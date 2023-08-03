@@ -1,0 +1,95 @@
+# source: https://github.com/lyz-code/blue-book/blob/9cd783fdcb95ce7f5b03d5fed739947a88da0590/docs/zfs_exporter.md#snapshot-alerts
+- record: zfs_dataset_snapshot_bytes
+  # This expression is not real for datasets that have children, so we're going to create this metric only for those datasets that don't have children
+  # I'm also going to assume that the datasets that have children don't hold data
+  expr: zfs_dataset_used_bytes - zfs_dataset_used_by_dataset_bytes and zfs_dataset_used_by_dataset_bytes > 200e3
+
+- alert: ZfsDatasetWithNoSnapshotsError
+  expr: zfs_dataset_used_by_dataset_bytes{type="filesystem"} > 200e3 unless on (hostname,filesystem) count by (hostname, filesystem, job) (zfs_dataset_used_bytes{type="snapshot"}) > 1
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The dataset {{ $labels.filesystem }} at {{ $labels.hostname }} doesn't have any snapshot.
+    description: "There might be an error on the snapshot system\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeFrequentlySizeError
+  expr: increase(sum by (hostname, filesystem, job) (zfs_dataset_used_bytes{type='snapshot',snapshot_type='frequently'})[60m:15m]) == 0
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The size of the frequently snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system or the data has not changed in the last hour\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeHourlySizeError
+  expr: increase(sum by (hostname, filesystem, job) (zfs_dataset_used_bytes{type='snapshot',snapshot_type='hourly'})[2h:30m]) == 0
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The size of the hourly snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system or the data has not changed in the last hour\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeDailySizeError
+  expr: increase(sum by (hostname, filesystem, job) (zfs_dataset_used_bytes{type='snapshot',snapshot_type='daily'})[2d:8h]) == 0
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The size of the daily snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system or the data has not changed in the last hour\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeMonthlySizeError
+  expr: increase(sum by (hostname, filesystem, job) (zfs_dataset_used_bytes{type='snapshot',snapshot_type='monthly'})[2d:8h]) == 0
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The size of the monthly snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system or the data has not changed in the last hour\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeFrequentlyUnexpectedNumberError
+  expr: increase((count by (hostname, filesystem, job) (zfs_dataset_used_bytes{snapshot_type="frequently",type="snapshot"}) < 4)[16m:1m]) < 1
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The number of the frequent snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeHourlyUnexpectedNumberError
+  expr: increase((count by (hostname, filesystem, job) (zfs_dataset_used_bytes{snapshot_type="hourly",type="snapshot"}) < 24)[1h10m:15m]) < 1
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The number of the hourly snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeDailyUnexpectedNumberError
+  expr: increase((count by (hostname, filesystem, job) (zfs_dataset_used_bytes{type='snapshot',snapshot_type='daily'}) < 30)[25h:5h]) < 1
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The number of the hourly snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTypeMonthlyUnexpectedNumberError
+  expr: increase((count by (hostname, filesystem, job) (zfs_dataset_used_bytes{type='snapshot',snapshot_type='monthly'}) < 6)[30d1h:10d]) < 1
+  for: 0m
+  labels:
+    severity: error
+  annotations:
+    summary: The number of the monthly snapshots has not changed for the dataset {{ $labels.filesystem }} at {{ $labels.hostname }}.
+    description: "There might be an error on the snapshot system\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+- alert: ZfsSnapshotTooMuchSize
+  expr: zfs_dataset_snapshot_bytes / zfs_dataset_used_by_dataset_bytes > 2 and zfs_dataset_snapshot_bytes > 100e6
+  for: 0m
+  labels:
+    severity: warning
+  annotations:
+    summary: The snapshots of the dataset {{ $labels.filesystem }} at {{ $labels.hostname }} use more than two times the data space
+    description: "The snapshots of the dataset {{ $labels.filesystem }} at {{ $labels.hostname }} use more than two times the data space\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
