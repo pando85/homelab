@@ -190,6 +190,14 @@ prometheus:
       limits:
         cpu: 4
         memory: 2.5Gi
+
+    # remove need of label `release: monitoring`
+    ruleSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+
     storageSpec:
       volumeClaimTemplate:
         spec:
