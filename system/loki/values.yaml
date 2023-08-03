@@ -31,6 +31,8 @@ loki-stack:
 
     serviceMonitor:
       enabled: true
+      additionalLabels:
+        release: monitoring
 
   # Needed for Alerting: https://grafana.com/docs/loki/latest/rules/
   # This is just a simple example, for more details: https://grafana.com/docs/loki/latest/configuration/#ruler_config
@@ -94,7 +96,8 @@ loki-stack:
 
     serviceMonitor:
       enabled: true
-
+      additionalLabels:
+        release: monitoring
     # Enable CRIO log format
     pipelineStages:
       - cri: {}

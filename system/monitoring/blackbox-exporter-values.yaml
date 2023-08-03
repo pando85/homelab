@@ -53,6 +53,8 @@ config:
 serviceMonitor:
   enabled: true
   defaults:
+    labels:
+      release: monitoring
     interval: 30s
     scrapeTimeout: 10s
 
@@ -82,6 +84,8 @@ resources:
 
 prometheusRule:
   enabled: true
+  additionalLabels:
+    release: monitoring
   rules:
     - alert: BlackboxSslCertificateWillExpireSoon
       expr: probe_ssl_earliest_cert_expiry - time() < 86400 * 3
