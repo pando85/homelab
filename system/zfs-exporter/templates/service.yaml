@@ -1,0 +1,10 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: zfs-exporter
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: 9134
+    targetPort: 9134

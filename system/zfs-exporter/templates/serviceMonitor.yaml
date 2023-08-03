@@ -1,0 +1,12 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: zfs-exporter
+  labels:
+    release: monitoring
+spec:
+  endpoints:
+  - interval: 30s
+    port: metrics
+  selector:
+    app: zfs-exporter
