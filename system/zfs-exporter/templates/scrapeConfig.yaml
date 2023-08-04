@@ -2,8 +2,6 @@ apiVersion: monitoring.coreos.com/v1alpha1
 kind: ScrapeConfig
 metadata:
   name: zfs-exporter
-  labels:
-    release: monitoring
 spec:
   staticConfigs:
     - targets:
