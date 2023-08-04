@@ -28,6 +28,7 @@ resources:
   - resources/grafana-admin-secret.yaml
   - resources/grafana-secret.yaml
   - resources/blackbox-exporter-dashboard-configmap.yaml
+  - resources/smartctl-exporter-dashboard-configmap.yaml
 
 patchesJson6902:
   - patch: |-
