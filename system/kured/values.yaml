@@ -1,4 +1,10 @@
 kured:
+  extraEnvVars:
+    - name: notifyUrl
+      valueFrom:
+        secretKeyRef:
+          name: kured-notifications-secret
+          key: notifyUrl
   configuration:
     startTime: "5:00"
     endTime: "7:00"
