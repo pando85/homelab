@@ -1,7 +1,7 @@
 # source: https://github.com/samber/awesome-prometheus-alerts/blob/ff76ceccdea4125cf2f9fde328a2c8e11589ecbe/dist/rules/zfs/zfs_exporter.yml
 - alert: ZfsPoolOutOfSpace
   expr: zfs_pool_free_bytes * 100 / zfs_pool_size_bytes < 10 and ON (instance, device, mountpoint) zfs_pool_readonly == 0
-  for: 0m
+  for: 5m
   labels:
     severity: warning
   annotations:
@@ -10,7 +10,7 @@
 
 - alert: ZfsPoolUnhealthy
   expr: zfs_pool_health > 0
-  for: 0m
+  for: 5m
   labels:
     severity: critical
   annotations:
@@ -19,7 +19,7 @@
 
 - alert: ZfsCollectorFailed
   expr: zfs_scrape_collector_success != 1
-  for: 0m
+  for: 5m
   labels:
     severity: warning
   annotations:
