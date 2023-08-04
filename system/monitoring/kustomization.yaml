@@ -29,6 +29,7 @@ resources:
   - resources/grafana-secret.yaml
   - resources/blackbox-exporter-dashboard-configmap.yaml
   - resources/smartctl-exporter-dashboard-configmap.yaml
+  - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/smartctl-exporter-service-monitor.yaml
 
 patchesJson6902:

@@ -28,7 +28,7 @@ data:
       "fiscalYearStartMonth": 0,
       "gnetId": 10530,
       "graphTooltip": 0,
-      "id": 31,
+      "id": 28,
       "links": [],
       "liveNow": false,
       "panels": [
@@ -127,7 +127,7 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Media errors",
+          "title": "Media Errors",
           "type": "stat"
         },
         {
@@ -197,10 +197,8 @@ data:
           "options": {
             "legend": {
               "calcs": [
-                "mean",
                 "lastNotNull",
-                "max",
-                "min"
+                "max"
               ],
               "displayMode": "table",
               "placement": "right",
@@ -282,12 +280,7 @@ data:
             "y": 4
           },
           "id": 26,
-          "links": [
-            {
-              "title": "Errors",
-              "url": "/d/HIwbBGIZk/s-m-a-r-t-disk-monitoring-for-prometheus-errors?$__url_time_range&$__all_variables"
-            }
-          ],
+          "links": [],
           "maxDataPoints": 100,
           "options": {
             "colorMode": "background",
@@ -318,7 +311,7 @@ data:
               "refId": "B"
             }
           ],
-          "title": "Critical warning",
+          "title": "Critical Warning",
           "type": "stat"
         },
         {
@@ -397,8 +390,101 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Active devices",
+          "title": "Active Devices",
           "type": "stat"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 12,
+            "x": 0,
+            "y": 10
+          },
+          "id": 56,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "editorMode": "code",
+              "expr": "smartctl_device_attribute{instance=~\"$instance\", device=~\"$device\", attribute_name=\"Reallocated_Event_Count\",attribute_value_type=\"raw\"}",
+              "instant": false,
+              "legendFormat": "{{instance}}:/dev/{{device}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Rellocated Event Count",
+          "type": "timeseries"
         },
         {
           "datasource": {
@@ -481,8 +567,8 @@ data:
           },
           "gridPos": {
             "h": 9,
-            "w": 24,
-            "x": 0,
+            "w": 12,
+            "x": 12,
             "y": 10
           },
           "id": 3,
@@ -652,8 +738,7 @@ data:
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "green",
-                        "value": null
+                        "color": "green"
                       },
                       {
                         "color": "red",
@@ -668,7 +753,7 @@ data:
                 "h": 7,
                 "w": 24,
                 "x": 0,
-                "y": 20
+                "y": 28
               },
               "id": 55,
               "options": {
