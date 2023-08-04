@@ -1,6 +1,6 @@
 kured:
   extraEnvVars:
-    - name: notifyUrl
+    - name: KURED_NOTIFY_URL
       valueFrom:
         secretKeyRef:
           name: kured-notifications-secret
