@@ -1,0 +1,5 @@
+// config doc: https://debian-handbook.info/browse/stable/sect.regular-upgrades.html
+APT::Periodic::Update-Package-Lists "30";
+APT::Periodic::Download-Upgradeable-Packages "30";
+APT::Periodic::AutocleanInterval "7";
+APT::Periodic::Unattended-Upgrade "1";

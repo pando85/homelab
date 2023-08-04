@@ -148,7 +148,7 @@
     - hostname
 
 - name: Configure journal log
-  file:
+  copy:
     src: journald.conf
     dest: /etc/systemd/journald.conf
     mode: 0644
@@ -171,3 +171,8 @@
   import_tasks: storage_dependencies.yml
   tags:
     - storage-dependencies
+
+- name: Install unattended upgrades
+  import_tasks: unattended_upgrades.yml
+  tags:
+    - unattended-upgrades

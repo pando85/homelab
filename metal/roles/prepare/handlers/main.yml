@@ -31,6 +31,13 @@
 - name: apply network interface
   command: netplan apply
 
+- name: unattended-upgrades | restart systemd service
+  ansible.builtin.service:
+    name: unattended-upgrades.service
+    daemon_reload: true
+    enabled: true
+    state: restarted
+
 - name: restart server
   vars:
     ansible_user: "{{ prepare_username }}"

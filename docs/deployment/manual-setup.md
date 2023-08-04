@@ -36,7 +36,7 @@
 - rock64: [image](https://www.armbian.com/rock64/)
 - odroid-c4: [image](https://www.armbian.com/odroid-c4/)
 - odroid-hc4: [image](https://www.armbian.com/odroid-hc4/)
-- amd64: [usb-stick](https://releases.ubuntu.com/20.04/)
+- amd64: [usb-stick](https://releases.ubuntu.com/22.04/)
 Use script from `scripts/prepare_sdcard.sh` to prepare instances and amd64 install manually.
 
 #### odroid-hc4

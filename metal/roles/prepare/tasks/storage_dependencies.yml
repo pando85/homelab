@@ -1,4 +1,4 @@
-- name: Install storage dependencies
+- name: storage-dependencies | Install storage dependencies
   apt:
     name:
       # zfs-generic-iscsi
@@ -12,7 +12,7 @@
     force_apt_get: true
     update_cache: true
 
-- name: Ensure open-iscsi services are running
+- name: storage-dependencies | Ensure open-iscsi services are running
   systemd:
     name: open-iscsi
     enabled: true

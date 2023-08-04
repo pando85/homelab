@@ -1,0 +1,24 @@
+---
+- name: unattended-upgrades | Install basic packages
+  apt:
+    name: unattended-upgrades
+    state: latest
+    force_apt_get: true
+    update_cache: true
+
+- name: unattended-upgrades | {{ item }} config
+  copy:
+    src: "{{ item }}"
+    dest: /etc/apt/apt.conf.d/{{ item }}
+    mode: 0644
+  loop:
+    - 20auto-upgrades
+    - 50unattended-upgrades
+  notify: unattended-upgrades | restart systemd service
+
+- name: unattended-upgrades | start systemd service
+  systemd:
+    name: unattended-upgrades
+    enabled: true
+    state: started
+  notify: unattended-upgrades | restart systemd service

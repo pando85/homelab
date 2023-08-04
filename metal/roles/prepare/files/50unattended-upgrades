@@ -1,0 +1,24 @@
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}";
+    "${distro_id} ${distro_codename}-security";
+	// Extended Security Maintenance; doesn't necessarily exist for
+	// every release and this system may not have it installed, but if
+	// available, the policy for updates is such that unattended-upgrades
+	// should also install from here by default.
+	"${distro_id}ESMApps:${distro_codename}-apps-security";
+	"${distro_id}ESM:${distro_codename}-infra-security";
+};
+
+Unattended-Upgrade::Package-Blacklist {
+    // The following matches all packages starting with linux-
+    // Use $ to explicitely define the end of a package name. Without
+    // the $, "libc6" would match all of them.
+    // Special characters need escaping
+    // The following matches packages like xen-system-amd64, xen-utils-4.1,
+    // xenstore-utils and libxenstore3.0
+    // For more information about Python regular expressions, see
+    // https://docs.python.org/3/howto/regex.html
+};
+
+Unattended-Upgrade::Automatic-Reboot "false";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
