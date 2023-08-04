@@ -5,8 +5,11 @@ kured:
         secretKeyRef:
           name: kured-notifications-secret
           key: notifyUrl
+
   configuration:
+    # reboot check period (default 1h0m0s)
+    period: "15m"
     startTime: "5:00"
-    endTime: "7:00"
+    endTime: "23:00"
     timeZone: Europe/Madrid
     rebootCommand: "/usr/bin/systemctl reboot"
