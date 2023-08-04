@@ -10,6 +10,6 @@ kured:
     # reboot check period (default 1h0m0s)
     period: "15m"
     startTime: "5:00"
-    endTime: "23:00"
+    endTime: "8:00"
     timeZone: Europe/Madrid
     rebootCommand: "/usr/bin/systemctl reboot"
