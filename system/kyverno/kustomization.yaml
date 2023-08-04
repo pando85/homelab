@@ -10,7 +10,7 @@ helmCharts:
     valuesFile: values.yaml
     version: 3.0.4
 
-patchesJson6902:
+patches:
   - patch: |-
       - op: add
         path: "/metadata/annotations/argocd.argoproj.io~1sync-options"

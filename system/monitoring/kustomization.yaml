@@ -32,7 +32,7 @@ resources:
   - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/smartctl-exporter-service-monitor.yaml
 
-patchesJson6902:
+patches:
   - patch: |-
       - op: add
         path: "/metadata/annotations/argocd.argoproj.io~1sync-options"
