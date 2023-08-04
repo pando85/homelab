@@ -1,0 +1,8 @@
+serviceMonitor:
+  enabled: true
+
+prometheusRules:
+  enabled: true
+
+nodeSelector:
+  kubernetes.io/arch: amd64
