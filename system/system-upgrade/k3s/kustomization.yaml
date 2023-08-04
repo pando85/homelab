@@ -9,3 +9,14 @@ kind: Kustomization
 commonAnnotations:
   # TODO: https://github.com/rancher/system-upgrade-controller/issues/172
   argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+
+patches:
+  - patch: |-
+      - op: add
+        path: /spec/channel
+        value: https://update.k3s.io/v1-release/channels/v1.25
+    target:
+      group: upgrade.cattle.io
+      version: v1
+      kind: Plan
+      name: .*
