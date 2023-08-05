@@ -48,7 +48,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -115,7 +115,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "sum (smartctl_device_media_errors{instance=~\"$instance\",device=~\"$device\"})",
@@ -133,7 +133,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -215,7 +215,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "avg(smartctl_device_temperature{ instance=~\"$instance\", device=~\"$device\" }) by (instance, device)",
@@ -234,7 +234,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -301,7 +301,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "sum (smartctl_device_critical_warning{instance=~\"$instance\", device=~\"$device\"})",
@@ -317,7 +317,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -380,7 +380,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "sum (smartctl_device_status{instance=~\"$instance\",device=~\"$device\"})",
@@ -396,7 +396,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -473,7 +473,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "smartctl_device_attribute{instance=~\"$instance\", device=~\"$device\", attribute_name=\"Reallocated_Event_Count\",attribute_value_type=\"raw\"}",
@@ -489,7 +489,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "power on hours:\nyellow after 3 year\nred after 5 years",
           "fieldConfig": {
@@ -598,7 +598,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "exemplar": false,
@@ -613,7 +613,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "exemplar": false,
@@ -719,7 +719,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "fieldConfig": {
                 "defaults": {
@@ -773,7 +773,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "code",
                   "exemplar": false,
@@ -787,7 +787,7 @@ data:
                 {
                   "datasource": {
                     "type": "prometheus",
-                    "uid": "prometheus"
+                    "uid": "${datasource}"
                   },
                   "editorMode": "code",
                   "exemplar": false,
@@ -938,7 +938,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "description": "Average time to spin up disk. (in ms)\nHigh values indicate problems with the motor.",
           "fieldConfig": {
@@ -1019,7 +1019,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "smartctl_device_attribute{attribute_name=\"Spin_Up_Time\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
@@ -1036,7 +1036,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -1091,7 +1091,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "exemplar": false,
@@ -1105,7 +1105,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "exemplar": false,
@@ -1120,7 +1120,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "exemplar": false,
@@ -1257,7 +1257,7 @@ data:
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus"
+            "uid": "${datasource}"
           },
           "fieldConfig": {
             "defaults": {
@@ -1279,8 +1279,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   }
                 ]
               },
@@ -1484,7 +1483,7 @@ data:
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "prometheus"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
               "expr": "smartctl_device",
@@ -1553,6 +1552,24 @@ data:
           {
             "current": {
               "selected": true,
+              "text": "Prometheus",
+              "value": "Prometheus"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "multi": false,
+            "name": "datasource",
+            "options": [],
+            "query": "prometheus",
+            "queryValue": "",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "selected": true,
               "text": [
                 "All"
               ],
@@ -1562,7 +1579,7 @@ data:
             },
             "datasource": {
               "type": "prometheus",
-              "uid": "prometheus"
+              "uid": "${datasource}"
             },
             "definition": "label_values(smartctl_version,instance)",
             "hide": 0,
@@ -1595,7 +1612,7 @@ data:
             },
             "datasource": {
               "type": "prometheus",
-              "uid": "prometheus"
+              "uid": "${datasource}"
             },
             "definition": "label_values(smartctl_device,device)",
             "hide": 0,
@@ -1650,6 +1667,6 @@ data:
       "timezone": "browser",
       "title": "SMART disk data",
       "uid": "d8352a62-dbf1-43ba-93c6-372aa3169e64",
-      "version": 1,
+      "version": 3,
       "weekStart": ""
     }
