@@ -1,5 +1,5 @@
 ---
-- name: Format "{{ item.dev_id }}"
+- name: additional-disk | Format "{{ item.dev_id }}"
   parted:
     device: "{{ item.dev_id }}"
     number: 1
@@ -8,7 +8,7 @@
   tags:
     - additional-disk
 
-- name: Create a new primary partition in {{ item.dev_id }}
+- name: additional-disk | Create a new primary partition in {{ item.dev_id }}
   parted:
     device: "{{ item.dev_id }}"
     label: gpt
@@ -17,7 +17,7 @@
   tags:
     - additional-disk
 
-- name: Create a ext4 filesystem on {{ item.dev_id }}1
+- name: additional-disk | Create a ext4 filesystem on {{ item.dev_id }}1
   filesystem:
     fstype: ext4
     dev: "{{ item.dev_id }}-part1"
@@ -25,7 +25,7 @@
   tags:
     - additional-disk
 
-- name: Get UUID for partition
+- name: additional-disk | Get UUID for partition
   command: blkid -s UUID -o value "{{ item.dev_id }}-part1"
   register: disk_blkid
   check_mode: no
@@ -33,7 +33,7 @@
   tags:
     - additional-disk
 
-- name: Mount "{{ item.dev_id }}-part1" to {{ item.path }}
+- name: additional-disk | Mount "{{ item.dev_id }}-part1" to {{ item.path }}
   mount:
     path: "{{ item.path }}"
     src: "UUID={{ disk_blkid.stdout }}"
