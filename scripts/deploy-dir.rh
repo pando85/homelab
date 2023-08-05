@@ -20,6 +20,7 @@
   when: not options.dry_run
 
 - name: Apply helm
+  # TODO: upgrade k3s version automatically
   command: |
     cd {{ directory }} && \
     [ ! -d "charts" ] && helm dependency build; \

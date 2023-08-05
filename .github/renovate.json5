@@ -24,12 +24,13 @@
   ],
   regexManagers: [
     {
-      description: "Process custom dependencies with double quotes, after colon and URLs with v",
+      description: "Process custom dependencies with double quotes, after colon, URLs and variables",
       fileMatch: [".+\\.ya?ml$"],
       matchStrings: [
         '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?"(?<currentValue>.*)"\n',
         '#\\srenovate: datasource=(?<datasource>\\S+)( versioning=(?<versioning>\\S+))?\n.*?: (?<depName>\\S+):(?<currentValue>.*)\n',
         '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?\\/v?(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\/.*',
+        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?: (?<currentValue>.*)\n',
       ],
       versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
     },
@@ -69,6 +70,12 @@
       matchManagers: ["regex"],
       matchUpdateTypes: ["major", "minor"],
       minimumReleaseAge: "30 days",
+    },
+    {
+      matchPackageNames: ["k3s-io/k3s"],
+      matchManagers: ["regex"],
+      matchUpdateTypes: ["major", "minor"],
+      minimumReleaseAge: "120 days",
     },
   ],
   ignoreDeps: [
