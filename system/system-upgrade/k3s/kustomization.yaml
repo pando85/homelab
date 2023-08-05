@@ -14,7 +14,7 @@ patches:
   - patch: |-
       - op: add
         path: /spec/version
-        # renovate: datasource=github-releases depName=k3s-io/k3s versioning=regex:^v(?<major>\d+)(\\.(?<minor>\d+))?(\\.(?<patch>\\d+))\\+k3s?((?<build>\\d+))$
+        # renovate: datasource=github-releases depName=k3s-io/k3s versioning=regex:^v?(?<major>\d+)(\\.(?<minor>\d+))?(\\.(?<patch>\\d+))\\+k3s?((?<build>\\d+))$
         value: v1.25.12+k3s1
     target:
       group: upgrade.cattle.io

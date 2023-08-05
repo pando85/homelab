@@ -30,7 +30,7 @@
         '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?"(?<currentValue>.*)"\n',
         '#\\srenovate: datasource=(?<datasource>\\S+)( versioning=(?<versioning>\\S+))?\n.*?: (?<depName>\\S+):(?<currentValue>.*)\n',
         '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?\\/v?(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+)\\/.*',
-        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?: (?<currentValue>.*)\n',
+        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?: v?(?<currentValue>.*)\n',
       ],
       versioningTemplate: "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
     },
