@@ -16,12 +16,12 @@ framework to build your own homelab.
 > practice for certifications, and so on. For more information about homelab in general, see the
 > [r/homelab introduction](https://www.reddit.com/r/homelab/wiki/introduction).
 
-## Overview
+## 📖 Overview
 
 This section provides a high level overview of the project. For further information, please see the
 [documentation](https://pando85.github.io/homelab/).
 
-### 🔧 Hardware
+## 🔧 Hardware
 
 | Device                              | Count | OS Disk Size | Data Disk Size                      | Ram  | Operating System | Purpose    |
 | ----------------------------------- | ----- | ------------ | ----------------------------------- | ---- | ---------------- | ---------- |
@@ -34,7 +34,7 @@ This section provides a high level overview of the project. For further informat
 | RTL8370N                            | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
 | Netgear gs724t                      | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
 
-### ⭐ Features
+## ⭐ Features
 
 - [x] Common applications: Gitea...
 - [x] Automated Kubernetes installation and management
@@ -49,26 +49,26 @@ This section provides a high level overview of the project. For further informat
 - [x] Automated backups
 - [ ] Automated offsite backups 🚧
 
-### 🌐 DNS
+## 🌐 DNS
 
-#### Load Balancer
+### Load Balancer
 
 [MetalLB](https://metallb.universe.tf/) is configured in BGP mode, both on my router and within the
 Kubernetes cluster.
 
-#### Ingress Controllers
+### Ingress Controllers
 
 For external access, port forwarding is configured for ports `80` and `443`, directing traffic to
 the load balancer IP of the Kubernetes ingress controller.
 
 There are also another ingress controller for internal use.
 
-#### Internal DNS
+### Internal DNS
 
 To handle internal requests, DNS configuration redirects all subdomains under `k8s.grigri` to the
 internal ingress controller.
 
-#### External DNS
+### External DNS
 
 [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) is deployed in the cluster and
 configured to sync DNS records to [Cloudflare](https://www.cloudflare.com/).
