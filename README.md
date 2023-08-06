@@ -51,7 +51,8 @@ Project status: **Alpha** (see [roadmap](#roadmap) below)
 - [x] Automatically update DNS records for exposed services
 - [x] Monitoring and alerting
 - [x] Single sign-on
-- [ ] Automated backups 🚧
+- [x] Automated backups
+- [ ] Automated offsite backups 🚧
 
 ### 🌐 DNS
 
