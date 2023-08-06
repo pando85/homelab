@@ -14,6 +14,10 @@ theme:
     - search.highlight
     - search.share
 
+plugins:
+  - search
+  - include_dir_to_nav
+
 markdown_extensions:
   - pymdownx.emoji:
       emoji_index: !!python/name:materialx.emoji.twemoji
@@ -34,11 +38,6 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Deployment:
-      - deployment/manual-setup.md
-      - deployment/metallb.md
-      - deployment/unifi.md
+      - deployment
   - User-guide:
-      - user-guide/add-or-remove-nodes.md
-      - user-guide/expand-longhorn-volume.md
-      - user-guide/install-pre-commit-hooks.md
-      - user-guide/run-commands-on-multiple-nodes.md
+      - user-guide

@@ -32,7 +32,9 @@ docs:
 		--tty \
 		--publish 8000:8000 \
 		--volume $(shell pwd):/docs \
-		squidfunk/mkdocs-material
+		--entrypoint /bin/sh \
+		squidfunk/mkdocs-material -c 'pip install --no-cache-dir -r /docs/docs/requirements.txt \
+		&& mkdocs serve --dev-addr=0.0.0.0:8000'
 
 git-hooks:	## pre-commit install
 git-hooks:

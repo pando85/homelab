@@ -1,86 +1,82 @@
 # Pando85's Homelab
 
-[![tag](https://img.shields.io/github/v/tag/pando85/homelab?style=flat-square&logo=semver&logoColor=white)](https://github.com/pando85/homelab/tags)
 [![document](https://img.shields.io/website?label=document&logo=gitbook&logoColor=white&style=flat-square&url=https%3A%2F%2Fhomelab.pando85.com)](https://homelab.pando85.com)
 [![license](https://img.shields.io/github/license/pando85/homelab?style=flat-square&logo=gnu&logoColor=white)](https://www.gnu.org/licenses/gpl-3.0.html)
-[![stars](https://img.shields.io/github/stars/pando85/homelab?logo=github&logoColor=white&color=gold&style=flat-square)](https://github.com/pando85/homelab)
 
-This project utilizes [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_code) and [GitOps](https://www.weave.works/technologies/gitops) to automate provisioning, operating, and updating self-hosted services in my homelab.
-It can be used as a highly customizable framework to build your own homelab.
+This project utilizes [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_code)
+and [GitOps](https://www.weave.works/technologies/gitops) to automate provisioning, operating, and
+updating self-hosted services in my homelab. Based in [K3s](https://k3s.io/),
+[ArgoCD](https://argo-cd.readthedocs.io/en/stable/),
+[Renovate](https://github.com/renovatebot/renovate) and ZFS. It can be used as a highly customizable
+framework to build your own homelab.
 
 > **What is a homelab?**
 >
-> Homelab is a laboratory at home where you can self-host, experiment with new technologies, practice for certifications, and so on.
-> For more information about homelab in general, see the [r/homelab introduction](https://www.reddit.com/r/homelab/wiki/introduction).
+> Homelab is a laboratory at home where you can self-host, experiment with new technologies,
+> practice for certifications, and so on. For more information about homelab in general, see the
+> [r/homelab introduction](https://www.reddit.com/r/homelab/wiki/introduction).
 
 ## Overview
 
-This section provides a high level overview of the project.
-For further information, please see the [documentation](TODO).
+This section provides a high level overview of the project. For further information, please see the
+[documentation](TODO).
 
-### Hardware
+### 🔧 Hardware
 
-TODO
+| Device                              | Count | OS Disk Size | Data Disk Size                      | Ram  | Operating System | Purpose    |
+| ----------------------------------- | ----- | ------------ | ----------------------------------- | ---- | ---------------- | ---------- |
+| AMD E-450 APU                       | 1     | 60GB         | N/A                                 | 8GB  | Ubuntu 22.04     | k3s server |
+| Supermicro Atom C2758 (A1SRi-2758F) | 1     | 250GB SSD    | 3\*4TB + 500GB (NVMe) RAIDZ + cache | 32GB | Centos 7         | K3s agent  |
+| Rock64                              | 6     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
+| Odroid-c4                           | 2     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
+| Odroid-hc4                          | 3     | N/A          | 3TB + 240GB SSD                     | 4GB  | Armbian          | K3s agent  |
+| PC Engines APU2e4                   | 1     | N/A          | N/A                                 | N/A  | N/A              | Router     |
+| RTL8370N                            | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
+| Netgear gs724t                      | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
+
 ### Features
 
 Project status: **Alpha** (see [roadmap](#roadmap) below)
 
 - [x] Common applications: Gitea...
-- [ ] Automated Kubernetes installation and management
+- [x] Automated Kubernetes installation and management
 - [x] Installing and managing applications using GitOps
 - [x] Automatic rolling upgrade for OS and Kubernetes
-- [x] Automatically update apps (with approval)
+- [x] Automatically update apps (with approval if needed)
 - [x] Modular architecture, easy to add or remove features/components
 - [x] Automated certificate management
 - [x] CI/CD platform
 - [x] Private container registry
 - [x] Distributed storage
-- [ ] Automatically update DNS records for exposed services
-- [ ] Monitoring and alerting 🚧
-- [ ] Automated offsite backups 🚧
-- [ ] Single sign-on 🚧
+- [x] Automatically update DNS records for exposed services
+- [x] Monitoring and alerting
+- [x] Single sign-on
+- [ ] Automated backups 🚧
 
-## License
+### 🌐 DNS
 
-<details>
+#### Load Balancer
 
-<summary>Distributed under the GPLv3 License.</summary>
+[MetalLB](https://metallb.universe.tf/) is configured in BGP mode, both on my router and within the Kubernetes cluster.
 
-This project is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+#### Ingress Controllers
 
-This project is distributed in the hope that it will be useful, but **WITHOUT ANY WARRANTY**; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-See the GNU General Public License for more details.
+For external access, port forwarding is configured for ports `80` and `443`, directing traffic to
+the load balancer IP of the Kubernetes ingress controller.
 
-You should have received a copy of the GNU General Public License along with this project (`LICENSE.md`).
-If not, see <https://www.gnu.org/licenses>.
+There are also another ingress controller for internal use.
 
-</details>
+#### Internal DNS
 
-## Acknowledgements
+To handle internal requests, DNS configuration redirects all subdomains under `k8s.grigri` to the internal ingress controller.
 
-- [khuedoan/homelab](https://github.com/khuedoan/homelab)
-- [ArgoCD usage and monitoring configuration in locmai/humble](https://github.com/locmai/humble)
->>>>>>> c14a611bfad59061f8546409ac5f940186bf24e9
-- [README template](https://github.com/othneildrew/Best-README-Template)
-- [Run the same Cloudflare Tunnel across many `cloudflared` processes](https://developers.cloudflare.com/cloudflare-one/tutorials/many-cfd-one-tunnel)
-- [MAC address environment variable in GRUB config](https://askubuntu.com/questions/1272400/how-do-i-automate-network-installation-of-many-ubuntu-18-04-systems-with-efi-and)
-- [Official k3s systemd service file](https://github.com/k3s-io/k3s/blob/master/k3s.service)
-- [Official Cloudflare Tunnel examples](https://github.com/cloudflare/argo-tunnel-examples)
-- [Initialize GitOps repository on Gitea and integrate with Tekton by RedHat](https://github.com/redhat-scholars/tekton-tutorial/tree/master/triggers)
-- [SSO configuration from xUnholy/k8s-gitops](https://github.com/xUnholy/k8s-gitops)
-- [Pre-commit config from k8s-at-home/flux-cluster-template](https://github.com/k8s-at-home/flux-cluster-template)
+#### External DNS
 
-Here is a list of the contributors who have helped to improve this project.
-Big shout-out to them!
+[ExternalDNS](https://github.com/kubernetes-sigs/external-dns) is deployed in the cluster and
+configured to sync DNS records to [Cloudflare](https://www.cloudflare.com/).
 
-- ![](https://github.com/locmai.png?size=24) [@locmai](https://github.com/locmai)
-- ![](https://github.com/MatthewJohn.png?size=24) [@MatthewJohn](https://github.com/MatthewJohn)
-- ![](https://github.com/karpfediem.png?size=24) [@karpfediem](https://github.com/karpfediem)
-- ![](https://github.com/linhng98.png?size=24) [@linhng98](https://github.com/linhng98)
-- ![](https://github.com/BlueHatbRit.png?size=24) [@BlueHatbRit](https://github.com/BlueHatbRit)
-- ![](https://github.com/dotdiego.png?size=24) [@dotdiego](https://github.com/dotdiego)
-- ![](https://github.com/Crimrose.png?size=24) [@Crimrose](https://github.com/Crimrose)
-- ![](https://github.com/eventi.png?size=24) [@eventi](https://github.com/eventi)
-- ![](https://github.com/Bourne-ID.png?size=24) [@Bourne-ID](https://github.com/Bourne-ID)
+## 🤝 Thanks
 
-If you feel you're missing from this list, feel free to add yourself in a PR.
+Thanks to all folks who donate their time to the [Kubernetes @Home](https://github.com/k8s-at-home/)
+community. A lot of inspiration for my cluster came from those that have shared their clusters over
+at [awesome-home-kubernetes](https://github.com/k8s-at-home/awesome-home-kubernetes).
