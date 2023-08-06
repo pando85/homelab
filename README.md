@@ -34,7 +34,7 @@ This section provides a high level overview of the project. For further informat
 | RTL8370N                            | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
 | Netgear gs724t                      | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
 
-### Features
+### ⭐ Features
 
 - [x] Common applications: Gitea...
 - [x] Automated Kubernetes installation and management
@@ -53,7 +53,8 @@ This section provides a high level overview of the project. For further informat
 
 #### Load Balancer
 
-[MetalLB](https://metallb.universe.tf/) is configured in BGP mode, both on my router and within the Kubernetes cluster.
+[MetalLB](https://metallb.universe.tf/) is configured in BGP mode, both on my router and within the
+Kubernetes cluster.
 
 #### Ingress Controllers
 
@@ -64,7 +65,8 @@ There are also another ingress controller for internal use.
 
 #### Internal DNS
 
-To handle internal requests, DNS configuration redirects all subdomains under `k8s.grigri` to the internal ingress controller.
+To handle internal requests, DNS configuration redirects all subdomains under `k8s.grigri` to the
+internal ingress controller.
 
 #### External DNS
 
