@@ -36,8 +36,6 @@ This section provides a high level overview of the project. For further informat
 
 ### Features
 
-Project status: **Alpha** (see [roadmap](#roadmap) below)
-
 - [x] Common applications: Gitea...
 - [x] Automated Kubernetes installation and management
 - [x] Installing and managing applications using GitOps
@@ -45,9 +43,6 @@ Project status: **Alpha** (see [roadmap](#roadmap) below)
 - [x] Automatically update apps (with approval if needed)
 - [x] Modular architecture, easy to add or remove features/components
 - [x] Automated certificate management
-- [x] CI/CD platform
-- [x] Private container registry
-- [x] Distributed storage
 - [x] Automatically update DNS records for exposed services
 - [x] Monitoring and alerting
 - [x] Single sign-on
