@@ -13,6 +13,6 @@ spec:
             message: Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature higher than 40 celsius degrees
           expr: smartctl_device_temperature > 40
-          for: 5m
+          for: 60m
           labels:
             severity: warning
