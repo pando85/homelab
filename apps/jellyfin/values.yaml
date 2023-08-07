@@ -1,0 +1,101 @@
+app-template:
+  controller:
+    type: statefulset
+  image:
+    repository: ghcr.io/onedr0p/jellyfin
+    tag: 10.8.10@sha256:1ef614db6a4c589777eb48bc9004d573b9c09f0d6d573a509041c6060f3a956b
+  env:
+    TZ: Europe/Madrid
+  service:
+    main:
+      ports:
+        http:
+          port: &port 8096
+
+  probes:
+    liveness: &probes
+      enabled: true
+      custom: true
+      spec:
+        httpGet:
+          path: /health
+          port: *port
+        initialDelaySeconds: 0
+        periodSeconds: 10
+        timeoutSeconds: 1
+        failureThreshold: 3
+    readiness: *probes
+    startup:
+      enabled: false
+
+  ingress:
+    main:
+      enabled: true
+      ingressClassName: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        hajimari.io/appName: jellyfin
+        hajimari.io/icon: mdi:television-classic
+      hosts:
+        - host: &host jellyfin.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - hosts:
+            - *host
+          secretName: jellyfin-tls-certificate
+    external:
+      enabled: true
+      ingressClassName: nginx-external
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host jellyfin.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - hosts:
+            - *host
+          secretName: jellyfin-external-tls-certificate
+  podSecurityContext:
+    runAsUser: 995
+    runAsGroup: 991
+    fsGroup: 991
+    fsGroupChangePolicy: "OnRootMismatch"
+  persistence:
+    config:
+      enabled: true
+      mountPath: /config
+      existingClaim: config-jellyfin-0-zfs
+    series:
+      enabled: true
+      type: hostPath
+      hostPath: /datasets/series
+      mountPath: /datasets/series
+    peliculas:
+      enabled: true
+      type: hostPath
+      hostPath: /datasets/peliculas
+      mountPath: /datasets/peliculas
+    documentales:
+      enabled: true
+      type: hostPath
+      hostPath: /datasets/documentales
+      mountPath: /datasets/documentales
+    transcode:
+      enabled: true
+      type: emptyDir
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      memory: 10Gi
+
+  nodeSelector:
+    name: grigri
