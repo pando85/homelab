@@ -13,7 +13,8 @@ on:
         default: "debug"
         required: false
   schedule:
-    - cron: "0/15 * * * *"
+    - cron: "0/15 4-10 * * 1"
+    - cron: "0 5 * * *"
   push:
     branches:
       - master
