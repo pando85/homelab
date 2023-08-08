@@ -1,0 +1,91 @@
+app-template:
+  controller:
+    # HA is not supported
+    type: statefulset
+
+  image:
+    repository: kanidm/server
+    tag: 1.1.0-beta.13
+
+  configMaps:
+    kanidmd-config:
+      enabled: true
+      data:
+        server.toml: |
+          bindaddress = "[::]:8443"
+          ldapbindaddress = "[::]:3636"
+          trust_x_forward_for = true
+          db_path = "/data/kanidm.db"
+          tls_chain = "/data/tls/tls.crt"
+          tls_key = "/data/tls/tls.key"
+          log_level = "info"
+          domain = "idm.grigri.cloud"
+          origin = "https://idm.grigri.cloud"
+          role = "WriteReplica"
+          [online_backup]
+          path = "/data/kanidm/backups/"
+          schedule = "00 2 * * *"
+          versions = 1
+
+  service:
+    main:
+      type: LoadBalancer
+      annotations:
+        metallb.universe.tf/loadBalancerIPs: "192.168.193.8"
+      externalTrafficPolicy: Local
+      ports:
+        http:
+          enabled: false
+        ldaps:
+          primary: true
+          port: 636
+          protocol: TCP
+          targetPort: 3636
+
+  ingress:
+    main:
+      enabled: true
+      ingressClassName: nginx-external
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host idm.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - hosts:
+            - *host
+          secretName: idm-external-tls-certificate
+
+  podSecurityContext:
+    runAsUser: 389
+    runAsGroup: 389
+    fsGroup: 389
+    fsGroupChangePolicy: "OnRootMismatch"
+
+  persistence:
+    data:
+      enabled: true
+      mountPath: /data
+      existingClaim: kanidm-data-zfs-0
+    kanidmd-config:
+      enabled: true
+      mountPath: /data/server.toml
+      subPath: server.toml
+      type: configMap
+      name: kanidmd-config
+    certs:
+      enabled: true
+      type: secret
+      name: idm-external-tls-certificate
+      mountPath: /data/tls
+      readOnly: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 400Mi
+    limits:
+      memory: 1Gi
