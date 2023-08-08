@@ -77,6 +77,12 @@
       matchUpdateTypes: ["major", "minor"],
       minimumReleaseAge: "120 days",
     },
+    {
+      matchPackageNames: ["k3s-io/k3s"],
+      matchManagers: ["regex"],
+      groupName: "k3s upgrade",
+      groupSlug: "k3s-upgrade",
+    },
   ],
   ignoreDeps: [
     // deprecated docker image
