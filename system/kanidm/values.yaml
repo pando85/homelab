@@ -1,7 +1,8 @@
 app-template:
   controller:
     annotations:
-      reloader.stakater.com/auto: "true"
+      configmap.reloader.stakater.com/reload: kanidm-kanidmd-config
+      secret.reloader.stakater.com/reload: idm-external-tls-certificate
     # HA is not supported
     type: statefulset
 
@@ -77,6 +78,7 @@ app-template:
         httpGet:
           path: /status
           port: *port
+          scheme: HTTPS
         initialDelaySeconds: 0
         periodSeconds: 10
         timeoutSeconds: 1
