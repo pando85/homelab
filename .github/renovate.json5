@@ -78,6 +78,7 @@
       minimumReleaseAge: "120 days",
     },
     {
+      // group k3s changes in one PR
       matchPackageNames: ["k3s-io/k3s"],
       matchManagers: ["regex"],
       additionalBranchPrefix: "k3s-",
