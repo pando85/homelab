@@ -76,7 +76,7 @@ app-template:
       mountPath: /data/server.toml
       subPath: server.toml
       type: configMap
-      name: kanidmd-config
+      name: kanidm-kanidmd-config
     certs:
       enabled: true
       type: secret
