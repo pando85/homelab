@@ -14,8 +14,8 @@ app-template:
       enabled: true
       data:
         server.toml: |
-          bindaddress = "127.0.0.1:8443"
-          ldapbindaddress = "127.0.0.1:3636"
+          bindaddress = "0.0.0.0:8443"
+          ldapbindaddress = "0.0.0.0:3636"
           trust_x_forward_for = true
           db_path = "/data/kanidm.db"
           tls_chain = "/data/tls/tls.crt"
@@ -40,8 +40,6 @@ app-template:
         metallb.universe.tf/loadBalancerIPs: "192.168.193.8"
       externalTrafficPolicy: Local
       ports:
-        http:
-          enabled: false
         ldaps:
           port: 636
           protocol: TCP
