@@ -1,5 +1,7 @@
 app-template:
   controller:
+    annotations:
+      reloader.stakater.com/auto: "true"
     # HA is not supported
     type: statefulset
 
@@ -29,6 +31,10 @@ app-template:
 
   service:
     main:
+      ports:
+        http:
+          port: &port 8443
+    ldaps:
       type: LoadBalancer
       annotations:
         metallb.universe.tf/loadBalancerIPs: "192.168.193.8"
@@ -65,6 +71,22 @@ app-template:
     runAsGroup: 389
     fsGroup: 389
     fsGroupChangePolicy: "OnRootMismatch"
+
+  probes:
+    liveness: &probes
+      enabled: true
+      custom: true
+      spec:
+        httpGet:
+          path: /status
+          port: *port
+        initialDelaySeconds: 0
+        periodSeconds: 10
+        timeoutSeconds: 1
+        failureThreshold: 3
+    readiness: *probes
+    startup:
+      enabled: false
 
   persistence:
     data:
