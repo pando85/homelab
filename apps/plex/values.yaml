@@ -78,11 +78,11 @@ app-template:
       hostPath: /datasets/documentales
       mountPath: /datasets/documentales
       readOnly: true
-    fixPlexSeriesImports:
+    fix-plex-series-imports:
       enabled: true
       type: emptyDir
       mountPath: /datasets/series/download
-    fixPlexPeliculasImports:
+    fix-plex-peliculas-imports:
       enabled: true
       type: emptyDir
       mountPath: /datasets/peliculas/download
