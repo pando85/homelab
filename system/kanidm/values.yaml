@@ -105,6 +105,7 @@ app-template:
       name: idm-external-tls-certificate
       mountPath: /data/tls
       readOnly: true
+      mode: 0400
   resources:
     requests:
       cpu: 50m
