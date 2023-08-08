@@ -17,6 +17,7 @@ app-template:
         server.toml: |
           bindaddress = "0.0.0.0:8443"
           ldapbindaddress = "0.0.0.0:3636"
+          #
           trust_x_forward_for = true
           db_path = "/data/kanidm.db"
           tls_chain = "/data/tls/tls.crt"
@@ -105,7 +106,6 @@ app-template:
       name: idm-external-tls-certificate
       mountPath: /data/tls
       readOnly: true
-      mode: 0400
   resources:
     requests:
       cpu: 50m
