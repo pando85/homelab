@@ -15,7 +15,7 @@ oauth2-proxy-kanidm:
           - *host
         secretName: oauth2-proxy-kanidm-tls-certificate
 
-  proxyVarsAsSecrets: true
+  proxyVarsAsSecrets: false
 
   config:
     existingSecret: oauth2-proxy-kanidm
