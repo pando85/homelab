@@ -1,0 +1,58 @@
+oauth2-proxy-kanidm:
+  replicaCount: 2
+  ingress:
+    enabled: true
+    className: nginx-external
+    annotations:
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+    path: /oauth2
+    hosts:
+      - &host auth-kanidm.grigri.cloud
+    tls:
+      - hosts:
+          - *host
+        secretName: oauth2-proxy-kanidm-tls-certificate
+
+  proxyVarsAsSecrets: true
+
+  config:
+    existingSecret: oauth2-proxy-kanidm
+
+  extraArgs:
+    provider: oidc
+    provider-display-name: Protected by Kanidm
+    set-xauthrequest: true
+    oidc-issuer-url: https://idm.grigri.cloud/oauth2/openid/k8s-oauth2-proxy
+    client-id: k8s-oauth2-proxy
+    code-challenge-method: S256
+    skip-provider-button: true
+    reverse-proxy: true
+    pass-authorization-header: true
+    email-domain: "*"
+    cookie-domain: .grigri.cloud
+    whitelist-domain: .grigri.cloud
+    cookie-refresh: 24h
+    cookie-expire: 168h
+    cookie-secure: true
+    ## dex needs to support RFC2307bis
+    # allowed-groups: wheel
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 14Mi
+    limits:
+      memory: 32Mi
+
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - oauth2-proxy-kanidm
+          topologyKey: "kubernetes.io/hostname"
