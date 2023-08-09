@@ -25,7 +25,6 @@ oauth2-proxy-kanidm:
     provider-display-name: Protected by Kanidm
     set-xauthrequest: true
     oidc-issuer-url: https://idm.grigri.cloud/oauth2/openid/k8s-oauth2-proxy
-    client-id: k8s-oauth2-proxy
     code-challenge-method: S256
     skip-provider-button: true
     reverse-proxy: true
