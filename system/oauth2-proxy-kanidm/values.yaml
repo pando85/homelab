@@ -1,4 +1,4 @@
-oauth2-proxy-kanidm:
+oauth2-proxy:
   replicaCount: 2
   ingress:
     enabled: true
@@ -15,7 +15,7 @@ oauth2-proxy-kanidm:
           - *host
         secretName: oauth2-proxy-kanidm-tls-certificate
 
-  proxyVarsAsSecrets: false
+  proxyVarsAsSecrets: true
 
   config:
     existingSecret: oauth2-proxy-kanidm
