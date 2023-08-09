@@ -3,7 +3,7 @@ argo-cd:
     cm:
       create: true
 
-      url: https://argocd.k8s.grigri
+      url: https://argocd.internal.grigri.cloud
 
       exec.enabled: "true"
 
@@ -31,7 +31,7 @@ argo-cd:
           - id: grafana-sso
             name: Grafana
             redirectURIs:
-              - 'https://grafana.k8s.grigri/login/generic_oauth'
+              - 'https://grafana.internal.grigri.cloud/login/generic_oauth'
             secretEnv: GRAFANA_SSO_CLIENT_SECRET
 
         connectors:
@@ -183,11 +183,12 @@ argo-cd:
       enabled: true
       ingressClassName: nginx-internal
       annotations:
-        cert-manager.io/cluster-issuer: internal
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
         hajimari.io/appName: ArgoCD
         hajimari.io/icon: robot
       hosts:
-        - &host argocd.k8s.grigri
+        - &host argocd.internal.grigri.cloud
       tls:
         - secretName: argocd-tls-certificate
           hosts:
@@ -300,7 +301,7 @@ argo-cd:
     enabled: true
 
     # -- Argo CD dashboard url; used in place of {{.context.argocdUrl}} in templates
-    argocdUrl: https://argocd.k8s.grigri
+    argocdUrl: https://argocd.internal.grigri.cloud
     updateStrategy:
       type: Recreate
 

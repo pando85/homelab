@@ -60,13 +60,14 @@ app-template:
       enabled: true
       ingressClassName: nginx-internal
       annotations:
-        cert-manager.io/cluster-issuer: internal
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
         nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
         hajimari.io/icon: mdi:lan
         hajimari.io/appName: unifi
         hajimari.io/instance: internal
       hosts:
-        - host: &host unifi.k8s.grigri
+        - host: &host unifi.internal.grigri.cloud
           paths:
             - path: /
               pathType: Prefix

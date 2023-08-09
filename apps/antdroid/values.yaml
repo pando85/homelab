@@ -18,9 +18,10 @@ app-template:
       enabled: true
       ingressClassName: nginx-internal
       annotations:
-        cert-manager.io/cluster-issuer: internal
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
       hosts:
-        - host: &host antdroid.k8s.grigri
+        - host: &host antdroid.internal.grigri.cloud
           paths:
             - path: /
               pathType: Prefix

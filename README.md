@@ -51,6 +51,12 @@ This section provides a high level overview of the project. For further informat
 
 ## 🌐 DNS
 
+[ExternalDNS](https://github.com/kubernetes-sigs/external-dns) is deployed in the cluster and
+configured to sync DNS records to [Cloudflare](https://www.cloudflare.com/).
+
+All connections outside the cluster are handled with TLS using
+[cert-manager](https://cert-manager.io/) with [Let's Encrypt](https://letsencrypt.org/).
+
 ### Load Balancer
 
 [MetalLB](https://metallb.universe.tf/) is configured in BGP mode, both on my router and within the
@@ -65,13 +71,24 @@ There are also another ingress controller for internal use.
 
 ### Internal DNS
 
-To handle internal requests, DNS configuration redirects all subdomains under `k8s.grigri` to the
-internal ingress controller.
+`internal.grigri.cloud` domain is used. Configured as:
+
+```yaml
+annotations:
+  cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+  external-dns.alpha.kubernetes.io/enabled: "true"
+```
 
 ### External DNS
 
-[ExternalDNS](https://github.com/kubernetes-sigs/external-dns) is deployed in the cluster and
-configured to sync DNS records to [Cloudflare](https://www.cloudflare.com/).
+`grigri.cloud` domain is used. Configured as:
+
+```yaml
+annotations:
+  cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+  external-dns.alpha.kubernetes.io/enabled: "true"
+  external-dns.alpha.kubernetes.io/target: grigri.cloud
+```
 
 ## 🤝 Thanks
 

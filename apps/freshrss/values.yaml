@@ -23,13 +23,14 @@ app-template:
       enabled: true
       ingressClassName: nginx-internal
       annotations:
-        cert-manager.io/cluster-issuer: internal
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
         hajimari.io/appName: FreshRSS
         hajimari.io/icon: rss-box
         hajimari.io/instance: internal
         hajimari.io/group: News
       hosts:
-        - host: &host freshrss.k8s.grigri
+        - host: &host freshrss.internal.grigri.cloud
           paths:
             - path: /
               pathType: Prefix

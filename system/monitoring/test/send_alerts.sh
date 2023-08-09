@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 name=fooAlert-$RANDOM
-url='https://alertmanager.k8s.grigri/api/v1/alerts'
+url='https://alertmanager.internal.grigri.cloud/api/v1/alerts'
 bold=$(tput bold)
 normal=$(tput sgr0)
 

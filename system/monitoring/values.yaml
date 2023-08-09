@@ -28,15 +28,16 @@ alertmanager:
     enabled: true
     ingressClassName: nginx-internal
     annotations:
-      cert-manager.io/cluster-issuer: internal
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      external-dns.alpha.kubernetes.io/enabled: "true"
     hosts:
-      - alertmanager.k8s.grigri
+      - alertmanager.internal.grigri.cloud
     paths:
       - /
     tls:
       - secretName: alertmanager-general-tls
         hosts:
-          - alertmanager.k8s.grigri
+          - alertmanager.internal.grigri.cloud
 
 
 grafana:
@@ -54,11 +55,12 @@ grafana:
     enabled: true
     ingressClassName: nginx-internal
     annotations:
-      cert-manager.io/cluster-issuer: internal
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      external-dns.alpha.kubernetes.io/enabled: "true"
       hajimari.io/appName: Grafana
       hajimari.io/icon: chart-bar
     hosts:
-      - &host grafana.k8s.grigri
+      - &host grafana.internal.grigri.cloud
     tls:
       - secretName: grafana-general-tls
         hosts:
@@ -104,7 +106,7 @@ grafana:
 
   grafana.ini:
     server:
-      root_url: https://grafana.k8s.grigri
+      root_url: https://grafana.internal.grigri.cloud
 
     log:
       level: info
@@ -116,9 +118,9 @@ grafana:
       client_id: grafana-sso
       client_secret: $__env{GRAFANA_SSO_CLIENT_SECRET}
       scopes: openid profile email groups
-      auth_url: https://argocd.k8s.grigri/api/dex/auth
-      token_url: https://argocd.k8s.grigri/api/dex/token
-      api_url: https://argocd.k8s.grigri/api/dex/userinfo
+      auth_url: https://argocd.internal.grigri.cloud/api/dex/auth
+      token_url: https://argocd.internal.grigri.cloud/api/dex/token
+      api_url: https://argocd.internal.grigri.cloud/api/dex/userinfo
       use_pkce: true
       role_attribute_path: email == 'pando855@gmail.com' && 'Admin'
 
@@ -213,12 +215,13 @@ prometheus:
     enabled: true
     ingressClassName: nginx-internal
     annotations:
-      cert-manager.io/cluster-issuer: internal
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      external-dns.alpha.kubernetes.io/enabled: "true"
     hosts:
-      - prometheus.k8s.grigri
+      - prometheus.internal.grigri.cloud
     paths:
       - /
     tls:
       - secretName: prometheus-general-tls
         hosts:
-          - prometheus.k8s.grigri
+          - prometheus.internal.grigri.cloud

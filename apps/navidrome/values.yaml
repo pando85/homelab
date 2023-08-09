@@ -31,13 +31,14 @@ app-template:
       enabled: true
       ingressClassName: nginx-internal
       annotations:
-        cert-manager.io/cluster-issuer: internal
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
         hajimari.io/appName: Navidrome
         hajimari.io/icon: music-circle
         hajimari.io/instance: internal
         hajimari.io/group: Media
       hosts:
-        - host: &host navidrome.k8s.grigri
+        - host: &host navidrome.internal.grigri.cloud
           paths:
             - path: /
               pathType: Prefix

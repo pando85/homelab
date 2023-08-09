@@ -69,13 +69,14 @@ spec:
 
   ingress:
     annotations:
-      cert-manager.io/cluster-issuer: internal
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      external-dns.alpha.kubernetes.io/enabled: "true"
       hajimari.io/appName: Vault
       hajimari.io/icon: database-lock
     spec:
       ingressClassName: nginx-internal
       rules:
-        - host: &host vault.k8s.grigri
+        - host: &host vault.internal.grigri.cloud
           http:
             paths:
               - backend:
@@ -207,9 +208,9 @@ spec:
           config:
             - name: urls
               issuing_certificates:
-                - https://vault.k8s.grigri/v1/pki/grigri/ca
+                - https://vault.internal.grigri.cloud/v1/pki/grigri/ca
               crl_distribution_points:
-                - https://vault.k8s.grigri/v1/pki/grigri/crl
+                - https://vault.internal.grigri.cloud/v1/pki/grigri/crl
           roles:
             - name: internal-certificates-grigri
               allow_localhost: false
