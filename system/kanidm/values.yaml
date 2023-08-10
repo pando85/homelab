@@ -66,6 +66,7 @@ app-template:
       tls:
         - hosts:
             - *host
+            - ldaps.idm.internal.grigri.cloud
           secretName: idm-external-tls-certificate
 
   podSecurityContext:
