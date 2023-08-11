@@ -7,117 +7,26 @@ argo-cd:
 
       exec.enabled: "true"
 
-      dex.config: |
-        # Uncomment this block to enable configuration for the expiration time durations.
-        # expiry:
-        #   signingKeys: "6h"
-        #   idTokens: "24h"
+      oidc.config: |
+        name: idm.grigri.cloud
+        issuer: https://dev-123456.oktapreview.com
+        clientID: $CLIENT_ID
+        clientSecret: $CLIENT_SECRET
 
-        # Options for controlling the logger.
-        logger:
-          level: "info"
-          format: "text" # can also be "json"
+        # Optional list of allowed aud claims. If omitted or empty, defaults to the clientID value above (and the
+        # cliClientID, if that is also specified). If you specify a list and want the clientID to be allowed, you must
+        # explicitly include it in the list.
+        # Token verification will pass if any of the token's audiences matches any of the audiences in this list.
+        allowedAudiences:
+        - $CLIENT_ID
 
-        # Uncomment this block to control which response types dex supports. For example
-        # the following response types enable the implicit flow for web-only clients.
-        # Defaults to ["code"], the code flow.
-        # oauth2:
-        #   responseTypes: ["code", "token", "id_token"]
+        # Optional. If false, tokens without an audience will always fail validation. If true, tokens without an audience
+        # will always pass validation.
+        # Defaults to true for Argo CD < 2.6.0. Defaults to false for Argo CD >= 2.6.0.
+        skipAudienceCheckWhenTokenHasNoAudience: false
 
-        # Instead of reading from an external storage, use this list of clients.
-        #
-        # If this option isn't chosen clients may be added through the gRPC API.
-        staticClients:
-          - id: grafana-sso
-            name: Grafana
-            redirectURIs:
-              - 'https://grafana.internal.grigri.cloud/login/generic_oauth'
-            secretEnv: GRAFANA_SSO_CLIENT_SECRET
-
-        connectors:
-        - type: ldap
-          # Required field for connector id.
-          id: ldap
-          # Required field for connector name.
-          name: LDAP.GRIGRI
-          config:
-            # Host and optional port of the LDAP server in the form "host:port".
-            # If the port is not supplied, it will be guessed based on "insecureNoSSL",
-            # and "startTLS" flags. 389 for insecure or StartTLS connections, 636
-            # otherwise.
-            host: ldap.grigri:389
-
-            # Following field is required if the LDAP host is not using TLS (port 389).
-            # Because this option inherently leaks passwords to anyone on the same network
-            # as dex, THIS OPTION MAY BE REMOVED WITHOUT WARNING IN A FUTURE RELEASE.
-            #
-            # insecureNoSSL: true
-
-            # If a custom certificate isn't provide, this option can be used to turn on
-            # TLS certificate checks. As noted, it is insecure and shouldn't be used outside
-            # of explorative phases.
-            #
-            # insecureSkipVerify: true
-
-            # When connecting to the server, connect using the ldap:// protocol then issue
-            # a StartTLS command. If unspecified, connections will use the ldaps:// protocol
-            #
-            startTLS: true
-
-            # Path to a trusted root certificate file. Default: use the host's root CA.
-            #rootCA: /etc/dex/ldap.ca
-
-            # A raw certificate file can also be provided inline.
-            # rootCAData: ( base64 encoded PEM file )
-
-            # The DN and password for an application service account. The connector uses
-            # these credentials to search for users and groups. Not required if the LDAP
-            # server provides access for anonymous auth.
-            # Please note that if the bind password contains a `$`, it has to be saved in an
-            # environment variable which should be given as the value to `bindPW`.
-            bindDN: "$LDAP_BINDDN"
-            bindPW: "$LDAP_BINDPW"
-
-            # The attribute to display in the provided password prompt. If unset, will
-            # display "Username"
-            usernamePrompt: Username
-
-            # User search maps a username and password entered by a user to a LDAP entry.
-            userSearch:
-              # BaseDN to start the search from. It will translate to the query
-              # "(&(objectClass=person)(uid=<username>))".
-              baseDN: "ou=People,dc=grigri,dc=cloud"
-              # Optional filter to apply when searching the directory.
-              #filter: "(objectClass=inetOrgPerson)"
-              # only allow wheel users
-              filter: "(&(objectClass=inetOrgPerson)(memberOf=cn=wheel,ou=Groups,dc=grigri,dc=cloud))"
-
-              # username attribute used for comparing user entries. This will be translated
-              # and combined with the other filter as "(<attr>=<username>)".
-              username: uid
-              # The following three fields are direct mappings of attributes on the user entry.
-              # String representation of the user.
-              idAttr: uid
-              # Required. Attribute to map to Email.
-              emailAttr: mail
-              # Maps to display name of users. No default value.
-              nameAttr: cn
-              preferredUsernameAttr: cn
-
-            # Group search queries for groups given a user entry.
-            groupSearch:
-              # The directory directly above the group entry.
-              baseDN: "ou=Groups,dc=grigri,dc=cloud"
-              # Optional filter to apply when searching the directory.
-              filter: "(objectClass=posixGroup)"
-
-              userMatchers:
-              - userAttr: memberOf
-                # dn cannot be used as LDAP attribute, we have RFC2307bis schema and this is
-                # not working.
-                # fixed in: https://github.com/dexidp/dex/pull/1202
-                groupAttr: dn
-              nameAttr: cn
+        # Optional set of OIDC scopes to request. If omitted, defaults to: ["openid", "profile", "email", "groups"]
+        requestedScopes: ["openid", "profile", "email"]
       # Disable git polling
       timeout.reconciliation: "0"
 
@@ -204,16 +113,16 @@ argo-cd:
     metrics: *metrics
 
     env:
-      - name: LDAP_BINDDN
+      - name: CLIENT_ID
         valueFrom:
           secretKeyRef:
-            name: dex-ldap-user
-            key: dn
-      - name: LDAP_BINDPW
+            name: oidc-client
+            key: client_id
+      - name: CLIENT_SECRET
         valueFrom:
           secretKeyRef:
-            name: dex-ldap-user
-            key: password
+            name: oidc-client
+            key: client_secret
     envFrom:
       - secretRef:
           name: grafana-secret
