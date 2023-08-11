@@ -21,12 +21,12 @@
 
 - Connect to DMZ `192.168.192.0/24`
 - Add DHCP server: range(60-99), but fix agent IPs before add to the cluster.
-- *only for controller HA* - Create lb for apiserver (used HaProxy: increase client, server and tunnel* timeouts to 86400000)
+- _only for controller HA_ - Create lb for apiserver (used HaProxy: increase client, server and
+  tunnel\* timeouts to 86400000)
 - Add DNS entry
 
 **tunnel\***: must be added in `backend->advanced settings->backend pass thru` as
 `timeout tunnel 86400s`
-
 
 ## Servers
 
@@ -35,23 +35,21 @@
 - rock64: [image](https://www.armbian.com/rock64/)
 - odroid-c4: [image](https://www.armbian.com/odroid-c4/)
 - odroid-hc4: [image](https://www.armbian.com/odroid-hc4/)
-- amd64: [usb-stick](https://releases.ubuntu.com/22.04/)
-Use script from `scripts/prepare_sdcard.sh` to prepare instances and amd64 install manually.
+- amd64: [usb-stick](https://releases.ubuntu.com/22.04/) Use script from `scripts/prepare_sdcard.sh`
+  to prepare instances and amd64 install manually.
 
 #### odroid-hc4
 
-**Important**: To be able to boot clean Armbian mainline based u-boot / kernel experiences, you need to remove incompatible Petitboot loader that is shipped with the board.
+**Important**: To be able to boot clean Armbian mainline based u-boot / kernel experiences, you need
+to remove incompatible Petitboot loader that is shipped with the board.
 
 ##### Bootloader Bypass Method
 
-This is now the preferred method.  It is easier, and be performed without a display via SSH
+This is now the preferred method. It is easier, and be performed without a display via SSH
 
-> Install an SD Card with a fresh Armbian image
-> Flip device upside down
-> With a tool, press and hold down the black button.
-> Continue holding button and plug in power to device
-> Login to console or SSH and perform follow normal setup procedures
-> Verify system can access SPI FLASH device and Erase
+> Install an SD Card with a fresh Armbian image Flip device upside down With a tool, press and hold
+> down the black button. Continue holding button and plug in power to device Login to console or SSH
+> and perform follow normal setup procedures Verify system can access SPI FLASH device and Erase
 > Reboot
 
 ```bash
@@ -66,8 +64,7 @@ odroidhc4:~:#
 
 #### Naming convention
 
-All nodes must be named with prefix `k8s-{hardware_tag}-{numerical_id}`.
-For example:
+All nodes must be named with prefix `k8s-{hardware_tag}-{numerical_id}`. For example:
 
 - k8s-rock64-3
 - k8s-odroid-c4-1
@@ -78,7 +75,6 @@ Also, consider their use case and performance profile. For example, for Ceph nod
 - k8s-sas-ssd-1
 - k8s-hot-storage-2
 
-
 ### Troubleshooting
 
 #### Same mac problem
@@ -86,7 +82,8 @@ Also, consider their use case and performance profile. For example, for Ceph nod
 Editing `/boot/ArmbianEnv.txt` didn't work.
 
 `/etc/network/interfaces`:
-```
+
+```conf
 ...
 auto eth0
 iface eth0 inet dhcp
@@ -113,7 +110,7 @@ Change uboot to use ddr 333 MHz frequency.
 
 Compile uboot binaries or download from here: https://nextcloud.grigri.cloud/f/451602
 
-```
+```bash
 git clone https://github.com/armbian/build.git
 cd build
 # edit `config/sources/families/include/rockchip64_common.inc` with this values for rock64:
@@ -132,7 +129,8 @@ docker cp $CONTAINER_ID:/root/armbian/cache/sources/u-boot/v2020.10/trust.bin .
 ```
 
 Then, in rock64 SD card:
-```
+
+```bash
 dd if=idbloader.bin of=/dev/mmcblk0 seek=64 conv=notrunc
 dd if=uboot.img of=/dev/mmcblk0 seek=16384 conv=notrunc
 dd if=trust.bin of=/dev/mmcblk0 seek=24576 conv=notrunc
@@ -140,7 +138,8 @@ sync
 ```
 
 Ref:
- - [Stability problems](https://forum.armbian.com/topic/15082-rock64-focal-fossa-memory-frequency/?tab=comments#comment-108127)
+
+- [Stability problems](https://forum.armbian.com/topic/15082-rock64-focal-fossa-memory-frequency/?tab=comments#comment-108127)
 
 ## Cluster
 
