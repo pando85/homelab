@@ -114,15 +114,15 @@ grafana:
     auth.generic_oauth:
       enabled: true
       allow_sign_up: true
-      name: Dex
-      client_id: grafana-sso
+      name: idm.grigri.cloud
+      client_id: $__env{GRAFANA_SSO_CLIENT_ID}
       client_secret: $__env{GRAFANA_SSO_CLIENT_SECRET}
-      scopes: openid profile email groups
-      auth_url: https://argocd.internal.grigri.cloud/api/dex/auth
-      token_url: https://argocd.internal.grigri.cloud/api/dex/token
-      api_url: https://argocd.internal.grigri.cloud/api/dex/userinfo
+      scopes: openid profile email
+      auth_url: https://idm.grigri.cloud/oauth2/authorise
+      token_url: https://idm.grigri.cloud/oauth2/token
+      api_url: https://idm.grigri.cloud/oauth2/openid/grafana/userinfo
       use_pkce: true
-      role_attribute_path: email == 'pando855@gmail.com' && 'Admin'
+      role_attribute_path: contains(info.scopes[*], 'admin') && 'Admin' || 'Viewer'
 
   extraVolumeMounts:
     - name: ca-bundle
