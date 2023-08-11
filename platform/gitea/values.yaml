@@ -94,18 +94,11 @@ gitea:
         # publicSSHKeyAttribute:
         synchronizeUsers: true
 
-    oauth: []
-      # - name: 'OAuth 1'
-      #   provider:
-      #   key:
-      #   secret:
-      #   existingSecret:
-      #   autoDiscoverUrl:
-      #   useCustomUrls:
-      #   customAuthUrl:
-      #   customTokenUrl:
-      #   customProfileUrl:
-      #   customEmailUrl:
+    oauth:
+      - name: kanidm
+        provider: idm.grigri.cloud
+        existingSecret: oidc-client
+        autoDiscoverUrl: https://idm.grigri.cloud/oauth2/openid/gitea/.well-known/openid-configuration
 
   extraContainerVolumeMounts:
     - name: ca-bundle
