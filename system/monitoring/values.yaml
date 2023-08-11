@@ -109,7 +109,7 @@ grafana:
       root_url: https://grafana.internal.grigri.cloud
 
     log:
-      level: info
+      level: debug
 
     auth.generic_oauth:
       enabled: true
