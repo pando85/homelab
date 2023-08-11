@@ -96,7 +96,7 @@ gitea:
 
     oauth:
       - name: kanidm
-        provider: idm.grigri.cloud
+        provider: openidConnect
         existingSecret: oidc-client
         autoDiscoverUrl: https://idm.grigri.cloud/oauth2/openid/gitea/.well-known/openid-configuration
 
