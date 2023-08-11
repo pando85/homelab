@@ -10,7 +10,6 @@ In order to use Metallb in BGP mode we must configure Pfsense as router to be ab
 BGP route table and route all network to that loadbalancer IPs. We use
 [this tutorial](https://www.danmanners.com/posts/pfsense-bgp-kubernetes/)
 
-
 - install package ffr
 
 - configure `Services->FRR->Global Settings`:
@@ -29,7 +28,6 @@ BGP route table and route all network to that loadbalancer IPs. We use
     action: permit
     Sequence: 100
   ```
-
 
 - `Services->FRR->BGP->BGP`:
 
