@@ -10,15 +10,15 @@ argo-cd:
       oidc.config: |
         name: idm.grigri.cloud
         issuer: https://idm.grigri.cloud/oauth2/openid/argocd
-        clientID: $CLIENT_ID
-        clientSecret: $CLIENT_SECRET
+        clientID: $oidc.kanidm.clientID
+        clientSecret: $oidc.kanidm.clientSecret
 
         # Optional list of allowed aud claims. If omitted or empty, defaults to the clientID value above (and the
         # cliClientID, if that is also specified). If you specify a list and want the clientID to be allowed, you must
         # explicitly include it in the list.
         # Token verification will pass if any of the token's audiences matches any of the audiences in this list.
         allowedAudiences:
-        - $CLIENT_ID
+        - $oidc.kanidm.clientID
 
         # Optional. If false, tokens without an audience will always fail validation. If true, tokens without an audience
         # will always pass validation.
@@ -80,18 +80,6 @@ argo-cd:
       createSecret: false
 
   server:
-    env:
-      - name: CLIENT_ID
-        valueFrom:
-          secretKeyRef:
-            name: oidc-client
-            key: client_id
-      - name: CLIENT_SECRET
-        valueFrom:
-          secretKeyRef:
-            name: oidc-client
-            key: client_secret
-
     resources:
       limits:
         cpu: 200m
