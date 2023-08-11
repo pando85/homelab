@@ -23,7 +23,7 @@ argo-cd:
         # Optional. If false, tokens without an audience will always fail validation. If true, tokens without an audience
         # will always pass validation.
         # Defaults to true for Argo CD < 2.6.0. Defaults to false for Argo CD >= 2.6.0.
-        skipAudienceCheckWhenTokenHasNoAudience: false
+        skipAudienceCheckWhenTokenHasNoAudience: true
 
         # Optional set of OIDC scopes to request. If omitted, defaults to: ["openid", "profile", "email", "groups"]
         requestedScopes: ["openid", "profile", "email"]
