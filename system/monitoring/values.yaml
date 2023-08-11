@@ -124,12 +124,6 @@ grafana:
       use_pkce: true
       role_attribute_path: contains(info.scopes[*], 'admin') && 'Admin' || 'Viewer'
 
-  extraVolumeMounts:
-    - name: ca-bundle
-      mountPath: /etc/ssl/certs/ca-certificates.crt
-      readOnly: true
-      hostPath: /etc/ssl/certs/ca-certificates.crt
-
   revisionHistoryLimit: 2
 
 coreDns:
