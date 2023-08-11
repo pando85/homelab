@@ -21,6 +21,34 @@ framework to build your own homelab.
 This section provides a high level overview of the project. For further information, please see the
 [documentation](https://pando85.github.io/homelab/).
 
+## ⛵ Kubernetes
+
+This repo is focused in maintain in a GitOps practical way my home infrastructure.
+[Ansible](https://www.ansible.com/) is used to deploy a simple [K3s](https://k3s.io/) cluster.
+Managed by [ArgoCD](https://argo-cd.readthedocs.io/en/stable/).
+
+### Installation
+
+The cluster is running on [Debian](https://www.debian.org/) based distributions, deployed on
+bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cluster.
+
+### Core components
+
+- [external-secrets](https://github.com/external-secrets/external-secrets): External Secrets
+  Operator reads information from a Vault and automatically injects the values as Kubernetes
+  Secrets.
+- [hashicorp/vault](https://www.vaultproject.io): A tool for secrets management, encryption as a
+  service, and privileged access management.
+- [kubernetes-sigs/external-dns](https://github.com/kubernetes-sigs/external-dns): Automatically
+  manages DNS records from my cluster in a cloud DNS provider.
+- [jetstack/cert-manager](https://cert-manager.io/docs/): Creates SSL certificates for services in
+  my Kubernetes cluster.
+- [kubernetes/ingress-nginx](https://github.com/kubernetes/ingress-nginx/): Ingress controller to
+  expose HTTP traffic to pods over DNS.
+- [democratic-csi](https://github.com/democratic-csi/democratic-csi): implements the CSI (container
+  storage interface) spec providing storage via zfs-based storage systems.
+- [kanidm](https://kanidm.com/): A simple, secure and fast identity management platform.
+
 ## 🔧 Hardware
 
 | Device                              | Count | OS Disk Size | Data Disk Size                      | Ram  | Operating System | Purpose    |
