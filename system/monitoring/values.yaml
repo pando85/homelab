@@ -122,7 +122,8 @@ grafana:
       token_url: https://idm.grigri.cloud/oauth2/token
       api_url: https://idm.grigri.cloud/oauth2/openid/grafana/userinfo
       use_pkce: true
-      role_attribute_path: contains(info.scopes[*], 'admin') && 'Admin' || 'Viewer'
+      groups_attribute_path: scopes
+      role_attribute_path: contains(info.groups[*], 'admin') && 'Admin' || 'Viewer'
 
   revisionHistoryLimit: 2
 
