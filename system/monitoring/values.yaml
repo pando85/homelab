@@ -57,8 +57,6 @@ grafana:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       external-dns.alpha.kubernetes.io/enabled: "true"
-      hajimari.io/appName: Grafana
-      hajimari.io/icon: chart-bar
     hosts:
       - &host grafana.internal.grigri.cloud
     tls:

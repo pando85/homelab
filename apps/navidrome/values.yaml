@@ -33,10 +33,6 @@ app-template:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
-        hajimari.io/appName: Navidrome
-        hajimari.io/icon: music-circle
-        hajimari.io/instance: internal
-        hajimari.io/group: Media
       hosts:
         - host: &host navidrome.internal.grigri.cloud
           paths:

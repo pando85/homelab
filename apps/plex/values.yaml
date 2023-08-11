@@ -23,8 +23,6 @@ app-template:
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        hajimari.io/appName: Plex
-        hajimari.io/icon: mdi:television-classic
       hosts:
         - host: &host plex.internal.grigri.cloud
           paths:

@@ -19,8 +19,6 @@ app-template:
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        hajimari.io/appName: Radarr
-        hajimari.io/icon: mdi:filmstrip
       hosts:
         - host: &host radarr.internal.grigri.cloud
           paths:
@@ -40,8 +38,6 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
         nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
-        hajimari.io/appName: Radarr
-        hajimari.io/icon: mdi:filmstrip
       hosts:
         - host: &host radarr.grigri.cloud
           paths:

@@ -18,8 +18,6 @@ app-template:
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        hajimari.io/appName: Bazarr
-        hajimari.io/icon: mdi:subtitles-outline
       hosts:
         - host: &host bazarr.internal.grigri.cloud
           paths:

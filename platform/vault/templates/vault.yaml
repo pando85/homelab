@@ -71,8 +71,6 @@ spec:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       external-dns.alpha.kubernetes.io/enabled: "true"
-      hajimari.io/appName: Vault
-      hajimari.io/icon: database-lock
     spec:
       ingressClassName: nginx-internal
       rules:

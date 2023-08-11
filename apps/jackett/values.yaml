@@ -25,10 +25,6 @@ app-template:
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        hajimari.io/appName: jackett
-        hajimari.io/icon: t-shirt-crew
-        hajimari.io/instance: internal
-        hajimari.io/group: Media
       hosts:
         - host: &host jackett.internal.grigri.cloud
           paths:
