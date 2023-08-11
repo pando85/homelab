@@ -50,6 +50,8 @@ gitea:
         enabled: true
 
     config:
+      oauth2_client:
+        ENABLE_AUTO_REGISTRATION: true
       server:
         LANDING_PAGE: explore
         ROOT_URL: https://gitea.grigri.cloud
@@ -79,20 +81,6 @@ gitea:
     additionalConfigSources:
       - secret:
           secretName: gitea-app-ini-database
-
-    ldap:
-      - name: ldap.grigri
-        existingSecret: gitea-ldap-user
-        securityProtocol: starttls
-        host: ldap.grigri
-        port: 389
-        userSearchBase: dc=grigri,dc=cloud
-        userFilter: (&(objectClass=inetOrgPerson)(memberof=cn=gitea,ou=Groups,dc=grigri,dc=cloud)(uid=%s))
-        adminFilter: (&(objectClass=inetOrgPerson)(memberOf=cn=wheel,ou=Groups,dc=grigri,dc=cloud))
-        emailAttribute: mail
-        usernameAttribute: cn
-        # publicSSHKeyAttribute:
-        synchronizeUsers: true
 
     oauth:
       - name: kanidm
