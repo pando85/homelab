@@ -17,6 +17,10 @@ oauth2-proxy:
 
   proxyVarsAsSecrets: true
 
+  deploymentAnnotations:
+    annotations:
+      secret.reloader.stakater.com/reload: oauth2-proxy
+
   config:
     existingSecret: oauth2-proxy
 
