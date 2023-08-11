@@ -80,6 +80,18 @@ argo-cd:
       createSecret: false
 
   server:
+    env:
+      - name: CLIENT_ID
+        valueFrom:
+          secretKeyRef:
+            name: oidc-client
+            key: client_id
+      - name: CLIENT_SECRET
+        valueFrom:
+          secretKeyRef:
+            name: oidc-client
+            key: client_secret
+
     resources:
       limits:
         cpu: 200m
