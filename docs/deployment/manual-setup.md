@@ -108,7 +108,7 @@ make first-boot
 
 Change uboot to use ddr 333 MHz frequency.
 
-Compile uboot binaries or download from here: https://nextcloud.grigri.cloud/f/451602
+Compile uboot binaries or download from [here](https://nextcloud.grigri.cloud/f/451602)
 
 ```bash
 git clone https://github.com/armbian/build.git
