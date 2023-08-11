@@ -1,4 +1,20 @@
-# Nextcloud
+# Nextcloud <!-- omit from toc -->
+
+- [Migrate auth to OIDC](#migrate-auth-to-oidc)
+- [Migrate Nextcloud](#migrate-nextcloud)
+  - [Nextcloud](#nextcloud)
+    - [apps](#apps)
+    - [data](#data)
+  - [Postgres](#postgres)
+- [occ command](#occ-command)
+
+## Migrate auth to OIDC
+
+- Configure Kanidm oauth2 with
+[OpenID Connect user backend for Nextcloud](https://github.com/nextcloud/user_oidc).
+- Follow Kanidm guide for
+[Nextcloud config](https://github.com/kanidm/kanidm/blob/054b580fe650f012063240ba6f951c99f3c13ddc/book/src/integrations/oauth2.md#nextcloud).
+- Use`displayname` from Kanidm (`name` in OIDC JWT) as user ID and keep user IDs from LDAP auth.
 
 ## Migrate Nextcloud
 
