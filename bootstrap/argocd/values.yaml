@@ -9,7 +9,7 @@ argo-cd:
 
       oidc.config: |
         name: idm.grigri.cloud
-        issuer: https://dev-123456.oktapreview.com
+        issuer: https://idm.grigri.cloud/oauth2/openid/argocd/
         clientID: $CLIENT_ID
         clientSecret: $CLIENT_SECRET
 
