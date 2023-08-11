@@ -109,7 +109,7 @@ grafana:
       root_url: https://grafana.internal.grigri.cloud
 
     log:
-      level: debug
+      level: info
 
     auth.generic_oauth:
       enabled: true
@@ -123,6 +123,7 @@ grafana:
       api_url: https://idm.grigri.cloud/oauth2/openid/grafana/userinfo
       use_pkce: true
       groups_attribute_path: scopes
+      name_attribute_path: preferred_username
       role_attribute_path: contains(scopes[*], 'admin') && 'Admin' || 'Viewer'
 
   revisionHistoryLimit: 2
