@@ -118,7 +118,7 @@ grafana:
       client_id: $__env{GRAFANA_SSO_CLIENT_ID}
       client_secret: $__env{GRAFANA_SSO_CLIENT_SECRET}
       scopes: openid profile email
-      auth_url: https://idm.grigri.cloud/oauth2/authorise
+      auth_url: https://idm.grigri.cloud/ui/oauth2
       token_url: https://idm.grigri.cloud/oauth2/token
       api_url: https://idm.grigri.cloud/oauth2/openid/grafana/userinfo
       use_pkce: true
