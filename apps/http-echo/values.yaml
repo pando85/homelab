@@ -55,10 +55,10 @@ app-template:
   resources:
     requests:
       cpu: 10m
-      memory: 4Mi
+      memory: 14Mi
     limits:
       cpu: 200m
-      memory: 256Mi
+      memory: 50Mi
 
   topologySpreadConstraints:
     - maxSkew: 1
