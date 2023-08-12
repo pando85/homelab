@@ -8,8 +8,8 @@ app-template:
     repository: deluan/navidrome
     tag: 0.49.3
   env:
-    #ND_REVERSEPROXYUSERHEADER: "X-User"
-    #ND_REVERSEPROXYWHITELIST: "10.0.0.0/8"
+    ND_REVERSEPROXYUSERHEADER: "X-Auth-Request-Preferred-Username"
+    ND_REVERSEPROXYWHITELIST: "10.0.0.0/8"
     ND_SCANSCHEDULE: 1h
     ND_LOGLEVEL: info
     ND_SESSIONTIMEOUT: 24h
@@ -33,6 +33,9 @@ app-template:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
+        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
+        nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
+        nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Preferred-Username"
       hosts:
         - host: &host navidrome.internal.grigri.cloud
           paths:
@@ -50,6 +53,9 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
+        nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
+        nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Preferred-Username"
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
