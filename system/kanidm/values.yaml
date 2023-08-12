@@ -111,7 +111,7 @@ app-template:
       readOnly: true
   resources:
     requests:
-      cpu: 50m
-      memory: 400Mi
+      cpu: 10m
+      memory: 40Mi
     limits:
-      memory: 1Gi
+      memory: 200Mi
