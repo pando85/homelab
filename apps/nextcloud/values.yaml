@@ -47,11 +47,6 @@ nextcloud:
         location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)(?:$|/)  { return 404; }
         location ~ ^/(?:\.|autotest|occ|issue|indie|db_|console)              { return 404; }
 
-        # Rule borrowed from .htaccess
-        #location /remote {
-        #    return 301 /remote.php$request_uri;
-        #}
-
       nginx.ingress.kubernetes.io/enable-global-auth: "false"
     tls:
       - hosts:
