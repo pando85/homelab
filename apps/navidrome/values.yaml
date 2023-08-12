@@ -8,7 +8,7 @@ app-template:
     repository: deluan/navidrome
     tag: 0.49.3
   env:
-    #ND_REVERSEPROXYUSERHEADER: "Remote-User"
+    #ND_REVERSEPROXYUSERHEADER: "X-User"
     #ND_REVERSEPROXYWHITELIST: "10.0.0.0/8"
     ND_SCANSCHEDULE: 1h
     ND_LOGLEVEL: info
