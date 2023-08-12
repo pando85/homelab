@@ -15,11 +15,11 @@ nextcloud:
         server_tokens off;
         proxy_hide_header X-Powered-By;
 
-        # Rule borrowed from .htaccess to handle Microsoft DAV clients
+        # Rule borrowed from `.htaccess` to handle Microsoft DAV clients
         location = / {
-          if ( $http_user_agent ~ ^DavClnt ) {
-            return 302 /remote.php/webdav/$is_args$args;
-          }
+            if ( $http_user_agent ~ ^DavClnt ) {
+                return 302 /remote.php/webdav/$is_args$args;
+            }
         }
 
         location = /robots.txt {
@@ -28,29 +28,24 @@ nextcloud:
             access_log off;
         }
 
+        # Make a regex exception for `/.well-known` so that clients can still
+        # access it despite the existence of the regex rule
+        # `location ~ /(\.|autotest|...)` which would otherwise handle requests
+        # for `/.well-known`.
         location ^~ /.well-known {
+            # The following 6 rules are borrowed from `.htaccess`
 
-          # The rules in this block are an adaptation of the rules
-          # in .htaccess that concern /.well-known.
+            location = /.well-known/carddav     { return 301 /remote.php/dav/; }
+            location = /.well-known/caldav      { return 301 /remote.php/dav/; }
+            # Anything else is dynamically handled by Nextcloud
+            location ^~ /.well-known            { return 301 /index.php$uri; }
 
-          location = /.well-known/carddav { return 301 /remote.php/dav/; }
-          location = /.well-known/caldav  { return 301 /remote.php/dav/; }
-
-          location /.well-known/acme-challenge    { try_files $uri $uri/ =404; }
-          location /.well-known/pki-validation    { try_files $uri $uri/ =404; }
-
-          # Let Nextcloud's API for /.well-known URIs handle all other
-          # requests by passing them to the front-end controller.
-          return 301 /index.php$request_uri;
+            try_files $uri $uri/ =404;
         }
 
-        # Rules borrowed from .htaccess to hide certain paths from clients
-        location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)/ {
-          deny all;
-        }
-        location ~ ^/(?:autotest|occ|issue|indie|db_|console) {
-          deny all;
-        }
+        # Rules borrowed from `.htaccess` to hide certain paths from clients
+        location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)(?:$|/)  { return 404; }
+        location ~ ^/(?:\.|autotest|occ|issue|indie|db_|console)              { return 404; }
 
         # Rule borrowed from .htaccess
         #location /remote {
