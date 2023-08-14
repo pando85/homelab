@@ -29,11 +29,11 @@ oauth2-proxy:
     set-xauthrequest: true
     # Add X-Auth-Request-Access-Token to NginX response
     pass-access-token: true
+    pass-authorization-header: true
     oidc-issuer-url: https://idm.grigri.cloud/oauth2/openid/k8s-oauth2-proxy
     code-challenge-method: S256
     skip-provider-button: true
     reverse-proxy: true
-    pass-authorization-header: true
     email-domain: "*"
     cookie-domain: .grigri.cloud
     whitelist-domain: .grigri.cloud
