@@ -1,4 +1,4 @@
-- name: restart k3s
+- name: Restart k3s
   systemd:
     name: k3s
     daemon_reload: true

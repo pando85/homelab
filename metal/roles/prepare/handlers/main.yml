@@ -1,44 +1,44 @@
 ---
 
-- name: update-ca-certificates
+- name: update-ca-certificates  # noqa: name[casing]
   command: update-ca-certificates
 
-- name: restart sshd
+- name: restart sshd  # noqa: name[casing]
   service:
     name: sshd
     state: restarted
 
-- name: update grub
+- name: update grub  # noqa: name[casing]
   command: update-grub
 
-- name: restart cpufrequtils
+- name: restart cpufrequtils  # noqa: name[casing]
   service:
     name: cpufrequtils
     state: restarted
 
-- name: restart systemd-logind
+- name: restart systemd-logind  # noqa: name[casing]
   systemd:
     name: systemd-logind
     daemon_reload: true
     state: restarted
 
-- name: restart systemd-journald
+- name: restart systemd-journald  # noqa: name[casing]
   systemd:
     name: systemd-journald
     daemon_reload: true
     state: restarted
 
-- name: apply network interface
+- name: apply network interface  # noqa: name[casing]
   command: netplan apply
 
-- name: unattended-upgrades | restart systemd service
+- name: unattended-upgrades | restart systemd service  # noqa: name[casing]
   ansible.builtin.service:
     name: unattended-upgrades.service
     daemon_reload: true
     enabled: true
     state: restarted
 
-- name: restart server
+- name: restart server  # noqa: name[casing]
   vars:
     ansible_user: "{{ prepare_username }}"
   reboot:

@@ -4,3 +4,4 @@ pbr~=5.9.0
 jmespath~=1.0.1
 ruamel.yaml~=0.17.21
 openshift~=0.13.1
+ansible-lint~=6.17.2

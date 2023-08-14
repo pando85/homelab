@@ -24,7 +24,8 @@
           rsync -av --delete -e "ssh -i {{ ansible_user_dir }}/id_ed25519"
           /var/lib/rancher/k3s/server/db/snapshots/ backup@{{ backup_target_host }}:{{ backup_target_dir }}
 
-    - debug:
+    - name: Echo public key
+      debug:
         msg: |
           Create {{ backup_target_dir }} and
           add key to authorized_keys on backup host user: {{ key.public_key }} root@{{ ansible_hostname }}

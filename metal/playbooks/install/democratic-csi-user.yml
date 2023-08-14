@@ -15,7 +15,7 @@
         shell: /bin/bash
         uid: 989
         groups: "democraticcsi"
-        append: yes
+        append: true
       tags:
         - democratic-csi
 
@@ -35,4 +35,4 @@
       tags:
         - democratic-csi
 
-    # currently added also to AllowUsers in `/etc/sshd_config`
+# currently added also to AllowUsers in `/etc/sshd_config`

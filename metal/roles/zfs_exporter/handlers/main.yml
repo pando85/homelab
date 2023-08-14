@@ -1,5 +1,5 @@
 ---
-- name: restart zfs-exporter
+- name: Restart zfs-exporter
   become: true
   systemd:
     name: zfs-exporter

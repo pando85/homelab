@@ -19,4 +19,4 @@
 - name: Install zfs-exporter
   hosts: grigri
   roles:
-    - zfs-exporter
+    - zfs_exporter

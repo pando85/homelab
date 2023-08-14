@@ -10,12 +10,13 @@
     shell: /bin/bash
     uid: 1000
     groups: "sudo,{{ prepare_username }}"
-    append: yes
+    append: true
 
 - name: user | Configure vim as default editor
   copy:
     content: "export EDITOR=vi"
     dest: /etc/profile.d/editor.sh
+    mode: "0644"
 
 - name: user | Allow sudo without password
   lineinfile:

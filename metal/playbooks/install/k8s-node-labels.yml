@@ -7,15 +7,17 @@
       vars:
         inventory_node_labels: []
       set_fact:
-        inventory_node_labels: "{{ inventory_node_labels + [ '%s=%s'|format(item.key, item.value) ] }}"
-      loop: "{{ node_labels|d({})|dict2items }}"
+        inventory_node_labels: "{{ inventory_node_labels + ['%s=%s' | format(item.key, item.value)] }}"
+      loop: "{{ node_labels | d({}) | dict2items }}"
       when:
         - node_labels is defined
         - node_labels is mapping
       tags:
         - node-tag
 
-    - debug: var=inventory_node_labels
+    - name: Print node labels
+      debug:
+        var: inventory_node_labels
       tags:
         - node-tag
 
@@ -34,15 +36,17 @@
       vars:
         inventory_node_annotations: []
       set_fact:
-        inventory_node_annotations: "{{ inventory_node_annotations + [ '%s=%s'|format(item.key, item.value) ] }}"
-      loop: "{{ node_annotations|d({})|dict2items }}"
+        inventory_node_annotations: "{{ inventory_node_annotations + ['%s=%s' | format(item.key, item.value)] }}"
+      loop: "{{ node_annotations | d({}) | dict2items }}"
       when:
         - node_annotations is defined
         - node_annotations is mapping
       tags:
         - node-annotations
 
-    - debug: var=inventory_node_annotations
+    - name: Print annotations
+      debug:
+        var: inventory_node_annotations
       tags:
         - node-annotations
 

@@ -4,14 +4,14 @@
   register: need_python
   failed_when: false
   changed_when: false
-  check_mode: no
+  check_mode: false
 
 - name: python | Check if python3 is installed
   raw: which python3
   register: need_python3
   failed_when: false
   changed_when: false
-  check_mode: no
+  check_mode: false
 
 - name: python | Create a symbolic link
   file:

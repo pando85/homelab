@@ -21,14 +21,14 @@
   filesystem:
     fstype: ext4
     dev: "{{ item.dev_id }}-part1"
-    force: "{{ item.force_format | default(false) }}"
+    force: "{{ item.force_format | default(prepare_additional_disks_force_format) }}"
   tags:
     - additional-disk
 
 - name: additional-disk | Get UUID for partition
   command: blkid -s UUID -o value "{{ item.dev_id }}-part1"
   register: disk_blkid
-  check_mode: no
+  check_mode: false
   changed_when: false
   tags:
     - additional-disk

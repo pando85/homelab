@@ -22,7 +22,7 @@ prepare_basic_packages:
   - htop
   - bpftrace
   - bpfcc-tools
-  #- linux-tools-{{ ansible_kernel }}
+  # -linux-tools-{{ ansible_kernel }}
   - sysstat
   - lsof
   - apparmor

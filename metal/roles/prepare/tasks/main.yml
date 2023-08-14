@@ -17,7 +17,8 @@
   when: prepare_max_cpu_freq is defined
   notify: restart cpufrequtils
 
-- meta: flush_handlers
+- name: Ensure handlers are executed
+  meta: flush_handlers
 
 - name: Generate new machine-id
   shell: >
@@ -42,7 +43,7 @@
     - name: Upgrade all packages to the latest version
       apt:
         name: "*"
-        state: latest
+        state: latest  # noqa: package-latest
         force_apt_get: true
         update_cache: true
       notify: restart server
@@ -50,10 +51,12 @@
     - name: Restart node if necessary after first upgrade
       meta: flush_handlers
 
-- debug: var=prepare_additional_disks
+- name: Print additional disk config
+  debug:
+    var: prepare_additional_disks
 
 - name: Additional storage
-  include_tasks: additional_disk.yml
+  include_tasks: additional-disk.yml
   loop: "{{ prepare_additional_disks }}"
   tags:
     - additional-disk
@@ -75,7 +78,7 @@
 - name: Install basic packages
   apt:
     name: "{{ prepare_basic_packages }}"
-    state: latest
+    state: present
     force_apt_get: true
     update_cache: true
 
@@ -116,6 +119,7 @@
   copy:
     content: "{{ item.cert }}"
     dest: "/usr/local/share/ca-certificates/{{ item.name }}.crt"
+    mode: "0444"
   when:
     - prepare_custom_cas is defined
   loop: "{{ prepare_custom_cas }}"
@@ -143,7 +147,7 @@
   template:
     src: hosts.j2
     dest: /etc/hosts
-    mode: 0644
+    mode: "0644"
   tags:
     - hostname
 
@@ -151,7 +155,7 @@
   copy:
     src: journald.conf
     dest: /etc/systemd/journald.conf
-    mode: 0644
+    mode: "0644"
   tags:
     - journald
     - logs
@@ -168,11 +172,11 @@
     - sysstat-collect
 
 - name: Set up storage dependencies
-  import_tasks: storage_dependencies.yml
+  import_tasks: storage-dependencies.yml
   tags:
     - storage-dependencies
 
 - name: Install unattended upgrades
-  import_tasks: unattended_upgrades.yml
+  import_tasks: unattended-upgrades.yml
   tags:
     - unattended-upgrades

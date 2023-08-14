@@ -11,7 +11,7 @@
     dest: "/usr/local/bin/k3s-{{ k3s_version }}"
     owner: root
     group: root
-    mode: 0755
+    mode: "0755"
   tags:
     k3s-upgrade
 
@@ -22,8 +22,8 @@
     state: link
     owner: root
     group: root
-    mode: 0755
-  notify: restart k3s
+    mode: "0755"
+  notify: Restart k3s
   tags:
     k3s-upgrade
 
@@ -31,7 +31,7 @@
   file:
     path: "{{ item }}"
     state: directory
-    mode: 0755
+    mode: "0755"
   loop:
     - /etc/rancher/k3s
     - /etc/rancher/node
@@ -48,7 +48,7 @@
   copy:
     content: "{{ lookup('community.general.random_string', length=32) }}"
     dest: "{{ k3s_token_file }}"
-    mode: 0600
+    mode: "0600"
 
 - name: Get k3s token from the first node
   run_once: true
@@ -61,19 +61,19 @@
   copy:
     content: "{{ k3s_token_base64.content | b64decode }}"
     dest: "{{ k3s_token_file }}"
-    mode: 0600
+    mode: "0600"
 
 - name: Copy k3s config files
   template:
     src: "{{ item.src }}"
     dest: "{{ item.dest }}"
-    mode: 0644
+    mode: "0644"
   loop:
     - src: config.yaml.j2
       dest: "{{ k3s_config_file }}"
     - src: k3s.service.j2
       dest: "{{ k3s_service_file }}"
-  notify: restart k3s
+  notify: Restart k3s
 
 - name: Enable k3s service
   systemd:
@@ -97,7 +97,7 @@
   copy:
     content: "{{ kubeconfig_base64.content | b64decode | replace('127.0.0.1', hostvars[groups['kube_control_plane'][0]].ansible_hostname) }}"
     dest: "{{ ansible_path }}/kubeconfig.yaml"
-    mode: 0600
+    mode: "0600"
   delegate_to: localhost
   become: false
   run_once: true
