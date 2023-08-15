@@ -310,7 +310,7 @@ rook-ceph-cluster:
     # see https://rook.io/docs/rook/v1.10/Storage-Configuration/Ceph-CSI/ceph-csi-snapshot/#rbd-snapshots for available configuration
     parameters: {}
 
-  # cephObjectStores:
+  cephObjectStores: []
   #   - name: ceph-objectstore
   #     # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Object-Storage/ceph-object-store-crd.md#object-store-settings for available configuration
   #     spec:
