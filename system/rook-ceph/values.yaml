@@ -1,0 +1,412 @@
+rook-ceph:
+  currentNamespaceOnly: true
+
+  logLevel: INFO
+
+  csi:
+    # -- Set logging level for cephCSI containers maintained by the cephCSI.
+    # Supported values from 0 to 5. 0 for general useful logs, 5 for trace level verbosity.
+    logLevel: 0
+    # -- CEPH CSI RBD provisioner resource requirement list
+    # csi-omap-generator resources will be applied only if `enableOMAPGenerator` is set to `true`
+    # @default -- see values.yaml
+    # TODO: adjust resources
+    csiRBDProvisionerResource: |
+      - name : csi-provisioner
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-resizer
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-attacher
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-snapshotter
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-rbdplugin
+        resource:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+      - name : csi-omap-generator
+        resource:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+      - name : liveness-prometheus
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 100m
+
+    # -- CEPH CSI RBD plugin resource requirement list
+    # @default -- see values.yaml
+    csiRBDPluginResource: |
+      - name : driver-registrar
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 100m
+      - name : csi-rbdplugin
+        resource:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+      - name : liveness-prometheus
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 100m
+
+    # -- CEPH CSI CephFS provisioner resource requirement list
+    # @default -- see values.yaml
+    csiCephFSProvisionerResource: |
+      - name : csi-provisioner
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-resizer
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-attacher
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-snapshotter
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+      - name : csi-cephfsplugin
+        resource:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+      - name : liveness-prometheus
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 100m
+    # -- CEPH CSI CephFS plugin resource requirement list
+    # @default -- see values.yaml
+    csiCephFSPluginResource: |
+      - name : driver-registrar
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 100m
+      - name : csi-cephfsplugin
+        resource:
+          requests:
+            memory: 512Mi
+            cpu: 250m
+          limits:
+            memory: 1Gi
+            cpu: 500m
+      - name : liveness-prometheus
+        resource:
+          requests:
+            memory: 128Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 100m
+
+    serviceMonitor:
+      # -- Enable ServiceMonitor for Ceph CSI drivers
+      enabled: true
+      # -- Service monitor scrape interval
+      interval: 30s
+
+    kubeletDirPath: /var/lib/kubelet
+
+  resources:
+    requests:
+      cpu: 40m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+  monitoring:
+    # -- Enable monitoring. Requires Prometheus to be pre-installed.
+    # Enabling will also create RBAC rules to allow Operator to create ServiceMonitors
+    enabled: true
+
+rook-ceph-cluster:
+  toolbox:
+    enabled: true
+    resources:
+      limits:
+        cpu: "500m"
+        memory: "1Gi"
+      requests:
+        cpu: "100m"
+        memory: "128Mi"
+
+  monitoring:
+    enabled: true
+    createPrometheusRules: true
+
+  configOverride: |
+    [global]
+    osd_pool_default_size = 2
+    osd_pool_default_min_size = 1
+
+  cephClusterSpec:
+    mon:
+      # Set the number of mons to be started. Generally recommended to be 3.
+      # For highest availability, an odd number of mons should be specified.
+      count: 3
+
+    mgr:
+      # When higher availability of the mgr is needed, increase the count to 2.
+      # In that case, one mgr will be active and one in standby. When Ceph updates which
+      # mgr is active, Rook will update the mgr services to match the active mgr.
+      count: 2
+      modules:
+        # Several modules should not need to be included in this list. The "dashboard" and "monitoring" modules
+        # are already enabled by other settings in the cluster CR.
+        - name: pg_autoscaler
+          enabled: true
+
+    dashboard:
+      enabled: true
+      urlPrefix: /
+      ssl: true
+
+    network:
+      provider: host
+
+    # enable log collector, daemons will log on files and rotate
+    logCollector:
+      enabled: false
+    resources:
+      mgr:
+        requests:
+          cpu: "125m"
+          memory: "512Mi"
+        limits:
+          memory: "1219Mi"
+      mon:
+        requests:
+          cpu: "49m"
+          memory: "477Mi"
+        limits:
+          memory: "1059Mi"
+      osd:
+        requests:
+          cpu: "442m"
+          memory: "1278Mi"
+        limits:
+          memory: "3Gi"
+      exporter:
+        limits:
+          cpu: "250m"
+          memory: "128Mi"
+        requests:
+          cpu: "50m"
+          memory: "50Mi"
+
+    storage:
+      useAllNodes: false
+      useAllDevices: false
+      config:
+        osdsPerDevice: "1"
+      nodes:
+        - name: k8s-odroid-hc4-1
+          devices:
+            - name: /dev/disk/by-id/ata-WDC_WD30EZRX-00DC0B0_WD-WMC1T2457392
+            - name: /dev/disk/by-id/ata-SanDisk_SDSSDHII240G_170234400122
+        - name: k8s-odroid-hc4-2
+          devices:
+            - name: /dev/disk/by-id/ata-WDC_WD30EZRX-00DC0B0_WD-WMC1T2292099
+            - name: /dev/disk/by-id/ata-SanDisk_SDSSDHII240G_170235401310
+        - name: k8s-odroid-hc4-3
+          devices:
+            - name: /dev/disk/by-id/ata-TOSHIBA_HDWQ140_Y8I5K0D2FAYG
+            - name: /dev/disk/by-id/ata-SanDisk_SD6SB1M-128G-1006_141924401021
+
+    disruptionManagement:
+      # If true, the operator will create and manage PodDisruptionBudgets for OSD, Mon, RGW, and MDS daemons. OSD PDBs are managed dynamically
+      # via the strategy outlined in the [design](https://github.com/rook/rook/blob/master/design/ceph/ceph-managed-disruptionbudgets.md). The operator will
+      # block eviction of OSDs by default and unblock them safely when drains are detected.
+      managePodBudgets: true
+      # A duration in minutes that determines how long an entire failureDomain like `region/zone/host` will be held in `noout` (in addition to the
+      # default DOWN/OUT interval) when it is draining. This is only relevant when  `managePodBudgets` is `true`. The default value is `30` minutes.
+      osdMaintenanceTimeout: 60
+
+  ingress:
+    dashboard:
+      ingressClassName: nginx-internal
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+      host:
+        name: &host rook-ceph.internal.grigri.cloud
+        path: "/"
+      tls:
+        - secretName: rook-ceph-general-tls
+          hosts:
+            - *host
+
+  cephBlockPools:
+    - name: ceph-blockpool
+      # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Block-Storage/ceph-block-pool-crd.md#spec for available configuration
+      spec:
+        failureDomain: host
+        replicated:
+          size: 2
+        # Enables collecting RBD per-image IO statistics by enabling dynamic OSD performance counters. Defaults to false.
+        # For reference: https://docs.ceph.com/docs/master/mgr/prometheus/#rbd-io-statistics
+        # enableRBDStats: true
+      storageClass:
+        enabled: true
+        name: ceph-block
+        isDefault: true
+        reclaimPolicy: Delete
+        allowVolumeExpansion: true
+        volumeBindingMode: "Immediate"
+        parameters:
+          imageFormat: "2"
+          # RBD image features, equivalent to OR'd bitfield value: 63
+          # Available for imageFormat: "2". Older releases of CSI RBD
+          # support only the `layering` feature. The Linux kernel (KRBD) supports the
+          # full feature complement as of 5.4
+          imageFeatures: layering
+
+          # These secrets contain Ceph admin credentials.
+          csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
+          csi.storage.k8s.io/provisioner-secret-namespace: "{{ .Release.Namespace }}"
+          csi.storage.k8s.io/controller-expand-secret-name: rook-csi-rbd-provisioner
+          csi.storage.k8s.io/controller-expand-secret-namespace: "{{ .Release.Namespace }}"
+          csi.storage.k8s.io/node-stage-secret-name: rook-csi-rbd-node
+          csi.storage.k8s.io/node-stage-secret-namespace: "{{ .Release.Namespace }}"
+          csi.storage.k8s.io/fstype: ext4
+  cephFileSystems: []
+
+  cephBlockPoolsVolumeSnapshotClass:
+    enabled: true
+    name: ceph-block
+    isDefault: false
+    deletionPolicy: Delete
+    annotations: {}
+    labels: {}
+    # see https://rook.io/docs/rook/v1.10/Storage-Configuration/Ceph-CSI/ceph-csi-snapshot/#rbd-snapshots for available configuration
+    parameters: {}
+
+  # cephObjectStores:
+  #   - name: ceph-objectstore
+  #     # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Object-Storage/ceph-object-store-crd.md#object-store-settings for available configuration
+  #     spec:
+  #       metadataPool:
+  #         failureDomain: host
+  #         replicated:
+  #           size: 3
+  #         deviceClass: sdd
+  #
+  #       dataPool:
+  #         failureDomain: host
+  #         erasureCoded:
+  #           dataChunks: 2
+  #           codingChunks: 1
+  #         deviceClass: hdd
+  #       preservePoolsOnDelete: true
+  #       gateway:
+  #         port: 80
+  #         resources:
+  #           limits:
+  #             cpu: "2000m"
+  #             memory: "2Gi"
+  #           requests:
+  #             cpu: "1000m"
+  #             memory: "1Gi"
+  #         # securePort: 443
+  #         # sslCertificateRef:
+  #         instances: 1
+  #         priorityClassName: system-cluster-critical
+  #     storageClass:
+  #       enabled: true
+  #       name: ceph-bucket
+  #       reclaimPolicy: Delete
+  #       volumeBindingMode: "Immediate"
+  #       # see https://github.com/rook/rook/blob/master/Documentation/ceph-object-bucket-claim.md#storageclass for available configuration
+  #       parameters:
+  #         # note: objectStoreNamespace and objectStoreName are configured by the chart
+  #         region: us-east-1
+  #     ingress:
+  #       # Enable an ingress for the ceph-objectstore
+  #       enabled: false
+  #       # annotations: {}
+  #       # host:
+  #       #   name: objectstore.example.com
+  #       #   path: /
+  #       # tls:
+  #       # - hosts:
+  #       #     - objectstore.example.com
+  #       #   secretName: ceph-objectstore-tls
+  #       # ingressClassName: nginx

@@ -1,9 +1,6 @@
 #!/bin/bash
 # This script is just for testing step by step
 
-# trying to get longhorn working
-# source: https://github.com/k3d-io/k3d/discussions/478
-#k3d cluster create --volume /tmp/longhorn:/var/lib/longhorn:shared --config test/cluster.yaml
 k3d cluster create --config test/cluster.yaml
 
 cat <<EOF | kubectl apply -f -
@@ -16,9 +13,7 @@ reclaimPolicy: Delete
 volumeBindingMode: WaitForFirstConsumer
 EOF
 
-#scripts/deploy-dir.rh system/longhorn-system
 scripts/deploy-dir.rh system/monitoring
-#scripts/deploy-dir.rh system/longhorn-system
 scripts/deploy-dir.rh system/monitoring
 scripts/deploy-dir.rh platform/vault
 scripts/deploy-dir.rh platform/external-secrets
