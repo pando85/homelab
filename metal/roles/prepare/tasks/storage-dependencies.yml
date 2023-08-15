@@ -8,6 +8,8 @@
       - scsitools
       # zfs-generic-nfs
       - nfs-common
+      # ceph
+      - lvm2
     state: present
     force_apt_get: true
     update_cache: true

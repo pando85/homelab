@@ -28,7 +28,7 @@
     creates: /etc/machine-id-new
   register: first_execution
   tags:
-    - additional-disk
+    - additional-disks
 
 - name: First execution
   when: first_execution.changed
@@ -54,12 +54,19 @@
 - name: Print additional disk config
   debug:
     var: prepare_additional_disks
+  tags:
+    - additional-disks
 
-- name: Additional storage
-  include_tasks: additional-disk.yml
+# TODO: create clean ceph disks playbook
+- name: Format "{{ item.dev_id }}"
+  parted:
+    device: "{{ item.dev_id }}"
+    number: 1
+    state: absent
+  when: item.force_format | default(prepare_additional_disks_force_format)
   loop: "{{ prepare_additional_disks }}"
   tags:
-    - additional-disk
+    - additional-disks
 
 - name: Disable unused services
   systemd:

@@ -37,8 +37,8 @@ prepare_sysctl:
     value: 4096
 
 prepare_additional_disks: []
-# - dev: /dev/sda
-#   path: /mnt
+# - dev_id: /dev/disk/by-id/ata-WDC_WD30EZRX-00DC0B0_WD-WMC1T2457392
+#   force_format: true
 prepare_additional_disks_force_format: false
 
 prepare_domain: localdomain
