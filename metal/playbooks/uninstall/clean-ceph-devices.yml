@@ -1,4 +1,11 @@
 ---
+- name: Print disks
+  hosts: all
+  tasks:
+    - name: Print disks to destroy
+      debug:
+        var: prepare_additional_disks
+      when: prepare_additional_disks is defined
 
 - name: Clean Ceph devices
   hosts:
@@ -14,11 +21,6 @@
       private: false
   any_errors_fatal: true
   pre_tasks:
-    # TODO: print before confirmation
-    - name: Print disks to destroy
-      debug:
-        var: prepare_additional_disks
-
     - name: Check confirmation
       fail:
         msg: "Abort."
