@@ -175,11 +175,6 @@ rook-ceph-cluster:
     # tolerate taints with a key of 'storage-node'.
     placement:
       all:
-        podAffinity:
-        podAntiAffinity:
-        topologySpreadConstraints:
-        tolerations:
-      # The above placement information can also be specified for mon, osd, and mgr components
       mon:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -189,10 +184,6 @@ rook-ceph-cluster:
                     operator: In
                     values:
                       - "true"
-      # Monitor deployments may contain an anti-affinity rule for avoiding monitor
-      # collocation on the same node. This is a required rule when host network is used
-      # or when AllowMultiplePerNode is false. Otherwise this anti-affinity rule is a
-      # preferred rule with weight: 50.
       osd:
       mgr:
       cleanup:
@@ -212,7 +203,7 @@ rook-ceph-cluster:
       osd:
         requests:
           cpu: "442m"
-          memory: "1278Mi"
+          memory: "1000Mi"
         limits:
           memory: "3Gi"
       exporter:
