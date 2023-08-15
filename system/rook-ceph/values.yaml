@@ -121,7 +121,7 @@ rook-ceph:
     # Enabling will also create RBAC rules to allow Operator to create ServiceMonitors
     enabled: true
 
-rook-ceph-cluster:
+rook-ceph-cluster-disabled:
   toolbox:
     enabled: true
     resources:
