@@ -13,13 +13,13 @@
         - node_labels is defined
         - node_labels is mapping
       tags:
-        - node-tag
+        - node-labels
 
     - name: Print node labels
       debug:
         var: inventory_node_labels
       tags:
-        - node-tag
+        - node-labels
 
     - name: Set label to node
       command: >-
@@ -30,7 +30,7 @@
       delegate_to: localhost
       changed_when: false
       tags:
-        - node-tag
+        - node-labels
 
     - name: Populate inventory node annotations
       vars:

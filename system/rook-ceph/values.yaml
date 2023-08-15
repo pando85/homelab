@@ -98,85 +98,6 @@ rook-ceph:
             memory: 256Mi
             cpu: 100m
 
-    # -- CEPH CSI CephFS provisioner resource requirement list
-    # @default -- see values.yaml
-    csiCephFSProvisionerResource: |
-      - name : csi-provisioner
-        resource:
-          requests:
-            memory: 128Mi
-            cpu: 100m
-          limits:
-            memory: 256Mi
-            cpu: 200m
-      - name : csi-resizer
-        resource:
-          requests:
-            memory: 128Mi
-            cpu: 100m
-          limits:
-            memory: 256Mi
-            cpu: 200m
-      - name : csi-attacher
-        resource:
-          requests:
-            memory: 128Mi
-            cpu: 100m
-          limits:
-            memory: 256Mi
-            cpu: 200m
-      - name : csi-snapshotter
-        resource:
-          requests:
-            memory: 128Mi
-            cpu: 100m
-          limits:
-            memory: 256Mi
-            cpu: 200m
-      - name : csi-cephfsplugin
-        resource:
-          requests:
-            memory: 512Mi
-            cpu: 250m
-          limits:
-            memory: 1Gi
-            cpu: 500m
-      - name : liveness-prometheus
-        resource:
-          requests:
-            memory: 128Mi
-            cpu: 50m
-          limits:
-            memory: 256Mi
-            cpu: 100m
-    # -- CEPH CSI CephFS plugin resource requirement list
-    # @default -- see values.yaml
-    csiCephFSPluginResource: |
-      - name : driver-registrar
-        resource:
-          requests:
-            memory: 128Mi
-            cpu: 50m
-          limits:
-            memory: 256Mi
-            cpu: 100m
-      - name : csi-cephfsplugin
-        resource:
-          requests:
-            memory: 512Mi
-            cpu: 250m
-          limits:
-            memory: 1Gi
-            cpu: 500m
-      - name : liveness-prometheus
-        resource:
-          requests:
-            memory: 128Mi
-            cpu: 50m
-          limits:
-            memory: 256Mi
-            cpu: 100m
-
     serviceMonitor:
       # -- Enable ServiceMonitor for Ceph CSI drivers
       enabled: true
@@ -245,6 +166,33 @@ rook-ceph-cluster:
     # enable log collector, daemons will log on files and rotate
     logCollector:
       enabled: false
+
+    # To control where various services will be scheduled by kubernetes, use the placement configuration sections below.
+    # The example under 'all' would have all services scheduled on kubernetes nodes labeled with 'role=storage-node' and
+    # tolerate taints with a key of 'storage-node'.
+    placement:
+      all:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: storage-node
+                    operator: In
+                    values:
+                      - true
+        podAffinity:
+        podAntiAffinity:
+        topologySpreadConstraints:
+        tolerations:
+      # The above placement information can also be specified for mon, osd, and mgr components
+      mon:
+      # Monitor deployments may contain an anti-affinity rule for avoiding monitor
+      # collocation on the same node. This is a required rule when host network is used
+      # or when AllowMultiplePerNode is false. Otherwise this anti-affinity rule is a
+      # preferred rule with weight: 50.
+      osd:
+      mgr:
+      cleanup:
     resources:
       mgr:
         requests:
