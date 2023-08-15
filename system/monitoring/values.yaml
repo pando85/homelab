@@ -201,8 +201,6 @@ prometheus:
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:
-              # More than double size to avoid alerts:
-              # https://github.com/longhorn/longhorn/issues/836
               storage: 150Gi
 
   ingress:
