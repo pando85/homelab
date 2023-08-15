@@ -315,19 +315,20 @@ rook-ceph-cluster:
             - *host
 
   cephBlockPools:
-    - name: ceph-blockpool
+    - name: rook-ceph-blockpool-hdd
       # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Block-Storage/ceph-block-pool-crd.md#spec for available configuration
       spec:
         failureDomain: host
         replicated:
           size: 2
+        deviceClass: hdd
         # Enables collecting RBD per-image IO statistics by enabling dynamic OSD performance counters. Defaults to false.
         # For reference: https://docs.ceph.com/docs/master/mgr/prometheus/#rbd-io-statistics
         # enableRBDStats: true
       storageClass:
         enabled: true
-        name: ceph-block
-        isDefault: true
+        name: rook-ceph-block-hdd
+        isDefault: false
         reclaimPolicy: Delete
         allowVolumeExpansion: true
         volumeBindingMode: "Immediate"
