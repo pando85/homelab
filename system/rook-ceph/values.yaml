@@ -352,7 +352,7 @@ rook-ceph-cluster:
 
   cephBlockPoolsVolumeSnapshotClass:
     enabled: true
-    name: ceph-block
+    name: rook-ceph-block
     isDefault: false
     deletionPolicy: Delete
     annotations: {}
