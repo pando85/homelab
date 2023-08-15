@@ -179,7 +179,7 @@ rook-ceph-cluster:
                   - key: storage-node
                     operator: In
                     values:
-                      - true
+                      - "true"
         podAffinity:
         podAntiAffinity:
         topologySpreadConstraints:
