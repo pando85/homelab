@@ -1,2 +1,3 @@
 node_labels:
   storage-node: "true"
+  rook-ceph.grigri.cloud/client: "false"

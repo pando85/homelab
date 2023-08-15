@@ -1,0 +1,55 @@
+---
+
+- name: Clean Ceph devices
+  hosts:
+    - ceph
+    # k8s nodes still can have monitors runnig if not node affinity defined
+    - k8s-cluster
+  become: true
+  gather_facts: true
+  vars_prompt:
+    - name: "nuke_confirmation"
+      prompt: "This will DESTROY rook-ceph disks. Do you wish to continue? [Y/n]"
+      default: "n"
+      private: false
+  any_errors_fatal: true
+  pre_tasks:
+    # TODO: print before confirmation
+    - name: Print disks to destroy
+      debug:
+        var: prepare_additional_disks
+
+    - name: Check confirmation
+      fail:
+        msg: "Abort."
+      when: nuke_confirmation != "Y"
+  tasks:
+    - name: Remove /var/lib/rook
+      become: true
+      file:
+        state: absent
+        path: "/var/lib/rook"
+
+    - name: Zap the drives
+      shell: >
+        sgdisk --zap-all {{ item.dev_id }} || true
+      loop: "{{ prepare_additional_disks }}"
+
+    - name: Remove lvm partitions
+      # noqa: command-instead-of-shell
+      shell: "{{ item }}"
+      loop:
+        - ls /dev/mapper/ceph--* | xargs -I% -- fuser --kill %
+        - ls /dev/mapper/ceph--* | xargs -I% -- dmsetup clear %
+        - ls /dev/mapper/ceph--* | xargs -I% -- dmsetup remove -f %
+        - ls /dev/mapper/ceph--* | xargs -I% -- rm -rf %
+      ignore_errors: true
+
+    - name: Wipe the block device
+      command: "wipefs -af {{ item.dev_id }}"
+      loop: "{{ prepare_additional_disks }}"
+
+    - name: Block delete without restart
+      shell: >
+        blkdiscard {{ item.dev_id }} && sync
+      loop: "{{ prepare_additional_disks }}"
