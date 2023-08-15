@@ -242,6 +242,16 @@ rook-ceph-cluster:
       # default DOWN/OUT interval) when it is draining. This is only relevant when  `managePodBudgets` is `true`. The default value is `30` minutes.
       osdMaintenanceTimeout: 60
 
+    healthCheck:
+      livenessProbe:
+        mgr:
+          disabled: false
+          # timeout causes dashboard restart
+          probe:
+            timeoutSeconds: 20
+            initialDelaySeconds: 60
+            periodSeconds: 30
+
   ingress:
     dashboard:
       ingressClassName: nginx-internal
