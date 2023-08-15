@@ -58,7 +58,7 @@
     - additional-disks
 
 # TODO: create clean ceph disks playbook
-- name: Format "{{ item.dev_id }}"
+- name: Format disks
   parted:
     device: "{{ item.dev_id }}"
     number: 1
