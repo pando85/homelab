@@ -102,11 +102,11 @@ rook-ceph-cluster:
     enabled: true
     resources:
       limits:
-        cpu: "500m"
-        memory: "1Gi"
+        cpu: 500m
+        memory: 128Mi
       requests:
-        cpu: "100m"
-        memory: "128Mi"
+        cpu: 10m
+        memory: 16Mi
 
   monitoring:
     enabled: true
