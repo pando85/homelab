@@ -6,6 +6,14 @@
 zfs rollback ${ZFS_VOLUME}@{ZFS_SNAPSHOT}
 ```
 
+## Postgres
+
+If after restore there are this kind of errors:
+
+> My wal position exceeds maximum replication lag
+
+Replica can be promoted to leader using `patrocitl failover` command as root.
+
 ## Longhorn
 
 - scale down replicas and delete pvc
