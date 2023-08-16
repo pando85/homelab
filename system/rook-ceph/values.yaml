@@ -86,7 +86,7 @@ rook-ceph:
 
   resources:
     requests:
-      cpu: 40m
+      cpu: 800m
       memory: 128Mi
     limits:
       cpu: 2
