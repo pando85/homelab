@@ -182,14 +182,13 @@ rook-ceph-cluster:
           memory: "1000Mi"
         limits:
           memory: "3Gi"
-      exporter:
+      crashcollector:
         limits:
-          cpu: "250m"
-          memory: "128Mi"
+          cpu: "500m"
+          memory: "60Mi"
         requests:
-          cpu: "50m"
-          memory: "50Mi"
-
+          cpu: "10m"
+          memory: "16Mi"
     storage:
       useAllNodes: false
       useAllDevices: false
