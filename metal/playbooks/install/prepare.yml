@@ -3,5 +3,6 @@
 
 - name: Prepare
   hosts: all:!grigri
+  serial: "{{ serial | default('100%') }}"
   roles:
     - prepare

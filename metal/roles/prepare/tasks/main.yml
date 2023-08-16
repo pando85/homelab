@@ -96,15 +96,31 @@
 
 - name: Disable swap in armbian
   lineinfile:
-    path: /etc/default/armbian-zram-config
+    path: /etc/default/{{ item }}
     regex: "^ENABLED"
     line: "ENABLED=false"
   # armbian ansible_distribution is Ubuntu
   ignore_errors: true
   when:
     - ansible_architecture == "aarch64"
-    - ansible_distribution == "Ubuntu"
+  loop:
+    - armbian-zram-config
+    - armbian-ramlog
   notify: restart server
+  tags:
+    - disable-armbian-services
+
+- name: Mount /var/log in RAM for arm64 devices
+  mount:
+    path: /var/log
+    src: tmpfs
+    fstype: tmpfs
+    opts: nosuid,noexec,nodev,mode=0755,size=50m
+    state: present
+  when:
+    - ansible_architecture == "aarch64"
+  tags:
+    - log2ram
 
 - name: Disable swap usage per cgroups
   lineinfile:
