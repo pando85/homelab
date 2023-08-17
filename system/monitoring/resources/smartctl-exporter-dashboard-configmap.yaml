@@ -28,7 +28,6 @@ data:
       "fiscalYearStartMonth": 0,
       "gnetId": 10530,
       "graphTooltip": 0,
-      "id": 28,
       "links": [],
       "liveNow": false,
       "panels": [
@@ -110,7 +109,7 @@ data:
             },
             "textMode": "auto"
           },
-          "pluginVersion": "10.0.2",
+          "pluginVersion": "10.0.3",
           "targets": [
             {
               "datasource": {
@@ -296,7 +295,7 @@ data:
             },
             "textMode": "auto"
           },
-          "pluginVersion": "10.0.2",
+          "pluginVersion": "10.0.3",
           "targets": [
             {
               "datasource": {
@@ -375,7 +374,7 @@ data:
             },
             "textMode": "auto"
           },
-          "pluginVersion": "10.0.2",
+          "pluginVersion": "10.0.3",
           "targets": [
             {
               "datasource": {
@@ -383,7 +382,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "sum (smartctl_device_status{instance=~\"$instance\",device=~\"$device\"})",
+              "expr": "sum (smartctl_device_smart_status{instance=~\"$instance\",device=~\"$device\"})",
               "format": "time_series",
               "intervalFactor": 1,
               "range": true,
@@ -593,7 +592,7 @@ data:
               }
             ]
           },
-          "pluginVersion": "10.0.2",
+          "pluginVersion": "10.0.3",
           "targets": [
             {
               "datasource": {
@@ -738,7 +737,8 @@ data:
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "green"
+                        "color": "green",
+                        "value": null
                       },
                       {
                         "color": "red",
@@ -753,7 +753,7 @@ data:
                 "h": 7,
                 "w": 24,
                 "x": 0,
-                "y": 28
+                "y": 20
               },
               "id": 55,
               "options": {
@@ -768,7 +768,7 @@ data:
                 },
                 "showHeader": true
               },
-              "pluginVersion": "10.0.2",
+              "pluginVersion": "10.0.3",
               "targets": [
                 {
                   "datasource": {
@@ -995,8 +995,8 @@ data:
             "overrides": []
           },
           "gridPos": {
-            "h": 8,
-            "w": 24,
+            "h": 6,
+            "w": 12,
             "x": 0,
             "y": 21
           },
@@ -1038,6 +1038,300 @@ data:
             "type": "prometheus",
             "uid": "${datasource}"
           },
+          "description": "Indicates problems with the disk surface (platter that stores the data), the actuator arm, and the read/write head. The higher RAW Read Error Rate, the higher chances of disk failure.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 21
+          },
+          "id": 57,
+          "links": [],
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "smartctl_device_attribute{attribute_name=\"Raw_Read_Error_Rate\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}:/dev/{{device}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Raw Read Error Rate",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "Reallocated sectors count is the number of sectors that are marked as reallocated by the hard drive upon an error. A growing count is generally considered a bad sign and can result in hard drive failure.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 0,
+            "y": 27
+          },
+          "id": 58,
+          "links": [],
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "smartctl_device_attribute{attribute_name=\"Reallocated_Sector_Ct\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}:/dev/{{device}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Reallocated Sector Count",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "description": "Indicates the number of unstable sectors on the disk drive that are yet to be remapped or reallocated. A rise in \"Current Pending Sector Count\" may indicate unstable sectors on the disk drive.",
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "linear",
+                "lineWidth": 2,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 12,
+            "x": 12,
+            "y": 27
+          },
+          "id": 59,
+          "links": [],
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "10.0.2",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${datasource}"
+              },
+              "editorMode": "code",
+              "expr": "smartctl_device_attribute{attribute_name=\"Current_Pending_Sector\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}:/dev/{{device}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Current Pending Sector Count",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
           "fieldConfig": {
             "defaults": {
               "color": {
@@ -1071,7 +1365,7 @@ data:
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 29
+            "y": 33
           },
           "id": 54,
           "options": {
@@ -1086,7 +1380,7 @@ data:
             },
             "showHeader": true
           },
-          "pluginVersion": "10.0.2",
+          "pluginVersion": "10.0.3",
           "targets": [
             {
               "datasource": {
@@ -1255,289 +1549,305 @@ data:
           "type": "table"
         },
         {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "custom": {
-                "align": "auto",
-                "cellOptions": {
-                  "type": "auto"
-                },
-                "filterable": false,
-                "inspect": false
-              },
-              "decimals": 2,
-              "displayName": "",
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  }
-                ]
-              },
-              "unit": "short"
-            },
-            "overrides": [
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Time"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "Time"
-                  },
-                  {
-                    "id": "custom.align"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "device_model"
-                },
-                "properties": [
-                  {
-                    "id": "displayName",
-                    "value": "device_model"
-                  },
-                  {
-                    "id": "unit",
-                    "value": "short"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 2
-                  },
-                  {
-                    "id": "custom.align"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "__name__"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "short"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 2
-                  },
-                  {
-                    "id": "custom.align"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "instance"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "short"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 2
-                  },
-                  {
-                    "id": "custom.align"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "job"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "short"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 2
-                  },
-                  {
-                    "id": "custom.align"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "type"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "short"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 2
-                  },
-                  {
-                    "id": "custom.align"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "Value"
-                },
-                "properties": [
-                  {
-                    "id": "unit",
-                    "value": "short"
-                  },
-                  {
-                    "id": "decimals",
-                    "value": 2
-                  },
-                  {
-                    "id": "custom.align"
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "protocol"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 93
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "interface"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 80
-                  }
-                ]
-              },
-              {
-                "matcher": {
-                  "id": "byName",
-                  "options": "ata_version"
-                },
-                "properties": [
-                  {
-                    "id": "custom.width",
-                    "value": 280
-                  }
-                ]
-              }
-            ]
-          },
+          "collapsed": true,
           "gridPos": {
-            "h": 9,
+            "h": 1,
             "w": 24,
             "x": 0,
-            "y": 37
+            "y": 41
           },
-          "id": 12,
-          "links": [],
-          "options": {
-            "cellHeight": "sm",
-            "footer": {
-              "countRows": false,
-              "fields": "",
-              "reducer": [
-                "sum"
-              ],
-              "show": false
-            },
-            "showHeader": true,
-            "sortBy": []
-          },
-          "pluginVersion": "10.0.2",
-          "targets": [
+          "id": 60,
+          "panels": [
             {
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
               },
-              "editorMode": "code",
-              "expr": "smartctl_device",
-              "format": "table",
-              "instant": true,
-              "interval": "",
-              "intervalFactor": 1,
-              "legendFormat": "__auto",
-              "refId": "A"
-            }
-          ],
-          "title": "Device Info",
-          "transformations": [
-            {
-              "id": "organize",
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "custom": {
+                    "align": "auto",
+                    "cellOptions": {
+                      "type": "auto"
+                    },
+                    "filterable": false,
+                    "inspect": false
+                  },
+                  "decimals": 2,
+                  "displayName": "",
+                  "mappings": [],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": null
+                      }
+                    ]
+                  },
+                  "unit": "short"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Time"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "Time"
+                      },
+                      {
+                        "id": "custom.align"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "device_model"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "device_model"
+                      },
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 2
+                      },
+                      {
+                        "id": "custom.align"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "__name__"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 2
+                      },
+                      {
+                        "id": "custom.align"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "instance"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 2
+                      },
+                      {
+                        "id": "custom.align"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "job"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 2
+                      },
+                      {
+                        "id": "custom.align"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "type"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 2
+                      },
+                      {
+                        "id": "custom.align"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "Value"
+                    },
+                    "properties": [
+                      {
+                        "id": "unit",
+                        "value": "short"
+                      },
+                      {
+                        "id": "decimals",
+                        "value": 2
+                      },
+                      {
+                        "id": "custom.align"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "protocol"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 93
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "interface"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byName",
+                      "options": "ata_version"
+                    },
+                    "properties": [
+                      {
+                        "id": "custom.width",
+                        "value": 280
+                      }
+                    ]
+                  }
+                ]
+              },
+              "gridPos": {
+                "h": 9,
+                "w": 24,
+                "x": 0,
+                "y": 22
+              },
+              "id": 12,
+              "links": [],
               "options": {
-                "excludeByName": {
-                  "Time": true,
-                  "__name__": true,
-                  "container": true,
-                  "endpoint": true,
-                  "job": true,
-                  "namespace": true,
-                  "pod": true,
-                  "service": true
+                "cellHeight": "sm",
+                "footer": {
+                  "countRows": false,
+                  "fields": "",
+                  "reducer": [
+                    "sum"
+                  ],
+                  "show": false
                 },
-                "indexByName": {
-                  "Time": 0,
-                  "Value": 20,
-                  "__name__": 1,
-                  "ata_additional_product_id": 4,
-                  "ata_version": 5,
-                  "container": 6,
-                  "device": 3,
-                  "endpoint": 7,
-                  "firmware_version": 8,
-                  "form_factor": 19,
-                  "instance": 2,
-                  "interface": 9,
-                  "job": 10,
-                  "model_family": 11,
-                  "model_name": 12,
-                  "namespace": 13,
-                  "pod": 14,
-                  "protocol": 15,
-                  "sata_version": 16,
-                  "serial_number": 17,
-                  "service": 18
-                },
-                "renameByName": {}
-              }
+                "showHeader": true,
+                "sortBy": []
+              },
+              "pluginVersion": "10.0.3",
+              "targets": [
+                {
+                  "datasource": {
+                    "type": "prometheus",
+                    "uid": "${datasource}"
+                  },
+                  "editorMode": "code",
+                  "expr": "smartctl_device{instance=~\"$instance\",device=~\"$device\"}",
+                  "format": "table",
+                  "instant": true,
+                  "interval": "",
+                  "intervalFactor": 1,
+                  "legendFormat": "__auto",
+                  "refId": "A"
+                }
+              ],
+              "title": "Device Info",
+              "transformations": [
+                {
+                  "id": "organize",
+                  "options": {
+                    "excludeByName": {
+                      "Time": true,
+                      "Value": true,
+                      "__name__": true,
+                      "container": true,
+                      "endpoint": true,
+                      "job": true,
+                      "namespace": true,
+                      "pod": true,
+                      "service": true
+                    },
+                    "indexByName": {
+                      "Time": 0,
+                      "Value": 20,
+                      "__name__": 1,
+                      "ata_additional_product_id": 4,
+                      "ata_version": 5,
+                      "container": 6,
+                      "device": 3,
+                      "endpoint": 7,
+                      "firmware_version": 8,
+                      "form_factor": 19,
+                      "instance": 2,
+                      "interface": 9,
+                      "job": 10,
+                      "model_family": 11,
+                      "model_name": 12,
+                      "namespace": 13,
+                      "pod": 14,
+                      "protocol": 15,
+                      "sata_version": 16,
+                      "serial_number": 17,
+                      "service": 18
+                    },
+                    "renameByName": {}
+                  }
+                }
+              ],
+              "type": "table"
             }
           ],
-          "type": "table"
+          "title": "Device Information",
+          "type": "row"
         }
       ],
       "refresh": "",
@@ -1551,7 +1861,7 @@ data:
         "list": [
           {
             "current": {
-              "selected": true,
+              "selected": false,
               "text": "Prometheus",
               "value": "Prometheus"
             },
@@ -1569,7 +1879,7 @@ data:
           },
           {
             "current": {
-              "selected": true,
+              "selected": false,
               "text": [
                 "All"
               ],
@@ -1636,7 +1946,7 @@ data:
         ]
       },
       "time": {
-        "from": "now-30m",
+        "from": "now-6h",
         "to": "now"
       },
       "timepicker": {
@@ -1667,6 +1977,6 @@ data:
       "timezone": "browser",
       "title": "SMART disk data",
       "uid": "d8352a62-dbf1-43ba-93c6-372aa3169e64",
-      "version": 3,
+      "version": 1,
       "weekStart": ""
     }
