@@ -6,6 +6,6 @@ spec:
   groups:
     - name: zfs-exporter.rules
       rules:
-{{- range $path, $_ :=  .Files.Glob  "files/rules/*.yaml" }}
+{{- range $path, $_ :=  .Files.Glob  "rules/*.yaml" }}
 {{ $.Files.Get $path | indent 8}}
 {{ end }}
