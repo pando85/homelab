@@ -6,6 +6,5 @@ metadata:
 spec:
   name: .mgr
   replicated:
-    size: 1
-    requireSafeReplicaSize: false
+    size: 2
   deviceClass: ssd
