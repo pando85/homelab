@@ -35,7 +35,9 @@ data:
             {{- if .Annotations.message }}
     _{{ .Annotations.message }}_
             {{- end }}
+            {{- if le (len .Alerts) 8 }}
     [Prometheus]({{ .GeneratorURL }})
+            {{- end }}
         {{ end }}
     {{- end }}
 
