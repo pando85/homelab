@@ -298,7 +298,7 @@ rook-ceph-cluster:
           failureDomain: host
           replicated:
             size: 3
-          deviceClass: sdd
+          deviceClass: ssd
         dataPool:
           failureDomain: host
           erasureCoded:
