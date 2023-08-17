@@ -3,6 +3,14 @@ rook-ceph:
 
   logLevel: INFO
 
+  resources:
+    requests:
+      cpu: 800m
+      memory: 128Mi
+    limits:
+      cpu: 2
+      memory: 256Mi
+
   csi:
     enableCephfsDriver: false
     # -- Set logging level for cephCSI containers maintained by the cephCSI.
@@ -84,13 +92,7 @@ rook-ceph:
 
     kubeletDirPath: /var/lib/kubelet
 
-  resources:
-    requests:
-      cpu: 800m
-      memory: 128Mi
-    limits:
-      cpu: 2
-      memory: 256Mi
+  cephCommandsTimeoutSeconds: 60
 
   monitoring:
     # -- Enable monitoring. Requires Prometheus to be pre-installed.
@@ -110,7 +112,7 @@ rook-ceph-cluster:
 
   monitoring:
     enabled: true
-    createPrometheusRules: true
+    createPrometheusRules: false
 
   configOverride: |
     [global]
@@ -118,6 +120,7 @@ rook-ceph-cluster:
     osd_pool_default_min_size = 1
 
   cephClusterSpec:
+    waitTimeoutForHealthyOSDInMinutes: 60
     mon:
       # Set the number of mons to be started. Generally recommended to be 3.
       # For highest availability, an odd number of mons should be specified.
@@ -289,15 +292,13 @@ rook-ceph-cluster:
     parameters: {}
 
   cephObjectStores:
-    - name: s3
-      # see https://github.com/rook/rook/blob/master/Documentation/CRDs/Object-Storage/ceph-object-store-crd.md#object-store-settings for available configuration
+    - name: eu-central-1a
       spec:
         metadataPool:
           failureDomain: host
           replicated:
             size: 3
           deviceClass: sdd
-
         dataPool:
           failureDomain: host
           erasureCoded:
@@ -319,7 +320,7 @@ rook-ceph-cluster:
           instances: 1
           priorityClassName: system-cluster-critical
       storageClass:
-        enabled: true
+        enabled: false
         name: ceph-bucket
         reclaimPolicy: Delete
         volumeBindingMode: "Immediate"
