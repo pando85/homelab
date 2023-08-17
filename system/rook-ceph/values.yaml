@@ -110,16 +110,20 @@ rook-ceph-cluster:
         cpu: 10m
         memory: 16Mi
 
-  monitoring:
-    enabled: true
-    createPrometheusRules: false
-
   configOverride: |
     [global]
     osd_pool_default_size = 2
     osd_pool_default_min_size = 1
 
+  monitoring:
+    enabled: true
+    createPrometheusRules: false
+
   cephClusterSpec:
+    # workaround to change interval
+    monitoring:
+      enabled: true
+      interval: 30s
     waitTimeoutForHealthyOSDInMinutes: 60
     mon:
       # Set the number of mons to be started. Generally recommended to be 3.
