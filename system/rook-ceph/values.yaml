@@ -328,6 +328,7 @@ rook-ceph-cluster:
           # note: objectStoreNamespace and objectStoreName are configured by the chart
           region: eu-central-1a
       ingress:
+        enabled: true
         ingressClassName: nginx-internal
         annotations:
           cert-manager.io/cluster-issuer: letsencrypt-prod-dns
