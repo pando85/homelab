@@ -27,7 +27,7 @@ data:
       ]{{- template "__alert_severity_prefix_title" . -}}{{ .CommonLabels.alertname }}*
     {{- end }}
     {{ define "__alert_severity_text" -}}
-        {{- $alertsLen := (len .Alerts) -}}
+        {{- $alerts := .Alerts -}}
         {{ range .Alerts }}
 
             {{- if .Annotations.description }}
@@ -36,7 +36,7 @@ data:
             {{- if .Annotations.message }}
     _{{ .Annotations.message }}_
             {{- end }}
-            {{- if le (len $alertsLen) 10 }}
+            {{- if le (len $alerts) 10 }}
     [Prometheus]({{ .GeneratorURL }})
             {{- end }}
         {{ end }}
