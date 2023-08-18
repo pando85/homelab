@@ -324,8 +324,8 @@ rook-ceph-cluster:
           instances: 1
           priorityClassName: system-cluster-critical
       storageClass:
-        enabled: false
-        name: ceph-bucket
+        enabled: true
+        name: rook-ceph-bucket
         reclaimPolicy: Delete
         volumeBindingMode: "Immediate"
         parameters:
