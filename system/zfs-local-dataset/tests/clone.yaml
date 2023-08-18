@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: clone-of-test-claim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5G
+  dataSource:
+    kind: PersistentVolumeClaim
+    name: test-claim
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clone-read
+spec:
+  template:
+    metadata:
+      name: clone-read
+    spec:
+      containers:
+        - name: read
+          image: ubuntu:xenial
+          command:
+            - dd
+            - if=/mnt/pv/test.img
+            - of=/dev/null
+            - bs=8k
+          volumeMounts:
+            - mountPath: "/mnt/pv"
+              name: test-volume
+      volumes:
+        - name: test-volume
+          persistentVolumeClaim:
+            claimName: clone-of-test-claim
+      restartPolicy: Never
