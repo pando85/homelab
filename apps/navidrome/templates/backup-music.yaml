@@ -1,0 +1,40 @@
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: navidrome-music-restic
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: navidrome-music-restic
+    template:
+      data:
+        RESTIC_REPOSITORY: '{{`{{ .REPOSITORY_TEMPLATE }}/navidrome-music`}}'
+        RESTIC_PASSWORD: '{{`{{ .RESTIC_PASSWORD }}`}}'
+        AWS_ACCESS_KEY_ID: '{{`{{ .AWS_ACCESS_KEY_ID }}`}}'
+        AWS_SECRET_ACCESS_KEY: '{{`{{ .AWS_SECRET_ACCESS_KEY }}`}}'
+  dataFrom:
+    - extract:
+        key: /volsync/restic-template
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: navidrome-music-backup
+spec:
+  sourcePVC: music-navidrome-zfs
+  trigger:
+    schedule: "0 7 * * *"
+  restic:
+    pruneIntervalDays: 7
+    repository: navidrome-music-restic
+    moverSecurityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+    retain:
+      daily: 7
+    copyMethod: Clone
+    cacheCapacity: 10Gi
