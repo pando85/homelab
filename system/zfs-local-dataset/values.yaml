@@ -20,7 +20,7 @@ democratic-csi:
 
   csiDriver:
     name: "org.democratic-csi.zfs-local-dataset"
-    storageCapacity: true
+    storageCapacity: false
     fsGroupPolicy: File
     attachRequired: false
 
