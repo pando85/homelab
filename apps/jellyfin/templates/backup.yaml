@@ -1,0 +1,40 @@
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: jellyfin-restic
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: jellyfin-restic
+    template:
+      data:
+        RESTIC_REPOSITORY: '{{`{{ .REPOSITORY_TEMPLATE }}/jellyfin`}}'
+        RESTIC_PASSWORD: '{{`{{ .RESTIC_PASSWORD }}`}}'
+        AWS_ACCESS_KEY_ID: '{{`{{ .AWS_ACCESS_KEY_ID }}`}}'
+        AWS_SECRET_ACCESS_KEY: '{{`{{ .AWS_SECRET_ACCESS_KEY }}`}}'
+  dataFrom:
+    - extract:
+        key: /volsync/restic-template
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: jellyfin-backup
+spec:
+  sourcePVC: config-jellyfin-0-zfs
+  trigger:
+    schedule: "0 7 * * *"
+  restic:
+    pruneIntervalDays: 7
+    repository: jellyfin-restic
+    moverSecurityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+    retain:
+      daily: 7
+    copyMethod: Clone
+    cacheCapacity: 1Gi
