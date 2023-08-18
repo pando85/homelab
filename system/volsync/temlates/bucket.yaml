@@ -1,0 +1,7 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: backup
+spec:
+  generateBucketName: backup
+  storageClassName: rook-ceph-bucket
