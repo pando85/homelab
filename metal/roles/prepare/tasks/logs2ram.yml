@@ -1,0 +1,21 @@
+---
+- name: logs2ram | Mount /var/log in RAM for arm64 devices
+  mount:
+    path: /var/log
+    src: tmpfs
+    fstype: tmpfs
+    opts: nosuid,noexec,nodev,mode=0755,size=50m
+    state: present
+
+- name: logs2ram | Copy truncate-logs script
+  copy:
+    src: truncate-logs.sh
+    dest: /usr/local/bin/truncate-logs
+    mode: "0755"
+
+- name: logs2ram | Create cron job for truncating logs
+  ansible.builtin.cron:
+    name: "truncate logs"
+    minute: "0"
+    hour: "0"
+    job: "/usr/local/bin/truncate-logs"

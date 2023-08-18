@@ -110,17 +110,12 @@
   tags:
     - disable-armbian-services
 
-- name: Mount /var/log in RAM for arm64 devices
-  mount:
-    path: /var/log
-    src: tmpfs
-    fstype: tmpfs
-    opts: nosuid,noexec,nodev,mode=0755,size=50m
-    state: present
+- name: Move logs to RAM
+  import_tasks: logs2ram.yml
   when:
     - ansible_architecture == "aarch64"
   tags:
-    - log2ram
+    - logs2ram
 
 - name: Disable swap usage per cgroups
   lineinfile:
