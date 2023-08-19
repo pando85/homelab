@@ -41,18 +41,18 @@ rook-ceph:
         resource:
           requests:
             memory: 16Mi
-            cpu: 100m
+            cpu: 20m
           limits:
             memory: 128Mi
-            cpu: 200m
+            cpu: 400m
       - name : csi-snapshotter
         resource:
           requests:
             memory: 16Mi
-            cpu: 100m
+            cpu: 20m
           limits:
             memory: 128Mi
-            cpu: 200m
+            cpu: 400m
       - name : csi-rbdplugin
         resource:
           requests:
