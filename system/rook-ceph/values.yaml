@@ -185,10 +185,10 @@ rook-ceph-cluster:
           memory: "1059Mi"
       osd:
         requests:
-          cpu: "442m"
-          memory: "1000Mi"
+          cpu: "400m"
+          memory: "500Mi"
         limits:
-          memory: "3Gi"
+          memory: "2Gi"
       crashcollector:
         limits:
           cpu: "500m"
