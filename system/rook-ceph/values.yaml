@@ -322,17 +322,6 @@ rook-ceph-cluster:
           # sslCertificateRef:
           instances: 2
           placement:
-            podAntiAffinity:
-              preferredDuringSchedulingIgnoredDuringExecution:
-                - weight: 100
-                  podAffinityTerm:
-                    labelSelector:
-                      matchExpressions:
-                        - key: app
-                          operator: In
-                          values:
-                            - rook-ceph-rgw
-                    topologyKey: kubernetes.io/hostname
             podAffinity:
               preferredDuringSchedulingIgnoredDuringExecution:
                 - weight: 100
