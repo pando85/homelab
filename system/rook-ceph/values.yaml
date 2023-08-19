@@ -314,14 +314,24 @@ rook-ceph-cluster:
           port: 80
           resources:
             limits:
-              cpu: 2000m
               memory: 2Gi
             requests:
-              cpu: 1000m
-              memory: 1Gi
+              cpu: 300m
+              memory: 200Mi
           # securePort: 443
           # sslCertificateRef:
-          instances: 1
+          instances: 2
+          placement:
+            podAntiAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                        - key: app
+                          operator: In
+                          values:
+                            - rook-ceph-rgw
           priorityClassName: system-cluster-critical
       storageClass:
         enabled: true
