@@ -23,6 +23,13 @@ alertmanager:
         labelSelector:
           matchLabels:
             app: alertmanager
+    resources:
+      requests:
+        cpu: 10m
+        memory: 40Mi
+      limits:
+        cpu: 200m
+        memory: 250Mi
 
   ingress:
     enabled: true
