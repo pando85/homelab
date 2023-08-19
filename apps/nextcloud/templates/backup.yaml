@@ -1,0 +1,40 @@
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: nextcloud-restic
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: nextcloud-restic
+    template:
+      data:
+        RESTIC_REPOSITORY: '{{`{{ .REPOSITORY_TEMPLATE }}/nextcloud`}}'
+        RESTIC_PASSWORD: '{{`{{ .RESTIC_PASSWORD }}`}}'
+        AWS_ACCESS_KEY_ID: '{{`{{ .AWS_ACCESS_KEY_ID }}`}}'
+        AWS_SECRET_ACCESS_KEY: '{{`{{ .AWS_SECRET_ACCESS_KEY }}`}}'
+  dataFrom:
+    - extract:
+        key: /volsync/restic-template
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: nextcloud-backup
+spec:
+  sourcePVC: nextcloud-nextcloud-data-zfs
+  trigger:
+    schedule: "0 6 * * *"
+  restic:
+    pruneIntervalDays: 7
+    repository: nextcloud-restic
+    moverSecurityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+    retain:
+      daily: 7
+    copyMethod: Direct
+    cacheCapacity: 10Gi
