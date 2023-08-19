@@ -332,6 +332,16 @@ rook-ceph-cluster:
                           operator: In
                           values:
                             - rook-ceph-rgw
+            podAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                        - key: app.kubernetes.io/instance
+                          operator: In
+                          values:
+                            - ingress-nginx
           priorityClassName: system-cluster-critical
       storageClass:
         enabled: true
