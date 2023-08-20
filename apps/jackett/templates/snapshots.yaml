@@ -5,7 +5,7 @@ metadata:
 spec:
   retention:
     maxCount: 20
-  schedule: "0 3 * * *"
+  schedule: "0 1 * * *" # UTC
   claimSelector:
     matchLabels:
       backup: jackett-zfs
