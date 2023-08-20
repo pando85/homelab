@@ -41,10 +41,6 @@ app-template:
     fsGroup: 991
     fsGroupChangePolicy: "OnRootMismatch"
   persistence:
-    config:
-      enabled: true
-      mountPath: /config
-      existingClaim: config-unpackerr-zfs
     peliculas-download:
       enabled: true
       type: hostPath
