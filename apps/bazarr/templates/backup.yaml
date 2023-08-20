@@ -26,7 +26,7 @@ metadata:
 spec:
   sourcePVC: config-bazarr-zfs
   trigger:
-    schedule: "0 7 * * *"
+    schedule: "30 1 * * *" # UTC
   restic:
     pruneIntervalDays: 7
     repository: bazarr-restic

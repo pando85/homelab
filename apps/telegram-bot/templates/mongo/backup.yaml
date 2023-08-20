@@ -26,7 +26,7 @@ metadata:
 spec:
   sourcePVC: mongo-persistent-storage-zfs-mongo-0
   trigger:
-    schedule: "0 7 * * *"
+    schedule: "30 1 * * *" # UTC
   restic:
     pruneIntervalDays: 7
     repository: telegram-bot-mongo-restic
