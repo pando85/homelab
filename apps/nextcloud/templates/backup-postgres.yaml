@@ -26,15 +26,15 @@ metadata:
 spec:
   sourcePVC: pgdata-nextcloud-postgres-0
   trigger:
-    schedule: "30 1 * * *" # UTC
+    schedule: "30 1 * * 2" # UTC
   restic:
-    pruneIntervalDays: 7
+    pruneIntervalDays: 30
     repository: nextcloud-postgres-restic
     moverSecurityContext:
       runAsUser: 995
       runAsGroup: 991
       fsGroup: 991
     retain:
-      daily: 7
+      weekly: 4
     copyMethod: Clone
     cacheCapacity: 200Mi

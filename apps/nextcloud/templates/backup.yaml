@@ -26,15 +26,15 @@ metadata:
 spec:
   sourcePVC: nextcloud-nextcloud-data-zfs
   trigger:
-    schedule: "30 2 * * *" # UTC
+    schedule: "30 2 * * 2" # UTC
   restic:
-    pruneIntervalDays: 7
+    pruneIntervalDays: 30
     repository: nextcloud-restic
     moverSecurityContext:
       runAsUser: 995
       runAsGroup: 991
       fsGroup: 991
     retain:
-      daily: 7
+      weekly: 4
     copyMethod: Direct
     cacheCapacity: 10Gi
