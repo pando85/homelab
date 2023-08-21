@@ -1,31 +1,54 @@
-queue_directory = /var/spool/postfix
-command_directory = /usr/sbin
-daemon_directory = /usr/libexec/postfix
-data_directory = /var/lib/postfix
-mail_owner = postfix
-inet_interfaces = localhost
-inet_protocols = ipv4
-mydestination = $myhostname, localhost.$mydomain, localhost
-unknown_local_recipient_reject_code = 550
+# See /usr/share/postfix/main.cf.dist for a commented, more complete version
+
+
+# Debian specific:  Specifying a file name will cause the first
+# line of that file to be used as the name.  The Debian default
+# is /etc/mailname.
+#myorigin = /etc/mailname
+
+smtpd_banner = $myhostname ESMTP $mail_name (Ubuntu)
+biff = no
+
+# appending .domain is the MUA's job.
+append_dot_mydomain = no
+
+# Uncomment the next line to generate "delayed mail" warnings
+#delay_warning_time = 4h
+
+readme_directory = no
+
+# See http://www.postfix.org/COMPATIBILITY_README.html -- default to 3.6 on
+# fresh installs.
+compatibility_level = 3.6
+
+
+
+# TLS parameters
+smtpd_tls_cert_file=/etc/ssl/certs/ssl-cert-snakeoil.pem
+smtpd_tls_key_file=/etc/ssl/private/ssl-cert-snakeoil.key
+smtpd_tls_security_level=may
+
+smtp_tls_CApath=/etc/ssl/certs
+smtp_tls_security_level=may
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+
+
+smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+myhostname = grigri.grigri
 alias_maps = hash:/etc/aliases
 alias_database = hash:/etc/aliases
-
-debugger_command =
-	PATH=/bin:/usr/bin:/usr/local/bin:/usr/X11R6/bin
-	ddd $daemon_directory/$process_name $process_id & sleep 5
-sendmail_path = /usr/sbin/sendmail.postfix
-newaliases_path = /usr/bin/newaliases.postfix
-mailq_path = /usr/bin/mailq.postfix
-setgid_group = postdrop
-html_directory = no
-manpage_directory = /usr/share/man
-sample_directory = /usr/share/doc/postfix-2.10.1/samples
-readme_directory = /usr/share/doc/postfix-2.10.1/README_FILES
+myorigin = /etc/mailname
+mydestination = $myhostname, localhost.$mydomain, localhost
 relayhost = [smtp.gmail.com]:587
 smtp_use_tls = yes
 smtp_sasl_auth_enable = yes
 smtp_sasl_security_options =
-smtp_sasl_password_maps = /etc/postfix/sasl_passwd
-smtp_tls_CAfile = /etc/ssl/certs/ca-bundle.crt
+smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+smtp_tls_CAfile = /etc/ssl/certs/ca-certificates.crt
 debug_peer_list=smtp.gmail.com
-debug_peer_level=3
+debug_peer_level=1
+mynetworks = 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+inet_protocols = ipv4

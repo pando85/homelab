@@ -1,4 +1,7 @@
 ---
+- name: add postfix password  # noqa: name[casing]
+  command: postmap /etc/postfix/sasl_passwd
+
 - name: restart postfix  # noqa: name[casing]
   systemd:
     name: postfix

@@ -56,15 +56,19 @@
   notify: restart postfix
   tags:
     - grigri-setup
+    - postfix
 
 - name: Configure postfix user
   template:
     src: sasl_passwd.j2
     dest: /etc/postfix/sasl_passwd
     mode: "0600"
-  notify: restart postfix
+  notify:
+    - add postfix password
+    - restart postfix
   tags:
     - grigri-setup
+    - postfix
 
 - name: Add grigri-service script
   template:
