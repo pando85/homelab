@@ -85,7 +85,7 @@ app-template:
         - --repo=https://github.com/KBlixt/subcleaner.git
         - --branch=master
         - --depth=1
-        - --wait=21600 # 6 hours
+        - --period=6h
         - --root=/add-ons/subcleaner
       volumeMounts:
         - name: add-ons
