@@ -33,12 +33,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Get token
-        id: get_token
-        uses: machine-learning-apps/actions-app-token@master
+      - name: Generate Token
+        uses: tibdex/github-app-token@v1
+        id: generate-token
         with:
-          APP_ID: ${{ secrets.APP_ID }}
-          APP_PEM: ${{ secrets.APP_PRIVATE_KEY }}
+          app_id: "${{ secrets.APP_ID }}"
+          private_key: "${{ secrets.APP_PRIVATE_KEY }}"
 
       - name: Override default config from dispatch variables
         run: |
@@ -49,4 +49,4 @@ jobs:
         uses: renovatebot/github-action@v39.0.1
         with:
           configurationFile: .github/renovate.json5
-          token: "${{ steps.get_token.outputs.app_token }}"
+          token: "${{ steps.generate-token.outputs.token }}"
