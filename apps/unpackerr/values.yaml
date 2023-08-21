@@ -5,6 +5,7 @@ app-template:
   env:
     TZ: Europe/Madrid
     UN_WEBSERVER_METRICS: true
+    UN_DEBUG: true
     UN_SONARR_0_URL: https://sonarr.internal.grigri.cloud
     UN_SONARR_0_PATHS_0: /datasets/series/download
     UN_RADARR_0_URL: https://radarr.internal.grigri.cloud
