@@ -4,6 +4,7 @@
   - [Pfsense](#pfsense)
 - [Servers](#servers)
   - [Flash SDs](#flash-sds)
+    - [amd64 instances](#amd64-instances)
     - [odroid-hc4](#odroid-hc4)
       - [Bootloader Bypass Method](#bootloader-bypass-method)
     - [Naming convention](#naming-convention)
@@ -35,8 +36,15 @@
 - rock64: [image](https://www.armbian.com/rock64/)
 - odroid-c4: [image](https://www.armbian.com/odroid-c4/)
 - odroid-hc4: [image](https://www.armbian.com/odroid-hc4/)
-- amd64: [usb-stick](https://releases.ubuntu.com/22.04/) Use script from `scripts/prepare_sdcard.sh`
-  to prepare instances and amd64 install manually.
+- amd64: [usb-stick](https://releases.ubuntu.com/22.04/)
+- grigri: [usb-stick](https://releases.ubuntu.com/22.04/)
+
+Use script from `scripts/prepare_sdcard.sh` to prepare instances. amd64 and grigri should be
+installed manually.
+
+#### amd64 instances
+
+Installed with Ubuntu: select ubuntu server (**non minimized**) and follow the process.
 
 #### odroid-hc4
 

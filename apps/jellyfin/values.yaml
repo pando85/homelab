@@ -26,7 +26,7 @@ app-template:
         failureThreshold: 3
     readiness: *probes
     startup:
-      enabled: false
+      enabled: true
 
   ingress:
     main:
