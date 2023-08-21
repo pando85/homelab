@@ -1,0 +1,11 @@
+---
+- name: restart postfix  # noqa: name[casing]
+  systemd:
+    name: postfix
+    state: restarted
+
+- name: mount zfs datasets  # noqa: name[casing]
+  command: zfs mount -a
+
+- name: restart server  # noqa: name[casing]
+  reboot:

@@ -1,20 +1,36 @@
 - name: Create democratic-csi zfs user
-  hosts:
-    - grigri
+  hosts: grigri
   tasks:
-    - name: "Add group zfs-nfs"
+    - name: Install demotratic-csi nfs dependencies
+      apt:
+        name: nfs-kernel-server
+        state: present
+        force_apt_get: true
+        update_cache: true
+      tags:
+        - democratic-csi
+
+    - name: Enable nfs-kernel-server
+      systemd:
+        name: nfs-kernel-server
+        daemon_reload: true
+        enabled: true
+      tags:
+        - democratic-csi
+
+    - name: Add group zfs-nfs
       group:
-        name: "democraticcsi"
+        name: democraticcsi
         gid: 985
       tags:
         - democratic-csi
 
-    - name: "Add user democraticcsi"
+    - name: Add user democraticcsi
       user:
-        name: "democraticcsi"
+        name: democraticcsi
         shell: /bin/bash
         uid: 989
-        groups: "democraticcsi"
+        groups: democraticcsi
         append: true
       tags:
         - democratic-csi
@@ -35,4 +51,5 @@
       tags:
         - democratic-csi
 
-# currently added also to AllowUsers in `/etc/sshd_config`
+# currently added also to AllowUsers in `/etc/ssh/sshd_config`
+# AllowUsers agil backup media democraticcsi

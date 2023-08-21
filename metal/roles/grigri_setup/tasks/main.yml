@@ -1,0 +1,142 @@
+---
+- name: Add media group
+  group:
+    name: media
+    gid: 991
+  tags:
+    - grigri-setup
+
+- name: Add media user
+  user:
+    name: media
+    shell: /bin/bash
+    uid: 995
+    home: /var/lib/media
+    groups: media
+    append: true
+  tags:
+    - grigri-setup
+
+- name: Add backup group
+  group:
+    name: backup
+    gid: 987
+  tags:
+    - grigri-setup
+
+- name: Add backup user
+  user:
+    name: backup
+    shell: /bin/bash
+    uid: 990
+    home: /datasets/backups/
+    create_home: false
+    groups: backup
+    append: true
+  tags:
+    - grigri-setup
+
+- name: Install notification tools
+  apt:
+    name:
+      - mailutils
+      - postfix
+      - curl
+    state: present
+    force_apt_get: true
+    update_cache: true
+  tags:
+    - grigri-setup
+
+- name: Configure postfix
+  copy:
+    src: postfix_main.cf
+    dest: /etc/postfix/main.cf
+    mode: "0644"
+  notify: restart postfix
+  tags:
+    - grigri-setup
+
+- name: Configure postfix user
+  template:
+    src: sasl_passwd.j2
+    dest: /etc/postfix/sasl_passwd
+    mode: "0600"
+  notify: restart postfix
+  tags:
+    - grigri-setup
+
+- name: Add grigri-service script
+  template:
+    src: grigri-service.j2
+    dest: /usr/local/bin/grigri-service
+    mode: "0755"
+  tags:
+    - grigri-setup
+
+- name: Add grigri-startup service
+  copy:
+    src: grigri-startup.service
+    dest: /etc/systemd/system/grigri-startup.service
+    mode: "0644"
+  tags:
+    - grigri-setup
+
+- name: Enable grigri-startup service
+  systemd:
+    name: grigri-startup
+    daemon_reload: true
+    enabled: true
+  tags:
+    - grigri-setup
+
+- name: Install smartctl
+  apt:
+    name: smartmontools
+    state: present
+    force_apt_get: true
+    update_cache: true
+  tags:
+    - grigri-setup
+
+- name: Ensure smartctl configured for sending notification errors
+  lineinfile:
+    path: /etc/smartd.conf
+    regexp: '^DEVICESCAN'
+    line: DEVICESCAN -H -m pando855@gmail.com -n standby,10,q
+  tags:
+    - grigri-setup
+
+- name: Enable smartd service
+  systemd:
+    name: smartd
+    daemon_reload: true
+    enabled: true
+  tags:
+    - grigri-setup
+
+- name: Install ZFS tools
+  apt:
+    name: zfsutils-linux
+    state: present
+    force_apt_get: true
+    update_cache: true
+  tags:
+    - grigri-setup
+
+- name: ZFS import datasets
+  command: zpool import datasets
+  args:
+    creates: /datasets
+  notify: mount zfs datasets
+  tags:
+    - grigri-setup
+
+- name: Configure ZFS module
+  copy:
+    src: zfs.conf
+    dest: /etc/modprobe.d/zfs.conf
+    mode: "0644"
+  notify: restart server
+  tags:
+    - grigri-setup

@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+
+# shellcheck disable=SC2089
+CHAT_ID="{{ lookup('passwordstore', 'grigri/telegram/chat_id') }}"
+# shellcheck disable=SC2089
+TELEGRAM_BOT_TOKEN="{{ lookup('passwordstore', 'grigri/telegram/token') }}"
+
+send_telegram_message()
+{
+    curl -X POST \
+        -H 'Content-Type: application/json' \
+        --data "$(generate_body "$1")" \
+        "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage"
+}
+
+generate_body()
+{
+    cat <<EOF
+{
+    "chat_id": "${CHAT_ID}",
+    "text": "$1",
+    "disable_notification": true
+}
+EOF
+}
+
+start() {
+    if [ -f /etc/apagado ];
+    then
+        rm /etc/apagado
+        message="$(hostname) started"
+        date | mail -s "$message" pando855@gmail.com
+        send_telegram_message "$message"
+    else
+        message="$(hostname) started after improper shutdown"
+        date | mail -s "$message" pando855@gmail.com
+        send_telegram_message "$message"
+    fi
+}
+
+stop() {
+    touch /etc/apagado
+}
+
+case $1 in
+    start|stop) "$1" ;;
+esac

@@ -189,8 +189,16 @@
   tags:
     - sysstat-collect
 
-- name: Set up storage dependencies
-  import_tasks: storage-dependencies.yml
+- name: Install storage dependencies
+  apt:
+    name:
+      # zfs-generic-nfs
+      - nfs-common
+      # ceph
+      - lvm2
+    state: present
+    force_apt_get: true
+    update_cache: true
   tags:
     - storage-dependencies
 

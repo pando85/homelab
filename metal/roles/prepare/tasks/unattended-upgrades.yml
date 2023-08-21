@@ -6,7 +6,7 @@
     force_apt_get: true
     update_cache: true
 
-- name: unattended-upgrades | {{ item }} config
+- name: unattended-upgrades | Config
   copy:
     src: "{{ item }}"
     dest: /etc/apt/apt.conf.d/{{ item }}

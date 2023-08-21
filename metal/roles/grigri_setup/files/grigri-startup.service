@@ -1,0 +1,15 @@
+[Unit]
+Description=Grigri server service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/grigri-service start
+ExecStop=/usr/local/bin/grigri-service stop
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+
+[Unit]
+Wants=network-online.target
+After=network-online.target

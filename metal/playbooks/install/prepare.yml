@@ -2,7 +2,12 @@
 #  ansible-playbook -i inventory/hosts.ini -K --limit {{ hosts }} -e 'serial=100%' playbooks/install/os.yml
 
 - name: Prepare
-  hosts: all:!grigri
+  hosts: all
   serial: "{{ serial | default('100%') }}"
   roles:
     - prepare
+
+- name: Setup grigri
+  hosts: grigri
+  roles:
+    - grigri_setup
