@@ -10,8 +10,8 @@ spec:
       rules:
         - alert: SmartCTLDeviceHighTemperature
           annotations:
-            message: Device {{ $labels.device }} on instance {{ $labels.instance }} has
-              a temperature higher than 41 celsius degrees
+            description: Device {{ $labels.device }} on instance {{ $labels.instance }} has
+              a temperature of {{ $value }} celsius degrees
           expr: smartctl_device_temperature > 41
           for: 60m
           labels:
