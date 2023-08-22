@@ -79,6 +79,7 @@
   systemd:
     name: k3s
     enabled: true
+    daemon_reload: true
     state: started
   register: k3s_service
   until: k3s_service is succeeded
