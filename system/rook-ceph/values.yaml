@@ -115,6 +115,9 @@ rook-ceph-cluster:
     osd_pool_default_size = 2
     osd_pool_default_min_size = 2
 
+    osd_scrub_begin_hour = 3
+    osd_scrub_end_hour = 6
+
   monitoring:
     enabled: true
     createPrometheusRules: false
@@ -269,11 +272,7 @@ rook-ceph-cluster:
         volumeBindingMode: "Immediate"
         parameters:
           imageFormat: "2"
-          # RBD image features, equivalent to OR'd bitfield value: 63
-          # Available for imageFormat: "2". Older releases of CSI RBD
-          # support only the `layering` feature. The Linux kernel (KRBD) supports the
-          # full feature complement as of 5.4
-          imageFeatures: layering
+          imageFeatures: layering,fast-diff,object-map,deep-flatten,exclusive-lock
 
           # These secrets contain Ceph admin credentials.
           csi.storage.k8s.io/provisioner-secret-name: rook-csi-rbd-provisioner
