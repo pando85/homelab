@@ -53,8 +53,8 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 
 | Device                              | Count | OS Disk Size | Data Disk Size                      | Ram  | Operating System | Purpose    |
 | ----------------------------------- | ----- | ------------ | ----------------------------------- | ---- | ---------------- | ---------- |
-| AMD E-450 APU                       | 1     | 60GB         | N/A                                 | 8GB  | Ubuntu 22.04     | k3s server |
-| Supermicro Atom C2758 (A1SRi-2758F) | 1     | 250GB SSD    | 3\*4TB + 500GB (NVMe) RAIDZ + cache | 32GB | Centos 7         | K3s agent  |
+| Supermicro Atom C2758 (A1SRi-2758F) | 1     | 250GB SSD    | 3\*4TB + 500GB (NVMe) RAIDZ + cache | 32GB | Ubuntu 22.04     | K3s server |
+| AMD E-450 APU                       | 1     | 60GB         | N/A                                 | 8GB  | Ubuntu 22.04     | k3s agent  |
 | Rock64                              | 6     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
 | Odroid-c4                           | 2     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
 | Odroid-hc4                          | 3     | N/A          | 3TB + 240GB SSD                     | 4GB  | Armbian          | K3s agent  |
@@ -75,7 +75,6 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 - [x] Monitoring and alerting
 - [x] Single sign-on
 - [x] Automated backups
-- [ ] Automated offsite backups 🚧
 
 ## 🌐 DNS
 
