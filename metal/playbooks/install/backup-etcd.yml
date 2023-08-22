@@ -1,13 +1,6 @@
 - name: Enable etcd backup
-  hosts:
-    - kube_control_plane[0]
+  hosts: grigri
   tasks:
-    - name: Check backup ssh key
-      community.crypto.openssh_keypair:
-        path: "{{ ansible_user_dir }}/id_ed25519"
-        type: ed25519
-      register: key
-
     - name: Check dependencies
       ansible.builtin.apt:
         name:
@@ -21,11 +14,4 @@
         minute: "0"
         hour: "1,13"
         job: >
-          rsync -av --delete -e "ssh -i {{ ansible_user_dir }}/id_ed25519"
-          /var/lib/rancher/k3s/server/db/snapshots/ backup@{{ backup_target_host }}:{{ backup_target_dir }}
-
-    - name: Echo public key
-      debug:
-        msg: |
-          Create {{ backup_target_dir }} and
-          add key to authorized_keys on backup host user: {{ key.public_key }} root@{{ ansible_hostname }}
+          rsync -av --delete /var/lib/rancher/k3s/server/db/snapshots/ {{ backup_target_dir }}
