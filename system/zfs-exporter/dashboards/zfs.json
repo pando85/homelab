@@ -294,7 +294,10 @@
       "transformations": [
         {
           "id": "joinByField",
-          "options": {}
+          "options": {
+            "byField": "pool",
+            "mode": "outer"
+          }
         },
         {
           "id": "organize",
