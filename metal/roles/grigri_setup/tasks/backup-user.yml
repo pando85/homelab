@@ -1,0 +1,26 @@
+---
+- name: backup-user | Add backup group
+  group:
+    name: backup
+    gid: 987
+
+- name: backup-user | Add backup user
+  user:
+    name: backup
+    shell: /bin/bash
+    uid: 990
+    home: /datasets/backups/
+    create_home: false
+    groups: backup
+    append: true
+
+# Add rsync backup to crontab in pfsense host. File `/etc/crontab`
+#   ```crontab
+#   0 4 * * * /usr/local/bin/rsync -avz /cf/conf/backup/ backup@grigri.grigri:/datasets/backups/pfsense/
+#   ```
+
+- name: backup-user | Set pfsense authorized keys
+  authorized_key:
+    user: backup
+    state: present
+    key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG4YvPnh7l7sC46/jvN/rESNA2eJ5Y51Tiq+XdJcxBd5 root@pfsense.grigri

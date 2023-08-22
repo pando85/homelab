@@ -10,5 +10,14 @@
 - name: mount zfs datasets  # noqa: name[casing]
   command: zfs mount -a
 
-- name: restart server  # noqa: name[casing]
-  reboot:
+- name: reload zfs module config  # noqa: name[casing]
+  shell: |
+    set -o pipefail
+    grep -E -v '^#|^\s*$' /etc/modprobe.d/zfs.conf | while read L; do
+      M=($L)
+      N=${M[2]}
+      P=(${N/=/ })
+      echo "${P[1]}" > /sys/module/zfs/parameters/${P[0]}
+    done
+  args:
+    executable: /bin/bash

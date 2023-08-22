@@ -1,0 +1,48 @@
+---
+- name: notifications | Install notification tools
+  apt:
+    name:
+      - mailutils
+      - postfix
+      - curl
+    state: present
+    force_apt_get: true
+    update_cache: true
+
+- name: notifications | Configure postfix
+  copy:
+    src: postfix_main.cf
+    dest: /etc/postfix/main.cf
+    mode: "0644"
+  notify: restart postfix
+  tags:
+    - postfix
+
+- name: notifications | Configure postfix user
+  template:
+    src: sasl_passwd.j2
+    dest: /etc/postfix/sasl_passwd
+    mode: "0600"
+  notify:
+    - add postfix password
+    - restart postfix
+  tags:
+    - postfix
+
+- name: notifications | Add grigri-service script
+  template:
+    src: grigri-service.j2
+    dest: /usr/local/bin/grigri-service
+    mode: "0755"
+
+- name: notifications | Add grigri-startup service
+  copy:
+    src: grigri-startup.service
+    dest: /etc/systemd/system/grigri-startup.service
+    mode: "0644"
+
+- name: notifications | Enable grigri-startup service
+  systemd:
+    name: grigri-startup
+    daemon_reload: true
+    enabled: true

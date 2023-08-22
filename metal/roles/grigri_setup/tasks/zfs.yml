@@ -1,0 +1,28 @@
+---
+- name: zfs | Enable smartd service
+  systemd:
+    name: smartd
+    daemon_reload: true
+    enabled: true
+
+- name: zfs | Install ZFS tools
+  apt:
+    name: zfsutils-linux
+    state: present
+    force_apt_get: true
+    update_cache: true
+
+- name: zfs | ZFS import datasets
+  command: zpool import datasets
+  args:
+    creates: /datasets
+  notify: mount zfs datasets
+
+- name: zfs | Configure ZFS module
+  copy:
+    src: zfs.conf
+    dest: /etc/modprobe.d/zfs.conf
+    mode: "0644"
+  notify: reload zfs module config
+  tags:
+    - zfs-config
