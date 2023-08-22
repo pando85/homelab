@@ -5,3 +5,4 @@ k3s_kubelet_extra_args:
 
 node_labels:
   name: grigri
+  rook-ceph.grigri.cloud/client: "true"

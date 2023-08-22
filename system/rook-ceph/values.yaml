@@ -82,6 +82,8 @@ rook-ceph:
             memory: 128Mi
             cpu: 500m
 
+    pluginNodeAffinity: rook-ceph.grigri.cloud/client=true
+
     serviceMonitor:
       # -- Enable ServiceMonitor for Ceph CSI drivers
       enabled: true
