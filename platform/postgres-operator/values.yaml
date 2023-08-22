@@ -1,4 +1,8 @@
 postgres-operator:
+  # multi-arch support
+  image:
+    registry: ghcr.io/zalando/postgres-operator
+
   configGeneral:
     enable_shm_volume: false
 
