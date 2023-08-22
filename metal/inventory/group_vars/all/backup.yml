@@ -1,2 +1,1 @@
-backup_target_host: grigri.grigri
 backup_target_dir: /datasets/backups/k8s/etcd
