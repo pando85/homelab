@@ -115,6 +115,7 @@ rook-ceph-cluster:
     osd_pool_default_size = 2
     osd_pool_default_min_size = 2
 
+    [osd]
     osd_scrub_begin_hour = 3
     osd_scrub_end_hour = 6
 
