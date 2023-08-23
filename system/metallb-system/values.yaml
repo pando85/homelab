@@ -17,3 +17,8 @@ metallb:
         memory: 24Mi
       limits:
         memory: 100Mi
+
+    livenessProbe:
+      enabled: true
+      periodSeconds: 30
+      timeoutSeconds: 5
