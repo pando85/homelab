@@ -35,6 +35,8 @@ prepare_sysctl:
   # Since kernel 5.4 default is 4096, in earlier kernels the default value is 128.
   - key: net.core.somaxconn
     value: 4096
+  - key: fs.inotify.max_user_instances
+    value: 1024
 
 prepare_additional_disks: []
 # - dev_id: /dev/disk/by-id/ata-WDC_WD30EZRX-00DC0B0_WD-WMC1T2457392
