@@ -1,0 +1,54 @@
+app-template:
+  controller:
+    type: statefulset
+  image:
+    repository: docker.io/fallenbagel/jellyseerr
+    tag: preview-pr184
+  env:
+    TZ: Europe/Madrid
+    LOG_LEVEL: "info"
+  service:
+    main:
+      ports:
+        http:
+          port: 5055
+  ingress:
+    main:
+      enabled: true
+      ingressClassName: nginx-external
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+        nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
+      hosts:
+        - host: &host requests.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - hosts:
+            - *host
+          secretName: jellyseerr-external-tls-certificate
+  podSecurityContext:
+    runAsUser: 568
+    runAsGroup: 568
+    fsGroup: 568
+    fsGroupChangePolicy: "OnRootMismatch"
+  persistence:
+    config:
+      enabled: true
+      mountPath: /app/config
+      existingClaim: jellyseerr-config-zfs
+  resources:
+    requests:
+      cpu: 10m
+      memory: 50Mi
+    limits:
+      memory: 300Mi
+      cpu: 200m
+
+  nodeSelector:
+    name: grigri
