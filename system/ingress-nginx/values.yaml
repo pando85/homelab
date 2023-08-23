@@ -96,4 +96,5 @@ ingress-nginx:
         enabled: true
 
   tcp:
+    # TODO: change to git namespace
     29518: gitea/gitea-ssh:22

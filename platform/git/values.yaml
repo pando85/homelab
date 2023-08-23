@@ -52,8 +52,8 @@ gitea:
         ENABLE_AUTO_REGISTRATION: true
       server:
         LANDING_PAGE: explore
-        ROOT_URL: https://gitea.grigri.cloud
-        SSH_DOMAIN: gitea.grigri.cloud
+        ROOT_URL: https://git.grigri.cloud
+        SSH_DOMAIN: git.grigri.cloud
         SSH_PORT: 29518
       database:
         DB_TYPE: postgres
