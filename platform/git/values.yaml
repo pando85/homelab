@@ -86,7 +86,7 @@ gitea:
       - name: kanidm
         provider: openidConnect
         existingSecret: oidc-client
-        autoDiscoverUrl: https://idm.grigri.cloud/oauth2/openid/gitea/.well-known/openid-configuration
+        autoDiscoverUrl: https://idm.grigri.cloud/oauth2/openid/git/.well-known/openid-configuration
 
   postgresql-ha:
     enabled: false
