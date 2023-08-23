@@ -50,7 +50,7 @@ gitea:
     config:
       oauth2_client:
         ENABLE_AUTO_REGISTRATION: true
-        OPENID_CONNECT_SCOPES: openid,email
+        OPENID_CONNECT_SCOPES: email
       server:
         LANDING_PAGE: explore
         ROOT_URL: https://git.grigri.cloud
