@@ -27,7 +27,7 @@ spec:
     gitea: gitea
 
   postgresql:
-    version: "15"
+    version: "14"
     parameters:
       archive_mode: 'off'
       max_connections: "4"

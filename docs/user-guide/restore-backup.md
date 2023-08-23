@@ -12,7 +12,7 @@ If after restore there are this kind of errors:
 
 > My wal position exceeds maximum replication lag
 
-Replica can be promoted to leader using `patrocitl failover` command as root.
+Replica can be promoted to leader using `patronictl failover` command as root.
 
 ## Longhorn
 
