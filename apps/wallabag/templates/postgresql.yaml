@@ -27,7 +27,7 @@ spec:
     wallabag: wallabag
 
   postgresql:
-    version: "14"
+    version: "15"
     parameters:
       archive_mode: 'off'
       max_connections: "4"
