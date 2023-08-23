@@ -9,6 +9,10 @@ metallb:
         memory: 54Mi
       limits:
         memory: 100Mi
+    livenessProbe:
+      enabled: true
+      periodSeconds: 30
+      timeoutSeconds: 5
 
   speaker:
     resources:
