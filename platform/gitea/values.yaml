@@ -75,6 +75,8 @@ gitea:
         LEVEL: info
       cron:
         NOTICE_ON_SUCCESS: false
+      migrations:
+        ALLOWED_DOMAINS: '*'
 
     additionalConfigSources:
       - secret:
