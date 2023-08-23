@@ -81,4 +81,4 @@ ingress-nginx:
         enabled: true
 
   tcp:
-    29518: gitea/gitea-ssh:22
+    29518: git/git-gitea-ssh:22
