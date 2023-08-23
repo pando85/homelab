@@ -22,22 +22,22 @@ data:
     {{- end }}
 
     {{ define "__alert_severity_title" -}}
-      *[{{ .Status | toUpper -}}
+      <b>[{{ .Status | toUpper -}}
       {{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{- end -}}
-      ]{{- template "__alert_severity_prefix_title" . -}}{{ .CommonLabels.alertname }}*
+      ]{{- template "__alert_severity_prefix_title" . -}}{{ .CommonLabels.alertname }}</b>
     {{- end }}
     {{ define "__alert_severity_text" -}}
         {{- $alertsLen := (len .Alerts) -}}
         {{ range .Alerts }}
 
             {{- if .Annotations.description }}
-    _{{ .Annotations.description }}_
+    <i>{{ .Annotations.description }}</i>
             {{- end }}
             {{- if .Annotations.message }}
-    _{{ .Annotations.message }}_
+    <i>{{ .Annotations.message }}</i>
             {{- end }}
             {{- if le $alertsLen 10 }}
-    [Prometheus]({{ .GeneratorURL }})
+    <a href="{{ .GeneratorURL }}">Prometheus</a>
             {{- end }}
         {{ end }}
     {{- end }}
