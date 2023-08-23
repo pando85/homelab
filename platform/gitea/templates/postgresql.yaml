@@ -5,7 +5,7 @@ metadata:
 spec:
   teamId: gitea
 
-  numberOfInstances: 1
+  numberOfInstances: 2
 
   resources:
     requests:
@@ -27,7 +27,7 @@ spec:
     gitea: gitea
 
   postgresql:
-    version: "15"
+    version: "14"
     parameters:
       archive_mode: 'off'
       max_connections: "4"
