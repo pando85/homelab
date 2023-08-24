@@ -192,8 +192,6 @@
 - name: Install storage dependencies
   apt:
     name:
-      # zfs-generic-nfs
-      - nfs-common
       # ceph
       - lvm2
     state: present

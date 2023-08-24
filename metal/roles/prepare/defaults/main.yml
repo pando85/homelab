@@ -10,9 +10,6 @@ prepare_basic_packages:
   - ca-certificates
   - parted
   - vim
-  # lonhorn dependencies
-  - open-iscsi
-  - nfs-common
   - curl
   - bash
   - gawk
