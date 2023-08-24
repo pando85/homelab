@@ -38,6 +38,10 @@
     enabled: true
     state: restarted
 
+- name: apt autoremove  # noqa: name[casing]
+  apt:
+    autoremove: true
+
 - name: restart server  # noqa: name[casing]
   vars:
     ansible_user: "{{ prepare_username }}"

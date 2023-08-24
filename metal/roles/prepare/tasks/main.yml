@@ -93,6 +93,7 @@
   apt:
     name: "{{ prepare_unnecesary_packages }}"
     state: absent
+  notify: apt autoremove
 
 - name: Disable swap in armbian
   lineinfile:

@@ -27,6 +27,7 @@ prepare_basic_packages:
 
 prepare_unnecesary_packages:
   - snapd
+  - armbian-zsh
 
 prepare_sysctl:
   # Since kernel 5.4 default is 4096, in earlier kernels the default value is 128.
