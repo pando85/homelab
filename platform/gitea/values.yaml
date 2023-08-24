@@ -23,7 +23,7 @@ gitea:
         hosts:
           - *host
 
-  replicaCount: 1
+  replicaCount: 0
 
   resources:
     limits:
