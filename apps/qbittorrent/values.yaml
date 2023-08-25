@@ -16,11 +16,57 @@ app-template:
 
   hostname: qbittorrent
 
+  sidecars:
+    metrics:
+      image:
+        repository: ghcr.io/esanchezm/prometheus-qbittorrent-exporter
+        tag: latest@sha256:4c019f0c9c8f06a119e2a32b8b338843a782045dce94fa0bef9a94b5f80450f8
+      env:
+        QBITTORRENT_HOST: localhost
+        QBITTORRENT_PORT: *port
+      resources:
+        requests:
+          cpu: 15m
+          memory: 19Mi
+        limits:
+          memory: 100Mi
+
+      ports:
+        - name: metrics
+          containerPort: &metrics_port 8000
+          protocol: TCP
+
+      livenessProbe:
+        failureThreshold: 3
+        initialDelaySeconds: 0
+        periodSeconds: 30
+        tcpSocket:
+          port: *metrics_port
+        timeoutSeconds: 1
+      readinessProbe:
+        failureThreshold: 3
+        initialDelaySeconds: 0
+        periodSeconds: 30
+        tcpSocket:
+          port: *metrics_port
+        timeoutSeconds: 1
+
   service:
     main:
       ports:
         http:
           port: *port
+
+  serviceMonitor:
+    main:
+      enabled: true
+      endpoints:
+        - port: metrics
+          scheme: http
+          path: /metrics
+          interval: 30s
+          scrapeTimeout: 30s
+
     bittorrent:
       type: LoadBalancer
       annotations:
