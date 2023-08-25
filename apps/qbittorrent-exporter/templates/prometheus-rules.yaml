@@ -1,0 +1,8 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: qbittorrent
+spec:
+{{- range $path, $_ := .Files.Glob "rules/*.yaml" }}
+{{ $.Files.Get $path | indent 2 }}
+{{- end }}
