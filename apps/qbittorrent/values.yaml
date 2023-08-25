@@ -52,6 +52,9 @@ app-template:
       ports:
         http:
           port: *port
+        metrics:
+          port: *metrics_port
+
     bittorrent:
       type: LoadBalancer
       annotations:
