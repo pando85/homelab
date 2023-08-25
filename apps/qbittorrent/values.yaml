@@ -56,17 +56,6 @@ app-template:
       ports:
         http:
           port: *port
-
-  serviceMonitor:
-    main:
-      enabled: true
-      endpoints:
-        - port: metrics
-          scheme: http
-          path: /metrics
-          interval: 30s
-          scrapeTimeout: 30s
-
     bittorrent:
       type: LoadBalancer
       annotations:
@@ -80,6 +69,16 @@ app-template:
           port: 50413
           protocol: TCP
           targetPort: 50413
+
+  serviceMonitor:
+    main:
+      enabled: true
+      endpoints:
+        - port: metrics
+          scheme: http
+          path: /metrics
+          interval: 30s
+          scrapeTimeout: 30s
 
   ingress:
     main:
