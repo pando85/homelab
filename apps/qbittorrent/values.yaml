@@ -57,7 +57,6 @@ app-template:
       annotations:
         metallb.universe.tf/loadBalancerIPs: "192.168.193.7"
         external-dns.alpha.kubernetes.io/enabled: "true"
-        external-dns.alpha.kubernetes.io/hostname: qbittorrent.internal.grigri.cloud
       externalTrafficPolicy: Local
       ports:
         bittorrent:
@@ -78,6 +77,22 @@ app-template:
 
   ingress:
     main:
+      enabled: true
+      ingressClassName: nginx-internal
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
+      hosts:
+        - host: &host qbittorrent.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+      tls:
+        - hosts:
+            - *host
+          secretName: qbittorrent-tls-certificate
+
+    external:
       enabled: true
       ingressClassName: nginx-external
       annotations:
