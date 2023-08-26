@@ -184,8 +184,8 @@ prometheus-node-exporter:
 prometheus:
   prometheusSpec:
     replicas: 1
-    retentionSize: 30GB
-    retention: 30d
+    retentionSize: 100GB
+    retention: 240d
     resources:
       requests:
         cpu: 1
