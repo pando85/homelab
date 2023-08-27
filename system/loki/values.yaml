@@ -15,14 +15,15 @@ loki:
 
   tableManager:
     retention_deletes_enabled: true
-    # 30 days
-    retention_period: 720h
+    # 6 months
+    retention_period: 4320h
 
   singleBinary:
     replicas: 1
 
     persistence:
       enabled: true
+      # Remove until k8s 1.27
       enableStatefulSetAutoDeletePVC: false
       size: 50Gi
       storageClass: zfs-local-dataset
