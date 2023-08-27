@@ -18,6 +18,8 @@ loki-stack:
         retention_deletes_enabled: true
         # 30 days
         retention_period: 720h
+      server:
+        log_level: debug
 
     replicas: 1
 
