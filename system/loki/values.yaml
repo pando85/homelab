@@ -23,6 +23,7 @@ loki:
 
     persistence:
       enabled: true
+      enableStatefulSetAutoDeletePVC: false
       size: 50Gi
       storageClass: zfs-local-dataset
 
