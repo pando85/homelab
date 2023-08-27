@@ -24,7 +24,7 @@ loki:
     persistence:
       enabled: true
       size: 50Gi
-      storageClassName: zfs-local-dataset
+      storageClass: zfs-local-dataset
 
     resources:
       limits:
@@ -49,6 +49,10 @@ loki:
         installOperator: false
     lokiCanary:
       enabled: false
+
+  gateway:
+    enabled: false
+
   # Requires self monitoring enabled
   test:
     enabled: false
