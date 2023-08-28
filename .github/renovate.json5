@@ -103,6 +103,7 @@
       matchManagers: ["regex"],
       matchUpdateTypes: ["major", "minor"],
       minimumReleaseAge: "120 days",
+      groupName: "k3s upgrade",
     },
     {
       // group k3s changes in one PR
