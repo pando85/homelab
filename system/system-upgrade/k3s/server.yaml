@@ -16,5 +16,6 @@ spec:
   drain:
     force: true
     skipWaitForDeleteTimeout: 300  # Honor PodDisruptionBudgets
+    disableEviction: true
   upgrade:
     image: rancher/k3s-upgrade
