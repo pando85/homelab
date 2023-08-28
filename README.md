@@ -64,7 +64,7 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 
 ## ⭐ Features
 
-- [x] Common applications: Gitea...
+- [x] Common applications: Jellyfin, Gitea, arr, nextcloud...
 - [x] Automated Kubernetes installation and management
 - [x] Installing and managing applications using GitOps
 - [x] Automatic rolling upgrade for OS and Kubernetes
