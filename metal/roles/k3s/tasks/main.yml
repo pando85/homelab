@@ -12,14 +12,16 @@
     owner: root
     group: root
     mode: "0755"
+  check_mode: false
   tags:
     k3s-upgrade
 
-- name: Link k3s binary
-  file:
+- name: Copy k3s binary
+  # system-upgrade needs the binary in the path, a link is not valid
+  copy:
     src: "/usr/local/bin/k3s-{{ k3s_version }}"
+    remote_src: true
     dest: "/usr/local/bin/k3s"
-    state: link
     owner: root
     group: root
     mode: "0755"
