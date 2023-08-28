@@ -104,6 +104,8 @@
       matchUpdateTypes: ["major", "minor"],
       minimumReleaseAge: "120 days",
       groupName: "k3s upgrade",
+      additionalBranchPrefix: "k3s-",
+      addLabels: ["renovate/k3s"],
     },
     {
       // group k3s changes in one PR
