@@ -110,5 +110,6 @@ Run with kubectl:
 
 ```bash
 chsh -s /bin/bash www-data
-su -p www-data -c "php /var/www/html/occ"
+su - www-data
+/var/www/html/occ
 ```
