@@ -14,4 +14,4 @@
         minute: "0"
         hour: "1,13"
         job: >
-          rsync -av --delete /var/lib/rancher/k3s/server/db/snapshots/ {{ backup_target_dir }}
+          rsync -av --delete /var/lib/rancher/k3s/server/db/snapshots/ {{ backup_target_dir }} > /dev/null
