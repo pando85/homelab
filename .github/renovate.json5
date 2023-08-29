@@ -81,6 +81,15 @@
       minimumReleaseAge: "30 days",
     },
     {
+      matchDatasources: ["docker"],
+      matchPackageNames: [
+        "nextcloud",
+        "redis"
+      ],
+      matchUpdateTypes: ["major"],
+      minimumReleaseAge: "30 days",
+    },
+    {
       matchPackageNames: [
         "rook-ceph",
         "rook-ceph-cluster",
@@ -117,8 +126,4 @@
       groupSlug: "k3s-upgrade",
     },
   ],
-  ignoreDeps: [
-    // deprecated docker image
-    "ghcr.io/onedr0p/jackett",
-  ]
 }
