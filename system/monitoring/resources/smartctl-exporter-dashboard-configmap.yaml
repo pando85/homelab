@@ -109,7 +109,7 @@ data:
             },
             "textMode": "auto"
           },
-          "pluginVersion": "10.0.3",
+          "pluginVersion": "10.1.0",
           "targets": [
             {
               "datasource": {
@@ -153,6 +153,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "linear",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -295,7 +296,7 @@ data:
             },
             "textMode": "auto"
           },
-          "pluginVersion": "10.0.3",
+          "pluginVersion": "10.1.0",
           "targets": [
             {
               "datasource": {
@@ -374,7 +375,7 @@ data:
             },
             "textMode": "auto"
           },
-          "pluginVersion": "10.0.3",
+          "pluginVersion": "10.1.0",
           "targets": [
             {
               "datasource": {
@@ -416,6 +417,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "linear",
                 "lineWidth": 1,
                 "pointSize": 5,
@@ -475,7 +477,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "smartctl_device_attribute{instance=~\"$instance\", device=~\"$device\", attribute_name=\"Reallocated_Event_Count\",attribute_value_type=\"raw\"}",
+              "expr": "sum(smartctl_device_attribute{instance=~\"$instance\", device=~\"$device\", attribute_name=\"Reallocated_Event_Count\",attribute_value_type=\"raw\"}) by (instance, device)",
               "instant": false,
               "legendFormat": "{{instance}}:/dev/{{device}}",
               "range": true,
@@ -592,7 +594,7 @@ data:
               }
             ]
           },
-          "pluginVersion": "10.0.3",
+          "pluginVersion": "10.1.0",
           "targets": [
             {
               "datasource": {
@@ -768,7 +770,7 @@ data:
                 },
                 "showHeader": true
               },
-              "pluginVersion": "10.0.3",
+              "pluginVersion": "10.1.0",
               "targets": [
                 {
                   "datasource": {
@@ -960,6 +962,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "linear",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1022,7 +1025,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "smartctl_device_attribute{attribute_name=\"Spin_Up_Time\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
+              "expr": "sum(smartctl_device_attribute{attribute_name=\"Spin_Up_Time\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}) by (instance, device)",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 1,
@@ -1058,6 +1061,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "linear",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1120,11 +1124,13 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "smartctl_device_attribute{attribute_name=\"Raw_Read_Error_Rate\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
+              "exemplar": false,
+              "expr": "sum(smartctl_device_attribute{attribute_name=\"Raw_Read_Error_Rate\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}) by (instance, device)",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 1,
               "legendFormat": "{{instance}}:/dev/{{device}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -1156,6 +1162,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "linear",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1218,7 +1225,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "smartctl_device_attribute{attribute_name=\"Reallocated_Sector_Ct\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
+              "expr": "sum(smartctl_device_attribute{attribute_name=\"Reallocated_Sector_Ct\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}) by (instance, device)",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 1,
@@ -1254,6 +1261,7 @@ data:
                   "tooltip": false,
                   "viz": false
                 },
+                "insertNulls": false,
                 "lineInterpolation": "linear",
                 "lineWidth": 2,
                 "pointSize": 5,
@@ -1316,7 +1324,7 @@ data:
                 "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "smartctl_device_attribute{attribute_name=\"Current_Pending_Sector\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}",
+              "expr": "sum(smartctl_device_attribute{attribute_name=\"Current_Pending_Sector\", instance=~\"$instance\", device=~\"$device\", attribute_value_type=\"raw\"}) by (instance, device)",
               "format": "time_series",
               "instant": false,
               "intervalFactor": 1,
@@ -1380,7 +1388,7 @@ data:
             },
             "showHeader": true
           },
-          "pluginVersion": "10.0.3",
+          "pluginVersion": "10.1.0",
           "targets": [
             {
               "datasource": {
@@ -1549,7 +1557,7 @@ data:
           "type": "table"
         },
         {
-          "collapsed": true,
+          "collapsed": false,
           "gridPos": {
             "h": 1,
             "w": 24,
@@ -1557,297 +1565,296 @@ data:
             "y": 41
           },
           "id": 60,
-          "panels": [
+          "panels": [],
+          "title": "Device Information",
+          "type": "row"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "thresholds"
+              },
+              "custom": {
+                "align": "auto",
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "filterable": false,
+                "inspect": false
+              },
+              "decimals": 2,
+              "displayName": "",
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "Time"
+                  },
+                  {
+                    "id": "custom.align"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "device_model"
+                },
+                "properties": [
+                  {
+                    "id": "displayName",
+                    "value": "device_model"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.align"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "__name__"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.align"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "instance"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.align"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "job"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.align"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "type"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.align"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Value"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 2
+                  },
+                  {
+                    "id": "custom.align"
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "protocol"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 93
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "interface"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "ata_version"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 280
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 42
+          },
+          "id": 12,
+          "links": [],
+          "options": {
+            "cellHeight": "sm",
+            "footer": {
+              "countRows": false,
+              "fields": "",
+              "reducer": [
+                "sum"
+              ],
+              "show": false
+            },
+            "showHeader": true,
+            "sortBy": []
+          },
+          "pluginVersion": "10.1.0",
+          "targets": [
             {
               "datasource": {
                 "type": "prometheus",
                 "uid": "${datasource}"
               },
-              "fieldConfig": {
-                "defaults": {
-                  "color": {
-                    "mode": "thresholds"
-                  },
-                  "custom": {
-                    "align": "auto",
-                    "cellOptions": {
-                      "type": "auto"
-                    },
-                    "filterable": false,
-                    "inspect": false
-                  },
-                  "decimals": 2,
-                  "displayName": "",
-                  "mappings": [],
-                  "thresholds": {
-                    "mode": "absolute",
-                    "steps": [
-                      {
-                        "color": "green",
-                        "value": null
-                      }
-                    ]
-                  },
-                  "unit": "short"
-                },
-                "overrides": [
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Time"
-                    },
-                    "properties": [
-                      {
-                        "id": "displayName",
-                        "value": "Time"
-                      },
-                      {
-                        "id": "custom.align"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "device_model"
-                    },
-                    "properties": [
-                      {
-                        "id": "displayName",
-                        "value": "device_model"
-                      },
-                      {
-                        "id": "unit",
-                        "value": "short"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 2
-                      },
-                      {
-                        "id": "custom.align"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "__name__"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "short"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 2
-                      },
-                      {
-                        "id": "custom.align"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "instance"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "short"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 2
-                      },
-                      {
-                        "id": "custom.align"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "job"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "short"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 2
-                      },
-                      {
-                        "id": "custom.align"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "type"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "short"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 2
-                      },
-                      {
-                        "id": "custom.align"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "Value"
-                    },
-                    "properties": [
-                      {
-                        "id": "unit",
-                        "value": "short"
-                      },
-                      {
-                        "id": "decimals",
-                        "value": 2
-                      },
-                      {
-                        "id": "custom.align"
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "protocol"
-                    },
-                    "properties": [
-                      {
-                        "id": "custom.width",
-                        "value": 93
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "interface"
-                    },
-                    "properties": [
-                      {
-                        "id": "custom.width",
-                        "value": 80
-                      }
-                    ]
-                  },
-                  {
-                    "matcher": {
-                      "id": "byName",
-                      "options": "ata_version"
-                    },
-                    "properties": [
-                      {
-                        "id": "custom.width",
-                        "value": 280
-                      }
-                    ]
-                  }
-                ]
-              },
-              "gridPos": {
-                "h": 9,
-                "w": 24,
-                "x": 0,
-                "y": 22
-              },
-              "id": 12,
-              "links": [],
-              "options": {
-                "cellHeight": "sm",
-                "footer": {
-                  "countRows": false,
-                  "fields": "",
-                  "reducer": [
-                    "sum"
-                  ],
-                  "show": false
-                },
-                "showHeader": true,
-                "sortBy": []
-              },
-              "pluginVersion": "10.0.3",
-              "targets": [
-                {
-                  "datasource": {
-                    "type": "prometheus",
-                    "uid": "${datasource}"
-                  },
-                  "editorMode": "code",
-                  "expr": "smartctl_device{instance=~\"$instance\",device=~\"$device\"}",
-                  "format": "table",
-                  "instant": true,
-                  "interval": "",
-                  "intervalFactor": 1,
-                  "legendFormat": "__auto",
-                  "refId": "A"
-                }
-              ],
-              "title": "Device Info",
-              "transformations": [
-                {
-                  "id": "organize",
-                  "options": {
-                    "excludeByName": {
-                      "Time": true,
-                      "Value": true,
-                      "__name__": true,
-                      "container": true,
-                      "endpoint": true,
-                      "job": true,
-                      "namespace": true,
-                      "pod": true,
-                      "service": true
-                    },
-                    "indexByName": {
-                      "Time": 0,
-                      "Value": 20,
-                      "__name__": 1,
-                      "ata_additional_product_id": 4,
-                      "ata_version": 5,
-                      "container": 6,
-                      "device": 3,
-                      "endpoint": 7,
-                      "firmware_version": 8,
-                      "form_factor": 19,
-                      "instance": 2,
-                      "interface": 9,
-                      "job": 10,
-                      "model_family": 11,
-                      "model_name": 12,
-                      "namespace": 13,
-                      "pod": 14,
-                      "protocol": 15,
-                      "sata_version": 16,
-                      "serial_number": 17,
-                      "service": 18
-                    },
-                    "renameByName": {}
-                  }
-                }
-              ],
-              "type": "table"
+              "editorMode": "code",
+              "expr": "smartctl_device{instance=~\"$instance\",device=~\"$device\"}",
+              "format": "table",
+              "instant": true,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "__auto",
+              "refId": "A"
             }
           ],
-          "title": "Device Information",
-          "type": "row"
+          "title": "Device Info",
+          "transformations": [
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true,
+                  "Value": true,
+                  "__name__": true,
+                  "container": true,
+                  "endpoint": true,
+                  "job": true,
+                  "namespace": true,
+                  "pod": true,
+                  "service": true
+                },
+                "indexByName": {
+                  "Time": 0,
+                  "Value": 20,
+                  "__name__": 1,
+                  "ata_additional_product_id": 4,
+                  "ata_version": 5,
+                  "container": 6,
+                  "device": 3,
+                  "endpoint": 7,
+                  "firmware_version": 8,
+                  "form_factor": 19,
+                  "instance": 2,
+                  "interface": 9,
+                  "job": 10,
+                  "model_family": 11,
+                  "model_name": 12,
+                  "namespace": 13,
+                  "pod": 14,
+                  "protocol": 15,
+                  "sata_version": 16,
+                  "serial_number": 17,
+                  "service": 18
+                },
+                "renameByName": {}
+              }
+            }
+          ],
+          "type": "table"
         }
       ],
       "refresh": "",
@@ -1863,7 +1870,7 @@ data:
             "current": {
               "selected": false,
               "text": "Prometheus",
-              "value": "Prometheus"
+              "value": "prometheus"
             },
             "hide": 0,
             "includeAll": false,
@@ -1879,7 +1886,7 @@ data:
           },
           {
             "current": {
-              "selected": false,
+              "selected": true,
               "text": [
                 "All"
               ],
