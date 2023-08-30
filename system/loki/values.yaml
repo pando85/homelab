@@ -38,6 +38,7 @@ loki:
 
   monitoring:
     dashboards:
+      # nothing added cause it checks if running with object storage
       enabled: true
     rules:
       enabled: true
