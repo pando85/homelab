@@ -32,6 +32,7 @@ resources:
   - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/smartctl-exporter-service-monitor.yaml
   - resources/temperature-dashboard-configmap.yaml
+  - resources/temperature-prometheus-rules.yaml
 
 patches:
   - patch: |-

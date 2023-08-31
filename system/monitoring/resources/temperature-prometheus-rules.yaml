@@ -1,0 +1,28 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app.kubernetes.io/name: prometheus-smartctl-exporter
+  name: monitoring-prometheus-smartctl-exporter-custom.rules
+spec:
+  groups:
+    - name: cpu-temperature.rules
+      rules:
+        - alert: HighTemperature
+          annotations:
+            description: |
+              Chip {{ $labels.chip }} on instance {{ $labels.instance }} has
+              a temperature of {{ $value }} celsius degrees.
+          expr: node_hwmon_temp_celsius > 60
+          for: 5m
+          labels:
+            severity: warning
+        - alert: HighTemperature
+          annotations:
+            description: |
+              Chip {{ $labels.chip }} on instance {{ $labels.instance }} has
+              a temperature of {{ $value }} celsius degrees.
+          expr: node_hwmon_temp_celsius > 70
+          for: 5m
+          labels:
+            severity: critical
