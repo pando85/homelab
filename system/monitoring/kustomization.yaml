@@ -25,12 +25,13 @@ helmCharts:
 resources:
   - resources/alertmanager-secret.yaml
   - resources/alertmanager-telegram-template.yaml
+  - resources/blackbox-exporter-dashboard-configmap.yaml
   - resources/grafana-admin-secret.yaml
   - resources/grafana-secret.yaml
-  - resources/blackbox-exporter-dashboard-configmap.yaml
   - resources/smartctl-exporter-dashboard-configmap.yaml
   - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/smartctl-exporter-service-monitor.yaml
+  - resources/temperature-dashboard-configmap.yaml
 
 patches:
   - patch: |-
