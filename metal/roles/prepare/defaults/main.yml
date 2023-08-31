@@ -15,6 +15,7 @@ prepare_basic_packages:
   - gawk
   - mount
   - util-linux
+  - smartmontools
   - ripgrep
   # debug
   - htop
