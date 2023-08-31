@@ -739,8 +739,7 @@ data:
                     "mode": "absolute",
                     "steps": [
                       {
-                        "color": "green",
-                        "value": null
+                        "color": "green"
                       },
                       {
                         "color": "red",
@@ -1397,7 +1396,7 @@ data:
               },
               "editorMode": "code",
               "exemplar": false,
-              "expr": "label_join(smartctl_device_attribute{attribute_name=\"Power-Off_Retract_Count\", instance=~\"$instance\", device=~\"$device\"}, \"id\", \":\", \"instance\", \"device\")",
+              "expr": "label_join(smartctl_device_attribute{attribute_name=\"Power-Off_Retract_Count\", attribute_value_type=\"raw\", instance=~\"$instance\", device=~\"$device\"}, \"id\", \":\", \"instance\", \"device\")",
               "format": "table",
               "instant": true,
               "legendFormat": "__auto",
@@ -1411,7 +1410,7 @@ data:
               },
               "editorMode": "code",
               "exemplar": false,
-              "expr": "label_join(smartctl_device_attribute{attribute_name=\"Start_Stop_Count\", instance=~\"$instance\", device=~\"$device\"}, \"id\", \":\", \"instance\", \"device\")",
+              "expr": "label_join(smartctl_device_attribute{attribute_name=\"Start_Stop_Count\", attribute_value_type=\"raw\", instance=~\"$instance\", device=~\"$device\"}, \"id\", \":\", \"instance\", \"device\")",
               "format": "table",
               "hide": false,
               "instant": true,
@@ -1426,7 +1425,7 @@ data:
               },
               "editorMode": "code",
               "exemplar": false,
-              "expr": "label_join(smartctl_device_attribute{attribute_name=\"Load_Cycle_Count\", instance=~\"$instance\", device=~\"$device\"}, \"id\", \":\", \"instance\", \"device\")",
+              "expr": "label_join(smartctl_device_attribute{attribute_name=\"Load_Cycle_Count\", attribute_value_type=\"raw\", instance=~\"$instance\", device=~\"$device\"}, \"id\", \":\", \"instance\", \"device\")",
               "format": "table",
               "hide": false,
               "instant": true,
@@ -1886,7 +1885,7 @@ data:
           },
           {
             "current": {
-              "selected": true,
+              "selected": false,
               "text": [
                 "All"
               ],
@@ -1919,7 +1918,7 @@ data:
           },
           {
             "current": {
-              "selected": true,
+              "selected": false,
               "text": [
                 "All"
               ],
@@ -1953,7 +1952,7 @@ data:
         ]
       },
       "time": {
-        "from": "now-6h",
+        "from": "now-12h",
         "to": "now"
       },
       "timepicker": {
@@ -1984,6 +1983,6 @@ data:
       "timezone": "browser",
       "title": "SMART disk data",
       "uid": "d8352a62-dbf1-43ba-93c6-372aa3169e64",
-      "version": 1,
+      "version": 2,
       "weekStart": ""
     }
