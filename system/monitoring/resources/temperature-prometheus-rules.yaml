@@ -1,9 +1,7 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
-  labels:
-    app.kubernetes.io/name: prometheus-smartctl-exporter
-  name: monitoring-prometheus-smartctl-exporter-custom.rules
+  name: monitoring-prometheus-cpu-temperature.rules
 spec:
   groups:
     - name: cpu-temperature.rules
