@@ -96,6 +96,7 @@ nextcloud:
       passwordKey: password
       smtpUsernameKey: smtp_username
       smtpPasswordKey: smtp_password
+      smtpHostKey: smtp_host
     phpConfigs:
       uploadLimit.ini: |
         upload_max_filesize = 10G
@@ -157,7 +158,6 @@ nextcloud:
       fromAddress: grigriserver
       domain: gmail.com
       smtp:
-        host: smtp.gmail.com
         secure: tls
         port: 587
         authtype: LOGIN
