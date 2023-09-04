@@ -189,10 +189,10 @@ prometheus:
     resources:
       requests:
         cpu: 1
-        memory: 3Gi
+        memory: 2Gi
       limits:
         cpu: 4
-        memory: 3Gi
+        memory: 2.5Gi
 
     # remove need of label `release: monitoring`
     ruleSelectorNilUsesHelmValues: false
