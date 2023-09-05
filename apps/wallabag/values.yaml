@@ -82,9 +82,9 @@ app-template:
   resources:
     requests:
       cpu: 100m
-      memory: 250Mi
+      memory: 145Mi
     limits:
-      memory: 512Mi
+      memory: 252Mi
 
   topologySpreadConstraints:
     - maxSkew: 1
