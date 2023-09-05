@@ -73,10 +73,10 @@ app-template:
   resources:
     requests:
       cpu: 150m
-      memory: 250Mi
+      memory: 170Mi
     limits:
       cpu: 1
-      memory: 500Mi
+      memory: 256Mi
 
   nodeSelector:
     name: grigri
