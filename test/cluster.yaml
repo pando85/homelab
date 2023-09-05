@@ -13,7 +13,7 @@ options:
           - agent:*
     extraArgs:
       # add when longhorn is available
-      #- arg: --disable=local-storage
+      # - arg: --disable=local-storage
       #  nodeFilters:
       #    - server:*
       - arg: --disable=traefik

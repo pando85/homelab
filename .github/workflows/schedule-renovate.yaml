@@ -1,6 +1,7 @@
 ---
 name: Schedule - Renovate
 
+# yamllint disable-line rule:truthy
 on:
   workflow_dispatch:
     inputs:
@@ -46,6 +47,7 @@ jobs:
           echo "LOG_LEVEL=${{ github.event.inputs.logLevel || env.LOG_LEVEL }}" >> "$GITHUB_ENV"
 
       - name: Renovate
+        # yamllint disable-line rule:comments
         uses: renovatebot/github-action@3cef36a9aba515d8726b491905b3bc766832e221 # v39.0.5
         with:
           configurationFile: .github/renovate.json5

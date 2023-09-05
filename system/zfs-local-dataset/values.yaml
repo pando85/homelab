@@ -1,4 +1,4 @@
-#https://github.com/democratic-csi/democratic-csi/pkgs/container/democratic-csi#multiple-deployments
+# https://github.com/democratic-csi/democratic-csi/pkgs/container/democratic-csi#multiple-deployments
 democratic-csi:
   driver:
     config:
