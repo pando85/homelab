@@ -66,6 +66,6 @@ app-template:
   resources:
     requests:
       cpu: 50m
-      memory: 1Gi
+      memory: 770Mi
     limits:
       memory: 1Gi
