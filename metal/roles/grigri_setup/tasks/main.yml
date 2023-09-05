@@ -41,7 +41,7 @@
   lineinfile:
     path: /etc/smartd.conf
     regexp: '^DEVICESCAN'
-    line: DEVICESCAN -H -m pando855@gmail.com -n standby,10,q
+    line: DEVICESCAN -H -M once -m pando855@gmail.com -n standby,10,q
   tags:
     - grigri-setup
 
