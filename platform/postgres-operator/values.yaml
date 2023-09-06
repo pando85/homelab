@@ -13,7 +13,9 @@ postgres-operator:
     minimal_major_version: "14"
 
   configKubernetes:
-    enable_pod_antiaffinity: true
+    # TODO: remove for postgres HA
+    enable_pod_antiaffinity: false
+    enable_pod_disruption_budget: false
 
   configLoadBalancer:
   # configDebug:
