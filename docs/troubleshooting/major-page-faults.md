@@ -6,15 +6,23 @@
 
 ## Timeline
 
-2023-08-21
+2023-08-21:
 
     - 22:57:XX CEST - Ubuntu 22.04 installed.
     - 23:34:07 CEST - Added to the cluster as worker.
 
-2023-08-22
+2023-08-22:
 
     - 06:XX:00 CEST - Max ~500 major page faults per second. 95% of memory utilization.
     - 18:40:XX CEST - `grigri` becomes K3s server.
+
+2023-09-05:
+
+    - Reduce `zfs_arc_max` to keep under 90% of memory usaged. This fixed major page faults.
+
+2023-09-06:
+
+    - Increase `zfs_arc_max` and set up `zfs_arc_sys_free` to try to avoid having free memory but still ensuring that major page faults are not happening any more.
 
 ## Root cause analysis
 
