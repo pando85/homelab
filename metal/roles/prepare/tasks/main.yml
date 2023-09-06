@@ -205,3 +205,8 @@
   import_tasks: unattended-upgrades.yml
   tags:
     - unattended-upgrades
+
+- name: Fix apparmor config
+  import_tasks: apparmor.yml
+  tags:
+    - apparmor

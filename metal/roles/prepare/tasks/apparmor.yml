@@ -1,0 +1,8 @@
+---
+- name: apparmor | Fix ntpd access config
+  lineinfile:
+    path: /etc/apparmor.d/usr.sbin.ntpd
+    insertbefore: '^  /etc/ntp.conf r,'
+    regexp: '^  /etc/ssl/openssl.cnf'
+    line: '  /etc/ssl/openssl.cnf r,'
+  notify: restart apparmor
