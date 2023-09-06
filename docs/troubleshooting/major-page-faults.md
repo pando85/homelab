@@ -24,6 +24,7 @@
 
     - 09:14:XX CEST - Increase `zfs_arc_max` and set up `zfs_arc_sys_free` (3.2Gi) to try to avoid having free memory but still ensuring that major page faults are not happening any more.
     - 12:30:XX CEST - Increase `zfs_arc_sys_free` to 4Gi cause memory available is ~ 1.5Gi.
+    - 16:22:XX CEST - Remove `zfs_arc_sys_free` and decrease `zfs_arc_max` to 12Gi.
 
 ## Root cause analysis
 
