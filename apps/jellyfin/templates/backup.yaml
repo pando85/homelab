@@ -37,4 +37,4 @@ spec:
     retain:
       daily: 7
     copyMethod: Clone
-    cacheCapacity: 1Gi
+    cacheCapacity: 4Gi
