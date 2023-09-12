@@ -11,7 +11,7 @@ spec:
             description: |
               Chip {{ $labels.chip }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: node_hwmon_temp_celsius > 60
+          expr: node_hwmon_temp_celsius > 65
           for: 5m
           labels:
             severity: warning
