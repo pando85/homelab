@@ -21,6 +21,7 @@ prepare_basic_packages:
   - htop
   - bpftrace
   - bpfcc-tools
+  - dnsutils
   # -linux-tools-{{ ansible_kernel }}
   - sysstat
   - lsof

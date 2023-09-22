@@ -1,0 +1,18 @@
+# pfSense Node Exporter Installation
+
+# To set up the pfSense Node Exporter for Prometheus monitoring, follow these steps:
+
+# 1. Navigate to System -> Package Manager -> Package Installer.
+# 2. Search for and install the node_exporter package.
+# 3. After the package installation is complete, go to Services -> Prometheus node_exporter.
+# 4. Enable the Node Exporter on the DMZ interface.
+# 5. Go to Firewall -> Aliases -> Ports and add 9100 to pfsense_internal_services_tcp,
+#    which are allowed in the DMZ interface.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: pfsense-node-exporter
+spec:
+  staticConfigs:
+    - targets:
+        - pfSense.grigri:9100
