@@ -15,4 +15,15 @@ metadata:
 spec:
   staticConfigs:
     - targets:
-        - pfSense.grigri:9100
+        - pfsense.grigri:9100
+      relabelings:
+        - source_labels:
+            - __address__
+          separator: ":"
+          regex: "(.*):(.*)"
+          replacement: "${1}"
+          target_label: instance
+          action: replace
+        - replacement: node-exporter
+          target_label: job
+          action: replace
