@@ -16,14 +16,14 @@ spec:
   staticConfigs:
     - targets:
         - pfsense.grigri:9100
-      relabelings:
-        - source_labels:
-            - __address__
-          separator: ":"
-          regex: "(.*):(.*)"
-          replacement: "${1}"
-          target_label: instance
-          action: replace
-        - replacement: node-exporter
-          target_label: job
-          action: replace
+  relabelings:
+    - sourceLabels:
+        - __address__
+      separator: ":"
+      regex: "(.*):(.*)"
+      replacement: "${1}"
+      targetLabel: instance
+      action: replace
+    - replacement: node-exporter
+      targetLabel: job
+      action: replace
