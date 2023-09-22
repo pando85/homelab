@@ -891,6 +891,7 @@ data:
           "dashLength": 10,
           "dashes": false,
           "datasource": {
+            "type": "prometheus",
             "uid": "$datasource"
           },
           "description": "Network received (bits/s)",
@@ -936,10 +937,12 @@ data:
               "datasource": {
                 "uid": "$datasource"
               },
-              "expr": "rate(node_network_receive_bytes_total{job=\"node-exporter\", instance=\"$instance\", device!=\"lo\"}[$__rate_interval]) * 8",
+              "editorMode": "code",
+              "expr": "rate(node_network_receive_bytes_total{job=\"node-exporter\", instance=\"$instance\", device=~\"$interface\"}[$__rate_interval]) * 8",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{device}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -981,6 +984,7 @@ data:
           "dashLength": 10,
           "dashes": false,
           "datasource": {
+            "type": "prometheus",
             "uid": "$datasource"
           },
           "description": "Network transmitted (bits/s)",
@@ -1026,10 +1030,12 @@ data:
               "datasource": {
                 "uid": "$datasource"
               },
-              "expr": "rate(node_network_transmit_bytes_total{job=\"node-exporter\", instance=\"$instance\", device!=\"lo\"}[$__rate_interval]) * 8",
+              "editorMode": "code",
+              "expr": "rate(node_network_transmit_bytes_total{job=\"node-exporter\", instance=\"$instance\", device=~\"$interface\"}[$__rate_interval]) * 8",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{device}}",
+              "range": true,
               "refId": "A"
             }
           ],
@@ -1114,6 +1120,70 @@ data:
               "refId": "PrometheusVariableQueryEditor-VariableQuery"
             },
             "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+          },
+          {
+            "current": {
+              "selected": true,
+              "text": [
+                "igb0.1074"
+              ],
+              "value": [
+                "igb0.1074"
+              ]
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "$datasource"
+            },
+            "definition": "label_values(node_pfsense_interface_info{job=\"node-exporter\", sysname!=\"Darwin\"},interface)",
+            "hide": 0,
+            "includeAll": true,
+            "label": "interface",
+            "multi": true,
+            "name": "interface",
+            "options": [],
+            "query": {
+              "query": "label_values(node_pfsense_interface_info{job=\"node-exporter\", sysname!=\"Darwin\"},interface)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 2,
+            "regex": "",
+            "skipUrlSync": false,
+            "sort": 0,
+            "tagValuesQuery": "",
+            "tagsQuery": "",
+            "type": "query",
+            "useTags": false
+          },
+          {
+            "current": {
+              "selected": false,
+              "text": "WAN",
+              "value": "WAN"
+            },
+            "datasource": {
+              "type": "prometheus",
+              "uid": "$datasource"
+            },
+            "definition": "label_values(node_pfsense_interface_info{job=\"node-exporter\", sysname!=\"Darwin\", interface=~\"$interface\"},description)",
+            "hide": 0,
+            "includeAll": false,
+            "label": "name",
+            "multi": false,
+            "name": "name",
+            "options": [],
+            "query": {
+              "query": "label_values(node_pfsense_interface_info{job=\"node-exporter\", sysname!=\"Darwin\", interface=~\"$interface\"},description)",
+              "refId": "PrometheusVariableQueryEditor-VariableQuery"
+            },
+            "refresh": 1,
             "regex": "",
             "skipUrlSync": false,
             "sort": 0,
