@@ -28,6 +28,7 @@ resources:
   - resources/blackbox-exporter-dashboard-configmap.yaml
   - resources/grafana-admin-secret.yaml
   - resources/grafana-secret.yaml
+  - resources/pfsense-node-exporter-scrape-config.yaml
   - resources/smartctl-exporter-dashboard-configmap.yaml
   - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/smartctl-exporter-service-monitor.yaml
