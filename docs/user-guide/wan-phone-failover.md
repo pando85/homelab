@@ -7,7 +7,7 @@ Use phone as WAN failover mechanism.
 Connect phone to router. In the phone:
 
 ```
-Ajustes->Punto de acces portátil -> Anclaje USB
+Ajustes -> Punto de acces portátil -> Anclaje USB
 ```
 
 In the router:
