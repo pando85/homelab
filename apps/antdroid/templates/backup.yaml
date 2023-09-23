@@ -37,4 +37,4 @@ spec:
     retain:
       weekly: 1
     copyMethod: Clone
-    cacheCapacity: 10Mi
+    cacheCapacity: 100Mi
