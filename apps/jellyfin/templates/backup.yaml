@@ -26,15 +26,15 @@ metadata:
 spec:
   sourcePVC: config-jellyfin-0-zfs
   trigger:
-    schedule: "30 1 * * *" # UTC
+    schedule: "30 1 * * 3" # UTC
   restic:
-    pruneIntervalDays: 7
+    pruneIntervalDays: 30
     repository: jellyfin-restic
     moverSecurityContext:
       runAsUser: 995
       runAsGroup: 991
       fsGroup: 991
     retain:
-      daily: 7
+      weekly: 4
     copyMethod: Clone
     cacheCapacity: 1Gi
