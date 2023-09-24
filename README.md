@@ -58,13 +58,13 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 | Rock64                              | 6     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
 | Odroid-c4                           | 2     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
 | Odroid-hc4                          | 3     | N/A          | 3TB + 240GB SSD                     | 4GB  | Armbian          | K3s agent  |
-| PC Engines APU2e4                   | 1     | N/A          | N/A                                 | N/A  | N/A              | Router     |
+| PC Engines APU2e4                   | 1     | 60GB         | N/A                                 | 4GB  | pfSense/FreeBSD  | Router     |
 | RTL8370N                            | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
 | Netgear gs724t                      | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
 
 ## ⭐ Features
 
-- [x] Common applications: Jellyfin, Gitea, arr, nextcloud...
+- [x] Common applications: Jellyfin, Gitea, arr, Nextcloud...
 - [x] Automated Kubernetes installation and management
 - [x] Installing and managing applications using GitOps
 - [x] Automatic rolling upgrade for OS and Kubernetes
