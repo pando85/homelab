@@ -37,11 +37,10 @@ app-template:
     fsGroupChangePolicy: "OnRootMismatch"
   resources:
     requests:
-      cpu: 150m
-      memory: 250Mi
+      cpu: 10m
+      memory: 8Mi
     limits:
-      cpu: 150m
-      memory: 500Mi
+      memory: 50Mi
 
   nodeSelector:
     kubernetes.io/arch: amd64
