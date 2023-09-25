@@ -28,7 +28,7 @@ app-template:
         - port: http
           scheme: http
           path: /metrics
-          interval: 6h
+          interval: 5m
           scrapeTimeout: 30s
   podSecurityContext:
     runAsUser: 995
