@@ -17,7 +17,7 @@ app-template:
       custom: true
       spec:
         httpGet:
-          path: /metrics
+          path: /
           port: *port
     readiness: *probe
 
