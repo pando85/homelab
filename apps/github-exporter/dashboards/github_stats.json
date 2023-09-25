@@ -19,7 +19,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 47,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -212,13 +211,13 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-30d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Github Stats",
   "uid": "aa16f561-4799-4bab-94c5-94b99e11110b",
-  "version": 3,
+  "version": 4,
   "weekStart": ""
 }
