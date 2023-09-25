@@ -6,7 +6,7 @@ app-template:
   image:
     repository: ghcr.io/onedr0p/prowlarr-nightly
     pullPolicy: IfNotPresent
-    tag: 1.9.1.3967@sha256:a6ea8037eb2390c441b4f8c9cea3ea80e906f62c33a89fd33f572e3bb7298440
+    tag: 1.9.2.3982@sha256:b7ec1983e873305007147fed2e9d986bc7c517d4d91749b9ec628d936840277c
   strategy:
     type: Recreate
   env:
