@@ -29,7 +29,7 @@ app-template:
           scheme: http
           path: /metrics
           interval: 6h
-          scrapeTimeout: 10s
+          scrapeTimeout: 30s
   podSecurityContext:
     runAsUser: 995
     runAsGroup: 991
