@@ -1,0 +1,47 @@
+app-template:
+  image:
+    repository: githubexporter/github-exporter
+    tag: 1.0.5
+  env:
+    REPOS: rash-sh/rash,pando85/timer,kanidm/kanidm,pando85/homelab
+  envFrom:
+    - secretRef:
+        name: github-exporter
+  service:
+    main:
+      ports:
+        http:
+          port: &port 9171
+  probes:
+    liveness: &probe
+      custom: true
+      spec:
+        httpGet:
+          path: /metrics
+          port: *port
+    readiness: *probe
+
+  serviceMonitor:
+    main:
+      enabled: true
+      endpoints:
+        - port: http
+          scheme: http
+          path: /metrics
+          interval: 6h
+          scrapeTimeout: 10s
+  podSecurityContext:
+    runAsUser: 995
+    runAsGroup: 991
+    fsGroup: 991
+    fsGroupChangePolicy: "OnRootMismatch"
+  resources:
+    requests:
+      cpu: 150m
+      memory: 250Mi
+    limits:
+      cpu: 150m
+      memory: 500Mi
+
+  nodeSelector:
+    kubernetes.io/arch: amd64
