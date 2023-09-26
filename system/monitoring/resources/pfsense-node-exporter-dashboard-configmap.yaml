@@ -646,6 +646,20 @@ data:
               "legendFormat": "{{device}}",
               "range": true,
               "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$datasource"
+              },
+              "editorMode": "code",
+              "expr": "39321600",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "legendFormat": "WAN max",
+              "range": true,
+              "refId": "B"
             }
           ],
           "title": "Received Bandwidth",
@@ -752,6 +766,19 @@ data:
               "legendFormat": "{{device}}",
               "range": true,
               "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$datasource"
+              },
+              "editorMode": "code",
+              "expr": "39321600",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "WAN max",
+              "range": true,
+              "refId": "B"
             }
           ],
           "title": "Transmit Bandwidth",
@@ -820,7 +847,7 @@ data:
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "10.1.1",
+          "pluginVersion": "10.1.2",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -911,7 +938,7 @@ data:
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "10.1.1",
+          "pluginVersion": "10.1.2",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -1163,8 +1190,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "rgba(50, 172, 45, 0.97)",
-                    "value": null
+                    "color": "rgba(50, 172, 45, 0.97)"
                   },
                   {
                     "color": "rgba(237, 129, 40, 0.89)",
@@ -1261,8 +1287,7 @@ data:
                 "mode": "absolute",
                 "steps": [
                   {
-                    "color": "green",
-                    "value": null
+                    "color": "green"
                   },
                   {
                     "color": "yellow",
@@ -1715,6 +1740,6 @@ data:
       "timezone": "cet",
       "title": "Node Exporter / pfSense",
       "uid": "f3d78a56-ca69-4014-86b1-03c73f0236a1",
-      "version": 3,
+      "version": 1,
       "weekStart": ""
     }
