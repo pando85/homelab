@@ -6,7 +6,7 @@ app-template:
 
   image:
     repository: wallabag/wallabag
-    tag: 2.6.6
+    tag: 2.6.7
   envFrom:
     - secretRef:
         name: wallabag-secret
