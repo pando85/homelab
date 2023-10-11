@@ -32,8 +32,8 @@ spec:
     repository: nextcloud-restic
     moverSecurityContext:
       runAsUser: 995
-      runAsGroup: 991
-      fsGroup: 991
+      runAsGroup: 33
+      fsGroup: 33
     retain:
       weekly: 4
     copyMethod: Direct
