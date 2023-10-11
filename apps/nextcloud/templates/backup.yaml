@@ -34,6 +34,7 @@ spec:
       runAsUser: 995
       runAsGroup: 33
       fsGroup: 33
+      fsGroupChangePolicy: "OnRootMismatch"
     retain:
       weekly: 4
     copyMethod: Direct
