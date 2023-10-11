@@ -132,6 +132,11 @@ nextcloud:
           'secret' =>  getenv('SECRET'),
           'passwordsalt' => getenv('PASSWORDSALT'),
         );
+      oidc.config.php: |-
+        <?php
+        $CONFIG = array (
+          'overwriteprotocol' => 'https',
+        );
 
     extraEnv:
       - name: REDIS_HOST
