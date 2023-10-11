@@ -12,6 +12,7 @@ ingress-nginx:
         proxy_cache_lock on;
         proxy_cache_use_stale updating;
       use-forwarded-headers: true
+      allow-snippet-annotations: true
 
     ingressClassResource:
       name: nginx-external
