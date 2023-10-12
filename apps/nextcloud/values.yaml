@@ -196,13 +196,49 @@ nextcloud:
 app-template:
   global:
     fullnameOverride: redis
-  image:
-    repository: redis
-    tag: 7.2.1
+  controllers:
+    main:
+      containers:
+        main:
+          image:
+            repository: redis
+            tag: 7.2.1
 
+          command:
+            - sh
+          args:
+            - -c
+            - >-
+              redis-server --requirepass $REDIS_PASSWORD
+          resources:
+            requests:
+              cpu: 23m
+              memory: 64M
+            limits:
+              cpu: 500m
+              memory: 64M
 
-  nodeSelector:
-    name: grigri
+          env:
+            REDIS_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: nextcloud
+                  key: redis_password
+
+  defaultPodOptions:
+    nodeSelector:
+      name: grigri
+
+    affinity:
+      podAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - nextcloud
+            topologyKey: kubernetes.io/hostname
 
   service:
     main:
@@ -212,35 +248,3 @@ app-template:
         redis:
           enabled: true
           port: 6379
-
-  command:
-    - sh
-  args:
-    - -c
-    - >-
-      redis-server --requirepass $REDIS_PASSWORD
-  resources:
-    requests:
-      cpu: 23m
-      memory: 64M
-    limits:
-      cpu: 500m
-      memory: 64M
-
-  affinity:
-    podAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        - labelSelector:
-            matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                  - nextcloud
-          topologyKey: kubernetes.io/hostname
-
-  env:
-    REDIS_PASSWORD:
-      valueFrom:
-        secretKeyRef:
-          name: nextcloud
-          key: redis_password
