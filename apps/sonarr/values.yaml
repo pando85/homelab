@@ -1,29 +1,43 @@
 app-template:
-  controller:
-    type: statefulset
-  image:
-    repository: ghcr.io/onedr0p/sonarr-develop
-    tag: 4.0.0.688@sha256:cc88687162269b73c0e9bd6f147d4f7957639a4bdae3741cffe4bcabd7978e1f
-  env:
-    TZ: Europe/Madrid
+  controllers:
+    main:
+      type: statefulset
+      containers:
+        main:
+          image:
+            repository: ghcr.io/onedr0p/sonarr-develop
+            tag: 4.0.0.688@sha256:cc88687162269b73c0e9bd6f147d4f7957639a4bdae3741cffe4bcabd7978e1f
+
+          env:
+            TZ: Europe/Madrid
+
+          resources:
+            requests:
+              cpu: 150m
+              memory: 170Mi
+            limits:
+              cpu: 1
+              memory: 256Mi
+
+          probes:
+            liveness: &probe
+              custom: true
+              spec:
+                httpGet:
+                  path: /ping
+                  port: &port 8989
+            readiness: *probe
+
   service:
     main:
       ports:
         http:
-          port: &port 8989
-  probes:
-    liveness: &probe
-      custom: true
-      spec:
-        httpGet:
-          path: /ping
           port: *port
-    readiness: *probe
 
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-internal
+      className: nginx-internal
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
@@ -32,6 +46,9 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
@@ -39,7 +56,7 @@ app-template:
 
     external:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -51,32 +68,32 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: sonarr-external-tls-certificate
-  podSecurityContext:
-    runAsUser: 995
-    runAsGroup: 991
-    fsGroup: 991
-    fsGroupChangePolicy: "OnRootMismatch"
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      name: grigri
+
   persistence:
     config:
       enabled: true
-      mountPath: /config
+      globalMounts:
+        - path: /config
       existingClaim: config-sonarr-zfs
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series
-      mountPath: /datasets/series
-  resources:
-    requests:
-      cpu: 150m
-      memory: 170Mi
-    limits:
-      cpu: 1
-      memory: 256Mi
-
-  nodeSelector:
-    name: grigri
+      globalMounts:
+        - path: /datasets/series
