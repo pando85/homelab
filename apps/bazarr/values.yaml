@@ -1,20 +1,43 @@
 app-template:
-  controller:
-    type: statefulset
-  image:
-    repository: ghcr.io/onedr0p/bazarr
-    tag: 1.3.0@sha256:6f78c727bff1fa56ba1be9fdd3d98e83b71a3405152dd6b47596af754d23e8a0
-  env:
-    TZ: Europe/Madrid
+  controllers:
+    main:
+      type: statefulset
+      containers:
+        main:
+          image:
+            repository: ghcr.io/onedr0p/bazarr
+            tag: 1.3.0@sha256:6f78c727bff1fa56ba1be9fdd3d98e83b71a3405152dd6b47596af754d23e8a0
+
+          env:
+            TZ: Europe/Madrid
+          resources:
+            requests:
+              cpu: 10m
+              memory: 250Mi
+            limits:
+              cpu: 1
+              memory: 500Mi
+
+        subcleaner:
+          image: registry.k8s.io/git-sync/git-sync:v4.0.0
+          imagePullPolicy: IfNotPresent
+          args:
+            - --repo=https://github.com/KBlixt/subcleaner.git
+            - --branch=master
+            - --depth=1
+            - --period=6h
+            - --root=/add-ons/subcleaner
+
   service:
     main:
       ports:
         http:
           port: 6767
+
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-internal
+      className: nginx-internal
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
@@ -23,6 +46,9 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
@@ -30,7 +56,7 @@ app-template:
 
     external:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -42,54 +68,42 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: bazarr-external-tls-certificate
-  podSecurityContext:
-    runAsUser: 995
-    runAsGroup: 991
-    fsGroup: 991
-    fsGroupChangePolicy: "OnRootMismatch"
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      name: grigri
   persistence:
     config:
       enabled: true
-      mountPath: /config
+      globalMounts:
+        - path: /config
       existingClaim: config-bazarr-zfs
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series
-      mountPath: /datasets/series
+      globalMounts:
+        - path: /datasets/series
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas
-      mountPath: /datasets/peliculas
+      globalMounts:
+        - path: /datasets/peliculas
     add-ons:
       enabled: true
       type: emptyDir
-      mountPath: /add-ons
-  resources:
-    requests:
-      cpu: 10m
-      memory: 250Mi
-    limits:
-      cpu: 1
-      memory: 500Mi
-  sidecars:
-    subcleaner:
-      image: registry.k8s.io/git-sync/git-sync:v4.0.0
-      imagePullPolicy: IfNotPresent
-      args:
-        - --repo=https://github.com/KBlixt/subcleaner.git
-        - --branch=master
-        - --depth=1
-        - --period=6h
-        - --root=/add-ons/subcleaner
-      volumeMounts:
-        - name: add-ons
-          mountPath: /add-ons
-
-  nodeSelector:
-    name: grigri
+      globalMounts:
+        - path: /add-ons
