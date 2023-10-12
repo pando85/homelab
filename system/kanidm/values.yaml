@@ -1,14 +1,39 @@
 app-template:
-  controller:
-    annotations:
-      configmap.reloader.stakater.com/reload: kanidm-kanidmd-config
-      secret.reloader.stakater.com/reload: idm-external-tls-certificate
-    # HA is not supported
-    type: statefulset
+  controllers:
+    main:
+      annotations:
+        configmap.reloader.stakater.com/reload: kanidm-kanidmd-config
+        secret.reloader.stakater.com/reload: idm-external-tls-certificate
+      type: statefulset
+      containers:
+        main:
+          image:
+            repository: kanidm/server
+            tag: 1.1.0-beta.13
 
-  image:
-    repository: kanidm/server
-    tag: 1.1.0-beta.13
+          resources:
+            requests:
+              cpu: 10m
+              memory: 40Mi
+            limits:
+              memory: 200Mi
+
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /status
+                  port: &port 8443
+                  scheme: HTTPS
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: false
 
   configMaps:
     kanidmd-config:
@@ -35,7 +60,7 @@ app-template:
     main:
       ports:
         http:
-          port: &port 8443
+          port: *port
     ldaps:
       type: LoadBalancer
       annotations:
@@ -52,7 +77,7 @@ app-template:
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -63,43 +88,32 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
             - ldaps.idm.internal.grigri.cloud
           secretName: idm-external-tls-certificate
 
-  podSecurityContext:
-    runAsUser: 389
-    runAsGroup: 389
-    fsGroup: 389
-    fsGroupChangePolicy: "OnRootMismatch"
-
-  probes:
-    liveness: &probes
-      enabled: true
-      custom: true
-      spec:
-        httpGet:
-          path: /status
-          port: *port
-          scheme: HTTPS
-        initialDelaySeconds: 0
-        periodSeconds: 10
-        timeoutSeconds: 1
-        failureThreshold: 3
-    readiness: *probes
-    startup:
-      enabled: false
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 389
+      runAsGroup: 389
+      fsGroup: 389
+      fsGroupChangePolicy: "OnRootMismatch"
 
   persistence:
     data:
       enabled: true
-      mountPath: /data
+      globalMounts:
+        - path: /data
       existingClaim: kanidm-data-zfs-0
     kanidmd-config:
       enabled: true
-      mountPath: /data/server.toml
+      globalMounts:
+        - path: /data/server.toml
       subPath: server.toml
       type: configMap
       name: kanidm-kanidmd-config
@@ -107,11 +121,6 @@ app-template:
       enabled: true
       type: secret
       name: idm-external-tls-certificate
-      mountPath: /data/tls
+      globalMounts:
+        - path: /data/tls
       readOnly: true
-  resources:
-    requests:
-      cpu: 10m
-      memory: 40Mi
-    limits:
-      memory: 200Mi
