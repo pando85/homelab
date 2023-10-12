@@ -1,31 +1,47 @@
 app-template:
-  image:
-    repository: golift/unpackerr
-    # 0.13.0>=
-    tag: unstable
-  env:
-    TZ: Europe/Madrid
-    UN_WEBSERVER_METRICS: true
-    UN_SONARR_0_URL: https://sonarr.internal.grigri.cloud
-    UN_SONARR_0_PATHS_0: /datasets/series/download
-    UN_RADARR_0_URL: https://radarr.internal.grigri.cloud
-    UN_RADARR_0_PATHS_0: /datasets/peliculas/download
-  envFrom:
-    - secretRef:
-        name: unpackerr
+  controllers:
+    main:
+      containers:
+        main:
+          image:
+            repository: golift/unpackerr
+            # 0.13.0>=
+            tag: unstable
+
+          env:
+            TZ: Europe/Madrid
+            UN_WEBSERVER_METRICS: true
+            UN_SONARR_0_URL: https://sonarr.internal.grigri.cloud
+            UN_SONARR_0_PATHS_0: /datasets/series/download
+            UN_RADARR_0_URL: https://radarr.internal.grigri.cloud
+            UN_RADARR_0_PATHS_0: /datasets/peliculas/download
+
+          envFrom:
+            - secretRef:
+                name: unpackerr
+
+          resources:
+            requests:
+              cpu: 150m
+              memory: 250Mi
+            limits:
+              cpu: 1
+              memory: 500Mi
+
+          probes:
+            liveness: &probe
+              custom: true
+              spec:
+                httpGet:
+                  path: /metrics
+                  port: &port 5656
+            readiness: *probe
+
   service:
     main:
       ports:
         http:
-          port: &port 5656
-  probes:
-    liveness: &probe
-      custom: true
-      spec:
-        httpGet:
-          path: /metrics
           port: *port
-    readiness: *probe
 
   serviceMonitor:
     main:
@@ -36,29 +52,26 @@ app-template:
           path: /metrics
           interval: 30s
           scrapeTimeout: 10s
-  podSecurityContext:
-    runAsUser: 995
-    runAsGroup: 991
-    fsGroup: 991
-    fsGroupChangePolicy: "OnRootMismatch"
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      name: grigri
+
   persistence:
     peliculas-download:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas/download
-      mountPath: /datasets/peliculas/download
+      globalMounts:
+        - path: /datasets/peliculas/download
     series-download:
       enabled: true
       type: hostPath
       hostPath: /datasets/series/download
-      mountPath: /datasets/series/download
-  resources:
-    requests:
-      cpu: 150m
-      memory: 250Mi
-    limits:
-      cpu: 1
-      memory: 500Mi
-
-  nodeSelector:
-    name: grigri
+      globalMounts:
+        - path: /datasets/series/download
