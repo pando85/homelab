@@ -81,6 +81,7 @@ app-template:
           port: *metrics_port
 
     bittorrent:
+      controller: main
       type: LoadBalancer
       annotations:
         metallb.universe.tf/loadBalancerIPs: "192.168.193.7"
