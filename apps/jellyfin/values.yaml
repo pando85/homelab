@@ -1,37 +1,48 @@
 app-template:
-  controller:
-    type: statefulset
-  image:
-    repository: ghcr.io/onedr0p/jellyfin
-    tag: 10.8.11@sha256:041977cb09d964ed4e00dec2bd0af3208f0121b8385a69617d30657596ffa292
-  env:
-    TZ: Europe/Madrid
+  controllers:
+    main:
+      type: statefulset
+      containers:
+        main:
+          image:
+            repository: ghcr.io/onedr0p/jellyfin
+            tag: 10.8.11@sha256:041977cb09d964ed4e00dec2bd0af3208f0121b8385a69617d30657596ffa292
+
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: &port 8096
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+          env:
+            TZ: Europe/Madrid
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              memory: 10Gi
+
   service:
     main:
       ports:
         http:
-          port: &port 8096
-
-  probes:
-    liveness: &probes
-      enabled: true
-      custom: true
-      spec:
-        httpGet:
-          path: /health
           port: *port
-        initialDelaySeconds: 0
-        periodSeconds: 10
-        timeoutSeconds: 1
-        failureThreshold: 3
-    readiness: *probes
-    startup:
-      enabled: true
 
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-internal
+      className: nginx-internal
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
@@ -40,13 +51,16 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: jellyfin-tls-certificate
     external:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -56,41 +70,43 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: jellyfin-external-tls-certificate
-  podSecurityContext:
-    runAsUser: 995
-    runAsGroup: 991
-    fsGroup: 991
-    fsGroupChangePolicy: "OnRootMismatch"
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      name: grigri
+
   persistence:
     config:
       enabled: true
-      mountPath: /config
+      globalMounts:
+        - path: /config
       existingClaim: config-jellyfin-0-zfs
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series
-      mountPath: /datasets/series
+      globalMounts:
+        - path: /datasets/series
       readOnly: true
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas
-      mountPath: /datasets/peliculas
+      globalMounts:
+        - path: /datasets/peliculas
       readOnly: true
     transcode:
       enabled: true
       type: emptyDir
-  resources:
-    requests:
-      cpu: 100m
-      memory: 1Gi
-    limits:
-      memory: 10Gi
-
-  nodeSelector:
-    name: grigri
