@@ -115,7 +115,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /data/server.toml
-      subPath: server.toml
+          subPath: server.toml
       type: configMap
       name: kanidm-kanidmd-config
     certs:
