@@ -19,17 +19,17 @@ app-template:
               cpu: 200m
               memory: 16Mi
 
-          topologySpreadConstraints:
-            - maxSkew: 1
-              topologyKey: kubernetes.io/hostname
-              whenUnsatisfiable: DoNotSchedule
-              labelSelector:
-                matchLabels:
-                  app.kubernetes.io/instance: antdroid
-                  app.kubernetes.io/name: antdroid
-
   defaultPodOptions:
     enableServiceLinks: false
+
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/instance: antdroid
+            app.kubernetes.io/name: antdroid
   service:
     main:
       ports:
