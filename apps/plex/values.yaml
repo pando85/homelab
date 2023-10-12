@@ -1,11 +1,23 @@
 app-template:
-  controller:
-    type: statefulset
-  image:
-    repository: ghcr.io/onedr0p/plex
-    tag: 1.32.6.7557-1cf77d501@sha256:6f87b0811df009af1defc9afad6afa383b9d821a7fcaddc968df41ba445d321e
-  env:
-    TZ: Europe/Madrid
+  controllers:
+    main:
+      type: statefulset
+      containers:
+        main:
+          image:
+            repository: ghcr.io/onedr0p/plex
+            tag: 1.32.6.7557-1cf77d501@sha256:6f87b0811df009af1defc9afad6afa383b9d821a7fcaddc968df41ba445d321e
+
+          env:
+            TZ: Europe/Madrid
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 174Mi
+            limits:
+              memory: 500Mi
+
   service:
     main:
       type: LoadBalancer
@@ -19,7 +31,7 @@ app-template:
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-internal
+      className: nginx-internal
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
@@ -28,13 +40,16 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: plex-tls-certificate
     external:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -44,55 +59,60 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: plex-external-tls-certificate
-  podSecurityContext:
-    runAsUser: 995
-    runAsGroup: 991
-    fsGroup: 991
-    fsGroupChangePolicy: "OnRootMismatch"
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      name: grigri
+
   persistence:
     config:
       enabled: true
-      mountPath: /config
+      globalMounts:
+        - path: /config
       existingClaim: config-plex-0-zfs
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series
-      mountPath: /datasets/series
+      globalMounts:
+        - path: /datasets/series
       readOnly: true
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas
-      mountPath: /datasets/peliculas
+      globalMounts:
+        - path: /datasets/peliculas
       readOnly: true
     documentales:
       enabled: true
       type: hostPath
       hostPath: /datasets/documentales
-      mountPath: /datasets/documentales
+      globalMounts:
+        - path: /datasets/documentales
       readOnly: true
     fix-plex-series-imports:
       enabled: true
       type: emptyDir
-      mountPath: /datasets/series/download
+      globalMounts:
+        - path: /datasets/series/download
     fix-plex-peliculas-imports:
       enabled: true
       type: emptyDir
-      mountPath: /datasets/peliculas/download
+      globalMounts:
+        - path: /datasets/peliculas/download
     transcode:
       enabled: true
       type: emptyDir
-  resources:
-    requests:
-      cpu: 100m
-      memory: 174Mi
-    limits:
-      memory: 500Mi
-
-  nodeSelector:
-    name: grigri
