@@ -1,19 +1,44 @@
 app-template:
-  controller:
-    # HA is not supported
-    replicas: 1
+  controllers:
+    main:
+      replicas: 1
+      # HA is not supported
+      strategy: Recreate
+      containers:
+        main:
+          image:
+            repository: ghcr.io/onedr0p/prowlarr-nightly
+            tag: 1.9.4.4015@sha256:d952a5a911df73e440056b38fc13e167dab29fdb5f8bdd67b115b18654ce4cec
 
-  image:
-    repository: ghcr.io/onedr0p/prowlarr-nightly
-    pullPolicy: IfNotPresent
-    tag: 1.9.4.4015@sha256:d952a5a911df73e440056b38fc13e167dab29fdb5f8bdd67b115b18654ce4cec
-  strategy:
-    type: Recreate
-  env:
-    TZ: Europe/Madrid
-    PROWLARR__INSTANCE_NAME: Prowlarr
-    PROWLARR__PORT: &port 9696
-    PROWLARR__LOG_LEVEL: info
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /ping
+                  port: &port 9696
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: false
+
+          env:
+            TZ: Europe/Madrid
+            PROWLARR__INSTANCE_NAME: Prowlarr
+            PROWLARR__PORT: *port
+            PROWLARR__LOG_LEVEL: info
+
+          resources:
+            requests:
+              cpu: 10m
+              memory: 200Mi
+            limits:
+              cpu: 1
+              memory: 400Mi
 
   service:
     main:
@@ -21,26 +46,10 @@ app-template:
         http:
           port: *port
 
-  probes:
-    liveness: &probes
-      enabled: true
-      custom: true
-      spec:
-        httpGet:
-          path: /ping
-          port: *port
-        initialDelaySeconds: 0
-        periodSeconds: 10
-        timeoutSeconds: 1
-        failureThreshold: 3
-    readiness: *probes
-    startup:
-      enabled: false
-
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-internal
+      className: nginx-internal
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
@@ -49,6 +58,9 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
@@ -56,7 +68,7 @@ app-template:
 
     external:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -68,27 +80,24 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: prowlarr-external-tls-certificate
 
-  podSecurityContext:
-    runAsUser: 568
-    runAsGroup: 568
-    fsGroup: 568
-    fsGroupChangePolicy: "OnRootMismatch"
+  defaultPodOptions:
+    podSecurityContext:
+      runAsUser: 568
+      runAsGroup: 568
+      fsGroup: 568
+      fsGroupChangePolicy: "OnRootMismatch"
 
   persistence:
     config:
       enabled: true
-      mountPath: /config
+      globalMounts:
+        - path: /config
       existingClaim: prowlarr-config-zfs
-
-  resources:
-    requests:
-      cpu: 10m
-      memory: 200Mi
-    limits:
-      cpu: 1
-      memory: 400Mi
