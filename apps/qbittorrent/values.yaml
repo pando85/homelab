@@ -1,51 +1,76 @@
 app-template:
-  image:
-    repository: ghcr.io/onedr0p/qbittorrent
-    tag: 4.5.5@sha256:16ddd3697593e8f0e82de2b2eae4edbe1b67eb04936cdb2dccae79fda3338850
+  controllers:
+    main:
+      containers:
+        main:
+          image:
+            repository: ghcr.io/onedr0p/qbittorrent
+            tag: 4.5.5@sha256:16ddd3697593e8f0e82de2b2eae4edbe1b67eb04936cdb2dccae79fda3338850
 
-  podSecurityContext:
-    runAsUser: 995
-    runAsGroup: 991
-    fsGroup: 991
-    fsGroupChangePolicy: "OnRootMismatch"
+          env:
+            UMASK: "022"
+            QBITTORRENT__PORT: &port 8080
+            QBITTORRENT__USE_PROFILE: "true"
 
-  env:
-    UMASK: "022"
-    QBITTORRENT__PORT: &port 8080
-    QBITTORRENT__USE_PROFILE: "true"
+          resources:
+            requests:
+              cpu: 330m
+              memory: 1.1Gi
+            limits:
+              memory: 1.4Gi
 
-  hostname: qbittorrent
+          probes:
+            liveness: &probe
+              enabled: true
+            readiness: *probe
+        metrics:
+          image:
+            repository: ghcr.io/esanchezm/prometheus-qbittorrent-exporter
+            tag: latest@sha256:4c019f0c9c8f06a119e2a32b8b338843a782045dce94fa0bef9a94b5f80450f8
+          env:
+            QBITTORRENT_HOST: localhost
+            QBITTORRENT_PORT: *port
+          resources:
+            requests:
+              cpu: 15m
+              memory: 19Mi
+            limits:
+              memory: 100Mi
 
-  sidecars:
-    metrics:
-      image: ghcr.io/esanchezm/prometheus-qbittorrent-exporter:latest@sha256:4c019f0c9c8f06a119e2a32b8b338843a782045dce94fa0bef9a94b5f80450f8
-      env:
-        QBITTORRENT_HOST: localhost
-        QBITTORRENT_PORT: *port
-      resources:
-        requests:
-          cpu: 15m
-          memory: 19Mi
-        limits:
-          memory: 100Mi
+          ports:
+            - name: metrics
+              containerPort: &metrics_port 8000
+              protocol: TCP
 
-      ports:
-        - name: metrics
-          containerPort: &metrics_port 8000
-          protocol: TCP
+          probes:
+            liveness:
+              enabled: true
+              spec:
+                failureThreshold: 3
+                periodSeconds: 30
+                tcpSocket:
+                  port: *metrics_port
+                timeoutSeconds: 1
+            readiness:
+              enabled: true
+              spec:
+                failureThreshold: 3
+                periodSeconds: 30
+                tcpSocket:
+                  port: *metrics_port
+                timeoutSeconds: 1
 
-      livenessProbe:
-        failureThreshold: 3
-        periodSeconds: 30
-        tcpSocket:
-          port: *metrics_port
-        timeoutSeconds: 1
-      readinessProbe:
-        failureThreshold: 3
-        periodSeconds: 30
-        tcpSocket:
-          port: *metrics_port
-        timeoutSeconds: 1
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    hostname: qbittorrent
+
+    nodeSelector:
+      name: grigri
 
   service:
     main:
@@ -81,7 +106,7 @@ app-template:
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-internal
+      className: nginx-internal
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
@@ -90,6 +115,9 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
@@ -97,7 +125,7 @@ app-template:
 
     external:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -108,6 +136,9 @@ app-template:
         - host: &host qbittorrent.grigri.cloud
           paths:
             - path: /
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
@@ -116,31 +147,20 @@ app-template:
   persistence:
     config:
       enabled: true
-      mountPath: /config
+      globalMounts:
+        - path: /config
       existingClaim: config-qbittorrent-zfs
 
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series/download
-      mountPath: /datasets/series/download
+      globalMounts:
+        - path: /datasets/series/download
 
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas/download
-      mountPath: /datasets/peliculas/download
-
-  resources:
-    requests:
-      cpu: 330m
-      memory: 1.1Gi
-    limits:
-      memory: 1.4Gi
-
-  probes:
-    liveness: &probe
-      enabled: true
-    readiness: *probe
-  nodeSelector:
-    name: grigri
+      globalMounts:
+        - path: /datasets/peliculas/download
