@@ -58,8 +58,8 @@ app-template:
             limits:
               memory: 252Mi
 
-            securityContext:
-              runAsUser: 0
+          securityContext:
+            runAsUser: 0
 
   defaultPodOptions:
     enableServiceLinks: false
