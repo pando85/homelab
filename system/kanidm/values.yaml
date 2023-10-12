@@ -62,6 +62,7 @@ app-template:
         http:
           port: *port
     ldaps:
+      controller: main
       type: LoadBalancer
       annotations:
         metallb.universe.tf/loadBalancerIPs: "192.168.193.8"
