@@ -1,26 +1,37 @@
 app-template:
-  controller:
-    # HA is not supported
-    replicas: 1
-    strategy: Recreate
+  controllers:
+    main:
+      replicas: 1
+      # HA is not supported
+      strategy: Recreate
+      containers:
+        main:
+          image:
+            repository: deluan/navidrome
+            tag: 0.49.3
 
-  image:
-    repository: deluan/navidrome
-    tag: 0.49.3
-  env:
-    ND_REVERSEPROXYUSERHEADER: "X-Auth-Request-Preferred-Username"
-    ND_REVERSEPROXYWHITELIST: "10.0.0.0/8"
-    ND_SCANSCHEDULE: 1h
-    ND_LOGLEVEL: info
-    ND_SESSIONTIMEOUT: 24h
-    ND_DATAFOLDER: /data
-    ND_MUSICFOLDER: /music
-    ND_AUTOIMPORTPLAYLISTS: "true"
-    ND_LASTFM_ENABLED: "true"
-    ND_LASTFM_LANGUAGE: es
-  envFrom:
-    - secretRef:
-        name: navidrome-secret
+          env:
+            ND_REVERSEPROXYUSERHEADER: "X-Auth-Request-Preferred-Username"
+            ND_REVERSEPROXYWHITELIST: "10.0.0.0/8"
+            ND_SCANSCHEDULE: 1h
+            ND_LOGLEVEL: info
+            ND_SESSIONTIMEOUT: 24h
+            ND_DATAFOLDER: /data
+            ND_MUSICFOLDER: /music
+            ND_AUTOIMPORTPLAYLISTS: "true"
+            ND_LASTFM_ENABLED: "true"
+            ND_LASTFM_LANGUAGE: es
+          envFrom:
+            - secretRef:
+                name: navidrome-secret
+
+          resources:
+            requests:
+              cpu: 10m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+
   service:
     main:
       ports:
@@ -29,7 +40,7 @@ app-template:
   ingress:
     main:
       enabled: true
-      ingressClassName: nginx-internal
+      className: nginx-internal
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
@@ -41,6 +52,9 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
@@ -48,7 +62,7 @@ app-template:
 
     external:
       enabled: true
-      ingressClassName: nginx-external
+      className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
@@ -61,29 +75,28 @@ app-template:
           paths:
             - path: /
               pathType: Prefix
+              service:
+                name: main
+                port: http
       tls:
         - hosts:
             - *host
           secretName: navidrome-external-tls-certificate
 
-  podSecurityContext:
-    runAsUser: 995
-    runAsGroup: 991
-    fsGroup: 991
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
 
   persistence:
     music:
       enabled: true
-      mountPath: /music
+      globalMounts:
+        - path: /music
       existingClaim: music-navidrome-zfs
     data:
       enabled: true
-      mountPath: /data
+      globalMounts:
+        - path: /data
       existingClaim: data-navidrome-zfs
-
-  resources:
-    requests:
-      cpu: 10m
-      memory: 256Mi
-    limits:
-      memory: 512Mi
