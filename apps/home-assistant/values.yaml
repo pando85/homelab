@@ -119,9 +119,9 @@ app-template:
     configmap:
       enabled: true
       globalMounts:
-        - path: /config
+        - path: /config/gitops
       type: configMap
-      name: home-assitant-config
+      name: home-assistant-config
 
   serviceMonitor:
     main:
