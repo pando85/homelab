@@ -3,7 +3,5 @@ kind: ConfigMap
 metadata:
   name: home-assistant-config
 data:
-  {{- range $path, $_ :=  .Files.Glob  "config/**" }}
-  {{ $path | trimPrefix "config/" }}: |-
-{{ $.Files.Get $path | indent 4 }}
-  {{ end }}
+# this removes subdirectories hiterarchy
+{{ (.Files.Glob "config/*").AsConfig | indent 2 }}
