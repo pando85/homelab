@@ -1,0 +1,41 @@
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: home-assistant-restic
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: home-assistant-restic
+    template:
+      data:
+        RESTIC_REPOSITORY: '{{`{{ .REPOSITORY_TEMPLATE }}/home-assistant`}}'
+        RESTIC_PASSWORD: '{{`{{ .RESTIC_PASSWORD }}`}}'
+        AWS_ACCESS_KEY_ID: '{{`{{ .AWS_ACCESS_KEY_ID }}`}}'
+        AWS_SECRET_ACCESS_KEY: '{{`{{ .AWS_SECRET_ACCESS_KEY }}`}}'
+  dataFrom:
+    - extract:
+        key: /volsync/restic-template
+---
+apiVersion: volsync.backube/v1alpha1
+kind: ReplicationSource
+metadata:
+  name: home-assistant-backup
+spec:
+  sourcePVC: home-assistant-config-zfs
+  trigger:
+    schedule: "30 1 * * 5" # UTC
+  restic:
+    pruneIntervalDays: 30
+    repository: home-assistant-restic
+    moverSecurityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+    retain:
+      weekly: 4
+    copyMethod: Clone
+    cacheCapacity: 100Mi

@@ -1,0 +1,13 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: home-assistant-zfs-backups
+spec:
+  retention:
+    maxCount: 20
+  schedule: "0 1 * * *" # UTC
+  claimSelector:
+    matchLabels:
+      backup: home-assistant-zfs
+  snapshotTemplate:
+    snapshotClassName: zfs-local-dataset
