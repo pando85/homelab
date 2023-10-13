@@ -116,3 +116,11 @@ app-template:
       globalMounts:
         - path: /config
       existingClaim: home-assistant-config-zfs
+
+  serviceMonitor:
+    main:
+      enabled: true
+      endpoints:
+        - port: http
+          scheme: http
+          path: /api/prometheus
