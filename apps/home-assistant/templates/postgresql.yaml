@@ -20,7 +20,7 @@ spec:
     storageClass: zfs-local-dataset
 
   users:
-    home-assistant:
+    home_assistant:
     - superuser
     - createdb
   databases:
