@@ -111,11 +111,17 @@ app-template:
           secretName: home-assistant-external-tls-certificate
 
   persistence:
-    images:
+    config:
       enabled: true
       globalMounts:
         - path: /config
       existingClaim: home-assistant-config-zfs
+    configmap:
+      enabled: true
+      globalMounts:
+        - path: /config
+      type: configMap
+      name: home-assitant-config
 
   serviceMonitor:
     main:
