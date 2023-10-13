@@ -12,7 +12,3 @@ http:
 
 recorder:
   db_url: !env_var ZZ_DB_URL
-
-prometheus:
-  namespace: hass
-  requires_auth: false
