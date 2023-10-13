@@ -1,6 +1,8 @@
 app-template:
   controllers:
     main:
+      annotations:
+        configmap.reloader.stakater.com/reload: home-assistant-config
       replicas: 1
       # HA is not supported
       strategy: Recreate
