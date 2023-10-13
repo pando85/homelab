@@ -22,8 +22,7 @@ app-template:
                 secretKeyRef:
                   name: home-assistant.home-assistant-postgres.credentials.postgresql.acid.zalan.do
                   key: password
-            POSTGRES_HOST: home-assistant-postgres
-            POSTGRES_DB: home_assistant
+            ZZ_DB_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@home-assistant-postgres/home_assistant"
           probes:
             liveness:
               enabled: false
