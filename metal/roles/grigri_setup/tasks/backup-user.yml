@@ -14,7 +14,7 @@
     groups: backup
     append: true
 
-# Add rsync backup to crontab in pfsense host. File `/etc/crontab`
+# In pfsense. Check that cron package is installed and then add in `Services -> Cron`:
 #   ```crontab
 #   0 4 * * * /usr/local/bin/rsync -avz /cf/conf/backup/ backup@grigri.grigri:/datasets/backups/pfsense/
 #   ```
