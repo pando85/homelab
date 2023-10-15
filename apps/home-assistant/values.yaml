@@ -110,7 +110,7 @@ app-template:
       tls:
         - hosts:
             - *host
-          secretName: home-assistant-external-tls-certificate
+          secretName: home-assistant-code-external-tls-certificate
 
   persistence:
     config:
