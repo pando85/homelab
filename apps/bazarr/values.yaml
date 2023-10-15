@@ -21,7 +21,7 @@ app-template:
         subcleaner:
           image:
             repository: registry.k8s.io/git-sync/git-sync
-            tag: v4.0.0
+            tag: v4.1.0
           args:
             - --repo=https://github.com/KBlixt/subcleaner.git
             - --branch=master
