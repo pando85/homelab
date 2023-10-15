@@ -72,7 +72,7 @@ app-template:
         main:
           01-init-config:
             - path: /tmp/secret
-      external-config:
-        type: emptyDir
-        globalMounts:
-          - path: /mosquitto/external_config
+    external-config:
+      type: emptyDir
+      globalMounts:
+        - path: /mosquitto/external_config
