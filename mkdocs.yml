@@ -37,6 +37,8 @@ markdown_extensions:
 
 nav:
   - Home: index.md
+  - Network:
+      - network
   - Deployment:
       - deployment
   - User-guide:
