@@ -29,6 +29,8 @@
 ## 1.5.0 (16-10-2023)
 ##   Added
 ##   - Cool modes
+##   Removed
+##   - S0 energy calculations (we are already calculating it in sensors)
 
 # Automations #
 ###############
