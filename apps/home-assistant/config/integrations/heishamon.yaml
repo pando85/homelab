@@ -468,11 +468,81 @@ mqtt:
           Active
         {%- endif -%}
 
-    #TOP27 - Heatshift Temperature
-    - name: Aquarea Heatshift Temperature
+    #TOP27 - Z1 Heat Request
+    - name: Aquarea Z1 Heat Request Temperature
       state_topic: "panasonic_heat_pump/main/Z1_Heat_Request_Temp"
       unit_of_measurement: "°C"
       state_class: "measurement"
+
+    #TOP28 - Z1 cool request temp
+    - name: Aquarea Z1 Cool Request Temp
+      state_topic: "panasonic_heat_pump/main/Z1_Cool_Request_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP29 - Z1 Heat curve target high temperature
+    - name: Aquarea Z1 Heat Curve Target High Temperature
+      state_topic: "panasonic_heat_pump/main/Z1_Heat_Curve_Target_High_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP30 - Z1 Heat curve target low temperature
+    - name: Aquarea Z1 Heat Curve Target Low Temperature
+      state_topic: "panasonic_heat_pump/main/Z1_Heat_Curve_Target_Low_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP31 - Z1 Heat curve outside high temperature
+    - name: Aquarea Z1 Heat Curve Outside High Temperature
+      state_topic: "panasonic_heat_pump/main/Z1_Heat_Curve_Outside_High_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP32 - Z1 Heat curve outside low temperature
+    - name: Aquarea Z1 Heat Curve Outside Low Temperature
+      state_topic: "panasonic_heat_pump/main/Z1_Heat_Curve_Outside_Low_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP34 - Z2 Heat request temp
+    - name: Aquarea Z2 Heat Request Temperature
+      state_topic: "panasonic_heat_pump/main/Z2_Heat_Request_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP35 - Z2 Cool request temp
+    - name: Aquarea Z2 Cool Request Temperature
+      state_topic: "panasonic_heat_pump/main/Z2_Cool_Request_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP36 - Z1 water temperature
+    - name: Aquarea Z1 Water Temperature
+      state_topic: "panasonic_heat_pump/main/Z1_Water_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP37 - Z2 water temperature
+    - name: Aquarea Z2 Water Temperature
+      state_topic: "panasonic_heat_pump/main/Z2_Water_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP38 - Cool power produced
+    - name: Aquarea Cool Power Produced
+      state_topic: "panasonic_heat_pump/main/Cool_Energy_Production"
+      unit_of_measurement: "W"
+      device_class: "power"
+      state_class: "measurement"
+      force_update: true
+
+    #TOP39 - Cool power consumed
+    - name: Aquarea Cool Power Consumed
+      state_topic: "panasonic_heat_pump/main/Cool_Energy_Consumption"
+      unit_of_measurement: "W"
+      device_class: "power"
+      state_class: "measurement"
+      force_update: true
 
     #TOP40 - DHW power produced
     - name: Aquarea DHW Power Produced
@@ -489,6 +559,18 @@ mqtt:
       device_class: "power"
       state_class: "measurement"
       force_update: true
+
+    #TOP42 - Z1 water target temperature
+    - name: Aquarea Z1 Water Target Temperature
+      state_topic: "panasonic_heat_pump/main/Z1_Water_Target_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
+
+    #TOP42 - Z2 water target temperature
+    - name: Aquarea Z2 Water Target Temperature
+      state_topic: "panasonic_heat_pump/main/Z2_Water_Target_Temp"
+      unit_of_measurement: "°C"
+      state_class: "measurement"
 
     #TOP44 - Last active error
     - name: Aquarea Last Error
