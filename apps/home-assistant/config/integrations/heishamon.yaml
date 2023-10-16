@@ -407,14 +407,14 @@ mqtt:
       force_update: true
 
     #TOP16 - Heating power consumed
-    - name: Aquarea Power Consumed
+    - name: Aquarea Heating Power Consumed
       state_topic: "panasonic_heat_pump/main/Heat_Energy_Consumption"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
       force_update: true
 
-    #TOP17 - Heating powerful mode
+    #TOP17 - Powerful mode
     - name: Aquarea Powerful Mode
       state_topic: "panasonic_heat_pump/main/Powerful_Mode_Time"
       unit_of_measurement: "Min"
@@ -804,7 +804,13 @@ sensor:
     method: left
   #Calculation Energy consumed (kWh) - Heat
   - platform: integration
-    source: sensor.aquarea_power_consumed
+    source: sensor.aquarea_heating_power_consumed
     name: Aquarea Heat Energy Consumed
+    unit_prefix: k
+    method: left
+  #Calculation Energy consumed (kWh) - Cool
+  - platform: integration
+    source: sensor.aquarea_cool_power_consumed
+    name: Aquarea Cool Energy Consumed
     unit_prefix: k
     method: left
