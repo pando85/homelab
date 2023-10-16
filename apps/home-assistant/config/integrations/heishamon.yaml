@@ -107,6 +107,10 @@ automation:
         option: >-
           {%- if trigger.payload == "0" -%}
             Heat
+          {%- elif trigger.payload == "1" -%}
+            Cool
+          {%- elif trigger.payload == "2" -%}
+            Auto
           {%- elif trigger.payload == "3" -%}
             DHW
           {%- elif trigger.payload == "4" -%}
@@ -309,7 +313,11 @@ mqtt:
         {%- elif value == "5" -%}
           Cool+DHW
         {%- elif value == "6" -%}
-          Auto+DHW
+          Auto(Heat)+DHW
+        {%- elif value == "7" -%}
+          Auto(Cool)
+        {%- elif value == "8" -%}
+          Auto(Cool)+DHW
         {%- endif -%}
 
     #TOP5 - Water inlet temp
