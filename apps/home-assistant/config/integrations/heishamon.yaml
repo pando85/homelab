@@ -278,9 +278,15 @@ input_select:
   heishamon_heatmode:
     name: Set Heat Mode
     options:
-      - Heat+DHW
       - Heat
+      - Cool
+      - Auto
       - DHW
+      - Heat+DHW
+      - Cool+DHW
+      - Auto(Heat)+DHW
+      - Auto(Cool)
+      - Auto(Cool)+DHW
 
 # sensor #
 ##########
