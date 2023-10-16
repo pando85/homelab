@@ -124,6 +124,12 @@ app-template:
         - path: /config/gitops
       type: configMap
       name: home-assistant-config
+    configmap-integrations:
+      enabled: true
+      globalMounts:
+        - path: /config/gitops/integrations
+      type: configMap
+      name: home-assistant-config-integrations
 
   serviceMonitor:
     main:
