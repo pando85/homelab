@@ -138,10 +138,22 @@ automation:
         payload_template: >-
           {%- if states('input_select.heishamon_heatmode') == "Heat" -%}
             0
-          {%- elif states('input_select.heishamon_heatmode') == "DHW" -%}
+          {%- if states('input_select.heishamon_heatmode') == "Cool" -%}
+            1
+          {%- if states('input_select.heishamon_heatmode') == "Auto" -%}
+            2
+          {%- if states('input_select.heishamon_heatmode') == "DHW" -%}
             3
-          {%- elif states('input_select.heishamon_heatmode') == "Heat+DHW" -%}
+          {%- if states('input_select.heishamon_heatmode') == "Heat+DHW" -%}
             4
+          {%- if states('input_select.heishamon_heatmode') == "Cool+DHW" -%}
+            5
+          {%- if states('input_select.heishamon_heatmode') == "Auto(Head)+DHW" -%}
+            6
+          {%- if states('input_select.heishamon_heatmode') == "Auto(Cool)" -%}
+            7
+          {%- if states('input_select.heishamon_heatmode') == "Auto(Cool)+DHW" -%}
+            8
           {%- endif -%}
 
   #Fetches Z1 temperature from status and sets the selector accordingly
