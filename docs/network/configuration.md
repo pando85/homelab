@@ -26,6 +26,39 @@ file.
   - Add `501` IoT
   - Add `502` IoT Offline
 
+- `Switching -> VLAN -> Advanced -> VLAN Membership`:
+  ```
+  VLAN ID: 1
+  VLAN Name: Default
+  VLAN Type: Default
+  Port  1   2   3   4   5   6   7   8   9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24
+                                                           U    U    U    U    U    U    U    U    U    U    U    U
+  ```
+
+  ```
+  VLAN ID: 101
+  VLAN Name: DMZ
+  VLAN Type: Static
+  Port  1   2   3   4   5   6   7   8   9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24
+        U   U   U   U   U   U   U   U   U   U    U    U
+  ```
+
+  ```
+  VLAN ID: 501
+  VLAN Name: IoT
+  VLAN Type: Static
+  Port  1   2   3   4   5   6   7   8   9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24
+                                                                                                        T    T    T
+  ```
+
+  ```
+  VLAN ID: 502
+  VLAN Name: IoT Offline
+  VLAN Type: Static
+  Port  1   2   3   4   5   6   7   8   9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24
+                                                                                                        T    T    T
+  ```
+
 - `Switching -> VLAN -> Advanced -> Port PVID Configuration`:
 
   ```
@@ -50,7 +83,7 @@ file.
   g19   1   1   1   None   Admit All   Disable   Disable   0
   g20   1   1   1   None   Admit All   Disable   Disable   0
   g21   1   1   1   None   Admit All   Disable   Disable   0
-  g22   1   1   1   None   Admit All   Disable   Disable   0
+  g22   1   1   1,501-502   501-502   Admit All   Disable   Disable   0
   g23   1   1   1   None   Admit All   Disable   Disable   0
   g24   1   1   1,101,501-502   101,501-502   Admit All   Disable   Disable   0
   g25   1   1   1   None   Admit All   Disable   Disable   0
@@ -61,22 +94,7 @@ file.
 
   ```yaml
   port 1-12: DMZ (VLAN 101)
-  port 13-23: LAN (VLAN 1/default)
+  port 13-21: LAN (VLAN 1/default)
+  port 22-23: LAN (VLAN 1 - Untagged, VLAN 501 - Tagged, VLAN 502 - Tagged)
   port 24: LAN (VLAN 1 - Untagged, VLAN101 - Tagged, VLAN 501 - Tagged, VLAN 502 - Tagged)
-  ```
-
-- `Switching -> VLAN -> Advanced -> VLAN Membership`:
-  ```
-  VLAN ID: 1
-  VLAN Name: Default
-  VLAN Type: Default
-  Port  1   2   3   4   5   6   7   8   9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24
-                                                           U    U    U    U    U    U    U    U    U    U    U    U
-  ```
-  ```
-  VLAN ID: 101
-  VLAN Name: DMZ
-  VLAN Type: Static
-  Port  1   2   3   4   5   6   7   8   9   10   11   12   13   14   15   16   17   18   19   20   21   22   23   24
-        U   U   U   U   U   U   U   U   U   U    U    U
   ```
