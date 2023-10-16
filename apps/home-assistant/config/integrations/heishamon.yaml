@@ -111,6 +111,14 @@ automation:
             DHW
           {%- elif trigger.payload == "4" -%}
             Heat+DHW
+          {%- elif trigger.payload == "5" -%}
+            Cool+DHW
+          {%- elif trigger.payload == "6" -%}
+            Auto(Heat)+DHW
+          {%- elif trigger.payload == "7" -%}
+            Auto(Cool)
+          {%- elif trigger.payload == "8" -%}
+            Auto(Cool)+DHW
           {%- endif -%}
 
   #Sets heatmode to the selected value
