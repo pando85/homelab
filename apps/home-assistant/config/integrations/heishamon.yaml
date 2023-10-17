@@ -732,8 +732,8 @@ sensor:
   #Energy use/production
   - platform: template
     sensors:
-      heishamon_w_production:
-        friendly_name: "Aquarea Energy Production"
+      heishamon_power_produced:
+        friendly_name: "Aquarea Power Produced"
         unit_of_measurement: "W"
         value_template: >-
             {{
@@ -741,8 +741,8 @@ sensor:
               states('sensor.aquarea_heat_power_produced') | float +
               states('sensor.aquarea_cool_power_produced') | float
             }}
-      heishamon_w_consumption:
-        friendly_name: "Aquarea Energy Consumption"
+      heishamon_power_consumed:
+        friendly_name: "Aquarea Power Consumed"
         unit_of_measurement: "W"
         value_template: >-
             {{
@@ -758,14 +758,14 @@ sensor:
         friendly_name: "Aquarea COP"
         unit_of_measurement: "x"
         value_template: >-
-          {%- if states('sensor.heishamon_w_consumption') | float(0) > 0 -%}
-            {{ '%0.1f' % ((states('sensor.heishamon_w_production') | float ) / (states('sensor.heishamon_w_consumption') | float )) }}
+          {%- if states('sensor.heishamon_power_consumed') | float(0) > 0 -%}
+            {{ '%0.1f' % ((states('sensor.heishamon_power_produced') | float ) / (states('sensor.heishamon_power_consumed') | float )) }}
           {%- else -%}
             0.0
           {%- endif -%}
 
         availability_template: >-
-          {%- if is_number(states('sensor.heishamon_w_consumption')) and is_number(states('sensor.heishamon_w_production')) %}
+          {%- if is_number(states('sensor.heishamon_power_consumed')) and is_number(states('sensor.heishamon_power_produced')) %}
             true
           {%- else %}
             false
@@ -845,7 +845,7 @@ sensor:
     method: left
   #Calculation Energy produced (kWh) - Total
   - platform: integration
-    source: sensor.heishamon_w_consumption
+    source: sensor.heishamon_power_consumed
     name: Aquarea Energy Produced
     unit_prefix: k
     method: left
@@ -870,7 +870,7 @@ sensor:
     method: left
   #Calculation Energy consumed (kWh) - Total
   - platform: integration
-    source: sensor.heishamon_w_consumption
+    source: sensor.heishamon_power_consumed
     name: Aquarea Energy Consumed
     unit_prefix: k
     method: left
