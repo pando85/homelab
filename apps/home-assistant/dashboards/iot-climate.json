@@ -379,7 +379,7 @@
   "style": "dark",
   "tags": [
     "IoT",
-    "energy"
+    "climate"
   ],
   "templating": {
     "list": [
@@ -481,8 +481,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "IoT - Energy",
+  "title": "IoT - Climate",
   "uid": "dc64fdbd-285c-4467-a7be-cd6f9eb97d3f",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }
