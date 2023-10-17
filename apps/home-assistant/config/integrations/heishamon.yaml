@@ -376,7 +376,7 @@ mqtt:
       state_class: "measurement"
 
     #TOP10 - Tank current temperature
-    - name: Aquarea Actual Tank Temperature
+    - name: Aquarea Tank Temperature
       state_topic: "panasonic_heat_pump/main/DHW_Temp"
       unit_of_measurement: "°C"
       state_class: "measurement"
@@ -394,8 +394,8 @@ mqtt:
 #      state_class: total
       state_class: "measurement"
 
-    #TOP14 - Outdoor unit ambient temperature
-    - name: Aquarea Outdoor Ambient
+    #TOP14 - Outside ambient temperature
+    - name: Aquarea Outside Ambient Temperature
       state_topic: "panasonic_heat_pump/main/Outside_Temp"
       unit_of_measurement: "°C"
       state_class: "measurement"
@@ -456,8 +456,8 @@ mqtt:
           Tank
         {%- endif -%}
 
-    #TOP21 - Outside pipe temp
-    - name: Aquarea Outdoor Pipe Temperature
+    #TOP21 - Outside pipe temperature
+    - name: Aquarea Outside Pipe Temperature
       state_topic: "panasonic_heat_pump/main/Outside_Pipe_Temp"
       unit_of_measurement: "°C"
 
@@ -471,14 +471,14 @@ mqtt:
           Active
         {%- endif -%}
 
-    #TOP27 - Z1 Heat Request
+    #TOP27 - Z1 heat request temperature
     - name: Aquarea Z1 Heat Request Temperature
       state_topic: "panasonic_heat_pump/main/Z1_Heat_Request_Temp"
       unit_of_measurement: "°C"
       state_class: "measurement"
 
-    #TOP28 - Z1 cool request temp
-    - name: Aquarea Z1 Cool Request Temp
+    #TOP28 - Z1 cool request temperature
+    - name: Aquarea Z1 Cool Request Temperature
       state_topic: "panasonic_heat_pump/main/Z1_Cool_Request_Temp"
       unit_of_measurement: "°C"
       state_class: "measurement"
