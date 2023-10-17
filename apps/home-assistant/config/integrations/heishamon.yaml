@@ -791,7 +791,7 @@ sensor:
   - platform: template
     sensors:
       heishamon_heat_cop:
-        friendly_name: "Aquarea HEAT COP"
+        friendly_name: "Aquarea HeaT COP"
         unit_of_measurement: "x"
         value_template: >-
           {%- if states('sensor.aquarea_heat_power_consumed') | float(0) > 0 -%}
