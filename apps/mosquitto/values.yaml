@@ -26,7 +26,7 @@ app-template:
           resources:
             requests:
               cpu: 10m
-              memory: 10M
+              memory: 20M
             limits:
               memory: 50M
 

@@ -14,9 +14,8 @@ app-template:
           resources:
             requests:
               cpu: 100m
-              memory: 4Mi
+              memory: 8Mi
             limits:
-              cpu: 200m
               memory: 16Mi
 
   defaultPodOptions:
