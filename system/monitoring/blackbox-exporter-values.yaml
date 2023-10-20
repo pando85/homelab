@@ -73,6 +73,9 @@ serviceMonitor:
     - module: http_2xx
       name: fame.grigri.cloud
       url: https://fame.grigri.cloud
+    - module: ping
+      name: aerotherm
+      url: cz-taw1b.iot.grigri
 
 resources:
   requests:
