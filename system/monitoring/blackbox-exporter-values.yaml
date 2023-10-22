@@ -76,6 +76,18 @@ serviceMonitor:
     - module: ping
       name: aerotherm
       url: cz-taw1b.iot.grigri
+    - module: ping
+      name: su100-510-office-a
+      url: su100-510-office-a.iot.grigri
+    - module: ping
+      name: su100-510-bedroom
+      url: su100-510-bedroom.iot.grigri
+    - module: ping
+      name: su100-510-hall-kitchen
+      url: su100-510-hall-kitchen.iot.grigri
+    - module: ping
+      name: su100-510-office-t
+      url: su100-510-office-t.iot.grigri
 
 resources:
   requests:
