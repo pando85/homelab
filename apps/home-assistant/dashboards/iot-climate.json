@@ -117,7 +117,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_set_temperature)\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_target_temperature)\"}[$interval])) by (entity, friendly_name)",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -1241,7 +1241,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": false,
+  "refresh": "",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
@@ -1252,7 +1252,7 @@
     "list": [
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "default",
           "value": "default"
         },
@@ -1352,6 +1352,6 @@
   "timezone": "",
   "title": "IoT - Climate",
   "uid": "dc64fdbd-285c-4467-a7be-cd6f9eb97d3f",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
