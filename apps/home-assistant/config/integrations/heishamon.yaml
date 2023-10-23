@@ -369,13 +369,13 @@ mqtt:
       unit_of_measurement: "Hz"
       state_class: "measurement"
 
-    #TOP9 - Tank set temperature
-    - name: Aquarea Tank Set Temperature
+    #TOP9 - Tank Target temperature
+    - name: Aquarea Tank Target Temperature
       state_topic: "panasonic_heat_pump/main/DHW_Target_Temp"
       unit_of_measurement: "°C"
       state_class: "measurement"
 
-    #TOP10 - Tank current temperature
+    #TOP10 - Tank temperature
     - name: Aquarea Tank Temperature
       state_topic: "panasonic_heat_pump/main/DHW_Temp"
       unit_of_measurement: "°C"
