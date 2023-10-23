@@ -19,7 +19,6 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 60,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -147,7 +146,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": "",
+  "refresh": false,
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
@@ -258,6 +257,10 @@
             "climate.thermostat_hall_kitchen"
           ]
         },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
         "definition": "label_values(hass_climate_current_temperature_celsius,entity)",
         "hide": 0,
         "includeAll": true,
@@ -277,13 +280,13 @@
     ]
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-2d",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "IoT - Climate Rooms",
   "uid": "de8d327d-351a-44fb-b402-2e1102394d45",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
