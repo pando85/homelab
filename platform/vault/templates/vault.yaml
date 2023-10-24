@@ -241,37 +241,3 @@ spec:
               province: "Madrid"
               allowed_domains_template: false
               issuer_ref: "default"
-      - type: pki
-        path: pki/iot
-        description: Grigri IoT root CA
-        config:
-          default_lease_ttl: "9528h"  # 397 days -> max certificate validity
-          max_lease_ttl: "87600h"  # 10 years
-        configuration:
-          config:
-            - name: urls
-              issuing_certificates:
-                - https://vault.internal.grigri.cloud/v1/pki/iot/ca
-              crl_distribution_points:
-                - https://vault.internal.grigri.cloud/v1/pki/iot/crl
-          roles:
-            - name: internal-certificates-grigri-iot
-              allow_localhost: false
-              ttl: "9528h"
-              max_ttl: "9528h"
-              allow_glob_domains: true
-              allowed_domains:
-                - "*.iot.grigri"
-                - "*.internal.grigri.cloud"
-              allow_subdomains: true
-              server_flag: true
-              client_flag: false
-              key_type: "rsa"
-              key_bits: 4096
-              signature_bits: 256
-              organization: "grigri"
-              country: "ES"
-              locality: "Madrid"
-              province: "Madrid"
-              allowed_domains_template: false
-              issuer_ref: "default"
