@@ -4,6 +4,7 @@ metadata:
   name: mosquitto-tls-crt
 spec:
   secretName: mosquitto-tls-crt-secret
+  commonName: mosquitto-tls.internal.grigri.cloud
   dnsNames:
     - mosquitto-tls.internal.grigri.cloud
   privateKey:
