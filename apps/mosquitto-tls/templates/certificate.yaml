@@ -6,6 +6,8 @@ spec:
   secretName: mosquitto-tls-crt-secret
   dnsNames:
     - mosquitto-tls.internal.grigri.cloud
+  keySize: 4096
+  keyAlgorithm: RSA
   issuerRef:
     name: iot
     kind: ClusterIssuer
