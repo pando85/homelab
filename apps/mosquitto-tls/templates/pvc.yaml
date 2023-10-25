@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: mosquitto-tls
+    app.kubernetes.io/name: mosquitto-tls
+    backup: mosquitto-tls-zfs
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: mosquitto-tls-data-zfs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: zfs-local-dataset

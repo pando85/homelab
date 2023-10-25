@@ -1,0 +1,7 @@
+apiVersion: v2
+name: mosquitto-tls
+version: 0.0.0
+dependencies:
+  - name: app-template
+    version: 2.0.3
+    repository: https://bjw-s.github.io/helm-charts/
