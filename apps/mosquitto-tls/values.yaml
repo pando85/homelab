@@ -42,9 +42,9 @@ app-template:
         http:
           enabled: false
         mqtt:
-          port: 1883
+          port: 8883
         websockets:
-          port: 8083
+          port: 8884
 
   defaultPodOptions:
     securityContext:
