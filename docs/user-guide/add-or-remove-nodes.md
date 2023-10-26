@@ -8,7 +8,7 @@ Or how to scale vertically. To replace the same node with a clean OS, remove it 
 
     You can add multiple nodes at the same time
 
-Ensure that it meets the requirements in [prerequisites](../deployment/prerequisites.md), then add its details to the inventory **at the end of the group** (kube_control_plane or kube_node):
+Add nodes details to the inventory **at the end of the group** (kube_control_plane or kube_node):
 
 ```diff
 diff --git a/metal/inventories/master/inventory.ini b/metal/inventories/master/inventory.ini
