@@ -3,9 +3,8 @@ app-template:
     main:
       annotations:
         reloader.stakater.com/auto: "true"
+      type: statefulset
       replicas: 1
-      # HA is not supported
-      strategy: Recreate
       containers:
         main:
           image:
