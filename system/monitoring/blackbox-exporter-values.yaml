@@ -91,6 +91,9 @@ serviceMonitor:
     - module: ping
       name: shellyem-main
       url: shellyem-main.iot.grigri
+    - module: ping
+      name: shellypmmini-servers
+      url: shellypmmini-servers.iot.grigri
 
 resources:
   requests:
