@@ -88,6 +88,9 @@ serviceMonitor:
     - module: ping
       name: su100-510-office-t
       url: su100-510-office-t.iot.grigri
+    - module: ping
+      name: shellyem-main
+      url: shellyem-main.iot.grigri
 
 resources:
   requests:
