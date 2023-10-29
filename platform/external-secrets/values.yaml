@@ -15,6 +15,14 @@ external-secrets:
       limits:
         cpu: 10m
         memory: 64Mi
+    certManager:
+      enable: true
+      cert:
+        create: true
+        issuerRef:
+          group: cert-manager.io
+          kind: ClusterIssuer
+          name: selfsigned-for-k8s-webhooks
 
   certController:
     resources:
