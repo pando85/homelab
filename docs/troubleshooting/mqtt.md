@@ -3,7 +3,7 @@
 Connect to server mosquitto with web client:
 
 ```bash
-docker run -d --name mqttx-web -p 80:80 emqx/mqttx-web
+docker run --rm --name mqttx-web -p 80:80 emqx/mqttx-web
 ```
 
 ```yaml
