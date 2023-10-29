@@ -16,7 +16,7 @@ external-secrets:
         cpu: 10m
         memory: 64Mi
     certManager:
-      enable: true
+      enabled: true
       cert:
         create: true
         issuerRef:
