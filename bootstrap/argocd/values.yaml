@@ -145,7 +145,7 @@ argo-cd:
         cpu: 200m
         memory: 128Mi
       requests:
-        cpu: 100m
+        cpu: 10m
         memory: 64Mi
 
     metrics:
@@ -161,7 +161,7 @@ argo-cd:
         cpu: 400m
         memory: 256Mi
       requests:
-        cpu: 100m
+        cpu: 10m
         memory: 78Mi
 
   notifications:
@@ -187,7 +187,7 @@ argo-cd:
         cpu: 10m
         memory: 24Mi
       limits:
-        cpu: 100m
+        cpu: 10m
         memory: 128Mi
 
     subscriptions:

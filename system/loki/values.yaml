@@ -68,7 +68,7 @@ promtail:
       cpu: 500m
       memory: 200Mi
     requests:
-      cpu: 100m
+      cpu: 10m
       memory: 85Mi
 
   config:

@@ -94,7 +94,7 @@ grafana:
       limits:
         memory: 128Mi
       requests:
-        cpu: 100m
+        cpu: 10m
         memory: 64Mi
     dashboards:
       enabled: true
@@ -162,7 +162,7 @@ prometheusOperator:
     limits:
       memory: 200Mi
     requests:
-      cpu: 100m
+      cpu: 10m
       memory: 100Mi
 
 prometheus-node-exporter:
