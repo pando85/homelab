@@ -1,0 +1,10 @@
+controller:
+  args:
+    # needed by zfs-local-dataset
+    enableDistributedSnapshotting: true
+
+webhook:
+  tls:
+    certManagerIssuerRef:
+      name: selfsigned-for-k8s-webhooks
+      kind: ClusterIssuer
