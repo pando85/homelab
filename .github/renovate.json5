@@ -92,24 +92,6 @@
       minimumReleaseAge: "30 days",
     },
     {
-      matchPackageNames: [
-        "rook-ceph",
-        "rook-ceph-cluster",
-      ],
-      matchDatasources: ["helm"],
-      matchUpdateTypes: ["major", "minor"],
-      minimumReleaseAge: "30 days",
-    },
-    {
-      matchPackageNames: [
-        "rook-ceph-cluster",
-      ],
-      matchDatasources: ["helm"],
-      matchUpdateTypes: ["patch"],
-      matchCurrentVersion: "!/^0/",
-      automerge: false,
-    },
-    {
       matchPackageNames: ["k3s-io/k3s"],
       matchManagers: ["regex"],
       matchUpdateTypes: ["major", "minor"],

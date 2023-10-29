@@ -14,7 +14,6 @@
   - [Setup](#setup)
   - [Stability problems (currently included 400MHz)](#stability-problems-currently-included-400mhz)
 - [Cluster](#cluster)
-- [Ansible installed services](#ansible-installed-services)
 
 ## Network
 
@@ -156,8 +155,3 @@ Ref:
 ```bash
 ansible-playbook playbooks/install/k8s.yml --become
 ```
-
-## Ansible installed services
-
-1. ceph
-2. metallb

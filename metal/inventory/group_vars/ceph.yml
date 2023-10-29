@@ -1,7 +1,0 @@
-node_labels:
-  storage-node: "true"
-  rook-ceph.grigri.cloud/client: "false"
-
-k3s_kubelet_extra_args_ceph:
-  - image-gc-high-threshold=70
-  - image-gc-low-threshold=60

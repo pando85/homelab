@@ -1,8 +1,0 @@
-apiVersion: snapshot.storage.k8s.io/v1
-kind: VolumeSnapshot
-metadata:
-  name: new-snapshot-test
-spec:
-  volumeSnapshotClassName: rook-ceph-block
-  source:
-    persistentVolumeClaimName: test-claim

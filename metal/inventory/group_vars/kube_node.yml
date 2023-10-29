@@ -3,4 +3,4 @@ k3s_kubelet_extra_args_node_default:
   - system-reserved=cpu=100m,memory=50Mi,ephemeral-storage=1Gi
   - eviction-hard=memory.available<300Mi,nodefs.available<10%
 
-k3s_kubelet_extra_args: "{{ k3s_kubelet_extra_args_node_default + k3s_kubelet_extra_args_ceph | default([]) }}"
+k3s_kubelet_extra_args: "{{ k3s_kubelet_extra_args_node_default | default([]) }}"
