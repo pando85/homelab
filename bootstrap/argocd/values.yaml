@@ -187,7 +187,6 @@ argo-cd:
         cpu: 10m
         memory: 24Mi
       limits:
-        cpu: 10m
         memory: 128Mi
 
     subscriptions:
