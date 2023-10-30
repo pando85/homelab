@@ -50,7 +50,16 @@
       matchPackagePatterns: ["plex", "qbittorrent"],
     },
     {
-      matchDatasources: ["docker"],
+      matchManagers: ["github-actions"],
+      matchUpdateTypes: ["minor", "patch"],
+      matchCurrentVersion: "!/^0/",
+      automerge: true,
+      automergeType: "pr",
+      ignoreTests: true,
+      platformAutomerge: true,
+    },
+    {
+      matchPackageNames: ["app-template"],
       matchUpdateTypes: ["minor", "patch"],
       matchCurrentVersion: "!/^0/",
       automerge: true,
@@ -60,15 +69,6 @@
     },
     {
       matchDatasources: ["helm"],
-      matchUpdateTypes: ["patch"],
-      matchCurrentVersion: "!/^0/",
-      automerge: true,
-      automergeType: "pr",
-      ignoreTests: true,
-      platformAutomerge: true,
-    },
-    {
-      matchPackageNames: ["app-template"],
       matchUpdateTypes: ["minor", "patch"],
       matchCurrentVersion: "!/^0/",
       automerge: true,
