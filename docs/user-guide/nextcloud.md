@@ -7,6 +7,9 @@
     - [data](#data)
   - [Postgres](#postgres)
 - [occ command](#occ-command)
+- [Troubleshooting](#troubleshooting)
+  - [Not automatically upgraded](#not-automatically-upgraded)
+  - [Automatically upgrades fails](#automatically-upgrades-fails)
 
 ## Migrate auth to OIDC
 
@@ -112,4 +115,22 @@ Run with kubectl:
 chsh -s /bin/bash www-data
 su - www-data
 /var/www/html/occ
+```
+
+## Troubleshooting
+
+### Not automatically upgraded
+
+```bash
+chsh -s /bin/bash www-data
+su - www-data
+/var/www/html/occ upgrade
+```
+
+### Automatically upgrades fails
+
+```bash
+chsh -s /bin/bash www-data
+su - www-data
+/var/www/html/occ maintenance:mode
 ```
