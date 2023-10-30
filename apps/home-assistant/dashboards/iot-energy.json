@@ -682,7 +682,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -803,7 +803,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"}[$interval]))",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"}[$__interval]))",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -911,7 +911,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1021,7 +1021,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$interval])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$interval]))",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__interval])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__interval]))",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1142,7 +1142,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"}[$interval])) - sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"}[$interval]))",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"}[$__interval])) - sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"}[$__interval]))",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -1250,7 +1250,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}))",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}))",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1360,7 +1360,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_servers_energy\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_servers_energy\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1481,7 +1481,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellypmmini_servers_power\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellypmmini_servers_power\"}[$__interval])) by (entity, friendly_name)",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -1589,7 +1589,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_servers_energy\"}[$interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_servers_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1699,7 +1699,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1820,7 +1820,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"}[$interval]))",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"}[$__interval]))",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -1928,7 +1928,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -2038,7 +2038,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_consumed\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -2053,7 +2053,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_heat_energy_consumed\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_heat_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2069,7 +2069,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_consumed\"}[$interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2191,7 +2191,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_dhw_power_consumed\"}[$interval]))",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_dhw_power_consumed\"}[$__interval]))",
           "instant": false,
           "legendFormat": "DHW",
           "range": true,
@@ -2203,7 +2203,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_heat_power_consumed\"}[$interval]))",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_heat_power_consumed\"}[$__interval]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Heat",
@@ -2216,7 +2216,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_cool_power_consumed\"}[$interval]))",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_cool_power_consumed\"}[$__interval]))",
           "hide": false,
           "instant": false,
           "legendFormat": "Cool",
@@ -2267,80 +2267,6 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
-      },
-      {
-        "auto": true,
-        "auto_count": 30,
-        "auto_min": "10s",
-        "current": {
-          "selected": false,
-          "text": "auto",
-          "value": "$__auto_interval_interval"
-        },
-        "hide": 0,
-        "name": "interval",
-        "options": [
-          {
-            "selected": true,
-            "text": "auto",
-            "value": "$__auto_interval_interval"
-          },
-          {
-            "selected": false,
-            "text": "1m",
-            "value": "1m"
-          },
-          {
-            "selected": false,
-            "text": "10m",
-            "value": "10m"
-          },
-          {
-            "selected": false,
-            "text": "30m",
-            "value": "30m"
-          },
-          {
-            "selected": false,
-            "text": "1h",
-            "value": "1h"
-          },
-          {
-            "selected": false,
-            "text": "6h",
-            "value": "6h"
-          },
-          {
-            "selected": false,
-            "text": "12h",
-            "value": "12h"
-          },
-          {
-            "selected": false,
-            "text": "1d",
-            "value": "1d"
-          },
-          {
-            "selected": false,
-            "text": "7d",
-            "value": "7d"
-          },
-          {
-            "selected": false,
-            "text": "14d",
-            "value": "14d"
-          },
-          {
-            "selected": false,
-            "text": "30d",
-            "value": "30d"
-          }
-        ],
-        "query": "1m,10m,30m,1h,6h,12h,1d,7d,14d,30d",
-        "queryValue": "",
-        "refresh": 2,
-        "skipUrlSync": false,
-        "type": "interval"
       }
     ]
   },
