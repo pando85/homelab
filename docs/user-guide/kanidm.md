@@ -31,3 +31,19 @@ kanidm person credential create-reset-token demo-user
 kanidm group list | rg name | rg users
 kanidm group add-members ${GROUP_NAME} demo-user
 ```
+
+## Add app to SSO
+
+Example with Grafana:
+```bash
+kanidm system oauth2 create grafana grafana  https://grafana.grigri.cloud/login/generic_oauth -D admin
+kanidm group create grafana-users -D admin
+kanidm group add-members grafana-users XXXXX -D admin
+kanidm system oauth2 update-scope-map grafana grafana-users openid profile email -D admin
+kanidm system oauth2 show-basic-secret grafana -D admin
+kanidm group create grafana-admins -D admin
+kanidm group add-members grafana-admins XXXXX -D admin
+kanidm system oauth2 update-sup-scope-map grafana grafana-admins admin -D admin
+kanidm system oauth2 prefer-short-username grafana -D admin
+kanidm system oauth2 set-landing-url grafana https://grafana.grigri.cloud/login/generic_oauth
+```
