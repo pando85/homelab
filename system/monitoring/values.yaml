@@ -112,7 +112,7 @@ grafana:
 
   grafana.ini:
     server:
-      root_url: https://grafana.internal.grigri.cloud
+      root_url: https://grafana.grigri.cloud
 
     log:
       level: info
