@@ -12,9 +12,9 @@ template:
         state: >
           {% set start = now().replace(hour=0,minute=0,second=0, microsecond=0) %}
           {% set end = (start + timedelta(days=5)) %}
-          {% set start = start.strftime("%Y-%m-%dT%H:%M:%S+00:00") %}
-          {% set end = end.strftime("%Y-%m-%dT%H:%M:%S+00:00") %}
-          {{ state_attr('weather.forecast_home', 'forecast') | selectattr('datetime', '>=', start) | selectattr('datetime','<=', end) | map(attribute='templow') | list | min }}
+          {% set start_str = start.strftime("%Y-%m-%dT%H:%M:%S+00:00") %}
+          {% set end_str = end.strftime("%Y-%m-%dT%H:%M:%S+00:00") %}
+          {{ state_attr('weather.forecast_home', 'forecast') | selectattr('datetime', '>=', start_str) | selectattr('datetime','<=', end_str) | map(attribute='templow') | list | min }}
 
 automation:
   alias: Frost Forecast
@@ -33,7 +33,6 @@ automation:
       data:
         title: Frost is forecast!
         message: |
-
           Days below {{ min_temp }} °C:
           {%- for day in state_attr('weather.forecast_home', 'forecast') | selectattr('templow', '<', min_temp) %}
           {{ as_datetime(day.datetime).strftime('%m-%d')  }} - Lowest temperature: {{ day.templow }}
