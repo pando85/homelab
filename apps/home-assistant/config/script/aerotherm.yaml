@@ -1,6 +1,6 @@
-set_heishamon_heatmode_notify:
+set_heat_mode:
   alias: Set Heat Mode
-  description: "Sets Heishamon HeatMode for scheduler-card with notification"
+  description: "Sets Heishamon heat mode for scheduler-card with notification"
   icon: mdi:hvac
   fields:
     heatmode:
