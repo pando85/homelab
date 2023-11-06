@@ -4,14 +4,21 @@ set_heishamon_heatmode_notify:
   icon: mdi:hvac
   mode: single
   sequence:
-    - service: input_select.select_option
-      entity_id: input_select.heishamon_heatmode
-      service_data:
+    - alias: Check is not current state
+      condition:
+        not:
+          - condition: state
+            entity_id: input_select.select_option
+            state: "{{ heatmode }}"
+    - alias: Set heat mode
+      service: input_select.select_option
+      target:
+        entity_id: input_select.heishamon_heatmode
+      data:
         option: "{{ heatmode }}"
-    - service: notify.agil
-      service_data:
+    - alias: Notify
+      service: notify.agil
+      data:
         message: |
-          Set Heat mode to `{{ heatmode }}`.
+          Set heat mode to `{{ heatmode }}`.
           Heat mode is `{{ states('input_select.heishamon_heatmode') }}`.
-      name: Notify
-      icon: "mdi:bell"
