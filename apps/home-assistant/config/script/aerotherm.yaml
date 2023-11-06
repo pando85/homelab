@@ -7,6 +7,18 @@ set_heishamon_heatmode_notify:
       description: "Heashamon heat mode"
       example: "Heat+DHW"
       required: true
+      selector:
+        select:
+          options:
+            - Heat
+            - Cool
+            - Auto
+            - DHW
+            - Heat+DHW
+            - Cool+DHW
+            - Auto(Heat)+DHW
+            - Auto(Cool)
+            - Auto(Cool)+DHW
   mode: single
   sequence:
     - alias: Check is not current state
