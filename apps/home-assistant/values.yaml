@@ -135,12 +135,12 @@ app-template:
         - path: /config/gitops/integrations
       type: configMap
       name: home-assistant-config-integrations
-    configmap-scripts:
+    configmap-script:
       enabled: true
       globalMounts:
-        - path: /config/gitops/scripts
+        - path: /config/gitops/script
       type: configMap
-      name: home-assistant-config-scripts
+      name: home-assistant-config-script
   serviceMonitor:
     main:
       enabled: true

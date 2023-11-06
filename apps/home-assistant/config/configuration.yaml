@@ -5,7 +5,7 @@ homeassistant:
   # Load packages
   packages: !include_dir_named integrations
 
-scripts: !include_dir_merge_named scripts
+script: !include_dir_merge_named scripts
 
 # Load frontend themes from the themes folder
 frontend:
