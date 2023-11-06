@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-config-scripts
+data:
+# this removes subdirectories hiterarchy
+{{ (.Files.Glob "config/scripts/*").AsConfig | indent 2 }}

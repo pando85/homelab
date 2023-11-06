@@ -1,0 +1,17 @@
+set_heishamon_heatmode_notify:
+  alias: Set Heat Mode
+  description: "Sets Heishamon HeatMode for scheduler-card with notification"
+  icon: mdi:hvac
+  mode: single
+  sequence:
+    - service: input_select.select_option
+      entity_id: input_select.heishamon_heatmode
+      service_data:
+        option: "{{ heatmode }}"
+    - service: notify.agil
+      service_data:
+        message: |
+          Set Heat mode to `{{ heatmode }}`.
+          Heat mode is `{{ states('input_select.heishamon_heatmode') }}`.
+      name: Notify
+      icon: "mdi:bell"
