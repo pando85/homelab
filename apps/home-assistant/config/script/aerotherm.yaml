@@ -22,9 +22,9 @@ set_heat_mode:
   mode: single
   sequence:
     - alias: Check is not current state
-      condition: "{{ not is_state('input_select.select_option', heatmode)}}"
+      condition: "{{ not is_state('input_select.heishamon_heatmode', heatmode)}}"
     - alias: Check is a valid state
-      condition: "{{ heatmode in state_attr('input_select.select_option', 'options')}}"
+      condition: "{{ heatmode in state_attr('input_select.heishamon_heatmode', 'options')}}"
     - alias: Set heat mode
       service: input_select.select_option
       target:
