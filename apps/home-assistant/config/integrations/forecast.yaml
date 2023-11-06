@@ -1,0 +1,35 @@
+template:
+  - trigger:
+      - platform: time
+        at: '18:00:00'
+    sensor:
+      - forecast_lowest_temperature_5_days:
+        unit_of_measurement: "°C"
+        state: >
+          {% set start = now().replace(hour=0,minute=0,second=0, microsecond=0) %}
+          {% set end = (start + timedelta(days=5)) %}
+          {% set start = start.strftime("%Y-%m-%dT%H:%M:%S+00:00") %}
+          {% set end = end.strftime("%Y-%m-%dT%H:%M:%S+00:00") %}
+          {{ state_attr('weather.forecast_home', 'forecast') | selectattr('datetime', '>=', start) | selectattr('datetime','<=', end) | map(attribute='templow') | list | min }}
+
+automation:
+  alias: Frost Forecast
+  description: >-
+    Checks the forecast lowest temps for the next 5 days and notify if there are frost risk
+  mode: single
+  trigger:
+    - platform: time
+      at: '18:30:00'
+  variables:
+    min_temp: 2
+  condition:
+    - condition: "{{ min_temp > states('sensor.forecast_lowest_temperature_5_days') | int }}"
+  action:
+    - service: notify.agil
+      data:
+        title: Frost is forecast!
+        message: |
+          Days below {{ min_temp }} °C.
+          {% for day in state_attr('weather.forecast_home', 'forecast') | selectattr('templow', '<', min_temp) %}
+          {{ as_datetime(day.datetime).strftime('%m-%d')  }} - Lowest temperature: {{ day.templow }}
+          {%- endfor %}
