@@ -27,7 +27,7 @@ automation:
   variables:
     min_temp: 2
   condition:
-    - condition: "{{ min_temp > states('sensor.forecast_lowest_temperature_5_days') | int }}"
+    - "{{ states('sensor.forecast_lowest_temperature_5_days') | int < min_temp }}"
   action:
     - service: notify.agil
       data:
