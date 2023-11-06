@@ -1,9 +1,11 @@
 template:
   - trigger:
       - platform: time
-        at: '18:00:00'
+        at:
+          - '18:00:00'
+          - '20:23:00'
     sensor:
-      - forecast_lowest_temperature_5_days:
+      - name: Forecast lowest temperature 5 days
         unit_of_measurement: "°C"
         state: >
           {% set start = now().replace(hour=0,minute=0,second=0, microsecond=0) %}
