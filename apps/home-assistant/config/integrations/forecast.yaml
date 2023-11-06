@@ -3,7 +3,9 @@ template:
       - platform: time
         at:
           - '18:00:00'
-          - '20:23:00'
+      # for debug
+      - platform: homeassistant
+        event: start
     sensor:
       - name: Forecast lowest temperature 5 days
         unit_of_measurement: "°C"
@@ -20,8 +22,8 @@ automation:
     Checks the forecast lowest temps for the next 5 days and notify if there are frost risk
   mode: single
   trigger:
-    - platform: time
-      at: '18:30:00'
+    - platform: state
+      entity_id: sensor.forecast_lowest_temperature_5_days
   variables:
     min_temp: 2
   condition:
