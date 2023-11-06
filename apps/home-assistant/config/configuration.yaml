@@ -21,4 +21,5 @@ prometheus:
   namespace: hass
   requires_auth: false
 
-!include_dir_named secrets
+telegram_bot: !include secrets/telegram_bot.yaml
+notify: !include secrets/notify.yaml
