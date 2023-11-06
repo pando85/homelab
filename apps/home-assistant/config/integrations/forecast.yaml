@@ -29,7 +29,7 @@ automation:
   condition:
     - "{{ states('sensor.forecast_lowest_temperature_5_days') | int < min_temp }}"
   action:
-    - service: notify.agil
+    - service: notify.all
       data:
         title: Frost is forecast!
         message: |
