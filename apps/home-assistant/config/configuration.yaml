@@ -20,3 +20,5 @@ recorder:
 prometheus:
   namespace: hass
   requires_auth: false
+
+!include_dir_named secrets

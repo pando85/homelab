@@ -123,6 +123,12 @@ app-template:
         - path: /config/gitops
       type: configMap
       name: home-assistant-config
+    secret:
+      enabled: true
+      globalMounts:
+        - path: /config/gitops/secrets
+      type: secret
+      name: hass-secrets
     configmap-integrations:
       enabled: true
       globalMounts:
