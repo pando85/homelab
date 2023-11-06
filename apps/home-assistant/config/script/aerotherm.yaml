@@ -5,11 +5,7 @@ set_heishamon_heatmode_notify:
   mode: single
   sequence:
     - alias: Check is not current state
-      condition:
-        not:
-          - condition: state
-            entity_id: input_select.select_option
-            state: "{{ heatmode }}"
+      condition: "{{ not is_state(input_select.select_option, heatmode)}}"
     - alias: Set heat mode
       service: input_select.select_option
       target:
