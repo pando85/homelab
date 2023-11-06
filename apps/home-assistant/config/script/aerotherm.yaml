@@ -6,6 +6,7 @@ set_heishamon_heatmode_notify:
     heatmode:
       description: "Heashamon heat mode"
       example: "Heat+DHW"
+      required: true
   mode: single
   sequence:
     - alias: Check is not current state
