@@ -4,8 +4,8 @@ template:
         at:
           - '18:00:00'
       # for debug
-      - platform: homeassistant
-        event: start
+      # - platform: homeassistant
+      #   event: start
     sensor:
       - name: Forecast lowest temperature 5 days
         unit_of_measurement: "°C"
@@ -33,7 +33,8 @@ automation:
       data:
         title: Frost is forecast!
         message: |
-          Days below {{ min_temp }} °C.
-          {% for day in state_attr('weather.forecast_home', 'forecast') | selectattr('templow', '<', min_temp) %}
+
+          Days below {{ min_temp }} °C:
+          {%- for day in state_attr('weather.forecast_home', 'forecast') | selectattr('templow', '<', min_temp) %}
           {{ as_datetime(day.datetime).strftime('%m-%d')  }} - Lowest temperature: {{ day.templow }}
           {%- endfor %}
