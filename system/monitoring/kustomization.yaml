@@ -30,7 +30,6 @@ resources:
   - resources/grafana-secret.yaml
   - resources/pfsense-darkstat-scrape-config.yaml
   - resources/pfsense-node-exporter-dashboard-configmap.yaml
-  - resources/pfsense-node-exporter-dashboard-configmap.yaml
   - resources/pfsense-node-exporter-scrape-config.yaml
   - resources/smartctl-exporter-dashboard-configmap.yaml
   - resources/smartctl-exporter-prometheus-rules.yaml
