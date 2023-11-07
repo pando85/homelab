@@ -19,6 +19,8 @@ apiVersion: monitoring.coreos.com/v1alpha1
 kind: ScrapeConfig
 metadata:
   name: pfsense-darkstat
+  labels:
+    release: monitoring
 spec:
   staticConfigs:
     - targets:

@@ -95,6 +95,8 @@ ingress-nginx:
       enabled: true
       serviceMonitor:
         enabled: true
+        additionalLabels:
+          release: monitoring
 
   tcp:
     29518: git/git-gitea-ssh:22

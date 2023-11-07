@@ -1,5 +1,7 @@
 serviceMonitor:
   enabled: true
+  extraLabels:
+    release: monitoring
   relabelings:
     - action: replace
       sourceLabels:
@@ -8,6 +10,8 @@ serviceMonitor:
 
 prometheusRules:
   enabled: true
+  labels:
+    release: monitoring
 
 nodeSelector:
   kubernetes.io/arch: amd64

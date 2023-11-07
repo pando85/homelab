@@ -2,6 +2,8 @@ apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
   name: monitoring-prometheus-cpu-temperature.rules
+  labels:
+    release: monitoring
 spec:
   groups:
     - name: cpu-temperature.rules

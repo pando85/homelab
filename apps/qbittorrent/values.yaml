@@ -97,6 +97,8 @@ app-template:
   serviceMonitor:
     main:
       enabled: true
+      labels:
+        release: monitoring
       endpoints:
         - port: metrics
           scheme: http

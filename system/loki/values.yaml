@@ -44,6 +44,8 @@ loki:
       enabled: true
     serviceMonitor:
       enabled: true
+      additionalLabels:
+        release: monitoring
       metricsInstance:
         enabled: false
     selfMonitoring:
@@ -140,6 +142,8 @@ promtail:
 
   serviceMonitor:
     enabled: true
+    labels:
+      release: monitoring
 
   # Enable CRIO log format
   pipelineStages:

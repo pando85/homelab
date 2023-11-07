@@ -3,6 +3,7 @@ kind: PrometheusRule
 metadata:
   labels:
     app.kubernetes.io/name: prometheus-smartctl-exporter
+    release: monitoring
   name: monitoring-prometheus-smartctl-exporter-custom.rules
 spec:
   groups:

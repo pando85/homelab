@@ -46,6 +46,8 @@ gitea:
       enabled: true
       serviceMonitor:
         enabled: true
+        additionalLabels:
+          release: monitoring
 
     config:
       oauth2_client:

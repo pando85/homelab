@@ -36,6 +36,8 @@ app-template:
   serviceMonitor:
     main:
       enabled: true
+      labels:
+        release: monitoring
       endpoints:
         - port: http
           scheme: http
