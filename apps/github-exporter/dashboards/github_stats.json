@@ -91,6 +91,7 @@
       "options": {
         "legend": {
           "calcs": [
+            "firstNotNull",
             "lastNotNull"
           ],
           "displayMode": "table",
@@ -111,7 +112,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "github_repo_stars{user=~\"$user\", repo=~\"$repo\"}",
+          "expr": "sum(github_repo_stars{user=~\"$user\", repo=~\"$repo\"}) by (user, repo)",
           "instant": false,
           "interval": "",
           "legendFormat": "{{user}}/{{repo}}",
@@ -150,7 +151,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": [
             "All"
           ],
@@ -180,7 +181,7 @@
       },
       {
         "current": {
-          "selected": false,
+          "selected": true,
           "text": [
             "All"
           ],
@@ -218,6 +219,6 @@
   "timezone": "",
   "title": "Github Stats",
   "uid": "aa16f561-4799-4bab-94c5-94b99e11110b",
-  "version": 4,
+  "version": 1,
   "weekStart": ""
 }
