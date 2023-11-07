@@ -10,7 +10,7 @@ serviceMonitor:
 
 prometheusRules:
   enabled: true
-  labels:
+  extraLabels:
     release: monitoring
 
 nodeSelector:
