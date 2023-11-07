@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+    external-dns.alpha.kubernetes.io/enabled: "true"
+  name: long-term-prometheus
+  namespace: monitoring
+spec:
+  ingressClassName: nginx-internal
+  rules:
+    - host: prometheus-long-term.internal.grigri.cloud
+      http:
+        paths:
+          - backend:
+              service:
+                name: long-term-prometheus
+                port:
+                  number: 9090
+            path: /
+            pathType: ImplementationSpecific
+  tls:
+    - hosts:
+        - prometheus-long-term.internal.grigri.cloud
+      secretName: prometheus-long-term-general-tls

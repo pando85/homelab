@@ -146,6 +146,7 @@ app-template:
       enabled: true
       labels:
         release: monitoring
+        operator.prometheus.io/instance: prometheus-long-term
       endpoints:
         - port: http
           scheme: http
