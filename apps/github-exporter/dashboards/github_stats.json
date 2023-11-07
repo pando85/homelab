@@ -134,9 +134,9 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "Prometheus",
-          "value": "prometheus"
+          "selected": true,
+          "text": "Prometheus long term",
+          "value": "prometheus-long-term"
         },
         "hide": 0,
         "includeAll": false,
@@ -144,6 +144,7 @@
         "name": "datasource",
         "options": [],
         "query": "prometheus",
+        "queryValue": "",
         "refresh": 1,
         "regex": "",
         "skipUrlSync": false,
@@ -219,6 +220,6 @@
   "timezone": "",
   "title": "Github Stats",
   "uid": "aa16f561-4799-4bab-94c5-94b99e11110b",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
