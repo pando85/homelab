@@ -1,0 +1,36 @@
+# pfSense Darkstat Installation
+
+# To set up the pfSense Darkstat for Prometheus monitoring, follow these steps:
+
+# 1. Navigate to System -> Package Manager -> Package Installer.
+# 2. Search for and install the darkstat package.
+# 3. After the package installation is complete, go to Services -> Darkstat .
+# 4. Enable the Darkstat. And configure as follows:
+#    ```
+#    capture_interface: LANBRIDGE
+#    web_interface_binding:
+#      - DMZ
+#      - LANBRIDGE
+#    local_network: LANBRIDGE
+#    ```
+# 5. Go to Firewall -> Aliases -> Ports and add 666 to pfsense_internal_services_tcp,
+#    which are allowed in the DMZ interface.
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: pfsense-darkstat
+spec:
+  staticConfigs:
+    - targets:
+        - pfsense.grigri:666
+  relabelings:
+    - sourceLabels:
+        - __address__
+      separator: ":"
+      regex: "(.*):(.*)"
+      replacement: "${1}"
+      targetLabel: instance
+      action: replace
+    - replacement: darkstat
+      targetLabel: job
+      action: replace

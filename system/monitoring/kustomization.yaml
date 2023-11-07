@@ -28,6 +28,8 @@ resources:
   - resources/blackbox-exporter-dashboard-configmap.yaml
   - resources/grafana-admin-secret.yaml
   - resources/grafana-secret.yaml
+  - resources/pfsense-darkstat-scrape-config.yaml
+  - resources/pfsense-node-exporter-dashboard-configmap.yaml
   - resources/pfsense-node-exporter-dashboard-configmap.yaml
   - resources/pfsense-node-exporter-scrape-config.yaml
   - resources/smartctl-exporter-dashboard-configmap.yaml
