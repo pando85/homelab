@@ -12,7 +12,7 @@ data:
     - name: Prometheus long term
       type: prometheus
       uid: prometheus-long-term
-      url: http://long-term-prometheus.monitoring:9090/
+      url: http://prometheus-long-term.monitoring:9090/
       access: proxy
       isDefault: false
       jsonData:
