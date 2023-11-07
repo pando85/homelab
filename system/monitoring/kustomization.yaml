@@ -31,6 +31,7 @@ resources:
   - resources/long-term-metrics/datasource-configmap.yaml
   - resources/long-term-metrics/ingress.yaml
   - resources/long-term-metrics/prometheus.yaml
+  - resources/long-term-metrics/service.yaml
   - resources/pfsense-darkstat-scrape-config.yaml
   - resources/pfsense-node-exporter-dashboard-configmap.yaml
   - resources/pfsense-node-exporter-scrape-config.yaml
