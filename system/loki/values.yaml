@@ -42,6 +42,8 @@ loki:
       enabled: true
     rules:
       enabled: true
+      labels:
+        release: monitoring
     serviceMonitor:
       enabled: true
       labels:
