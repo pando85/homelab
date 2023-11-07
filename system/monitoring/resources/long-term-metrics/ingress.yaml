@@ -4,7 +4,7 @@ metadata:
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod-dns
     external-dns.alpha.kubernetes.io/enabled: "true"
-  name: long-term-prometheus
+  name: prometheus-long-term
   namespace: monitoring
 spec:
   ingressClassName: nginx-internal
@@ -14,7 +14,7 @@ spec:
         paths:
           - backend:
               service:
-                name: long-term-prometheus
+                name: prometheus-long-term
                 port:
                   number: 9090
             path: /
