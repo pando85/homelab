@@ -32,11 +32,11 @@ spec:
   replicas: 1
   resources:
     limits:
-      cpu: 4
-      memory: 2.5Gi
-    requests:
-      cpu: 200m
+      cpu: 1
       memory: 1Gi
+    requests:
+      cpu: 10m
+      memory: 50Mi
   routePrefix: /
   ruleNamespaceSelector: {}
   ruleSelector:
