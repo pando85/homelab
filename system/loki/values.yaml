@@ -44,7 +44,7 @@ loki:
       enabled: true
     serviceMonitor:
       enabled: true
-      additionalLabels:
+      labels:
         release: monitoring
       metricsInstance:
         enabled: false

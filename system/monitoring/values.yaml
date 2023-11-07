@@ -134,6 +134,12 @@ grafana:
 
   revisionHistoryLimit: 2
 
+  serviceMonitor:
+    enabled: true
+    path: /metrics
+    labels:
+      release: monitoring
+
 coreDns:
   enabled: true
   service:
