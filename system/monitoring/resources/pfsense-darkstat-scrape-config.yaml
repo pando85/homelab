@@ -31,6 +31,3 @@ spec:
       replacement: "${1}"
       targetLabel: instance
       action: replace
-    - replacement: darkstat
-      targetLabel: job
-      action: replace
