@@ -7,11 +7,12 @@ app-template:
       containers:
         main:
           image:
-            repository: ghcr.io/linuxserver/freshrss
-            tag: 1.20.0-ls149
+            repository: freshrss/freshrss
+            tag: 1.22.1
 
           env:
             TZ: Europe/Madrid
+            CRON_MIN: "18,48"
 
           resources:
             requests:
@@ -71,5 +72,5 @@ app-template:
     config:
       enabled: true
       globalMounts:
-        - path: /config
+        - path: /var/www/FreshRSS/data
       existingClaim: freshrss-config-zfs
