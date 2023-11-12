@@ -13,7 +13,6 @@ app-template:
           env:
             TZ: Europe/Madrid
             CRON_MIN: "18,48"
-            DATA_PATH: /var/www/FreshRSS/data/www/freshrss/data
           resources:
             requests:
               cpu: 10m
