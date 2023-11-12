@@ -12,7 +12,8 @@ app-template:
           env:
             TZ: Europe/Madrid
             CRON_MIN: "18,48"
-            OIDC_ENABLED: "true"
+            # true gives error and non zero value is enough
+            OIDC_ENABLED: "1"
             OIDC_PROVIDER_METADATA_URL: https://idm.grigri.cloud/oauth2/openid/freshrss/.well-known/openid-configuration
             OIDC_REMOTE_USER_CLAIM: preferred_username
             OIDC_SCOPES: "openid profile email"
