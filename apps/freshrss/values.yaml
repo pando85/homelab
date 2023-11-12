@@ -14,7 +14,6 @@ app-template:
             CRON_MIN: "18,48"
             OIDC_ENABLED: true
             OIDC_PROVIDER_METADATA_URL: https://idm.grigri.cloud/oauth2/openid/freshrss/.well-known/openid-configuration
-            OIDC_CLIENT_CRYPTO_KEY: '"exec:/bin/bash -c \"head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32\""'
             OIDC_REMOTE_USER_CLAIM: preferred_username
             OIDC_SCOPES: "openid profile email"
             OIDC_X_FORWARDED_HEADERS: X-Forwarded-Host X-Forwarded-Port X-Forwarded-Proto
