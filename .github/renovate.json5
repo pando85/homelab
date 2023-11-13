@@ -44,12 +44,6 @@
       addLabels: ["renovate/{{parentDir}}"],
     },
     {
-      description: "Loose versioning for non-semver packages",
-      matchDatasources: ["docker"],
-      versioning: "loose",
-      matchPackagePatterns: ["plex", "qbittorrent"],
-    },
-    {
       matchManagers: ["github-actions"],
       matchUpdateTypes: ["minor", "patch"],
       matchCurrentVersion: "!/^0/",
@@ -58,29 +52,34 @@
       ignoreTests: true,
       platformAutomerge: true,
     },
+    // Docker
     {
-      matchPackageNames: ["app-template"],
+      matchDatasources: ["docker"],
+      versioning: "loose",
+      matchPackagePatterns: [
+        "plex",
+        "qbittorrent",
+        "radarr",
+        "sonarr",
+        "prowlarr",
+      ],
+    },
+    {
+      matchDatasources: ["docker"],
       matchUpdateTypes: ["minor", "patch"],
       matchCurrentVersion: "!/^0/",
       automerge: true,
-      automergeType: "pr",
       ignoreTests: true,
+      automergeType: "pr",
       platformAutomerge: true,
     },
     {
-      matchDatasources: ["helm"],
-      matchUpdateTypes: ["minor", "patch"],
-      matchCurrentVersion: "!/^0/",
+      matchDatasources: ["docker"],
+      matchUpdateTypes: ["digest"],
       automerge: true,
-      automergeType: "pr",
       ignoreTests: true,
+      automergeType: "pr",
       platformAutomerge: true,
-    },
-    {
-      matchPackageNames: ["vault"],
-      matchManagers: ["regex"],
-      matchUpdateTypes: ["major", "minor"],
-      minimumReleaseAge: "30 days",
     },
     {
       matchDatasources: ["docker"],
@@ -92,6 +91,23 @@
       minimumReleaseAge: "30 days",
     },
     {
+      matchPackageNames: ["vault"],
+      matchManagers: ["regex"],
+      matchUpdateTypes: ["major", "minor"],
+      minimumReleaseAge: "30 days",
+    },
+    // Helm
+    {
+      matchDatasources: ["helm"],
+      matchUpdateTypes: ["minor", "patch"],
+      matchCurrentVersion: "!/^0/",
+      automerge: true,
+      automergeType: "pr",
+      ignoreTests: true,
+      platformAutomerge: true,
+    },
+    // K3s
+    {
       matchPackageNames: ["k3s-io/k3s"],
       matchManagers: ["regex"],
       matchUpdateTypes: ["major", "minor"],
@@ -101,7 +117,7 @@
       addLabels: ["renovate/k3s"],
     },
     {
-      // group k3s changes in one PR
+      description: "Group k3s changes in one PR",
       matchPackageNames: ["k3s-io/k3s"],
       matchManagers: ["regex"],
       additionalBranchPrefix: "k3s-",
