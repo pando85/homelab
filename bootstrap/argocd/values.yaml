@@ -27,7 +27,15 @@ argo-cd:
 
         # Optional set of OIDC scopes to request. If omitted, defaults to: ["openid", "profile", "email", "groups"]
         requestedScopes: ["openid", "profile", "email"]
-        enablePKCEAuthentication: true
+        # PKCE not working, it is not sending the code_challenge
+        # to enable:
+        # ```bash
+        # kanidm system oauth2 delete argocd
+        # kanidm system oauth2 create argocd argocd  https://argocd.internal.grigri.cloud/pkce/verify -D admin
+        # kanidm system oauth2 update-scope-map argocd argocd-users openid profile email\n
+        # kanidm system oauth2 set-landing-url argocd 'https://argocd.internal.grigri.cloud/auth/login?return_url=https%3A%2F%2Fargocd.internal.grigri.cloud%2Fapplications'
+        # ```
+        # enablePKCEAuthentication: true
       # Disable git polling
       timeout.reconciliation: "0"
 
