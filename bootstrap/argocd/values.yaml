@@ -27,6 +27,7 @@ argo-cd:
 
         # Optional set of OIDC scopes to request. If omitted, defaults to: ["openid", "profile", "email", "groups"]
         requestedScopes: ["openid", "profile", "email"]
+        enablePKCEAuthentication: true
       # Disable git polling
       timeout.reconciliation: "0"
 
