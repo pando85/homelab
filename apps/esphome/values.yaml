@@ -48,16 +48,17 @@ app-template:
   persistence:
     config:
       enabled: true
-      type: configMap
-      name: esphome-config
+      type: custom
       globalMounts:
         - path: /config
-    secrets:
-      type: secret
-      name: esphome-secrets
-      globalMounts:
-        - path: /config/secrets
-          subPath: secrets.yaml
+      volumeSpec:
+        - name: all-in-one
+          projected:
+            sources:
+              - configMap:
+                  name: esphome-config
+              - secret:
+                  name: esphome-secrets
     esphome-cache:
       type: emptyDir
       globalMounts:
