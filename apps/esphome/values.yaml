@@ -4,6 +4,18 @@ app-template:
       annotations:
         reloader.stakater.com/auto: "true"
       type: statefulset
+      # hack to make devices show as online
+      initContainers:
+        01-init-config:
+          image:
+            repository: debian
+            tag: 10.9-slim
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - >
+              cp /original/config/* /config/
       containers:
         main:
           image:
@@ -50,7 +62,7 @@ app-template:
       enabled: true
       type: custom
       globalMounts:
-        - path: /config
+        - path: /original/config
       volumeSpec:
         name: all-in-one
         projected:
@@ -62,4 +74,4 @@ app-template:
     esphome-cache:
       type: emptyDir
       globalMounts:
-        - path: /config/.esphome
+        - path: /config
