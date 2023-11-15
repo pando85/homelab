@@ -105,7 +105,8 @@ sensor:
   - platform: dht
     pin: GPIO25
     # minimum update interval: https://www.adafruit.com/product/393
-    update_interval: 2s
+    # people say that it warms up when update_interval = 2s
+    update_interval: 5s
     humidity:
       name: "Rack Humidity"
       id: humidity
