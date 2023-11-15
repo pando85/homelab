@@ -2527,9 +2527,9 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "Prometheus",
-          "value": "prometheus"
+          "selected": true,
+          "text": "Prometheus long term",
+          "value": "prometheus-long-term"
         },
         "hide": 0,
         "includeAll": false,

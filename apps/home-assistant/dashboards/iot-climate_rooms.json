@@ -157,9 +157,9 @@
     "list": [
       {
         "current": {
-          "selected": false,
-          "text": "default",
-          "value": "default"
+          "selected": true,
+          "text": "Prometheus long term",
+          "value": "prometheus-long-term"
         },
         "hide": 0,
         "includeAll": false,
