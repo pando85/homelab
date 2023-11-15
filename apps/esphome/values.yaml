@@ -57,6 +57,10 @@ app-template:
             - *host
           secretName: esphome-tls-certificate
 
+  defaultPodOptions:
+    nodeSelector:
+      kubernetes.io/arch: amd64
+
   persistence:
     config:
       enabled: true
