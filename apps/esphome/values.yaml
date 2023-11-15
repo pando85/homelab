@@ -50,7 +50,8 @@ app-template:
       enabled: true
       globalMounts:
         - path: /config
-      existingClaim: config-esphome-zfs
+      type: configMap
+      name: esphome-config
     secrets:
       type: secret
       name: esphome-secrets
@@ -61,10 +62,3 @@ app-template:
       type: emptyDir
       globalMounts:
         - path: /config/.esphome
-    # deploy-key:
-    #   type: secret
-    #   name: esphome-deploykey
-    #   defaultMode: 256
-    #   globalMounts:
-    #     - path: /root/.ssh/id_ed25519
-    #       subPath: id_ed25519
