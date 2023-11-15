@@ -1,0 +1,10 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: esphome
+  labels:
+    operator.prometheus.io/instance: prometheus-long-term
+spec:
+{{- range $path, $_ := .Files.Glob "rules/*.yaml" }}
+{{ $.Files.Get $path | indent 2 }}
+{{- end }}
