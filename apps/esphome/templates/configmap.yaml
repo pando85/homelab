@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: esphome-config
 data:
-{{ (.Files.Glob "config/*").AsConfig | indent 2 }}
+{{ (.Files.Glob "config/*.yaml").AsConfig | indent 2 }}

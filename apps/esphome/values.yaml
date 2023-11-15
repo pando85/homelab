@@ -48,15 +48,15 @@ app-template:
   persistence:
     config:
       enabled: true
-      globalMounts:
-        - path: /config
       type: configMap
       name: esphome-config
+      globalMounts:
+        - path: /config
     secrets:
       type: secret
       name: esphome-secrets
       globalMounts:
-        - path: /config/secrets.yaml
+        - path: /config/secrets
           subPath: secrets.yaml
     esphome-cache:
       type: emptyDir
