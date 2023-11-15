@@ -52,13 +52,13 @@ app-template:
       globalMounts:
         - path: /config
       volumeSpec:
-        - name: all-in-one
-          projected:
-            sources:
-              - configMap:
-                  name: esphome-config
-              - secret:
-                  name: esphome-secrets
+        name: all-in-one
+        projected:
+          sources:
+            - configMap:
+                name: esphome-config
+            - secret:
+                name: esphome-secrets
     esphome-cache:
       type: emptyDir
       globalMounts:
