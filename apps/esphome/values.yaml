@@ -45,13 +45,6 @@ app-template:
             - *host
           secretName: esphome-tls-certificate
 
-  defaultPodOptions:
-    securityContext:
-      runAsUser: 995
-      runAsGroup: 991
-      fsGroup: 991
-      fsGroupChangePolicy: "OnRootMismatch"
-
   persistence:
     config:
       enabled: true
