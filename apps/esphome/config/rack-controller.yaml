@@ -96,7 +96,7 @@ sensor:
     id: fan_speed
     name: Fan Speed
     accuracy_decimals: 0
-    update_interval: 15s
+    update_interval: 5s
     # NF-S12A max (to calibrate): 1200 RPM
     filters:
       - multiply: 0.5
@@ -106,7 +106,7 @@ sensor:
     pin: GPIO25
     # minimum update interval: https://www.adafruit.com/product/393
     # people say that it warms up when update_interval = 2s
-    update_interval: 5s
+    update_interval: 10s
     humidity:
       name: "Rack Humidity"
       id: humidity
