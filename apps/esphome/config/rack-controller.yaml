@@ -96,7 +96,7 @@ sensor:
     id: fan_speed
     name: Fan Speed
     accuracy_decimals: 0
-    update_interval: 5s
+    update_interval: 1s
     # NF-S12A max (to calibrate): 1200 RPM
     filters:
       - multiply: 0.5
@@ -115,6 +115,16 @@ sensor:
       id: temperature
 
 output:
+  - platform: template
+    id: thermostat_output
+    type: float
+    write_action:
+      - lambda: |-
+          ESP_LOGD("PID", "Written to output: %.2f", state);
+          if (id(thermostat).mode != CLIMATE_MODE_OFF) {
+            id(fan_pwm).set_level(state);
+          }
+
   - platform: ledc
     pin: GPIO16
     # target 25kHz in noctua specs
@@ -139,15 +149,17 @@ climate:
     id: thermostat
     sensor: temperature
     default_target_temperature: 20°C
-    cool_output: fan_pwm
+    cool_output: thermostat_output
     visual:
       min_temperature: 15
       max_temperature: 50
       temperature_step: 1
     control_parameters:
-      kp: 0.0
-      ki: 0.0
-      kd: 0.0
+      # % speed that we want
+      kp: 0.3
+      # increase over time
+      ki: 0.002
+      kd: 0
       max_integral: 0.0
       output_averaging_samples: 5
       derivative_averaging_samples: 5
