@@ -120,9 +120,14 @@ output:
     type: float
     write_action:
       - lambda: |-
-          ESP_LOGD("PID", "Written to output: %.2f", state);
+          ESP_LOGD("pid", "Written to output: %.2f", state);
           if (id(thermostat).mode != CLIMATE_MODE_OFF) {
             id(fan_pwm).set_level(state);
+          // return to fan state
+          } else if (id(fans).state) {
+            id(fan_pwm).set_level(float(id(fans).speed)/100);
+          } else {
+            id(fan_pwm).set_level(0);
           }
 
   - platform: ledc
