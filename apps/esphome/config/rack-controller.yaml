@@ -160,11 +160,26 @@ climate:
       max_temperature: 50
       temperature_step: 1
     control_parameters:
-      # % speed that we want
-      kp: 0.3
-      # increase over time
-      ki: 0.002
-      kd: 0
+      kp: 1.09135
+      ki: 0.00463
+      kd: 64.31172
+    # Please copy these values into your YAML configuration! They will reset on the next reboot.
+    # Alternative Rules:
+    #   Rule 'Ziegler-Nichols PI':
+    #     kp: 0.81851, ki: 0.00208, kd: 0.00000
+    #   Rule 'Pessen Integral PID':
+    #     kp: 1.27324, ki: 0.00675, kd: 90.03640
+    #   Rule 'Some Overshoot PID':
+    #     kp: 0.60570, ki: 0.00257, kd: 95.18134
+    #   Rule 'No Overshoot PID':
+    #     kp: 0.36378, ki: 0.00154, kd: 53.59309
+
+      # First manual setup values:
+      # # % speed that we want
+      # kp: 0.3
+      # # increase over time
+      # ki: 0.002
+      # kd: 0
       max_integral: 0.0
       output_averaging_samples: 5
       derivative_averaging_samples: 5
