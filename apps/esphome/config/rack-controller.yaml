@@ -153,7 +153,7 @@ climate:
     name: "Rack Thermostat"
     id: thermostat
     sensor: temperature
-    default_target_temperature: 20°C
+    default_target_temperature: 27°C
     cool_output: thermostat_output
     visual:
       min_temperature: 15
