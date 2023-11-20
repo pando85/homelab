@@ -9,7 +9,7 @@ app-template:
         01-init-config:
           image:
             repository: debian
-            tag: 10.9-slim
+            tag: 10.13-slim
           command:
             - /bin/sh
             - -c
