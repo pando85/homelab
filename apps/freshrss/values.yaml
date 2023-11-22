@@ -29,17 +29,18 @@ app-template:
               memory: 128Mi
     cron:
       type: cronjob
-      concurrencyPolicy: Forbid
-      timeZone: "Europe/Madrid"
-      schedule: "*/20 * * * *"
-      startingDeadlineSeconds: 30
-      successfulJobsHistory: 1
-      failedJobsHistory: 1
-      backoffLimit: 3
+      cronjob:
+        concurrencyPolicy: Forbid
+        timeZone: "Europe/Madrid"
+        schedule: "*/20 * * * *"
+        startingDeadlineSeconds: 30
+        successfulJobsHistory: 1
+        failedJobsHistory: 1
+        backoffLimit: 3
       containers:
         main:
           image: *image
-          env: &env
+          env: *env
           command: /usr/bin/su
           args:
             - www-data
