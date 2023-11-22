@@ -42,7 +42,6 @@ app-template:
         reloader.stakater.com/auto: "true"
       type: deployment
       replicas: 1
-      containers:
       initContainers:
         01-init-config:
           image:
@@ -54,6 +53,7 @@ app-template:
           args:
             - >
               cp /original/conf/* /conf/
+      containers:
         main:
           image:
             repository: acockburn/appdaemon
