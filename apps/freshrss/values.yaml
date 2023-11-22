@@ -6,12 +6,11 @@ app-template:
       strategy: Recreate
       containers:
         main:
-          image:
+          image: &image
             repository: freshrss/freshrss
             tag: 1.22.1
-          env:
+          env: &env
             TZ: Europe/Madrid
-            CRON_MIN: "18,48"
             # true gives error and non zero value is enough
             OIDC_ENABLED: "1"
             OIDC_PROVIDER_METADATA_URL: https://idm.grigri.cloud/oauth2/openid/freshrss/.well-known/openid-configuration
@@ -28,7 +27,24 @@ app-template:
             limits:
               cpu: 500m
               memory: 128Mi
-
+    cron:
+      type: cronjob
+      image: *image
+      env: &env
+      concurrencyPolicy: Forbid
+      timeZone: "Europe/Madrid"
+      schedule: "*/20 * * * *"
+      startingDeadlineSeconds: 30
+      successfulJobsHistory: 1
+      failedJobsHistory: 1
+      backoffLimit: 3
+      command: /usr/bin/su
+      args:
+        - www-data
+        - -s
+        - /bin/sh
+        - -c
+        - 'php /var/www/FreshRSS/app/actualize_script.php'
   service:
     main:
       ports:
