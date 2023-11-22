@@ -29,8 +29,6 @@ app-template:
               memory: 128Mi
     cron:
       type: cronjob
-      image: *image
-      env: &env
       concurrencyPolicy: Forbid
       timeZone: "Europe/Madrid"
       schedule: "*/20 * * * *"
@@ -38,13 +36,17 @@ app-template:
       successfulJobsHistory: 1
       failedJobsHistory: 1
       backoffLimit: 3
-      command: /usr/bin/su
-      args:
-        - www-data
-        - -s
-        - /bin/sh
-        - -c
-        - 'php /var/www/FreshRSS/app/actualize_script.php'
+      containers:
+        main:
+          image: *image
+          env: &env
+          command: /usr/bin/su
+          args:
+            - www-data
+            - -s
+            - /bin/sh
+            - -c
+            - 'php /var/www/FreshRSS/app/actualize_script.php'
   service:
     main:
       ports:
