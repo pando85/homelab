@@ -37,20 +37,40 @@ app-template:
               memory: 350Mi
             limits:
               memory: 1Gi
-        codeserver:
+    appdaemon-climate:
+      annotations:
+        reloader.stakater.com/auto: "true"
+      type: deployment
+      replicas: 1
+      containers:
+      initContainers:
+        01-init-config:
           image:
-            repository: ghcr.io/coder/code-server
-            tag: 4.19.0
-          env:
-            TZ: Europe/Madrid
-          workingDir: /config
+            repository: debian
+            tag: 12.2-slim
+          command:
+            - /bin/sh
+            - -c
           args:
-            - --auth
-            - "none"
-            - --user-data-dir
-            - "/config/.vscode"
-            - --extensions-dir
-            - "/config/.vscode"
+            - >
+              cp /original/conf/* /conf/
+        main:
+          image:
+            repository: acockburn/appdaemon
+            tag: 4.4.2
+          env:
+            HA_URL: http://home-assistant:8123
+            DASH_URL: https://appdaemon-climate.grigri.cloud
+            TIMEZONE: Europe/Madrid
+          envFrom:
+            - secretRef:
+                name: hass-appdaemon-climate
+          resources:
+            requests:
+              cpu: 10m
+              memory: 50Mi
+            limits:
+              memory: 200Mi
 
   defaultPodOptions:
     enableServiceLinks: false
@@ -67,8 +87,10 @@ app-template:
       ports:
         http:
           port: 8123
-        codeserver:
-          port: 8080
+    appdaemon-climate:
+      ports:
+        http:
+          port: 5050
   ingress:
     main:
       enabled: true
@@ -89,7 +111,7 @@ app-template:
         - hosts:
             - *host
           secretName: home-assistant-external-tls-certificate
-    code-server:
+    appdaemon-climate:
       enabled: true
       className: nginx-external
       annotations:
@@ -99,48 +121,75 @@ app-template:
         nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
         nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
       hosts:
-        - host: &host hass-code.grigri.cloud
+        - host: &host appdaemon-climate.grigri.cloud
           paths:
             - path: /
               pathType: Prefix
               service:
-                name: main
-                port: codeserver
+                name: appdaemon-climate
+                port: http
       tls:
         - hosts:
             - *host
-          secretName: home-assistant-code-external-tls-certificate
+          secretName: hass-appdaemon-climate-tls-certificate
 
   persistence:
     config:
       enabled: true
-      globalMounts:
-        - path: /config
       existingClaim: home-assistant-config-zfs
+      advancedMounts:
+        main:
+          main:
+            - path: /config
     configmap:
       enabled: true
-      globalMounts:
-        - path: /config/gitops
       type: configMap
       name: home-assistant-config
+      advancedMounts:
+        main:
+          main:
+            - path: /config/gitops
     secret:
       enabled: true
-      globalMounts:
-        - path: /config/gitops/secrets
       type: secret
       name: hass-secrets
+      advancedMounts:
+        main:
+          main:
+            - path: /config/gitops/secrets
     configmap-integrations:
       enabled: true
-      globalMounts:
-        - path: /config/gitops/integrations
       type: configMap
       name: home-assistant-config-integrations
+      advancedMounts:
+        main:
+          main:
+            - path: /config/gitops/integrations
     configmap-script:
       enabled: true
-      globalMounts:
-        - path: /config/gitops/script
       type: configMap
       name: home-assistant-config-script
+      advancedMounts:
+        main:
+          main:
+            - path: /config/gitops/script
+    appdaemon-climate:
+      enabled: true
+      type: configMap
+      name: hass-appdaemon-climate
+      advancedMounts:
+        appdaemon-climate:
+          main:
+            - path: /original/conf
+    appdaemon-climate-cache:
+      type: emptyDir
+      advancedMounts:
+        appdaemon-climate:
+          01-init-config:
+            - path: /conf
+          main:
+            - path: /conf
+
   serviceMonitor:
     main:
       enabled: true
