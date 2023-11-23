@@ -1,4 +1,0 @@
-input_boolean:
-  appdaemon_climate_enable:
-    name: AppDaemon Climate Enable
-    icon: mdi:thermometer-auto
