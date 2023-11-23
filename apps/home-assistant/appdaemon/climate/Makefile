@@ -11,6 +11,7 @@ ENV_FILE=.env.list
 .PHONY: requirements
 requirements:	## install requirements
 	@echo Install requirements
+	@pip install appdaemon
 	@pip install -r requirements.txt > /dev/null
 
 .PHONY: run

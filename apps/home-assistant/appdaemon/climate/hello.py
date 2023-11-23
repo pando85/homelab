@@ -1,4 +1,4 @@
-import hassapi as hass
+import appdaemon.plugins.hass.hassapi as hass
 
 #
 # Hello World App
@@ -8,6 +8,6 @@ import hassapi as hass
 
 class HelloWorld(hass.Hass):
 
-  def initialize(self):
+  async def initialize(self):
     self.log("Hello from AppDaemon")
     self.log("You are now ready to run Apps!")

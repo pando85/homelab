@@ -1,0 +1,18 @@
+appdaemon:
+  latitude: <replaced_in_entrypoint>
+  longitude: <replaced_in_entrypoint>
+  elevation: <replaced_in_entrypoint>
+  time_zone: <replaced_in_entrypoint>
+  plugins:
+    HASS:
+      type: hass
+      ha_url: <replaced_in_entrypoint>
+      token: <replaced_in_entrypoint>
+      cert_verify: True
+http:
+  url: <replaced_in_entrypoint>
+admin:
+api:
+hadashboard:
+
+total_threads: 0
