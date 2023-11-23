@@ -8,4 +8,7 @@
 .env.list
 apps/
 dashboards/
+compiled/
+namespaces/
+www/
 appdaemon.yaml
