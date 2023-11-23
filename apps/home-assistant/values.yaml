@@ -91,7 +91,7 @@ app-template:
       controller: appdaemon-climate
       ports:
         http:
-          port: 5050
+          port: 80
   ingress:
     main:
       enabled: true
