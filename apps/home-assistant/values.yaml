@@ -88,6 +88,7 @@ app-template:
         http:
           port: 8123
     appdaemon-climate:
+      controller: appdaemon-climate
       ports:
         http:
           port: 5050
