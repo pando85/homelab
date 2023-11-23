@@ -1,7 +1,7 @@
 substitutions:
-  device_name: "athom-smart-plug-v2 9d9516"
-  friendly_name: "Athom Smart Plug V2 9d9516"
-  project_name: "athom.smart-plug-v2-9d9516"
+  device_name: "athom-smart-plug-v2-2"
+  friendly_name: "Athom Smart Plug V2 2"
+  project_name: "athom.smart-plug-v2-2"
   project_version: "1.1"
   relay_restore_mode: RESTORE_DEFAULT_OFF
 
