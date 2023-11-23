@@ -176,3 +176,5 @@ text_sensor:
 time:
   - platform: sntp
     id: sntp_time
+    servers:
+      - pfsense.grigri

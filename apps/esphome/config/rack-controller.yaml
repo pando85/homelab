@@ -12,6 +12,9 @@ ota:
   safe_mode: true
   password: !secret ota_password
 
+mdns:
+  disabled: false
+
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
@@ -200,3 +203,9 @@ button:
     name: "PID Climate Autotune"
     on_press:
       - climate.pid.autotune: thermostat
+
+time:
+  - platform: sntp
+    id: sntp_time
+    servers:
+      - pfsense.grigri
