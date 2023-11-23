@@ -180,7 +180,7 @@ app-template:
       name: hass-appdaemon-climate
       advancedMounts:
         appdaemon-climate:
-          main:
+          01-init-config:
             - path: /original/conf
     appdaemon-climate-cache:
       type: emptyDir
