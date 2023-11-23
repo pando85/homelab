@@ -82,6 +82,17 @@ app-template:
       fsGroup: 568
       fsGroupChangePolicy: "OnRootMismatch"
 
+    affinity:
+      podAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - home-assistant
+            topologyKey: kubernetes.io/hostname
+
   service:
     main:
       ports:
