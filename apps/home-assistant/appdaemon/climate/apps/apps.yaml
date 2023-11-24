@@ -1,0 +1,10 @@
+climate_control:
+  module: climate_control
+  class: ClimateControl
+  input_boolean:
+    enable: input_boolean.appdaemon_climate_enable
+  input_number:
+    min_hours_per_day: input_number.appdaemon_climate_min_hours_per_day
+  sensor:
+    pvpc_price: sensor.esios_pvpc
+  notify_target: agil
