@@ -37,7 +37,7 @@ app-template:
               memory: 350Mi
             limits:
               memory: 1Gi
-    appdaemon-climate:
+    appdaemon:
       annotations:
         reloader.stakater.com/auto: "true"
       type: deployment
@@ -52,7 +52,7 @@ app-template:
             - -c
           args:
             - >
-              cp /original/conf/* /conf/
+              cp -r /original/conf/* /conf/
       containers:
         main:
           image:
@@ -60,11 +60,11 @@ app-template:
             tag: 4.4.2
           env:
             HA_URL: http://home-assistant:8123
-            DASH_URL: https://appdaemon-climate.grigri.cloud
+            DASH_URL: https://appdaemon.grigri.cloud
             TIMEZONE: Europe/Madrid
           envFrom:
             - secretRef:
-                name: hass-appdaemon-climate
+                name: hass-appdaemon
           resources:
             requests:
               cpu: 10m
@@ -98,8 +98,8 @@ app-template:
       ports:
         http:
           port: 8123
-    appdaemon-climate:
-      controller: appdaemon-climate
+    appdaemon:
+      controller: appdaemon
       ports:
         http:
           port: 80
@@ -123,7 +123,7 @@ app-template:
         - hosts:
             - *host
           secretName: home-assistant-external-tls-certificate
-    appdaemon-climate:
+    appdaemon:
       enabled: true
       className: nginx-external
       annotations:
@@ -133,17 +133,17 @@ app-template:
         nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
         nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
       hosts:
-        - host: &host appdaemon-climate.grigri.cloud
+        - host: &host appdaemon.grigri.cloud
           paths:
             - path: /
               pathType: Prefix
               service:
-                name: appdaemon-climate
+                name: appdaemon
                 port: http
       tls:
         - hosts:
             - *host
-          secretName: hass-appdaemon-climate-tls-certificate
+          secretName: hass-appdaemon-tls-certificate
 
   persistence:
     config:
@@ -185,18 +185,26 @@ app-template:
         main:
           main:
             - path: /config/gitops/script
-    appdaemon-climate:
+    appdaemon:
       enabled: true
       type: configMap
-      name: hass-appdaemon-climate
+      name: hass-appdaemon
       advancedMounts:
-        appdaemon-climate:
+        appdaemon:
           01-init-config:
             - path: /original/conf
-    appdaemon-climate-cache:
+    appdaemon-apps:
+      enabled: true
+      type: configMap
+      name: hass-appdaemon-apps
+      advancedMounts:
+        appdaemon:
+          01-init-config:
+            - path: /original/conf/apps
+    appdaemon-cache:
       type: emptyDir
       advancedMounts:
-        appdaemon-climate:
+        appdaemon:
           01-init-config:
             - path: /conf
           main:
