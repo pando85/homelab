@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: hass-appdaemon
 data:
-{{ (.Files.Glob "appdaemon/climate/*").AsConfig | indent 2 }}
+{{ (.Files.Glob "appdaemon/*").AsConfig | indent 2 }}
