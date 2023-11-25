@@ -100,7 +100,7 @@ class ClimateControl(hass.Hass):
                 },
                 "tooltip": [{"field": "hour", "title": "Hour"}, {"field": "status", "title": "Status"}],
             },
-            "config": {"axisX": {"labelAngle": 0}},
+            "config": {"axisX": {"labelAngle": 0, "labelAlign": "right"}},
             "width": 400,
             "height": 20,
         }
@@ -141,8 +141,14 @@ class ClimateControl(hass.Hass):
 
         if self.args["notify"]["enabled"]:
             vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
-            cheap_msg = " (electricity is cheap!)" if is_cheap else ""
-            msg = f"Schedule{cheap_msg}: [​​​​​​​​​​​](https://kroki.io/vegalite/png/{vega_diagram})"
+            cheap_msg = (
+                """
+                Electricity is cheap today!
+                """
+                if is_cheap
+                else ""
+            )
+            msg = f"Programming the climate control for these hours: [​​​​​​​​​​​](https://kroki.io/vegalite/png/{vega_diagram}){cheap_msg}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
