@@ -1,3 +1,6 @@
+import base64
+import json
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import groupby
@@ -6,15 +9,6 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 import pytz
-
-"""
-Requirements:
-- button for enable or disable automated control.
-- calculate number of minimum hours needed: can be fixed at the beginning ~ 5, then we can use
-    outside temperatures and then we can combine it with predictions and sun hours in the morning.
-- calculate cheapest hours (use price moving average for last week -> lower than that is OK)
-    if cheapest hours are much cheaper for more hours add more hours.
-"""
 
 
 @dataclass
@@ -89,6 +83,33 @@ class ClimateControl(hass.Hass):
 
         return group_consecutives
 
+    def _generate_vega_diagram(self, datetimes_to_schedule) -> str:
+        hours = [x.hour for x in datetimes_to_schedule]
+        data_values = [{"hour": i, "status": "ON" if i in hours else "OFF"} for i in range(24)]
+
+        vega_lite_spec = {
+            "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+            "data": {"values": data_values},
+            "mark": "rect",
+            "encoding": {
+                "x": {"field": "hour", "type": "ordinal", "title": "Hour of Day"},
+                "color": {
+                    "field": "status",
+                    "type": "nominal",
+                    "scale": {"domain": ["ON", "OFF"], "range": ["green", "red"]},
+                },
+                "tooltip": [{"field": "hour", "title": "Hour"}, {"field": "status", "title": "Status"}],
+            },
+            "config": {"axisX": {"labelAngle": 0}},
+            "width": 400,
+            "height": 20,
+        }
+
+        vega_lite_json = json.dumps(vega_lite_spec, indent=2)
+        self.log(vega_lite_json, level="DEBUG")
+
+        return base64.urlsafe_b64encode(zlib.compress(vega_lite_json.encode("utf-8"), 9)).decode("ascii")
+
     async def _register_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         await self._unregister_schedulers()
         self.log("Registering schedulers")
@@ -117,6 +138,12 @@ class ClimateControl(hass.Hass):
         self.log(f"{prices_to_schedule=}", level="DEBUG")
         self.log(f"{len(prices_to_schedule)}", level="DEBUG")
         datetimes_to_schedule = [price.datetime for price in prices_to_schedule]
+
+        if self.args["notify"]["enabled"]:
+            vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
+            cheap_msg = " (electricity is cheap!)" if is_cheap else ""
+            msg = f"Schedule{cheap_msg}: [​​​​​​​​​​​](https://kroki.io/vegalite/png/{vega_diagram})"
+            await self.notify(msg, name=self.args["notify"]["target"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
         now = datetime.now(pytz.timezone(self.get_timezone()))
