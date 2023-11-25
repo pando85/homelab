@@ -1,6 +1,8 @@
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from appdaemon import logging
 from climate_control import ClimateControl, Price
 
 
@@ -13,6 +15,10 @@ class AsyncMock(MagicMock):
 def climate_control():
     with patch.object(ClimateControl, "__init__", lambda self: None):
         climate_control = ClimateControl()
+
+        climate_control._logging = logging.Logging(None, "DEBUG")
+        climate_control.logger = climate_control._logging.get_logger()
+
         climate_control.args = MagicMock(return_value={"sensor": {"pvpc_price": "sensor.esios_pvpc"}})
         return climate_control
 
@@ -54,7 +60,11 @@ async def test_get_prices(climate_control):
     for price in prices:
         assert isinstance(price, Price)
         assert price.value > 0
-        assert price.hour >= 0 and price.hour <= 23
+        now = datetime.now()
+
+        assert price.datetime >= datetime(now.year, now.month, now.day) and price.datetime <= datetime(
+            now.year, now.month, now.day
+        ) + timedelta(days=1)
 
 
 @pytest.mark.asyncio
@@ -100,3 +110,69 @@ async def test_get_prices_negative_values(climate_control):
 
     with pytest.raises(ValueError):
         await climate_control._get_prices()
+
+
+@pytest.mark.parametrize(
+    "date_list, expected_result",
+    [
+        (
+            [
+                datetime(2023, 1, 1, 0, 0),
+                datetime(2023, 1, 1, 2, 0),
+                datetime(2023, 1, 1, 1, 0),
+                datetime(2023, 1, 1, 4, 0),
+                datetime(2023, 1, 1, 5, 0),
+                datetime(2023, 1, 1, 6, 0),
+            ],
+            [
+                [datetime(2023, 1, 1, 0, 0), datetime(2023, 1, 1, 1, 0), datetime(2023, 1, 1, 2, 0)],
+                [datetime(2023, 1, 1, 4, 0), datetime(2023, 1, 1, 5, 0), datetime(2023, 1, 1, 6, 0)],
+            ],
+        ),
+        (
+            [
+                datetime(2023, 1, 1, 0, 0),
+                datetime(2023, 1, 1, 1, 0),
+                datetime(2023, 1, 1, 2, 0),
+                datetime(2023, 1, 1, 3, 0),
+                datetime(2023, 1, 1, 6, 0),
+            ],
+            [
+                [
+                    datetime(2023, 1, 1, 0, 0),
+                    datetime(2023, 1, 1, 1, 0),
+                    datetime(2023, 1, 1, 2, 0),
+                    datetime(2023, 1, 1, 3, 0),
+                ],
+                [datetime(2023, 1, 1, 6, 0)],
+            ],
+        ),
+        (
+            [
+                datetime(2023, 1, 1, 10, 0),
+                datetime(2023, 1, 1, 3, 0),
+                datetime(2023, 1, 1, 21, 0),
+                datetime(2023, 1, 1, 6, 0),
+                datetime(2023, 1, 1, 20, 0),
+            ],
+            [
+                [
+                    datetime(2023, 1, 1, 3, 0),
+                ],
+                [
+                    datetime(2023, 1, 1, 6, 0),
+                ],
+                [
+                    datetime(2023, 1, 1, 10, 0),
+                ],
+                [
+                    datetime(2023, 1, 1, 20, 0),
+                    datetime(2023, 1, 1, 21, 0),
+                ],
+            ],
+        ),
+    ],
+)
+def test_group_for_scheduling(climate_control, date_list, expected_result):
+    result = climate_control._group_for_scheduling(date_list)
+    assert result == expected_result

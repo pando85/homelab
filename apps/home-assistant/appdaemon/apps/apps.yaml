@@ -7,4 +7,11 @@ climate_control:
     min_hours_per_day: input_number.appdaemon_climate_min_hours_per_day
   sensor:
     pvpc_price: sensor.esios_pvpc
-  notify_target: agil
+  notify:
+    enabled: true
+    target: agil
+  climate:
+    enabled: true
+    entity: input_select.heishamon_heatmode
+    on_mode: Heat+DHW
+    off_mode: DHW
