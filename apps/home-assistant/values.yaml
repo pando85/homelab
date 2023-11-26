@@ -256,7 +256,7 @@ app-template:
     whisper:
       enabled: true
       type: emptyDir
-      size: 5Gi
+      sizeLimit: 5Gi
       advancedMounts:
         whisper:
           main:
@@ -264,7 +264,7 @@ app-template:
     piper:
       enabled: true
       type: emptyDir
-      size: 5Gi
+      sizeLimit: 5Gi
       advancedMounts:
         piper:
           main:
