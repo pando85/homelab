@@ -81,7 +81,7 @@ app-template:
             tag: 1.0.0
           args:
             - --model
-            - tiny
+            - tiny-int8
             - --language
             - es
           resources:
