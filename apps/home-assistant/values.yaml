@@ -233,14 +233,14 @@ app-template:
             - path: /conf
           main:
             - path: /conf
-  whisper:
-    config:
-      enabled: true
-      existingClaim: home-assistant-whisper-zfs
-      advancedMounts:
-        whisper:
-          main:
-            - path: /data
+    whisper:
+      config:
+        enabled: true
+        existingClaim: home-assistant-whisper-zfs
+        advancedMounts:
+          whisper:
+            main:
+              - path: /data
 
   serviceMonitor:
     main:
