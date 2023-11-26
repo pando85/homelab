@@ -84,7 +84,6 @@ app-template:
             - tiny-int8
             - --language
             - en
-            - --device cpu
             - --compute-type
             - int8
             - --beam-size
