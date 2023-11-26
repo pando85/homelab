@@ -81,7 +81,7 @@ app-template:
             tag: 1.0.0
           args:
             - --model
-            - small
+            - medium-int8
             - --language
             - es
           resources:
@@ -90,6 +90,21 @@ app-template:
               memory: 1.2Gi
             limits:
               memory: 3.6Gi
+    piper:
+      type: deployment
+      replicas: 1
+      containers:
+        main:
+          image:
+            repository: rhasspy/wyoming-piper
+            tag: 1.4.0
+          args:
+            - --voice
+            - es-es-sharvard-medium
+          resources:
+            requests:
+              cpu: 15m
+              memory: 300Mi
 
   defaultPodOptions:
     enableServiceLinks: false
@@ -127,6 +142,11 @@ app-template:
       ports:
         http:
           port: 10300
+    piper:
+      controller: piper
+      ports:
+        http:
+          port: 10200
   ingress:
     main:
       enabled: true
@@ -235,9 +255,18 @@ app-template:
             - path: /conf
     whisper:
       enabled: true
-      existingClaim: home-assistant-whisper-zfs
+      type: emptyDir
+      size: 5Gi
       advancedMounts:
         whisper:
+          main:
+            - path: /data
+    piper:
+      enabled: true
+      type: emptyDir
+      size: 5Gi
+      advancedMounts:
+        piper:
           main:
             - path: /data
 
