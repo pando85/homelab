@@ -83,7 +83,12 @@ app-template:
             - --model
             - tiny-int8
             - --language
-            - es
+            - en
+            - --device cpu
+            - --compute-type
+            - int8
+            - --beam-size
+            - 1
           resources:
             requests:
               cpu: 15m
@@ -100,7 +105,7 @@ app-template:
             tag: 1.4.0
           args:
             - --voice
-            - es_ES-sharvard-medium
+            - en_US-amy-medium
           resources:
             requests:
               cpu: 15m
