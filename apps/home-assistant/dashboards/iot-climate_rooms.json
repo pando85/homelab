@@ -146,7 +146,7 @@
       "type": "timeseries"
     }
   ],
-  "refresh": false,
+  "refresh": "",
   "schemaVersion": 38,
   "style": "dark",
   "tags": [
@@ -157,7 +157,7 @@
     "list": [
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "Prometheus long term",
           "value": "prometheus-long-term"
         },
@@ -175,17 +175,13 @@
       },
       {
         "current": {
-          "selected": true,
-          "text": [
-            "climate.thermostat_hall_kitchen"
-          ],
-          "value": [
-            "climate.thermostat_hall_kitchen"
-          ]
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "prometheus"
+          "uid": "${datasource}"
         },
         "definition": "label_values(hass_climate_current_temperature_celsius,entity)",
         "hide": 0,
