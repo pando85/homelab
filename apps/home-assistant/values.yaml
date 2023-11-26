@@ -71,6 +71,25 @@ app-template:
               memory: 50Mi
             limits:
               memory: 200Mi
+    whisper:
+      type: deployment
+      replicas: 1
+      containers:
+        main:
+          image:
+            repository: rhasspy/wyoming-whisper
+            tag: 1.0.0
+          args:
+            - --model
+            - small
+            - --language
+            - es
+          resources:
+            requests:
+              cpu: 15m
+              memory: 1.2Gi
+            limits:
+              memory: 3.6Gi
 
   defaultPodOptions:
     enableServiceLinks: false
@@ -103,6 +122,11 @@ app-template:
       ports:
         http:
           port: 80
+    whisper:
+      controller: whisper
+      ports:
+        http:
+          port: 10300
   ingress:
     main:
       enabled: true
@@ -209,6 +233,14 @@ app-template:
             - path: /conf
           main:
             - path: /conf
+  whisper:
+    config:
+      enabled: true
+      existingClaim: home-assistant-whisper-zfs
+      advancedMounts:
+        whisper:
+          main:
+            - path: /data
 
   serviceMonitor:
     main:

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: whisper
+    app.kubernetes.io/name: home-assistant
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: home-assistant-whisper-zfs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: zfs-local-dataset
