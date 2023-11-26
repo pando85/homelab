@@ -122,7 +122,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_climate_current_temperature_celsius{entity=~\"$room\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_climate_current_temperature_celsius{entity=~\"$room\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -134,7 +134,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_climate_target_temperature_celsius{entity=~\"$room\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_climate_target_temperature_celsius{entity=~\"$room\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "Target {{friendly_name}}",

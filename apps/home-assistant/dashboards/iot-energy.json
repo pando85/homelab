@@ -1080,7 +1080,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"})[$__interval:])",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -1419,7 +1419,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"}[$__interval])) - sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_1_power\"})[$__interval:]) - avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"})[$__interval:])",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -1758,7 +1758,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellypmmini_servers_power\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=~\"sensor.shellypmmini_servers_power\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -2097,7 +2097,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.shellyem_main_channel_2_power\"})[$__interval:])",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -2466,7 +2466,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_dhw_power_consumed\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.aquarea_dhw_power_consumed\"})[$__interval:])",
           "instant": false,
           "legendFormat": "DHW",
           "range": true,
@@ -2478,7 +2478,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_heat_power_consumed\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.aquarea_heat_power_consumed\"})[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "Heat",
@@ -2491,7 +2491,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_cool_power_consumed\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.aquarea_cool_power_consumed\"})[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "Cool",

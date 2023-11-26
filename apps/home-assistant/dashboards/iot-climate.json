@@ -446,7 +446,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_target_temperature)\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_target_temperature)\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -672,7 +672,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_dhw_power_consumed\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=\"sensor.aquarea_dhw_power_consumed\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{ friendly_name }}",
           "range": true,
@@ -684,7 +684,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_dhw_power_produced\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=\"sensor.aquarea_dhw_power_produced\"}) by (entity, friendly_name)[$__interval:]))",
           "hide": false,
           "instant": false,
           "legendFormat": "{{ friendly_name }}",
@@ -697,7 +697,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_dhw_cop\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_dhw_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -803,7 +803,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_outlet_target_temperature|sensor.aquarea_outlet_temperature)\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_outlet_target_temperature|sensor.aquarea_outlet_temperature)\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -1029,7 +1029,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_heat_power_consumed\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=\"sensor.aquarea_heat_power_consumed\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{ friendly_name }}",
           "range": true,
@@ -1041,7 +1041,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_heat_power_produced\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=\"sensor.aquarea_heat_power_produced\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{ friendly_name }}",
@@ -1054,7 +1054,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_heat_cop\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_heat_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -1160,7 +1160,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_outlet_target_temperature|sensor.aquarea_outlet_temperature)\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_outlet_target_temperature|sensor.aquarea_outlet_temperature)\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -1386,7 +1386,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_cool_power_consumed\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=\"sensor.aquarea_cool_power_consumed\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{ friendly_name }}",
           "range": true,
@@ -1398,7 +1398,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_cool_power_produced\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=\"sensor.aquarea_cool_power_produced\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{ friendly_name }}",
@@ -1411,7 +1411,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cool_cop\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cool_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -1522,7 +1522,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_climate_current_temperature_celsius[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_climate_current_temperature_celsius) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -1534,7 +1534,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{entity=\"sensor.aquarea_outside_ambient_temperature\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{entity=\"sensor.aquarea_outside_ambient_temperature\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -1658,7 +1658,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_climate_current_temperature_celsius[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_climate_current_temperature_celsius) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -1670,7 +1670,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_climate_target_temperature_celsius[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_climate_target_temperature_celsius) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "Target {{friendly_name}}",
@@ -2098,7 +2098,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{entity=\"sensor.aquarea_outside_ambient_temperature\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{entity=\"sensor.aquarea_outside_ambient_temperature\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -2111,7 +2111,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_x{entity=\"sensor.heishamon_cop\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{entity=\"sensor.heishamon_cop\"})[$__interval:])",
           "instant": false,
           "legendFormat": "COP",
           "range": true,
@@ -2230,7 +2230,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_[a-z]*_power_consumed\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.aquarea_[a-z]*_power_consumed\"})[$__interval:])",
           "instant": false,
           "legendFormat": "Consumed",
           "range": true,
@@ -2242,7 +2242,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=~\"sensor.aquarea_[a-z]*_power_produced\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=~\"sensor.aquarea_[a-z]*_power_produced\"})[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "Produced",
@@ -2255,7 +2255,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cop\"}[$__interval]))",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cop\"})[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "COP",
@@ -2368,7 +2368,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_discharge_temperature|sensor.aquarea_eva_outlet_temperature|sensor.aquarea_inside_pipe_temperature|sensor.aquarea_main_hex_outlet_temperature|sensor.aquarea_outlet_target_temperature|sensor.aquarea_outlet_temperature)\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_discharge_temperature|sensor.aquarea_eva_outlet_temperature|sensor.aquarea_inside_pipe_temperature|sensor.aquarea_main_hex_outlet_temperature|sensor.aquarea_outlet_target_temperature|sensor.aquarea_outlet_temperature)\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -2513,6 +2513,6 @@
   "timezone": "",
   "title": "IoT - Climate",
   "uid": "dc64fdbd-285c-4467-a7be-cd6f9eb97d3f",
-  "version": 2,
+  "version": 5,
   "weekStart": ""
 }
