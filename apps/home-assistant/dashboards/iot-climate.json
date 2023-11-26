@@ -55,6 +55,310 @@
         "x": 0,
         "y": 0
       },
+      "id": 25,
+      "panels": [],
+      "title": "Summary",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "kwatth"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cool"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 1
+      },
+      "id": 17,
+      "options": {
+        "displayLabels": [
+          "value"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_consumed\"}[$__range])) by (entity, friendly_name)",
+          "instant": true,
+          "legendFormat": "DHW",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_heat_energy_consumed\"}[$__range])) by (entity, friendly_name)",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "Heat",
+          "range": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_consumed\"}[$__range])) by (entity, friendly_name)",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "Cool",
+          "range": false,
+          "refId": "C"
+        }
+      ],
+      "title": "Total Energy Consumed",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "unit": "kwatth"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cool"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 1
+      },
+      "id": 18,
+      "options": {
+        "displayLabels": [
+          "value"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_produced\"}[$__range])) by (entity, friendly_name)",
+          "instant": true,
+          "legendFormat": "DHW",
+          "range": false,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_heat_energy_produced\"}[$__range])) by (entity, friendly_name)",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "Heat",
+          "range": false,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_produced\"}[$__range])) by (entity, friendly_name)",
+          "hide": false,
+          "instant": true,
+          "legendFormat": "Cool",
+          "range": false,
+          "refId": "C"
+        }
+      ],
+      "title": "Total Energy Produced",
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus-long-term"
+      },
+      "description": "The coefficient of performance or COP (sometimes CP or CoP) of a heat pump, refrigerator or air conditioning system is a ratio of useful heating or cooling provided to work (energy) required.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#8ab8ff",
+                "value": null
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 5,
+        "x": 0,
+        "y": 9
+      },
+      "id": 26,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.1.5",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus-long-term"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cop\"} > 0)[$__range:])",
+          "instant": true,
+          "legendFormat": "__auto",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "title": "Average COP",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
       "id": 7,
       "panels": [],
       "title": "DHW",
@@ -119,7 +423,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 1
+        "y": 14
       },
       "id": 8,
       "options": {
@@ -204,7 +508,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 1
+        "y": 14
       },
       "id": 9,
       "maxDataPoints": 10,
@@ -346,7 +650,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 9
+        "y": 22
       },
       "id": 10,
       "options": {
@@ -410,7 +714,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 17
+        "y": 30
       },
       "id": 21,
       "panels": [],
@@ -476,7 +780,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 18
+        "y": 31
       },
       "id": 22,
       "options": {
@@ -561,7 +865,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 18
+        "y": 31
       },
       "id": 23,
       "maxDataPoints": 10,
@@ -703,7 +1007,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 26
+        "y": 39
       },
       "id": 24,
       "options": {
@@ -767,7 +1071,364 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 34
+        "y": 47
+      },
+      "id": 27,
+      "panels": [],
+      "title": "Cool",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "text",
+                "value": null
+              }
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 48
+      },
+      "id": 28,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "10.1.5",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(avg_over_time(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_outlet_target_temperature|sensor.aquarea_outlet_temperature)\"}[$__interval])) by (entity, friendly_name)",
+          "instant": false,
+          "legendFormat": "{{friendly_name}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cool Temperature",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "kwatth"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 48
+      },
+      "id": 29,
+      "maxDataPoints": 10,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "orientation": "auto",
+        "showValue": "auto",
+        "stacking": "none",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
+          "format": "time_series",
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Consumed",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_produced\"}[$__interval])) by (entity, friendly_name)",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "legendFormat": "Produced",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Cool Energy",
+      "type": "barchart"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "watt"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Aquarea Heat COP"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 56
+      },
+      "id": 30,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_cool_power_consumed\"}[$__interval])) by (entity, friendly_name)",
+          "instant": false,
+          "legendFormat": "{{ friendly_name }}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(avg_over_time(hass_sensor_power_w{entity=\"sensor.aquarea_cool_power_produced\"}[$__interval])) by (entity, friendly_name)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{ friendly_name }}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(avg_over_time(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cool_cop\"}[$__interval])) by (entity, friendly_name)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{friendly_name}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Cool Power",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 64
       },
       "id": 3,
       "panels": [],
@@ -820,7 +1481,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text"
+                "color": "text",
+                "value": null
               }
             ]
           },
@@ -832,7 +1494,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 35
+        "y": 65
       },
       "id": 2,
       "options": {
@@ -929,7 +1591,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text"
+                "color": "text",
+                "value": null
               }
             ]
           },
@@ -967,7 +1630,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 35
+        "y": 65
       },
       "id": 12,
       "options": {
@@ -1023,7 +1686,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 43
+        "y": 73
       },
       "id": 4,
       "title": "Energy",
@@ -1064,7 +1727,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1074,13 +1738,29 @@
           },
           "unit": "kwatth"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cool"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 44
+        "y": 74
       },
       "id": 13,
       "maxDataPoints": 10,
@@ -1193,7 +1873,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1203,13 +1884,29 @@
           },
           "unit": "kwatth"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cool"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 44
+        "y": 74
       },
       "id": 15,
       "maxDataPoints": 10,
@@ -1333,7 +2030,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text"
+                "color": "text",
+                "value": null
               }
             ]
           },
@@ -1377,7 +2075,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 52
+        "y": 82
       },
       "id": 16,
       "options": {
@@ -1469,7 +2167,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green"
+                "color": "green",
+                "value": null
               },
               {
                 "color": "red",
@@ -1509,7 +2208,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 52
+        "y": 82
       },
       "id": 14,
       "options": {
@@ -1568,206 +2267,12 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "unit": "kwatth"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 60
-      },
-      "id": 17,
-      "options": {
-        "displayLabels": [
-          "value"
-        ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_consumed\"}[$__range])) by (entity, friendly_name)",
-          "instant": true,
-          "legendFormat": "DHW",
-          "range": false,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_heat_energy_consumed\"}[$__range])) by (entity, friendly_name)",
-          "hide": false,
-          "instant": true,
-          "legendFormat": "Heat",
-          "range": false,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_consumed\"}[$__range])) by (entity, friendly_name)",
-          "hide": false,
-          "instant": true,
-          "legendFormat": "Cool",
-          "range": false,
-          "refId": "C"
-        }
-      ],
-      "title": "Total Energy Consumed",
-      "type": "piechart"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            }
-          },
-          "mappings": [],
-          "unit": "kwatth"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 60
-      },
-      "id": 18,
-      "options": {
-        "displayLabels": [
-          "value"
-        ],
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "pieType": "pie",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "tooltip": {
-          "mode": "single",
-          "sort": "none"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_produced\"}[$__range])) by (entity, friendly_name)",
-          "instant": true,
-          "legendFormat": "DHW",
-          "range": false,
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_heat_energy_produced\"}[$__range])) by (entity, friendly_name)",
-          "hide": false,
-          "instant": true,
-          "legendFormat": "Heat",
-          "range": false,
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_produced\"}[$__range])) by (entity, friendly_name)",
-          "hide": false,
-          "instant": true,
-          "legendFormat": "Cool",
-          "range": false,
-          "refId": "C"
-        }
-      ],
-      "title": "Total Energy Produced",
-      "type": "piechart"
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 68
+        "y": 90
       },
       "id": 19,
       "panels": [],
@@ -1820,7 +2325,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text"
+                "color": "text",
+                "value": null
               }
             ]
           },
@@ -1832,7 +2338,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 69
+        "y": 91
       },
       "id": 20,
       "options": {
@@ -1918,7 +2424,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "text"
+                "color": "text",
+                "value": null
               }
             ]
           },
@@ -1930,7 +2437,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 69
+        "y": 91
       },
       "id": 11,
       "options": {
@@ -1980,7 +2487,7 @@
     "list": [
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "Prometheus long term",
           "value": "prometheus-long-term"
         },
@@ -2006,6 +2513,6 @@
   "timezone": "",
   "title": "IoT - Climate",
   "uid": "dc64fdbd-285c-4467-a7be-cd6f9eb97d3f",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }
