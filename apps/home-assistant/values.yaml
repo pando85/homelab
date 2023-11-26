@@ -81,13 +81,9 @@ app-template:
             tag: 1.0.0
           args:
             - --model
-            - tiny-int8
+            - tiny
             - --language
             - en
-            - --compute-type
-            - int8
-            - --beam-size
-            - "1"
           resources:
             requests:
               cpu: 15m
