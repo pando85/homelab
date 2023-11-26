@@ -289,7 +289,7 @@
     {
       "datasource": {
         "type": "prometheus",
-        "uid": "prometheus-long-term"
+        "uid": "${datasource}"
       },
       "description": "The coefficient of performance or COP (sometimes CP or CoP) of a heat pump, refrigerator or air conditioning system is a ratio of useful heating or cooling provided to work (energy) required.",
       "fieldConfig": {
@@ -337,7 +337,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "prometheus-long-term"
+            "uid": "${datasource}"
           },
           "editorMode": "code",
           "exemplar": false,
