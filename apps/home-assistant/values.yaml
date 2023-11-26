@@ -88,7 +88,7 @@ app-template:
             - --compute-type
             - int8
             - --beam-size
-            - 1
+            - "1"
           resources:
             requests:
               cpu: 15m
