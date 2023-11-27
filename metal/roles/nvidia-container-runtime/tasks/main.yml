@@ -1,0 +1,26 @@
+- name: Download NVIDIA container toolkit GPG key
+  ansible.builtin.get_url:
+    url: https://nvidia.github.io/libnvidia-container/gpgkey
+    dest: /usr/share/keyrings/nvidia-container-toolkit-keyring.asc
+  register: download_gpg
+
+- name: Import GPG key
+  ansible.builtin.command:
+    cmd: sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg /usr/share/keyrings/nvidia-container-toolkit-keyring.asc
+  args:
+    chdir: /usr/share/keyrings
+  when: download_gpg.changed
+
+- name: Modify repository file with GPG key
+  copy:
+    src: nvidia-container-toolkit.list
+    dest: /etc/apt/sources.list.d/nvidia-container-toolkit.list
+    mode: "0644"
+
+- name: Install NVIDA container runtime packages and deps
+  apt:
+    name:
+      - nvidia-container-runtime
+      - cuda-drivers-fabricmanager-535
+      - nvidia-headless-535-server
+    update_cache: true

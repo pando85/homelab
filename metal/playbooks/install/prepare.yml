@@ -11,3 +11,10 @@
   hosts: grigri
   roles:
     - grigri_setup
+
+- name: Setup NVIDA drivers
+  hosts: nvidia
+  roles:
+    - name: nvidia-container-runtime
+      tags:
+        - nvidia-container-runtime
