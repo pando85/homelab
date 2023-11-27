@@ -9,5 +9,5 @@ spec:
     - name: zfs-exporter.rules
       rules:
 {{- range $path, $_ :=  .Files.Glob  "rules/*.yaml" }}
-{{ $.Files.Get $path | indent 8}}
+{{ $.Files.Get $path | indent 8 }}
 {{ end }}

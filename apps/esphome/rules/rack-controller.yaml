@@ -1,19 +1,16 @@
-groups:
-  - name: rack-controller.rules
-    rules:
-      - alert: RackHighTemperature
-        annotations:
-          description: |
-            Entity {{ $labels.entity }} has a temperature of {{ $value }} celsius degrees.
-        expr: hass_sensor_temperature_celsius{entity="sensor.rack_controller_rack_temperature"} > 35
-        for: 5m
-        labels:
-          severity: warning
-      - alert: RackHighTemperature
-        annotations:
-          description: |
-            Entity {{ $labels.entity }} has a temperature of {{ $value }} celsius degrees.
-        expr: hass_sensor_temperature_celsius{entity="sensor.rack_controller_rack_temperature"} > 40
-        for: 5m
-        labels:
-          severity: critical
+- alert: RackHighTemperature
+  annotations:
+    description: |
+      Entity {{ $labels.entity }} has a temperature of {{ $value }} celsius degrees.
+  expr: hass_sensor_temperature_celsius{entity="sensor.rack_controller_rack_temperature"} > 35
+  for: 5m
+  labels:
+    severity: warning
+- alert: RackHighTemperature
+  annotations:
+    description: |
+      Entity {{ $labels.entity }} has a temperature of {{ $value }} celsius degrees.
+  expr: hass_sensor_temperature_celsius{entity="sensor.rack_controller_rack_temperature"} > 40
+  for: 5m
+  labels:
+    severity: critical

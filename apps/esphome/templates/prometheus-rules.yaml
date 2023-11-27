@@ -5,6 +5,9 @@ metadata:
   labels:
     operator.prometheus.io/instance: prometheus-long-term
 spec:
+  groups:
+    - name: rack-controller.rules
+      rules:
 {{- range $path, $_ := .Files.Glob "rules/*.yaml" }}
-{{ $.Files.Get $path | indent 2 }}
+{{ $.Files.Get $path | indent 8 }}
 {{- end }}

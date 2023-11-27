@@ -5,6 +5,9 @@ metadata:
   labels:
     release: monitoring
 spec:
+  groups:
+    - name: qbittorrent.rules
+      rules:
 {{- range $path, $_ := .Files.Glob "rules/*.yaml" }}
-{{ $.Files.Get $path | indent 2 }}
+{{ $.Files.Get $path | indent 8 }}
 {{- end }}
