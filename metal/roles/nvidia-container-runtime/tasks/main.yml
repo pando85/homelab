@@ -24,3 +24,4 @@
       - cuda-drivers-fabricmanager-535
       - nvidia-headless-535-server
     update_cache: true
+  notify: restart server

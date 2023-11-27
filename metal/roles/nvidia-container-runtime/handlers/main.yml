@@ -1,0 +1,2 @@
+- name: restart server  # noqa: name[casing]
+  reboot:
