@@ -7,7 +7,19 @@ After=network-online.target
 Type=notify
 ExecStartPre=-/sbin/modprobe br_netfilter
 ExecStartPre=-/sbin/modprobe overlay
-ExecStart=/usr/local/bin/k3s {{ 'server' if 'kube_control_plane' in group_names else 'agent' }}
+ExecStart=/usr/local/bin/k3s {{ 'server' if 'kube_control_plane' in group_names else 'agent' }} \
+{% if 'kube_control_plane' in group_names %}
+  --kube-controller-manager-arg "node-monitor-period=5s" \
+  --kube-controller-manager-arg "node-monitor-grace-period=40s" \
+  --kube-apiserver-arg "default-not-ready-toleration-seconds=300" \
+  --kube-apiserver-arg "default-unreachable-toleration-seconds=300" \
+{% endif %}
+{% for item in k3s_kubelet_extra_args %}
+  --kubelet-arg "{{ item }}" \
+{% endfor %}
+  --kubelet-arg "node-status-update-frequency=4s" \
+  --kubelet-arg "container-log-max-size=1Mi" \
+  --kubelet-arg "container-log-max-files=2"
 KillMode=process
 Delegate=yes
 # Having non-zero Limit*s causes performance problems due to accounting overhead

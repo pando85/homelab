@@ -5,7 +5,9 @@
     ansible_path: "{{ playbook_dir }}/../.."
   roles:
     - geerlingguy.ntp
-    - k3s
+    - name: k3s
+      tags:
+        - k3s
 
 - name: Label Kubernetes nodes
   ansible.builtin.import_playbook: k8s-node-labels.yml
