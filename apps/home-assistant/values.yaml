@@ -37,6 +37,7 @@ app-template:
               memory: 350Mi
             limits:
               memory: 1Gi
+
     appdaemon:
       annotations:
         reloader.stakater.com/auto: "true"
@@ -71,25 +72,38 @@ app-template:
               memory: 50Mi
             limits:
               memory: 200Mi
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - home-assistant
+              topologyKey: kubernetes.io/hostname
+
     whisper:
       type: deployment
       replicas: 1
       containers:
         main:
           image:
-            repository: rhasspy/wyoming-whisper
-            tag: 1.0.0
+            repository: pando85/wyoming-whisper
+            tag: 1.1.0
           args:
             - --model
-            - tiny
+            - medium
             - --language
-            - en
+            - es
+            - --device
+            - cuda
           resources:
             requests:
               cpu: 15m
-              memory: 1.2Gi
+              memory: 100Mi
             limits:
-              memory: 3.6Gi
+              nvidia.com/gpu: "1"
     piper:
       type: deployment
       replicas: 1
@@ -105,6 +119,17 @@ app-template:
             requests:
               cpu: 15m
               memory: 150Mi
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - home-assistant
+              topologyKey: kubernetes.io/hostname
+
 
   defaultPodOptions:
     enableServiceLinks: false
@@ -115,17 +140,6 @@ app-template:
       runAsGroup: 568
       fsGroup: 568
       fsGroupChangePolicy: "OnRootMismatch"
-
-    affinity:
-      podAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-                - key: app.kubernetes.io/name
-                  operator: In
-                  values:
-                    - home-assistant
-            topologyKey: kubernetes.io/hostname
 
   service:
     main:
