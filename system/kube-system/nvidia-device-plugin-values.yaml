@@ -1,3 +1,16 @@
+config:
+  map:
+    default: |-
+      version: v1
+      flags:
+        migStrategy: none
+      sharing:
+        timeSlicing:
+          renameByDefault: false
+          failRequestsGreaterThanOne: false
+          resources:
+            - name: nvidia.com/gpu
+              replicas: 4
 runtimeClassName: nvidia
 nodeSelector:
   feature.node.kubernetes.io/pci-10de.present: "true"
