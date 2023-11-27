@@ -781,7 +781,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "avg_over_time(\n    (\n        sum(\n            (increase(\n                hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[1h]\n            )\n            * scalar(\n                hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}\n            ))\n            >= 0\n        ) by (entity, friendly_name)\n    )[$__range:1h]\n)",
+          "expr": "sum_over_time(\n    (\n        sum(\n            (increase(\n                hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[1h]\n            )\n            * scalar(\n                hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}\n            ))\n            >= 0\n        ) by (entity, friendly_name)\n    )[$__range:1h]\n) / sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__range])) by (entity, friendly_name)",
           "instant": true,
           "interval": "",
           "legendFormat": "__auto",
@@ -1138,8 +1138,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1248,8 +1247,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1356,8 +1354,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1477,8 +1474,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1587,8 +1583,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1695,8 +1690,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1816,8 +1810,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -1926,8 +1919,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2034,8 +2026,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2155,8 +2146,7 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "green",
-                "value": null
+                "color": "green"
               },
               {
                 "color": "red",
@@ -2527,7 +2517,7 @@
     "list": [
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "Prometheus long term",
           "value": "prometheus-long-term"
         },
@@ -2546,7 +2536,7 @@
     ]
   },
   "time": {
-    "from": "now/d",
+    "from": "now/M",
     "to": "now"
   },
   "timepicker": {},
