@@ -1,0 +1,3 @@
+runtimeClassName: nvidia
+nodeSelector:
+  feature.node.kubernetes.io/pci-10de.present: "true"
