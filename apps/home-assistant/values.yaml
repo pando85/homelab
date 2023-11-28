@@ -72,16 +72,17 @@ app-template:
               memory: 50Mi
             limits:
               memory: 200Mi
-      affinity:
-        podAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app.kubernetes.io/name
-                    operator: In
-                    values:
-                      - home-assistant
-              topologyKey: kubernetes.io/hostname
+      pod:
+        affinity:
+          podAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - home-assistant
+                topologyKey: kubernetes.io/hostname
 
     whisper:
       type: deployment
@@ -119,16 +120,17 @@ app-template:
             requests:
               cpu: 15m
               memory: 150Mi
-      affinity:
-        podAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app.kubernetes.io/name
-                    operator: In
-                    values:
-                      - home-assistant
-              topologyKey: kubernetes.io/hostname
+      pod:
+        affinity:
+          podAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - home-assistant
+                topologyKey: kubernetes.io/hostname
 
 
   defaultPodOptions:
