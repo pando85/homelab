@@ -84,27 +84,27 @@ app-template:
                         - home-assistant
                 topologyKey: kubernetes.io/hostname
 
-    # whisper:
-    #   type: deployment
-    #   replicas: 1
-    #   containers:
-    #     main:
-    #       image:
-    #         repository: pando85/wyoming-whisper
-    #         tag: 1.1.0
-    #       args:
-    #         - --model
-    #         - medium-int8
-    #         - --language
-    #         - es
-    #         - --device
-    #         - cuda
-    #       resources:
-    #         requests:
-    #           cpu: 15m
-    #           memory: 100Mi
-    #         limits:
-    #           nvidia.com/gpu: "1"
+    whisper:
+      type: deployment
+      replicas: 1
+      containers:
+        main:
+          image:
+            repository: pando85/wyoming-whisper
+            tag: 1.1.0
+          args:
+            - --model
+            - medium-int8
+            - --language
+            - es
+            - --device
+            - cuda
+          resources:
+            requests:
+              cpu: 15m
+              memory: 100Mi
+            limits:
+              nvidia.com/gpu: "1"
     piper:
       type: deployment
       replicas: 1
@@ -153,11 +153,11 @@ app-template:
       ports:
         http:
           port: 80
-    # whisper:
-    #   controller: whisper
-    #   ports:
-    #     http:
-    #       port: 10300
+    whisper:
+      controller: whisper
+      ports:
+        http:
+          port: 10300
     piper:
       controller: piper
       ports:
@@ -269,14 +269,14 @@ app-template:
             - path: /conf
           main:
             - path: /conf
-    # whisper:
-    #   enabled: true
-    #   type: emptyDir
-    #   sizeLimit: 5Gi
-    #   advancedMounts:
-    #     whisper:
-    #       main:
-    #         - path: /data
+    whisper:
+      enabled: true
+      type: emptyDir
+      sizeLimit: 5Gi
+      advancedMounts:
+        whisper:
+          main:
+            - path: /data
     piper:
       enabled: true
       type: emptyDir
