@@ -87,6 +87,8 @@ app-template:
     whisper:
       type: deployment
       replicas: 1
+      pod:
+        runtimeClassName: nvidia
       containers:
         main:
           image:
