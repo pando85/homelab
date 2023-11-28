@@ -73,7 +73,7 @@ app-template:
             limits:
               memory: 200Mi
       pod:
-        affinity:
+        affinity: &affinity
           podAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
               - labelSelector:
@@ -124,16 +124,25 @@ app-template:
               cpu: 15m
               memory: 150Mi
       pod:
-        affinity:
-          podAffinity:
-            requiredDuringSchedulingIgnoredDuringExecution:
-              - labelSelector:
-                  matchExpressions:
-                    - key: app.kubernetes.io/name
-                      operator: In
-                      values:
-                        - home-assistant
-                topologyKey: kubernetes.io/hostname
+        affinity: *affinity
+
+    openwakeword:
+      type: deployment
+      replicas: 1
+      containers:
+        main:
+          image:
+            repository: rhasspy/wyoming-openwakeword
+            tag: 1.8.1
+          args:
+            - --preload-model
+            - alexa
+          resources:
+            requests:
+              cpu: 15m
+              memory: 150Mi
+      pod:
+        affinity: *affinity
 
 
   defaultPodOptions:
@@ -166,6 +175,11 @@ app-template:
       ports:
         http:
           port: 10200
+    openwakeword:
+      controller: openwakeword
+      ports:
+        http:
+          port: 10400
   ingress:
     main:
       enabled: true
