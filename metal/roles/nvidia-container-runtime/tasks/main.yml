@@ -23,5 +23,7 @@
       - nvidia-container-runtime
       - cuda-drivers-fabricmanager-535
       - nvidia-headless-535-server
+      - nvidia-utils-535-server
+      - nvidia-cuda-toolkit
     update_cache: true
   notify: restart server
