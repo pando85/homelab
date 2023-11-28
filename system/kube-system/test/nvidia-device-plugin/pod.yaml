@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: gpu-nvidia-class
+spec:
+  restartPolicy: Never
+  runtimeClassName: nvidia
+  containers:
+    - name: gpu
+      image: "nvidia/cuda:11.5.2-base-ubuntu20.04"
+      command: ["/bin/bash", "-c", "--"]
+      args: ["while true; do sleep 30; done;"]
+      resources:
+        limits:
+          nvidia.com/gpu: 1

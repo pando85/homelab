@@ -117,7 +117,8 @@ app-template:
             tag: 1.4.0
           args:
             - --voice
-            - en_US-amy-medium
+            #- en_US-amy-medium
+            - es_ES-sharvard-medium
           resources:
             requests:
               cpu: 15m
