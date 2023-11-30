@@ -28,11 +28,7 @@ class ClimateControl(hass.Hass):
         self.timers = []
         self._logging
         input_boolean_enable = self.args["input_boolean"]["enable"]
-        is_enabled = await self.get_state(input_boolean_enable, attribute="state") == "on"
-        self.log(f"Climate control is {'enabled' if is_enabled else 'disabled'}")
-        if is_enabled:
-            await self._register_schedulers()
-
+        await self._daily_register_schedulers()
         # Register schedulers if climate control is enabled
         await self.listen_state(self._register_schedulers, input_boolean_enable, new="on", old="off")
         # Unregister schedulers if climate control is enabled
@@ -40,7 +36,13 @@ class ClimateControl(hass.Hass):
 
         # Register schedulers every day
         # give enough time to get new data
-        await self.run_daily(self._register_schedulers, "00:00:05")
+        await self.run_daily(self._daily_register_schedulers, "00:00:05")
+
+    async def _daily_register_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
+        is_enabled = await self.get_state(self.args["input_boolean"]["enable"], attribute="state") == "on"
+        self.log(f"Climate control is {'enabled' if is_enabled else 'disabled'}")
+        if is_enabled:
+            await self._register_schedulers()
 
     async def _get_prices(self) -> List[Price]:
         pvpc = await self.get_state(self.args["sensor"]["pvpc_price"], attribute="all")
@@ -174,9 +176,11 @@ class ClimateControl(hass.Hass):
     async def _unregister_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         self.log("Unregistering schedulers")
 
-        # get a list to iterate because keys change dynamically while iterating
-        timers = list(self.AD.sched.schedule.get(self.name, {}).keys())
-        [await self.cancel_timer(timer) for timer in timers]
+        schedulers = {_id: self.AD.sched.schedule[self.name][_id] for _id in self.AD.sched.schedule.get(self.name, {})}
+        self.log(f"{schedulers=}", level="DEBUG")
+        ids_to_disable = [_id for _id, i in schedulers.items() if i["callback"] != self._daily_register_schedulers]
+        self.log(f"{ids_to_disable=}", level="DEBUG")
+        [await self.cancel_timer(_id) for _id in ids_to_disable]
 
     async def terminate(self):
         await self._unregister_schedulers()

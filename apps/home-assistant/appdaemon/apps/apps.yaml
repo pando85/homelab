@@ -15,3 +15,4 @@ climate_control:
     entity: input_select.heishamon_heatmode
     on_mode: Heat+DHW
     off_mode: DHW
+  log_level: INFO
