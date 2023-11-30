@@ -68,7 +68,7 @@ app-template:
                 name: hass-appdaemon
           resources:
             requests:
-              cpu: 10m
+              cpu: 30m
               memory: 50Mi
             limits:
               memory: 200Mi
@@ -104,7 +104,7 @@ app-template:
           resources:
             requests:
               cpu: 15m
-              memory: 100Mi
+              memory: 600Mi
             limits:
               nvidia.com/gpu: "1"
     piper:
