@@ -6,7 +6,7 @@ app-template:
         main:
           image:
             repository: jellyfin/jellyfin
-            tag: 10.8.12
+            tag: 10.8.13
 
           probes:
             liveness: &probes
