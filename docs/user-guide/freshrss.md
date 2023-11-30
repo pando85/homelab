@@ -1,34 +1,50 @@
-# FreshRSS’
+# FreshRSS
 
-## SQlite Backup
+## SQLite Backup
+
+### Export
+
+To export data from FreshRSS using SQLite, utilize the following command:
 
 ```bash
 ./cli/export-sqlite-for-user.php --user ${USERNAME} --filename /tmp/freshrss.sqlite
 ```
 
-## Postgres config
+### Import
 
-Full-text search optimization in PostgreSQL
+To import previously exported SQLite data back into FreshRSS, use the following command:
 
-Without changing anything in FreshRSS’ code (which is using ILIKE), it is possible to make text searches much faster by adding some indexes in PostgreSQL 9.1+ (at the cost of more disc space and slower insertions):
+```bash
+./cli/import-sqlite-for-user.php --user ${USERNAME} --force-overwrite --filename /tmp/freshrss.sqlite
+```
+
+## PostgreSQL Configuration
+
+Optimizing Full-text search in PostgreSQL for FreshRSS involves adding indexes. This can significantly improve search performance without modifying FreshRSS' code (which uses ILIKE).
+
+First, ensure you have the `pg_trgm` extension installed:
 
 ```sql
 CREATE EXTENSION pg_trgm;
-CREATE INDEX gin_trgm_index_title ON freshrss_entry USING gin(title gin_trgm_ops);
-CREATE INDEX gin_trgm_index_content ON freshrss_entry USING gin(content gin_trgm_ops);
 ```
 
-Where freshrss_entry needs to be adapted to the name of the entry of a given use, e.g., freshrss_alice_entry.
+Then, create the necessary indexes for title and content:
 
-Such an index on the entry.title column makes searches such as intitle:Hello much faster. General searches such as Something search both on entry.title and entry.content and therefore require the two indexes shown above.
+```sql
+CREATE INDEX gin_trgm_index_title ON "freshrss_entry" USING gin(title gin_trgm_ops);
+CREATE INDEX gin_trgm_index_content ON "freshrss_entry" USING gin(content gin_trgm_ops);
+```
 
-Likewise, if you wanted to speed up searches on the authors (author:Alice), you would add another index:
+Replace "freshrss_entry" with the appropriate entry name (e.g., freshrss_alice_entry).
 
+For faster searches on authors (e.g., author:Alice), add another index:
+
+```sql
 CREATE INDEX gin_trgm_index_author ON freshrss_entry USING gin(author gin_trgm_ops);
+```
 
-Etc. for other text fields. The list of fields can be seen in [CREATE TABLE _entry section](https://github.com/FreshRSS/FreshRSS/blob/edge/app/SQL/install.sql.pgsql.php).
-
+Repeat this process for other text fields as needed. Refer to the [CREATE TABLE _entry section](https://github.com/FreshRSS/FreshRSS/blob/edge/app/SQL/install.sql.pgsql.php) for the list of fields.
 
 ## References
 
-- [Freshrss Database configuration](https://freshrss.github.io/FreshRSS/en/admins/DatabaseConfig.html)
+- [FreshRSS Database Configuration](https://freshrss.github.io/FreshRSS/en/admins/DatabaseConfig.html)
