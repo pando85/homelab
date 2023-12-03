@@ -20,6 +20,10 @@ on:
     branches:
       - master
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   LOG_LEVEL: info
   DRY_RUN: false
