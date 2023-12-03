@@ -28,12 +28,37 @@ app-template:
             - --depth=1
             - --period=6h
             - --root=/add-ons/subcleaner
+    whisper:
+      type: deployment
+      replicas: 1
+      pod:
+        runtimeClassName: nvidia
+      containers:
+        main:
+          image:
+            repository: onerahmet/openai-whisper-asr-webservice
+            tag: v1.2.4-gpu
+          env:
+            ASR_ENGINE: openai_whisper
+            ASR_MODEL: small
+            ASR_MODEL_PATH: /data
+          resources:
+            requests:
+              cpu: 15m
+              memory: 600Mi
+            limits:
+              nvidia.com/gpu: "1"
 
   service:
     main:
       ports:
         http:
           port: 6767
+    whisper:
+      controller: whisper
+      ports:
+        http:
+          port: 9000
 
   ingress:
     main:
@@ -108,3 +133,11 @@ app-template:
       type: emptyDir
       globalMounts:
         - path: /add-ons
+    whisper:
+      enabled: true
+      type: emptyDir
+      sizeLimit: 5Gi
+      advancedMounts:
+        whisper:
+          main:
+            - path: /data
