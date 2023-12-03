@@ -63,7 +63,7 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 | cerezo           | Unifi UAP                           | 1     | N/A          | N/A                                 | N/A  | N/A              | AP         |
 | manzano          | Unifi UAP                           | 1     | N/A          | N/A                                 | N/A  | N/A              | AP         |
 
-\* with graphic card connected: Nvidia GeForce GTX 1060 3GB
+\* with Nvidia GeForce GTX 1060 3GB
 
 ### Images
 
