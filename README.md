@@ -54,7 +54,7 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 | Hostname         | Device                              | Count | OS Disk Size | Data Disk Size                      | Ram  | Operating System | Purpose    |
 | ---------------- | ----------------------------------- | ----- | ------------ | ----------------------------------- | ---- | ---------------- | ---------- |
 | grigri           | Supermicro Atom C2758 (A1SRi-2758F) | 1     | 250GB SSD    | 3\*4TB + 500GB (NVMe) RAIDZ + cache | 32GB | Ubuntu 22.04     | K3s server |
-| k8s-amd64-1      | AMD E-450 APU                       | 1     | 60GB         | N/A                                 | 8GB  | Ubuntu 22.04     | k3s agent  |
+| k8s-amd64-1\*    | AMD E-450 APU                       | 1     | 60GB         | N/A                                 | 8GB  | Ubuntu 22.04     | k3s agent  |
 | k8s-rock64-i     | Rock64                              | 6     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
 | k8s-odroid-c4-i  | Odroid-c4                           | 2     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
 | k8s-odroid-hc4-i | Odroid-hc4                          | 1     | N/A          | 3TB + 240GB SSD                     | 4GB  | Armbian          | K3s agent  |
@@ -62,6 +62,16 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 | gs724t           | Netgear gs724t                      | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
 | cerezo           | Unifi UAP                           | 1     | N/A          | N/A                                 | N/A  | N/A              | AP         |
 | manzano          | Unifi UAP                           | 1     | N/A          | N/A                                 | N/A  | N/A              | AP         |
+
+\* with graphic card connected: Nvidia GeForce GTX 1060 3GB
+
+### Images
+
+Rack:
+<img src="https://raw.githubusercontent.com/pando85/homelab/master/docs/images/rack.jpg" width="50%" height="auto" />
+
+K8s-amd64-1 + 8 SBC:
+<img src="https://raw.githubusercontent.com/pando85/homelab/master/docs/images/k8s-amd64-1.jpg" width="50%" height="auto" />
 
 ## ⭐ Features
 
