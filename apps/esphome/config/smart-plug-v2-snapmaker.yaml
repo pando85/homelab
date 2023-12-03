@@ -1,7 +1,7 @@
 substitutions:
-  device_name: "athom-smart-plug-v2-1"
-  friendly_name: "Athom Smart Plug V2 1"
-  project_name: "athom.smart-plug-v2-1"
+  device_name: "smart-plug-v2-snapmaker"
+  friendly_name: "Smart Plug V2 Snapmaker"
+  project_name: "athom.smart-plug-v2-snapmaker"
   project_version: "1.1"
   relay_restore_mode: RESTORE_DEFAULT_OFF
 
