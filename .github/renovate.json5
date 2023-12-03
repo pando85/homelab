@@ -15,6 +15,7 @@
   commitMessagePrefix: "{{parentDir}}: ",
   timezone: "Europe/Madrid",
   schedule: ["after 4am and before 10am on Monday"],
+  prConcurrentLimit: 4,
   enabledManagers: [
     "argocd",
     "github-actions",
