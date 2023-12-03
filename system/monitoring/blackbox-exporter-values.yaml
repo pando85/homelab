@@ -50,6 +50,13 @@ config:
       timeout: 30s
       icmp:
         preferred_ip_protocol: ip4
+    tcp_connect:
+      prober: tcp
+      tcp:
+        preferred_ip_protocol: ip4
+        ip_protocol_fallback: false
+        tls: false
+      timeout: 15s
 
 serviceMonitor:
   enabled: true
@@ -96,6 +103,12 @@ serviceMonitor:
     - module: ping
       name: shellypmmini-servers
       url: shellypmmini-servers.iot.grigri
+    - module: tcp_connect
+      name: rack-controller
+      url: rack-controller.iot.grigri:6053
+    - module: tcp_connect
+      name: smart-plug-v2-snapmaker
+      url: smart-plug-v2-snapmaker.iot.grigri:6053
 
 resources:
   requests:
