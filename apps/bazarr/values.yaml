@@ -42,7 +42,7 @@ app-template:
             repository: onerahmet/openai-whisper-asr-webservice
             tag: v1.2.4-gpu
           env:
-            ASR_ENGINE: openai_whisper
+            ASR_ENGINE: faster_whisper
             ASR_MODEL: small
             ASR_MODEL_PATH: /data
           resources:
