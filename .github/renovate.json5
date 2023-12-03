@@ -15,7 +15,6 @@
   commitMessagePrefix: "{{parentDir}}: ",
   timezone: "Europe/Madrid",
   schedule: ["after 4am and before 10am on Monday"],
-  prConcurrentLimit: 4,
   enabledManagers: [
     "argocd",
     "github-actions",
@@ -72,6 +71,7 @@
       automerge: true,
       ignoreTests: true,
       automergeType: "pr",
+      prConcurrentLimit: 6,
       platformAutomerge: true,
     },
     {
@@ -80,6 +80,7 @@
       automerge: true,
       ignoreTests: true,
       automergeType: "pr",
+      prConcurrentLimit: 6,
       platformAutomerge: true,
     },
     {
@@ -104,6 +105,7 @@
       matchCurrentVersion: "!/^0/",
       automerge: true,
       automergeType: "pr",
+      prConcurrentLimit: 4,
       ignoreTests: true,
       platformAutomerge: true,
     },
