@@ -48,7 +48,7 @@ app-template:
           resources:
             requests:
               cpu: 15m
-              memory: 600Mi
+              memory: 2.3Gi
             limits:
               nvidia.com/gpu: "1"
 
