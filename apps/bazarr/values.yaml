@@ -2,6 +2,9 @@ app-template:
   controllers:
     main:
       type: statefulset
+      pod:
+        nodeSelector:
+          name: grigri
       containers:
         main:
           image:
@@ -108,31 +111,37 @@ app-template:
       fsGroup: 991
       fsGroupChangePolicy: "OnRootMismatch"
 
-    nodeSelector:
-      name: grigri
   persistence:
     config:
       enabled: true
-      globalMounts:
-        - path: /config
       existingClaim: config-bazarr-zfs
+      advancedMounts:
+        main:
+          main:
+            - path: /config
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series
-      globalMounts:
-        - path: /datasets/series
+      advancedMounts:
+        main:
+          main:
+            - path: /datasets/series
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas
-      globalMounts:
-        - path: /datasets/peliculas
+      advancedMounts:
+        main:
+          main:
+            - path: /datasets/peliculas
     add-ons:
       enabled: true
       type: emptyDir
-      globalMounts:
-        - path: /add-ons
+      advancedMounts:
+        main:
+          main:
+            - path: /add-ons
     whisper:
       enabled: true
       type: emptyDir
