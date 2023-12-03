@@ -142,6 +142,8 @@ app-template:
         main:
           main:
             - path: /add-ons
+          subcleaner:
+            - path: /add-ons
     whisper:
       enabled: true
       type: emptyDir
