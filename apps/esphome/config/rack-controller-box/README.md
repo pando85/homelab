@@ -19,12 +19,13 @@ and utilizing our controller for precision temperature management in rack-mounte
 
 ## Functionality
 
-- **Temperature Monitoring:** Real-time temperature updates for informed decisions.
+- **Home Assistant Integration:** Effortlessly manage and monitor sensors through Home Assistant
+  control.
 
-- **Fan Control:** Automatic control of Noctua fans with PID based on temperature readings or can be
-  manually set to a specific speed.
+- **Fan Control:** Enjoy automated Noctua fan control using PID based on temperature readings, or
+  opt for manual configuration with a specific speed.
 
-- **Display Interface:** User-friendly OLED display for real time monitoring.
+- **Display Interface:** Experience real-time monitoring through the user-friendly OLED display.
 
 ## Images
 
