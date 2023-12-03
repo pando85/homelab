@@ -71,7 +71,6 @@
       automerge: true,
       ignoreTests: true,
       automergeType: "pr",
-      prConcurrentLimit: 6,
       platformAutomerge: true,
     },
     {
@@ -80,7 +79,6 @@
       automerge: true,
       ignoreTests: true,
       automergeType: "pr",
-      prConcurrentLimit: 6,
       platformAutomerge: true,
     },
     {
@@ -105,7 +103,6 @@
       matchCurrentVersion: "!/^0/",
       automerge: true,
       automergeType: "pr",
-      prConcurrentLimit: 4,
       ignoreTests: true,
       platformAutomerge: true,
     },
