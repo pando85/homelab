@@ -34,8 +34,8 @@ and utilizing our controller for precision temperature management in rack-mounte
 ## Images
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="https://raw.githubusercontent.com/pando85/homelab/master/apps/esphome/config/rack-controller-box/rack-controller-front.jpg" width="50%" height="auto" />
-  <img src="https://raw.githubusercontent.com/pando85/homelab/master/apps/esphome/config/rack-controller-box/rack-controller-back.jpg" width="50%" height="auto" />
+  <img src="https://raw.githubusercontent.com/pando85/homelab/master/apps/esphome/config/rack-controller-box/rack-controller-front.jpg" width="45%" height="auto" />
+  <img src="https://raw.githubusercontent.com/pando85/homelab/master/apps/esphome/config/rack-controller-box/rack-controller-back.jpg" width="40%" height="auto" />
 </div>
 <div style="display: flex; justify-content: center;">
   <img src="https://raw.githubusercontent.com/pando85/homelab/master/apps/esphome/config/rack-controller-box/rack-controller.jpg" width="50%" height="auto" />
