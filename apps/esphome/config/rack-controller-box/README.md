@@ -17,6 +17,10 @@ and utilizing our controller for precision temperature management in rack-mounte
 
 - **Temperature Sensor (DHT22):** Accurate measurement of ambient temperature and humidity.
 
+- **DC Power Female Jack (5.5x2.1mm):** Connector for powering the ESP32 and fans, ensuring a reliable power source.
+
+- **DC-DC Step-down (LM2596):** Voltage regulation component that efficiently steps down the voltage, contributing to stable and reliable operation of the ESP32 controller.
+
 ## Functionality
 
 - **Home Assistant Integration:** Effortlessly manage and monitor sensors through Home Assistant
