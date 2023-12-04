@@ -67,8 +67,10 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 
 ### Images
 
-<img src="https://raw.githubusercontent.com/pando85/homelab/master/docs/images/rack.jpg" width="50%" height="auto" />
-<img src="https://raw.githubusercontent.com/pando85/homelab/master/docs/images/k8s-amd64-1.jpg" width="50%" height="auto" />
+<div style="display: flex; justify-content: space-between;">
+  <img src="https://raw.githubusercontent.com/pando85/homelab/master/docs/images/rack.jpg" width="50%" height="auto" />
+  <img src="https://raw.githubusercontent.com/pando85/homelab/master/docs/images/k8s-amd64-1.jpg" width="50%" height="auto" />
+</div>
 
 ## ⭐ Features
 
