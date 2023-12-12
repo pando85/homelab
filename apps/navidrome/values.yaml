@@ -44,8 +44,6 @@ app-template:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          proxy_set_header X-Auth-Request-Preferred-Username agil;
       hosts:
         - host: &host navidrome.internal.grigri.cloud
           paths:
