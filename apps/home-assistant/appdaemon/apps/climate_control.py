@@ -120,15 +120,23 @@ class ClimateControl(hass.Hass):
         self.log(f"{prices=}", level="DEBUG")
 
         historical_data = await self.get_history(entity_id=self.args["sensor"]["pvpc_price"], days=10)
-        historical_prices = [
-            Price(value=float(j["state"]), datetime=j["last_changed"]) for i in historical_data for j in i
-        ]
+        if historical_data is not None:
+            historical_prices = [
+                Price(value=float(j["state"]), datetime=j["last_changed"]) for i in historical_data for j in i
+            ]
 
-        self.log(f"{historical_prices=}", level="DEBUG")
-        price_10dma = mean([p.value for p in historical_prices])
-        self.log(f"{price_10dma=}", level="DEBUG")
+            self.log(f"{historical_prices=}", level="DEBUG")
+            price_10dma = mean([p.value for p in historical_prices])
+            self.log(f"{price_10dma=}", level="DEBUG")
 
-        cheap_price_limit = price_10dma * 2 / 3
+            cheap_price_limit = price_10dma * 2 / 3
+        else:
+            cheap_price_limit = self.args["fallback_cheap_electricity_price"]
+            await self.notify(
+                f"Error getting historical prices: fallback price to {cheap_price_limit} €",
+                name=self.args["notify"]["target"],
+            )
+
         cheapest_prices = list(filter(lambda x: x.value < cheap_price_limit, prices))
         self.log(f"{cheapest_prices=}", level="DEBUG")
 

@@ -22,7 +22,7 @@ requirements_test:	## install requirements test
 	@pip install -r requirements_test.txt > /dev/null
 
 .PHONY: run
-run: DOCKER_EXEC_ARGS ?= ''
+run: DOCKER_EXEC_ARGS ?=
 run:	## run in local docker
 	@if [ ! -f $(ENV_FILE) ]; then \
         echo "Cannot find environment file at $(ENV_FILE)" >&2; \
