@@ -1,0 +1,15 @@
+automation:
+  alias: Reboot HASS when database disconnected
+  trigger:
+    - platform: event
+      event_type: system_log_event
+      event_data:
+        name: homeassistant.components.websocket_api.http.connection
+        level: ERROR
+  condition:
+    condition: template
+    value_template: "{{ 'The database connection has not been established' in trigger.event.data.exception[0] }}"
+  action:
+    - service: homeassistant.restart
+      data:
+        entity_id: climate.thermostat_bedroom
