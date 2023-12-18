@@ -66,12 +66,22 @@
     },
     {
       matchDatasources: ["docker"],
+      matchPackageNames: [
+        "nextcloud",
+        "redis"
+      ],
+      matchUpdateTypes: ["major"],
+      minimumReleaseAge: "30 days",
+    },
+    {
+      matchDatasources: ["docker"],
       matchUpdateTypes: ["minor", "patch"],
       matchCurrentVersion: "!/^0/",
       automerge: true,
       ignoreTests: true,
       automergeType: "pr",
       platformAutomerge: true,
+      excludePackageNames: ["nextcloud"],
     },
     {
       matchDatasources: ["docker"],
@@ -80,15 +90,6 @@
       ignoreTests: true,
       automergeType: "pr",
       platformAutomerge: true,
-    },
-    {
-      matchDatasources: ["docker"],
-      matchPackageNames: [
-        "nextcloud",
-        "redis"
-      ],
-      matchUpdateTypes: ["major"],
-      minimumReleaseAge: "30 days",
     },
     {
       matchPackageNames: ["vault"],
