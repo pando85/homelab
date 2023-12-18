@@ -8,7 +8,7 @@ app-template:
         main:
           image:
             repository: deluan/navidrome
-            tag: 0.50.1
+            tag: 0.50.2
 
           env:
             ND_REVERSEPROXYUSERHEADER: "X-Auth-Request-Preferred-Username"
