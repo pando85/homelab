@@ -254,7 +254,7 @@
             "uid": "${data_source}"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(qbittorrent_dl_info_data_total[$__range]))",
+          "expr": "sum(increase(qbittorrent_dl_info_data_total[$__range]))",
           "instant": false,
           "interval": "",
           "legendFormat": " ",
@@ -315,7 +315,7 @@
             "uid": "${data_source}"
           },
           "editorMode": "code",
-          "expr": "sum(max_over_time(qbittorrent_up_info_data_total[$__range]))",
+          "expr": "sum(increase(qbittorrent_up_info_data_total[$__range]))",
           "instant": false,
           "interval": "",
           "legendFormat": " ",
@@ -988,7 +988,7 @@
     ]
   },
   "time": {
-    "from": "now-90d",
+    "from": "now-30d",
     "to": "now"
   },
   "timepicker": {},
