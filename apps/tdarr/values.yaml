@@ -10,6 +10,13 @@ app-template:
           image:
             repository: haveagitgat/tdarr
             tag: 2.17.01
+          env:
+            PUID: 995
+            PGID: 991
+            webUIPort: &web_port 8265
+            serverPort: &server_port 8266
+            serverIP: 0.0.0.0
+            TZ: Europe/Madrid
           resources:
             requests:
               cpu: 10m
@@ -23,10 +30,31 @@ app-template:
     main:
       ports:
         http:
-          port: 8266
+          port: *web_port
+        server:
+          port: *server_port
 
   ingress:
     main:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host tdarr-ui.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                name: main
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: tdarr-ui-tls-certificate
+
+    server:
       enabled: true
       className: nginx-internal
       annotations:
@@ -39,7 +67,7 @@ app-template:
               pathType: Prefix
               service:
                 name: main
-                port: http
+                port: server
       tls:
         - hosts:
             - *host
@@ -55,7 +83,7 @@ app-template:
         nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
         nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
       hosts:
-        - host: &host tdarr.grigri.cloud
+        - host: &host tdarr-ui.grigri.cloud
           paths:
             - path: /
               pathType: Prefix
@@ -65,7 +93,7 @@ app-template:
       tls:
         - hosts:
             - *host
-          secretName: tdarr-external-tls-certificate
+          secretName: tdarr-ui-external-tls-certificate
   defaultPodOptions:
     securityContext:
       runAsUser: 995
