@@ -8,7 +8,7 @@ app-template:
       containers:
         main:
           image:
-            repository: haveagitgat/tdarr
+            repository: ghcr.io/haveagitgat/tdarr
             tag: 2.17.01
           env:
             PUID: 995
@@ -32,6 +32,8 @@ app-template:
         http:
           port: *web_port
         server:
+          enabled: true
+          protocol: TCP
           port: *server_port
 
   ingress:
@@ -96,9 +98,12 @@ app-template:
           secretName: tdarr-ui-external-tls-certificate
   defaultPodOptions:
     securityContext:
-      runAsUser: 995
-      runAsGroup: 991
+      runAsUser: 0
+      runAsGroup: 0
       fsGroup: 991
+      capabilities:
+        add:
+          - CHOWN
       fsGroupChangePolicy: "OnRootMismatch"
 
   persistence:
