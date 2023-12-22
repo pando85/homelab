@@ -95,9 +95,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "10.1.0",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -185,9 +186,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "10.1.0",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "expr": "qbittorrent_dht_nodes",
@@ -241,9 +243,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "10.1.0",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -251,7 +254,7 @@
             "uid": "${data_source}"
           },
           "editorMode": "code",
-          "expr": "sum (qbittorrent_dl_info_data_total)",
+          "expr": "sum(max_over_time(qbittorrent_dl_info_data_total[$__range]))",
           "instant": false,
           "interval": "",
           "legendFormat": " ",
@@ -301,9 +304,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "10.1.0",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -311,7 +315,7 @@
             "uid": "${data_source}"
           },
           "editorMode": "code",
-          "expr": "sum (qbittorrent_up_info_data_total)",
+          "expr": "sum(max_over_time(qbittorrent_up_info_data_total[$__range]))",
           "instant": false,
           "interval": "",
           "legendFormat": " ",
@@ -361,9 +365,10 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "textMode": "auto",
+        "wideLayout": true
       },
-      "pluginVersion": "10.1.0",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -417,6 +422,8 @@
       },
       "id": 16,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -428,7 +435,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.1.0",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -485,6 +492,8 @@
       },
       "id": 17,
       "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
         "orientation": "auto",
         "reduceOptions": {
           "calcs": [
@@ -496,7 +505,7 @@
         "showThresholdLabels": false,
         "showThresholdMarkers": true
       },
-      "pluginVersion": "10.1.0",
+      "pluginVersion": "10.2.2",
       "targets": [
         {
           "datasource": {
@@ -530,6 +539,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -638,6 +648,7 @@
             "mode": "palette-classic"
           },
           "custom": {
+            "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
             "axisLabel": "",
@@ -843,7 +854,6 @@
   "refresh": "10s",
   "revision": 1,
   "schemaVersion": 38,
-  "style": "dark",
   "tags": [],
   "templating": {
     "list": [
@@ -943,7 +953,7 @@
       {
         "allValue": ".*",
         "current": {
-          "selected": false,
+          "selected": true,
           "text": [
             "All"
           ],
@@ -978,7 +988,7 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-90d",
     "to": "now"
   },
   "timepicker": {},
