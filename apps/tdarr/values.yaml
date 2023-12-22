@@ -22,7 +22,7 @@ app-template:
               cpu: 10m
               memory: 250Mi
             limits:
-              cpu: 1
+              cpu: '1'
               memory: 500Mi
 
 
@@ -101,9 +101,6 @@ app-template:
       runAsUser: 0
       runAsGroup: 0
       fsGroup: 991
-      capabilities:
-        add:
-          - CHOWN
       fsGroupChangePolicy: "OnRootMismatch"
 
   persistence:
