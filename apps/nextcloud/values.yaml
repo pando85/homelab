@@ -115,6 +115,11 @@ nextcloud:
       .htaccess: true
       redis.config.php: true
     configs:
+      log.config.php: |-
+        <?php
+        $CONFIG = array (
+          'loglevel' => 2,
+        );
       proxy.config.php: |-
         <?php
         $CONFIG = array (
