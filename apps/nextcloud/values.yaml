@@ -12,9 +12,9 @@ nextcloud:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       # default Nextcloud timeout in:
       # `grep timeout /var/www/html/lib/private/Installer.php`
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "150"
-      nginx.ingress.kubernetes.io/proxy-connect-timeout: "150"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "150"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       # fix timeouts uploading big files disabling proxy buffering
       nginx.ingress.kubernetes.io/proxy-buffering: "off"
       nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
