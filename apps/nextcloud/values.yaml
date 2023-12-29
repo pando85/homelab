@@ -178,9 +178,9 @@ nextcloud:
           - |
             sed -i 's/^\([[:space:]]*\)\$timeout = \$this->isCLI ? 0 : 120;/\1$timeout = $this->isCLI ? 0 : 1200;/' /var/www/html/lib/private/Installer.php
         volumeMounts:
-          - mountPath: /var/www/
+          - mountPath: /var/www/html
             name: nextcloud-main
-            subPath: root
+            subPath: html
 
     mail:
       enabled: true
