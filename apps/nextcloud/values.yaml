@@ -115,9 +115,24 @@ nextcloud:
         max_execution_time = 3600
         default_phone_region = ES
     defaultConfigs:
-      .htaccess: true
+      .htaccess: false
       redis.config.php: true
     configs:
+      .htaccess: |-
+        # --- Start default chart Apache config ---
+        # line below if for Apache 2.4
+        <ifModule mod_authz_core.c>
+        Require all denied
+        </ifModule>
+        # line below if for Apache 2.2
+        <ifModule !mod_authz_core.c>
+        deny from all
+        </ifModule>
+        # section for Apache 2.2 and 2.4
+        <ifModule mod_autoindex.c>
+        IndexIgnore *
+        # --- End default chart Apache config ---
+        LimitRequestBody 0
       log.config.php: |-
         <?php
         $CONFIG = array (
