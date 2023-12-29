@@ -15,6 +15,9 @@ nextcloud:
       nginx.ingress.kubernetes.io/proxy-send-timeout: "150"
       nginx.ingress.kubernetes.io/proxy-connect-timeout: "150"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "150"
+      # fix timeouts uploading big files disabling proxy buffering
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
       nginx.ingress.kubernetes.io/proxy-body-size: 10G
       nginx.ingress.kubernetes.io/server-snippet: |-
         server_tokens off;
