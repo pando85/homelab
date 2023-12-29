@@ -118,7 +118,7 @@ nextcloud:
       .htaccess: false
       redis.config.php: true
     configs:
-      .htaccess: |-
+      .htaccess: |
         # --- Start default chart Apache config ---
         # line below if for Apache 2.4
         <ifModule mod_authz_core.c>
