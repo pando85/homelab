@@ -206,7 +206,7 @@ nextcloud:
         mountPath: /etc/ssl/certs/ca-certificates.crt
         readOnly: true
       - name: nextcloud-config
-        mountPath: /etc/apache2/conf-available/limit-request-body.conf
+        mountPath: /etc/apache2/conf-enabled/limit-request-body.conf
         subPath: limit-request-body.conf
 
   securityContext:
