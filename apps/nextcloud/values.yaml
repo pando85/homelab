@@ -170,6 +170,18 @@ nextcloud:
           secretKeyRef:
             name: nextcloud
             key: passwordsalt
+    extraInitContainers:
+      - name: replace-timeout
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            sed -i 's/^\([[:space:]]*\)\$timeout = \$this->isCLI ? 0 : 120;/\1$timeout = $this->isCLI ? 0 : 1200;/' /var/www/html/lib/private/Installer.php
+        volumeMounts:
+          - mountPath: /var/www/
+            name: nextcloud-main
+            subPath: root
+
     mail:
       enabled: true
       fromAddress: grigriserver
