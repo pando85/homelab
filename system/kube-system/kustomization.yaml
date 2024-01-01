@@ -12,7 +12,7 @@ helmCharts:
     releaseName: kube-system
     repo: https://piraeus.io/helm-charts/
     valuesFile: snapshot-controller-values.yaml
-    version: 2.0.3
+    version: 2.0.4
   - includeCRDs: true
     name: nvidia-device-plugin
     namespace: kube-system
