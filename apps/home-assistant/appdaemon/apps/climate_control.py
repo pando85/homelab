@@ -66,7 +66,7 @@ class ClimateControl(hass.Hass):
             await self.notify(msg, name=self.args["notify"]["target"])
         if self.args["climate"]["enabled"]:
             await self.set_state(self.args["climate"]["entity"], state=mode)
-            while await self.get_state(self.args["climate"]["entity"]) == mode:
+            while await self.get_state(self.args["climate"]["entity"]) != mode:
                 await self.sleep(1)
 
     async def _start_hvac(self, kwargs={}):
