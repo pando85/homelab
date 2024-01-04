@@ -38,6 +38,11 @@
     enabled: true
     state: restarted
 
+- name: unattended-upgrades | ignore armbian changes  # noqa: name[casing]
+  command: dpkg-divert --no-rename --add /etc/apt/apt.conf.d/02-armbian-periodic
+  when:
+    - ansible_architecture == "aarch64"
+
 - name: apt autoremove  # noqa: name[casing]
   apt:
     autoremove: true

@@ -14,7 +14,10 @@
   loop:
     - 20auto-upgrades
     - 50unattended-upgrades
-  notify: unattended-upgrades | restart systemd service
+    - 02-armbian-periodic
+  notify:
+    - unattended-upgrades | restart systemd service
+    - unattended-upgrades | ignore armbian changes
 
 - name: unattended-upgrades | Start systemd service
   systemd:
