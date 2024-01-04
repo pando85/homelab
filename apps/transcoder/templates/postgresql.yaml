@@ -1,0 +1,38 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: transcoder-postgres
+spec:
+  teamId: transcoder
+  numberOfInstances: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  volume:
+    size: 1.5Gi
+    storageClass: zfs-local-dataset
+
+  users:
+    transcoder:
+    - superuser
+    - createdb
+  databases:
+    transcoder: transcoder
+
+  postgresql:
+    version: "15"
+    parameters:
+      archive_mode: 'off'
+      max_connections: "4"
+      shared_buffers: 32MB
+      log_checkpoints: 'off'
+      log_connections: 'off'
+      log_disconnections: 'off'
+      log_lock_waits: 'off'
+      log_min_duration_statement: "-1"
+      log_statement: none

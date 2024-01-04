@@ -1,0 +1,153 @@
+app-template:
+  controllers:
+    main:
+      type: statefulset
+      containers:
+        main:
+          image:
+            repository: segator/transcoderd
+            tag: master
+
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: &port 8080
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+          env:
+            TZ: Europe/Madrid
+            TR_DB_USER:
+              valueFrom:
+                secretKeyRef:
+                  name: transcoder.transcoder-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            TR_DB_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: transcoder.transcoder-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 200Mi
+            limits:
+              memory: 400Mi
+    rabbit:
+      type: statefulset
+      containers:
+        main:
+          image:
+            repository: rabbitmq
+            tag: 3.12.11
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              type: TCP
+            readiness: *probes
+            startup:
+              enabled: true
+          env:
+            RABBITMQ_DEFAULT_USER:
+              valueFrom:
+                secretKeyRef:
+                  name: rabbit-credentials
+                  key: username
+            RABBITMQ_DEFAULT_PASS:
+              valueFrom:
+                secretKeyRef:
+                  name: rabbit-credentials
+                  key: password
+          resources:
+            requests:
+              cpu: 10m
+              memory: 200Mi
+            limits:
+              memory: 200Mi
+  service:
+    main:
+      ports:
+        http:
+          port: *port
+    rabbit:
+      ports:
+        tcp-clients:
+          port: 5672
+
+  ingress:
+    main:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host transcorder.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                name: main
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: transcorder-tls-certificate
+
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 991
+      fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      name: grigri
+
+  persistence:
+    config:
+      enabled: true
+      type: secret
+      name: transcoder-config
+      advancedMounts:
+        main:
+          main:
+            - path: /etc/transcoderd/
+    # series:
+    #   enabled: true
+    #   type: hostPath
+    #   hostPath: /datasets/series
+    #   advancedMounts:
+    #     main:
+    #       main:
+    #         - path: /datasets/series
+    #   readOnly: true
+    # peliculas:
+    #   enabled: true
+    #   type: hostPath
+    #   hostPath: /datasets/peliculas
+    #   advancedMounts:
+    #     main:
+    #       main:
+    #         - path: /datasets/peliculas
+    #   readOnly: true
+    # transcode:
+    #   enabled: true
+    #   type: emptyDir
+    peliculas:
+      enabled: true
+      type: hostPath
+      hostPath: '/datasets/peliculas/The Expendables 3 (2014)'
+      advancedMounts:
+        main:
+          main:
+            - path: '/datasets/peliculas/The Expendables 3 (2014)'
