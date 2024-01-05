@@ -5,8 +5,8 @@ app-template:
       containers:
         main:
           image:
-            repository: segator/transcoderd
-            tag: master
+            repository: pando85/transcoderd
+            tag: 9545766
 
           probes:
             liveness: &probes
