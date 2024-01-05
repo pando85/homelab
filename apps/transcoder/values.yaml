@@ -83,9 +83,18 @@ app-template:
           port: *port
     rabbit:
       controller: rabbit
+      type: LoadBalancer
+      externalTrafficPolicy: Local
+      annotations:
+        metallb.universe.tf/loadBalancerIPs: "192.168.193.3"
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/hostname: transcoder-rabbit.internal.grigri.cloud
       ports:
         tcp-clients:
+          enabled: true
+          protocol: TCP
           port: *port_rabbit
+          targetPort: *port_rabbit
 
   ingress:
     main:
