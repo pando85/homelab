@@ -132,7 +132,6 @@ app-template:
     #     main:
     #       main:
     #         - path: /datasets/series
-    #   readOnly: true
     # peliculas:
     #   enabled: true
     #   type: hostPath
@@ -141,10 +140,7 @@ app-template:
     #     main:
     #       main:
     #         - path: /datasets/peliculas
-    #   readOnly: true
-    # transcode:
-    #   enabled: true
-    #   type: emptyDir
+
     peliculas:
       enabled: true
       type: hostPath
@@ -153,3 +149,10 @@ app-template:
         main:
           main:
             - path: '/datasets/peliculas/The Expendables 3 (2014)'
+    transcode:
+      enabled: true
+      type: emptyDir
+      advancedMounts:
+        main:
+          main:
+            - path: /tmp
