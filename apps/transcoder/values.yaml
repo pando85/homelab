@@ -8,7 +8,7 @@ app-template:
         main:
           image:
             repository: pando85/transcoderd
-            tag: '95a5b23'
+            tag: 'b428530'
 
           probes:
             liveness: &probes
@@ -16,7 +16,7 @@ app-template:
               custom: true
               spec:
                 httpGet:
-                  path: /health
+                  path: /-/healthy
                   port: &port 8080
                 initialDelaySeconds: 0
                 periodSeconds: 10
