@@ -8,7 +8,7 @@ app-template:
         main:
           image:
             repository: pando85/transcoderd
-            tag: '9545766'
+            tag: '95a5b23'
 
           probes:
             liveness: &probes
@@ -27,12 +27,12 @@ app-template:
               enabled: true
           env:
             TZ: Europe/Madrid
-            DB_USER:
+            DATABASE_USER:
               valueFrom:
                 secretKeyRef:
                   name: transcoder.transcoder-postgres.credentials.postgresql.acid.zalan.do
                   key: username
-            DB_PASSWORD:
+            DATABASE_PASSWORD:
               valueFrom:
                 secretKeyRef:
                   name: transcoder.transcoder-postgres.credentials.postgresql.acid.zalan.do
