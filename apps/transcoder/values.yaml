@@ -52,10 +52,11 @@ app-template:
             liveness: &probes
               enabled: true
               custom: true
-              type: TCP
+              spec:
+                tcpSocket:
+                  port: &port_rabbit 5672
             readiness: *probes
-            startup:
-              enabled: true
+            startup: *probes
           env:
             RABBITMQ_DEFAULT_USER:
               valueFrom:
@@ -79,9 +80,10 @@ app-template:
         http:
           port: *port
     rabbit:
+      controller: rabbit
       ports:
         tcp-clients:
-          port: 5672
+          port: *port_rabbit
 
   ingress:
     main:
