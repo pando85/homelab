@@ -1,12 +1,14 @@
 app-template:
   controllers:
     main:
+      annotations:
+        reloader.stakater.com/auto: "true"
       type: statefulset
       containers:
         main:
           image:
             repository: pando85/transcoderd
-            tag: 9545766
+            tag: '9545766'
 
           probes:
             liveness: &probes
@@ -25,12 +27,12 @@ app-template:
               enabled: true
           env:
             TZ: Europe/Madrid
-            TR_DB_USER:
+            DB_USER:
               valueFrom:
                 secretKeyRef:
                   name: transcoder.transcoder-postgres.credentials.postgresql.acid.zalan.do
                   key: username
-            TR_DB_PASSWORD:
+            DB_PASSWORD:
               valueFrom:
                 secretKeyRef:
                   name: transcoder.transcoder-postgres.credentials.postgresql.acid.zalan.do
