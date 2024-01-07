@@ -7,8 +7,8 @@ app-template:
       containers:
         main:
           image:
-            repository: pando85/transcoderd
-            tag: 'b428530'
+            repository: pando85/transcoder
+            tag: '1343b82-server'
 
           probes:
             liveness: &probes
