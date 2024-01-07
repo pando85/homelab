@@ -26,14 +26,15 @@ ingress-nginx:
       limits:
         memory: 328Mi
       requests:
-        cpu: 10m
+        cpu: 40m
         memory: 150Mi
 
     autoscaling:
       enabled: true
       minReplicas: 2
       maxReplicas: 11
-      targetCPUUtilizationPercentage: 500
+      # when CPU == 500m
+      targetCPUUtilizationPercentage: 1250
       targetMemoryUtilizationPercentage: 200
     topologySpreadConstraints:
       - maxSkew: 1
