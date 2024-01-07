@@ -16,7 +16,6 @@ app-template:
               cpu: 150m
               memory: 170Mi
             limits:
-              cpu: 1
               memory: 256Mi
 
           probes:
