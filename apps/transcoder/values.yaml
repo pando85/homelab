@@ -141,31 +141,22 @@ app-template:
         main:
           main:
             - path: /etc/transcoderd/
-    # series:
-    #   enabled: true
-    #   type: hostPath
-    #   hostPath: /datasets/series
-    #   advancedMounts:
-    #     main:
-    #       main:
-    #         - path: /datasets/series
-    # peliculas:
-    #   enabled: true
-    #   type: hostPath
-    #   hostPath: /datasets/peliculas
-    #   advancedMounts:
-    #     main:
-    #       main:
-    #         - path: /datasets/peliculas
-
-    peliculas:
+    series:
       enabled: true
       type: hostPath
-      hostPath: '/datasets/peliculas/The Expendables 3 (2014)'
+      hostPath: /datasets/series
       advancedMounts:
         main:
           main:
-            - path: '/datasets/peliculas/The Expendables 3 (2014)'
+            - path: /datasets/series
+    peliculas:
+      enabled: true
+      type: hostPath
+      hostPath: /datasets/peliculas
+      advancedMounts:
+        main:
+          main:
+            - path: /datasets/peliculas
     transcode:
       enabled: true
       type: emptyDir
@@ -173,3 +164,13 @@ app-template:
         main:
           main:
             - path: /tmp
+    rabbit:
+      enabled: true
+      type: persistentVolumeClaim
+      accessMode: ReadWriteOnce
+      storageClass: zfs-local-dataset
+      size: 1Gi
+      advancedMounts:
+        rabbit:
+          main:
+            - path: /var/lib/rabbitmq
