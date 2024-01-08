@@ -49,7 +49,7 @@ app-template:
         main:
           image:
             repository: rabbitmq
-            tag: 3.12.11
+            tag: 3.12.12
           probes:
             liveness: &probes
               enabled: true
