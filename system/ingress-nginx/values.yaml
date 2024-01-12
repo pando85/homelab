@@ -33,7 +33,7 @@ ingress-nginx:
       nodeAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
           - weight: 100
-            nodeSelectorTerms:
+            preference:
               matchExpressions:
                 - key: name
                   operator: In
