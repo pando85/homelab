@@ -29,6 +29,24 @@ ingress-nginx:
         cpu: 40m
         memory: 150Mi
 
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: name
+                  operator: In
+                  values:
+                    - grigri
+          - weight: 50
+            preference:
+              matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values:
+                    - amd64
+
     autoscaling:
       enabled: true
       minReplicas: 2
