@@ -29,6 +29,17 @@ ingress-nginx:
         cpu: 40m
         memory: 150Mi
 
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            nodeSelectorTerms:
+              matchExpressions:
+                - key: name
+                  operator: In
+                  values:
+                    - grigri
+
     autoscaling:
       enabled: true
       minReplicas: 2
