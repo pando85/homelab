@@ -39,6 +39,13 @@ ingress-nginx:
                   operator: In
                   values:
                     - grigri
+          - weight: 50
+            preference:
+              matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values:
+                    - amd64
 
     autoscaling:
       enabled: true
