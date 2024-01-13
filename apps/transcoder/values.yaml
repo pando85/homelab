@@ -8,7 +8,7 @@ app-template:
         main:
           image:
             repository: pando85/transcoder
-            tag: '5a08be6-server'
+            tag: '06bdf99-server'
 
           probes:
             liveness: &probes
