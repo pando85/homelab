@@ -75,7 +75,7 @@ app-template:
               cpu: 10m
               memory: 200Mi
             limits:
-              memory: 200Mi
+              memory: 800Mi
   service:
     main:
       ports:
