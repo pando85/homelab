@@ -7,7 +7,7 @@ app-template:
       containers:
         main:
           image:
-            repository: pando85/transcoder
+            repository: ghcr.io/pando85/transcoder
             tag: '06bdf99-server'
 
           probes:
