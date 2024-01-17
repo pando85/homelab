@@ -157,7 +157,7 @@
 
 - name: Set hostname
   hostname:
-    name: "{{ ansible_hostname }}"
+    name: "{{ inventory_hostname }}"
   tags:
     - hostname
 

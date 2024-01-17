@@ -111,6 +111,8 @@ Use playbook `playbooks/install/so.yml` to setup servers.
 make first-boot
 ```
 
+**Note**: Armbian default user/password -> root/1234
+
 ### Stability problems (currently included 400MHz)
 
 Change uboot to use ddr 333 MHz frequency.

@@ -4,30 +4,42 @@
       - ansible_path is defined
       - k3s_kubelet_extra_args | type_debug == "list"
 
-- name: Download k3s binary
-  get_url:
-    url: https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/{{ k3s_binary }}
-    checksum: sha256:https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/sha256sum-{{ k3s_arch }}.txt
-    dest: "/usr/local/bin/k3s-{{ k3s_version }}"
-    owner: root
-    group: root
-    mode: "0755"
-  check_mode: false
+- name: Check if k3s binary exists
+  stat:
+    path: "/usr/local/bin/k3s"
+  register: k3s_binary_stat
   tags:
-    k3s-upgrade
+    - k3s-upgrade
 
-- name: Copy k3s binary
-  # system-upgrade needs the binary in the path, a link is not valid
-  copy:
-    src: "/usr/local/bin/k3s-{{ k3s_version }}"
-    remote_src: true
-    dest: "/usr/local/bin/k3s"
-    owner: root
-    group: root
-    mode: "0755"
-  notify: Restart k3s
-  tags:
-    k3s-upgrade
+- name: Install k3s
+  when: not k3s_binary_stat.stat.exists
+  block:
+    - name: Download k3s binary
+      get_url:
+        url: https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/{{ k3s_binary }}
+        checksum:
+          sha256:https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/sha256sum-{{
+          k3s_arch }}.txt
+        dest: "/usr/local/bin/k3s-{{ k3s_version }}"
+        owner: root
+        group: root
+        mode: "0755"
+      check_mode: false
+      tags:
+        - k3s-upgrade
+
+    - name: Copy k3s binary
+      # system-upgrade needs the binary in the path, a link is not valid
+      copy:
+        src: "/usr/local/bin/k3s-{{ k3s_version }}"
+        remote_src: true
+        dest: "/usr/local/bin/k3s"
+        owner: root
+        group: root
+        mode: "0755"
+      notify: Restart k3s
+      tags:
+        - k3s-upgrade
 
 - name: Ensure config directories exist
   file:
@@ -98,7 +110,9 @@
 
 - name: Write Kubernetes config file with the correct cluster address
   copy:
-    content: "{{ kubeconfig_base64.content | b64decode | replace('127.0.0.1', hostvars[groups['kube_control_plane'][0]].ansible_hostname) }}"
+    content:
+      "{{ kubeconfig_base64.content | b64decode | replace('127.0.0.1',
+      hostvars[groups['kube_control_plane'][0]].ansible_hostname) }}"
     dest: "{{ ansible_path }}/kubeconfig.yaml"
     mode: "0600"
   delegate_to: localhost

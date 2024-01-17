@@ -6,3 +6,4 @@
     regexp: '^  /etc/ssl/openssl.cnf'
     line: '  /etc/ssl/openssl.cnf r,'
   notify: restart apparmor
+  ignore_errors: true
