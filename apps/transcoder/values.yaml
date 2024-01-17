@@ -8,7 +8,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/pando85/transcoder
-            tag: '4bbbf23-server '
+            tag: 'f964a34-server '
 
           probes:
             liveness: &probes
@@ -27,6 +27,7 @@ app-template:
               enabled: true
           env:
             TZ: Europe/Madrid
+            CONFIG_PATH: /etc/transcoder/config.yaml
             DATABASE_USER:
               valueFrom:
                 secretKeyRef:
@@ -140,7 +141,7 @@ app-template:
       advancedMounts:
         main:
           main:
-            - path: /etc/transcoderd/
+            - path: /etc/transcoder/
     series:
       enabled: true
       type: hostPath
