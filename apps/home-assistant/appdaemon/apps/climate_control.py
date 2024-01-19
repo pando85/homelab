@@ -21,6 +21,14 @@ class Price:
             raise ValueError
 
 
+def is_float(value):
+    try:
+        float_value = float(value)
+        return True
+    except ValueError:
+        return False
+
+
 class ClimateControl(hass.Hass):
     async def initialize(self):
         self.log("Starting")
@@ -124,7 +132,10 @@ class ClimateControl(hass.Hass):
         historical_data = await self.get_history(entity_id=self.args["sensor"]["pvpc_price"], days=10)
         if historical_data is not None:
             historical_prices = [
-                Price(value=float(j["state"]), datetime=j["last_changed"]) for i in historical_data for j in i
+                Price(value=float(j["state"]), datetime=j["last_changed"])
+                for i in historical_data
+                for j in i
+                if is_float(j["state"])
             ]
 
             self.log(f"{historical_prices=}", level="DEBUG")
