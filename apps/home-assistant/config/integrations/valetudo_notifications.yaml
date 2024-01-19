@@ -1,16 +1,14 @@
 automation:
-  trigger_variables:
-    vacuum_id: vacuum.valetudo_detailedinternalrhinoceros
   trigger:
     - platform: state
-      entity_id: "{{ vacuum_id }}"
+      entity_id: vacuum.valetudo_detailedinternalrhinoceros
       from: cleaning
       to: returning
       id: cleaning_finished
       variables:
         msg_type: success_msg
     - platform: state
-      entity_id: "{{ vacuum_id }}"
+      entity_id: vacuum.valetudo_detailedinternalrhinoceros
       to: error
       for:
         hours: 0
