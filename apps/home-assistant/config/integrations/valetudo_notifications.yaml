@@ -34,7 +34,7 @@ automation:
   variables:
     strings:
       success_msg: "Cleaning task succeeded at {{ now().strftime('%-H:%M') }}."
-      error_msg: "The robot has encountered an issue: {{ states( error_message_sensor ) }}"
+      error_msg: "The robot has encountered an issue: {{ states('sensor.valetudo_detailedinternalrhinoceros_error') }}"
       default_msg: "Everything is working fine."
     message: "{{ strings[msg_type] | default(strings['default_msg']) }}"
     # TODO: send map photo
