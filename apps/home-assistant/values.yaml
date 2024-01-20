@@ -144,6 +144,21 @@ app-template:
       pod:
         affinity: *affinity
 
+    valetudopng:
+      type: deployment
+      replicas: 1
+      containers:
+        main:
+          image:
+            repository: ghcr.io/erkexzcx/valetudopng
+            tag: v1.0.16
+          args:
+            - -config
+            - /config/config.yml
+          resources:
+            requests:
+              cpu: 15m
+              memory: 150Mi
 
   defaultPodOptions:
     enableServiceLinks: false
@@ -180,6 +195,12 @@ app-template:
       ports:
         http:
           port: 10400
+    valetudopng:
+      controller: valetudopng
+      ports:
+        http:
+          port: 3000
+
   ingress:
     main:
       enabled: true
@@ -302,7 +323,14 @@ app-template:
         piper:
           main:
             - path: /data
-
+    valetudopng:
+      enabled: true
+      type: secret
+      name: valetudopng-config
+      advancedMounts:
+        valetudopng:
+          main:
+            - path: /config
   serviceMonitor:
     main:
       enabled: true
