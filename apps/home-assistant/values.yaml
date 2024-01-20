@@ -145,6 +145,8 @@ app-template:
         affinity: *affinity
 
     valetudopng:
+      annotations:
+        reloader.stakater.com/auto: "true"
       type: deployment
       replicas: 1
       containers:
