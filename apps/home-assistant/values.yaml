@@ -242,6 +242,24 @@ app-template:
         - hosts:
             - *host
           secretName: hass-appdaemon-tls-certificate
+    valetudopng:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
+      hosts:
+        - host: &host valetudopng.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                name: valetudopng
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: hass-valetudopng-tls-certificate
 
   persistence:
     config:
