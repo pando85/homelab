@@ -36,7 +36,7 @@ automation:
       success_msg: "Cleaning task succeeded at {{ now().strftime('%-H:%M') }}."
       error_msg: "The robot has encountered an issue: {{ states( error_message_sensor ) }}"
       default_msg: "Everything is working fine."
-    message: "{{ strings[msg_type] | default(strings[language]['default_msg']) }}"
+    message: "{{ strings[msg_type] | default(strings['default_msg']) }}"
     # TODO: send map photo
 
   action:
