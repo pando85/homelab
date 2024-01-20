@@ -41,6 +41,7 @@ automation:
   action:
     - service: notify.all
       data:
+        message: required but not used when sending photo
         data:
           photo:
             - url: http://home-assistant-valetudopng:3000/api/map/image
