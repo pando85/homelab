@@ -41,8 +41,9 @@ automation:
   action:
     - service: notify.all
       data:
-        title: Tanque
-        message: "{{ message }}"
         data:
           photo:
             - url: http://home-assistant-valetudopng:3000/api/map/image
+              caption: |
+                Tanque
+                "{{ message }}"
