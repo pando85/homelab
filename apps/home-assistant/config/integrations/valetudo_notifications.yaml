@@ -33,7 +33,7 @@ automation:
               state: "No error"
   variables:
     strings:
-      success_msg: "Cleaning task succeeded at {{ now().strftime('%-H:%M') }}."
+      success_msg: "Cleaning task succeeded."
       error_msg: "The robot has encountered an issue: {{ states('sensor.valetudo_detailedinternalrhinoceros_error') }}"
       default_msg: "Everything is working fine."
     message: "{{ strings[msg_type] | default(strings['default_msg']) }}"
@@ -44,3 +44,6 @@ automation:
       data:
         title: Tanque
         message: "{{ message }}"
+        data:
+          photo:
+            - url: http://home-assistant-valetudopng:3000/api/map/image
