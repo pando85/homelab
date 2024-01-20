@@ -160,7 +160,7 @@ app-template:
           resources:
             requests:
               cpu: 15m
-              memory: 150Mi
+              memory: 15Mi
 
   defaultPodOptions:
     enableServiceLinks: false

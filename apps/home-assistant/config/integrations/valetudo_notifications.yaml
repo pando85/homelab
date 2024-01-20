@@ -47,4 +47,4 @@ automation:
             - url: http://home-assistant-valetudopng:3000/api/map/image
               caption: |
                 Tanque
-                "{{ message }}"
+                {{ message }}
