@@ -1,4 +1,8 @@
 automation:
+  alias: Valetudo Notifications
+  description: >-
+    Sends notifications for Tanque vacuum robot.
+  mode: single
   trigger:
     - platform: state
       entity_id: vacuum.valetudo_detailedinternalrhinoceros
@@ -42,4 +46,3 @@ automation:
       data:
         title: "{{ title }}"
         message: "{{ message }}"
-        data: "{{ data }}"
