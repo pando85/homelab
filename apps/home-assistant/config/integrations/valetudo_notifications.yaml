@@ -37,7 +37,6 @@ automation:
       error_msg: "The robot has encountered an issue: {{ states('sensor.valetudo_detailedinternalrhinoceros_error') }}"
       default_msg: "Everything is working fine."
     message: "{{ strings[msg_type] | default(strings['default_msg']) }}"
-    # TODO: send map photo
 
   action:
     - service: notify.all
