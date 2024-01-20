@@ -1,8 +1,7 @@
 automation:
   alias: Valetudo Notifications
-  description: >-
-    Sends notifications for Tanque vacuum robot.
-  mode: single
+  description: Sends notifications for Tanque vacuum robot.
+  mode: queued
   trigger:
     - platform: state
       entity_id: vacuum.valetudo_detailedinternalrhinoceros
@@ -31,18 +30,17 @@ automation:
           conditions:
             - condition: state
               entity_id: sensor.valetudo_detailedinternalrhinoceros_error
-              state: ""
+              state: "No error"
   variables:
     strings:
       success_msg: "Cleaning task succeeded at {{ now().strftime('%-H:%M') }}."
       error_msg: "The robot has encountered an issue: {{ states( error_message_sensor ) }}"
       default_msg: "Everything is working fine."
-    title: Tanque
     message: "{{ strings[msg_type] | default(strings[language]['default_msg']) }}"
     # TODO: send map photo
 
   action:
     - service: notify.all
       data:
-        title: "{{ title }}"
+        title: Tanque
         message: "{{ message }}"
