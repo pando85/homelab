@@ -5,8 +5,7 @@ app-template:
         main:
           image:
             repository: golift/unpackerr
-            # 0.13.0>=
-            tag: unstable
+            tag: 0.13.1
 
           env:
             TZ: Europe/Madrid
