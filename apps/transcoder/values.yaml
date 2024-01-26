@@ -111,7 +111,7 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-buffering: "off"
         nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
       hosts:
-        - host: &host transcorder.internal.grigri.cloud
+        - host: &host transcoder.internal.grigri.cloud
           paths:
             - path: /
               pathType: Prefix
@@ -121,7 +121,7 @@ app-template:
       tls:
         - hosts:
             - *host
-          secretName: transcorder-tls-certificate
+          secretName: transcoder-tls-certificate
 
   defaultPodOptions:
     securityContext:
