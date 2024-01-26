@@ -8,7 +8,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/pando85/transcoder
-            tag: 'e0a88b7-server'
+            tag: '615b474-server'
 
           probes:
             liveness: &probes
