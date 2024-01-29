@@ -133,7 +133,7 @@ app-template:
         main:
           image:
             repository: rhasspy/wyoming-openwakeword
-            tag: 1.8.1
+            tag: 1.9.0
           args:
             - --preload-model
             - alexa
