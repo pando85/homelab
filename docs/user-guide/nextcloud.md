@@ -14,9 +14,9 @@
 ## Migrate auth to OIDC
 
 - Configure Kanidm oauth2 with
-[OpenID Connect user backend for Nextcloud](https://github.com/nextcloud/user_oidc).
+  [OpenID Connect user backend for Nextcloud](https://github.com/nextcloud/user_oidc).
 - Follow Kanidm guide for
-[Nextcloud config](https://github.com/kanidm/kanidm/blob/054b580fe650f012063240ba6f951c99f3c13ddc/book/src/integrations/oauth2.md#nextcloud).
+  [Nextcloud config](https://github.com/kanidm/kanidm/blob/054b580fe650f012063240ba6f951c99f3c13ddc/book/src/integrations/oauth2.md#nextcloud).
 - Use`displayname` from Kanidm (`name` in OIDC JWT) as user ID and keep user IDs from LDAP auth.
 
 ## Migrate Nextcloud
@@ -128,6 +128,10 @@ su - www-data
 ```
 
 ### Automatically upgrades fails
+
+Check `https://nextcloud.grigri.cloud/index.php/settings/integrity/failed`.
+
+Always fails in code integrity check without any errors, just hangs forever in the web browser auto updater.
 
 ```bash
 chsh -s /bin/bash www-data
