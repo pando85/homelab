@@ -19,8 +19,6 @@ app-template:
             ND_DATAFOLDER: /data
             ND_MUSICFOLDER: /music
             ND_AUTOIMPORTPLAYLISTS: "true"
-            ND_LASTFM_ENABLED: "true"
-            ND_LASTFM_LANGUAGE: es
           envFrom:
             - secretRef:
                 name: navidrome-secret
