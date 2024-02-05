@@ -1,7 +1,7 @@
 nextcloud:
   image:
     repository: nextcloud
-    tag: 28.0.1
+    tag: 28.0.2
 
   ingress:
     enabled: true
