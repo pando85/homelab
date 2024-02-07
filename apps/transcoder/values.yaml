@@ -7,8 +7,8 @@ app-template:
       containers:
         main:
           image:
-            repository: ghcr.io/pando85/transcoder
-            tag: "0a7e612-server"
+            repository: ghcr.io/pando85/gearr
+            tag: "0.0.0-server"
 
           probes:
             liveness: &probes
