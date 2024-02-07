@@ -1,20 +1,13 @@
 automation:
-  alias: Office A switch
-  description: Link office A switch with office A light.
-  trigger:
-    - platform: state
-      entity_id: light.ceiling_light_office_a
-      from: "on"
-      to: "off"
-    - platform: state
-      entity_id: light.mini_switch_office_a_light
-      from: "on"
-      to: "off"
-  condition:
-    - condition: template
-      value_template: "{{ states(light.ceiling_light_office_a) != states(light.mini_switch_office_a_light) }}"
-
-  action:
-    - service: homeassistant.turn_{{ trigger.to_state.state }}
-      data:
-        entity_id: "{% if trigger.from_state.entity_id != light.ceiling_light_office_a %} {{ light.ceiling_light_office_a }} {% else %} {{ light.mini_switch_office_a_light }} {% endif %}"
+  - alias: Sync Office A Switches
+    description: Link switch with fan light and viceversa.
+    trigger:
+      - platform: state
+        entity_id:
+          - light.mini_switch_office_a_light
+          - light.ceiling_light_office_a
+    action:
+      - service: light.turn_{{ trigger.to_state.state }}
+        entity_id:
+          - light.mini_switch_office_a_light
+          - light.ceiling_light_office_a
