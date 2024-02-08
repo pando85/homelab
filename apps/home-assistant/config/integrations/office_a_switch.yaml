@@ -9,8 +9,23 @@ automation:
         not_from:
           - "unknown"
           - "unavailable"
+        to:
+          - "on"
+          - "off"
+    condition: "{{ trigger.to_state.context.parent_id == none }}"
     action:
-      - service: light.turn_{{ trigger.to_state.state }}
-        entity_id:
-          - light.mini_switch_office_a_light
-          - light.ceiling_light_office_a
+      - wait_template: "{{ (as_timestamp(now()) - as_timestamp(this.attributes.last_triggered | default(0)) | int > 1) }}"
+        timeout: 1
+      - service_template: >
+          {% if trigger.to_state.state == 'on' %}
+          light.turn_on
+          {% elif trigger.to_state.state == 'off' %}
+          light.turn_off
+          {% endif %}
+        data_template:
+          entity_id: >
+            {% if trigger.entity_id == light.mini_switch_office_a_light %}
+            {{ light.ceiling_light_office_a }}
+            {% elif trigger.entity_id == light.ceiling_light_office_a %}
+            {{ light.mini_switch_office_a_light }}
+            {% endif %}
