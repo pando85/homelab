@@ -6,14 +6,9 @@ automation:
         entity_id:
           - light.mini_switch_office_a_light
           - light.ceiling_light_office_a
-        from: "off"
-        to: "on"
-      - platform: state
-        entity_id:
-          - light.mini_switch_office_a_light
-          - light.ceiling_light_office_a
-        from: "on"
-        to: "off"
+        not_from:
+          - "unknown"
+          - "unavailable"
     action:
       - service: light.turn_{{ trigger.to_state.state }}
         entity_id:
