@@ -15,7 +15,7 @@ app-template:
                   port: &port 9171
             readiness: *probe
           env:
-            REPOS: rash-sh/rash, pando85/timer, kanidm/kanidm, pando85/homelab
+            REPOS: rash-sh/rash, pando85/timer, kanidm/kanidm, pando85/homelab, pando85/gearr
           envFrom:
             - secretRef:
                 name: github-exporter
