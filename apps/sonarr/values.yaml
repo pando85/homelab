@@ -6,7 +6,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/onedr0p/sonarr-develop
-            tag: 4.0.1.1047@sha256:69dc3cf877077dc4a8827f433e20aa2e953b87bcdb3a04437c82dabc7ef216db
+            tag: 4.0.1.1114@sha256:1895eb1f08c3316082a773cf2c25a417ab42aa9d9935185ccd60dc6826d3087a
 
           env:
             TZ: Europe/Madrid
