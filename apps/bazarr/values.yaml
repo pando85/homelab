@@ -40,7 +40,7 @@ app-template:
         main:
           image:
             repository: onerahmet/openai-whisper-asr-webservice
-            tag: v1.2.4-gpu
+            tag: v1.3.0-gpu
           env:
             ASR_ENGINE: openai_whisper
             ASR_MODEL: base
