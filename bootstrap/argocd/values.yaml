@@ -39,7 +39,7 @@ argo-cd:
       # Disable git polling
       timeout.reconciliation: "0"
 
-      statusbadge.enabled: 'true'
+      statusbadge.enabled: "true"
       # The health assessement of argoproj.io/Application CRD has been removed in argocd 1.8
       # (see https://github.com/argoproj/argo-cd/issues/3781 for more information)
       # You might need to restore it if you are using app-of-apps pattern and orchestrating
@@ -77,13 +77,13 @@ argo-cd:
       #   g, subject, inherited-subject
       # See https://github.com/argoproj/argo-cd/blob/master/docs/operator-manual/rbac.md for additional information.
       policy.csv: |
-          # Grant all members of each LDAP group
-          p, role:none, *, *, */*, deny
-          #g, wheel, role:admin
-          # workaround until fix DN in dex (see LDAP config part)
-          g, pando855@gmail.com, role:admin
+        # Grant all members of each LDAP group
+        p, role:none, *, *, */*, deny
+        #g, wheel, role:admin
+        # workaround until fix DN in dex (see LDAP config part)
+        g, pando855@gmail.com, role:admin
 
-      scopes: '[groups, email]'
+      scopes: "[groups, email]"
 
     secret:
       createSecret: false
@@ -103,12 +103,8 @@ argo-cd:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
-      hosts:
-        - &host argocd.internal.grigri.cloud
-      tls:
-        - secretName: argocd-tls-certificate
-          hosts:
-            - *host
+      hostname: argocd.internal.grigri.cloud
+      tls: true
     metrics: &metrics
       enabled: true
       serviceMonitor:
