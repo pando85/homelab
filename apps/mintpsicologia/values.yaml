@@ -1,0 +1,59 @@
+wordpress:
+  wordpressUsername: ateneatla
+  existingSecret: "wordpress-secret"
+  wordpressBlogName: Mintpsicologia
+  wordpressTablePrefix: wp_
+  wordpressScheme: https
+  wordpressSkipInstall: false
+  wordpressExtraConfigContent: |
+    @ini_set( 'post_max_size', '128M');
+    @ini_set( 'memory_limit', '256M' );
+  wordpressConfiguration: ""
+  existingWordPressConfigurationSecret: ""
+  wordpressConfigureCache: true
+  wordpressAutoUpdateLevel: minor
+  wordpressPlugins: none
+  serviceAccountName: default
+  hostAliases:
+    ## Required for apache-exporter to work
+    - ip: "127.0.0.1"
+      hostnames:
+        - mintpsicologia.internal.grigri.cloud
+  resources:
+    limits: {}
+    requests:
+      memory: 512Mi
+      cpu: 300m
+  persistence:
+    enabled: true
+    storageClass: zfs-local-dataset
+    size: 1Gi
+  volumePermissions:
+    enabled: false
+  ingress:
+    enabled: true
+    ingressClassName: nginx-internal
+    hostname: mintpsicologia.internal.grigri.cloud
+    path: /
+    annotations:
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+    tls: true
+    extraHosts:
+  mariadb:
+    enabled: true
+    architecture: standalone
+    auth:
+      rootPassword: ""
+      database: bitnami_wordpress
+      username: bn_wordpress
+      password: ""
+    primary:
+      persistence:
+        enabled: true
+        storageClass: zfs-local-dataset
+        accessModes:
+          - ReadWriteOnce
+        size: 1Gi
+  memcached:
+    enabled: true
