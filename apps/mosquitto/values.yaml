@@ -29,7 +29,27 @@ app-template:
               memory: 20M
             limits:
               memory: 50M
-
+        exporter:
+          image:
+            repository: sapcc/mosquitto-exporter
+            tag: 0.8.0
+          resources:
+            requests:
+              cpu: 10m
+              memory: 20M
+            limits:
+              memory: 50M
+          env:
+            - name: MQTT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-user
+                  key: username
+            - name: MQTT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mosquitto-user
+                  key: password
   service:
     main:
       type: LoadBalancer
@@ -45,6 +65,8 @@ app-template:
           port: 1883
         websockets:
           port: 8083
+        exporter:
+          port: 9234
 
   defaultPodOptions:
     securityContext:
@@ -78,3 +100,15 @@ app-template:
       type: emptyDir
       globalMounts:
         - path: /mosquitto/external_config
+
+  serviceMonitor:
+    main:
+      enabled: true
+      labels:
+        release: monitoring
+      endpoints:
+        - port: http
+          scheme: http
+          path: /metrics
+          interval: 1m
+          scrapeTimeout: 30s
