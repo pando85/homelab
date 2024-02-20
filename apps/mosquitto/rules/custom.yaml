@@ -1,0 +1,10 @@
+- alert: MQTTMissingClient
+  annotations:
+    description: |
+      There are only {{ $value }} clients connected to the MQTT server, but there should be at least 5 clients connected:
+      Missing clients: HASS, tanque, valetudopng, goHeishamon, and exporter itself.
+      This condition has persisted for longer than 1 hour.
+  expr: broker_clients_connected < 5
+  for: 1h
+  labels:
+    severity: warning
