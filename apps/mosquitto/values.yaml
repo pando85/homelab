@@ -110,5 +110,5 @@ app-template:
         - port: metrics
           scheme: http
           path: /metrics
-          interval: 1m
-          scrapeTimeout: 30s
+          interval: 30s
+          scrapeTimeout: 10s
