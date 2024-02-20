@@ -65,7 +65,7 @@ app-template:
           port: 1883
         websockets:
           port: 8083
-        exporter:
+        metrics:
           port: 9234
 
   defaultPodOptions:
@@ -107,7 +107,7 @@ app-template:
       labels:
         release: monitoring
       endpoints:
-        - port: http
+        - port: metrics
           scheme: http
           path: /metrics
           interval: 1m
