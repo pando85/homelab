@@ -3,7 +3,7 @@
     description: |
       {{ $value }} torrents from {{ $labels.category }} category have being in download status
       for longer than 2 days
-  expr: qbittorrent_torrents_count{status="downloading"} > 0
+  expr: qbittorrent_torrents_count{status=~"(downloading|stalledDL)"} > 0
   for: 2d
   labels:
     severity: warning
