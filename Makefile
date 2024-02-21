@@ -39,3 +39,4 @@ docs:
 git-hooks:	## pre-commit install
 git-hooks:
 	pre-commit install
+	pre-commit install --hook-type commit-msg
