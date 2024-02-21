@@ -19,7 +19,7 @@ app-template:
               memory: 250Mi
             limits:
               cpu: 1
-              memory: 500Mi
+              memory: 1Gi
 
         subcleaner:
           image:
