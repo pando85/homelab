@@ -56,3 +56,13 @@ wordpress:
         size: 1Gi
   memcached:
     enabled: true
+    affinity:
+      podAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - wordpress
+            topologyKey: kubernetes.io/hostname
