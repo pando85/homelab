@@ -49,11 +49,17 @@ wordpress:
       username: bn_wordpress
       password: ""
     primary:
+      extraFlags: "--init-file=/tmp/force_set_passwords.sql"
       persistence:
         enabled: true
         storageClass: zfs-local-dataset
         accessModes:
           - ReadWriteOnce
         size: 1Gi
+    initdbScripts:
+      force_set_passwords.sh: |
+        #!/bin/sh
+
+        echo "ALTER USER 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD'; ALTER USER '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASSWORD'; " > /tmp/force_set_passwords.sql
   memcached:
     enabled: true
