@@ -60,6 +60,6 @@ wordpress:
       force_set_passwords.sh: |
         #!/bin/sh
 
-        echo "ALTER USER 'root'@'%' IDENTIFIED BY '$MYSQL_ROOT_PASSWORD'; ALTER USER '$MYSQL_USER'@'%' IDENTIFIED BY '$MYSQL_PASSWORD'; " > /tmp/force_set_passwords.sql
+        echo "ALTER USER 'root'@'%' IDENTIFIED BY '$MARIADB_ROOT_PASSWORD'; ALTER USER '$MARIADB_USER'@'%' IDENTIFIED BY '$MARIADB_PASSWORD'; " > /tmp/force_set_passwords.sql
   memcached:
     enabled: true
