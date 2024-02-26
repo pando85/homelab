@@ -16,7 +16,6 @@ esp8266:
   board: esp8285
   restore_from_flash: true
 
-
 ota:
   safe_mode: true
   password: !secret ota_password
@@ -59,7 +58,7 @@ globals:
   - id: total_energy
     type: float
     restore_value: yes
-    initial_value: '0.0'
+    initial_value: "0.0"
 
 binary_sensor:
   - platform: status
@@ -88,12 +87,14 @@ sensor:
     name: "${friendly_name} Uptime Sensor"
 
   - platform: cse7766
+    # unsupported in 2024.2:
+    # https://github.com/esphome/issues/issues/5504
+    # https://github.com/esphome/esphome/pull/6265
     update_interval: 10s
     current:
       name: "${friendly_name} Current"
       filters:
-        - lambda: if (x < 0.060) return 0.0; else return x;   #For the chip will report less than 3w power when no load is connected
-
+        - lambda: if (x < 0.060) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
 
     voltage:
       name: "${friendly_name} Voltage"
@@ -101,8 +102,7 @@ sensor:
       name: "${friendly_name} Power"
       id: power_sensor
       filters:
-        - lambda: if (x < 3.0) return 0.0; else return x;    #For the chip will report less than 3w power when no load is connected
-
+        - lambda: if (x < 3.0) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
 
     energy:
       name: "${friendly_name} Energy"
@@ -137,7 +137,6 @@ sensor:
     accuracy_decimals: 3
     filters:
       - multiply: 0.001
-
 
 button:
   - platform: factory_reset
