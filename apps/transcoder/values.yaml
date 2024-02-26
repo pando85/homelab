@@ -8,7 +8,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/pando85/gearr
-            tag: "0.1.2-server"
+            tag: "0.1.3-server"
 
           probes:
             liveness: &probes
