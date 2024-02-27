@@ -3,8 +3,6 @@
 ## ZFS
 
 ```bash
-# check snapshot
-zfs list datasets/k8s/l/v/${PV_NAME} -t snapshot -o name,creation
 zfs rollback ${ZFS_VOLUME}@{ZFS_SNAPSHOT}
 ```
 
@@ -15,3 +13,11 @@ If after restore there are this kind of errors:
 > My wal position exceeds maximum replication lag
 
 Replica can be promoted to leader using `patronictl failover` command as root.
+
+## Longhorn
+
+- scale down replicas and delete pvc
+- restore latest backup from [UI](https://longhorn.k8s.grigri/#/backup):
+  - pv with the same name
+  - pvc with the same name
+- scale up and recreate pvc. Warning: change storageClass to `longhorn-static`
