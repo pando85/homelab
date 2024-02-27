@@ -9,7 +9,7 @@ app-template:
         main:
           image:
             repository: kanidm/server
-            tag: 1.1.0-rc.15
+            tag: 1.1.0-rc.16
 
           resources:
             requests:
