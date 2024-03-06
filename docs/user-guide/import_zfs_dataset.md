@@ -1,5 +1,16 @@
 # Import ZFS dataset
 
+## Steps
+
+- stop app
+- clone volume
+- create new volume
+- change volume for app
+- check app
+- remove old volume
+
+## Commands
+
 In ZFS server:
 
 ```
@@ -60,7 +71,7 @@ metadata:
   finalizers:
   - zfs.openebs.io/finalizer
   name: ${NAME}
-  namespace: ${NAMESPACE}
+  namespace: zfs-localpv
 spec:
   capacity: "$((${SIZE::-1} * 1024 * 1024 * 1024))" # size of the volume in bytes
   fsType: zfs
