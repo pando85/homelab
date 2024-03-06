@@ -58,7 +58,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /data
-      existingClaim: mosquitto-tls-data-zfs
+      existingClaim: mosquitto-tls
     config-file:
       type: configMap
       name: mosquitto-tls-config
