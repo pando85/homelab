@@ -1,0 +1,103 @@
+minio:
+  image:
+    repository: quay.io/minio/minio
+    tag: RELEASE.2024-03-03T17-50-39Z
+
+  mcImage:
+    repository: quay.io/minio/mc
+    tag: RELEASE.2024-03-03T00-13-08Z
+
+  mode: standalone
+
+  drivesPerNode: 1
+  # Number of MinIO containers running
+  replicas: 2
+
+  existingSecret: minio-users
+
+  persistence:
+    enabled: true
+    existingClaim: minio-backup
+
+  ingress:
+    enabled: false
+    ingressClassName: nginx-internal
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    hosts:
+      - &host s3.internal.grigri.cloud
+    tls:
+      - hosts:
+          - *host
+        secretName: s3-tls-certificate
+
+  resources:
+    requests:
+      memory: 2.5Gi
+
+  users:
+    []
+    ## Username, password and policy to be assigned to the user
+    ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
+    ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
+    ## NOTE: this will fail if LDAP is enabled in your MinIO deployment
+    ## make sure to disable this if you are using LDAP.
+    #- accessKey: console
+    #  secretKey: console123
+    #  policy: consoleAdmin
+    # Or you can refer to specific secret
+    #- accessKey: externalSecret
+    #  existingSecret: my-secret
+    #  existingSecretKey: password
+    #  policy: readonly
+
+  buckets:
+    []
+    #   # Name of the bucket
+    # - name: bucket1
+    #   # Policy to be set on the
+    #   # bucket [none|download|upload|public]
+    #   policy: none
+    #   # Purge if bucket exists already
+    #   purge: false
+    #   # set versioning for
+    #   # bucket [true|false]
+    #   versioning: false # remove this key if you do not want versioning feature
+    #   # set objectlocking for
+    #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
+    #   objectlocking: false
+    # - name: bucket2
+    #   policy: none
+    #   purge: false
+    #   versioning: true
+    #   # set objectlocking for
+    #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
+    #   objectlocking: false
+
+  ## OpenID Identity Management
+  ## The following section documents environment variables for enabling external identity management using an OpenID Connect (OIDC)-compatible provider.
+  ## See https://min.io/docs/minio/linux/operations/external-iam/configure-openid-external-identity-management.html for a tutorial on using these variables.
+  oidc:
+    enabled: false
+    configUrl: "https://identity-provider-url/.well-known/openid-configuration"
+    clientId: "minio"
+    clientSecret: ""
+    # Provide existing client secret from the Kubernetes Secret resource, existing secret will have priority over `clientId` and/or `clientSecret``
+    existingClientSecretName: ""
+    existingClientIdKey: ""
+    existingClientSecretKey: ""
+    claimName: "policy"
+    scopes: "openid,profile,email"
+    redirectUri: "https://console-endpoint-url/oauth_callback"
+    # Can leave empty
+    claimPrefix: ""
+    comment: ""
+    displayName: ""
+
+  metrics:
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: monitoring

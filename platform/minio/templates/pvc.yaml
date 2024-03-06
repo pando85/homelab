@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: minio
+    app.kubernetes.io/name: minio
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: minio-backup
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Ti
+  storageClassName: backup
