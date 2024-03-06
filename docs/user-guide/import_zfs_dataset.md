@@ -68,8 +68,8 @@ spec:
   shared: "yes"
   poolName: ${DATASET}
   volumeType: DATASET
-Status:
-  State: Ready
+status:
+  state: Ready
 EOF
 k3s kubectl apply -f /tmp/zfs-volume.yaml
 ```

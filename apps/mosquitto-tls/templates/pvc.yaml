@@ -14,5 +14,3 @@ spec:
   resources:
     requests:
       storage: 2Gi
-  csi:
-    volumeHandle: mosquitto-tls
