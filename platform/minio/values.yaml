@@ -1,11 +1,11 @@
 minio:
   image:
     repository: quay.io/minio/minio
-    tag: RELEASE.2024-03-03T17-50-39Z
+    tag: RELEASE.2024-03-03T17-50-39Z-cpuv1
 
   mcImage:
     repository: quay.io/minio/mc
-    tag: RELEASE.2024-03-03T00-13-08Z
+    tag: RELEASE.2024-03-03T00-13-08Z-cpuv1
 
   mode: standalone
 
