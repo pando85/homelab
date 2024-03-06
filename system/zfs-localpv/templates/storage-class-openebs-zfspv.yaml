@@ -8,7 +8,7 @@ allowVolumeExpansion: true
 parameters:
   fstype: "zfs"
   shared: "yes"
-  poolname: "dataset"
+  poolname: "dataset/openebs"
 provisioner: zfs.csi.openebs.io
 allowedTopologies:
   - matchLabelExpressions:
