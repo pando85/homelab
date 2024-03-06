@@ -32,6 +32,19 @@ minio:
           - *host
         secretName: s3-tls-certificate
 
+  consoleIngress:
+    enabled: true
+    ingressClassName: nginx-internal
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      external-dns.alpha.kubernetes.io/enabled: "true"
+    hosts:
+      - &hostMC mc-s3.internal.grigri.cloud
+    tls:
+      - hosts:
+          - *hostMC
+        secretName: mc-s3-tls-certificate
+
   resources:
     requests:
       memory: 2
