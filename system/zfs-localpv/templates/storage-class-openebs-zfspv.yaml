@@ -1,0 +1,19 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: openebs-zfspv
+  annotations:
+    storageclass.kubernetes.io/is-default-class: true
+allowVolumeExpansion: true
+parameters:
+  fstype: "zfs"
+  shared: "yes"
+  poolname: "dataset"
+provisioner: zfs.csi.openebs.io
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: kubernetes.io/hostname
+        values:
+          - grigri
+# with this we will take into account the k8s scheduler instead of CapacityWeighted (default) or VolumeWeighted.
+volumeBindingMode: WaitForFirstConsumer
