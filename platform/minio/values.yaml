@@ -20,7 +20,7 @@ minio:
     existingClaim: minio-backup
 
   ingress:
-    enabled: false
+    enabled: true
     ingressClassName: nginx-internal
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
