@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: mosquitto-tls-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset
