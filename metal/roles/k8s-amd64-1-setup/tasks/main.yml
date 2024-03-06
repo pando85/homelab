@@ -1,0 +1,34 @@
+---
+- name: Install smartctl
+  apt:
+    name: smartmontools
+    state: present
+    force_apt_get: true
+    update_cache: true
+  tags:
+    - k8s-amd64-1-setup
+
+- name: Ensure smartctl configured for sending notification errors
+  lineinfile:
+    path: /etc/smartd.conf
+    regexp: "^DEVICESCAN"
+    line: DEVICESCAN -H -M once -m pando855@gmail.com -n standby,10,q
+  tags:
+    - k8s-amd64-1-setup
+
+- name: Enable smartd service
+  systemd:
+    name: smartd
+    daemon_reload: true
+    enabled: true
+  tags:
+    - k8s-amd64-1-setup
+
+- name: Install ZFS tools
+  apt:
+    name: zfsutils-linux
+    state: present
+    force_apt_get: true
+    update_cache: true
+  tags:
+    - k8s-amd64-1-setup

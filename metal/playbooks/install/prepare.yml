@@ -12,6 +12,11 @@
   roles:
     - grigri_setup
 
+- name: Setup k8s-amd64-1
+  hosts: k8s-amd64-1
+  roles:
+    - k8s-amd64-1-setup
+
 - name: Setup NVIDA drivers
   hosts: nvidia
   roles:
