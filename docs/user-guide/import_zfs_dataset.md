@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-5b203fd2-ac4b-4653-909a-74830fc22dd4
-NAME=storage-loki-0
-SIZE=50G
-NAMESPACE=loki
+PVC=datasets/k8s/l/v/pvc-51028963-8129-4bc4-9edd-2a210b82cddd
+NAME=vault-file-vault-0
+SIZE=1G
+NAMESPACE=vault
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs
