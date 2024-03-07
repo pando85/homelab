@@ -7,11 +7,10 @@ metadata:
     backup: antdroid-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: antdroid-data-zfs
+  name: antdroid-data
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 100Mi
-  storageClassName: zfs-local-dataset
+      storage: 0.1Gi

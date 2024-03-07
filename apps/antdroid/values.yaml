@@ -79,4 +79,4 @@ app-template:
       enabled: true
       globalMounts:
         - path: /usr/share/nginx/html
-      existingClaim: antdroid-data-zfs
+      existingClaim: antdroid-data
