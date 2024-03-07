@@ -110,7 +110,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /data
-      existingClaim: kanidm-data-zfs-0
+      existingClaim: kanidm-data-0
     kanidmd-config:
       enabled: true
       globalMounts:

@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: kanidm-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

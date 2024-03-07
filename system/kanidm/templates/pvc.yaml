@@ -7,11 +7,10 @@ metadata:
     backup: kanidm-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: kanidm-data-zfs-0
+  name: kanidm-data-0
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 400Mi
-  storageClassName: zfs-local-dataset
+      storage: 0.5Gi

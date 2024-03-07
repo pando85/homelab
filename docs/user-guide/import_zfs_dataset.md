@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=pvc-480f4c73-6e98-489d-b3a1-6e39673fab8c
-NAME=config-jellyfin
-SIZE=100G
-NAMESPACE=jellyfin
+PVC=datasets/k8s/l/v/pvc-44ab785c-a09c-474e-9744-5ee0d2fe8373
+NAME=kanidm-data-0
+SIZE=0.5G
+NAMESPACE=kanidm
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs
