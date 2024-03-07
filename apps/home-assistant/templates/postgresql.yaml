@@ -5,7 +5,7 @@ metadata:
 spec:
   teamId: home-assistant
 
-  numberOfInstances: 0
+  numberOfInstances: 1
 
   resources:
     requests:
