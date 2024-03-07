@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-648fb604-3ac9-4427-adcf-d4d457acc96b
-NAME=mosquitto-data
-SIZE=2G
-NAMESPACE=mosquitto
+PVC=datasets/k8s/l/v/pvc-5c19f58b-9394-4100-9116-c38dd11a431d
+NAME=config-bazarr
+SIZE=1G
+NAMESPACE=bazarr
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs

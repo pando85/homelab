@@ -7,11 +7,10 @@ metadata:
     backup: bazarr-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: config-bazarr-zfs
+  name: config-bazarr
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
-  storageClassName: zfs-local-dataset

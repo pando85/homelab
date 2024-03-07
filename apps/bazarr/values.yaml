@@ -114,7 +114,7 @@ app-template:
   persistence:
     config:
       enabled: true
-      existingClaim: config-bazarr-zfs
+      existingClaim: config-bazarr
       advancedMounts:
         main:
           main:
