@@ -7,11 +7,10 @@ metadata:
     backup: mosquitto-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: mosquitto-data-zfs
+  name: mosquitto-data
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
-  storageClassName: zfs-local-dataset

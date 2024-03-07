@@ -80,7 +80,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /data
-      existingClaim: mosquitto-data-zfs
+      existingClaim: mosquitto-data
     config-file:
       type: configMap
       name: mosquitto-config
