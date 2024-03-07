@@ -7,11 +7,10 @@ metadata:
     backup: unifi-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: unifi-config-zfs
+  name: config-unifi
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
-  storageClassName: zfs-local-dataset

@@ -91,4 +91,4 @@ app-template:
       enabled: true
       globalMounts:
         - path: /unifi
-      existingClaim: unifi-config-zfs
+      existingClaim: config-unifi

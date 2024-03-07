@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-44ab785c-a09c-474e-9744-5ee0d2fe8373
-NAME=kanidm-data-0
-SIZE=0.5G
-NAMESPACE=kanidm
+PVC=datasets/k8s/l/v/pvc-401c2430-992b-4747-821f-2edd854ce132
+NAME=config-unifi
+SIZE=2G
+NAMESPACE=unifi
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs
