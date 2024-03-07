@@ -50,7 +50,6 @@ wordpress:
     primary:
       persistence:
         enabled: true
-        storageClass: zfs-local-dataset
         accessModes:
           - ReadWriteOnce
         size: 1Gi
