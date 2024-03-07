@@ -5,7 +5,7 @@ metadata:
 spec:
   teamId: nextcloud
 
-  numberOfInstances: 0
+  numberOfInstances: 1
 
   resources:
     requests:
@@ -16,7 +16,6 @@ spec:
 
   volume:
     size: 2.5Gi
-    storageClass: zfs-local-dataset
 
   users:
     nextcloud:
