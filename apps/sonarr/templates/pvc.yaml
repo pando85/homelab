@@ -7,11 +7,10 @@ metadata:
     backup: sonarr-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: config-sonarr-zfs
+  name: config-sonarr
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
-  storageClassName: zfs-local-dataset

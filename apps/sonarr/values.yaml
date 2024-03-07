@@ -89,7 +89,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /config
-      existingClaim: config-sonarr-zfs
+      existingClaim: config-sonarr
     series:
       enabled: true
       type: hostPath
