@@ -15,7 +15,6 @@ spec:
 
   volume:
     size: 1.5Gi
-    storageClass: zfs-local-dataset
 
   users:
     transcoder:

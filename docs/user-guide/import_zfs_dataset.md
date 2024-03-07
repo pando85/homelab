@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-232a2126-3df2-4abd-9470-9df0d21cd72f
-NAME=antdroid-data
-SIZE=0.1G
-NAMESPACE=antdroid
+PVC=datasets/k8s/l/v/pvc-1355efbc-fb3f-412b-96e2-c6e3a6845177
+NAME=pgdata-transcoder-postgres-0
+SIZE=1.5G
+NAMESPACE=transcoder
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs
