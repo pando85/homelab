@@ -1,7 +1,7 @@
 apiVersion: snapscheduler.backube/v1
 kind: SnapshotSchedule
 metadata:
-  name: jellyfin-zfs-backups
+  name: jellyfin-backups
 spec:
   retention:
     maxCount: 20
@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: jellyfin-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

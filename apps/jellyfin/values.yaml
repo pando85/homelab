@@ -92,7 +92,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /config
-      existingClaim: config-jellyfin-0-zfs
+      existingClaim: config-jellyfin
     series:
       enabled: true
       type: hostPath

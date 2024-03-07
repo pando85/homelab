@@ -7,11 +7,10 @@ metadata:
     backup: jellyfin-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: config-jellyfin-0-zfs
+  name: config-jellyfin
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 100Gi
-  storageClassName: zfs-local-dataset
