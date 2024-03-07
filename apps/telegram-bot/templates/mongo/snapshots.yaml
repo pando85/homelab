@@ -1,7 +1,7 @@
 apiVersion: snapscheduler.backube/v1
 kind: SnapshotSchedule
 metadata:
-  name: telegram-bot-zfs-backups
+  name: telegram-bot-backups
 spec:
   retention:
     maxCount: 20
@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: telegram-bot-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

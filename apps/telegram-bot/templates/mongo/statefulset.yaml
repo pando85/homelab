@@ -61,7 +61,6 @@ spec:
         labels:
           backup: telegram-bot-zfs
       spec:
-        storageClassName: zfs-local-dataset
         accessModes:
           - ReadWriteOnce
         resources:
