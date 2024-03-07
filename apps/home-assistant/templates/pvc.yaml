@@ -7,11 +7,10 @@ metadata:
     backup: home-assistant-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: home-assistant-config-zfs
+  name: home-assistant-config
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 4Gi
-  storageClassName: zfs-local-dataset

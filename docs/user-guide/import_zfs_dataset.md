@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-3d8ee37c-d137-4650-967a-41c3e61f006b
-NAME=freshrss-config
-SIZE=2G
-NAMESPACE=freshrss
+PVC=datasets/k8s/l/v/pvc-d07b7df1-8604-4a74-a5c8-12e2464c9577
+NAME=home-assistant-config
+SIZE=4G
+NAMESPACE=home-assistant
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs

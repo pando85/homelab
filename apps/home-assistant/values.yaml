@@ -266,7 +266,7 @@ app-template:
   persistence:
     config:
       enabled: true
-      existingClaim: home-assistant-config-zfs
+      existingClaim: home-assistant-config
       advancedMounts:
         main:
           main:
