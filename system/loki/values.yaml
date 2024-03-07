@@ -3,7 +3,7 @@ loki:
     commonConfig:
       replication_factor: 1
     storage:
-      type: 'filesystem'
+      type: "filesystem"
 
     auth_enabled: false
 
@@ -26,7 +26,6 @@ loki:
       # Remove until k8s 1.27
       enableStatefulSetAutoDeletePVC: false
       size: 50Gi
-      storageClass: zfs-local-dataset
 
     resources:
       limits:
