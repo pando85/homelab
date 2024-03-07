@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       vault_cr: vault
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset
