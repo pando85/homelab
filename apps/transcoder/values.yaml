@@ -169,7 +169,6 @@ app-template:
       enabled: true
       type: persistentVolumeClaim
       accessMode: ReadWriteOnce
-      storageClass: zfs-local-dataset
       size: 1Gi
       advancedMounts:
         rabbit:
