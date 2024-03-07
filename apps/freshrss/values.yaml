@@ -1,7 +1,7 @@
 app-template:
   controllers:
     main:
-      replicas: 0
+      replicas: 1
       # HA is not supported
       strategy: Recreate
       containers:
@@ -80,4 +80,4 @@ app-template:
       enabled: true
       globalMounts:
         - path: /var/www/FreshRSS/data
-      existingClaim: freshrss-config-zfs
+      existingClaim: freshrss-config

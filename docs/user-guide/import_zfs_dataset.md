@@ -15,9 +15,9 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-d2884bec-137b-4938-95f6-5f7eff1c52f5
-NAME=pgdata-freshrss-postgres-0
-SIZE=1.5G
+PVC=datasets/k8s/l/v/pvc-3d8ee37c-d137-4650-967a-41c3e61f006b
+NAME=freshrss-config
+SIZE=2G
 NAMESPACE=freshrss
 
 PVC_NAME=${NAME}

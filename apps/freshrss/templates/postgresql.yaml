@@ -5,7 +5,7 @@ metadata:
 spec:
   teamId: freshrss
 
-  numberOfInstances: 0
+  numberOfInstances: 1
 
   resources:
     requests:

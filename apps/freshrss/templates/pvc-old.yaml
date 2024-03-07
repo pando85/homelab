@@ -7,10 +7,11 @@ metadata:
     backup: freshrss-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: freshrss-config
+  name: freshrss-config-zfs
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
+  storageClassName: zfs-local-dataset
