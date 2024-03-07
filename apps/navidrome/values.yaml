@@ -83,6 +83,7 @@ app-template:
       runAsUser: 995
       runAsGroup: 991
       fsGroup: 991
+      fsGroupChangePolicy: "OnRootMismatch"
 
   persistence:
     music:

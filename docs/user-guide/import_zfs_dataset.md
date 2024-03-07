@@ -15,9 +15,9 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-86757c5f-970c-457f-80e2-1ac3d40dd7ad
-NAME=music-navidrome
-SIZE=200G
+PVC=datasets/k8s/l/v/pvc-0b224a8a-81b3-4449-8bb0-d7593df49d2a
+NAME=data-navidrome
+SIZE=1G
 NAMESPACE=navidrome
 
 PVC_NAME=${NAME}
