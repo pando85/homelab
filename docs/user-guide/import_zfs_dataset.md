@@ -15,9 +15,9 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-e0ed25c3-29b9-4520-8d22-accbd1433395
-NAME=wallabag-images
-SIZE=4G
+PVC=datasets/k8s/l/v/pvc-4fca3ad4-28cb-4dff-8ff7-c0ab98d322c3
+NAME=pgdata-wallabag-postgres-0
+SIZE=1.5G
 NAMESPACE=wallabag
 
 DATASET=datasets/openebs
@@ -74,7 +74,7 @@ metadata:
   name: ${NAME}
   namespace: zfs-localpv
 spec:
-  capacity: "$((${SIZE::-1} * 1024 * 1024 * 1024))" # size of the volume in bytes
+  capacity: "$(echo "${SIZE::-1} * 1024 * 1024 * 1024" | bc)" # size of the volume in bytes
   fsType: zfs
   ownerNodeID: grigri
   shared: "yes"
