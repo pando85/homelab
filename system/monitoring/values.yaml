@@ -46,7 +46,6 @@ alertmanager:
         hosts:
           - alertmanager.internal.grigri.cloud
 
-
 grafana:
   enabled: true
 
@@ -190,7 +189,7 @@ prometheus-node-exporter:
 
 prometheus:
   prometheusSpec:
-    replicas: 1
+    replicas: 0
     retentionSize: 100GB
     retention: 240d
     resources:
@@ -211,7 +210,6 @@ prometheus:
     storageSpec:
       volumeClaimTemplate:
         spec:
-          storageClassName: zfs-local-dataset
           accessModes: ["ReadWriteOnce"]
           resources:
             requests:

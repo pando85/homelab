@@ -15,11 +15,13 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-e0ed25c3-29b9-4520-8d22-accbd1433395
-NAME=wallabag-images
-SIZE=4G
-NAMESPACE=wallabag
+PVC=datasets/k8s/l/v/pvc-d7bf5b5d-ea64-4d7c-bf57-dc82be1f504a
+NAME=prometheus-monitoring-kube-prometheus-prometheus-db-prometheus-monitoring-kube-prometheus-prometheus-0
+SIZE=150G
+NAMESPACE=monitoring
 
+#PVC_NAME=${NAME}
+PVC_NAME=${NAME}
 DATASET=datasets/openebs
 NEW_DATASET=${DATASET}/${NAME}
 
@@ -43,7 +45,7 @@ spec:
   claimRef:
     apiVersion: v1
     kind: PersistentVolumeClaim
-    name: ${NAME}
+    name: ${PVC_NAME}
     namespace: ${NAMESPACE}
   csi:
     driver: zfs.csi.openebs.io
@@ -74,7 +76,7 @@ metadata:
   name: ${NAME}
   namespace: zfs-localpv
 spec:
-  capacity: "$((${SIZE::-1} * 1024 * 1024 * 1024))" # size of the volume in bytes
+  capacity: "$(echo "${SIZE::-1} * 1024 * 1024 * 1024" | bc)" # size of the volume in bytes
   fsType: zfs
   ownerNodeID: grigri
   shared: "yes"

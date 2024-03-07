@@ -17,24 +17,23 @@ spec:
 
   volume:
     size: 1.5Gi
-    storageClass: zfs-local-dataset
 
   users:
     wallabag:
-    - superuser
-    - createdb
+      - superuser
+      - createdb
   databases:
     wallabag: wallabag
 
   postgresql:
     version: "15"
     parameters:
-      archive_mode: 'off'
+      archive_mode: "off"
       max_connections: "4"
       shared_buffers: 32MB
-      log_checkpoints: 'off'
-      log_connections: 'off'
-      log_disconnections: 'off'
-      log_lock_waits: 'off'
+      log_checkpoints: "off"
+      log_connections: "off"
+      log_disconnections: "off"
+      log_lock_waits: "off"
       log_min_duration_statement: "-1"
       log_statement: none
