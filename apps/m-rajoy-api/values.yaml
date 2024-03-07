@@ -101,4 +101,4 @@ app-template:
       enabled: true
       globalMounts:
         - path: /data/mariano-rajoy
-      existingClaim: m-rajoy-api-data-zfs
+      existingClaim: m-rajoy-api-data

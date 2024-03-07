@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-03c63764-ef12-4a2d-ab0d-894d17c7c167
-NAME=pgdata-nextcloud-postgres-0
-SIZE=2.5G
-NAMESPACE=nextcloud
+PVC=datasets/k8s/l/v/pvc-6e195a95-db7f-4624-9778-c6e4b3db969a
+NAME=m-rajoy-api-data
+SIZE=0.1G
+NAMESPACE=m-rajoy-api
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs

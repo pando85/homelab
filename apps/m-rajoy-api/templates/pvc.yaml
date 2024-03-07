@@ -7,11 +7,10 @@ metadata:
     backup: m-rajoy-api-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: m-rajoy-api-data-zfs
+  name: m-rajoy-api-data
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 100Mi
-  storageClassName: zfs-local-dataset
+      storage: 0.1Gi
