@@ -83,7 +83,7 @@ nextcloud:
 
   persistence:
     enabled: true
-    existingClaim: nextcloud-nextcloud-data-zfs
+    existingClaim: nextcloud-nextcloud-data
 
     nextcloudData:
       enabled: false
