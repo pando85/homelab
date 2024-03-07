@@ -7,11 +7,10 @@ metadata:
     backup: navidrome-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: music-navidrome-zfs
+  name: music-navidrome
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 200Gi
-  storageClassName: zfs-local-dataset

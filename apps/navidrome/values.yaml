@@ -89,9 +89,9 @@ app-template:
       enabled: true
       globalMounts:
         - path: /music
-      existingClaim: music-navidrome-zfs
+      existingClaim: music-navidrome
     data:
       enabled: true
       globalMounts:
         - path: /data
-      existingClaim: data-navidrome-zfs
+      existingClaim: data-navidrome

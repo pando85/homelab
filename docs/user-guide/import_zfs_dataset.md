@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-9454fce3-6f1a-4493-861f-57b86bc85d59
-NAME=data-gitea-zfs-0
-SIZE=10G
-NAMESPACE=git
+PVC=datasets/k8s/l/v/pvc-86757c5f-970c-457f-80e2-1ac3d40dd7ad
+NAME=music-navidrome
+SIZE=200G
+NAMESPACE=navidrome
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs
