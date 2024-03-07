@@ -79,7 +79,7 @@ gitea:
       cron:
         NOTICE_ON_SUCCESS: false
       migrations:
-        ALLOWED_DOMAINS: '*'
+        ALLOWED_DOMAINS: "*"
 
     additionalConfigSources:
       - secret:
