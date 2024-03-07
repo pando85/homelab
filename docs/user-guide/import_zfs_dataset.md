@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-d7bf5b5d-ea64-4d7c-bf57-dc82be1f504a
-NAME=prometheus-monitoring-kube-prometheus-prometheus-db-prometheus-monitoring-kube-prometheus-prometheus-0
-SIZE=150G
-NAMESPACE=monitoring
+PVC=datasets/k8s/l/v/pvc-d2884bec-137b-4938-95f6-5f7eff1c52f5
+NAME=pgdata-freshrss-postgres-0
+SIZE=1.5G
+NAMESPACE=freshrss
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs
