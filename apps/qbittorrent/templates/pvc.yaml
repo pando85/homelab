@@ -7,11 +7,10 @@ metadata:
     backup: qbittorrent-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: config-qbittorrent-zfs
+  name: config-qbittorrent
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
-  storageClassName: zfs-local-dataset

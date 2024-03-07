@@ -152,7 +152,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /config
-      existingClaim: config-qbittorrent-zfs
+      existingClaim: config-qbittorrent
 
     series:
       enabled: true
