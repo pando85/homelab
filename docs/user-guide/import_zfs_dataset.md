@@ -20,7 +20,6 @@ NAME=prometheus-monitoring-kube-prometheus-prometheus-db-prometheus-monitoring-k
 SIZE=150G
 NAMESPACE=monitoring
 
-#PVC_NAME=${NAME}
 PVC_NAME=${NAME}
 DATASET=datasets/openebs
 NEW_DATASET=${DATASET}/${NAME}
