@@ -26,7 +26,6 @@ wordpress:
       cpu: 300m
   persistence:
     enabled: true
-    storageClass: zfs-local-dataset
     size: 1Gi
   volumePermissions:
     enabled: false
