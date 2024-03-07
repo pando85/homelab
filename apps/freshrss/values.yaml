@@ -1,7 +1,7 @@
 app-template:
   controllers:
     main:
-      replicas: 1
+      replicas: 0
       # HA is not supported
       strategy: Recreate
       containers:
@@ -47,7 +47,7 @@ app-template:
             - -s
             - /bin/sh
             - -c
-            - 'php /var/www/FreshRSS/app/actualize_script.php'
+            - "php /var/www/FreshRSS/app/actualize_script.php"
   service:
     main:
       ports:
