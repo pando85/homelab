@@ -15,10 +15,10 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-3536eea2-27b3-48ef-b16b-fc052c67152d
-NAME=mongo-persistent-storage-zfs-mongo-0
-SIZE=1G
-NAMESPACE=telegram-bot
+PVC=datasets/k8s/l/v/pvc-23930864-b13d-4bcb-a57e-898eee5c53ac
+NAME=prometheus-long-term-prometheus-db-prometheus-long-term-prometheus-0
+SIZE=200G
+NAMESPACE=monitoring
 
 PVC_NAME=${NAME}
 DATASET=datasets/openebs

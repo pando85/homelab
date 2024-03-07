@@ -72,4 +72,3 @@ spec:
         resources:
           requests:
             storage: 200Gi
-        storageClassName: zfs-local-dataset
