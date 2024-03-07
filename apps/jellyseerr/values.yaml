@@ -62,4 +62,4 @@ app-template:
       enabled: true
       globalMounts:
         - path: /app/config
-      existingClaim: jellyseerr-config-zfs
+      existingClaim: jellyseerr-config
