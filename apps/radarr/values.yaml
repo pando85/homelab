@@ -80,7 +80,7 @@ app-template:
       enabled: true
       globalMounts:
         - path: /config
-      existingClaim: config-radarr-zfs
+      existingClaim: config-radarr
     peliculas:
       enabled: true
       type: hostPath
