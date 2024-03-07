@@ -1,4 +1,6 @@
 wordpress:
+  image:
+    debug: true
   wordpressUsername: ateneatla
   existingSecret: "wordpress-secret"
   wordpressBlogName: Mintpsicologia
