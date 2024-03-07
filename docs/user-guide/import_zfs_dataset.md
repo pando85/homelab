@@ -15,16 +15,17 @@ In ZFS server:
 
 ```
 # variables
-PVC=datasets/k8s/l/v/pvc-eb3b9543-b268-4e10-8c5a-bb2f204c4115
-NAME=mosquitto-tls
-SIZE=2G
-NAMESPACE=mosquitto-tls
+PVC=datasets/k8s/l/v/pvc-e0ed25c3-29b9-4520-8d22-accbd1433395
+NAME=wallabag-images
+SIZE=4G
+NAMESPACE=wallabag
 
 DATASET=datasets/openebs
 NEW_DATASET=${DATASET}/${NAME}
 
 zfs snapshot ${PVC}@clone
 zfs clone ${PVC}@clone ${NEW_DATASET}
+zfs promote ${NEW_DATASET}
 zfs unmount ${NEW_DATASET}
 zfs set mountpoint=legacy ${NEW_DATASET}
 zfs set quota=${SIZE} ${NEW_DATASET}

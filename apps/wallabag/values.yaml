@@ -102,4 +102,4 @@ app-template:
       enabled: true
       globalMounts:
         - path: /var/www/wallabag/web/assets/images
-      existingClaim: wallabag-images-zfs
+      existingClaim: wallabag-images

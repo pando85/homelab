@@ -7,10 +7,11 @@ metadata:
     backup: wallabag-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: wallabag-images
+  name: wallabag-images-zfs
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
       storage: 4Gi
+  storageClassName: zfs-local-dataset
