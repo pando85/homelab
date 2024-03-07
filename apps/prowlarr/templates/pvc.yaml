@@ -7,11 +7,10 @@ metadata:
     backup: prowlarr-zfs
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
-  name: prowlarr-config-zfs
+  name: prowlarr-config
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 500Mi
-  storageClassName: zfs-local-dataset
+      storage: 0.5Gi

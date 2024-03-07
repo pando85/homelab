@@ -99,4 +99,4 @@ app-template:
       enabled: true
       globalMounts:
         - path: /config
-      existingClaim: prowlarr-config-zfs
+      existingClaim: prowlarr-config
