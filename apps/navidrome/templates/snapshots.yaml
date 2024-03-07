@@ -1,7 +1,7 @@
 apiVersion: snapscheduler.backube/v1
 kind: SnapshotSchedule
 metadata:
-  name: navidrome-zfs-backups
+  name: navidrome-backups
 spec:
   retention:
     maxCount: 20
@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: navidrome-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

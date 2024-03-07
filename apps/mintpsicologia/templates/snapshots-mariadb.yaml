@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       app.kubernetes.io/name: mariadb
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

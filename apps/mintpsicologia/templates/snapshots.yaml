@@ -1,7 +1,7 @@
 apiVersion: snapscheduler.backube/v1
 kind: SnapshotSchedule
 metadata:
-  name: wordpress-zfs-backups
+  name: wordpress-backups
 spec:
   retention:
     maxCount: 20
@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       app.kubernetes.io/name: wordpress
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

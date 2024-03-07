@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       cluster-name: nextcloud-postgres
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

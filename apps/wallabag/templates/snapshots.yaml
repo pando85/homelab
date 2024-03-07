@@ -1,7 +1,7 @@
 apiVersion: snapscheduler.backube/v1
 kind: SnapshotSchedule
 metadata:
-  name: wallabag-zfs-backups
+  name: wallabag-backups
 spec:
   retention:
     maxCount: 20
@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: wallabag-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset
