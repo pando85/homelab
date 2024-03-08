@@ -55,6 +55,8 @@ velero:
           s3ForcePathStyle: "true"
           s3Url: https://s3.internal.grigri.cloud/
 
+    uploaderType: restic
+
   credentials:
     existingSecret: velero-bucket-credentials
 
