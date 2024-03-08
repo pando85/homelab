@@ -25,6 +25,13 @@ minio:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       external-dns.alpha.kubernetes.io/enabled: "true"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      # fix timeouts uploading big files disabling proxy buffering
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-body-size: 1000G
     hosts:
       - &host s3.internal.grigri.cloud
     tls:
@@ -38,13 +45,6 @@ minio:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       external-dns.alpha.kubernetes.io/enabled: "true"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-      # fix timeouts uploading big files disabling proxy buffering
-      nginx.ingress.kubernetes.io/proxy-buffering: "off"
-      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-      nginx.ingress.kubernetes.io/proxy-body-size: 1000G
     hosts:
       - &hostMC mc-s3.internal.grigri.cloud
     tls:
