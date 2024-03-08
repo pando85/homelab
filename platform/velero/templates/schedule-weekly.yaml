@@ -27,7 +27,7 @@ spec:
       - system-upgrade
       - zfs-exporter
       - zfs-localpv
-    orLabelSelector:
+    orLabelSelectors:
       - matchLabels:
         app: velero
     includeClusterResources: false
