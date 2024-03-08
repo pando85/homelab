@@ -68,7 +68,7 @@ spec:
     volumeClaimTemplate:
       metadata:
         labels:
-          app: velero
+          backup: velero
       spec:
         accessModes:
           - ReadWriteOnce
