@@ -16,4 +16,4 @@ spec:
     ttl: 2160h0m0s # 90d
     volumeSnapshotLocations:
       - zfspv-incr
-  useOwnerReferencesInBackup: false
+  useOwnerReferencesInBackup: true
