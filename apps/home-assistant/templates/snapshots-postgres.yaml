@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       cluster-name: home-assistant-postgres
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset
