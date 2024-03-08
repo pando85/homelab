@@ -23,18 +23,17 @@ kanidm raw search '{"eq": ["name", "idm_self_acp_write"]}'
 
 ```bash
 kanidm person create demo-user "demo-user" -D idm_admin
-# LDAP access (jellyfin)
-kanidm person posix set demo-user
-kanidm person update demo-user --mail "demo-user@example.com"
-kanidm person credential create-reset-token demo-user
+kanidm person update demo-user --mail "demo-user@example.com" -D idm_admin
+kanidm person credential create-reset-token demo-user -D idm_admin
 
-kanidm group list | rg name | rg users
-kanidm group add-members ${GROUP_NAME} demo-user
+kanidm group list -D idm_admin | rg name | rg users
+kanidm group add-members ${GROUP_NAME} demo-user -D idm_admin
 ```
 
 ## Add app to SSO
 
 Example with Grafana:
+
 ```bash
 kanidm system oauth2 create grafana grafana  https://grafana.grigri.cloud/login/generic_oauth -D admin
 kanidm group create grafana-users -D admin
