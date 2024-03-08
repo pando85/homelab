@@ -7,6 +7,13 @@ velero:
       memory: 1024Mi
 
   initContainers:
+    - name: velero-plugin-for-aws
+      # https://github.com/vmware-tanzu/velero-plugin-for-aws#compatibility
+      image: velero/velero-plugin-for-aws:v1.9.0
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - name: plugins
+          mountPath: "/target"
     - name: velero-openebs-plugin
       image: openebs/velero-plugin:2.2.0
       imagePullPolicy: IfNotPresent
@@ -21,7 +28,7 @@ velero:
     backupStorageLocation:
       - name: default
         # https://velero.io/docs/v1.13/supported-providers/
-        provider: aws
+        provider: AWS
         default: true
         bucket: velero
         config:
