@@ -30,8 +30,7 @@ spec:
     includeClusterResources: false
     snapshotVolumes: true
     storageLocation: default
-    defaultVolumesToRestic: false
+    ttl: 744h0m0s # 31d
     volumeSnapshotLocations:
       - zfspv-incr
-    ttl: 744h0m0s # 31d
   useOwnerReferencesInBackup: false
