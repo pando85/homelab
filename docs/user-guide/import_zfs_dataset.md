@@ -75,7 +75,7 @@ metadata:
   name: ${NAME}
   namespace: zfs-localpv
 spec:
-  capacity: "$(echo "${SIZE::-1} * 1024 * 1024 * 1024" | bc)" # size of the volume in bytes
+  capacity: "$(echo "(${SIZE::-1} * 1024 * 1024 * 1024) / 1" | bc)" # size of the volume in bytes
   fsType: zfs
   ownerNodeID: grigri
   shared: "yes"

@@ -39,6 +39,17 @@ velero:
     # Probably will use it in the future if they add a feature to upload snapshots to S3
     # or if we decide to mirror them between different Cephs. SnapshotClass are already annotated.
     volumeSnapshotLocation:
+      - name: zfspv-full
+        provider: openebs.io/zfspv-blockstore
+        config:
+          bucket: velero
+          prefix: zfs
+          # this is the namespace where ZFS-LocalPV creates all the CRs, passed as OPENEBS_NAMESPACE env in the ZFS-LocalPV deployment
+          namespace: zfs-localpv
+          provider: aws
+          region: minio
+          s3ForcePathStyle: "true"
+          s3Url: https://s3.internal.grigri.cloud/
       - name: zfspv-incr
         provider: openebs.io/zfspv-blockstore
         default: true
