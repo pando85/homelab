@@ -1,0 +1,81 @@
+velero:
+  resources: # https://velero.io/docs/v1.10/performance-guidance/#case-3-1062510k-files-781-directories-1000mb-per-file-total-10376gb-content
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 1024Mi
+
+  initContainers:
+    - name: velero-openebs-plugin
+      image: openebs/velero-plugin:2.2.0
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - name: plugins
+          mountPath: "/target"
+
+  configuration:
+    backupStorageLocation:
+      - name: local-s3
+        # https://velero.io/docs/v1.13/supported-providers/
+        provider: aws
+        default: true
+        bucket: velero
+        config:
+          region: minio
+          s3ForcePathStyle: true
+          s3Url: http://minio.minio.svc:9000/
+    # Is configured but not currenlty in use in velero schedules.
+    # Probably will use it in the future if they add a feature to upload snapshots to S3
+    # or if we decide to mirror them between different Cephs. SnapshotClass are already annotated.
+    volumeSnapshotLocation:
+      - name: zfspv-incr
+        provider: openebs.io/zfspv-blockstore
+        default: true
+        config:
+          bucket: velero
+          prefix: zfs
+          # number of incremental backups we want to have
+          # 3 weekly incremental + 1 full to have the full month backup
+          incrBackupCount: "3"
+          # this is the namespace where ZFS-LocalPV creates all the CRs, passed as OPENEBS_NAMESPACE env in the ZFS-LocalPV deployment
+          namespace: zfs-localpv
+          provider: aws
+          region: minio
+          s3ForcePathStyle: "true"
+          s3Url: http://minio.minio.svc:9000/
+
+  credentials:
+    existingSecret: velero-bucket-credentials
+
+  # The number of seconds to allow for graceful termination of the pod. defaults is 1h
+  terminationGracePeriodSeconds: 1800
+
+  metrics:
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: monitoring
+    prometheusRule:
+      additionalLabels:
+        release: monitoring
+      enabled: true
+      spec:
+        - alert: VeleroBackupPartialFailures
+          annotations:
+            message: Velero backup {{ $labels.schedule }} has {{ $value | humanizePercentage }} partialy
+              failed backups.
+          expr: |-
+            velero_backup_partial_failure_total{schedule!=""} / velero_backup_attempt_total{schedule!=""} > 0.25
+          for: 15m
+          labels:
+            severity: warning
+        - alert: VeleroBackupFailures
+          annotations:
+            message: Velero backup {{ $labels.schedule }} has {{ $value | humanizePercentage }} failed
+              backups.
+          expr: |-
+            velero_backup_failure_total{schedule!=""} / velero_backup_attempt_total{schedule!=""} > 0.25
+          for: 15m
+          labels:
+            severity: warning

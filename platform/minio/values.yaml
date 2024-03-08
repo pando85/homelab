@@ -50,7 +50,10 @@ minio:
       memory: 2
 
   users:
-    []
+    - accessKey: velero
+      existingSecret: minio-users
+      existingSecretKey: veleroPassword
+      policy: readwrite
     ## Username, password and policy to be assigned to the user
     ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
     ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
@@ -66,7 +69,14 @@ minio:
     #  policy: readonly
 
   buckets:
-    []
+    - name: velero
+      # Policy to be set on the
+      # bucket [none|download|upload|public]
+      policy: none
+      # Purge if bucket exists already
+      purge: false
+      versioning: false
+      objectlocking: false
     #   # Name of the bucket
     # - name: bucket1
     #   # Policy to be set on the
