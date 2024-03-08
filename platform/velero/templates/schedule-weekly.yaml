@@ -27,7 +27,6 @@ spec:
       - system-upgrade
       - zfs-exporter
       - zfs-localpv
-    includeClusterResources: false
     snapshotVolumes: true
     storageLocation: default
     ttl: 744h0m0s # 31d
