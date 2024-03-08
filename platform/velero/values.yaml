@@ -28,7 +28,7 @@ velero:
     backupStorageLocation:
       - name: default
         # https://velero.io/docs/v1.13/supported-providers/
-        provider: AWS
+        provider: aws
         default: true
         bucket: velero
         config:
