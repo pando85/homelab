@@ -66,6 +66,9 @@ spec:
   retentionSize: 200GB
   storage:
     volumeClaimTemplate:
+      metadata:
+        labels:
+          app: velero
       spec:
         accessModes:
           - ReadWriteOnce

@@ -1,0 +1,40 @@
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: weekly-all
+  namespace: velero
+spec:
+  schedule: 30 6 * * 2
+  template:
+    includedNamespaces:
+      - "*"
+    excludedNamespaces:
+      - argocd
+      - github-exporter
+      - http-echo
+      - ingress-nginx
+      - ingress-nginx-external
+      - kube-node-lease
+      - kube-public
+      - kube-system
+      - kured
+      - loki
+      - metallb-system
+      - minio
+      - postgres-operator
+      - reloader
+      - snapscheduler
+      - system-upgrade
+      - zfs-exporter
+      - zfs-localpv
+    labelSelector:
+      matchLabels:
+        app: velero
+    includeClusterResources: false
+    snapshotVolumes: true
+    storageLocation: default
+    defaultVolumesToRestic: false
+    volumeSnapshotLocations:
+      - zfspv-incr
+    ttl: 744h0m0s # 31d
+  useOwnerReferencesInBackup: false
