@@ -105,25 +105,20 @@ minio:
     #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
     #   objectlocking: false
 
+  environment:
+    MINIO_IDENTITY_OPENID_ROLE_POLICY: consoleAdmin
   ## OpenID Identity Management
   ## The following section documents environment variables for enabling external identity management using an OpenID Connect (OIDC)-compatible provider.
   ## See https://min.io/docs/minio/linux/operations/external-iam/configure-openid-external-identity-management.html for a tutorial on using these variables.
   oidc:
-    enabled: false
-    configUrl: "https://identity-provider-url/.well-known/openid-configuration"
-    clientId: "minio"
-    clientSecret: ""
-    # Provide existing client secret from the Kubernetes Secret resource, existing secret will have priority over `clientId` and/or `clientSecret``
-    existingClientSecretName: ""
-    existingClientIdKey: ""
-    existingClientSecretKey: ""
-    claimName: "policy"
+    enabled: true
+    configUrl: "https://idm.grigri.cloud/oauth2/openid//.well-known/openid-configuration"
+    existingClientSecretName: minio-oidc
+    existingClientIdKey: clientId
+    existingClientSecretKey: clientSecret
     scopes: "openid,profile,email"
-    redirectUri: "https://console-endpoint-url/oauth_callback"
-    # Can leave empty
-    claimPrefix: ""
-    comment: ""
-    displayName: ""
+    redirectUri: https://mc-s3.internal.grigri.cloud/oauth_callback
+    displayName: "preferred_username"
 
   metrics:
     serviceMonitor:
