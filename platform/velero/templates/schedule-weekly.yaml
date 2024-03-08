@@ -29,7 +29,7 @@ spec:
       - zfs-localpv
     orLabelSelectors:
       - matchLabels:
-        app: velero
+          app: velero
     includeClusterResources: false
     snapshotVolumes: true
     storageLocation: default
