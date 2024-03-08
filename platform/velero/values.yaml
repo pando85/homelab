@@ -58,7 +58,7 @@ velero:
           prefix: zfs
           # number of incremental backups we want to have
           # 3 weekly incremental + 1 full to have the full month backup
-          incrBackupCount: "3"
+          incrBackupCount: "11"
           # this is the namespace where ZFS-LocalPV creates all the CRs, passed as OPENEBS_NAMESPACE env in the ZFS-LocalPV deployment
           namespace: zfs-localpv
           provider: aws

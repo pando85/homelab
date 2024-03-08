@@ -4,7 +4,7 @@ metadata:
   name: weekly-all-labeled
   namespace: velero
 spec:
-  schedule: 30 6 * * 2
+  schedule: 30 2 * * 2
   template:
     includedNamespaces:
       - "*"
@@ -13,7 +13,7 @@ spec:
           backup: velero
     snapshotVolumes: true
     storageLocation: default
-    ttl: 744h0m0s # 31d
+    ttl: 2160h0m0s # 90d
     volumeSnapshotLocations:
       - zfspv-incr
   useOwnerReferencesInBackup: false
