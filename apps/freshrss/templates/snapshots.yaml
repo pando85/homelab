@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: freshrss-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

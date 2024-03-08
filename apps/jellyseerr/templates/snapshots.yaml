@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       snapshots: jellyseerr-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       cluster-name: freshrss-postgres
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset

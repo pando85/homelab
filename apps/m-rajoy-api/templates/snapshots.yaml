@@ -9,5 +9,3 @@ spec:
   claimSelector:
     matchLabels:
       backup: m-rajoy-api-zfs
-  snapshotTemplate:
-    snapshotClassName: zfs-local-dataset
