@@ -25,9 +25,9 @@ minio:
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       external-dns.alpha.kubernetes.io/enabled: "true"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "86400"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
       # fix timeouts uploading big files disabling proxy buffering
       nginx.ingress.kubernetes.io/proxy-buffering: "off"
       nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
