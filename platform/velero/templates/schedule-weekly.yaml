@@ -21,6 +21,7 @@ spec:
       - loki
       - metallb-system
       - minio
+      - monitoring
       - postgres-operator
       - reloader
       - snapscheduler
