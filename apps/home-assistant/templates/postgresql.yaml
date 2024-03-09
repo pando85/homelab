@@ -16,6 +16,8 @@ spec:
       memory: 256Mi
 
   volume:
+    # We have to manually define label velero.io/exclude-from-backup=true
+    # https://github.com/zalando/postgres-operator/issues/2222
     size: 2Gi
 
   users:
