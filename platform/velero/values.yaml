@@ -68,6 +68,9 @@ velero:
 
     uploaderType: restic
     fsBackupTimeout: 32h
+    defaultItemOperationTimeout: 32h
+    garbageCollectionFrequency: 24h
+    logLevel: debug
 
   credentials:
     existingSecret: velero-bucket-credentials
