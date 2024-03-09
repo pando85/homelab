@@ -118,7 +118,7 @@ minio:
     existingClientSecretKey: clientSecret
     scopes: "openid,profile,email"
     redirectUri: https://mc-s3.internal.grigri.cloud/oauth_callback
-    displayName: "preferred_username"
+    displayName: idm.grigri.cloud
 
   metrics:
     serviceMonitor:
