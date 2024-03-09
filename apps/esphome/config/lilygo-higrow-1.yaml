@@ -180,7 +180,7 @@ sensor:
 text_sensor:
   # Installed version
   - platform: template
-    name: "${devicename} - Installed version"
+    name: "${friendly_name} - Installed version"
     icon: "mdi:label-outline"
     entity_category: diagnostic
     lambda: |-
