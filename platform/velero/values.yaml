@@ -67,6 +67,7 @@ velero:
           s3Url: https://s3.internal.grigri.cloud/
 
     uploaderType: restic
+    fsBackupTimeout: 32h
 
   credentials:
     existingSecret: velero-bucket-credentials
