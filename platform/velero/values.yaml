@@ -15,7 +15,7 @@ velero:
         - name: plugins
           mountPath: "/target"
     - name: velero-openebs-plugin
-      image: openebs/velero-plugin:2.2.0
+      image: openebs/velero-plugin:3.6.0
       imagePullPolicy: IfNotPresent
       volumeMounts:
         - name: plugins
