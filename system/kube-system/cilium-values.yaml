@@ -65,18 +65,13 @@ securityContext:
 # the option auto-direct-node-routes: true. Otherwise, an additional system component such as a BGP daemon must be run
 autoDirectNodeRoutes: true
 
-# https://docs.cilium.io/en/stable/network/bgp-control-plane/
-# -- Configure BGP
 bgp:
-  enabled: true
-  announce:
-    loadbalancerIP: true
-    podCIDR: false
+  enabled: false
 
 # -- This feature set enables virtual BGP routers to be created via
 # CiliumBGPPeeringPolicy CRDs.
 bgpControlPlane:
-  enabled: false
+  enabled: true
   secretsNamespace:
     name: kube-system
 

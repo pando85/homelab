@@ -32,7 +32,7 @@ app-template:
       type: LoadBalancer
       externalTrafficPolicy: Local
       annotations:
-        metallb.universe.tf/loadBalancerIPs: "192.168.193.2"
+        lbipam.cilium.io/ips: "192.168.193.2"
       ports:
         http:
           port: 8443

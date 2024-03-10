@@ -54,7 +54,7 @@ app-template:
     main:
       type: LoadBalancer
       annotations:
-        metallb.universe.tf/loadBalancerIPs: "192.168.193.9"
+        lbipam.cilium.io/ips: "192.168.193.9"
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/hostname: mosquitto.internal.grigri.cloud
       externalTrafficPolicy: Local
