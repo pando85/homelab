@@ -16,7 +16,7 @@ wifi:
   domain: !secret domain_devices
 
   ap:
-    ssid: "${friendly_name} Fallback Hotspot"
+    ssid: "${friendly_name}"
     password: !secret wifi_fallback_ap_password
 
 captive_portal:
