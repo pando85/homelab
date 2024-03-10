@@ -22,6 +22,7 @@ prepare_basic_packages:
   - bpftrace
   - bpfcc-tools
   - dnsutils
+  - traceroute
   # -linux-tools-{{ ansible_kernel }}
   - sysstat
   - lsof
