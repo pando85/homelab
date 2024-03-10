@@ -17,8 +17,7 @@
     - name: Download k3s binary
       get_url:
         url: https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/{{ k3s_binary }}
-        checksum:
-          sha256:https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/sha256sum-{{
+        checksum: sha256:https://github.com/k3s-io/k3s/releases/download/{{ k3s_version }}/sha256sum-{{
           k3s_arch }}.txt
         dest: "/usr/local/bin/k3s-{{ k3s_version }}"
         owner: root
@@ -110,8 +109,7 @@
 
 - name: Write Kubernetes config file with the correct cluster address
   copy:
-    content:
-      "{{ kubeconfig_base64.content | b64decode | replace('127.0.0.1',
+    content: "{{ kubeconfig_base64.content | b64decode | replace('127.0.0.1',
       hostvars[groups['kube_control_plane'][0]].ansible_hostname) }}"
     dest: "{{ ansible_path }}/kubeconfig.yaml"
     mode: "0600"
@@ -120,3 +118,14 @@
   run_once: true
   tags:
     - kubeconfig
+
+# https://github.com/cilium/cilium/issues/23838
+- name: Ensure dir is owned by root
+  file:
+    path: /opt/cni/bin
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  tags:
+    - workaround-cilium
