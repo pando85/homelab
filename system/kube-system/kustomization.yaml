@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: kube-system
 
 resources:
+  - resources/cilium-bgp-config.yaml
   - resources/runtime-class.yaml
 
 helmCharts:
