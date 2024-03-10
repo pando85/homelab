@@ -68,25 +68,16 @@ autoDirectNodeRoutes: true
 # https://docs.cilium.io/en/stable/network/bgp-control-plane/
 # -- Configure BGP
 bgp:
-  # -- Enable BGP support inside Cilium; embeds a new ConfigMap for BGP inside
-  # cilium-agent and cilium-operator
-  enabled: false
+  enabled: true
   announce:
-    # -- Enable allocation and announcement of service LoadBalancer IPs
-    loadbalancerIP: false
-    # -- Enable announcement of node pod CIDR
+    loadbalancerIP: true
     podCIDR: false
 
 # -- This feature set enables virtual BGP routers to be created via
 # CiliumBGPPeeringPolicy CRDs.
 bgpControlPlane:
-  # -- Enables the BGP control plane.
   enabled: false
-  # -- SecretsNamespace is the namespace which BGP support will retrieve secrets from.
   secretsNamespace:
-    # -- Create secrets namespace for BGP secrets.
-    create: false
-    # -- The name of the secret namespace to which Cilium agents are given read access
     name: kube-system
 
 containerRuntime:
