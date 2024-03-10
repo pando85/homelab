@@ -30,8 +30,24 @@ To calibrate Lilygo Higrow for accurate measurements, follow these steps:
 3. **Dry Calibration**: After flashing the file, clean and dry the sensor thoroughly. Take initial measurements from the log output.
 4. **Initial Measurement**: Note down the voltage readings for soil conductivity and moisture after 10 minutes of dry run.
 5. **Adjust Minimum Values**: Update your YAML file with the minimum values obtained during dry calibration.
+   ```
+   [15:46:50][D][sensor:127]: 'lilygo_higrow_plant_sensor Soil Conductivity': Sending state 0.07500 V with 2 decimals of accuracy
+   [15:46:46][D][sensor:127]: 'lilygo_higrow_plant_sensor Soil Moisture': Sending state 2.83300 V with 2 decimals of accuracy
+   ```
+   ```yaml
+   moisture_min: "2.833"
+   conductivity_min: "0.075"
+   ```
 6. **Water Calibration**: Submerge the sensor partially in water and record the voltage readings after stabilization.
 7. **Adjust Maximum Values**: Update your YAML file with the maximum values obtained during water calibration.
+   ```
+   [16:22:22][D][sensor:127]: 'lilygo_higrow_plant_sensor Soil Conductivity': Sending state 0.08600 V with 2 decimals of accuracy
+   [16:22:25][D][sensor:127]: 'lilygo_higrow_plant_sensor Soil Moisture': Sending state 1.56200 V with 2 decimals of accuracy
+   ```
+   ```yaml
+   moisture_max: "1.562"
+   conductivity_max: "0.086"
+   ```
 8. **Uncomment Configuration**: Uncomment the previously commented sections in the configuration file.
 9. **Reflash**: Once again, flash the updated configuration file using the previous command.
 10. **Temperature and Humidity Calibration**: Optionally, calibrate temperature and humidity sensors as per your requirements.
