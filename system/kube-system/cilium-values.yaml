@@ -1,0 +1,175 @@
+rollOutCiliumPods: true
+
+serviceAccounts:
+  # cert-manager used instead
+  clustermeshcertgen:
+    create: false
+  hubblecertgen:
+    create: false
+
+securityContext:
+  capabilities:
+    ciliumAgent:
+      # Use to set socket permission
+      - CHOWN
+      # Used to terminate envoy child process
+      - KILL
+      # Used since cilium modifies routing tables, etc...
+      - NET_ADMIN
+      # Used since cilium creates raw sockets, etc...
+      - NET_RAW
+      # Used since cilium monitor uses mmap
+      - IPC_LOCK
+      # Used in iptables. Consider removing once we are iptables-free
+      - SYS_MODULE
+      # Could be an alternative for the SYS_ADMIN for the RLIMIT_NPROC
+      - SYS_RESOURCE
+      # Both PERFMON and BPF requires kernel 5.8, container runtime
+      # cri-o >= v1.22.0 or containerd >= v1.5.0.
+      # If available, SYS_ADMIN can be removed.
+      - PERFMON
+      - BPF
+      # Allow discretionary access control (e.g. required for package installation)
+      - DAC_OVERRIDE
+      # Allow to set Access Control Lists (ACLs) on arbitrary files (e.g. required for package installation)
+      - FOWNER
+      # Allow to execute program that changes GID (e.g. required for package installation)
+      - SETGID
+      # Allow to execute program that changes UID (e.g. required for package installation)
+      - SETUID
+    # -- Capabilities for the `mount-cgroup` init container
+    cleanCiliumState:
+      # Most of the capabilities here are the same ones used in the
+      # cilium-agent's container because this container can be used to
+      # uninstall all Cilium resources, and therefore it is likely that
+      # will need the same capabilities.
+      # Used since cilium modifies routing tables, etc...
+      - NET_ADMIN
+      # Used in iptables. Consider removing once we are iptables-free
+      - SYS_MODULE
+      # Could be an alternative for the SYS_ADMIN for the RLIMIT_NPROC
+      - SYS_RESOURCE
+      # Both PERFMON and BPF requires kernel 5.8, container runtime
+      # cri-o >= v1.22.0 or containerd >= v1.5.0.
+      # If available, SYS_ADMIN can be removed.
+      - PERFMON
+      - BPF
+
+# If all nodes share a single L2 network, then this can be taken care of by enabling
+# the option auto-direct-node-routes: true. Otherwise, an additional system component such as a BGP daemon must be run
+autoDirectNodeRoutes: true
+
+# https://docs.cilium.io/en/stable/network/bgp-control-plane/
+# -- Configure BGP
+bgp:
+  # -- Enable BGP support inside Cilium; embeds a new ConfigMap for BGP inside
+  # cilium-agent and cilium-operator
+  enabled: false
+  announce:
+    # -- Enable allocation and announcement of service LoadBalancer IPs
+    loadbalancerIP: false
+    # -- Enable announcement of node pod CIDR
+    podCIDR: false
+
+# -- This feature set enables virtual BGP routers to be created via
+# CiliumBGPPeeringPolicy CRDs.
+bgpControlPlane:
+  # -- Enables the BGP control plane.
+  enabled: false
+  # -- SecretsNamespace is the namespace which BGP support will retrieve secrets from.
+  secretsNamespace:
+    # -- Create secrets namespace for BGP secrets.
+    create: false
+    # -- The name of the secret namespace to which Cilium agents are given read access
+    name: kube-system
+
+containerRuntime:
+  integration: containerd
+  socketPath: /var/run/k3s/containerd/containerd.sock
+
+kubeProxyReplacement: true
+kubeProxyReplacementHealthzBindAddr: "0.0.0.0:10256"
+
+hubble:
+  enabled: true
+  metrics:
+    enabled:
+      - dns:query;ignoreAAAA
+      - drop
+      - tcp
+      - flow
+      - icmp
+      - http
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: monitoring
+    dashboards:
+      enabled: true
+      annotations:
+        grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/cilium
+      label: grafana_dashboard
+  tls:
+    enabled: true
+    auto:
+      enabled: true
+      method: certmanager
+      certManagerIssuerRef:
+        group: cert-manager.io
+        kind: ClusterIssuer
+        name: internal
+  relay:
+    enabled: true
+    rollOutPods: true
+    prometheus:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+        labels:
+          release: monitoring
+  ui:
+    enabled: true
+    rollOutPods: true
+    ingress:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - &host hubble.internal.grigri.cloud
+      tls:
+        hosts:
+          - *host
+        secretName: hubble-tls-certificate
+
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: monitoring
+dashboards:
+  enabled: true
+  label: grafana_dashboard
+  annotations:
+    grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/cilium
+
+# -- Enable use of the remote node identity.
+# ref: https://docs.cilium.io/en/v1.7/install/upgrade/#configmap-remote-node-identity
+# Deprecated without replacement in 1.15. To be removed in 1.16.
+remoteNodeIdentity: false
+
+routingMode: native
+operator:
+  prometheus:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      labels:
+        release: monitoring
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    annotations:
+      grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/cilium
