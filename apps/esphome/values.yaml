@@ -15,7 +15,7 @@ app-template:
             - -c
           args:
             - >
-              cp -r /original/config/* /config/
+              cp --dereference -r /original/config/* /config/
       containers:
         main:
           image:
