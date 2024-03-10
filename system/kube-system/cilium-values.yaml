@@ -24,6 +24,7 @@ securityContext:
       - SYS_MODULE
       # Could be an alternative for the SYS_ADMIN for the RLIMIT_NPROC
       - SYS_RESOURCE
+      - SYS_ADMIN
       # Both PERFMON and BPF requires kernel 5.8, container runtime
       # cri-o >= v1.22.0 or containerd >= v1.5.0.
       # If available, SYS_ADMIN can be removed.
