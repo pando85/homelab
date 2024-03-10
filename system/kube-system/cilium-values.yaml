@@ -66,9 +66,7 @@ securityContext:
 autoDirectNodeRoutes: true
 
 bgp:
-  enabled: true
-  announce:
-    loadbalancerIP: true
+  enabled: false
 
 # -- This feature set enables virtual BGP routers to be created via
 # CiliumBGPPeeringPolicy CRDs.
