@@ -27,6 +27,7 @@ file.
   - Add `502` IoT Offline
 
 - `Switching -> VLAN -> Advanced -> VLAN Membership`:
+
   ```
   VLAN ID: 1
   VLAN Name: Default

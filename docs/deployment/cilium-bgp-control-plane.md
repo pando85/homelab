@@ -1,13 +1,15 @@
-# MetalLB
+# Cilium BPG control plane
+
+Cilium replaces MetalLB for creating K8s LBs based on BGP.
 
 ## Deployment
 
-Ansible set up the configuration and ArgoCD deploys MetalLB.
+Ansible set up the configuration and ArgoCD deploys Cilium.
 
 ## Router config
 
-In order to use Metallb in BGP mode we must configure Pfsense as router to be able of share
-BGP route table and route all network to that loadbalancer IPs. We use
+In order to use Cilium BGP control plane mode we must configure Pfsense as router to be able of share
+BGP route table and route all network to that load balancer IPs. We use
 [this tutorial](https://www.danmanners.com/posts/pfsense-bgp-kubernetes/)
 
 - install package ffr
@@ -52,20 +54,6 @@ BGP route table and route all network to that loadbalancer IPs. We use
     allow_as_inbound: enabled
   - name: 192.168.192.11
     descr: k8s-amd64-1
-    remote_as: 64513
-    route_map_filters:
-      inbound_router_map_filter: allow-all
-      outbound_router_map_filter: allow-all
-    allow_as_inbound: enabled
-  - name: 192.168.192.21
-    descr: k8s-odroid-hc4-1
-    remote_as: 64513
-    route_map_filters:
-      inbound_router_map_filter: allow-all
-      outbound_router_map_filter: allow-all
-    allow_as_inbound: enabled
-  - name: 192.168.192.22
-    descr: k8s-odroid-hc4-2
     remote_as: 64513
     route_map_filters:
       inbound_router_map_filter: allow-all
@@ -136,5 +124,5 @@ BGP route table and route all network to that loadbalancer IPs. We use
     allow_as_inbound: enabled
   ```
 
-**Important:** to access metallb network from kubernetes subnet you need to add your host to bgp
+**Important:** to access Cilium IP pools network from kubernetes subnet you need to add your host to bgp
 Some issues could be experimented if not added as `docker push` not working correctly.
