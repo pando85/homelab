@@ -3,7 +3,7 @@ substitutions:
   friendly_name: rack-controller
 
 packages:
-  connection: !include ./packages_connection.yaml
+  connection: !include ./packages/connection.yaml
 
 esphome:
   name: ${name}

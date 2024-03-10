@@ -17,5 +17,5 @@ substitutions:
   # sleep_duration: 60min
 
 packages:
-  connection: !include ./packages_connection.yaml
-  lilygo-higrow: !include ./packages_lilygo-higrow.yaml
+  connection: !include ./packages/connection.yaml
+  lilygo-higrow: !include ./packages/lilygo-higrow.yaml
