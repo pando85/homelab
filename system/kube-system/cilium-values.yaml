@@ -7,6 +7,9 @@ serviceAccounts:
   hubblecertgen:
     create: false
 
+k8sServiceHost: grigri.grigri
+k8sServicePort: "6443"
+
 securityContext:
   capabilities:
     ciliumAgent:
