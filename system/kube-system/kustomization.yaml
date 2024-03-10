@@ -15,13 +15,6 @@ helmCharts:
     valuesFile: cilium-values.yaml
     version: 1.15.1
   - includeCRDs: true
-    name: snapshot-controller
-    namespace: kube-system
-    releaseName: kube-system
-    repo: https://piraeus.io/helm-charts/
-    valuesFile: snapshot-controller-values.yaml
-    version: 2.2.0
-  - includeCRDs: true
     name: nvidia-device-plugin
     namespace: kube-system
     releaseName: kube-system
