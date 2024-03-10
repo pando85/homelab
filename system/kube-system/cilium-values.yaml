@@ -139,9 +139,9 @@ hubble:
       hosts:
         - &host hubble.internal.grigri.cloud
       tls:
-        hosts:
-          - *host
-        secretName: hubble-tls-certificate
+        - secretName: hubble-tls-certificate
+          hosts:
+            - *host
 
 prometheus:
   enabled: true
