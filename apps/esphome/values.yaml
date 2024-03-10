@@ -15,7 +15,7 @@ app-template:
             - -c
           args:
             - >
-              cp /original/config/* /config/
+              cp -r /original/config/* /config/
       containers:
         main:
           image:
@@ -75,6 +75,17 @@ app-template:
                 name: esphome-config
             - secret:
                 name: esphome-secrets
+    config-packages:
+      enabled: true
+      type: custom
+      globalMounts:
+        - path: /original/config/packages
+      volumeSpec:
+        name: all-in-one
+        projected:
+          sources:
+            - configMap:
+                name: esphome-config-packages
     esphome-cache:
       type: emptyDir
       globalMounts:
