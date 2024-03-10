@@ -1,8 +1,8 @@
 ---
 substitutions:
-  name: "lilygo-higrow-1"
-  friendly_name: "Lilygo Higrow 1"
-  project_name: "lilygo.higrow-1"
+  name: "lilygo-higrow-2"
+  friendly_name: "Lilygo Higrow 2"
+  project_name: "lilygo.higrow-2"
   project_version: "1.1"
   update_interval: 1min
   loglevel: DEBUG

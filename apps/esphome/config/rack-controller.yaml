@@ -1,37 +1,21 @@
-esphome:
+substitutions:
   name: rack-controller
   friendly_name: rack-controller
+
+packages:
+  connection: !include ./packages/connection.yaml
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
 
 esp32:
   board: esp32dev
   framework:
     type: arduino
 
-ota:
-  safe_mode: true
-  password: !secret ota_password
-
-mdns:
-  disabled: false
-
-wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  domain: !secret domain_devices
-
-  ap:
-    ssid: "Rack-Controller Fallback Hotspot"
-    password: !secret wifi_fallback_ap_password
-
-captive_portal:
-
 # Enable logging
 logger:
-
-# Enable Home Assistant API
-api:
-  encryption:
-    key: !secret home_assistant_api_key
 
 # OLED display
 i2c:
@@ -202,9 +186,3 @@ button:
     name: "PID Climate Autotune"
     on_press:
       - climate.pid.autotune: thermostat
-
-time:
-  - platform: sntp
-    id: sntp_time
-    servers:
-      - pfsense.grigri

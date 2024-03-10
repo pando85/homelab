@@ -9,7 +9,7 @@ help:	## Show this help menu.
 .PHONY: requirements
 requirements:	## install requirements
 	@echo Install requirements
-	@pip install -r requirements.txt > /dev/null
+	@pip install --upgrade -r requirements.txt > /dev/null
 
 .PHONY: secrets.yaml
 secrets:	## update secrets file
