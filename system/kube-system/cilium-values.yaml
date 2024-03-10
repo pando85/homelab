@@ -143,6 +143,7 @@ hubble:
           hosts:
             - *host
 
+ipv4NativeRoutingCIDR: "10.0.0.0/8"
 prometheus:
   enabled: true
   serviceMonitor:
