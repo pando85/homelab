@@ -26,6 +26,8 @@ wordpress:
     requests:
       memory: 512Mi
       cpu: 300m
+  service:
+    type: ClusterIP
   persistence:
     enabled: true
     size: 1Gi
