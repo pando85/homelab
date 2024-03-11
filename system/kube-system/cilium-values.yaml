@@ -136,6 +136,12 @@ hubble:
             - *host
 
 ipv4NativeRoutingCIDR: "10.0.0.0/8"
+
+loadBalancerIP:
+  algorithm: maglev
+  # DSR for TCP and SNAT for UDP
+  mode: hybrid
+
 prometheus:
   enabled: true
   serviceMonitor:
