@@ -85,7 +85,6 @@ app-template:
     rabbit:
       controller: rabbit
       type: LoadBalancer
-      externalTrafficPolicy: Local
       annotations:
         # Cilium v1.16+
         lbipam.cilium.io/ips: "192.168.193.3"
