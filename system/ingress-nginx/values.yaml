@@ -93,6 +93,7 @@ ingress-nginx:
         https: https
 
       type: LoadBalancer
+      externalTrafficPolicy: Local
       internal:
         enabled: false
 
