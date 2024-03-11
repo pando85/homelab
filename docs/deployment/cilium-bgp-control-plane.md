@@ -36,7 +36,7 @@ BGP route table and route all network to that load balancer IPs. We use
   ```conf
   [bgp router options]
   enable=x
-  local_as=64513
+  local_as=64512
 
   [network distribution]
   netowrks_to_distribute=subenet to router: 192.168.193.0/24 router map: allow-all
