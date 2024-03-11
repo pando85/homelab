@@ -9,5 +9,5 @@ spec:
   virtualRouters:
     - localASN: 64513
       neighbors:
-        - peerAddress: "192.168.192.1/32"
-          peerASN: 64512
+        - peerAddress: 192.168.192.1/32
+          peerASN: 64513
