@@ -61,6 +61,11 @@ velero:
           # multiPartChunkSize can be from 5Mi(5*1024*1024 Bytes) to 5Gi
           # For more information: https://docs.min.io/docs/minio-server-limits-per-tenant.html
           # If not set then it will be calculated from the file size
+          # Default is set to 5Mi in AWS: https://github.com/openebs/velero-plugin/blob/cea57783e3ed887d2b7b0e7bafc436ff26bd9a7b/pkg/clouduploader/conn.go#L110
+          # Default MaxUploadParts: 10000
+          # Max default size: 5Mi * 10000 = 50Gi
+          # Another alternative is to change to 0 and use calculated size:
+          # https://github.com/openebs/velero-plugin/blob/cea57783e3ed887d2b7b0e7bafc436ff26bd9a7b/pkg/clouduploader/operation.go#L54
           multiPartChunkSize: 100Mi
           # number of incremental backups we want to have
           # 3 weekly incremental + 1 full to have the full month backup
