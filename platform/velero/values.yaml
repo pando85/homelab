@@ -4,6 +4,7 @@ velero:
       cpu: 200m
       memory: 500Mi
     limits:
+      cpu: "2"
       memory: 2Gi
 
   initContainers:
