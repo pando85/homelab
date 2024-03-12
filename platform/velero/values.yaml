@@ -1,10 +1,10 @@
 velero:
   resources: # https://velero.io/docs/v1.10/performance-guidance/#case-3-1062510k-files-781-directories-1000mb-per-file-total-10376gb-content
     requests:
-      cpu: 50m
-      memory: 128Mi
+      cpu: 200m
+      memory: 500Mi
     limits:
-      memory: 1024Mi
+      memory: 2Gi
 
   initContainers:
     - name: velero-plugin-for-aws
