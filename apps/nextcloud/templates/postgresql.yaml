@@ -15,7 +15,7 @@ spec:
       memory: 1Gi
 
   volume:
-    size: 2.5Gi
+    size: 6Gi
 
   users:
     nextcloud:
