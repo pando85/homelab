@@ -16,7 +16,7 @@ spec:
       memory: 256Mi
 
   volume:
-    size: 1.5Gi
+    size: 4Gi
 
   users:
     freshrss:
