@@ -19,8 +19,8 @@ app-template:
                   path: /ping
                   port: &port 9696
                 initialDelaySeconds: 0
-                periodSeconds: 10
-                timeoutSeconds: 1
+                periodSeconds: 30
+                timeoutSeconds: 3
                 failureThreshold: 3
             readiness: *probes
             startup:
