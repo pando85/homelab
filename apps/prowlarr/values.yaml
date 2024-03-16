@@ -24,7 +24,7 @@ app-template:
                 failureThreshold: 3
             readiness: *probes
             startup:
-              enabled: false
+              enabled: true
 
           env:
             TZ: Europe/Madrid
