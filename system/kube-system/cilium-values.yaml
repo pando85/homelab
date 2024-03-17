@@ -86,7 +86,7 @@ kubeProxyReplacement: true
 kubeProxyReplacementHealthzBindAddr: "0.0.0.0:10256"
 
 loadBalancer:
-  standalone: false
+  standalone: true
   algorithm: maglev
   # DSR for TCP and SNAT for UDP
   mode: hybrid
