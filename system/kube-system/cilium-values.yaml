@@ -85,6 +85,15 @@ containerRuntime:
 kubeProxyReplacement: true
 kubeProxyReplacementHealthzBindAddr: "0.0.0.0:10256"
 
+loadBalancer:
+  standalone: true
+  algorithm: maglev
+  # DSR for TCP and SNAT for UDP
+  mode: hybrid
+
+nodePort:
+  enabled: false
+
 hubble:
   enabled: true
   metrics:
@@ -139,11 +148,6 @@ hubble:
             - *host
 
 ipv4NativeRoutingCIDR: "10.0.0.0/8"
-
-loadBalancerIP:
-  algorithm: maglev
-  # DSR for TCP and SNAT for UDP
-  mode: hybrid
 
 prometheus:
   enabled: true
