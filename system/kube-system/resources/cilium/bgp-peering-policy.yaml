@@ -19,5 +19,5 @@ spec:
             values:
               - "never-used-value"
       neighbors:
-        - peerAddress: "192.168.192.1/32"
+        - peerAddress: 192.168.192.1
           peerASN: 64512
