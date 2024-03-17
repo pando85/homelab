@@ -95,7 +95,16 @@ loadBalancer:
   acceleration: best-effort
 
 nodePort:
-  enabled: false
+  # enabled cause kubeProxyReplacement is true
+  enabled: true
+
+hostPort:
+  # enabled cause kubeProxyReplacement is true
+  enabled: true
+
+socketLB:
+  # enabled cause kubeProxyReplacement is true
+  enabled: true
 
 hubble:
   enabled: true
