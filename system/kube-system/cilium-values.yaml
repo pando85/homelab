@@ -66,7 +66,7 @@ securityContext:
 
 # If all nodes share a single L2 network, then this can be taken care of by enabling
 # the option auto-direct-node-routes: true. Otherwise, an additional system component such as a BGP daemon must be run
-autoDirectNodeRoutes: false
+autoDirectNodeRoutes: true
 
 bgp:
   enabled: false
@@ -167,7 +167,7 @@ dashboards:
 # Deprecated without replacement in 1.15. To be removed in 1.16.
 remoteNodeIdentity: false
 
-tunnelProtocol: vxlan
+#tunnelProtocol: vxlan
 
 # -- Enable native-routing mode or tunneling mode.
 # Possible values:
@@ -175,13 +175,13 @@ tunnelProtocol: vxlan
 #   - native
 #   - tunnel
 # @default -- `"tunnel"`
-routingMode: tunnel
+#routingMode: tunnel
 # # Test if this is the cause of externalTrafficPolicy `Local` not working`
-# routingMode: native
+routingMode: native
 
 # -- Configure VXLAN and Geneve tunnel port.
 # @default -- Port 8472 for VXLAN, Port 6081 for Geneve
-tunnelPort: 8472
+#tunnelPort: 8472
 
 operator:
   prometheus:
