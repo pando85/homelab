@@ -67,6 +67,8 @@ securityContext:
 # If all nodes share a single L2 network, then this can be taken care of by enabling
 # the option auto-direct-node-routes: true. Otherwise, an additional system component such as a BGP daemon must be run
 autoDirectNodeRoutes: true
+# if autoDirectNodeRoutes is false then the following cannot be used
+ipv4NativeRoutingCIDR: "10.0.0.0/8"
 
 bgp:
   enabled: false
@@ -90,6 +92,7 @@ loadBalancer:
   algorithm: maglev
   # DSR for TCP and SNAT for UDP
   mode: hybrid
+  acceleration: best-effort
 
 nodePort:
   enabled: false
@@ -146,8 +149,6 @@ hubble:
         - secretName: hubble-tls-certificate
           hosts:
             - *host
-
-ipv4NativeRoutingCIDR: "10.0.0.0/8"
 
 prometheus:
   enabled: true
