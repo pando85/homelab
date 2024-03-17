@@ -58,6 +58,8 @@ app-template:
               spec:
                 tcpSocket:
                   port: &port_rabbit 5672
+                periodSeconds: 30
+                timeoutSeconds: 3
             readiness: *probes
             startup: *probes
           env:
