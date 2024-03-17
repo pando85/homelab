@@ -74,6 +74,9 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
         nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
+        nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+        nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
       hosts:
         - host: &host prowlarr.grigri.cloud
           paths:
