@@ -48,6 +48,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.2
     descr: grigri
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -55,6 +56,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.11
     descr: k8s-amd64-1
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -62,6 +64,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.23
     descr: k8s-odroid-hc4-3
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -69,6 +72,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.31
     descr: k8s-odroid-c4-1
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -76,6 +80,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.32
     descr: k8s-odroid-c4-2
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -83,6 +88,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.41
     descr: k8s-rock64-1
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -90,6 +96,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.42
     descr: k8s-rock64-2
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -97,6 +104,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.43
     descr: k8s-rock64-3
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -104,6 +112,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.44
     descr: k8s-rock64-4
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -111,6 +120,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.45
     descr: k8s-rock64-5
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
@@ -118,6 +128,7 @@ BGP route table and route all network to that load balancer IPs. We use
   - name: 192.168.192.46
     descr: k8s-rock64-6
     remote_as: 64513
+    next_hop_self: true
     route_map_filters:
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
