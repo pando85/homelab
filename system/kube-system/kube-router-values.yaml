@@ -4,11 +4,6 @@ kubeRouter:
 
   router:
     enabled: true
-
-    peers:
-      - ip: "192.168.192.1"
-        asn: 64512
-
     enableOverlay: true
     enableIbgp: true
     enableCni: false
