@@ -38,8 +38,8 @@ BGP route table and route all network to that load balancer IPs. We use
   enable=x
   local_as=64512
 
-  [network distribution]
-  netowrks_to_distribute=subenet to router: 192.168.193.0/24 router map: allow-all
+  [graceful restart/shutdown]
+  enable_bgp_graceful_shutdown=true
   ```
 
 - in `Services->FRR->BGP->Neighbors`:
