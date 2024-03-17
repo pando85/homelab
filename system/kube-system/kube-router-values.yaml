@@ -1,0 +1,23 @@
+kubeRouter:
+  cni:
+    install: false
+
+  router:
+    enabled: true
+
+    peers:
+      - ip: "192.168.192.1"
+        asn: 64512
+
+    enableOverlay: true
+    enableIbgp: true
+    enableCni: false
+    clusterAsn: 64513
+    advertiseLoadbalancerIp: true
+    advertiseExternalIp: true
+    advertiseClusterIp: true
+
+  firewall:
+    enabled: false
+  serviceProxy:
+    enabled: false
