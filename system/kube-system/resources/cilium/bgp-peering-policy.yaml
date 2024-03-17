@@ -8,6 +8,8 @@ spec:
       kubernetes.io/arch: amd64
   virtualRouters:
     - localASN: 64513
+      # this allows routingMode native withouth the need of autoDirectNodeRoutes true: Not tested
+      # exportPodCIDR: true
       # Advertisement of services to BGP peers
       # https://docs.cilium.io/en/v1.15/network/bgp-control-plane/#service-announcements
       serviceSelector:
