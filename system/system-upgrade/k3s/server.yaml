@@ -12,10 +12,14 @@ spec:
         operator: Exists
   serviceAccountName: system-upgrade
   concurrency: 1
+  # If left unspecified, no drain will be performed.
+  # See:
+  # - https://kubernetes.io/docs/tasks/administer-cluster/safely-drain-node/
+  # - https://kubernetes.io/docs/reference/generated/kubectl/kubectl-commands#drain
+  # drain:
+  #   force: true
+  #   skipWaitForDeleteTimeout: 300  # Honor PodDisruptionBudgets
+  #   disableEviction: true
   cordon: true
-  drain:
-    force: true
-    skipWaitForDeleteTimeout: 300  # Honor PodDisruptionBudgets
-    disableEviction: true
   upgrade:
     image: rancher/k3s-upgrade
