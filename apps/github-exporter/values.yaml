@@ -1,8 +1,8 @@
 app-template:
   controllers:
-    main:
+    github-exporter:
       containers:
-        main:
+        github-exporter:
           image:
             repository: githubexporter/github-exporter
             tag: 1.1.0
@@ -26,15 +26,16 @@ app-template:
               memory: 8Mi
             limits:
               memory: 50Mi
-
   service:
-    main:
+    github-exporter:
+      controller: github-exporter
       ports:
         http:
           port: *port
 
   serviceMonitor:
-    main:
+    github-exporter:
+      serviceName: github-exporter
       enabled: true
       labels:
         operator.prometheus.io/instance: prometheus-long-term
