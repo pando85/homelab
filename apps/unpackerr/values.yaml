@@ -38,6 +38,7 @@ app-template:
 
   service:
     unpackerr:
+      controller: unpackerr
       ports:
         http:
           port: *port
@@ -45,6 +46,7 @@ app-template:
   serviceMonitor:
     unpackerr:
       enabled: true
+      serviceName: unpackerr
       labels:
         release: monitoring
       endpoints:
