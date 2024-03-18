@@ -1,9 +1,9 @@
 app-template:
   controllers:
-    main:
+    http-echo:
       replicas: 1
       containers:
-        main:
+        http-echo:
           image:
             repository: mendhak/http-https-echo
             tag: 31
@@ -18,10 +18,18 @@ app-template:
             limits:
               cpu: 200m
               memory: 50Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
 
   defaultPodOptions:
-    enableServiceLinks: false
-
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -32,13 +40,14 @@ app-template:
             app.kubernetes.io/name: http-echo
 
   service:
-    main:
+    http-echo:
+      controller: http-echo
       ports:
         http:
           port: 8080
 
   ingress:
-    main:
+    http-echo:
       enabled: true
       className: nginx-internal
       annotations:
@@ -50,7 +59,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: http-echo
                 port: http
       tls:
         - hosts:
@@ -72,7 +81,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: http-echo
                 port: http
       tls:
         - hosts:
