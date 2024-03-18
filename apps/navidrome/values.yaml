@@ -29,6 +29,16 @@ app-template:
               memory: 256Mi
             limits:
               memory: 512Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
 
   service:
     navidrome:
