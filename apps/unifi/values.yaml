@@ -30,6 +30,7 @@ app-template:
   service:
     unifi:
       type: LoadBalancer
+      controller: unifi
       annotations:
         # Cilium v1.16+
         lbipam.cilium.io/ips: "192.168.193.2"
@@ -81,7 +82,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: unifi
+                identifier: unifi
                 port: http
       tls:
         - hosts:
