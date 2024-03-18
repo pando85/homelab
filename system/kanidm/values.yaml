@@ -127,3 +127,4 @@ app-template:
       name: idm-external-tls-certificate
       globalMounts:
         - path: /data/tls
+          readOnly: true
