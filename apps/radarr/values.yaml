@@ -17,6 +17,16 @@ app-template:
               memory: 180Mi
             limits:
               memory: 400Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
 
   service:
     radarr:
