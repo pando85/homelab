@@ -1,9 +1,9 @@
 app-template:
   controllers:
-    main:
+    jellyfin:
       type: statefulset
       containers:
-        main:
+        jellyfin:
           image:
             repository: jellyfin/jellyfin
             tag: 10.8.13
@@ -23,6 +23,13 @@ app-template:
             readiness: *probes
             startup:
               enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: &port 8096
+                failureThreshold: 30
+                periodSeconds: 10
           env:
             TZ: Europe/Madrid
 
@@ -34,13 +41,14 @@ app-template:
               memory: 10Gi
 
   service:
-    main:
+    jellyfin:
+      controller: jellyfin
       ports:
         http:
           port: *port
 
   ingress:
-    main:
+    jellyfin:
       enabled: true
       className: nginx-internal
       annotations:
@@ -52,7 +60,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: jellyfin
                 port: http
       tls:
         - hosts:
@@ -71,7 +79,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: jellyfin
                 port: http
       tls:
         - hosts:
@@ -99,14 +107,14 @@ app-template:
       hostPath: /datasets/series
       globalMounts:
         - path: /datasets/series
-      readOnly: true
+          readOnly: true
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas
       globalMounts:
         - path: /datasets/peliculas
-      readOnly: true
+          readOnly: true
     transcode:
       enabled: true
       type: emptyDir
