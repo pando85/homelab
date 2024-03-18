@@ -26,7 +26,10 @@ app-template:
                   path: /ping
                   port: &port 8989
             readiness: *probe
-
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 60
   service:
     main:
       ports:
