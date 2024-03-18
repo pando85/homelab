@@ -29,6 +29,23 @@ app-template:
               memory: 20M
             limits:
               memory: 50M
+          probes:
+            liveness: &probe
+              enabled: true
+              custom: true
+              spec:
+                periodSeconds: 10
+                tcpSocket:
+                  port: &port 1883
+            readiness: *probe
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
+                tcpSocket:
+                  port: *port
         exporter:
           image:
             repository: sapcc/mosquitto-exporter
@@ -50,6 +67,23 @@ app-template:
                 secretKeyRef:
                   name: mosquitto-user
                   key: password
+          probes:
+            liveness: &probe
+              enabled: true
+              custom: true
+              spec:
+                periodSeconds: 10
+                tcpSocket:
+                  port: &metrics_port 9234
+            readiness: *probe
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
+                tcpSocket:
+                  port: *metrics_port
   service:
     mosquitto:
       type: LoadBalancer
@@ -65,11 +99,11 @@ app-template:
         http:
           enabled: false
         mqtt:
-          port: 1883
+          port: *port
         websockets:
           port: 8083
         metrics:
-          port: 9234
+          port: *metrics_port
 
   defaultPodOptions:
     securityContext:
