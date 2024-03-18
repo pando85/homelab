@@ -1,11 +1,11 @@
 app-template:
   controllers:
-    main:
+    wallabag:
       replicas: 1
       # HA is not supported
       strategy: Recreate
       containers:
-        main:
+        wallabag:
           image:
             repository: wallabag/wallabag
             tag: 2.6.8
@@ -72,12 +72,12 @@ app-template:
             app.kubernetes.io/instance: wallabag
             app.kubernetes.io/name: wallabag
   service:
-    main:
+    wallabag:
       ports:
         http:
           port: 80
   ingress:
-    main:
+    wallabag:
       enabled: true
       className: nginx-external
       annotations:
@@ -90,7 +90,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                name: wallabag
                 port: http
       tls:
         - hosts:
