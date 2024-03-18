@@ -1,9 +1,9 @@
 app-template:
   controllers:
-    main:
+    jellyseerr:
       type: statefulset
       containers:
-        main:
+        jellyseerr:
           image:
             repository: docker.io/fallenbagel/jellyseerr
             tag: preview-pr184
@@ -18,14 +18,24 @@ app-template:
               memory: 300Mi
             limits:
               memory: 500Mi
-
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
   service:
-    main:
+    jellyseerr:
+      controller: jellyseerr
       ports:
         http:
           port: 5055
   ingress:
-    main:
+    jellyseerr:
       enabled: true
       className: nginx-external
       annotations:
@@ -41,7 +51,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: jellyseerr
                 port: http
       tls:
         - hosts:
