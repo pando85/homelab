@@ -1,8 +1,8 @@
 app-template:
   controllers:
-    main:
+    unpackerr:
       containers:
-        main:
+        unpackerr:
           image:
             repository: golift/unpackerr
             tag: 0.13.1
@@ -37,13 +37,13 @@ app-template:
             readiness: *probe
 
   service:
-    main:
+    unpackerr:
       ports:
         http:
           port: *port
 
   serviceMonitor:
-    main:
+    unpackerr:
       enabled: true
       labels:
         release: monitoring
