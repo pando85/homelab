@@ -61,8 +61,6 @@ app-template:
       # testing: https://github.com/cilium/cilium/issues/31333
       externalTrafficPolicy: Local
       ports:
-        http:
-          enabled: false
         mqtt:
           port: *port
         websockets:
