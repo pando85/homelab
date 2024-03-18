@@ -1,11 +1,11 @@
 app-template:
   controllers:
-    main:
+    transcoder:
       annotations:
         reloader.stakater.com/auto: "true"
       type: statefulset
       containers:
-        main:
+        transcoder:
           image:
             repository: ghcr.io/pando85/gearr
             tag: "0.1.11-server"
@@ -47,7 +47,7 @@ app-template:
     rabbit:
       type: statefulset
       containers:
-        main:
+        rabbitmq:
           image:
             repository: rabbitmq
             tag: 3.13.0
@@ -80,7 +80,8 @@ app-template:
             limits:
               memory: 2Gi
   service:
-    main:
+    transcoder:
+      controller: transcoder
       ports:
         http:
           port: *port
@@ -102,7 +103,7 @@ app-template:
           targetPort: *port_rabbit
 
   ingress:
-    main:
+    transcoder:
       enabled: true
       className: nginx-internal
       annotations:
@@ -120,7 +121,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: transcoder
                 port: http
       tls:
         - hosts:
@@ -143,31 +144,31 @@ app-template:
       type: secret
       name: transcoder-config
       advancedMounts:
-        main:
-          main:
+        transcoder:
+          transcoder:
             - path: /etc/transcoder/
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series
       advancedMounts:
-        main:
-          main:
+        transcoder:
+          transcoder:
             - path: /datasets/series
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas
       advancedMounts:
-        main:
-          main:
+        transcoder:
+          transcoder:
             - path: /datasets/peliculas
     transcode:
       enabled: true
       type: emptyDir
       advancedMounts:
-        main:
-          main:
+        transcoder:
+          transcoder:
             - path: /tmp
     rabbit:
       enabled: true
@@ -176,5 +177,5 @@ app-template:
       size: 1Gi
       advancedMounts:
         rabbit:
-          main:
+          rabbitmq:
             - path: /var/lib/rabbitmq
