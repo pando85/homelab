@@ -229,9 +229,9 @@ app-template:
   global:
     fullnameOverride: redis
   controllers:
-    main:
+    redis:
       containers:
-        main:
+        redis:
           image:
             repository: redis
             tag: 7.2.4
@@ -273,7 +273,8 @@ app-template:
             topologyKey: kubernetes.io/hostname
 
   service:
-    main:
+    redis:
+      controller: redis
       ports:
         http:
           enabled: false
