@@ -1,12 +1,12 @@
 app-template:
   controllers:
-    main:
+    bazarr:
       type: statefulset
       pod:
         nodeSelector:
           name: grigri
       containers:
-        main:
+        bazarr:
           image:
             repository: ghcr.io/onedr0p/bazarr
             tag: 1.4.2@sha256:113035f37f289f190781d9d728f2ebf56c895b972921820f5d30408427c837d9
@@ -20,6 +20,16 @@ app-template:
             limits:
               cpu: 1
               memory: 1Gi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
 
         subcleaner:
           image:
@@ -37,7 +47,7 @@ app-template:
       pod:
         runtimeClassName: nvidia
       containers:
-        main:
+        whisper:
           image:
             repository: onerahmet/openai-whisper-asr-webservice
             tag: v1.3.0-gpu
@@ -51,9 +61,19 @@ app-template:
               memory: 2.3Gi
             limits:
               nvidia.com/gpu: "1"
-
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
   service:
-    main:
+    bazarr:
+      controller: bazarr
       ports:
         http:
           port: 6767
@@ -64,7 +84,7 @@ app-template:
           port: 9000
 
   ingress:
-    main:
+    bazarr:
       enabled: true
       className: nginx-internal
       annotations:
@@ -76,7 +96,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: bazarr
                 port: http
       tls:
         - hosts:
@@ -98,7 +118,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: bazarr
                 port: http
       tls:
         - hosts:
@@ -116,31 +136,31 @@ app-template:
       enabled: true
       existingClaim: config-bazarr
       advancedMounts:
-        main:
-          main:
+        bazarr:
+          bazarr:
             - path: /config
     series:
       enabled: true
       type: hostPath
       hostPath: /datasets/series
       advancedMounts:
-        main:
-          main:
+        bazarr:
+          bazarr:
             - path: /datasets/series
     peliculas:
       enabled: true
       type: hostPath
       hostPath: /datasets/peliculas
       advancedMounts:
-        main:
-          main:
+        bazarr:
+          bazarr:
             - path: /datasets/peliculas
     add-ons:
       enabled: true
       type: emptyDir
       advancedMounts:
-        main:
-          main:
+        bazarr:
+          bazarr:
             - path: /add-ons
           subcleaner:
             - path: /add-ons
@@ -150,5 +170,5 @@ app-template:
       sizeLimit: 5Gi
       advancedMounts:
         whisper:
-          main:
+          whisper:
             - path: /data
