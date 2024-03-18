@@ -1,8 +1,8 @@
 app-template:
   controllers:
-    main:
+    qbittorrent:
       containers:
-        main:
+        qbittorrent:
           image:
             repository: ghcr.io/onedr0p/qbittorrent
             tag: 4.6.3@sha256:f2895e632fe66299d8ccc68265cc11aea92a232b7d0844de9961864b3e504026
@@ -73,7 +73,8 @@ app-template:
       name: grigri
 
   service:
-    main:
+    qbittorrent:
+      controller: qbittorrent
       ports:
         http:
           port: *port
@@ -81,7 +82,7 @@ app-template:
           port: *metrics_port
 
     bittorrent:
-      controller: main
+      controller: qbittorrent
       type: LoadBalancer
       annotations:
         # Cilium v1.16+
@@ -97,8 +98,9 @@ app-template:
           targetPort: 50413
 
   serviceMonitor:
-    main:
+    qbittorrent:
       enabled: true
+      serviceName: qbittorrent
       labels:
         release: monitoring
       endpoints:
@@ -109,7 +111,7 @@ app-template:
           scrapeTimeout: 30s
 
   ingress:
-    main:
+    qbittorrent:
       enabled: true
       className: nginx-internal
       annotations:
@@ -121,7 +123,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: qbittorrent
                 port: http
       tls:
         - hosts:
@@ -142,7 +144,7 @@ app-template:
           paths:
             - path: /
               service:
-                name: main
+                identifier: qbittorrent
                 port: http
       tls:
         - hosts:
