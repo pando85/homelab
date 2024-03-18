@@ -26,6 +26,16 @@ app-template:
             limits:
               cpu: 500m
               memory: 1.5Gi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
 
   service:
     unifi:
