@@ -29,6 +29,23 @@ app-template:
               memory: 20M
             limits:
               memory: 50M
+          probes:
+            liveness: &probe
+              enabled: true
+              custom: true
+              spec:
+                periodSeconds: 10
+                tcpSocket:
+                  port: &port 8883
+            readiness: *probe
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
+                tcpSocket:
+                  port: *port
 
   service:
     main:
@@ -46,7 +63,7 @@ app-template:
         http:
           enabled: false
         mqtt:
-          port: 8883
+          port: *port
         websockets:
           port: 8884
 

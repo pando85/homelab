@@ -68,14 +68,14 @@ app-template:
                   name: mosquitto-user
                   key: password
           probes:
-            liveness: &probe
+            liveness: &metrics_probe
               enabled: true
               custom: true
               spec:
                 periodSeconds: 10
                 tcpSocket:
                   port: &metrics_port 9234
-            readiness: *probe
+            readiness: *metrics_probe
             startup:
               enabled: true
               custom: true
