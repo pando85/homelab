@@ -29,6 +29,7 @@ app-template:
 
           probes:
             liveness: &probe
+              enabled: true
               custom: true
               spec:
                 httpGet:
