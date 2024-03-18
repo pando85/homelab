@@ -1,9 +1,9 @@
 app-template:
   controllers:
-    main:
+    m-rajoy-api:
       replicas: 1
       containers:
-        main:
+        m-rajoy-api:
           image:
             repository: pando85/quotes-simple-web-api
             tag: 1.0.0
@@ -34,13 +34,14 @@ app-template:
               memory: 128Mi
 
   service:
-    main:
+    m-rajoy-api:
+      controller: m-rajoy-api
       ports:
         http:
           port: *port
 
   ingress:
-    main:
+    m-rajoy-api:
       enabled: true
       className: nginx-internal
       annotations:
@@ -52,7 +53,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: m-rajoy-api
                 port: http
       tls:
         - hosts:
@@ -72,7 +73,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: m-rajoy-api
                 port: http
       tls:
         - hosts:
@@ -84,8 +85,6 @@ app-template:
       runAsUser: 995
       runAsGroup: 991
       fsGroup: 991
-
-    enableServiceLinks: false
 
     topologySpreadConstraints:
       - maxSkew: 1
