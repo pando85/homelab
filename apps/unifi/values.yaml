@@ -27,10 +27,14 @@ app-template:
               cpu: 500m
               memory: 1.5Gi
           probes:
-            liveness:
+            liveness: &probe
               enabled: true
-            readiness:
-              enabled: true
+              custom: true
+              spec:
+                periodSeconds: 10
+                tcpSocket:
+                  port: &port 8443
+            readiness: *probe
             startup:
               enabled: true
               spec:
@@ -48,7 +52,7 @@ app-template:
         io.cilium/lb-ipam-ips: "192.168.193.2"
       ports:
         http:
-          port: 8443
+          port: *port
           protocol: HTTPS
         controller:
           enabled: true
