@@ -1,6 +1,6 @@
 app-template:
   controllers:
-    main:
+    mosquitto:
       replicas: 1
       type: statefulset
       annotations:
@@ -19,7 +19,7 @@ app-template:
               chmod 600 /mosquitto/external_config/mosquitto_pwd &&
               mosquitto_passwd -U /mosquitto/external_config/mosquitto_pwd
       containers:
-        main:
+        mosquitto:
           image:
             repository: public.ecr.aws/docker/library/eclipse-mosquitto
             tag: 2.0.18
@@ -51,8 +51,9 @@ app-template:
                   name: mosquitto-user
                   key: password
   service:
-    main:
+    mosquitto:
       type: LoadBalancer
+      controller: mosquitto
       annotations:
         # Cilium v1.16+
         lbipam.cilium.io/ips: "192.168.193.9"
@@ -87,15 +88,15 @@ app-template:
       type: configMap
       name: mosquitto-config
       advancedMounts:
-        main:
-          main:
+        mosquitto:
+          mosquitto:
             - path: /mosquitto/config/mosquitto.conf
               subPath: mosquitto.conf
     secret-file:
       type: secret
       name: mosquitto-user
       advancedMounts:
-        main:
+        mosquitto:
           01-init-config:
             - path: /tmp/secret
     external-config:
@@ -104,8 +105,9 @@ app-template:
         - path: /mosquitto/external_config
 
   serviceMonitor:
-    main:
+    mosquitto:
       enabled: true
+      serviceName: mosquitto
       labels:
         release: monitoring
       endpoints:
