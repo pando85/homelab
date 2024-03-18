@@ -1,6 +1,6 @@
 app-template:
   controllers:
-    main:
+    mosquitto:
       replicas: 1
       type: statefulset
       annotations:
@@ -19,7 +19,7 @@ app-template:
               chmod 600 /mosquitto/external_config/mosquitto_pwd &&
               mosquitto_passwd -U /mosquitto/external_config/mosquitto_pwd
       containers:
-        main:
+        mosquitto:
           image:
             repository: public.ecr.aws/docker/library/eclipse-mosquitto
             tag: 2.0.18
@@ -31,8 +31,9 @@ app-template:
               memory: 50M
 
   service:
-    main:
+    mosquitto:
       type: LoadBalancer
+      controller: mosquitto
       annotations:
         # Cilium v1.16+
         lbipam.cilium.io/ips: "192.168.193.10"
@@ -67,23 +68,23 @@ app-template:
       type: configMap
       name: mosquitto-tls-config
       advancedMounts:
-        main:
-          main:
+        mosquitto:
+          mosquitto:
             - path: /mosquitto/config/mosquitto.conf
               subPath: mosquitto.conf
     secret-file:
       type: secret
       name: mosquitto-tls-user
       advancedMounts:
-        main:
+        mosquitto:
           01-init-config:
             - path: /tmp/secret
     tls:
       type: secret
       name: mosquitto-tls-crt-secret
       advancedMounts:
-        main:
-          main:
+        mosquitto:
+          mosquitto:
             - path: /mosquitto/tls
     external-config:
       type: emptyDir
