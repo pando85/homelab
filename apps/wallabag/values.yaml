@@ -73,6 +73,7 @@ app-template:
             app.kubernetes.io/name: wallabag
   service:
     wallabag:
+      controller: wallabag
       ports:
         http:
           port: 80
@@ -90,7 +91,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: wallabag
+                identifier: wallabag
                 port: http
       tls:
         - hosts:
