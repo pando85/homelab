@@ -1,11 +1,11 @@
 app-template:
   controllers:
-    main:
+    unifi:
       replicas: 1
       # HA is not supported
       strategy: Recreate
       containers:
-        main:
+        unifi:
           image:
             repository: jacobalberty/unifi
             tag: v8.0.28
@@ -28,7 +28,7 @@ app-template:
               memory: 1.5Gi
 
   service:
-    main:
+    unifi:
       type: LoadBalancer
       annotations:
         # Cilium v1.16+
@@ -68,7 +68,7 @@ app-template:
           port: 10001
           protocol: UDP
   ingress:
-    main:
+    unifi:
       enabled: true
       className: nginx-internal
       annotations:
@@ -81,7 +81,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                name: unifi
                 port: http
       tls:
         - hosts:
