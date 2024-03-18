@@ -1,11 +1,11 @@
 app-template:
   controllers:
-    main:
+    freshrss:
       replicas: 1
       # HA is not supported
       strategy: Recreate
       containers:
-        main:
+        freshrss:
           image: &image
             repository: freshrss/freshrss
             tag: 1.23.1
@@ -27,6 +27,16 @@ app-template:
             limits:
               cpu: 500m
               memory: 128Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
     cron:
       type: cronjob
       cronjob:
@@ -38,7 +48,7 @@ app-template:
         failedJobsHistory: 1
         backoffLimit: 3
       containers:
-        main:
+        freshrss:
           image: *image
           env: *env
           command: /usr/bin/su
@@ -49,13 +59,14 @@ app-template:
             - -c
             - "php /var/www/FreshRSS/app/actualize_script.php"
   service:
-    main:
+    freshrss:
+      controller: freshrss
       ports:
         http:
           port: 80
 
   ingress:
-    main:
+    freshrss:
       enabled: true
       className: nginx-external
       annotations:
@@ -68,7 +79,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: freshrss
                 port: http
       tls:
         - hosts:
