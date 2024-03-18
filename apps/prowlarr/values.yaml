@@ -1,11 +1,11 @@
 app-template:
   controllers:
-    main:
+    prowlarr:
       replicas: 1
       # HA is not supported
       strategy: Recreate
       containers:
-        main:
+        prowlarr:
           image:
             repository: ghcr.io/onedr0p/prowlarr-nightly
             tag: 1.15.0.4337@sha256:907ff20a72bd2ab6aa2ae47bf5563195584f5fd3e932e9f0f7d2196bfa1d9e3a
@@ -40,13 +40,14 @@ app-template:
               memory: 400Mi
 
   service:
-    main:
+    prowlarr:
+      controller: prowlarr
       ports:
         http:
           port: *port
 
   ingress:
-    main:
+    prowlarr:
       enabled: true
       className: nginx-internal
       annotations:
@@ -58,7 +59,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: prowlarr
                 port: http
       tls:
         - hosts:
@@ -83,7 +84,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: prowlarr
                 port: http
       tls:
         - hosts:
