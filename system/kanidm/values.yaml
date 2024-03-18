@@ -1,12 +1,12 @@
 app-template:
   controllers:
-    main:
+    kanidmd:
       annotations:
         configmap.reloader.stakater.com/reload: kanidm-kanidmd-config
         secret.reloader.stakater.com/reload: idm-external-tls-certificate
       type: statefulset
       containers:
-        main:
+        kanidmd:
           image:
             repository: kanidm/server
             tag: 1.1.0-rc.16
@@ -19,7 +19,7 @@ app-template:
               memory: 2Gi
 
           probes:
-            liveness: &probes
+            liveness: &probe
               enabled: true
               custom: true
               spec:
@@ -31,7 +31,7 @@ app-template:
                 periodSeconds: 10
                 timeoutSeconds: 1
                 failureThreshold: 3
-            readiness: *probes
+            readiness: *probe
             startup:
               enabled: false
 
@@ -57,12 +57,13 @@ app-template:
           versions = 1
 
   service:
-    main:
+    kanidmd:
+      controller: kanidmd
       ports:
         http:
           port: *port
     ldaps:
-      controller: main
+      controller: kanidmd
       type: LoadBalancer
       annotations:
         # Cilium v1.16+
@@ -78,7 +79,7 @@ app-template:
           targetPort: 3636
 
   ingress:
-    main:
+    kanidmd:
       enabled: true
       className: nginx-external
       annotations:
@@ -92,7 +93,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: kanidmd
                 port: http
       tls:
         - hosts:
