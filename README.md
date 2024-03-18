@@ -45,9 +45,11 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
   my Kubernetes cluster.
 - [kubernetes/ingress-nginx](https://github.com/kubernetes/ingress-nginx/): Ingress controller to
   expose HTTP traffic to pods over DNS.
-- [democratic-csi](https://github.com/democratic-csi/democratic-csi): implements the CSI (container
-  storage interface) spec providing storage via zfs-based storage systems.
+- [openebs/zfs-localpv](https://github.com/openebs/zfs-localpv): CSI Driver for dynamic
+  provisioning of Persistent Local Volumes for Kubernetes using ZFS.
 - [kanidm](https://kanidm.com/): A simple, secure and fast identity management platform.
+- [velero](https://velero.io/): Tool to safely backup and restore, perform disaster recovery,
+  and migrate Kubernetes cluster resources and persistent volumes.
 
 ## 🔧 Hardware
 
@@ -96,7 +98,7 @@ All connections outside the cluster are handled with TLS using
 
 ### Load Balancer
 
-[MetalLB](https://metallb.universe.tf/) is configured in BGP mode, both on my router and within the
+[Cilium](https://cilium.io/) is configured with BGP control plane, both on my router and within the
 Kubernetes cluster.
 
 ### Ingress Controllers
