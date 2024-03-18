@@ -1,11 +1,11 @@
 app-template:
   controllers:
-    main:
+    navidrome:
       replicas: 1
       # HA is not supported
       strategy: Recreate
       containers:
-        main:
+        navidrome:
           image:
             repository: deluan/navidrome
             tag: 0.51.1
@@ -31,12 +31,13 @@ app-template:
               memory: 512Mi
 
   service:
-    main:
+    navidrome:
+      controller: navidrome
       ports:
         http:
           port: 4533
   ingress:
-    main:
+    navidrome:
       enabled: true
       className: nginx-internal
       annotations:
@@ -48,7 +49,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: navidrome
                 port: http
       tls:
         - hosts:
@@ -71,7 +72,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: navidrome
                 port: http
       tls:
         - hosts:
