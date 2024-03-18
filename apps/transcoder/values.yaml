@@ -63,7 +63,10 @@ app-template:
             readiness: *probes
             startup:
               enabled: true
+              custom: true
               spec:
+                tcpSocket:
+                  port: *port_rabbit
                 failureThreshold: 90
           env:
             RABBITMQ_DEFAULT_USER:
