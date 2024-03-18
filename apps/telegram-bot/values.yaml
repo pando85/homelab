@@ -1,9 +1,9 @@
 app-template:
   controllers:
-    main:
+    telegram-bot:
       replicas: 2
       containers:
-        main:
+        telegram-bot:
           image:
             repository: pando85/troll-bot
             tag: 1.0.1
@@ -27,13 +27,14 @@ app-template:
               memory: 32Mi
 
   service:
-    main:
+    telegram-bot:
+      controller: telegram-bot
       ports:
         http:
           port: 5000
 
   ingress:
-    main:
+    telegram-bot:
       enabled: true
       className: nginx-internal
       annotations:
@@ -45,7 +46,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: telegram-bot
                 port: http
       tls:
         - hosts:
@@ -65,7 +66,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: telegram-bot
                 port: http
       tls:
         - hosts:
