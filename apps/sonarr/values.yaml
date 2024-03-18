@@ -30,6 +30,7 @@ app-template:
               enabled: true
               spec:
                 failureThreshold: 60
+                periodSeconds: 10
   service:
     main:
       ports:
