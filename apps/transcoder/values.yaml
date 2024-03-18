@@ -61,7 +61,10 @@ app-template:
                 periodSeconds: 30
                 timeoutSeconds: 3
             readiness: *probes
-            startup: *probes
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 90
           env:
             RABBITMQ_DEFAULT_USER:
               valueFrom:
