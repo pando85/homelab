@@ -22,6 +22,12 @@ app-template:
           probes:
             liveness: &probe
               enabled: true
+              spec:
+                failureThreshold: 3
+                periodSeconds: 10
+                tcpSocket:
+                  port: *port
+                timeoutSeconds: 1
             readiness: *probe
         metrics:
           image:
@@ -43,22 +49,16 @@ app-template:
               protocol: TCP
 
           probes:
-            liveness:
+            liveness: &metrics_probe
               enabled: true
+              custom: true
               spec:
                 failureThreshold: 3
                 periodSeconds: 30
                 tcpSocket:
                   port: *metrics_port
                 timeoutSeconds: 1
-            readiness:
-              enabled: true
-              spec:
-                failureThreshold: 3
-                periodSeconds: 30
-                tcpSocket:
-                  port: *metrics_port
-                timeoutSeconds: 1
+            readiness: *metrics_probe
 
   defaultPodOptions:
     securityContext:
