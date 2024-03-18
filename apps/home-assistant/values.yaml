@@ -1,12 +1,12 @@
 app-template:
   controllers:
-    main:
+    hass:
       annotations:
         reloader.stakater.com/auto: "true"
       type: statefulset
       replicas: 1
       containers:
-        main:
+        hass:
           image:
             repository: ghcr.io/onedr0p/home-assistant
             tag: 2024.3.1@sha256:2a5531471db90664df50d4aec488f340a74a1f18de6dd2a4a7c53335ad9b6e0e
@@ -25,11 +25,14 @@ app-template:
             ZZ_DB_URL: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@home-assistant-postgres/home_assistant"
           probes:
             liveness:
-              enabled: false
+              enabled: true
             readiness:
-              enabled: false
+              enabled: true
             startup:
-              enabled: false
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
 
           resources:
             requests:
@@ -55,7 +58,7 @@ app-template:
             - >
               cp -r /original/conf/* /conf/
       containers:
-        main:
+        appdaemon:
           image:
             repository: acockburn/appdaemon
             tag: 4.4.2
@@ -72,6 +75,16 @@ app-template:
               memory: 50Mi
             limits:
               memory: 200Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
       pod:
         affinity: &affinity
           podAffinity:
@@ -90,7 +103,7 @@ app-template:
       pod:
         runtimeClassName: nvidia
       containers:
-        main:
+        whisper:
           image:
             repository: pando85/wyoming-whisper
             tag: 1.1.0
@@ -107,11 +120,21 @@ app-template:
               memory: 600Mi
             limits:
               nvidia.com/gpu: "1"
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
     piper:
       type: deployment
       replicas: 1
       containers:
-        main:
+        piper:
           image:
             repository: rhasspy/wyoming-piper
             tag: 1.5.0
@@ -123,6 +146,16 @@ app-template:
             requests:
               cpu: 15m
               memory: 150Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
       pod:
         affinity: *affinity
 
@@ -130,7 +163,7 @@ app-template:
       type: deployment
       replicas: 1
       containers:
-        main:
+        openwakeword:
           image:
             repository: rhasspy/wyoming-openwakeword
             tag: 1.10.0
@@ -141,6 +174,16 @@ app-template:
             requests:
               cpu: 15m
               memory: 150Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
       pod:
         affinity: *affinity
 
@@ -150,7 +193,7 @@ app-template:
       type: deployment
       replicas: 1
       containers:
-        main:
+        valetudopng:
           image:
             repository: ghcr.io/erkexzcx/valetudopng
             tag: v1.0.16
@@ -161,10 +204,19 @@ app-template:
             requests:
               cpu: 15m
               memory: 15Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
 
   defaultPodOptions:
-    enableServiceLinks: false
-    terminationGracePeriodSeconds: "1"
+    terminationGracePeriodSeconds: 1
 
     securityContext:
       runAsUser: 568
@@ -173,7 +225,8 @@ app-template:
       fsGroupChangePolicy: "OnRootMismatch"
 
   service:
-    main:
+    hass:
+      controller: hass
       ports:
         http:
           port: 8123
@@ -204,7 +257,7 @@ app-template:
           port: 3000
 
   ingress:
-    main:
+    hass:
       enabled: true
       className: nginx-external
       annotations:
@@ -217,7 +270,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: hass
                 port: http
       tls:
         - hosts:
@@ -238,7 +291,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: appdaemon
+                identifier: appdaemon
                 port: http
       tls:
         - hosts:
@@ -256,7 +309,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: valetudopng
+                identifier: valetudopng
                 port: http
       tls:
         - hosts:
@@ -268,40 +321,40 @@ app-template:
       enabled: true
       existingClaim: home-assistant-config
       advancedMounts:
-        main:
-          main:
+        hass:
+          hass:
             - path: /config
     configmap:
       enabled: true
       type: configMap
       name: home-assistant-config
       advancedMounts:
-        main:
-          main:
+        hass:
+          hass:
             - path: /config/gitops
     secret:
       enabled: true
       type: secret
       name: hass-secrets
       advancedMounts:
-        main:
-          main:
+        hass:
+          hass:
             - path: /config/gitops/secrets
     configmap-integrations:
       enabled: true
       type: configMap
       name: home-assistant-config-integrations
       advancedMounts:
-        main:
-          main:
+        hass:
+          hass:
             - path: /config/gitops/integrations
     configmap-script:
       enabled: true
       type: configMap
       name: home-assistant-config-script
       advancedMounts:
-        main:
-          main:
+        hass:
+          hass:
             - path: /config/gitops/script
     appdaemon:
       enabled: true
@@ -325,7 +378,7 @@ app-template:
         appdaemon:
           01-init-config:
             - path: /conf
-          main:
+          appdaemon:
             - path: /conf
     whisper:
       enabled: true
@@ -333,7 +386,7 @@ app-template:
       sizeLimit: 5Gi
       advancedMounts:
         whisper:
-          main:
+          whisper:
             - path: /data
     piper:
       enabled: true
@@ -341,7 +394,7 @@ app-template:
       sizeLimit: 5Gi
       advancedMounts:
         piper:
-          main:
+          piper:
             - path: /data
     valetudopng:
       enabled: true
@@ -349,11 +402,12 @@ app-template:
       name: valetudopng-config
       advancedMounts:
         valetudopng:
-          main:
+          valetudopng:
             - path: /config
   serviceMonitor:
-    main:
+    hass:
       enabled: true
+      serviceName: hass
       labels:
         operator.prometheus.io/instance: prometheus-long-term
       endpoints:
