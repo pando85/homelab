@@ -1,9 +1,9 @@
 app-template:
   controllers:
-    main:
+    sonarr:
       type: statefulset
       containers:
-        main:
+        sonarr:
           image:
             repository: ghcr.io/onedr0p/sonarr-develop
             tag: 4.0.2.1341@sha256:e7e1a75fa1586559f91d5e26caac72f96f1e18ae01ccb2d7c7ce589a3bedaca4
@@ -32,13 +32,14 @@ app-template:
                 failureThreshold: 60
                 periodSeconds: 10
   service:
-    main:
+    sonarr:
+      controller: sonarr
       ports:
         http:
           port: *port
 
   ingress:
-    main:
+    sonarr:
       enabled: true
       className: nginx-internal
       annotations:
@@ -50,7 +51,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: sonarr
                 port: http
       tls:
         - hosts:
@@ -72,7 +73,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: sonarr
                 port: http
       tls:
         - hosts:
