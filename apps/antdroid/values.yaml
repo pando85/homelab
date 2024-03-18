@@ -1,9 +1,9 @@
 app-template:
   controllers:
-    main:
+    antdroid:
       replicas: 1
       containers:
-        main:
+        nginx:
           image:
             repository: nginx
             tag: 1.25.4-alpine
@@ -17,10 +17,12 @@ app-template:
               memory: 8Mi
             limits:
               memory: 16Mi
-
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
   defaultPodOptions:
-    enableServiceLinks: false
-
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
@@ -30,13 +32,14 @@ app-template:
             app.kubernetes.io/instance: antdroid
             app.kubernetes.io/name: antdroid
   service:
-    main:
+    antdroid:
+      controller: antdroid
       ports:
         http:
           port: 80
 
   ingress:
-    main:
+    antdroid:
       enabled: true
       className: nginx-internal
       annotations:
@@ -48,7 +51,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: antdroid
                 port: http
       tls:
         - hosts:
@@ -67,7 +70,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: antdroid
                 port: http
       tls:
         - hosts:
