@@ -1,6 +1,6 @@
 app-template:
   controllers:
-    main:
+    esphome:
       annotations:
         reloader.stakater.com/auto: "true"
       type: statefulset
@@ -17,7 +17,7 @@ app-template:
             - >
               cp --dereference -r /original/config/* /config/
       containers:
-        main:
+        esphome:
           image:
             repository: ghcr.io/esphome/esphome
             tag: 2024.2.2@sha256:96e4ea5664de466af3549f28862290bbbc2bd1cadf444393c91a97256ed51ae8
@@ -29,14 +29,25 @@ app-template:
               memory: 1374M
             limits:
               memory: 2048M
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
   service:
-    main:
+    esphome:
+      controller: esphome
       ports:
         http:
           port: 6052
 
   ingress:
-    main:
+    esphome:
       enabled: true
       className: nginx-internal
       annotations:
@@ -50,7 +61,7 @@ app-template:
             - path: /
               pathType: Prefix
               service:
-                name: main
+                identifier: esphome
                 port: http
       tls:
         - hosts:
