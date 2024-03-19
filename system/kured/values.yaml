@@ -13,3 +13,5 @@ kured:
     endTime: "8:00"
     timeZone: Europe/Madrid
     rebootCommand: "/usr/bin/systemctl reboot"
+    # avoid tuesday and wednesday because long running backups can be running
+    rebootDays: [mo, th, fr, sa, su]
