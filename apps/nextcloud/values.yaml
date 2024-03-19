@@ -276,8 +276,6 @@ app-template:
     redis:
       controller: redis
       ports:
-        http:
-          enabled: false
         redis:
           enabled: true
           port: 6379
