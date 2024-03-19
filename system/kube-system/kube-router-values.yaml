@@ -5,6 +5,7 @@ kubeRouter:
   router:
     enabled: true
     enableOverlay: true
+    enablePodEgress: false
     enableIbgp: true
     enableCni: false
     clusterAsn: 64513
