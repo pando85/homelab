@@ -97,8 +97,6 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/hostname: mosquitto.internal.grigri.cloud
       ports:
-        http:
-          enabled: false
         mqtt:
           port: *port
         websockets:
