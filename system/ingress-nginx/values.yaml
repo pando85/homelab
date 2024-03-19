@@ -82,7 +82,6 @@ ingress-nginx:
         io.cilium/lb-ipam-ips: "192.168.193.1"
         metallb.universe.tf/loadBalancerIPs: "192.168.193.1"
       # loadBalancerClass: "io.cilium/bgp-control-plane"
-      externalTrafficPolicy: Local
       enableHttp: true
       enableHttps: true
       ports:

@@ -102,7 +102,6 @@ app-template:
         metallb.universe.tf/loadBalancerIPs: "192.168.193.3"
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/hostname: transcoder-rabbit.internal.grigri.cloud
-      externalTrafficPolicy: Local
       ports:
         tcp-clients:
           enabled: true
