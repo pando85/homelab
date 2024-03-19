@@ -71,12 +71,14 @@ autoDirectNodeRoutes: true
 ipv4NativeRoutingCIDR: "10.0.0.0/8"
 
 bgp:
-  enabled: false
+  enabled: true
+  announce:
+    loadbalancerIP: true
 
 # -- This feature set enables virtual BGP routers to be created via
 # CiliumBGPPeeringPolicy CRDs.
 bgpControlPlane:
-  enabled: true
+  enabled: false
   secretsNamespace:
     name: kube-system
 
