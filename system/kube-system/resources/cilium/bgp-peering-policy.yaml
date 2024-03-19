@@ -1,0 +1,23 @@
+apiVersion: "cilium.io/v2alpha1"
+kind: CiliumBGPPeeringPolicy
+metadata:
+  name: default
+spec:
+  nodeSelector:
+    matchLabels:
+      kubernetes.io/os: linux
+  virtualRouters:
+    - localASN: 64513
+      # this allows routingMode native withouth the need of autoDirectNodeRoutes true: Not tested
+      # exportPodCIDR: true
+      # Advertisement of services to BGP peers
+      # https://docs.cilium.io/en/v1.15/network/bgp-control-plane/#service-announcements
+      serviceSelector:
+        matchExpressions:
+          - key: advertise-bgp
+            operator: NotIn
+            values:
+              - "never-used-value"
+      neighbors:
+        - peerAddress: "192.168.192.1/32"
+          peerASN: 64512
