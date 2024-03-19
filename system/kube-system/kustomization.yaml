@@ -35,3 +35,13 @@ helmCharts:
     repo: https://nvidia.github.io/gpu-feature-discovery
     valuesFile: gpu-feature-discovery-values.yaml
     version: 0.8.2
+
+patches:
+  - patch: |-
+      - op: remove
+        path: "/spec/template/metadata/annotations/rollme"
+    target:
+      group: apps
+      version: v1
+      kind: DaemonSet
+      name: kube-system-gpu-feature-discovery
