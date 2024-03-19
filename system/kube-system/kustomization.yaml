@@ -3,8 +3,7 @@ kind: Kustomization
 namespace: kube-system
 
 resources:
-  - resources/cilium/bgp-peering-policy.yaml
-  - resources/cilium/load-balancer-ip-pool.yaml
+  - resources/cilium/bgp-config.yaml
   - resources/runtime-class.yaml
 
 helmCharts:
