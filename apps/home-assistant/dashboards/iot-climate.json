@@ -545,7 +545,7 @@
           "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Consumed",
           "range": true,
           "refId": "A"
@@ -561,7 +561,7 @@
           "format": "time_series",
           "hide": false,
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Produced",
           "range": true,
           "refId": "B"
@@ -902,7 +902,7 @@
           "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_heat_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Consumed",
           "range": true,
           "refId": "A"
@@ -918,7 +918,7 @@
           "format": "time_series",
           "hide": false,
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Produced",
           "range": true,
           "refId": "B"
@@ -1259,7 +1259,7 @@
           "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_cool_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Consumed",
           "range": true,
           "refId": "A"
@@ -1275,7 +1275,7 @@
           "format": "time_series",
           "hide": false,
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Produced",
           "range": true,
           "refId": "B"
@@ -1797,7 +1797,7 @@
           "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_consumed\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "DHW",
           "range": true,
           "refId": "A"
@@ -1813,7 +1813,7 @@
           "format": "time_series",
           "hide": false,
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Heat",
           "range": true,
           "refId": "B"
@@ -1829,7 +1829,7 @@
           "format": "time_series",
           "hide": false,
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Cool",
           "range": true,
           "refId": "C"
@@ -1943,7 +1943,7 @@
           "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.aquarea_dhw_energy_produced\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "DHW",
           "range": true,
           "refId": "A"
@@ -1959,7 +1959,7 @@
           "format": "time_series",
           "hide": false,
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Heat",
           "range": true,
           "refId": "B"
@@ -1975,7 +1975,7 @@
           "format": "time_series",
           "hide": false,
           "instant": false,
-          "interval": "",
+          "interval": "1h",
           "legendFormat": "Cool",
           "range": true,
           "refId": "C"
