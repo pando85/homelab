@@ -17,3 +17,7 @@ climate_control:
     off_mode: DHW
   fallback_cheap_electricity_price: 0.09
   log_level: INFO
+
+last_connection_sensor:
+  module: last_connection_sensor
+  class: LastConnectionSensor

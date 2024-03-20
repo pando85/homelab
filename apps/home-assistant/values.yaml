@@ -407,7 +407,10 @@ app-template:
   serviceMonitor:
     hass:
       enabled: true
-      serviceName: hass
+      # if directory != service name, it will be prefixed to the service name:
+      # ${directory}-${service}
+      # https://github.com/bjw-s/helm-charts/blob/45ec2d739fc787c95947e0f3d68b05e54fe5f077/charts/library/common/templates/lib/service/_valuesToObject.tpl#L20
+      serviceName: home-assistant-hass
       labels:
         operator.prometheus.io/instance: prometheus-long-term
       endpoints:
