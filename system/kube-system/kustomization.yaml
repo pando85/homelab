@@ -15,12 +15,6 @@ helmCharts:
     repo: https://helm.cilium.io/
     valuesFile: cilium-values.yaml
     version: 1.15.2
-  - name: kube-router
-    namespace: kube-system
-    releaseName: kube-router
-    repo: https://charts.enix.io/
-    valuesFile: kube-router-values.yaml
-    version: 1.10.0
   - includeCRDs: true
     name: nvidia-device-plugin
     namespace: kube-system
