@@ -25,7 +25,7 @@
         src: /tmp/zfs_exporter-{{ zfs_exporter_version }}.linux-amd64/zfs_exporter
         dest: /usr/local/bin
         mode: "0755"
-
+      notify: Restart zfs-exporter
 
 - name: Create the systemd service
   become: true
