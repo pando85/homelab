@@ -1,5 +1,5 @@
 debug:
-  enabled: true
+  enabled: false
 
 rollOutCiliumPods: true
 
@@ -9,9 +9,6 @@ serviceAccounts:
     create: false
   hubblecertgen:
     create: false
-
-k8sServiceHost: grigri.grigri
-k8sServicePort: "6443"
 
 securityContext:
   capabilities:
@@ -64,12 +61,6 @@ securityContext:
       - PERFMON
       - BPF
 
-# If all nodes share a single L2 network, then this can be taken care of by enabling
-# the option auto-direct-node-routes: true. Otherwise, an additional system component such as a BGP daemon must be run
-autoDirectNodeRoutes: true
-# if autoDirectNodeRoutes is false then the following cannot be used
-ipv4NativeRoutingCIDR: "10.0.0.0/8"
-
 bgp:
   enabled: false
 
@@ -84,27 +75,12 @@ containerRuntime:
   integration: containerd
   socketPath: /var/run/k3s/containerd/containerd.sock
 
-kubeProxyReplacement: true
-kubeProxyReplacementHealthzBindAddr: "0.0.0.0:10256"
-
 loadBalancer:
   standalone: false
   algorithm: maglev
   # DSR for TCP and SNAT for UDP
   mode: hybrid
   acceleration: best-effort
-
-nodePort:
-  # enabled cause kubeProxyReplacement is true
-  enabled: true
-
-hostPort:
-  # enabled cause kubeProxyReplacement is true
-  enabled: true
-
-socketLB:
-  # enabled cause kubeProxyReplacement is true
-  enabled: true
 
 hubble:
   enabled: true
@@ -176,22 +152,6 @@ dashboards:
 # ref: https://docs.cilium.io/en/v1.7/install/upgrade/#configmap-remote-node-identity
 # Deprecated without replacement in 1.15. To be removed in 1.16.
 remoteNodeIdentity: false
-
-#tunnelProtocol: vxlan
-
-# -- Enable native-routing mode or tunneling mode.
-# Possible values:
-#   - ""
-#   - native
-#   - tunnel
-# @default -- `"tunnel"`
-#routingMode: tunnel
-# # Test if this is the cause of externalTrafficPolicy `Local` not working`
-routingMode: native
-
-# -- Configure VXLAN and Geneve tunnel port.
-# @default -- Port 8472 for VXLAN, Port 6081 for Geneve
-#tunnelPort: 8472
 
 operator:
   prometheus:

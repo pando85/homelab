@@ -14,7 +14,6 @@ ExecStart=/usr/local/bin/k3s {{ 'server' if 'kube_control_plane' in group_names 
   --kube-apiserver-arg "default-not-ready-toleration-seconds=300" \
   --kube-apiserver-arg "default-unreachable-toleration-seconds=300" \
   --flannel-backend=none \
-  --disable-kube-proxy \
 {% endif %}
 {% for item in k3s_kubelet_extra_args %}
   --kubelet-arg "{{ item }}" \
