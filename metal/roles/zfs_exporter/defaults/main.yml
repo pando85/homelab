@@ -1,3 +1,4 @@
 ---
+# renovate: datasource=github-releases depName=pdf/zfs_exporter versioning=regex:^(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))$
 zfs_exporter_version: 2.3.2
 zfs_exporter_arguments: --collector.dataset-snapshot
