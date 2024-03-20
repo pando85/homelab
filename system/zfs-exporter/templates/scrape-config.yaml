@@ -8,5 +8,5 @@ spec:
   staticConfigs:
     - targets:
         - grigri.grigri:9134
-  scrapeInterval: 30s
+  scrapeInterval: 60s
   scrapeTimeout: 10s
