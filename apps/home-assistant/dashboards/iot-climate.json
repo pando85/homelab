@@ -511,7 +511,6 @@
         "y": 14
       },
       "id": 9,
-      "maxDataPoints": 10,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
@@ -868,7 +867,6 @@
         "y": 31
       },
       "id": 23,
-      "maxDataPoints": 10,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
@@ -1225,7 +1223,6 @@
         "y": 48
       },
       "id": 29,
-      "maxDataPoints": 10,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
@@ -1763,7 +1760,6 @@
         "y": 74
       },
       "id": 13,
-      "maxDataPoints": 10,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
@@ -1909,7 +1905,6 @@
         "y": 74
       },
       "id": 15,
-      "maxDataPoints": 10,
       "options": {
         "barRadius": 0,
         "barWidth": 0.97,
