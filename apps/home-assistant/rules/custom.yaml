@@ -2,7 +2,7 @@
   expr: hass_last_updated_time_seconds{domain="sensor",entity="sensor.last_appdaemon_connection"} > time() - 60
   annotations:
     description: |
-      App daemon is not updating {{ $entity }} since the last 10m. App daemon can be disconnected
+      App daemon is not updating {{ $labels.entity }} since the last 10m. App daemon can be disconnected
       from Home Assistant or not working properly.
   for: 10m
   labels:
