@@ -9,5 +9,5 @@ class LastConnectionSensor(hass.Hass):
         self.run_minutely(self.update_last_connection, time)
 
     async def update_last_connection(self, cb_args):
-        now = datetime.now()
+        now = datetime.datetime.now()
         self.set_state("sensor.last_appdaemon_connection", state=now.strftime("%Y-%m-%d %H:%M:%S"))
