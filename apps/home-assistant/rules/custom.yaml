@@ -3,7 +3,7 @@
   annotations:
     description: |
       App daemon is not updating {{ $labels.entity }} since the last 10m. App daemon can be disconnected
-      from Home Assistant or not working properly.
+      from Home Assistant or Home Assistant is not serving metrics.
   for: 10m
   labels:
     severity: warning
