@@ -86,7 +86,19 @@
     description: "There might be an error on the snapshot system\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
 
 - alert: ZfsSnapshotTooMuchSize
-  expr: zfs_dataset_snapshot_bytes / zfs_dataset_used_by_dataset_bytes > 2 and zfs_dataset_snapshot_bytes > 100e6
+  # TODO: clean this because the second part is a workaround for missing data points
+  expr: |
+    (
+        (zfs_dataset_snapshot_bytes / zfs_dataset_used_by_dataset_bytes > 2 and zfs_dataset_snapshot_bytes > 100e6)
+        or
+        (
+            (
+                predict_linear(zfs_dataset_snapshot_bytes[5m], 60 * 5) /
+                predict_linear(zfs_dataset_used_by_dataset_bytes[5m], 60 * 5
+            ) > 2
+          and predict_linear(zfs_dataset_snapshot_bytes[5m], 60 * 5)  > 100e6)
+        )
+    )
   for: 5m
   labels:
     severity: warning
