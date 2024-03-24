@@ -43,3 +43,5 @@ nav:
       - deployment
   - User-guide:
       - user-guide
+  - Troubleshooting:
+      - troubleshooting
