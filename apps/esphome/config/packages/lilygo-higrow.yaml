@@ -148,25 +148,24 @@ text_sensor:
   - platform: version
     hide_timestamp: true
     name: "${friendly_name} - ESPHome Version"
+# climate:
+#   - platform: bang_bang
+#     visual:
+#       min_temperature: 0
+#       max_temperature: 100
+#       temperature_step: 1
 
-climate:
-  - platform: bang_bang
-    visual:
-      min_temperature: 0
-      max_temperature: 100
-      temperature_step: 1
+#     name: ${friendly_name} Regler
+#     # TODO: check
+#     sensor: moisture
+#     default_target_temperature_low: 20
+#     default_target_temperature_high: 70
 
-    name: ${friendly_name} Regler
-    # TODO: check
-    sensor: moisture
-    default_target_temperature_low: 20
-    default_target_temperature_high: 70
+#     heat_action:
+#       - switch.turn_on: water
 
-    heat_action:
-      - switch.turn_on: water
-
-    idle_action:
-      - switch.turn_off: water
+#     idle_action:
+#       - switch.turn_off: water
 # packages:
 #   # Battery only works for 12 hours with deepsleep!
 #   deepsleep: !include https://github.com/bruvv/LILYGO-T-Higrow-Esphome/blob/4eba66ad27f2bea9e632ff7eeb703e06d6f102c6/common/deepsleep.yaml
