@@ -2,6 +2,8 @@ apiVersion: "vault.banzaicloud.com/v1alpha1"
 kind: "Vault"
 metadata:
   name: "vault"
+  labels:
+    backup/retain: quaterly
 spec:
   size: 1
   # renovate: datasource=docker
@@ -23,7 +25,7 @@ spec:
 
   # Vault Pods , Services and TLS Secret labels
   vaultLabels:
-    backup/retain: quaterly
+    example.com/log-format: "json"
 
   # Vault Configurer Pods and Services labels
   vaultConfigurerLabels:
