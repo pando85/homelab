@@ -1,6 +1,8 @@
 app-template:
   controllers:
     m-rajoy-api:
+      labels:
+        backup/retain: quaterly
       replicas: 1
       containers:
         m-rajoy-api:

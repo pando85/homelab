@@ -6,6 +6,8 @@ postgres-operator:
 
   configGeneral:
     enable_shm_volume: false
+    inherited_labels:
+      - backup/retain
 
   configMajorVersionUpgrade:
     # "off": no upgrade, "manual": manifest triggers action, "full": minimal version violation triggers too

@@ -1,6 +1,8 @@
 app-template:
   controllers:
     hass:
+      labels:
+        backup/retain: quaterly
       annotations:
         reloader.stakater.com/auto: "true"
       type: statefulset

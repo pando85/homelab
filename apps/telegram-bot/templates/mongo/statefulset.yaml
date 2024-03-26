@@ -60,6 +60,7 @@ spec:
         name: mongo-persistent-storage-zfs
         labels:
           backup: telegram-bot-zfs
+          backup/retain: quaterly
       spec:
         accessModes:
           - ReadWriteOnce

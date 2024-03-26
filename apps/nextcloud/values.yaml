@@ -3,6 +3,9 @@ nextcloud:
     repository: nextcloud
     tag: 28.0.3
 
+  deploymentLabels:
+    backup/retain: quaterly
+
   ingress:
     enabled: true
     className: nginx-external

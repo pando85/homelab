@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: mosquitto
     app.kubernetes.io/name: mosquitto
     backup: mosquitto-zfs
+    backup/retain: weekly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: mosquitto-data

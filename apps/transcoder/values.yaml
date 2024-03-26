@@ -1,6 +1,8 @@
 app-template:
   controllers:
     transcoder:
+      labels:
+        backup/retain: quaterly
       annotations:
         reloader.stakater.com/auto: "true"
       type: statefulset

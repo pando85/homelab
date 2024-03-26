@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: jellyfin
     app.kubernetes.io/name: jellyfin
     backup: jellyfin-zfs
+    backup/retain: quaterly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: config-jellyfin

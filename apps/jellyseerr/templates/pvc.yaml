@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: jellyseerr
     app.kubernetes.io/name: jellyseerr
     snapshots: jellyseerr-zfs
+    backup/retain: quaterly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: jellyseerr-config

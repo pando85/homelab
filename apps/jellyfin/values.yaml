@@ -1,6 +1,8 @@
 app-template:
   controllers:
     jellyfin:
+      labels:
+        backup/retain: quaterly
       type: statefulset
       containers:
         jellyfin:

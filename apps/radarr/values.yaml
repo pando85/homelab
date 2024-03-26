@@ -1,6 +1,8 @@
 app-template:
   controllers:
     radarr:
+      labels:
+        backup/retain: quaterly
       type: statefulset
       containers:
         radarr:

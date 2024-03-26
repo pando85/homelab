@@ -1,6 +1,8 @@
 app-template:
   controllers:
     antdroid:
+      labels:
+        backup/retain: quaterly
       replicas: 1
       containers:
         nginx:

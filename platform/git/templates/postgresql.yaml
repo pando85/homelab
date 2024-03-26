@@ -2,6 +2,8 @@ apiVersion: "acid.zalan.do/v1"
 kind: postgresql
 metadata:
   name: gitea-postgres
+  labels:
+    backup/retain: quaterly
 spec:
   teamId: gitea
 

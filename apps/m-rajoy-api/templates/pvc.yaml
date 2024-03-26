@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: m-rajoy-api
     app.kubernetes.io/name: m-rajoy-api
     backup: m-rajoy-api-zfs
+    backup/retain: quaterly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: m-rajoy-api-data

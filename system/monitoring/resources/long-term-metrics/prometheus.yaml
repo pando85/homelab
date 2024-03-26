@@ -3,6 +3,8 @@ kind: Prometheus
 metadata:
   name: long-term-prometheus
   namespace: monitoring
+  labels:
+    backup/retain: quaterly
 spec:
   alerting:
     alertmanagers:
@@ -69,6 +71,7 @@ spec:
       metadata:
         labels:
           backup: velero
+          backup/retain: quaterly
       spec:
         accessModes:
           - ReadWriteOnce

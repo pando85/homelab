@@ -1,6 +1,8 @@
 app-template:
   controllers:
     jellyseerr:
+      labels:
+        backup/retain: quaterly
       type: statefulset
       containers:
         jellyseerr:

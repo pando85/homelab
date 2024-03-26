@@ -1,0 +1,19 @@
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: retain-weekly
+  namespace: velero
+spec:
+  schedule: 30 2 * * 2
+  template:
+    includedNamespaces:
+      - "*"
+    orLabelSelectors:
+      - matchLabels:
+          backup/retain: weekly
+    snapshotVolumes: true
+    storageLocation: default
+    ttl: 240h0m0s # 10d
+    volumeSnapshotLocations:
+      - zfspv-full
+  useOwnerReferencesInBackup: true

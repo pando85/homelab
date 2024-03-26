@@ -1,6 +1,8 @@
 app-template:
   controllers:
     mosquitto:
+      labels:
+        backup/retain: weekly
       replicas: 1
       type: statefulset
       annotations:

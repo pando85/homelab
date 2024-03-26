@@ -23,7 +23,7 @@ spec:
 
   # Vault Pods , Services and TLS Secret labels
   vaultLabels:
-    example.com/log-format: "json"
+    backup/retain: quaterly
 
   # Vault Configurer Pods and Services labels
   vaultConfigurerLabels:
@@ -96,6 +96,8 @@ spec:
   volumeClaimTemplates:
     - metadata:
         name: vault-file
+        labels:
+          backup/retain: quaterly
       spec:
         accessModes:
           - ReadWriteOnce

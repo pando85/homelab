@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: bazarr
     app.kubernetes.io/name: bazarr
     backup: bazarr-zfs
+    backup/retain: weekly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: config-bazarr

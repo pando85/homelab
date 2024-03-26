@@ -1,6 +1,8 @@
 app-template:
   controllers:
     freshrss:
+      labels:
+        backup/retain: weekly
       replicas: 1
       # HA is not supported
       strategy: Recreate

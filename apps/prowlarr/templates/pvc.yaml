@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: prowlarr
     app.kubernetes.io/name: prowlarr
     backup: prowlarr-zfs
+    backup/retain: weekly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: prowlarr-config

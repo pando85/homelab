@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: wallabag
     app.kubernetes.io/name: wallabag
     backup: wallabag-zfs
+    backup/retain: quaterly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: wallabag-images

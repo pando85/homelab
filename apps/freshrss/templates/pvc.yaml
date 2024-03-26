@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: freshrss
     app.kubernetes.io/name: freshrss
     backup: freshrss-zfs
+    backup/retain: weekly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: freshrss-config

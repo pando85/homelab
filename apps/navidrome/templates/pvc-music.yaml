@@ -5,6 +5,7 @@ metadata:
     app.kubernetes.io/instance: navidrome
     app.kubernetes.io/name: navidrome
     backup: navidrome-zfs
+    backup/retain: quaterly
   annotations:
     argocd.argoproj.io/sync-options: Prune=false
   name: music-navidrome
