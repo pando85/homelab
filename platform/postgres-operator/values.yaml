@@ -6,8 +6,6 @@ postgres-operator:
 
   configGeneral:
     enable_shm_volume: false
-    inherited_labels:
-      - backup/retain
 
   configMajorVersionUpgrade:
     # "off": no upgrade, "manual": manifest triggers action, "full": minimal version violation triggers too
@@ -18,6 +16,8 @@ postgres-operator:
     # TODO: remove for postgres HA
     enable_pod_antiaffinity: false
     enable_pod_disruption_budget: false
+    inherited_labels:
+      - backup/retain
 
   configLoadBalancer:
   # configDebug:
