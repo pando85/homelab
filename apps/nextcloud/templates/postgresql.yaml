@@ -27,7 +27,7 @@ spec:
     nextcloud: nextcloud
 
   postgresql:
-    version: "15"
+    version: "16"
     parameters:
       archive_mode: "off"
       max_connections: "4"
