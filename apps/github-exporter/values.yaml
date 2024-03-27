@@ -8,6 +8,7 @@ app-template:
             tag: 1.1.0
           probes:
             liveness: &probe
+              enabled: true
               custom: true
               spec:
                 httpGet:
