@@ -20,7 +20,7 @@ spec:
   volume:
     # We have to manually define label velero.io/exclude-from-backup=true
     # https://github.com/zalando/postgres-operator/issues/2222
-    size: 2Gi
+    size: 4Gi
 
   users:
     home_assistant:
