@@ -1,9 +1,18 @@
 - alert: AppDaemonDown
-  expr: hass_last_updated_time_seconds{domain="sensor",entity="sensor.last_appdaemon_connection"} < time() - 120
+  expr: time() - hass_last_updated_time_seconds{domain="sensor",entity="sensor.last_appdaemon_connection"} > 120
   annotations:
     description: |
       App daemon is not updating {{ $labels.entity }} since the last 10m. App daemon can be disconnected
-      from Home Assistant or Home Assistant is not serving metrics.
+      from Home Assistant or Home Assistant is not serving metrics since {{ $value }} seconds.
+  for: 10m
+  labels:
+    severity: warning
+- alert: AquareaDown
+  expr: time() - hass_last_updated_time_seconds{domain="sensor",entity="sensor.aquarea_discharge_temperature"} > 2000
+  annotations:
+    description: |
+      Aquarea is not updating {{ $labels.entity }} since the last ~40m. cz-taw1b.iot.grigri is not
+      sending this data since {{ $value }} seconds.
   for: 10m
   labels:
     severity: warning
