@@ -24,6 +24,7 @@ app-template:
           probes:
             liveness: &probe
               enabled: true
+              custom: true
               spec:
                 failureThreshold: 3
                 periodSeconds: 10
