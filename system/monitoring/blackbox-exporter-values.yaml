@@ -103,6 +103,15 @@ serviceMonitor:
     - module: ping
       name: shellypmmini-servers
       url: shellypmmini-servers.iot.grigri
+    - module: ping
+      name: shellyplus2pm-bedroom
+      url: shellyplus2pm-bedroom.iot.grigri
+    - module: ping
+      name: shellyplus2pm-office-t
+      url: shellyplus2pm-office-t.iot.grigri
+    - module: ping
+      name: shellyplus2pm-office-a
+      url: shellyplus2pm-office-a.iot.grigri
     - module: tcp_connect
       name: rack-controller
       url: rack-controller.iot.grigri:6053
