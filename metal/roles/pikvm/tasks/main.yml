@@ -1,0 +1,16 @@
+---
+- name: Set Web UI password
+  ansible.builtin.htpasswd:
+    path: /etc/kvmd/htpasswd
+    name: "{{ lookup('passwordstore', 'web/prusik-ipmi.grigri', subkey='login') }}"
+    password: "{{ lookup('passwordstore', 'web/prusik-ipmi.grigri') }}"
+  tags:
+    - pikvm
+
+- name: Remove Web UI admin user
+  ansible.builtin.htpasswd:
+    path: /etc/kvmd/htpasswd
+    name: admin
+    state: absent
+  tags:
+    - pikvm

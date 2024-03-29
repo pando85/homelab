@@ -1,7 +1,8 @@
-ansible~=2.9.0,>=2.9.16
-netaddr~=0.8.0
-pbr~=5.9.0
-jmespath~=1.0.1
-ruamel.yaml~=0.17.21
-openshift~=0.13.1
-ansible-lint~=6.17.2
+ansible~=9.4
+ansible-core~=2.16
+netaddr~=1.2
+pbr~=6.0
+jmespath~=1.0
+ruamel.yaml~=0.18
+openshift~=0.13
+ansible-lint~=24.2

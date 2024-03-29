@@ -2,6 +2,13 @@
 - name: Set python interpreter
   import_tasks: python.yml
 
+- name: RW for blikvm
+  shell: mount -o remount,rw / && mount -o remount,rw /boot
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: ansible_host == "prusik-ipmi"
+
 - name: Create user and enable login
   import_tasks: user.yml
 
@@ -47,6 +54,7 @@
         force_apt_get: true
         update_cache: true
       notify: restart server
+      when: ansible_host != "prusik-ipmi"
 
     - name: Restart node if necessary after first upgrade
       meta: flush_handlers
@@ -87,12 +95,14 @@
     state: present
     force_apt_get: true
     update_cache: true
+  when: ansible_host != "prusik-ipmi"
 
 - name: Remove unnecesary packages
   apt:
     name: "{{ prepare_unnecesary_packages }}"
     state: absent
   notify: apt autoremove
+  when: ansible_host != "prusik-ipmi"
 
 - name: Disable swap in armbian
   lineinfile:
@@ -114,6 +124,7 @@
   import_tasks: logs2ram.yml
   when:
     - ansible_architecture == "aarch64"
+    - ansible_os_family == "Debian"
   tags:
     - logs2ram
 
@@ -140,6 +151,7 @@
     mode: "0444"
   when:
     - prepare_custom_cas is defined
+    - ansible_os_family == "Debian"
   loop: "{{ prepare_custom_cas }}"
   tags:
     - custom-cas
@@ -191,10 +203,12 @@
 
 - name: Install unattended upgrades
   import_tasks: unattended-upgrades.yml
+  when: ansible_host != "prusik-ipmi"
   tags:
     - unattended-upgrades
 
 - name: Fix apparmor config
   import_tasks: apparmor.yml
+  when: ansible_host != "prusik-ipmi"
   tags:
     - apparmor

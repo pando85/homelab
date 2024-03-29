@@ -1,5 +1,5 @@
 - name: Create some basic config
-  hosts: all
+  hosts: k3s_cluster
   environment:
     KUBECONFIG: ../../kubeconfig.yaml
   tasks:

@@ -1,7 +1,8 @@
 .POSIX:
 
-WORKON_HOME ?= .venv
-VENV_BASE ?= $(WORKON_HOME)/homelab
+WORKON_HOME ?= .direnv
+PYTHON_VERSION:=$(shell python --version | cut -d " " -f 2)
+VENV_BASE ?= $(WORKON_HOME)/python-$(PYTHON_VERSION)
 PYTHON := ${VENV_BASE}/bin/python3
 PYTHON_BIN_DIR := ${VENV_BASE}/bin
 

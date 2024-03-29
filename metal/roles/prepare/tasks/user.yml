@@ -4,6 +4,11 @@
     name: "{{ prepare_username }}"
     gid: 1000
 
+- name: "user | Add group sudo"
+  group:
+    name: "sudo"
+    gid: 27
+
 - name: "user | Add user {{ prepare_username }}"
   user:
     name: "{{ prepare_username }}"
