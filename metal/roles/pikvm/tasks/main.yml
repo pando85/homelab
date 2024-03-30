@@ -14,3 +14,21 @@
     state: absent
   tags:
     - pikvm
+
+- name: Ensure dir exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/kvmd-oled.service.d
+    state: directory
+  tags:
+    - pikvm
+
+- name: Rotate OLED display
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/kvmd-oled.service.d/override.conf
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/kvmd-oled --height=32 --clear-on-exit --rotate=2
+  notify: restart kvmd-oled
+  tags:
+    - pikvm
