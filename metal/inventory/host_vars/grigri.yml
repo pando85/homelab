@@ -2,3 +2,9 @@ k3s_kubelet_extra_args:
   - kube-reserved=cpu=1,memory=2.5Gi,ephemeral-storage=1Gi
   - system-reserved=cpu=2,memory=10Gi,ephemeral-storage=1Gi
   - eviction-hard=memory.available<300Mi,nodefs.available<10%
+
+zfs_arc_min_gb: 1
+zfs_arc_max_gb: 8
+
+l2arc_write_max_mb: 120
+l2arc_write_boost_mb: 160

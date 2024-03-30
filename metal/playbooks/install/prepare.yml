@@ -7,10 +7,12 @@
   roles:
     - prepare
 
-- name: Setup grigri
-  hosts: grigri
+- name: Setup amd64
+  hosts:
+    - grigri
+    - prusik
   roles:
-    - grigri_setup
+    - setup
 
 - name: Setup k8s-amd64-1
   hosts: k8s-amd64-1

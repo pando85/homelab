@@ -1,10 +1,10 @@
 [Unit]
-Description=Grigri server service
+Description=Telegram notification server service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/grigri-service start
-ExecStop=/usr/local/bin/grigri-service stop
+ExecStart=/usr/local/bin/telegram-notification start
+ExecStop=/usr/local/bin/telegram-notification stop
 RemainAfterExit=yes
 
 [Install]

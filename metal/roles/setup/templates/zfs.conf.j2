@@ -1,7 +1,5 @@
-# 1 Gi
-options zfs zfs_arc_min=1073741824
-# 8 Gi
-options zfs zfs_arc_max=8589934592
+options zfs zfs_arc_min={{ zfs_arc_min_gb | int * 1024 * 1024 * 1024 }}
+options zfs zfs_arc_max={{ zfs_arc_max_gb | int * 1024 * 1024 * 1024 }}
 
 # Increase throughput
 # https://openzfs.github.io/openzfs-docs/Performance%20and%20Tuning/ZIO%20Scheduler.html
@@ -11,8 +9,8 @@ options zfs zfs_vdev_sync_read_min_active=20
 options zfs zfs_vdev_sync_write_max_active=20
 options zfs zfs_vdev_sync_write_min_active=20
 
-options zfs l2arc_write_max=120111222 # 120MB/s
-options zfs l2arc_write_boost=160111222 # 160MB/s
+options zfs l2arc_write_max={{ l2arc_write_max_mb | int * 1024 * 1024 }}
+options zfs l2arc_write_boost={{ l2arc_write_boost_mb | int * 1024 * 1024 }}
 options zfs l2arc_noprefetch=0
 options zfs l2arc_headroom=4
 options zfs l2arc_headroom_boost=200

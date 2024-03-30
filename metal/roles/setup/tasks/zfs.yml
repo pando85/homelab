@@ -1,4 +1,12 @@
 ---
+- name: zfs | Ensure variables are defined
+  assert:
+    that:
+      - zfs_arc_min_gb is defined
+      - zfs_arc_max_gb is defined
+      - l2arc_write_max_mb is defined
+      - l2arc_write_boost_mb is defined
+
 - name: zfs | Enable smartd service
   systemd:
     name: smartd
@@ -19,8 +27,8 @@
   notify: mount zfs datasets
 
 - name: zfs | Configure ZFS module
-  copy:
-    src: zfs.conf
+  template:
+    src: zfs.conf.j2
     dest: /etc/modprobe.d/zfs.conf
     mode: "0644"
   notify: reload zfs module config

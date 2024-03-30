@@ -4,7 +4,7 @@
     name: media
     gid: 991
   tags:
-    - grigri-setup
+    - setup
 
 - name: Add media user
   user:
@@ -15,18 +15,19 @@
     groups: media
     append: true
   tags:
-    - grigri-setup
+    - setup
 
 - name: Backup user
   import_tasks: backup-user.yml
   tags:
-    - grigri-setup
+    - setup
     - backup-user
 
 - name: Notifications
   import_tasks: notifications.yml
   tags:
-    - grigri-setup
+    - setup
+    - notifications
 
 - name: Install smartctl
   apt:
@@ -35,7 +36,7 @@
     force_apt_get: true
     update_cache: true
   tags:
-    - grigri-setup
+    - setup
 
 - name: Ensure smartctl configured for sending notification errors
   lineinfile:
@@ -43,9 +44,10 @@
     regexp: '^DEVICESCAN'
     line: DEVICESCAN -H -M once -m pando855@gmail.com -n standby,10,q
   tags:
-    - grigri-setup
+    - setup
 
 - name: Configure ZFS
   import_tasks: zfs.yml
   tags:
-    - grigri-setup
+    - setup
+    - zfs
