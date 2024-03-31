@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import json
 import zlib
@@ -126,7 +127,18 @@ class ClimateControl(hass.Hass):
         await self._unregister_schedulers()
         self.log("Registering schedulers")
 
-        prices = await self._get_prices()
+        try:
+            prices = await self._get_prices()
+        except Exception as e:
+            # Retry in 10 minutes
+            self.log(f"Error getting prices: {e}", level="ERROR")
+            await self.notify(
+                "Error getting prices: retrying in 10 minutes",
+                name=self.args["notify"]["target"],
+            )
+            await asyncio.sleep(600)
+            return self._register_schedulers()
+
         self.log(f"{prices=}", level="DEBUG")
 
         historical_data = await self.get_history(entity_id=self.args["sensor"]["pvpc_price"], days=10)
