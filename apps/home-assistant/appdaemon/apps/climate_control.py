@@ -64,6 +64,7 @@ class ClimateControl(hass.Hass):
                 value=pvpc["attributes"][f"price_{i:02d}h"],
             )
             for i in range(24)
+            if f"price_{i:02d}h" in pvpc["attributes"] and is_float(pvpc["attributes"][f"price_{i:02d}h"])
         ]
         return prices
 
@@ -166,6 +167,14 @@ class ClimateControl(hass.Hass):
         self.log(f"{cheapest_prices=}", level="DEBUG")
 
         min_hours = int(float(await self.get_state(self.args["input_number"]["min_hours_per_day"])))
+        if len(prices) < min_hours:
+            msg = f"Less than {min_hours} hours of data available"
+            self.log(msg, level="WARNING")
+            await self.notify(
+                f"WARNING: {msg}",
+                name=self.args["notify"]["target"],
+            )
+
         is_cheap = len(cheapest_prices) >= min_hours
 
         prices_to_schedule = cheapest_prices if is_cheap else self._cheaper_hours(prices, min_hours)
