@@ -131,10 +131,6 @@ sensor:
     state_class: "measurement"
     setup_priority: -300
     update_interval: ${update_interval}
-    # convert to illuminance
-    filters:
-      - lambda: |-
-          return x * 200.0;
 
 text_sensor:
   # Installed version
