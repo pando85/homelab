@@ -16,6 +16,7 @@ wifi:
   domain: !secret domain_devices
 
   ap:
+    ap_timeout: 1h
     ssid: "${friendly_name}"
     password: !secret wifi_fallback_ap_password
 
