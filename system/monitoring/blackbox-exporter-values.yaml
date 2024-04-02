@@ -119,8 +119,8 @@ serviceMonitor:
       name: smart-plug-v2-snapmaker
       url: smart-plug-v2-snapmaker.iot.grigri:6053
     - module: tcp_connect
-      name: athom-smart-plug-v2-2
-      url: athom-smart-plug-v2-2.iot.grigri:6053
+      name: smart-plug-v2-terrace
+      url: smart-plug-v2-terrace.iot.grigri:6053
     - module: tcp_connect
       name: lilygo-higrow-2
       url: lilygo-higrow-2.iot.grigri:6053
