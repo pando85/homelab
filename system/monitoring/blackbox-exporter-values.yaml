@@ -118,6 +118,18 @@ serviceMonitor:
     - module: tcp_connect
       name: smart-plug-v2-snapmaker
       url: smart-plug-v2-snapmaker.iot.grigri:6053
+    - module: tcp_connect
+      name: athom-smart-plug-v2-2
+      url: athom-smart-plug-v2-2.iot.grigri:6053
+    - module: tcp_connect
+      name: lilygo-higrow-2
+      url: lilygo-higrow-2.iot.grigri:6053
+    - module: tcp_connect
+      name: lilygo-higrow-1
+      url: lilygo-higrow-1.iot.grigri:6053
+    - module: tcp_connect
+      name: mini-switch-office-a
+      url: mini-switch-office-a.iot.grigri:6053
 
 resources:
   requests:
