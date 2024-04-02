@@ -32,11 +32,11 @@
 
 ### Flash SDs
 
-- rock64: [image](https://www.armbian.com/rock64/)
 - odroid-c4: [image](https://www.armbian.com/odroid-c4/)
 - odroid-hc4: [image](https://www.armbian.com/odroid-hc4/)
 - amd64: [usb-stick](https://releases.ubuntu.com/22.04/)
 - grigri: [usb-stick](https://releases.ubuntu.com/22.04/)
+- prusik-ipmi: [image](https://files.pikvm.org/images/v4plus-hdmi-rpi4-latest.img.xz)
 
 Use script from `scripts/prepare_sdcard.sh` to prepare instances. amd64 and grigri should be
 installed manually.
@@ -73,7 +73,6 @@ odroidhc4:~:#
 
 All nodes must be named with prefix `k8s-{hardware_tag}-{numerical_id}`. For example:
 
-- k8s-rock64-3
 - k8s-odroid-c4-1
 - k8s-amd64-1
 
