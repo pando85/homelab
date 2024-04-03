@@ -98,6 +98,15 @@ nextcloud:
       cpu: 400m
       memory: 200Mi
 
+  livenessProbe: &probe
+    enabled: true
+    periodSeconds: 60
+    timeoutSeconds: 10
+  readinessProbe: *probe
+  startupProbe:
+    enabled: true
+    periodSeconds: 20
+
   nextcloud:
     host: nextcloud.grigri.cloud
     existingSecret:
@@ -217,16 +226,6 @@ nextcloud:
 
   nodeSelector:
     name: grigri
-
-  livenessProbe:
-    enabled: true
-    periodSeconds: 30
-  readinessProbe:
-    enabled: true
-    periodSeconds: 30
-  startupProbe:
-    enabled: true
-    periodSeconds: 20
 
 app-template:
   global:
