@@ -6,6 +6,9 @@ esphome:
     name: "${project_name}"
     version: "${project_version}"
 
+substitutions:
+  update_interval: 60s
+
 esp8266:
   board: esp8285
   restore_from_flash: true
@@ -62,18 +65,21 @@ sensor:
     # unsupported in 2024.2:
     # https://github.com/esphome/issues/issues/5504
     # https://github.com/esphome/esphome/pull/6265
-    update_interval: 10s
     current:
       name: "${friendly_name} Current"
       filters:
+        - throttle_average: ${update_interval}
         - lambda: if (x < 0.060) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
 
     voltage:
       name: "${friendly_name} Voltage"
+      filters:
+        - throttle_average: ${update_interval}
     power:
       name: "${friendly_name} Power"
       id: power_sensor
       filters:
+        - throttle_average: ${update_interval}
         - lambda: if (x < 3.0) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
 
     energy:
@@ -81,6 +87,7 @@ sensor:
       id: energy
       unit_of_measurement: kWh
       filters:
+        - throttle: ${update_interval}
         # Multiplication factor from W to kW is 0.001
         - multiply: 0.001
       on_value:
@@ -90,6 +97,15 @@ sensor:
               float current_energy_value = id(energy).state;
               id(total_energy) += current_energy_value - previous_energy_value;
               previous_energy_value = current_energy_value;
+    apparent_power:
+      name: "${friendly_name} Apparent Power"
+      filters:
+        - throttle_average: ${update_interval}
+    power_factor:
+      name: "${friendly_name} Power Factor"
+      filters:
+        - throttle_average: ${update_interval}
+
   - platform: template
     name: "${friendly_name} Total Energy"
     unit_of_measurement: kWh
@@ -99,7 +115,7 @@ sensor:
     accuracy_decimals: 3
     lambda: |-
       return id(total_energy);
-    update_interval: 10s
+    update_interval: ${update_interval}
 
   - platform: total_daily_energy
     name: "${friendly_name} Total Daily Energy"
