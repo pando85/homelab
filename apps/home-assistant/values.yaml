@@ -198,7 +198,7 @@ app-template:
         valetudopng:
           image:
             repository: ghcr.io/erkexzcx/valetudopng
-            tag: v1.0.16
+            tag: v1.0.17
           args:
             - -config
             - /config/config.yml
