@@ -4,3 +4,10 @@
     state: restarted
     enabled: yes
     daemon_reload: yes
+
+- name: restart kvmd-fan
+  systemd:
+    name: kvmd-fan
+    state: restarted
+    enabled: yes
+    daemon_reload: yes

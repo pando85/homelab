@@ -27,8 +27,9 @@
 - name: Ensure kvmd-fan.py is installed
   ansible.builtin.copy:
     src: kvmd-fan.py
-    dest: /usr/bin/kvmd-fan.py
+    dest: /usr/bin/kvmd-fan
     mode: '0755'
+  notify: restart kvmd-fan
   tags:
     - pikvm
 
@@ -37,6 +38,7 @@
     src: kvmd-fan.service
     dest: /etc/systemd/system/kvmd-fan.service
     mode: '0644'
+  notify: restart kvmd-fan
   tags:
     - pikvm
 

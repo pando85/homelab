@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env -S python -u
 # encoding: utf-8
 
 import RPi.GPIO
@@ -6,8 +6,8 @@ import time
 
 #settings
 fan_gpio=12 # Fan GPIO pin number (default: 12)
-idle_speed = 0 # Fan speed when under min_temp(IDLE) (min: 0, max: 100)
-min_temp = 40 # Fan starting temperature
+idle_speed = 25 # Fan speed when under min_temp(IDLE) (min: 0, max: 100)
+min_temp = 45 # Fan starting temperature
 max_temp = 60 # Fan max speed temperature (max: 60)
 
 #define GPIO
