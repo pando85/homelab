@@ -8,6 +8,8 @@
     executable: /bin/bash
   changed_when: false
   when: ansible_host == "prusik-ipmi"
+  tags:
+    - pikvm
 
 - name: Create user and enable login
   import_tasks: user.yml

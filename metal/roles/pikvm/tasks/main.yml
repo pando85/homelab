@@ -22,6 +22,32 @@
   tags:
     - pikvm
 
+# BliKVM fan instructions:
+# https://github.com/ThomasVon2021/blikvm/blob/e7eda4b2214ce50473534886b81b4b651ddecd10/package/kvmd-fan/readme.md
+- name: Ensure kvmd-fan.py is installed
+  ansible.builtin.copy:
+    src: kvmd-fan.py
+    dest: /usr/bin/kvmd-fan.py
+    mode: '0755'
+  tags:
+    - pikvm
+
+- name: Ensure kvmd-fan.service is installed
+  ansible.builtin.copy:
+    src: kvmd-fan.service
+    dest: /etc/systemd/system/kvmd-fan.service
+    mode: '0644'
+  tags:
+    - pikvm
+
+- name: Enable kvmd-fan service
+  ansible.builtin.systemd:
+    name: kvmd-fan
+    state: started
+    enabled: yes
+  tags:
+    - pikvm
+
 - name: Rotate OLED display
   ansible.builtin.copy:
     dest: /etc/systemd/system/kvmd-oled.service.d/override.conf
