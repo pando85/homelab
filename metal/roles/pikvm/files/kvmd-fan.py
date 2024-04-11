@@ -9,8 +9,8 @@ import logging
 
 # Settings
 FAN_GPIO = 12  # Fan GPIO pin number (default: 12)
-IDLE_SPEED = 25  # Fan speed when under min_temp (IDLE) (min: 0, max: 100)
-MIN_TEMP = 45  # Fan starting temperature
+IDLE_SPEED = 50  # Fan speed when under min_temp (IDLE) (min: 0, max: 100)
+MIN_TEMP = 50  # Fan starting temperature
 MAX_TEMP = 60  # Fan max speed temperature (max: 60)
 SOCKET_PATH = "/run/kvmd/fan.sock"  # UNIX socket path
 SLEEP_TIME = 5
@@ -19,7 +19,7 @@ SLEEP_TIME = 5
 RPi.GPIO.setwarnings(False)
 RPi.GPIO.setmode(RPi.GPIO.BCM)
 RPi.GPIO.setup(FAN_GPIO, RPi.GPIO.OUT)
-pwm = RPi.GPIO.PWM(FAN_GPIO, 100)
+pwm = RPi.GPIO.PWM(FAN_GPIO, 10)
 running = False
 
 # Setup logging

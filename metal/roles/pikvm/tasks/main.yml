@@ -32,6 +32,7 @@
   notify: restart kvmd-fan
   tags:
     - pikvm
+    - kvmd-fan
 
 - name: Ensure kvmd-fan.service is installed
   ansible.builtin.copy:
@@ -41,6 +42,7 @@
   notify: restart kvmd-fan
   tags:
     - pikvm
+    - kvmd-fan
 
 - name: Enable kvmd-fan service
   ansible.builtin.systemd:
@@ -49,6 +51,7 @@
     enabled: yes
   tags:
     - pikvm
+    - kvmd-fan
 
 - name: Ensure EDID is configured
   ansible.builtin.copy:
