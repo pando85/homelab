@@ -7,6 +7,13 @@
   service:
     name: sshd
     state: restarted
+  when: ansible_distribution_version != "24.04"
+
+- name: restart sshd  # noqa: name[casing]
+  service:
+    name: ssh
+    state: restarted
+  when: ansible_distribution_version == "24.04"
 
 - name: update grub  # noqa: name[casing]
   command: update-grub
