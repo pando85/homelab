@@ -19,6 +19,7 @@
 
 - name: Backup user
   import_tasks: backup-user.yml
+  when: ansible_hostname == 'grigri'
   tags:
     - setup
     - backup-user
