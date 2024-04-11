@@ -50,6 +50,15 @@
   tags:
     - pikvm
 
+- name: Ensure EDID is configured
+  ansible.builtin.copy:
+    src: edid.hex
+    dest: /root/edid.hex
+    mode: '0644'
+  notify: make edid configuration permanent
+  tags:
+    - pikvm
+
 - name: Rotate OLED display
   ansible.builtin.copy:
     dest: /etc/systemd/system/kvmd-oled.service.d/override.conf

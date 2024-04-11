@@ -11,3 +11,6 @@
     state: restarted
     enabled: yes
     daemon_reload: yes
+
+- name: make edid configuration permanent
+  shell: kvmd-edidconf --import=/root/edid.hex
