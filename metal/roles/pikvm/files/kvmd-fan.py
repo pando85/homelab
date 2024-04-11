@@ -3,11 +3,10 @@
 
 import RPi.GPIO
 import time
-import socket
 import os
 import json
 import logging
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
 from socketserver import UnixStreamServer
 
 #settings
@@ -66,6 +65,7 @@ try:
     if os.path.exists(socket_path):
         os.remove(socket_path)
     with UnixStreamServer(socket_path, MyHandler) as httpd:
+        os.chmod(socket_path, 0o666)
         while True:
             try:
                 with open('/sys/class/thermal/thermal_zone0/temp') as tmpFile:
