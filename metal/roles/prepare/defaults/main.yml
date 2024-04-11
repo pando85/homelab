@@ -11,6 +11,7 @@ prepare_basic_packages:
   - parted
   - vim
   - curl
+  - screen
   - bash
   - gawk
   - mount
