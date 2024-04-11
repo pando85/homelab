@@ -17,6 +17,7 @@ prepare_basic_packages:
   - mount
   - util-linux
   - smartmontools
+  - less
   - ripgrep
   # debug
   - htop
