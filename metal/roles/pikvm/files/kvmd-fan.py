@@ -1,96 +1,104 @@
 #!/usr/bin/env -S python -u
 # encoding: utf-8
 
+from aiohttp import web
+import asyncio
 import RPi.GPIO
-import time
 import os
-import json
 import logging
-from http.server import BaseHTTPRequestHandler
-from socketserver import UnixStreamServer
 
-#settings
-fan_gpio=12 # Fan GPIO pin number (default: 12)
-idle_speed = 25 # Fan speed when under min_temp(IDLE) (min: 0, max: 100)
-min_temp = 45 # Fan starting temperature
-max_temp = 60 # Fan max speed temperature (max: 60)
-socket_path = '/run/kvmd/fan.sock' # UNIX socket path
+# Settings
+FAN_GPIO = 12  # Fan GPIO pin number (default: 12)
+IDLE_SPEED = 25  # Fan speed when under min_temp (IDLE) (min: 0, max: 100)
+MIN_TEMP = 45  # Fan starting temperature
+MAX_TEMP = 60  # Fan max speed temperature (max: 60)
+SOCKET_PATH = "/run/kvmd/fan.sock"  # UNIX socket path
+SLEEP_TIME = 5
 
-#define GPIO
+# Define GPIO
 RPi.GPIO.setwarnings(False)
 RPi.GPIO.setmode(RPi.GPIO.BCM)
-RPi.GPIO.setup(fan_gpio, RPi.GPIO.OUT)
-pwm = RPi.GPIO.PWM(fan_gpio,100)
+RPi.GPIO.setup(FAN_GPIO, RPi.GPIO.OUT)
+pwm = RPi.GPIO.PWM(FAN_GPIO, 100)
 running = False
 
-# setup logging
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 
 set_speed = None
 cpu_temp = None
 
+
 def calculate_fan_speed(cpu_temp):
-    if cpu_temp >= max_temp:
+    if cpu_temp >= MAX_TEMP:
         return 100
     else:
-        temp_speed = int((cpu_temp - min_temp) / (max_temp - min_temp) * 100)
-        return min(max(idle_speed, temp_speed), 100)
+        temp_speed = int((cpu_temp - MIN_TEMP) / (MAX_TEMP - MIN_TEMP) * 100)
+        return min(max(IDLE_SPEED, temp_speed), 100)
 
-class MyHandler(BaseHTTPRequestHandler):
-    def address_string(self):
-        try:
-            return super().address_string()
-        except IndexError:
-            return 'unix_socket'
 
-    def do_GET(self):
-        logging.info("GET %s", self.path)
-        if self.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"ok": True, "result": {"version": "1.0"}}).encode())
-        elif self.path == '/state':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            self.wfile.write(json.dumps({"ok": True, "result": {"temp": cpu_temp, "fan_speed": set_speed}}).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-            self.wfile.write(b'Not found\n')
+routes = web.RouteTableDef()
 
-#running code
-try:
-    if os.path.exists(socket_path):
-        os.remove(socket_path)
-    with UnixStreamServer(socket_path, MyHandler) as httpd:
-        os.chmod(socket_path, 0o666)
+
+@routes.get("/")
+async def root(_):
+    return web.json_response({"ok": True, "result": {"version": "1.0"}})
+
+
+@routes.get("/state")
+async def handle_request(_):
+    return web.json_response({"ok": True, "result": {"temp": cpu_temp, "fan_speed": set_speed}})
+
+
+async def update_temp_and_fan_speed():
+    global cpu_temp, set_speed, running
+    try:
         while True:
-            try:
-                with open('/sys/class/thermal/thermal_zone0/temp') as tmpFile:
-                    cpu_temp = int(tmpFile.read())/1000
-                logging.info("Temp: %s", cpu_temp)
-                if cpu_temp >= min_temp:
-                    if not running:
-                        logging.info("PWM_Start")
-                        pwm.start(0)
-                        running = True
-                    set_speed = calculate_fan_speed(cpu_temp)
-                    logging.info("set_speed: %s %%", set_speed)
-                    pwm.ChangeDutyCycle(set_speed)
-                else:
-                    if running:
-                        running = False
-                        pwm.stop()
-                        logging.info("PWM_Stop")
-            except Exception as e:
-                logging.error("Error: %s", e)
+            with open("/sys/class/thermal/thermal_zone0/temp") as tmpFile:
+                cpu_temp = int(tmpFile.read()) / 1000
+            logging.info("Temp: %s", cpu_temp)
+            if cpu_temp >= MIN_TEMP:
+                if not running:
+                    logging.info("PWM started")
+                    pwm.start(0)
+                    running = True
+                set_speed = calculate_fan_speed(cpu_temp)
+                logging.info("set_speed: %s %%", set_speed)
+                pwm.ChangeDutyCycle(set_speed)
+            else:
+                if running:
+                    running = False
+                    pwm.stop()
+                    logging.info("PWM stopped")
+            await asyncio.sleep(SLEEP_TIME)
+    except Exception as e:
+        logging.error("Error: %s", e)
 
-            time.sleep(1)
 
-            httpd.handle_request()
+async def main():
+    app = web.Application()
+    app.add_routes(routes)
 
-except KeyboardInterrupt:
-    pass
-pwm.stop()
+    if os.path.exists(SOCKET_PATH):
+        os.remove(SOCKET_PATH)
+
+    runner = web.AppRunner(app)
+    await runner.setup()
+    asyncio.create_task(update_temp_and_fan_speed())
+
+    try:
+        site = web.UnixSite(runner, SOCKET_PATH)
+        await site.start()
+        logging.info(f"Fan control server started at {SOCKET_PATH}")
+        os.chmod(SOCKET_PATH, 0o666)
+        while True:
+            await asyncio.sleep(3600)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        await runner.cleanup()
+        pwm.stop()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
