@@ -20,6 +20,7 @@
     force_apt_get: true
     update_cache: true
 
+# To check creation command: `zpool history <pool_name>`
 - name: zfs | ZFS import datasets
   command: zpool import datasets
   args:
