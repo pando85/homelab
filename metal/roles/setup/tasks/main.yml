@@ -2,7 +2,7 @@
 - name: Add media group
   group:
     name: media
-    gid: 991
+    gid: 501
   tags:
     - setup
 
