@@ -118,9 +118,6 @@ app-template:
             - cuda
             - --compute-type
             - int8
-          env:
-            # https://github.com/SYSTRAN/faster-whisper/issues/516#issuecomment-2001996246
-            LD_LIBRARY_PATH: /usr/local/lib/python3.9/site-packages/torch/lib
           resources:
             requests:
               cpu: 15m
