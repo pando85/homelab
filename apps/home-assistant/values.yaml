@@ -111,7 +111,7 @@ app-template:
             tag: 2.1.0
           args:
             - --model
-            - large-v3
+            - marianbasti/distil-whisper-large-v3-es
             - --language
             - es
             - --device
