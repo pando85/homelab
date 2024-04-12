@@ -111,11 +111,13 @@ app-template:
             tag: 2.1.0
           args:
             - --model
-            - distil-large-v2
+            - distil-large-v3
             - --language
             - es
             - --device
             - cuda
+            - --compute-type
+            - int8
           resources:
             requests:
               cpu: 15m
