@@ -111,7 +111,7 @@ app-template:
             tag: 2.0.0
           args:
             - --model
-            - Systran/faster-distil-whisper-large-v3
+            - large-v3
             - --language
             - es
             - --device
