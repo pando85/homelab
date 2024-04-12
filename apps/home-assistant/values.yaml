@@ -107,11 +107,11 @@ app-template:
       containers:
         whisper:
           image:
-            repository: pando85/wyoming-whisper
-            tag: 1.1.0
+            repository: rhasspy/wyoming-whisper
+            tag: 2.1.0
           args:
             - --model
-            - medium-int8
+            - large-v3
             - --language
             - es
             - --device
