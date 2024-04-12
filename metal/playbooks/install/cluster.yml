@@ -19,6 +19,8 @@
   ansible.builtin.import_playbook: democratic-csi-user.yml
 
 - name: Install zfs-exporter
-  hosts: grigri
+  hosts:
+    - grigri
+    - prusik
   roles:
     - zfs_exporter
