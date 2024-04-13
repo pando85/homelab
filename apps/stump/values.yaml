@@ -111,5 +111,5 @@ app-template:
       type: hostPath
       hostPath: /datasets/libros
       globalMounts:
-        - path: /data
+        - path: /datasets/libros
           readOnly: true
