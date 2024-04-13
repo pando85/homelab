@@ -9,6 +9,12 @@ app-template:
           image:
             repository: aaronleopold/stump
             tag: nightly@sha256:7f6a4f68f94e2e97ed22009307c35fccec9138aaf8b351275d3fbcd416636115
+          env:
+            STUMP_IN_DOCKER: "true"
+            STUMP_CONFIG_DIR: /config
+            STUMP_VERBOSITY: info
+            # it doesn't work because it tries to remove /etc/timezone
+            # TZ: Europe/Madrid
 
           probes:
             liveness: &probes
@@ -30,12 +36,6 @@ app-template:
                 httpGet: *httpGet
                 failureThreshold: 30
                 periodSeconds: 10
-          env:
-            STUMP_IN_DOCKER: "true"
-            STUMP_CONFIG_DIR: /config
-            STUMP_VERBOSITY: info
-            # it doesn't work because it tries to remove /etc/timezone
-            # TZ: Europe/Madrid
 
           resources:
             requests:
@@ -95,7 +95,7 @@ app-template:
       runAsGroup: 501
       fsGroup: 501
       fsGroupChangePolicy: "OnRootMismatch"
-
+    enableServiceLinks: false
     nodeSelector:
       kubernetes.io/hostname: prusik
 
