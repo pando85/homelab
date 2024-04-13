@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: stump
+    app.kubernetes.io/name: stump
+    backup: stump-zfs
+    backup/retain: quaterly
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: config-stump
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Mi

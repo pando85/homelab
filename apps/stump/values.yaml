@@ -1,0 +1,114 @@
+app-template:
+  controllers:
+    stump:
+      labels:
+        backup/retain: quaterly
+      type: statefulset
+      containers:
+        stump:
+          image:
+            repository: aaronleopold/stump
+            tag: nightly@sha256:7f6a4f68f94e2e97ed22009307c35fccec9138aaf8b351275d3fbcd416636115
+
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet: &httpGet
+                  path: /api/v1/ping
+                  port: &port 10801
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet: *httpGet
+                failureThreshold: 30
+                periodSeconds: 10
+          env:
+            PUID: "995"
+            PGID: "501"
+            STUMP_IN_DOCKER: "true"
+            STUMP_CONFIG_DIR: /config
+            STUMP_VERBOSITY: info
+
+          resources:
+            requests:
+              cpu: 10m
+              memory: 200Mi
+            limits:
+              memory: 1Gi
+
+  service:
+    stump:
+      controller: stump
+      ports:
+        http:
+          port: *port
+
+  ingress:
+    stump:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host stump.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: stump
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: stump-tls-certificate
+    external:
+      enabled: true
+      className: nginx-external
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host stump.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: stump
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: stump-external-tls-certificate
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 501
+      fsGroup: 501
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      name: prusik
+
+  persistence:
+    config:
+      enabled: true
+      globalMounts:
+        - path: /config
+      existingClaim: config-stump
+    libros:
+      enabled: true
+      type: hostPath
+      hostPath: /datasets/libros
+      globalMounts:
+        - path: /datasets/libros
+          readOnly: true
