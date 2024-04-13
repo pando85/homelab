@@ -31,7 +31,7 @@ app-template:
                 failureThreshold: 30
                 periodSeconds: 10
           env:
-            STUMP_IN_DOCKER: "false"
+            STUMP_IN_DOCKER: "true"
             STUMP_CONFIG_DIR: /config
             STUMP_VERBOSITY: info
             # it doesn't work because it tries to remove /etc/timezone
@@ -110,5 +110,5 @@ app-template:
       type: hostPath
       hostPath: /datasets/libros
       globalMounts:
-        - path: /datasets/libros
+        - path: /data
           readOnly: true
