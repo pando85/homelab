@@ -97,7 +97,7 @@ app-template:
       fsGroupChangePolicy: "OnRootMismatch"
 
     nodeSelector:
-      name: prusik
+      kubernetes.io/hostname: prusik
 
   persistence:
     config:
