@@ -34,7 +34,8 @@ app-template:
             STUMP_IN_DOCKER: "false"
             STUMP_CONFIG_DIR: /config
             STUMP_VERBOSITY: info
-            TZ: Europe/Madrid
+            # it doesn't work because it tries to remove /etc/timezone
+            # TZ: Europe/Madrid
 
           resources:
             requests:
