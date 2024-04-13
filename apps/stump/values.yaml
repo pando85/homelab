@@ -43,7 +43,7 @@ app-template:
               cpu: 10m
               memory: 200Mi
             limits:
-              memory: 1Gi
+              memory: 10Gi
 
   service:
     stump:
