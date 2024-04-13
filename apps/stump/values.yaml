@@ -33,7 +33,7 @@ app-template:
           env:
             PUID: "995"
             PGID: "501"
-            STUMP_IN_DOCKER: "true"
+            STUMP_IN_DOCKER: "false"
             STUMP_CONFIG_DIR: /config
             STUMP_VERBOSITY: info
 
