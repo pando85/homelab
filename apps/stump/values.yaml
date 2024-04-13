@@ -12,7 +12,8 @@ app-template:
           env:
             STUMP_IN_DOCKER: "true"
             STUMP_CONFIG_DIR: /config
-            STUMP_VERBOSITY: info
+            # 0->NONE, 1->INFO, 2->DEBUG, 3->TRACE
+            STUMP_VERBOSITY: "1"
             # it doesn't work because it tries to remove /etc/timezone
             # TZ: Europe/Madrid
 
