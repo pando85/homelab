@@ -133,12 +133,12 @@ argo-cd:
       targetCPUUtilizationPercentage: 150
       targetMemoryUtilizationPercentage: 90
     resources:
-      limits:
-        cpu: 2.5
-        memory: 512Mi
       requests:
         cpu: 1
         memory: 512Mi
+      limits:
+        cpu: 2.5
+        memory: 2Gi
     env:
       - name: ARGOCD_EXEC_TIMEOUT
         value: "300s"
