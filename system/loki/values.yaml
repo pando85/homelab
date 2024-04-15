@@ -19,7 +19,7 @@ loki:
           period: 24h
           prefix: loki_index_
         object_store: filesystem
-        schema: v12
+        schema: v13
         store: boltdb-shipper
 
   auth_enabled: false
