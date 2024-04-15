@@ -42,6 +42,19 @@ singleBinary:
       cpu: 40m
       memory: 200Mi
 
+write:
+  replicas: 0
+reads:
+  replicas: 0
+backend:
+  replicas: 0
+
+# disable memcached
+resultsCache:
+  enabled: false
+chunksCache:
+  enabled: false
+
 lokiCanary:
   enabled: false
 
@@ -50,10 +63,4 @@ gateway:
 
 # Requires self monitoring enabled
 test:
-  enabled: false
-
-# disable Memcached
-chunksCache:
-  enabled: false
-resultsCache:
   enabled: false
