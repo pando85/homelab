@@ -212,7 +212,7 @@ app-template:
         release: monitoring
       endpoints:
         - port: metrics
-          scheme: metrics
+          scheme: http
           path: /metrics
           interval: 30s
           scrapeTimeout: 10s
@@ -223,7 +223,7 @@ app-template:
         release: monitoring
       endpoints:
         - port: metrics
-          scheme: metrics
+          scheme: http
           path: /metrics
           interval: 30s
           scrapeTimeout: 10s
