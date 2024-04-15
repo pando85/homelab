@@ -1,0 +1,11 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: immich-zfs-backups
+spec:
+  retention:
+    maxCount: 20
+  schedule: "0 1 * * *" # UTC
+  claimSelector:
+    matchLabels:
+      backup: immich-zfs

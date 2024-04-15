@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: immich
+    app.kubernetes.io/name: immich
+    backup: immich-zfs
+    backup/retain: quaterly
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: immich-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
