@@ -115,11 +115,15 @@ app-template:
       ports:
         http:
           port: 3001
+        metrics:
+          port: 8081
     microservices:
       controller: microservices
       ports:
         http:
           port: 3002
+        metrics:
+          port: 8081
     ml:
       controller: ml
       ports:
@@ -208,7 +212,18 @@ app-template:
         release: monitoring
       endpoints:
         - port: metrics
-          scheme: http
+          scheme: metrics
+          path: /metrics
+          interval: 30s
+          scrapeTimeout: 10s
+    microservices:
+      enabled: true
+      serviceName: microservices
+      labels:
+        release: monitoring
+      endpoints:
+        - port: metrics
+          scheme: metrics
           path: /metrics
           interval: 30s
           scrapeTimeout: 10s
