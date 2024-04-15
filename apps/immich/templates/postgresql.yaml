@@ -39,10 +39,18 @@ spec:
       log_lock_waits: "off"
       log_min_duration_statement: "-1"
       log_statement: none
+      shared_preload_libraries: "vectors.so"
 
   preparedDatabases:
     immich:
       extensions:
+      # it doesn't work. Manually applied:
+      # ```sql
+      # CREATE EXTENSION cube;
+      # CREATE EXTENSION earthdistance;
+      # ALTER SYSTEM SET shared_preload_libraries = "vectors.so"
+      # CREATE EXTENSION vectors;
+      # ```
         cube: public
         earthdistance: public
         vectors: public
