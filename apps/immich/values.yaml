@@ -72,6 +72,7 @@ app-template:
           env:
             <<: *env
             TZ: Europe/Madrid
+            NVIDIA_VISIBLE_DEVICES: all
           envFrom: *envFrom
           resources:
             requests:
@@ -92,7 +93,9 @@ app-template:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
             tag: v1.101.0
-          env: *env
+          env:
+            <<: *env
+            NVIDIA_VISIBLE_DEVICES: all
           envFrom: *envFrom
           resources:
             requests:
