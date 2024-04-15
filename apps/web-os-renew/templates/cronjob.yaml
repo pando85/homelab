@@ -19,7 +19,7 @@ spec:
                     name: web-os-dev-session
                     key: token
             command:
-            - curl
-            - https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${SESSION_TOKEN}
-            - -s
+              - curl
+              - https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${SESSION_TOKEN}
+              - -s
           restartPolicy: OnFailure
