@@ -52,6 +52,11 @@ app-template:
             limits:
               cpu: 500m
               memory: 256Mi
+          probes: &probes
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
     microservices:
       pod: *pod
       containers:
@@ -69,6 +74,7 @@ app-template:
             limits:
               cpu: 500m
               memory: 256Mi
+          probes: *probes
     ml:
       pod: *pod
       containers:
@@ -85,6 +91,7 @@ app-template:
             limits:
               cpu: "4"
               memory: 10Gi
+          probes: *probes
     redis:
       containers:
         main:
@@ -94,6 +101,8 @@ app-template:
           env:
             REDIS_REPLICATION_MODE: master
           command: ["redis-server"]
+          probes: *probes
+
   service:
     server:
       controller: server
