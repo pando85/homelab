@@ -39,7 +39,8 @@ spec:
       log_lock_waits: "off"
       log_min_duration_statement: "-1"
       log_statement: none
-      shared_preload_libraries: "vectors.so"
+      # add vectors.so to shared_preload_libraries
+      shared_preload_libraries: "bg_mon,pg_stat_statements,pgextwlist,pg_auth_mon,set_user,timescaledb,pg_cron,pg_stat_kcache,vectors.so"
 
   preparedDatabases:
     immich:
