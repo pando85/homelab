@@ -21,4 +21,5 @@ spec:
             command:
             - curl
             - https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${SESSION_TOKEN}
+            - -s
           restartPolicy: OnFailure
