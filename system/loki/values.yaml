@@ -12,6 +12,16 @@ loki:
   storage:
     type: "filesystem"
 
+  schemaConfig:
+    configs:
+      - from: "2022-01-11"
+        index:
+          period: 24h
+          prefix: loki_index_
+        object_store: filesystem
+        schema: v12
+        store: boltdb-shipper
+
   auth_enabled: false
 
 rbac:
@@ -20,10 +30,11 @@ rbac:
 ingress:
   enabled: false
 
-tableManager:
-  retention_deletes_enabled: true
-  # 6 months
-  retention_period: 4320h
+# Requires self monitoring enabled
+test:
+  enabled: false
+lokiCanary:
+  enabled: false
 
 singleBinary:
   replicas: 1
@@ -44,7 +55,7 @@ singleBinary:
 
 write:
   replicas: 0
-reads:
+read:
   replicas: 0
 backend:
   replicas: 0
@@ -55,12 +66,5 @@ resultsCache:
 chunksCache:
   enabled: false
 
-lokiCanary:
-  enabled: false
-
 gateway:
-  enabled: false
-
-# Requires self monitoring enabled
-test:
   enabled: false
