@@ -8,7 +8,7 @@
   labels:
     severity: warning
 - alert: AquareaDown
-  expr: time() - hass_last_updated_time_seconds{domain="sensor",entity="sensor.aquarea_discharge_temperature"} > 2000
+  expr: time() - hass_last_updated_time_seconds{domain="sensor",entity="sensor.aquarea_discharge_temperature"} > 3600
   annotations:
     description: |
       Aquarea is not updating {{ $labels.entity }} since the last ~40m. cz-taw1b.iot.grigri is not
