@@ -74,17 +74,7 @@ app-template:
             limits:
               cpu: 500m
               memory: 256Mi
-          probes:
-            liveness:
-              enabled: true
-              custom: true
-              spec: &probeSocket
-                tcpSocket:
-                  port: 3001
-            readiness:
-              enabled: true
-              custom: true
-              spec: *probeSocket
+          probes: *probes
     ml:
       pod: *pod
       containers:
@@ -119,6 +109,11 @@ app-template:
       ports:
         http:
           port: 3001
+    microservices:
+      controller: microservices
+      ports:
+        http:
+          port: 3002
     ml:
       controller: ml
       ports:
