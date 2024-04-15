@@ -78,8 +78,8 @@ app-template:
               cpu: 10m
               memory: 128Mi
             limits:
-              cpu: "5"
-              memory: 10Gi
+              cpu: "10"
+              memory: 20Gi
               nvidia.com/gpu: "1"
           probes: *probes
     ml:
