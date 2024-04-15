@@ -17,7 +17,7 @@ spec:
                 valuefrom:
                   secretKeyRef:
                     name: web-os-dev-session
-                    key: sessionToken
+                    key: token
             command:
             - curl
             - https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${SESSION_TOKEN}
