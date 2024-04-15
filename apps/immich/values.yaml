@@ -97,6 +97,7 @@ app-template:
           env:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
+            MPLCONFIGDIR: /.config/matplotlib
           envFrom: *envFrom
           resources:
             requests:
