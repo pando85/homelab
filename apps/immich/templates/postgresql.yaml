@@ -43,5 +43,5 @@ spec:
   preparedDatabases:
     immich:
       extensions:
-        cube: public
-        earthdistance: public
+        cube: data
+        earthdistance: data
