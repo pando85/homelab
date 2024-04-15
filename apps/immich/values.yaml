@@ -77,11 +77,14 @@ app-template:
           probes:
             liveness:
               enabled: true
-              tcpSocket: &tcpSocket
-                port: 3001
+              custom: true
+              spec: &probeSocket
+                tcpSocket:
+                  port: 3001
             readiness:
               enabled: true
-              tcpSocket: *tcpSocket
+              custom: true
+              spec: *probeSocket
     ml:
       pod: *pod
       containers:
