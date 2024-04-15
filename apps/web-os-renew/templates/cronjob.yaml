@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: renew-web-os-dev-session
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: renew-web-os-dev-session
+            image: curlimages/curl:8.7.1
+            imagePullPolicy: IfNotPresent
+            env:
+              - name: SESSION_TOKEN
+                valuefrom:
+                  secretKeyRef:
+                    name: web-os-dev-session
+                    key: sessionToken
+            command:
+            - curl
+            - https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${SESSION_TOKEN}
+          restartPolicy: OnFailure
