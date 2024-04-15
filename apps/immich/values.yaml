@@ -74,7 +74,14 @@ app-template:
             limits:
               cpu: 500m
               memory: 256Mi
-          probes: *probes
+          probes:
+            liveness:
+              enabled: true
+              tcpSocket: &tcpSocket
+                port: 3001
+            readiness:
+              enabled: true
+              tcpSocket: *tcpSocket
     ml:
       pod: *pod
       containers:
