@@ -213,7 +213,7 @@ app-template:
   serviceMonitor:
     server:
       enabled: true
-      serviceName: server
+      serviceName: immich-server
       labels:
         release: monitoring
       endpoints:
@@ -224,7 +224,7 @@ app-template:
           scrapeTimeout: 10s
     microservices:
       enabled: true
-      serviceName: microservices
+      serviceName: immich-microservices
       labels:
         release: monitoring
       endpoints:
