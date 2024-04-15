@@ -28,19 +28,19 @@ app-template:
             REDIS_PORT: "6379"
             IMMICH_SERVER_URL: http://immich-server:3001
             IMMICH_MACHINE_LEARNING_URL: http://immich-ml:3003
-            REPLACE_DB_HOSTNAME: immich-postgres
-            REPLACE_DB_DATABASE_NAME: immich
-            REPLACE_DB_USERNAME:
+            A_REPLACE_DB_HOSTNAME: immich-postgres
+            A_REPLACE_DB_DATABASE_NAME: immich
+            A_REPLACE_DB_USERNAME:
               valueFrom:
                 secretKeyRef:
                   name: immich.immich-postgres.credentials.postgresql.acid.zalan.do
                   key: username
-            REPLACE_DB_PASSWORD:
+            A_REPLACE_DB_PASSWORD:
               valueFrom:
                 secretKeyRef:
                   name: immich.immich-postgres.credentials.postgresql.acid.zalan.do
                   key: password
-            DB_URL: postgresql://$(REPLACE_DB_USERNAME):$(REPLACE_DB_PASSOWRD)@$(REPLACE_DB_HOSTNAME):5432/$(REPLACE_DB_DTABASE_NAME)?sslmode=no-verify
+            DB_URL: postgresql://$(A_REPLACE_DB_USERNAME):$(A_REPLACE_DB_PASSOWRD)@$(A_REPLACE_DB_HOSTNAME):5432/$(A_REPLACE_DB_DTABASE_NAME)?sslmode=no-verify
             IMMICH_METRICS: true
           envFrom: &envFrom
             - secretRef:
