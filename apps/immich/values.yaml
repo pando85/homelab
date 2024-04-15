@@ -42,7 +42,7 @@ app-template:
             IMMICH_METRICS: true
           envFrom: &envFrom
             - secretRef:
-                name: immich-secret
+                name: immich-secrets
           resources:
             requests:
               cpu: 10m
