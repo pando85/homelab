@@ -7,7 +7,7 @@ app-template:
         qbittorrent:
           image:
             repository: ghcr.io/onedr0p/qbittorrent
-            tag: 4.6.4@sha256:85f185207a81ec03e84b8302db06f1694c533c99e0efdb2acf0316d554d332e3
+            tag: 4.6.4@sha256:b9af0f2173572a69d2c02eab8f701ef7b04f61689efe1c5338b96445d528dec4
 
           env:
             UMASK: "022"
