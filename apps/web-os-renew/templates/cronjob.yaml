@@ -21,5 +21,8 @@ spec:
             command:
               - sh
               - -c
-              - curl -s https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${SESSION_TOKEN}
+              - |
+                curl -s https://developer.lge.com/secure/ResetDevModeSession.dev?sessionToken=${SESSION_TOKEN} \
+                  | grep success && echo "Session token renewed" \
+                  || echo "Failed to renew session token"
           restartPolicy: OnFailure
