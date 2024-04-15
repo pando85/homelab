@@ -1,158 +1,59 @@
+deploymentMode: SingleBinary
 loki:
-  loki:
-    podSecurityContext:
-      fsGroup: 10001
-      runAsGroup: 10001
-      runAsNonRoot: true
-      runAsUser: 10001
-      fsGroupChangePolicy: "OnRootMismatch"
+  podSecurityContext:
+    fsGroup: 10001
+    runAsGroup: 10001
+    runAsNonRoot: true
+    runAsUser: 10001
+    fsGroupChangePolicy: "OnRootMismatch"
 
-    commonConfig:
-      replication_factor: 1
-    storage:
-      type: "filesystem"
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: "filesystem"
 
-    auth_enabled: false
+  auth_enabled: false
 
-  rbac:
-    pspEnabled: false
+rbac:
+  pspEnabled: false
 
-  ingress:
-    enabled: false
+ingress:
+  enabled: false
 
-  tableManager:
-    retention_deletes_enabled: true
-    # 6 months
-    retention_period: 4320h
+tableManager:
+  retention_deletes_enabled: true
+  # 6 months
+  retention_period: 4320h
 
-  singleBinary:
-    replicas: 1
+singleBinary:
+  replicas: 1
 
-    persistence:
-      enabled: true
-      # Remove until k8s 1.27
-      enableStatefulSetAutoDeletePVC: false
-      size: 50Gi
-
-    resources:
-      limits:
-        cpu: 2
-        memory: 4Gi
-      requests:
-        cpu: 40m
-        memory: 200Mi
-
-  monitoring:
-    dashboards:
-      # nothing added cause it checks if running with object storage
-      enabled: true
-    rules:
-      enabled: true
-      labels:
-        release: monitoring
-    serviceMonitor:
-      enabled: true
-      labels:
-        release: monitoring
-      metricsInstance:
-        enabled: false
-    selfMonitoring:
-      enabled: false
-      grafanaAgent:
-        installOperator: false
-    lokiCanary:
-      enabled: false
-
-  gateway:
-    enabled: false
-
-  # Requires self monitoring enabled
-  test:
-    enabled: false
-
-promtail:
-  enabled: true
+  persistence:
+    enabled: true
+    # Remove until k8s 1.27
+    enableStatefulSetAutoDeletePVC: false
+    size: 50Gi
 
   resources:
     limits:
-      cpu: 500m
-      memory: 200Mi
+      cpu: 2
+      memory: 4Gi
     requests:
-      cpu: 10m
-      memory: 85Mi
+      cpu: 40m
+      memory: 200Mi
 
-  config:
-    logLevel: info
-    serverPort: 3101
-    clients:
-      - url: http://{{ .Release.Name }}:3100/loki/api/v1/push
-    snippets:
-      # Add additional scrape config
-      # https://grafana.com/docs/loki/latest/clients/promtail/scraping/#journal-scraping-linux-only
-      extraScrapeConfigs: |
-        # arm64
-        - job_name: journal-arm64
-          journal:
-            path: /run/log/journal
-            max_age: 12h
-            labels:
-              job: systemd-journal
-          relabel_configs:
-            - source_labels:
-                - __journal__systemd_unit
-              target_label: systemd_unit
-            - source_labels:
-                - __journal__hostname
-              target_label: node_name
-            - source_labels:
-                - __journal_syslog_identifier
-              target_label: syslog_identifier
-        # amd64
-        - job_name: journal-amd64
-          journal:
-            path: /var/log/journal
-            max_age: 12h
-            labels:
-              job: systemd-journal
-          relabel_configs:
-            - source_labels:
-                - __journal__systemd_unit
-              target_label: systemd_unit
-            - source_labels:
-                - __journal__hostname
-              target_label: node_name
-            - source_labels:
-                - __journal_syslog_identifier
-              target_label: syslog_identifier
+lokiCanary:
+  enabled: false
 
-  # Mount journal directory into promtail pods
-  extraVolumes:
-    - name: journal-run
-      hostPath:
-        path: /run/log/journal
-    - name: journal-var
-      hostPath:
-        path: /var/log/journal
-    - name: machine-id
-      hostPath:
-        path: /etc/machine-id
+gateway:
+  enabled: false
 
-  extraVolumeMounts:
-    - name: journal-run
-      mountPath: /run/log/journal
-      readOnly: true
-    - name: journal-var
-      mountPath: /var/log/journal
-      readOnly: true
-    - name: machine-id
-      mountPath: /etc/machine-id
-      readOnly: true
+# Requires self monitoring enabled
+test:
+  enabled: false
 
-  serviceMonitor:
-    enabled: true
-    labels:
-      release: monitoring
-
-  # Enable CRIO log format
-  pipelineStages:
-    - cri: {}
+# disable Memcached
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
