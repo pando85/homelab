@@ -27,6 +27,7 @@ app-template:
             REDIS_HOSTNAME: immich-redis
             REDIS_PORT: "6379"
             IMMICH_SERVER_URL: http://immich-server:3001
+            IMMICH_MACHINE_LEARNING_ENABLED: "true"
             IMMICH_MACHINE_LEARNING_URL: http://immich-ml:3003
             A_REPLACE_DB_HOSTNAME: immich-postgres
             A_REPLACE_DB_DATABASE_NAME: immich
@@ -76,7 +77,9 @@ app-template:
               memory: 256Mi
           probes: *probes
     ml:
-      pod: *pod
+      pod:
+        <<: *pod
+        runtimeClassName: nvidia
       containers:
         main:
           image:
@@ -91,6 +94,7 @@ app-template:
             limits:
               cpu: "4"
               memory: 10Gi
+              nvidia.com/gpu: "1"
           probes: *probes
     redis:
       containers:
@@ -193,3 +197,16 @@ app-template:
         ml:
           main:
             - path: /cache
+
+  serviceMonitor:
+    server:
+      enabled: true
+      serviceName: server
+      labels:
+        release: monitoring
+      endpoints:
+        - port: metrics
+          scheme: http
+          path: /metrics
+          interval: 30s
+          scrapeTimeout: 10s
