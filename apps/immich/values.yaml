@@ -59,7 +59,9 @@ app-template:
             readiness:
               enabled: true
     microservices:
-      pod: *pod
+      pod:
+        <<: *pod
+        runtimeClassName: nvidia
       containers:
         main:
           image: *image
@@ -77,6 +79,7 @@ app-template:
             limits:
               cpu: 500m
               memory: 256Mi
+              nvidia.com/gpu: "1"
           probes: *probes
     ml:
       pod:
