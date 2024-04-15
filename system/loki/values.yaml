@@ -21,7 +21,7 @@ loki:
         object_store: filesystem
         schema: v12
         store: boltdb-shipper
-      - from: "2024-04-16"
+      - from: "2024-04-15"
         index:
           period: 24h
           prefix: loki_index_
