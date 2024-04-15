@@ -14,7 +14,7 @@ spec:
             imagePullPolicy: IfNotPresent
             env:
               - name: SESSION_TOKEN
-                valuefrom:
+                valueFrom:
                   secretKeyRef:
                     name: web-os-dev-session
                     key: token
