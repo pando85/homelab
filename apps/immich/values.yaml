@@ -59,6 +59,7 @@ app-template:
             readiness:
               enabled: true
     microservices:
+      strategy: RollingUpdate
       pod:
         <<: *pod
         runtimeClassName: nvidia
@@ -82,6 +83,7 @@ app-template:
               nvidia.com/gpu: "1"
           probes: *probes
     ml:
+      strategy: RollingUpdate
       pod:
         <<: *pod
         runtimeClassName: nvidia
