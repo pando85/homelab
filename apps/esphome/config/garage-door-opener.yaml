@@ -1,0 +1,9 @@
+substitutions:
+  name: "garage-door-opener"
+  friendly_name: "Garage Door Opener"
+  project_name: "garage-door-opener"
+  project_version: "1.1"
+
+packages:
+  connection: !include ./packages/connection.yaml
+  cc1101: !include ./packages/cc1101.yaml
