@@ -3,3 +3,4 @@ ntp_servers:
   - pfsense.grigri
 
 ntp_timezone: Europe/Madrid
+ntp_manage_config: true

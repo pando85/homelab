@@ -1,3 +1,6 @@
+# ntp is changed by ntpsec in Ubuntu 24.04 and Debian 12
+ntp_config_file: /etc/ntpsec/ntp.conf
+
 k3s_kubelet_extra_args:
   - kube-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi
   - system-reserved=cpu=2,memory=10Gi,ephemeral-storage=1Gi

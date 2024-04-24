@@ -4,7 +4,9 @@
   vars:
     ansible_path: "{{ playbook_dir }}/../.."
   roles:
-    - geerlingguy.ntp
+    - name: geerlingguy.ntp
+      tags:
+        - ntp
     - name: k3s
       tags:
         - k3s
