@@ -6,6 +6,8 @@ ingress-nginx:
     replicaCount: 2
 
     config:
+      # auto value takes all nodes in cgroups v2 (dell_v2)
+      worker-processes: 1
       http-snippet: |
         proxy_cache_path /dev/shm levels=1:2 keys_zone=static-cache:2m max_size=300m inactive=7d use_temp_path=off;
         proxy_cache_key $scheme$proxy_host$request_uri;
@@ -24,7 +26,6 @@ ingress-nginx:
 
     resources:
       limits:
-        cpu: "2"
         memory: 328Mi
       requests:
         cpu: 40m
