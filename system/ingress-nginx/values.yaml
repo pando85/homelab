@@ -25,7 +25,7 @@ ingress-nginx:
     resources:
       limits:
         cpu: "2"
-        memory: 328Mi
+        memory: 2Gi
       requests:
         cpu: 40m
         memory: 150Mi
