@@ -17,3 +17,5 @@ spec:
   resources:
     requests:
       storage: 1000Gi
+  storageClassName: openebs-zfspv
+  volumeName: nextcloud-nextcloud-data
