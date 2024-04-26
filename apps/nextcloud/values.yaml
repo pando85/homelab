@@ -6,6 +6,7 @@ nextcloud:
   deploymentLabels:
     backup/retain: quaterly
 
+  replicaCount: 0
   ingress:
     enabled: true
     className: nginx-external
@@ -225,7 +226,7 @@ nextcloud:
     fsGroupChangePolicy: "OnRootMismatch"
 
   nodeSelector:
-    name: grigri
+    kubernetes.io/hostname: prusik
 
 app-template:
   global:
@@ -261,7 +262,7 @@ app-template:
 
   defaultPodOptions:
     nodeSelector:
-      name: grigri
+      kubernetes.io/hostname: prusik
 
     affinity:
       podAffinity:
