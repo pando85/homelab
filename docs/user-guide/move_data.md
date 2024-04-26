@@ -100,6 +100,8 @@ k3s kubectl apply -f /tmp/zfs-volume.yaml
 - Check app
 - Remove old volume
 
+I'm not sure how to handle PVC Bound. At the moment I just marked the PV as Retain and recreate the PVC manually.
+
 ### Commands
 
 In ZFS server:
