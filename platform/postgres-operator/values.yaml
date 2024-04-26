@@ -14,8 +14,9 @@ postgres-operator:
 
   configKubernetes:
     # TODO: remove for postgres HA
-    enable_pod_antiaffinity: false
-    enable_pod_disruption_budget: false
+    enable_pod_antiaffinity: true
+    pdb_master_label_selector: false
+    enable_pod_disruption_budget: true
     inherited_labels:
       - backup/retain
 
