@@ -94,7 +94,7 @@ nextcloud:
 
   resources:
     limits:
-      memory: 1Gi
+      memory: 2Gi
     requests:
       cpu: 400m
       memory: 200Mi
