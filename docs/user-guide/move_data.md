@@ -1,6 +1,8 @@
-# Import ZFS dataset
+# Move data
 
-## Steps
+## Import ZFS dataset
+
+### Steps
 
 - stop app
 - clone volume
@@ -9,11 +11,11 @@
 - check app
 - remove old volume
 
-## Commands
+### Commands
 
 In ZFS server:
 
-```
+```bash
 # variables
 PVC=datasets/k8s/l/v/pvc-0f17e0bf-6741-44fa-9e37-e5ed394ff56b
 NAME=transcoder-rabbit
@@ -78,6 +80,89 @@ spec:
   capacity: "$(echo "(${SIZE::-1} * 1024 * 1024 * 1024) / 1" | bc)" # size of the volume in bytes
   fsType: zfs
   ownerNodeID: grigri
+  shared: "yes"
+  poolName: ${DATASET}
+  volumeType: DATASET
+status:
+  state: Ready
+EOF
+k3s kubectl apply -f /tmp/zfs-volume.yaml
+```
+
+## Move ZFS volume between nodes
+
+### Steps
+
+- Stop app
+- Send snapshots
+- Create new volume
+- Change volume for app
+- Check app
+- Remove old volume
+
+### Commands
+
+In ZFS server:
+
+```bash
+# variables
+PVC_NAME=nextcloud-nextcloud-data
+SIZE=1000G
+NAMESPACE=nextcloud
+
+DATASET=datasets/openebs
+NEW_DATASET=${DATASET}/${PVC_NAME}
+
+zfs set mountpoint=legacy ${NEW_DATASET}
+zfs set quota=${SIZE} ${NEW_DATASET}
+
+cat << EOF > /tmp/pv.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ${PVC_NAME}
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: ${SIZE}i # size of the volume
+  claimRef:
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    name: ${PVC_NAME}
+    namespace: ${NAMESPACE}
+  csi:
+    driver: zfs.csi.openebs.io
+    fsType: zfs
+    volumeAttributes:
+      openebs.io/poolname: ${DATASET}
+    volumeHandle: ${PVC_NAME}
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - prusik
+  persistentVolumeReclaimPolicy: Delete
+  storageClassName: openebs-zfspv
+  volumeMode: Filesystem
+EOF
+k3s kubectl apply -f /tmp/pv.yaml
+
+cat << EOF > /tmp/zfs-volume.yaml
+apiVersion: zfs.openebs.io/v1
+kind: ZFSVolume
+metadata:
+  finalizers:
+  - zfs.openebs.io/finalizer
+  name: ${PVC_NAME}
+  namespace: zfs-localpv
+spec:
+  capacity: "$(echo "(${SIZE::-1} * 1024 * 1024 * 1024) / 1" | bc)" # size of the volume in bytes
+  fsType: zfs
+  ownerNodeID: prusik
   shared: "yes"
   poolName: ${DATASET}
   volumeType: DATASET

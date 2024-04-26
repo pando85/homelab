@@ -6,7 +6,7 @@ nextcloud:
   deploymentLabels:
     backup/retain: quaterly
 
-  replicaCount: 0
+  replicaCount: 1
   ingress:
     enabled: true
     className: nginx-external

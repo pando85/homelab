@@ -41,7 +41,7 @@ metadata:
 data:**Warning**: ArgoCD labels are going to be restored too. If you are doing the restore into other namespace as in the example, disable ArgoCD or modify the labels.
   # add 1+ key-value pairs here, where the key is the old
   # node name and the value is the new node name.
-  grigri: k8s-amd64-1
+  grigri: prusik
 ```
 
 ### Restoring with a Different Storage Class

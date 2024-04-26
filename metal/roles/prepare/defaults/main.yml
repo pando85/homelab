@@ -18,6 +18,7 @@ prepare_basic_packages:
   - util-linux
   - smartmontools
   - less
+  - bc
   - ripgrep
   - bash-completion
   # debug
