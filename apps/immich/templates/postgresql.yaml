@@ -52,6 +52,6 @@ spec:
       # ALTER SYSTEM SET shared_preload_libraries = "vectors.so"
       # CREATE EXTENSION vectors;
       # ```
-        cube: public
-        earthdistance: public
-        vectors: public
+        # cube: public
+        # earthdistance: public
+        # vectors: public
