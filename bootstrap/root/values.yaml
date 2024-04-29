@@ -28,7 +28,6 @@ stacks:
     ignoreDifferences:
       - group: ''
         kind: PersistentVolumeClaim
-        name: '*'
         jsonPointers:
           - /spec/volumeMode
           - /spec/volumeName
