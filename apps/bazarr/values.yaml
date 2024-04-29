@@ -6,7 +6,7 @@ app-template:
       type: statefulset
       pod:
         nodeSelector:
-          name: grigri
+          kubernetes.io/hostname: prusik
       containers:
         bazarr:
           image:

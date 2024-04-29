@@ -67,7 +67,7 @@ app-template:
       fsGroup: 568
       fsGroupChangePolicy: "OnRootMismatch"
     nodeSelector:
-      name: grigri
+      kubernetes.io/hostname: prusik
 
   persistence:
     config:
