@@ -15,3 +15,4 @@ allowedTopologies:
           - k8s-amd64-1
 # with this we will take into account the k8s scheduler instead of CapacityWeighted (default) or VolumeWeighted.
 volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
