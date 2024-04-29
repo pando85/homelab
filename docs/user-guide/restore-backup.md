@@ -8,11 +8,26 @@ zfs rollback ${ZFS_VOLUME}@{ZFS_SNAPSHOT}
 
 ## Postgres
 
+### Troubleshooting
+
+#### Exceeds maximum replication lag
+
 If after restore there are this kind of errors:
 
 > My wal position exceeds maximum replication lag
 
 Replica can be promoted to leader using `patronictl failover` command as root.
+
+#### Operator could not connect to database
+
+Update passwords using values in secrets. Inside a container:
+
+```bash
+psql -U postgres
+ALTER USER postgres WITH PASSWORD 'VALUE_FROM_SECRET';
+ALTER USER standby WITH PASSWORD 'VALUE_FROM_SECRET';
+ALTER USER APP_USER_NAME WITH PASSWORD 'VALUE_FROM_SECRET';
+```
 
 ## Velero
 

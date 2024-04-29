@@ -176,6 +176,7 @@ app-template:
         transcoder:
           transcoder:
             - path: /tmp
+    # TODO: don't start on prusik -> Not enough space on node
     rabbit:
       enabled: true
       type: persistentVolumeClaim
