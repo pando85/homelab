@@ -25,3 +25,11 @@ stacks:
           - /data/tls.key
   - name: platform
   - name: apps
+    ignoreDifferences:
+      - group: ''
+        kind: PersistentVolumeClaim
+        name: '*'
+        jsonPointers:
+          - /spec/volumeMode
+          - /spec/volumeName
+          - /spec/storageClassName
