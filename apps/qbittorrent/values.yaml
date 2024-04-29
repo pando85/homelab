@@ -3,6 +3,7 @@ app-template:
     qbittorrent:
       labels:
         backup/retain: quaterly
+      replicas: 0
       containers:
         qbittorrent:
           image:
