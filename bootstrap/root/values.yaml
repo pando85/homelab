@@ -24,3 +24,4 @@ stacks:
           - /data/tls.crt
           - /data/tls.key
   - name: platform
+  - name: apps
