@@ -37,10 +37,10 @@ ingress-nginx:
           - weight: 100
             preference:
               matchExpressions:
-                - key: name
+                - key: kubernetes.io/hostname
                   operator: In
                   values:
-                    - grigri
+                    - prusik
           - weight: 50
             preference:
               matchExpressions:
@@ -66,7 +66,7 @@ ingress-nginx:
       targetCPUUtilizationPercentage: 1250
       targetMemoryUtilizationPercentage: 200
     topologySpreadConstraints:
-      - maxSkew: 1
+      - maxSkew: 4
         topologyKey: kubernetes.io/hostname
         whenUnsatisfiable: DoNotSchedule
         labelSelector:
