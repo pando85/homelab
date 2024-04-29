@@ -86,3 +86,13 @@ app-template:
       globalMounts:
         - path: /usr/share/nginx/html
       existingClaim: antdroid-data
+
+    config:
+      enabled: true
+      type: configMap
+      name: nginx-config
+      advancedMounts:
+        antdroid:
+          nginx:
+            - path: /etc/nginx/nginx.conf
+              subPath: nginx.conf
