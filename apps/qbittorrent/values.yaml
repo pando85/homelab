@@ -73,8 +73,9 @@ app-template:
 
     hostname: qbittorrent
 
-    nodeSelector:
-      name: grigri
+    # uncomment after restore:
+    #nodeSelector:
+    #  kubernetes.io/hostname: prusik
 
   service:
     qbittorrent:
