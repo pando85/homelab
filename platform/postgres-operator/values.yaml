@@ -16,7 +16,7 @@ postgres-operator:
     # TODO: remove for postgres HA
     enable_pod_antiaffinity: true
     pdb_master_label_selector: false
-    enable_pod_disruption_budget: true
+    enable_pod_disruption_budget: false
     inherited_labels:
       - backup/retain
 
