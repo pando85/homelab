@@ -55,6 +55,14 @@ app-template:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
+        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
+        nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
+        nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Preferred-Username"
+        # Enable subsonic client
+        nginx.ingress.kubernetes.io/auth-snippet: |
+            if ( $request_uri ~ "/rest" ) {
+                return 200;
+            }
       hosts:
         - host: &host navidrome.internal.grigri.cloud
           paths:
@@ -78,6 +86,11 @@ app-template:
         nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
         nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
         nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Preferred-Username"
+        # Enable subsonic client
+        nginx.ingress.kubernetes.io/auth-snippet: |
+            if ( $request_uri ~ "/rest" ) {
+                return 200;
+            }
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
