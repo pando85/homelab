@@ -24,4 +24,4 @@ spec:
   tls:
     - hosts:
         - tanque.grigri.cloud
-      secretName: prometheus-long-term-general-tls
+      secretName: tanque-external-tls
