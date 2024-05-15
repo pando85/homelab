@@ -108,9 +108,9 @@ In ZFS server:
 
 ```bash
 # variables
-PVC_NAME=nextcloud-nextcloud-data
-SIZE=1000G
-NAMESPACE=nextcloud
+PVC_NAME=minio-backup
+SIZE=2000G
+NAMESPACE=minio
 
 DATASET=datasets/openebs
 NEW_DATASET=${DATASET}/${PVC_NAME}
@@ -147,7 +147,7 @@ spec:
           operator: In
           values:
           - prusik
-  persistentVolumeReclaimPolicy: Delete
+  persistentVolumeReclaimPolicy: Retain
   storageClassName: openebs-zfspv
   volumeMode: Filesystem
 EOF
@@ -164,7 +164,7 @@ metadata:
 spec:
   capacity: "$(echo "(${SIZE::-1} * 1024 * 1024 * 1024) / 1" | bc)" # size of the volume in bytes
   fsType: zfs
-  ownerNodeID: prusik
+  ownerNodeID: grigri
   shared: "yes"
   poolName: ${DATASET}
   volumeType: DATASET
