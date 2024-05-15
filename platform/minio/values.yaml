@@ -57,7 +57,7 @@ minio:
 
   resources:
     requests:
-      memory: 2
+      memory: 2Gi
 
   users:
     - accessKey: velero
