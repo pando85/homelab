@@ -146,7 +146,7 @@ spec:
         - key: kubernetes.io/hostname
           operator: In
           values:
-          - prusik
+          - grigri
   persistentVolumeReclaimPolicy: Retain
   storageClassName: openebs-zfspv
   volumeMode: Filesystem

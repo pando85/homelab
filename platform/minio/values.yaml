@@ -52,9 +52,6 @@ minio:
           - *hostMC
         secretName: mc-s3-tls-certificate
 
-  nodeSelector:
-    kubernetes.io/hostname: grigri
-
   resources:
     requests:
       memory: 2Gi
