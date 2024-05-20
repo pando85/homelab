@@ -10,6 +10,7 @@
   when: ansible_host == "prusik-ipmi"
   tags:
     - pikvm
+    - always
 
 - name: Create user and enable login
   import_tasks: user.yml

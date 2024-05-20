@@ -20,7 +20,7 @@ RPi.GPIO.setwarnings(False)
 RPi.GPIO.setmode(RPi.GPIO.BCM)
 RPi.GPIO.setup(FAN_GPIO, RPi.GPIO.OUT)
 pwm = RPi.GPIO.PWM(FAN_GPIO, 10)
-running = False
+running = True
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -53,6 +53,9 @@ async def handle_request(_):
 async def update_temp_and_fan_speed():
     global cpu_temp, set_speed, running
     try:
+        logging.info("Init PWM and set speed to 0")
+        pwm.start(0)
+        pwm.ChangeDutyCycle(0)
         while True:
             with open("/sys/class/thermal/thermal_zone0/temp") as tmpFile:
                 cpu_temp = int(tmpFile.read()) / 1000
