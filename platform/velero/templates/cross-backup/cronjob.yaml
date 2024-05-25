@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rclone-sync
+spec:
+  schedule: "30 2 * * 4"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: rclone
+            image: rclone/rclone:1.66.0
+            command:
+              - /bin/sh
+              - -c
+              - rclone sync s3.internal.grigri.cloud:velero/backups secret-cross-backup:backups --config /config/rclone.conf
+            resources:
+              requests:
+                memory: 512Mi
+                cpu: 500m
+              limits:
+                memory: 8Gi
+                cpu: "4"
+            volumeMounts:
+            - name: rclone-config-volume
+              mountPath: /config
+              subPath: rclone.conf
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumes:
+          - name: rclone-config-volume
+            secret:
+              secretName: rclone-config
+              items:
+              - key: rclone.conf
+                path: rclone.conf
