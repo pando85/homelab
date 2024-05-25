@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: cross-backup
+    app.kubernetes.io/name: cross-backup
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: cross-backups
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Ti

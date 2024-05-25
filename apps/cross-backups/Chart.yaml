@@ -1,0 +1,7 @@
+apiVersion: v2
+name: cross-backups
+version: 0.0.0
+dependencies:
+  - name: minio
+    version: 5.2.0
+    repository: https://charts.min.io/

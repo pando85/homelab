@@ -1,0 +1,134 @@
+minio:
+  image:
+    repository: quay.io/minio/minio
+    tag: RELEASE.2024-03-03T17-50-39Z-cpuv1
+
+  mcImage:
+    repository: quay.io/minio/mc
+    tag: RELEASE.2024-03-03T00-13-08Z-cpuv1
+
+  mode: standalone
+
+  drivesPerNode: 1
+  # Number of MinIO containers running
+  replicas: 1
+
+  existingSecret: cross-backups-users
+
+  persistence:
+    enabled: true
+    existingClaim: cross-backups
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx-external
+    annotations:
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "86400"
+      nginx.ingress.kubernetes.io/proxy-connect-timeout: "86400"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
+      # fix timeouts uploading big files disabling proxy buffering
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-body-size: 1000G
+    hosts:
+      - &host cross-backups.grigri.cloud
+    tls:
+      - hosts:
+          - *host
+        secretName: s3-tls-certificate
+
+  consoleIngress:
+    enabled: true
+    ingressClassName: nginx-external
+    annotations:
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+    hosts:
+      - &hostMC mc-cross-backups.grigri.cloud
+    tls:
+      - hosts:
+          - *hostMC
+        secretName: mc-s3-tls-certificate
+
+  resources:
+    requests:
+      memory: 2Gi
+
+  policies:
+    - name: millaReadWritePolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::milla/*'
+          actions:
+            - "s3:AbortMultipartUpload"
+            - "s3:GetObject"
+            - "s3:DeleteObject"
+            - "s3:PutObject"
+            - "s3:ListMultipartUploadParts"
+        - resources:
+            - 'arn:aws:s3:::milla/'
+          actions:
+            - "s3:CreateBucket"
+            - "s3:DeleteBucket"
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
+            - "s3:ListBucketMultipartUploads"
+  users:
+    - accessKey: milla
+      existingSecret: cross-backups-users
+      existingSecretKey: millaPassword
+      policy: millaReadWritePolicy
+    ## Username, password and policy to be assigned to the user
+    ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
+    ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
+    ## NOTE: this will fail if LDAP is enabled in your MinIO deployment
+    ## make sure to disable this if you are using LDAP.
+    #- accessKey: console
+    #  secretKey: console123
+    #  policy: consoleAdmin
+    # Or you can refer to specific secret
+    #- accessKey: externalSecret
+    #  existingSecret: my-secret
+    #  existingSecretKey: password
+    #  policy: readonly
+
+  buckets:
+    - name: milla
+      # Policy to be set on the
+      # bucket [none|download|upload|public]
+      policy: none
+      # Purge if bucket exists already
+      purge: false
+      versioning: false
+      objectlocking: false
+    #   # Name of the bucket
+    # - name: bucket1
+    #   # Policy to be set on the
+    #   # bucket [none|download|upload|public]
+    #   policy: none
+    #   # Purge if bucket exists already
+    #   purge: false
+    #   # set versioning for
+    #   # bucket [true|false]
+    #   versioning: false # remove this key if you do not want versioning feature
+    #   # set objectlocking for
+    #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
+    #   objectlocking: false
+    # - name: bucket2
+    #   policy: none
+    #   purge: false
+    #   versioning: true
+    #   # set objectlocking for
+    #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
+    #   objectlocking: false
+
+  metrics:
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: monitoring
