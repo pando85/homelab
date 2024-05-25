@@ -27,6 +27,16 @@ spec:
               mountPath: /config
               subPath: rclone.conf
           restartPolicy: OnFailure
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                  - key: "app"
+                    operator: In
+                    values:
+                    - "minio"
+                topologyKey: "kubernetes.io/hostname"
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
