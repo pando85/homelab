@@ -24,7 +24,7 @@ spec:
                 cpu: "4"
             volumeMounts:
             - name: rclone-config-volume
-              mountPath: /config
+              mountPath: /config/rclone.conf
               subPath: rclone.conf
           restartPolicy: OnFailure
           nodeSelector:
@@ -36,6 +36,3 @@ spec:
           - name: rclone-config-volume
             secret:
               secretName: rclone-config
-              items:
-              - key: rclone.conf
-                path: rclone.conf
