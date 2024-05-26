@@ -14,7 +14,12 @@ spec:
             command:
               - /bin/sh
               - -c
-              - rclone sync s3.internal.grigri.cloud:velero/backups secret-cross-backup:backups --config /config/rclone.conf
+              - |
+                rclone sync s3.internal.grigri.cloud:velero/backups secret-cross-backup:backups \
+                  --config /config/rclone.conf \
+                  --fast-list \
+                  --checkers 16 \
+                  --transfers 12
             resources:
               requests:
                 memory: 512Mi
