@@ -237,7 +237,7 @@ app-template:
         redis:
           image:
             repository: redis
-            tag: 7.2.4
+            tag: 7.2.5
 
           command:
             - sh
