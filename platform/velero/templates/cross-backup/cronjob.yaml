@@ -22,8 +22,8 @@ spec:
                   --transfers 12
             resources:
               requests:
-                memory: 512Mi
-                cpu: 500m
+                memory: 312Mi
+                cpu: 200m
               limits:
                 memory: 8Gi
                 cpu: "4"
