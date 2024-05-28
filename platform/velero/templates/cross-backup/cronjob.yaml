@@ -7,6 +7,9 @@ spec:
   jobTemplate:
     spec:
       template:
+        metadata:
+          annotations:
+            kubernetes.io/egress-bandwidth: "20M"
         spec:
           containers:
           - name: rclone
@@ -22,8 +25,8 @@ spec:
                   --transfers 12
             resources:
               requests:
-                memory: 312Mi
-                cpu: 200m
+                memory: 1Gi
+                cpu: "1.5"
               limits:
                 memory: 8Gi
                 cpu: "4"

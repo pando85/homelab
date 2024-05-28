@@ -61,6 +61,16 @@ securityContext:
       - PERFMON
       - BPF
 
+# -- Enable bandwidth manager to optimize TCP and UDP workloads and allow
+# for rate-limiting traffic from individual Pods with EDT (Earliest Departure
+# Time) through the "kubernetes.io/egress-bandwidth" Pod annotation.
+bandwidthManager:
+  # -- Enable bandwidth manager infrastructure (also prerequirement for BBR)
+  enabled: true
+  # -- Activate BBR TCP congestion control for Pods
+  # requires Kernel 5.18.X or later (grigri is 5.15)
+  bbr: false
+
 bgp:
   enabled: false
 
