@@ -9,7 +9,7 @@ spec:
       template:
         metadata:
           annotations:
-            kubernetes.io/egress-bandwidth: "20M"
+            kubernetes.io/egress-bandwidth: "200M"
         spec:
           containers:
           - name: rclone
