@@ -6,6 +6,9 @@ external-secrets:
     limits:
       memory: 64Mi
 
+  extraArgs:
+    loglevel: debug
+
   webhook:
     resources:
       requests:
