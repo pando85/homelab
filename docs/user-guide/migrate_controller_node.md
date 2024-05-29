@@ -29,4 +29,6 @@ cd metal
 ANSIBLE_EXTRA_ARGS="--limit prusik" make cluster
 kubectl get nodes
 make cluster
+
+# remove labels
 ```

@@ -1,1 +1,1 @@
-backup_target_dir: /datasets/backups/k8s/etcd
+backup_target_dir: /datasets/backups/k3s/etcd

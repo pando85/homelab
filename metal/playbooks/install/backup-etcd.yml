@@ -1,5 +1,5 @@
 - name: Enable etcd backup
-  hosts: grigri
+  hosts: prusik
   tasks:
     - name: Check dependencies
       ansible.builtin.apt:
