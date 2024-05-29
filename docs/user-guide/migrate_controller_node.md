@@ -17,18 +17,16 @@ Example:
 k3s etcd-snapshot save
 systemctl stop k3s
 
-rsync -av --delete -e "ssh -i /root/id_ed25519" /var/lib/rancher/k3s/server/ \
-    backup@grigri.grigri:/datasets/backups/k8s/server
-rsync -av -e "ssh -i /root/id_ed25519" \
-    /var/lib/rancher/k3s/server/db/snapshots/on-demand-k8s-amd64-1-1692721476 \
-    backup@grigri.grigri:/datasets/backups/k8s/
+rsync -av --delete /var/lib/rancher/k3s/server/ backup@prusik:/datasets/backups/k3s/server
 
 # grigri
-k3s server --cluster-reset --cluster-reset-restore-path=/datasets/backups/k8s/on-demand-k8s-amd64-1-1692721476 --token /datasets/backups/k8s/server/token
+k3s server --cluster-reset --cluster-reset-restore-path=/datasets/backups/k3s/server/db/snapshots/on-demand-grigri-1716963887 --token /datasets/backups/k3s/server/token
+
+# change inventory with new controller and move controller to worker
 
 # localhost
 cd metal
-ANSIBLE_EXTRA_ARGS="--limit grigri" make cluster
+ANSIBLE_EXTRA_ARGS="--limit prusik" make cluster
 kubectl get nodes
 make cluster
 ```
