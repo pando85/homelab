@@ -35,3 +35,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: external-secrets-k8s-store
+    namespace: external-secrets
