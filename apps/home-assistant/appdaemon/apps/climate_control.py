@@ -80,7 +80,7 @@ class ClimateControl(hass.Hass):
                 await self.sleep(1)
 
     async def _start_hvac(self, kwargs={}):
-        await self._change_hvac_mode(self.args["climate"]["on_mode"])
+        await self._change_hvac_mode(self.args["input_select"]["heat_mode"])
 
     async def _stop_hvac(self, kwargs={}):
         await self._change_hvac_mode(self.args["climate"]["off_mode"])

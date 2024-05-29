@@ -5,6 +5,8 @@ climate_control:
     enable: input_boolean.appdaemon_climate_enable
   input_number:
     min_hours_per_day: input_number.appdaemon_climate_min_hours_per_day
+  input_select:
+    heat_mode: input_select.appdaemon_climate_heat_mode
   sensor:
     pvpc_price: sensor.esios_pvpc
   notify:

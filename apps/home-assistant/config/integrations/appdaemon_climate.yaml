@@ -9,3 +9,10 @@ input_number:
     min: 0
     max: 24
     step: 1
+
+input_select:
+  appdaemon_climate_heat_mode:
+    name: Set Heat Mode
+    options:
+      - Heat+DHW
+      - Cool+DHW
