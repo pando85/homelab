@@ -59,7 +59,7 @@ wordpress:
           backup/retain: quaterly
         accessModes:
           - ReadWriteOnce
-        size: 1Gi
+        size: 2Gi
   memcached:
     enabled: true
     affinity:
