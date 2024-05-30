@@ -36,6 +36,7 @@ velero:
           region: minio
           s3ForcePathStyle: true
           s3Url: http://minio.minio.svc:9000/
+          publicUrl: https://s3.internal.grigri.cloud/
     # Is configured but not currenlty in use in velero schedules.
     # Probably will use it in the future if they add a feature to upload snapshots to S3
     # or if we decide to mirror them between different Cephs. SnapshotClass are already annotated.
