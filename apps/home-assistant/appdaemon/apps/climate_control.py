@@ -36,6 +36,7 @@ class ClimateControl(hass.Hass):
         self.stop_app
         self.timers = []
         self._logging
+        self.input_select_heat_mode = self.args["input_select_heat_mode"]
         input_boolean_enable = self.args["input_boolean"]["enable"]
         await self._daily_register_schedulers()
         # Register schedulers if climate control is enabled
@@ -80,7 +81,7 @@ class ClimateControl(hass.Hass):
                 await self.sleep(1)
 
     async def _start_hvac(self, kwargs={}):
-        await self._change_hvac_mode(self.args["input_select"]["heat_mode"])
+        await self._change_hvac_mode(self.input_select_heat_mode)
 
     async def _stop_hvac(self, kwargs={}):
         await self._change_hvac_mode(self.args["climate"]["off_mode"])
