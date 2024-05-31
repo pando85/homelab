@@ -13,7 +13,7 @@ climate_control:
     enabled: true
     target: agil
   climate:
-    enabled: false
+    enabled: true
     entity: input_select.heishamon_heatmode
     on_mode: Heat+DHW
     off_mode: DHW
