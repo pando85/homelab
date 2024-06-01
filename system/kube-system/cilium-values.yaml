@@ -77,6 +77,9 @@ bandwidthManager:
 bgp:
   enabled: false
 
+bpf:
+  masquerade: true
+
 # -- This feature set enables virtual BGP routers to be created via
 # CiliumBGPPeeringPolicy CRDs.
 bgpControlPlane:
@@ -148,8 +151,10 @@ hubble:
           hosts:
             - *host
 
+kubeProxyReplacement: true
 routingMode: native
 ipv4NativeRoutingCIDR: "10.0.0.0/8"
+enableIPv4BIGTCP: true
 
 prometheus:
   enabled: true
