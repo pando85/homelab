@@ -151,6 +151,7 @@ hubble:
           hosts:
             - *host
 
+installNoConntrackIptablesRules: true
 kubeProxyReplacement: true
 routingMode: native
 ipv4NativeRoutingCIDR: "10.0.0.0/8"
@@ -172,6 +173,7 @@ dashboards:
 # -- Enable use of the remote node identity.
 # ref: https://docs.cilium.io/en/v1.7/install/upgrade/#configmap-remote-node-identity
 # Deprecated without replacement in 1.15. To be removed in 1.16.
+# required by masquerade
 remoteNodeIdentity: true
 
 operator:
