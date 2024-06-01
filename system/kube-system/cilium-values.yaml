@@ -69,7 +69,7 @@ bandwidthManager:
   enabled: true
   # -- Activate BBR TCP congestion control for Pods
   # requires Kernel 5.18.X or later (grigri is 5.15)
-  bbr: false
+  bbr: true
 
 bgp:
   enabled: false
