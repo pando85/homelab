@@ -61,7 +61,8 @@ securityContext:
       - PERFMON
       - BPF
 
-autoDirectNodeRoutes: false
+# requires: `routingMode: native` it is setup below
+autoDirectNodeRoutes: true
 
 # -- Enable bandwidth manager to optimize TCP and UDP workloads and allow
 # for rate-limiting traffic from individual Pods with EDT (Earliest Departure
@@ -146,6 +147,8 @@ hubble:
         - secretName: hubble-tls-certificate
           hosts:
             - *host
+
+routingMode: native
 
 prometheus:
   enabled: true
