@@ -61,7 +61,7 @@ securityContext:
       - PERFMON
       - BPF
 
-autoDirectNodeRoutes: true
+autoDirectNodeRoutes: false
 
 # -- Enable bandwidth manager to optimize TCP and UDP workloads and allow
 # for rate-limiting traffic from individual Pods with EDT (Earliest Departure
