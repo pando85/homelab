@@ -8,7 +8,7 @@ app-template:
         stump:
           image:
             repository: aaronleopold/stump
-            tag: nightly@sha256:b9b03f185d3b0ff4ae44bf9c2ebedfee03c8a4bd08fbf127b4b22b6c896974b3
+            tag: nightly@sha256:f0fc65dc45170e8df3b4db9d59e6675c9f63ef42c8b9028ad7d4519244170d51
           env:
             STUMP_IN_DOCKER: "true"
             STUMP_CONFIG_DIR: /config
