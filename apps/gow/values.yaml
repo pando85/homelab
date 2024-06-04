@@ -255,11 +255,11 @@ app-template:
       advancedMounts:
         pulseaudio:
           main:
-            - path: /etc/pulse
+            - path: /etc/pulse/default.pa
               subPath: default.pa
-            - path: /etc/pulse
+            - path: /etc/pulse/client.conf
               subPath: client.conf
-            - path: /etc/pulse
+            - path: /etc/pulse/daemon.conf
               subPath: daemon.conf
     dshm:
       enabled: true
