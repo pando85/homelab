@@ -17,7 +17,7 @@ app-template:
             PULSE_SERVER: /tmp/pulse/pulse-socket
             GOW_REQUIRED_DEVICES: /dev/uinput /dev/input/event* /dev/dri/*
             XDG_RUNTIME_DIR: /tmp/.X11-unix
-            NVIDIA_DRIVER_CAPABILITIES: utility,video,graphics,display
+            NVIDIA_DRIVER_CAPABILITIES: &nvidia_driver_capabilities all
             NVIDIA_VISIBLE_DEVICES: &nvidia_visible_devices all
           envFrom:
             - secretRef:
@@ -56,7 +56,7 @@ app-template:
             DISPLAY: *display
             REFRESH_RATE: "60"
             RESOLUTION: 1920x1080
-            NVIDIA_DRIVER_CAPABILITIES: &nvidia_driver_capabilities all
+            NVIDIA_DRIVER_CAPABILITIES: *nvidia_driver_capabilities
             NVIDIA_VISIBLE_DEVICES: *nvidia_visible_devices
           resources:
             requests:
