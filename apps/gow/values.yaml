@@ -10,7 +10,7 @@ app-template:
             privileged: true
           image:
             repository: ghcr.io/games-on-whales/sunshine
-            tag: &tag edge@sha256:46a8e851a1593cc41b202b3001531e3ae142950398a706592fcf6f9c27c2af22
+            tag: edge@sha256:3033da81b2e95c1dc4632ce499f30917c0770ddee734a85e438b50bc4190375b
           env:
             DISPLAY: &display :99
             LOG_LEVEL: info
@@ -51,7 +51,7 @@ app-template:
             privileged: true
           image:
             repository: ghcr.io/games-on-whales/xorg
-            tag: *tag
+            tag: edge@sha256:ec49241ad7323965184d6f40d33f1376cd2fcb2fc2ecfa1f6b963f17f441c612
           env:
             DISPLAY: *display
             REFRESH_RATE: "60"
@@ -71,7 +71,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/games-on-whales/pulseaudio
-            tag: *tag
+            tag: edge@sha256:966362b6958f11b87c8e1acef60097ed89a63d19ad3d7972d447a1941e82164c
           resources:
             requests:
               cpu: 300m
@@ -85,7 +85,7 @@ app-template:
             privileged: true
           image:
             repository: ghcr.io/games-on-whales/steam
-            tag: *tag
+            tag: edge@sha256:46a8e851a1593cc41b202b3001531e3ae142950398a706592fcf6f9c27c2af22
           env:
             DISPLAY: *display
             PULSE_SERVER: /tmp/pulse/pulse-socket
