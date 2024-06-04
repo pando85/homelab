@@ -152,6 +152,7 @@ app-template:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
+        nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
       hosts:
         - host: &host sunshine.internal.grigri.cloud
           paths:
