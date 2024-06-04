@@ -27,6 +27,8 @@
       # for nvidia-smi
       - nvidia-utils-535-server
       - libnvidia-encode-535-server
+      # for game on whales
+      - xserver-xorg-video-nvidia-535-server
     update_cache: true
   notify: restart server
 
