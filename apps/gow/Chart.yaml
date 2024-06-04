@@ -1,0 +1,7 @@
+apiVersion: v2
+name: gow
+version: 0.0.0
+dependencies:
+  - name: app-template
+    version: 3.2.1
+    repository: https://bjw-s.github.io/helm-charts/
