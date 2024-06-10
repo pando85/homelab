@@ -10,7 +10,7 @@ app-template:
         freshrss:
           image: &image
             repository: freshrss/freshrss
-            tag: 1.24.0
+            tag: 1.24.1
           env: &env
             TZ: Europe/Madrid
             # true gives error and non zero value is enough
