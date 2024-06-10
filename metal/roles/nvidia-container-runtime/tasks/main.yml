@@ -21,14 +21,14 @@
   apt:
     name:
       - nvidia-container-runtime
-      - cuda-drivers-fabricmanager-535
-      - nvidia-headless-535-server
+      - cuda-drivers-fabricmanager-550
+      - nvidia-headless-550-server
       - nvidia-cuda-toolkit
       # for nvidia-smi
-      - nvidia-utils-535-server
-      - libnvidia-encode-535-server
+      - nvidia-utils-550-server
+      - libnvidia-encode-550-server
       # for game on whales
-      - xserver-xorg-video-nvidia-535-server
+      - xserver-xorg-video-nvidia-550-server
     update_cache: true
   notify: restart server
 
