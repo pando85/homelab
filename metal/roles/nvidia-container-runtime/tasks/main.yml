@@ -29,6 +29,7 @@
       - libnvidia-encode-550-server
       # for game on whales
       - xserver-xorg-video-nvidia-550-server
+      - git
     update_cache: true
   notify: restart server
 
@@ -37,3 +38,22 @@
     name: nvidia-fabricmanager
     enabled: false
     state: stopped
+
+- name: Clone nvidia-patch repository
+  git:
+    repo: https://github.com/keylase/nvidia-patch
+    dest: /opt/nvidia-patch
+    update: true
+
+- name: Run the patch script
+  ansible.builtin.command:
+    cmd: bash patch.sh
+  args:
+    chdir: /opt/nvidia-patch
+  register: patch_output
+
+- name: Reboot server
+  debug:
+    msg: "{{ patch_output.stdout }}"
+  when: "'Patched!' in patch_output.stdout"
+  notify: restart server
