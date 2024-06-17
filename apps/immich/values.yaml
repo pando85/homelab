@@ -2,8 +2,8 @@ variables:
   env: &env
     DB_PORT: "5432"
     ENABLE_MAPBOX: "true"
-    # "IMMICH_LOG_LEVEL" must be one of [verbose, debug, info, warn, error, fatal]
-    IMMICH_LOG_LEVEL: info
+    # "IMMICH_LOG_LEVEL" must be one of [verbose, debug, log, warn, error, fatal]
+    IMMICH_LOG_LEVEL: log
     NODE_ENV: "production"
     REDIS_HOSTNAME: immich-redis
     REDIS_PORT: "6379"
