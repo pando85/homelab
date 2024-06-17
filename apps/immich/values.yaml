@@ -79,7 +79,6 @@ app-template:
             TZ: Europe/Madrid
             NVIDIA_VISIBLE_DEVICES: all
             IMMICH_WORKERS_EXCLUDE: 'api'
-            IMMICH_PORT: "3002"
           envFrom: *envFrom
           resources:
             requests:
@@ -133,13 +132,6 @@ app-template:
       ports:
         http:
           port: 3001
-        metrics:
-          port: 8081
-    microservices:
-      controller: microservices
-      ports:
-        http:
-          port: 3002
         metrics:
           port: 8081
     ml:
@@ -241,17 +233,6 @@ app-template:
     server:
       enabled: true
       serviceName: immich-server
-      labels:
-        release: monitoring
-      endpoints:
-        - port: metrics
-          scheme: http
-          path: /metrics
-          interval: 30s
-          scrapeTimeout: 10s
-    microservices:
-      enabled: true
-      serviceName: immich-microservices
       labels:
         release: monitoring
       endpoints:
