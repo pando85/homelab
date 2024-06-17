@@ -1,3 +1,30 @@
+variables:
+  env: &env
+    DB_PORT: "5432"
+    ENABLE_MAPBOX: "true"
+    # "LOG_LEVEL" must be one of [verbose, debug, log, warn, error, fatal]
+    LOG_LEVEL: log
+    NODE_ENV: "production"
+    REDIS_HOSTNAME: immich-redis
+    REDIS_PORT: "6379"
+    IMMICH_SERVER_URL: http://immich-server:3001
+    IMMICH_MACHINE_LEARNING_ENABLED: "true"
+    IMMICH_MACHINE_LEARNING_URL: http://immich-ml:3003
+    A_REPLACE_DB_HOSTNAME: immich-postgres
+    A_REPLACE_DB_DATABASE_NAME: immich
+    A_REPLACE_DB_USERNAME:
+      valueFrom:
+        secretKeyRef:
+          name: immich.immich-postgres.credentials.postgresql.acid.zalan.do
+          key: username
+    A_REPLACE_DB_PASSWORD:
+      valueFrom:
+        secretKeyRef:
+          name: immich.immich-postgres.credentials.postgresql.acid.zalan.do
+          key: password
+    DB_URL: postgresql://$(A_REPLACE_DB_USERNAME):$(A_REPLACE_DB_PASSWORD)@$(A_REPLACE_DB_HOSTNAME):5432/$(A_REPLACE_DB_DATABASE_NAME)?sslmode=no-verify
+    IMMICH_METRICS: true
+
 app-template:
   controllers:
     server:
@@ -15,31 +42,10 @@ app-template:
           image: &image
             repository: ghcr.io/immich-app/immich-server
             tag: v1.106.4
-          env: &env
-            DB_PORT: "5432"
-            ENABLE_MAPBOX: "true"
-            # "LOG_LEVEL" must be one of [verbose, debug, log, warn, error, fatal]
-            LOG_LEVEL: log
-            NODE_ENV: "production"
-            REDIS_HOSTNAME: immich-redis
-            REDIS_PORT: "6379"
-            IMMICH_SERVER_URL: http://immich-server:3001
-            IMMICH_MACHINE_LEARNING_ENABLED: "true"
-            IMMICH_MACHINE_LEARNING_URL: http://immich-ml:3003
-            A_REPLACE_DB_HOSTNAME: immich-postgres
-            A_REPLACE_DB_DATABASE_NAME: immich
-            A_REPLACE_DB_USERNAME:
-              valueFrom:
-                secretKeyRef:
-                  name: immich.immich-postgres.credentials.postgresql.acid.zalan.do
-                  key: username
-            A_REPLACE_DB_PASSWORD:
-              valueFrom:
-                secretKeyRef:
-                  name: immich.immich-postgres.credentials.postgresql.acid.zalan.do
-                  key: password
-            DB_URL: postgresql://$(A_REPLACE_DB_USERNAME):$(A_REPLACE_DB_PASSWORD)@$(A_REPLACE_DB_HOSTNAME):5432/$(A_REPLACE_DB_DATABASE_NAME)?sslmode=no-verify
-            IMMICH_METRICS: true
+          env:
+            <<: *env
+            IMMICH_WORKERS_INCLUDE: 'api'
+            IMMICH_PORT: "3001"
           envFrom: &envFrom
             - secretRef:
                 name: immich-secrets
@@ -67,6 +73,8 @@ app-template:
             <<: *env
             TZ: Europe/Madrid
             NVIDIA_VISIBLE_DEVICES: all
+            IMMICH_WORKERS_EXCLUDE: 'api'
+            IMMICH_PORT: "3002"
           envFrom: *envFrom
           resources:
             requests:
