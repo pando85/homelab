@@ -3,7 +3,7 @@ variables:
     DB_PORT: "5432"
     ENABLE_MAPBOX: "true"
     # "LOG_LEVEL" must be one of [verbose, debug, log, warn, error, fatal]
-    LOG_LEVEL: log
+    LOG_LEVEL: verbose
     NODE_ENV: "production"
     REDIS_HOSTNAME: immich-redis
     REDIS_PORT: "6379"
