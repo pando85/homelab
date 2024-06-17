@@ -18,7 +18,8 @@ spec:
       memory: 10Gi
 
   volume:
-    size: 3Gi
+    # for storing 3 months of snapshots
+    size: 10Gi
 
   users:
     immich:
