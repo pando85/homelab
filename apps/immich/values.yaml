@@ -15,9 +15,6 @@ app-template:
           image: &image
             repository: ghcr.io/immich-app/immich-server
             tag: v1.106.4
-          command: /bin/sh
-          args:
-            - ./start-server.sh
           env: &env
             DB_PORT: "5432"
             ENABLE_MAPBOX: "true"
@@ -66,9 +63,6 @@ app-template:
       containers:
         main:
           image: *image
-          command: /bin/sh
-          args:
-            - ./start-microservices.sh
           env:
             <<: *env
             TZ: Europe/Madrid
