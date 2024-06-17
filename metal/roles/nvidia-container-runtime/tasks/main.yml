@@ -30,6 +30,8 @@
       # for game on whales
       - xserver-xorg-video-nvidia-550-server
       - git
+      ## not sure if needed
+      - libnvidia-fbc1-550-server
     update_cache: true
   notify: restart server
 
