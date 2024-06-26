@@ -1,0 +1,11 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: special-web-zfs-backups
+spec:
+  retention:
+    maxCount: 2
+  schedule: "0 1 * * *" # UTC
+  claimSelector:
+    matchLabels:
+      backup: special-web-zfs
