@@ -50,7 +50,7 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       hosts:
-        - host: &host regalo-cumpleaños.grigri.cloud
+        - host: &host regalo.grigri.cloud
           paths:
             - path: /
               pathType: Prefix
