@@ -14,7 +14,7 @@ spec:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{device=~"nvme.*"} > 45 or smartctl_device_temperature{device!~"nvme.*"} > 41
+          expr: smartctl_device_temperature{device=~"nvme.*"} > 50 or smartctl_device_temperature{device!~"nvme.*"} > 41
           for: 60m
           labels:
             severity: warning
