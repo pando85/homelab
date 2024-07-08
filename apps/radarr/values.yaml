@@ -8,7 +8,7 @@ app-template:
         radarr:
           image:
             repository: ghcr.io/onedr0p/radarr-develop
-            tag: 5.7.0.8882@sha256:d6a11184848cc5309b9c0024cf33b40bb6a3613a5b15613bcc51864b23839015
+            tag: 5.8.1.8906@sha256:79ed00896ae3d8e1845d69caff1cdd715871a8e77e7a67df874cc415c4af24e4
 
           env:
             TZ: Europe/Madrid
