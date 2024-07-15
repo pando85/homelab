@@ -45,7 +45,7 @@ data:
 
     {{ define "__alert_silence_url" -}}
     {{- if and (eq .Status "firing") (le (len .Alerts) 10) -}}
-    <a href="https://grafana.grigri.cloud/alerting/silence/new?alertmanager=Alertmanager&matcher=alertname%3D{{ .CommonLabels.alertname }}&matcher=severity%3D{{ .CommonLabels.severity }}-*&comment=Silence%20with%20telegram%20link">Silence alerts</a>
+    <a href="https://grafana.grigri.cloud/alerting/silence/new?alertmanager=Alertmanager&matcher=alertname%3D{{ .CommonLabels.alertname }}&matcher=severity%3D{{ .CommonLabels.severity }}&comment=Silence%20with%20telegram%20link">Silence alerts</a>
     {{- end }}
     {{- end }}
 
