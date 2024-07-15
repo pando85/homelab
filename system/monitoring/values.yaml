@@ -22,7 +22,7 @@ alertmanager:
         whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
-            app: alertmanager
+            alertmanager: monitoring-kube-prometheus-alertmanager
     resources:
       requests:
         cpu: 10m
@@ -30,6 +30,14 @@ alertmanager:
       limits:
         cpu: 200m
         memory: 250Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: openebs-zfspv
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 500Mi
 
   ingress:
     enabled: true
