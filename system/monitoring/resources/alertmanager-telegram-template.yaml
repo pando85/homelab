@@ -39,12 +39,18 @@ data:
             {{- if le $alertsLen 10 }}
     <a href="{{ .GeneratorURL }}">Prometheus</a>
 
-    <a href="https://grafana.grigri.cloud/alerting/silence/new?alertmanager=Alertmanager&matcher=alertname%3D{{ .CommonLabels.alertname }}&matcher=severity%3D{{ .CommonLabels.severity }}-*&comment=Silence%20with%20telegram%20link">Silence alerts</a>
             {{- end }}
         {{ end }}
+    {{- end }}
+
+    {{ define "__alert_silence_url" -}}
+    {{- if le (len .Alerts) 10 -}}
+    <a href="https://grafana.grigri.cloud/alerting/silence/new?alertmanager=Alertmanager&matcher=alertname%3D{{ .CommonLabels.alertname }}&matcher=severity%3D{{ .CommonLabels.severity }}-*&comment=Silence%20with%20telegram%20link">Silence alerts</a>
+    {{- end }}
     {{- end }}
 
     {{ define "telegram.custom.message" -}}
     {{ template "__alert_severity_title" . }}
     {{ template "__alert_severity_text" . }}
+    {{ template "__alert_silence_url" . }}
     {{- end }}
