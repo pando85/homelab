@@ -7,6 +7,7 @@ oauth2-proxy:
       external-dns.alpha.kubernetes.io/enabled: "true"
       external-dns.alpha.kubernetes.io/target: grigri.cloud
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      nginx.ingress.kubernetes.io/proxy-buffer-size: "128k"
     path: /oauth2
     hosts:
       - &host auth.grigri.cloud
