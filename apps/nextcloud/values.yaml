@@ -82,8 +82,18 @@ nextcloud:
     host: nextcloud-postgres
   cronjob:
     enabled: true
-    failedJobsHistoryLimit: 1
-    successfulJobsHistoryLimit: 1
+    resources:
+      limits:
+        cpu: 400m
+        memory: 128Mi
+      requests:
+        cpu: 10m
+        memory: 40Mi
+    securityContext:
+      runAsUser: 33
+      runAsGroup: 33
+      runAsNonRoot: true
+      readOnlyRootFilesystem: true
 
   persistence:
     enabled: true
@@ -166,6 +176,16 @@ nextcloud:
         <?php
         $CONFIG = array (
           'overwriteprotocol' => 'https',
+        );
+      cron.config.php: |-
+        <?php
+        $CONFIG = array (
+          'maintenance_window_start' => 1,
+        );
+      contacts.config.php: |-
+        <?php
+        $CONFIG = array (
+          'default_phone_region' => 'ES',
         );
 
     extraEnv:
