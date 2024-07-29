@@ -10,7 +10,7 @@ app-template:
             privileged: true
           image:
             repository: ghcr.io/games-on-whales/sunshine
-            tag: edge@sha256:c0fa5fff800a87cae55096f2f07ec47a3a05758de83bf22b9fc719b94826fa6d
+            tag: edge@sha256:8146310a1ac018dd5e0246eceb27918edf25afc0a425a64aa55cc73149bd0649
           env:
             DISPLAY: &display :99
             LOG_LEVEL: info
