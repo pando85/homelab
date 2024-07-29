@@ -78,3 +78,10 @@ After next login, you will receive groups `uuid` and groups `spn` in the token:
   ]
 }
 ```
+
+**Note**: When groups scope is activated your header size will be above 4k so you will need to add
+this annotation to your ingress:
+
+```yaml
+nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+```
