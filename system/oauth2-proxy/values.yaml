@@ -42,6 +42,8 @@ oauth2-proxy:
     cookie-expire: 168h
     cookie-secure: true
     scope: "openid profile email groups"
+    session-store-type: redis
+    redis-connection-url: redis://redis:6379
     ## dex needs to support RFC2307bis
     # allowed-groups: wheel
 
@@ -62,3 +64,51 @@ oauth2-proxy:
                 values:
                   - oauth2-proxy
           topologyKey: "kubernetes.io/hostname"
+
+app-template:
+  global:
+    fullnameOverride: redis
+  controllers:
+    redis:
+      containers:
+        redis:
+          image:
+            repository: redis
+            tag: 7.2.5
+
+          command:
+            - sh
+          args:
+            - -c
+            - >-
+              redis-server
+          resources:
+            requests:
+              cpu: 23m
+              memory: 64M
+            limits:
+              cpu: 500m
+              memory: 64M
+
+  defaultPodOptions:
+    nodeSelector:
+      kubernetes.io/hostname: prusik
+
+    affinity:
+      podAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - nextcloud
+            topologyKey: kubernetes.io/hostname
+
+  service:
+    redis:
+      controller: redis
+      ports:
+        redis:
+          enabled: true
+          port: 6379
