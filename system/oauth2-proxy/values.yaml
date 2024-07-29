@@ -94,17 +94,6 @@ app-template:
     nodeSelector:
       kubernetes.io/hostname: prusik
 
-    affinity:
-      podAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          - labelSelector:
-              matchExpressions:
-                - key: app.kubernetes.io/name
-                  operator: In
-                  values:
-                    - nextcloud
-            topologyKey: kubernetes.io/hostname
-
   service:
     redis:
       controller: redis
