@@ -41,6 +41,7 @@ oauth2-proxy:
     cookie-refresh: 24h
     cookie-expire: 168h
     cookie-secure: true
+    scope: "openid profile email groups"
     ## dex needs to support RFC2307bis
     # allowed-groups: wheel
 
