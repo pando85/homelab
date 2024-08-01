@@ -10,7 +10,7 @@ k3s_kubelet_extra_args:
   - eviction-hard=memory.available<300Mi,nodefs.available<10%
 
 zfs_arc_min_gb: 1
-zfs_arc_max_gb: 32
+zfs_arc_max_gb: 25
 
 l2arc_write_max_mb: 300
 l2arc_write_boost_mb: 500
