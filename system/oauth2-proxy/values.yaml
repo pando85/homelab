@@ -92,8 +92,6 @@ app-template:
               memory: 64M
 
   defaultPodOptions:
-    nodeSelector:
-      kubernetes.io/hostname: prusik
 
     affinity:
       podAffinity:
