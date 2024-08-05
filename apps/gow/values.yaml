@@ -51,7 +51,7 @@ app-template:
             privileged: true
           image:
             repository: ghcr.io/games-on-whales/xorg
-            tag: edge@sha256:cda287528b4f94e4e058dd0f7f9e8ee13767b7bf9c7e7cb8af014377b4ba129a
+            tag: edge@sha256:a6c992977efad036f66088d479e2ad01c92177796da7aaac8d9eef6f429960a9
           env:
             DISPLAY: *display
             REFRESH_RATE: "60"
