@@ -1,0 +1,24 @@
+controllers:
+  flaresolverr:
+    replicas: 1
+    containers:
+      flaresolverr:
+        image:
+          repository: ghcr.io/flaresolverr/flaresolverr
+          tag: v3.3.21
+        env:
+          TZ: Europe/Madrid
+        resources:
+          requests:
+            cpu: 10m
+            memory: 128Mi
+          limits:
+            memory: 500Mi
+
+service:
+  main:
+    controller: flaresolverr
+    type: ClusterIP
+    ports:
+      http:
+        port: 8191
