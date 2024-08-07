@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mintpsicologia-external
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+    external-dns.alpha.kubernetes.io/enabled: "true"
+    external-dns.alpha.kubernetes.io/target: grigri.cloud
+    nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
+    nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+spec:
+  ingressClassName: nginx-external
+  rules:
+    - host: mintpsicologia.grigri.cloud
+      http:
+        paths:
+          - backend:
+              service:
+                name: mintpsicologia-wordpress
+                port:
+                  name: http
+            path: /
+            pathType: ImplementationSpecific
+  tls:
+    - hosts:
+        - mintpsicologia.grigri.cloud
+      secretName: mintpsicologia-external-tls
