@@ -5,7 +5,7 @@ controllers:
       flaresolverr:
         image:
           repository: ghcr.io/flaresolverr/flaresolverr
-          tag: pr-1301
+          tag: v3.3.21
         env:
           TZ: Europe/Madrid
         resources:
