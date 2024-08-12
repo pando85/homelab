@@ -62,6 +62,15 @@
     },
     {
       matchDatasources: ["docker"],
+      matchUpdateTypes: ["minor"],
+      matchPackageNames: ["kanidm"],
+      matchCurrentVersion: "!/^0/",
+      automerge: false,
+      ignoreTests: false,
+      platformAutomerge: false,
+    },
+    {
+      matchDatasources: ["docker"],
       matchUpdateTypes: ["digest"],
       automerge: true,
       ignoreTests: true,
