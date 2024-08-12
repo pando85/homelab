@@ -14,8 +14,6 @@ serviceAccounts:
     create: false
 
 securityContext:
-  # TODO: remove privileged: true
-  privileged: true
   capabilities:
     ciliumAgent:
       # Use to set socket permission
