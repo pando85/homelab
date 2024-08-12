@@ -71,7 +71,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/games-on-whales/pulseaudio
-            tag: edge@sha256:afdef1ad3637bba509d02ec073f77cb1a646e67b4f84e0f4b197a2d8cff0b546
+            tag: edge@sha256:94e68db623d134b28f8f96ccd3f9c88945c590311c5d121949e992ce0cd45fbc
           resources:
             requests:
               cpu: 300m
