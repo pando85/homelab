@@ -5,5 +5,34 @@
     insertbefore: '^  /etc/ntp.conf r,'
     regexp: '^  /etc/ssl/openssl.cnf'
     line: '  /etc/ssl/openssl.cnf r,'
-  notify: restart apparmor
   ignore_errors: true
+  notify:
+    - restart apparmor
+
+- name: apparmor | Disable apparmor in armbian
+  lineinfile:
+    path: /usr/share/armbian/armbianEnv.txt
+    regex: "^extraargs="
+    line: 'extraargs=apparmor=0'
+  # armbian has no variables to be distingued
+  ignore_errors: true
+  notify:
+    - restart server
+
+- name: apparmor | Disable apparmor
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_CMDLINE_LINUX='
+    line: 'GRUB_CMDLINE_LINUX="apparmor=0"'
+  # armbian has no variables to be distingued
+  ignore_errors: true
+  notify:
+    - update grub
+    - restart server
+
+- name: apparmor | Disable service
+  service:
+    name: apparmor
+    enabled: false
+  notify:
+    - restart server
