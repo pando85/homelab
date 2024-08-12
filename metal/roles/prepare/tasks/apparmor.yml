@@ -11,7 +11,7 @@
 
 - name: apparmor | Disable apparmor in armbian
   lineinfile:
-    path: /usr/share/armbian/armbianEnv.txt
+    path: /boot/armbianEnv.txt
     regex: "^extraargs="
     line: 'extraargs=apparmor=0'
   # armbian has no variables to be distingued
