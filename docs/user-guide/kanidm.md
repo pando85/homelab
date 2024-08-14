@@ -85,3 +85,11 @@ this annotation to your ingress:
 ```yaml
 nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
 ```
+
+## Upgrade
+
+Check if upgrade is possible:
+
+```bash
+kanidmd domain upgrade-check
+```
