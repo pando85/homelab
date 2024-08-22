@@ -75,6 +75,11 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        # for API access (mobile app)
+        nginx.ingress.kubernetes.io/auth-snippet: |
+            if ( $request_uri ~ "/api" ) {
+                return 200;
+            }
       hosts:
         - host: &host freshrss.grigri.cloud
           paths:
