@@ -104,6 +104,6 @@ app-template:
       name: freshrss-overwrite-apache-config
       advancedMounts:
         freshrss:
-          main:
+          freshrss:
             - path: /var/www/FreshRSS/Docker/FreshRSS.Apache.conf
               subPath: FreshRSS.Apache.conf
