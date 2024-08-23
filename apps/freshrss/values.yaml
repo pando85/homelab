@@ -94,3 +94,13 @@ app-template:
       globalMounts:
         - path: /var/www/FreshRSS/data
       existingClaim: freshrss-config
+
+    apache-config:
+      enabled: true
+      type: configMap
+      name: freshrss-overwrite-apache-config
+      advancedMounts:
+        freshrss:
+          main:
+            - path: /var/www/FreshRSS/Docker/FreshRSS.Apache.conf
+              subPath: FreshRSS.Apache.conf
