@@ -105,5 +105,5 @@ app-template:
       advancedMounts:
         freshrss:
           freshrss:
-            - path: /var/www/FreshRSS/Docker/FreshRSS.Apache.conf
+            - path: /etc/apache2/sites-available/FreshRSS.Apache.conf
               subPath: FreshRSS.Apache.conf
