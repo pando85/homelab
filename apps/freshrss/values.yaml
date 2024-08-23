@@ -21,7 +21,6 @@ app-template:
             OIDC_X_FORWARDED_HEADERS: X-Forwarded-Host X-Forwarded-Port X-Forwarded-Proto
             OIDC_SESSION_INACTIVITY_TIMEOUT: "2592000"
             OIDC_SESSION_MAX_DURATION: "2592000"
-            OIDC_SESSION_TYPE: client-cookie:persistent:store_id_token
             OIDCSessionInactivityTimeout: "2592000"
           envFrom:
             - secretRef:
