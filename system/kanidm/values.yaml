@@ -11,7 +11,7 @@ app-template:
         kanidmd:
           image:
             repository: kanidm/server
-            tag: 1.3.2
+            tag: 1.3.3
 
           resources:
             requests:
