@@ -85,7 +85,7 @@ app-template:
             privileged: true
           image:
             repository: ghcr.io/games-on-whales/steam
-            tag: edge@sha256:68531234ff4c575ce121ef97292ecfdbff3dc0f77641d67ff5865678bdcd5616
+            tag: edge@sha256:a054c063493158354adeb8cf43277aeccab0faf6ed3b92e6d9422b8b5395f852
           env:
             DISPLAY: *display
             PULSE_SERVER: /tmp/pulse/pulse-socket
