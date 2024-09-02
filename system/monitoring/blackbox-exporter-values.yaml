@@ -18,10 +18,10 @@ ingress:
         - *host
       secretName: blackbox-exporter-tls-certificate
 
-securityContext:
-  capabilities:
-    add:
-      - NET_RAW
+podSecurityContext:
+  sysctls:
+    - name: net.ipv4.ping_group_range
+      value: "0 2147483647"
 
 config:
   modules:
