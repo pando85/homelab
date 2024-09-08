@@ -12,7 +12,6 @@
     - [Same mac problem](#same-mac-problem)
     - [No python interpreter found](#no-python-interpreter-found)
   - [Setup](#setup)
-  - [Stability problems (currently included 400MHz)](#stability-problems-currently-included-400mhz)
 - [Cluster](#cluster)
 
 ## Network
@@ -32,7 +31,6 @@
 
 ### Flash SDs
 
-- odroid-c4: [image](https://www.armbian.com/odroid-c4/)
 - odroid-hc4: [image](https://www.armbian.com/odroid-hc4/)
 - amd64: [usb-stick](https://releases.ubuntu.com/22.04/)
 - grigri: [usb-stick](https://releases.ubuntu.com/22.04/)
@@ -111,43 +109,6 @@ make first-boot
 ```
 
 **Note**: Armbian default user/password -> root/1234
-
-### Stability problems (currently included 400MHz)
-
-Change uboot to use ddr 333 MHz frequency.
-
-Compile uboot binaries or download from [here](https://nextcloud.grigri.cloud/f/451602)
-
-```bash
-git clone https://github.com/armbian/build.git
-cd build
-# edit `config/sources/families/include/rockchip64_common.inc` with this values for rock64:
-#      BOOT_USE_BLOBS=yes
-#      BOOT_SOC=rk3328
-#      DDR_BLOB='rk33/rk3328_ddr_333MHz_v1.16.bin'
-#      MINILOADER_BLOB='rk33/rk322xh_miniloader_v2.50.bin'
-#      BL31_BLOB='rk33/rk322xh_bl31_v1.44.elf'
-
-./compile.sh docker
-# switch to expert (to see rock64) and compile u-boot for rock64
-docker cp $CONTAINER_ID:/root/armbian/cache/sources/u-boot/v2020.10/uboot.img .
-docker cp $CONTAINER_ID:/root/armbian/cache/sources/u-boot/v2020.10/idbloader.bin .
-docker cp $CONTAINER_ID:/root/armbian/cache/sources/u-boot/v2020.10/trust.bin .
-
-```
-
-Then, in rock64 SD card:
-
-```bash
-dd if=idbloader.bin of=/dev/mmcblk0 seek=64 conv=notrunc
-dd if=uboot.img of=/dev/mmcblk0 seek=16384 conv=notrunc
-dd if=trust.bin of=/dev/mmcblk0 seek=24576 conv=notrunc
-sync
-```
-
-Ref:
-
-- [Stability problems](https://forum.armbian.com/topic/15082-rock64-focal-fossa-memory-frequency/?tab=comments#comment-108127)
 
 ## Cluster
 

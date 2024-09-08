@@ -57,7 +57,7 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
 | ---------------- | ----------------------------------- | ----- | ------------ | ----------------------------------- | ---- | ---------------- | ---------- |
 | grigri           | Supermicro Atom C2758 (A1SRi-2758F) | 1     | 250GB SSD    | 3\*4TB + 500GB (NVMe) RAIDZ + cache | 32GB | Ubuntu 22.04     | K3s server |
 | prusik\*         | Ryzen 9 7950X (ASUS PRIME X670-P)   | 1     | 512GB        | 4\*12TB + 2TB (NVMe) RAIDZ + cache  | 64GB | Ubuntu 24.04     | k3s agent  |
-| k8s-odroid-hc4-i | Odroid-hc4                          | 1     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
+| k8s-odroid-hc4-3 | Odroid-hc4                          | 1     | N/A          | N/A                                 | 4GB  | Armbian          | K3s agent  |
 | prusik-ipmi      | Raspberry Pi 4 Model B Rev 1.5      | 1     | 16GB         | N/A                                 | 4GB  | PiKVM            | ipmi       |
 | pfsense          | PC Engines APU2e4                   | 1     | 60GB         | N/A                                 | 4GB  | pfSense/FreeBSD  | Router     |
 | gs724t           | Netgear gs724t                      | 1     | N/A          | N/A                                 | N/A  | N/A              | Switch     |
