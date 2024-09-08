@@ -71,7 +71,7 @@ odroidhc4:~:#
 
 All nodes must be named with prefix `k8s-{hardware_tag}-{numerical_id}`. For example:
 
-- k8s-odroid-c4-1
+- k8s-odroid-hc4-1
 - k8s-amd64-1
 
 Also, consider their use case and performance profile. For example, for Ceph nodes:
