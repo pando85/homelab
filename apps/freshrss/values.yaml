@@ -22,7 +22,6 @@ app-template:
             OIDC_SESSION_INACTIVITY_TIMEOUT: "2592000"
             OIDC_SESSION_MAX_DURATION: "2592000"
             OIDC_SESSION_TYPE: server-cache
-            OIDCSessionInactivityTimeout: "2592000"
           envFrom:
             - secretRef:
                 name: freshrss-sso
