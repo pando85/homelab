@@ -13,6 +13,7 @@ postgres-operator:
     minimal_major_version: "14"
 
   configKubernetes:
+    enable_owner_references: false
     # TODO: remove for postgres HA
     enable_pod_antiaffinity: true
     pdb_master_label_selector: false
