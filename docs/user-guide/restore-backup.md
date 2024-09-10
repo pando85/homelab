@@ -35,8 +35,8 @@ ALTER USER APP_USER_NAME WITH PASSWORD 'VALUE_FROM_SECRET';
 
 - Remove nodeSelector
 - Create backup
-- Stop service (deployment and PVCs). Recommended manually: scale argocd-repo-server to 0 and proceed manually.
 - Change old PV `persistentVolumeReclaimPolicy` to `Retain`
+- Stop service (deployment and destroy PVCs). Recommended manually: scale argocd-repo-server to 0 and proceed manually.
 - Restore from backup
 - Enable service. Scale up argocd-repo-server.
 - Check everything is OK
@@ -108,3 +108,9 @@ velero restore create --from-backup ${BACKUP_NAME} --include-namespaces ${NAMESP
 ```
 
 **Note**: ArgoCD labels will also be restored. If restoring to a different namespace, consider disabling ArgoCD or modifying the labels accordingly.
+
+Example filtering by resource and labels:
+
+```bash
+velero restore create --from-backup retain-quaterly-20240910023040  --include-namespaces mintpsicologia --restore-volumes=true --namespace-mappings mintpsicologia:mintpsicologia --include-resources persistentvolumes,persistentvolumeclaims --selector app.kubernetes.io/name=mariadb
+```
