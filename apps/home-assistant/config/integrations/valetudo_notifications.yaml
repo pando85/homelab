@@ -48,3 +48,11 @@ automation:
               caption: |
                 Tanque
                 {{ message }}
+
+binary_sensor:
+  - platform: template
+    sensors:
+      valetudo_working_state:
+        friendly_name: "Valetudo Working state"
+        device_class: running
+        value_template: "{{ states('sensor.valetudo_detailedinternalrhinoceros_status_flag') != 'none' }}"
