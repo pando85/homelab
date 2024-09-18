@@ -34,11 +34,6 @@ loki:
 
   auth_enabled: false
 
-  compactor:
-    working_directory: /var/loki/compactor/retention
-    retention_enabled: true
-    delete_request_store: filesystem
-
 rbac:
   pspEnabled: false
 
