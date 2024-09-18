@@ -8,8 +8,8 @@ loki:
     fsGroupChangePolicy: "OnRootMismatch"
 
   limits_config:
+    max_query_lookback: 90d
     retention_period: 90d
-
   commonConfig:
     replication_factor: 1
   storage:
@@ -17,13 +17,6 @@ loki:
 
   schemaConfig:
     configs:
-      - from: "2022-01-11"
-        index:
-          period: 24h
-          prefix: loki_index_
-        object_store: filesystem
-        schema: v12
-        store: boltdb-shipper
       - from: "2024-04-15"
         index:
           period: 24h
@@ -33,6 +26,11 @@ loki:
         store: tsdb
 
   auth_enabled: false
+
+  compactor:
+    working_directory: /var/loki/retention
+    retention_enabled: true
+    delete_request_store: filesystem
 
 rbac:
   pspEnabled: false
