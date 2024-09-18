@@ -7,6 +7,9 @@ loki:
     runAsUser: 10001
     fsGroupChangePolicy: "OnRootMismatch"
 
+  limits_config:
+    retention_period: 90d
+
   commonConfig:
     replication_factor: 1
   storage:
