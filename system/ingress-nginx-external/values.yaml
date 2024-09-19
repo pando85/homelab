@@ -75,10 +75,7 @@ ingress-nginx:
     service:
       enabled: true
       annotations:
-        # Cilium v1.16+
         lbipam.cilium.io/ips: "192.168.193.4"
-        # Cilium v1.15
-        io.cilium/lb-ipam-ips: "192.168.193.4"
       loadBalancerClass: "io.cilium/bgp-control-plane"
       externalTrafficPolicy: Local
       enableHttp: true
