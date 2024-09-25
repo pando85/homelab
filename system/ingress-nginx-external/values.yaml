@@ -15,6 +15,11 @@ ingress-nginx:
         proxy_cache_use_stale updating;
       use-forwarded-headers: true
       allow-snippet-annotations: true
+      enable-brotli: "true"
+      brotli-level: "6"
+      # Added text/html and application/vnd.api+json + default ones:
+      # https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/#gzip-types
+      brotli-types: text/html and application/vnd.api+json application/xml+rss application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/plain text/x-component
 
     ingressClassResource:
       name: nginx-external
