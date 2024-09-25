@@ -166,7 +166,6 @@ kubeControllerManager:
   enabled: false
 
 prometheusOperator:
-  # https://github.com/helm/charts/issues/19147
   admissionWebhooks:
     enabled: false
   tls:
