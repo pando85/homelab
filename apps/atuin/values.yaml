@@ -17,6 +17,9 @@ app-template:
             ATUIN_METRICS__HOST: 0.0.0.0
             ATUIN_METRICS__PORT: &metricsPort 9090
             ATUIN_TLS__ENABLE: "false"
+          args:
+            - server
+            - start
           probes:
             liveness: &probes
               enabled: true
