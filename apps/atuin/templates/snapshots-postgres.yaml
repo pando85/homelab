@@ -1,0 +1,11 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: atuin-postgres-backups
+spec:
+  retention:
+    maxCount: 1
+  schedule: "0 1 * * *" # UTC
+  claimSelector:
+    matchLabels:
+      cluster-name: atuin-postgres
