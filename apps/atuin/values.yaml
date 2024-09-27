@@ -10,17 +10,6 @@ app-template:
             repository: ghcr.io/atuinsh/atuin
             tag: 18.3.0
           env:
-            AA_POSTGRES_USER:
-              valueFrom:
-                secretKeyRef:
-                  name: atuin.atuin-postgres.credentials.postgresql.acid.zalan.do
-                  key: username
-            AA_POSTGRES_PASSWORD:
-              valueFrom:
-                secretKeyRef:
-                  name: atuin.atuin-postgres.credentials.postgresql.acid.zalan.do
-                  key: password
-            ATUIN_DB_URI: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@atuin-postgres/atuin"
             ATUIN_HOST: 0.0.0.0
             ATUIN_PORT: &port 8080
             ATUIN_OPEN_REGISTRATION: "false"
@@ -28,6 +17,9 @@ app-template:
             ATUIN_METRICS__HOST: 0.0.0.0
             ATUIN_METRICS__PORT: &metricsPort 9090
             ATUIN_TLS__ENABLE: "false"
+          envFrom:
+            - secretRef:
+                name: atuin-database
           args:
             - server
             - start
