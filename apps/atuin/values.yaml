@@ -71,6 +71,7 @@ app-template:
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/proxy-body-size: 1G
       hosts:
         - host: &host atuin.internal.grigri.cloud
           paths:
@@ -90,6 +91,7 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/proxy-body-size: 1G
       hosts:
         - host: &host atuin.grigri.cloud
           paths:
