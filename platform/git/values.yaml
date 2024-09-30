@@ -1,6 +1,5 @@
-gitea:
+forgejo:
   image:
-    repository: gitea/gitea
     rootless: true
   labels:
     backup/retain: quaterly
