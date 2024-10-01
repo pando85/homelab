@@ -207,13 +207,6 @@ prometheus:
         cpu: 4
         memory: 2.5Gi
 
-    # Change this to false doesn't require label `release: monitoring` for following resources:
-    ruleSelectorNilUsesHelmValues: true
-    serviceMonitorSelectorNilUsesHelmValues: true
-    podMonitorSelectorNilUsesHelmValues: true
-    probeSelectorNilUsesHelmValues: true
-    scrapeConfigSelectorNilUsesHelmValues: true
-
     storageSpec:
       volumeClaimTemplate:
         spec:
