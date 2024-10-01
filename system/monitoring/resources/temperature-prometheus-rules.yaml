@@ -13,7 +13,7 @@ spec:
             description: |
               Chip {{ $labels.chip }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: node_hwmon_temp_celsius{chip!="pci0000:00_0000:00:18_3"} > 66 or node_hwmon_temp_celsius{chip="pci0000:00_0000:00:18_3"} > 85
+          expr: node_hwmon_temp_celsius{chip!="pci0000:00_0000:00:18_3", chip!~"nvme.*"} > 66 or node_hwmon_temp_celsius{chip="pci0000:00_0000:00:18_3"} > 85
           for: 5m
           labels:
             severity: warning
@@ -22,7 +22,7 @@ spec:
             description: |
               Chip {{ $labels.chip }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: node_hwmon_temp_celsius{chip!="pci0000:00_0000:00:18_3"} > 70 or node_hwmon_temp_celsius{chip="pci0000:00_0000:00:18_3"} > 90
+          expr: node_hwmon_temp_celsius{chip!="pci0000:00_0000:00:18_3", chip!~"nvme.*"} > 70 or node_hwmon_temp_celsius{chip="pci0000:00_0000:00:18_3"} > 90
           for: 5m
           labels:
             severity: critical
