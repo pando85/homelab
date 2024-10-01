@@ -7,7 +7,7 @@ metadata:
 spec:
   vault:
     path: pki/iot/sign/internal-certificates-grigri-iot
-    server: http://vault.vault:8200
+    server: https://vault.vault:8200
     auth:
       kubernetes:
         role: allow-iot-pki
