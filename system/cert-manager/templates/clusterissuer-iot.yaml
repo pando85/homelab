@@ -7,7 +7,9 @@ metadata:
 spec:
   vault:
     path: pki/iot/sign/internal-certificates-grigri-iot
-    server: https://vault.vault:8200
+    # Vault internal service has a custom CA that has to be added here replicating secret.
+    # This adds an additional jump through the ingress but it is cleanest:
+    server: https://vault.internal.grigri.cloud
     auth:
       kubernetes:
         role: allow-iot-pki
