@@ -38,3 +38,5 @@ spec:
       log_lock_waits: "off"
       log_min_duration_statement: "-1"
       log_statement: none
+      # ZFS settings:
+      full_page_writes: "off"
