@@ -12,7 +12,9 @@ app-template:
           image:
             repository: kanidm/server
             tag: 1.3.3
-
+          command:
+            - /usr/bin/sleep
+            - inf
           resources:
             requests:
               cpu: 10m
