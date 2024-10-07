@@ -47,6 +47,7 @@ app-template:
           #
           trust_x_forward_for = true
           db_path = "/data/kanidm.db"
+          db_fs_type = "zfs"
           tls_chain = "/data/tls/tls.crt"
           tls_key = "/data/tls/tls.key"
           log_level = "info"
