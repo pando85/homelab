@@ -4,6 +4,7 @@ app-template:
       labels:
         backup/retain: quaterly
       replicas: 1
+      strategy: Recreate
       containers:
         qbittorrent:
           image:
