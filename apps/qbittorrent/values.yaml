@@ -12,14 +12,15 @@ app-template:
 
           env:
             UMASK: "022"
-            QBT_TORRENTING_PORT: &port 8080
+            QBT_TORRENTING_PORT: &torrent_port 50413
+            QBT_WEBUI_PORT: &port 8080
 
           resources:
             requests:
               cpu: 330m
-              memory: 1.4Gi
+              memory: 2Gi
             limits:
-              memory: 2.4Gi
+              memory: 3.5Gi
 
           probes:
             liveness: &probe
@@ -98,9 +99,9 @@ app-template:
       ports:
         bittorrent:
           enabled: true
-          port: 50413
+          port: *torrent_port
           protocol: TCP
-          targetPort: 50413
+          targetPort: *torrent_port
 
   serviceMonitor:
     qbittorrent:
