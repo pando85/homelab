@@ -3,5 +3,5 @@ name: vault
 version: 0.0.0
 dependencies:
   - name: vault-operator
-    version: 1.19.0
-    repository: https://kubernetes-charts.banzaicloud.com
+    version: 1.20.0
+    repository: oci://ghcr.io/bank-vaults/helm-charts
