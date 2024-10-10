@@ -91,10 +91,7 @@ app-template:
       type: LoadBalancer
       controller: mosquitto
       annotations:
-        # Cilium v1.16+
         lbipam.cilium.io/ips: "192.168.193.9"
-        # Cilium v1.15
-        io.cilium/lb-ipam-ips: "192.168.193.9"
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/hostname: mosquitto.internal.grigri.cloud
       externalTrafficPolicy: Local

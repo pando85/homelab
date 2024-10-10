@@ -51,10 +51,7 @@ app-template:
       type: LoadBalancer
       controller: unifi
       annotations:
-        # Cilium v1.16+
         lbipam.cilium.io/ips: "192.168.193.2"
-        # Cilium v1.15
-        io.cilium/lb-ipam-ips: "192.168.193.2"
       externalTrafficPolicy: Local
       ports:
         http:
