@@ -55,6 +55,17 @@ app-template:
               cpu: 10m
             limits:
               memory: 256Mi
+      pod:
+        affinity:
+          podAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: cluster-name
+                      operator: In
+                      values:
+                        - atuin-postgres
+                topologyKey: kubernetes.io/hostname
   service:
     atuin:
       controller: atuin
