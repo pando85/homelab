@@ -1,4 +1,14 @@
 argo-cd:
+  global:
+    affinity:
+      podAntiAffinity: soft
+      nodeAffinity:
+        type: hard
+        matchExpressions:
+          - key: beta.kubernetes.io/arch
+            operator: In
+            values:
+              - amd64
   configs:
     cm:
       create: true
