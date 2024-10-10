@@ -171,11 +171,9 @@ ingress-nginx:
           successThreshold: 1
           timeoutSeconds: 1
         resources:
-          limits:
-            memory: 1Gi
           requests:
-            cpu: 512m
-            memory: 512Mi
+            cpu: 10m
+            memory: 13Mi
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
