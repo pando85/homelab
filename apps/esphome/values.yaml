@@ -85,8 +85,6 @@ app-template:
           sources:
             - configMap:
                 name: esphome-config
-            - secret:
-                name: esphome-secrets
     config-packages:
       enabled: true
       type: custom
@@ -98,6 +96,8 @@ app-template:
           sources:
             - configMap:
                 name: esphome-config-packages
+            - secret:
+                name: esphome-secrets
     esphome-cache:
       type: emptyDir
       globalMounts:
