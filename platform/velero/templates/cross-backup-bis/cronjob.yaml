@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: rclone-sync
+  name: rclone-sync-bis
 spec:
   schedule: "30 2 * * 4"
   jobTemplate:
@@ -43,4 +43,4 @@ spec:
           volumes:
           - name: rclone-config-volume
             secret:
-              secretName: rclone-config
+              secretName: rclone-config-bis
