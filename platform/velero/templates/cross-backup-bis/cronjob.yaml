@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: rclone-sync
+spec:
+  schedule: "30 2 * * 4"
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          annotations:
+            kubernetes.io/egress-bandwidth: "200M"
+        spec:
+          containers:
+          - name: rclone
+            image: rclone/rclone:1.66.0
+            command:
+              - /bin/sh
+              - -c
+              - |
+                rclone sync s3.internal.grigri.cloud:velero/backups secret-cross-backup:backups \
+                  --config /config/rclone.conf \
+                  --fast-list \
+                  --checkers 16 \
+                  --transfers 12
+            resources:
+              requests:
+                memory: 1Gi
+                cpu: "1.5"
+              limits:
+                memory: 8Gi
+                cpu: "4"
+            volumeMounts:
+            - name: rclone-config-volume
+              mountPath: /config/rclone.conf
+              subPath: rclone.conf
+          restartPolicy: OnFailure
+          nodeSelector:
+            kubernetes.io/hostname: grigri
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+          volumes:
+          - name: rclone-config-volume
+            secret:
+              secretName: rclone-config
