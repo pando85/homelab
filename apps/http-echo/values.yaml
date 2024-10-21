@@ -6,7 +6,7 @@ app-template:
         http-echo:
           image:
             repository: mendhak/http-https-echo
-            tag: 34
+            tag: 35
 
           securityContext:
             runAsUser: 1000
