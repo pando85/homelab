@@ -185,7 +185,7 @@ nextcloud:
         );
 
     hooks:
-      before-starting: |
+      post-upgrade: |
         #!/bin/bash
         set -e
         /var/www/html/occ maintenance:repair --include-expensive

@@ -58,7 +58,6 @@
       ignoreTests: true,
       automergeType: "pr",
       platformAutomerge: true,
-      excludePackageNames: ["nextcloud"],
     },
     {
       matchDatasources: ["docker"],
