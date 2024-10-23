@@ -186,8 +186,9 @@ nextcloud:
 
     extraEnv:
       # workaround for fix auto-update with postgres with SSL enabled
-      - name: HOME
-        value: ""
+      # https://github.com/nextcloud/docker/issues/2053#issuecomment-1676392064
+      - name: PGSSLCERT
+        value: "/tmp/postgresql.crt"
       - name: REDIS_HOST
         value: redis
       - name: REDIS_HOST_PORT
