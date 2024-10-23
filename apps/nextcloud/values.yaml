@@ -1,7 +1,7 @@
 nextcloud:
   image:
     repository: nextcloud
-    tag: 29.0.8
+    tag: 30.0.1
 
   deploymentLabels:
     backup/retain: quaterly
@@ -123,10 +123,9 @@ nextcloud:
       smtpUsernameKey: smtp_username
       smtpPasswordKey: smtp_password
       smtpHostKey: smtp_host
-    # auto update: avoid if HA enabled
-    # 0 - enabled
-    # 1 - disabled
-    update: 0
+    # 1 for enabling updates even when using a custom command
+    # value of NEXTCLOUD_UPDATE envar
+    update: 1
     phpConfigs:
       uploadLimit.ini: |
         upload_max_filesize = 10G
