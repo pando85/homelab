@@ -184,6 +184,13 @@ nextcloud:
           'default_phone_region' => 'ES',
         );
 
+    hooks:
+      post-upgrade: |
+        #!/bin/bash
+        set -e
+        /var/www/html/occ maintenance:repair --include-expensive
+        /var/www/html/occ db:add-missing-indices
+
     extraEnv:
       # workaround for fix auto-update with postgres with SSL enabled
       # https://github.com/nextcloud/docker/issues/2053#issuecomment-1676392064
