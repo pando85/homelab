@@ -89,11 +89,6 @@ nextcloud:
       requests:
         cpu: 10m
         memory: 40Mi
-    securityContext:
-      runAsUser: 33
-      runAsGroup: 33
-      runAsNonRoot: true
-      readOnlyRootFilesystem: true
 
   persistence:
     enabled: true
