@@ -129,7 +129,9 @@ nextcloud:
       smtpPasswordKey: smtp_password
       smtpHostKey: smtp_host
     # auto update: avoid if HA enabled
-    update: 1
+    # 0 - enabled
+    # 1 - disabled
+    update: 0
     phpConfigs:
       uploadLimit.ini: |
         upload_max_filesize = 10G
