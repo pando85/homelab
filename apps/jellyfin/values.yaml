@@ -11,7 +11,7 @@ app-template:
         jellyfin:
           image:
             repository: jellyfin/jellyfin
-            tag: 10.9.11
+            tag: 10.10.0
 
           probes:
             liveness: &probes
