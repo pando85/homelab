@@ -173,7 +173,6 @@ nextcloud:
         $CONFIG = array (
           'overwriteprotocol' => 'https',
           'allow_local_remote_servers' => true,
-
           'user_oidc' => [
               'use_pkce' => true,
           ],
