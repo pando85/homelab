@@ -172,6 +172,13 @@ nextcloud:
         <?php
         $CONFIG = array (
           'overwriteprotocol' => 'https',
+          'allow_local_remote_servers' => true,
+
+          'user_oidc' => [
+              'use_pkce' => true,
+          ],
+          'allow_user_to_change_display_name' => false,
+          'lost_password_link' => 'disabled',
         );
       cron.config.php: |-
         <?php
