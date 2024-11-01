@@ -10,6 +10,7 @@
 - [Troubleshooting](#troubleshooting)
   - [Not automatically upgraded](#not-automatically-upgraded)
   - [Automatically upgrades fails](#automatically-upgrades-fails)
+  - [Enable other auth methods](#enable-other-auth-methods)
 
 ## Migrate auth to OIDC
 
@@ -137,4 +138,12 @@ Always fails in code integrity check without any errors, just hangs forever in t
 chsh -s /bin/bash www-data
 su - www-data
 /var/www/html/occ maintenance:mode
+```
+
+### Enable other auth methods
+
+```bash
+chsh -s /bin/bash www-data
+su - www-data
+/var/www/html/occ config:app:set --value=0 user_oidc allow_multiple_user_backends
 ```
