@@ -468,7 +468,7 @@ mqtt:
 
     #TOP15 - Heat power produced
     - name: Aquarea Heat Power Produced
-      state_topic: "panasonic_heat_pump/main/Heat_Power_Production"
+      state_topic: "panasonic_heat_pump/main/Heat_Energy_Production"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
@@ -476,7 +476,7 @@ mqtt:
 
     #TOP16 - Heat power consumed
     - name: Aquarea Heat Power Consumed
-      state_topic: "panasonic_heat_pump/main/Heat_Power_Consumption"
+      state_topic: "panasonic_heat_pump/main/Heat_Energy_Consumption"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
