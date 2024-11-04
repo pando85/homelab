@@ -45,16 +45,16 @@ spec:
       # ZFS settings:
       full_page_writes: "off"
 
-  preparedDatabases:
-    immich:
-      extensions:
-      # it doesn't work. Manually applied:
-      # ```sql
-      # CREATE EXTENSION cube;
-      # CREATE EXTENSION earthdistance;
-      # ALTER SYSTEM SET shared_preload_libraries = "vectors.so"
-      # CREATE EXTENSION vectors;
-      # ```
-        # cube: public
-        # earthdistance: public
-        # vectors: public
+  # preparedDatabases:
+  #   immich:
+  #     extensions:
+  #     # it doesn't work. Manually applied:
+  #     # ```sql
+  #     # CREATE EXTENSION cube;
+  #     # CREATE EXTENSION earthdistance;
+  #     # ALTER SYSTEM SET shared_preload_libraries = "vectors.so"
+  #     # CREATE EXTENSION vectors;
+  #     # ```
+  #       cube: public
+  #       earthdistance: public
+  #       vectors: public
