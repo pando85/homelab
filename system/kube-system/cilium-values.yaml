@@ -89,10 +89,6 @@ bgpControlPlane:
   secretsNamespace:
     name: kube-system
 
-containerRuntime:
-  integration: containerd
-  socketPath: /var/run/k3s/containerd/containerd.sock
-
 enableRuntimeDeviceDetection: true
 
 loadBalancer:
