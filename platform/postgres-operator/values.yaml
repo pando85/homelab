@@ -21,7 +21,6 @@ postgres-operator:
     inherited_labels:
       - backup/retain
 
-  configLoadBalancer:
   # configDebug:
   #   # toggles verbose debug logs from the operator
   #   debug_logging: false
