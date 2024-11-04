@@ -23,7 +23,7 @@ variables:
           name: immich.immich-postgres.credentials.postgresql.acid.zalan.do
           key: password
     DB_URL: postgresql://$(A_REPLACE_DB_USERNAME):$(A_REPLACE_DB_PASSWORD)@$(A_REPLACE_DB_HOSTNAME):5432/$(A_REPLACE_DB_DATABASE_NAME)?sslmode=no-verify
-    IMMICH_METRICS: true
+    IMMICH_TELEMETRY_INCLUDE: all
 
 app-template:
   controllers:
