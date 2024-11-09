@@ -43,7 +43,6 @@ app-template:
       runAsGroup: 65534
       fsGroup: 65534
       fsGroupChangePolicy: 'OnRootMismatch'
-      readOnlyRootFilesystem: true
 
     topologySpreadConstraints:
       - maxSkew: 1
@@ -101,6 +100,6 @@ app-template:
             - *host
           secretName: kroki-external-tls-certificate
 
-    persistence:
-      tmp:
-        type: emptyDir
+  persistence:
+    tmp:
+      type: emptyDir
