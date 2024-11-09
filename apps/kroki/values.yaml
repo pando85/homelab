@@ -67,6 +67,7 @@ app-template:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
+        nginx.ingress.kubernetes.io/proxy-buffering: "on"
         nginx.ingress.kubernetes.io/configuration-snippet: |
           proxy_cache static-cache;
           expires 7d;
@@ -92,11 +93,11 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-buffering: "on"
-        nginx.ingress.kubernetes.io/server-snippet: |
+        nginx.ingress.kubernetes.io/configuration-snippet: |
           proxy_cache static-cache;
+          expires 7d;
           proxy_cache_valid 200 7d;
           add_header X-Cache-Status $upstream_cache_status;
-          proxy_hide_header Expires;
       hosts:
         - host: &host kroki.grigri.cloud
           paths:

@@ -14,8 +14,6 @@ ingress-nginx:
         proxy_cache_key $scheme$proxy_host$request_uri;
         proxy_cache_lock on;
         proxy_cache_use_stale updating;
-        # Expires was supersedes by Cache-Control and some servers configure it wrong as kroki
-        proxy_ignore_headers Expires;
       use-forwarded-headers: true
       allow-snippet-annotations: true
       enable-brotli: "true"

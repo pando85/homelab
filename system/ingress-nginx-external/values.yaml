@@ -11,8 +11,9 @@ ingress-nginx:
       hsts: "true"
       http-snippet: |
         proxy_cache_path /dev/shm levels=1:2 keys_zone=static-cache:2m max_size=300m inactive=7d use_temp_path=off;
-        # Expires was supersedes by Cache-Control and some servers configure it wrong as kroki
-        proxy_ignore_headers Expires;
+        proxy_cache_key $scheme$proxy_host$request_uri;
+        proxy_cache_lock on;
+        proxy_cache_use_stale updating;
       use-forwarded-headers: true
       allow-snippet-annotations: true
       enable-brotli: "true"
