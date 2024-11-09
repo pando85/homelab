@@ -10,16 +10,6 @@ app-template:
           env:
             KROKI_SAFE_MODE: SECURE
             KROKI_MAX_URI_LENGTH: 8192
-          securityContext:
-            runAsUser: 1000
-
-          resources:
-            requests:
-              cpu: 10m
-              memory: 14Mi
-            limits:
-              cpu: 200m
-              memory: 50Mi
           probes:
             liveness:
               enabled: true
@@ -30,6 +20,19 @@ app-template:
               spec:
                 failureThreshold: 30
                 periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - "ALL"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 14Mi
+            limits:
+              cpu: 200m
+              memory: 50Mi
 
   defaultPodOptions:
     automountServiceAccountToken: false
@@ -40,11 +43,7 @@ app-template:
       runAsGroup: 65534
       fsGroup: 65534
       fsGroupChangePolicy: 'OnRootMismatch'
-      allowPrivilegeEscalation: false
       readOnlyRootFilesystem: true
-      capabilities:
-        drop:
-          - ALL
 
     topologySpreadConstraints:
       - maxSkew: 1
