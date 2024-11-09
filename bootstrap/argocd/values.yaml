@@ -74,7 +74,7 @@ argo-cd:
       controller.status.processors: 5
       controller.operation.processors: 5
       controller.repo.server.timeout.seconds: 300
-      controller.diff.server.side: "true"
+      controller.diff.server.side: "false"
 
       server.insecure: true
 
