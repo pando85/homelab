@@ -29,10 +29,10 @@ app-template:
           resources:
             requests:
               cpu: 10m
-              memory: 14Mi
+              memory: 128Mi
             limits:
               cpu: 200m
-              memory: 50Mi
+              memory: 128Mi
 
   defaultPodOptions:
     automountServiceAccountToken: false
