@@ -71,7 +71,9 @@ app-template:
           proxy_cache static-cache;
           proxy_cache_valid 200 7d;
           add_header X-Cache-Status $upstream_cache_status;
-          proxy_hide_header Expires Date Last-Modified;
+          proxy_hide_header Expires;
+          proxy_hide_header Date;
+          proxy_hide_header Last-Modified;
       hosts:
         - host: &host kroki.internal.grigri.cloud
           paths:
@@ -95,7 +97,8 @@ app-template:
           proxy_cache static-cache;
           proxy_cache_valid 200 7d;
           add_header X-Cache-Status $upstream_cache_status;
-          proxy_hide_header Expires Last-Modified;
+          proxy_hide_header Expires;
+          proxy_hide_header Last-Modified;
 
       hosts:
         - host: &host kroki.grigri.cloud
