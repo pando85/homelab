@@ -31,8 +31,8 @@ app-template:
               cpu: 10m
               memory: 128Mi
             limits:
-              cpu: 1
-              memory: 3Gi
+              cpu: 250m
+              memory: 512Mi
 
   defaultPodOptions:
     automountServiceAccountToken: false
@@ -67,6 +67,10 @@ app-template:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         external-dns.alpha.kubernetes.io/enabled: "true"
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          proxy_cache static-cache;
+          proxy_cache_valid any 7d;
+          add_header X-Cache-Status $upstream_cache_status;
       hosts:
         - host: &host kroki.internal.grigri.cloud
           paths:
@@ -86,6 +90,10 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          proxy_cache static-cache;
+          proxy_cache_valid any 7d;
+          add_header X-Cache-Status $upstream_cache_status;
 
       hosts:
         - host: &host kroki.grigri.cloud
