@@ -69,11 +69,9 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         nginx.ingress.kubernetes.io/configuration-snippet: |
           proxy_cache static-cache;
+          expires 7d;
           proxy_cache_valid 200 7d;
           add_header X-Cache-Status $upstream_cache_status;
-          proxy_hide_header Expires;
-          proxy_hide_header Date;
-          proxy_hide_header Last-Modified;
       hosts:
         - host: &host kroki.internal.grigri.cloud
           paths:
@@ -98,8 +96,6 @@ app-template:
           proxy_cache_valid 200 7d;
           add_header X-Cache-Status $upstream_cache_status;
           proxy_hide_header Expires;
-          proxy_hide_header Last-Modified;
-
       hosts:
         - host: &host kroki.grigri.cloud
           paths:
