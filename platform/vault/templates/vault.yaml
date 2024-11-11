@@ -7,7 +7,7 @@ metadata:
 spec:
   size: 1
   # renovate: datasource=docker
-  image: hashicorp/vault:1.17.6
+  image: hashicorp/vault:1.18.0
   # specify a custom bank-vaults image with bankVaultsImage:
   # bankVaultsImage: ghcr.io/banzaicloud/bank-vaults:latest
 
