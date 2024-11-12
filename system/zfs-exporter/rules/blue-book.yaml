@@ -109,8 +109,8 @@
 
 - record: zfs_dataset_snapshot_bytes
   # This expression is not real for datasets that have children, so we're going to create this metric only for those datasets that don't have children
-  # I'm also going to assume that the datasets that have children don't hold data
-  expr: zfs_dataset_used_bytes - zfs_dataset_used_by_dataset_bytes and zfs_dataset_used_by_dataset_bytes > 500e3
+  # I'm also going to assume that the datasets that have children don't hold data or less than ~500MB
+  expr: zfs_dataset_used_bytes - zfs_dataset_used_by_dataset_bytes and zfs_dataset_used_by_dataset_bytes > 200e6
 - alert: ZfsSnapshotTooMuchSize
   expr: zfs_dataset_snapshot_bytes / zfs_dataset_used_by_dataset_bytes > 2 and zfs_dataset_snapshot_bytes > 10e9
   for: 5m
