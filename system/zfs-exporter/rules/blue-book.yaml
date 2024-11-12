@@ -85,7 +85,7 @@
   # I'm also going to assume that the datasets that have children don't hold data
   expr: zfs_dataset_used_bytes - zfs_dataset_used_by_dataset_bytes and zfs_dataset_used_by_dataset_bytes > 200e3
 - alert: ZfsSnapshotTooMuchSize
-  expr: zfs_dataset_snapshot_bytes / zfs_dataset_used_by_dataset_bytes > 2 and zfs_dataset_snapshot_bytes > 10e9
+  expr: zfs_dataset_snapshot_bytes / zfs_dataset_used_by_dataset_bytes > 2 and zfs_dataset_snapshot_bytes > 10
   for: 5m
   labels:
     severity: warning
@@ -94,5 +94,5 @@
     description: |
       The snapshots on the dataset {{ $labels.name }} at {{ $labels.instance }} are consuming more than twice the space of the dataset itself.
 
-      Current snapshot size: {{ printf "%.2f" ($value * 100) }}% of dataset size
+      Current snapshots size: {{ printf "%.2f" ($value * 100) }}% of dataset size
       Threshold: 10 GB
