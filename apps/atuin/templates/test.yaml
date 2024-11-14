@@ -1,0 +1,24 @@
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: velero-bucket-credentials
+  namespace: bazarr
+spec:
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault
+  target:
+    name: velero-bucket-credentials
+    template:
+      engineVersion: v2
+      data:
+        cloud: |-
+          [default]
+          aws_access_key_id=velero
+          aws_secret_access_key={{`{{ .password }}`}}
+  data:
+    - secretKey: password
+      remoteRef:
+        key: /minio/users
+        property: veleroPassword
