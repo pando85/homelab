@@ -93,3 +93,9 @@ Check if upgrade is possible:
 ```bash
 kanidmd domain upgrade-check
 ```
+
+## Disable anonymous access
+
+```bash
+kanidm service-account validity expire-at anonymous '2024-11-14T00:00:00+01:00'
+```
