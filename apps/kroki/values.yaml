@@ -22,6 +22,8 @@ app-template:
                 periodSeconds: 5
           securityContext:
             allowPrivilegeEscalation: false
+            # vega needs to write
+            # https://github.com/yuzutech/kroki/issues/1806
             readOnlyRootFilesystem: false
             capabilities:
               drop:
