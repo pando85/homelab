@@ -6,7 +6,7 @@ app-template:
         kroki:
           image:
             repository: yuzutech/kroki
-            tag: 0.25.0
+            tag: 0.26.0
           env:
             KROKI_SAFE_MODE: SECURE
             KROKI_MAX_URI_LENGTH: 8192
@@ -39,9 +39,9 @@ app-template:
     enableServiceLinks: false
     securityContext:
       runAsNonRoot: true
-      runAsUser: 65534
-      runAsGroup: 65534
-      fsGroup: 65534
+      runAsUser: 1001
+      runAsGroup: 1001
+      fsGroup: 1001
       fsGroupChangePolicy: 'OnRootMismatch'
 
     topologySpreadConstraints:
