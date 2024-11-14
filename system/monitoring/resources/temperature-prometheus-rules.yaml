@@ -8,6 +8,11 @@ spec:
   groups:
     - name: cpu-temperature.rules
       rules:
+        # chip: pci0000:00_0000:00:18_3
+        # sensors:
+        #   - temp1: Tctl
+        #   - temp3: Tccd1
+        #   - temp4: Tccd2
         - alert: HighTemperature
           annotations:
             description: |
