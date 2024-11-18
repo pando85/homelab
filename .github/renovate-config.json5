@@ -6,7 +6,6 @@
     ':preserveSemverRanges',
     ':disableRateLimiting',
   ],
-  username: 'renovate85-bot[bot]',
   gitAuthor: 'Renovate <4646670+renovate85-bot[bot]@users.noreply.github.com>',
   forkProcessing: 'enabled',
   rebaseWhen: 'conflicted',
@@ -15,6 +14,7 @@
   schedule: [
     'after 4am and before 10am on Monday',
   ],
+  username: 'renovate85-bot[bot]',
   repositories: ["pando85/homelab"],
   enabledManagers: [
     'argocd',

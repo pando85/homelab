@@ -52,5 +52,5 @@ jobs:
         # yamllint disable-line rule:comments
         uses: renovatebot/github-action@e02bf7b1c996027e55e910400653576a8293246c # v41.0.3
         with:
-          configurationFile: .github/renovate.json5
+          configurationFile: .github/renovate-config.json5
           token: "${{ steps.generate-token.outputs.token }}"
