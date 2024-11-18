@@ -26,6 +26,8 @@
   ],
   'pre-commit': {
     enabled: true,
+    commitMessagePrefix: 'pre-commit: ',
+    branchPrefix: 'pre-commit-',
   },
   configMigration: true,
   customManagers: [
