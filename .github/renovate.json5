@@ -15,6 +15,7 @@
   schedule: [
     'after 4am and before 10am on Monday',
   ],
+  repositories: ["pando85/homelab"],
   enabledManagers: [
     'argocd',
     'github-actions',
