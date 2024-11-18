@@ -1,5 +1,5 @@
 ---
-# renovate: datasource=github-releases depName=pdf/zfs_exporter versioning=regex:^v(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))$
+# renovate: datasource=github-releases depName=pdf/zfs_exporter versioning=regex:^(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))$ extractVersion=^v(?<major>\d+)(\.(?<minor>\d+))?(\.(?<patch>\d+))$
 zfs_exporter_version: 2.3.2
 # deadline: Maximum duration that a collection should run before returning cached data.
 #     Should be set to a value shorter than your scrape timeout duration. The current collection
