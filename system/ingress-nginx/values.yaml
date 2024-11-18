@@ -144,7 +144,7 @@ ingress-nginx:
         - grigri
     extraContainers:
       - name: dns-proxy
-        image: coredns/coredns:1.11.3
+        image: coredns/coredns:1.11.4
         args:
           - -conf
           - /etc/coredns/Corefile
