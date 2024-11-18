@@ -37,10 +37,10 @@
         '.+\\.ya?ml$',
       ],
       matchStrings: [
-        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?( extractVersion=(?<extractVersion>\\S+))?\n.*?"(?<currentValue>.*)"\n',
+        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?"(?<currentValue>.*)"\n',
         '#\\srenovate: datasource=(?<datasource>\\S+)( versioning=(?<versioning>\\S+))?\n.*?: (?<depName>\\S+):(?<currentValue>.*)\n',
         '#\\srenovate: url-match: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?\\/(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)\\/.*',
-        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?: (?<currentValue>.*)\n',
+        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?( extractVersion=(?<extractVersion>\\S+))?\n.*?: (?<currentValue>.*)\n',
       ],
       versioningTemplate: '{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}',
     },
