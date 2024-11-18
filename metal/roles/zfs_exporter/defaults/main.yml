@@ -1,6 +1,6 @@
 ---
 # renovate: datasource=github-releases depName=pdf/zfs_exporter
-zfs_exporter_version: 2.3.2
+zfs_exporter_version: 2.3.4
 # deadline: Maximum duration that a collection should run before returning cached data.
 #     Should be set to a value shorter than your scrape timeout duration. The current collection
 #     run will continue and update the cache when complete (default: 8s)
