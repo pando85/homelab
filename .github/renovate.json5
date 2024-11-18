@@ -10,6 +10,9 @@
   timezone: "Europe/Madrid",
   schedule: ["after 4am and before 10am on Monday"],
   enabledManagers: ["argocd", "github-actions", "helm-values", "helmv3", "kustomize", "pre-commit", "regex"],
+  "pre-commit": {
+    enabled: true
+  },
   regexManagers: [
     {
       description: "Process custom dependencies with double quotes, after colon, URLs and variables",
