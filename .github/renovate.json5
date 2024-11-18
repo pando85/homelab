@@ -13,6 +13,7 @@
   "pre-commit": {
     enabled: true
   },
+  configMigration: true,
   regexManagers: [
     {
       description: "Process custom dependencies with double quotes, after colon, URLs and variables",
