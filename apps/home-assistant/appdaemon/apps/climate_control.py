@@ -168,12 +168,17 @@ class ClimateControl(hass.Hass):
 
         min_hours = int(float(await self.get_state(self.args["input_number"]["min_hours_per_day"])))
         if len(prices) < min_hours:
-            msg = f"Less than {min_hours} hours of data available"
+            msg = f"""Less than {min_hours} hours of data available: {prices}.
+
+            Retrying in 10 minutes"""
             self.log(msg, level="WARNING")
             await self.notify(
                 f"WARNING: {msg}",
                 name=self.args["notify"]["target"],
             )
+            await self._start_hvac()
+            await asyncio.sleep(600)
+            return self._register_schedulers()
 
         is_cheap = len(cheapest_prices) >= min_hours
 
