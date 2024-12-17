@@ -183,6 +183,7 @@ nextcloud:
         <?php
         $CONFIG = array (
           'maintenance_window_start' => 1,
+          'overwrite.cli.url' => 'https://nextcloud.grigri.cloud',
         );
       contacts.config.php: |-
         <?php
