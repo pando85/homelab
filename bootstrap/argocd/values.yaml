@@ -128,7 +128,7 @@ argo-cd:
   controller:
     resources:
       requests:
-        cpu: 1
+        cpu: 200m
         memory: 512Mi
       limits:
         cpu: 3
@@ -141,7 +141,7 @@ argo-cd:
       enabled: false
     resources:
       requests:
-        cpu: 1
+        cpu: 100m
         memory: 512Mi
       limits:
         cpu: 2.5
