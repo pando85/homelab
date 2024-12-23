@@ -98,7 +98,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
-            tag: v1.122.3
+            tag: v1.123.0
           env:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
