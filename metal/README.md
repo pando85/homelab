@@ -91,7 +91,7 @@ To obtain the Telegram `chat_id` and `token`, follow these steps:
         curl https://api.telegram.org/bot<YOUR_TOKEN_HERE>/getUpdates
         ```
     4. Look for the `chat` object within the response JSON. The `id` field within the `chat` object represents the `chat_id` of the group/channel.
-   
+
 Make sure to keep the `token` and `chat_id` secure and not expose them publicly. These credentials are required for integrating Telegram notifications with your deployment setup.
 
 Feel free to reach out if you have any questions or need further assistance.
