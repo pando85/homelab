@@ -83,7 +83,7 @@ velero:
     fsBackupTimeout: 32h
     defaultItemOperationTimeout: 32h
     garbageCollectionFrequency: 24h
-    logLevel: info
+    logLevel: debug
 
   credentials:
     existingSecret: velero-bucket-credentials
