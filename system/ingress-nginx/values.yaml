@@ -1,6 +1,8 @@
 ingress-nginx:
   controller:
     admissionWebhooks:
+      # This fix need to be applied: https://github.com/kubernetes/ingress-nginx/pull/12626
+      enabled: false
       timeoutSeconds: 30
 
     replicaCount: 2
@@ -17,7 +19,6 @@ ingress-nginx:
       use-forwarded-headers: true
       allow-snippet-annotations: true
       annotations-risk-level: Critical
-      strict-validate-path-type: "false"
       enable-brotli: "true"
       brotli-level: "6"
       # Added text/html and application/vnd.api+json + default ones:
