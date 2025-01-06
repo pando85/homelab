@@ -19,6 +19,7 @@ ingress-nginx:
       use-forwarded-headers: true
       allow-snippet-annotations: true
       annotations-risk-level: Critical
+      allow-cross-namespace-resources: "true"
       enable-brotli: "true"
       brotli-level: "6"
       # Added text/html and application/vnd.api+json + default ones:
