@@ -16,6 +16,7 @@ ingress-nginx:
         proxy_cache_use_stale updating;
       use-forwarded-headers: true
       allow-snippet-annotations: true
+      annotations-risk-level: Critical
       enable-brotli: "true"
       brotli-level: "6"
       # Added text/html and application/vnd.api+json + default ones:
