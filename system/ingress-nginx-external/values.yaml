@@ -15,8 +15,6 @@ ingress-nginx:
         proxy_cache_lock on;
         proxy_cache_use_stale updating;
       use-forwarded-headers: true
-      # Disable until PR merged: https://github.com/kubernetes/ingress-nginx/pull/12626
-      enable-annotation-validation: "false"
       allow-snippet-annotations: true
       annotations-risk-level: Critical
       enable-brotli: "true"
