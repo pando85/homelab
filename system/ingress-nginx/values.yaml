@@ -5,6 +5,9 @@ ingress-nginx:
       timeoutSeconds: 30
 
     replicaCount: 2
+    extraArgs:
+      # Disable until PR merged: https://github.com/kubernetes/ingress-nginx/pull/12626
+      enable-annotation-validation: "false"
 
     config:
       # auto value takes all nodes in cgroups v2 (dell_v2)
