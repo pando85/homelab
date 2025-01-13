@@ -119,7 +119,7 @@ app-template:
         main:
           image:
             repository: public.ecr.aws/docker/library/redis
-            tag: 7.4.1
+            tag: 7.4.2
           env:
             REDIS_REPLICATION_MODE: master
           command: ["redis-server"]
