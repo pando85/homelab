@@ -8,9 +8,8 @@
   stat:
     path: "/usr/local/bin/k3s"
   register: k3s_binary_stat
-  tags:
-    - k3s-upgrade
 
+# upgrades are handled by the system-upgrade service
 - name: Install k3s
   when: not k3s_binary_stat.stat.exists
   block:
@@ -24,8 +23,6 @@
         group: root
         mode: "0755"
       check_mode: false
-      tags:
-        - k3s-upgrade
 
     - name: Copy k3s binary
       # system-upgrade needs the binary in the path, a link is not valid
@@ -37,8 +34,6 @@
         group: root
         mode: "0755"
       notify: Restart k3s
-      tags:
-        - k3s-upgrade
 
 - name: Ensure config directories exist
   file:
