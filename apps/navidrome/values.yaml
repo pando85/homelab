@@ -21,6 +21,7 @@ app-template:
             ND_DATAFOLDER: /data
             ND_MUSICFOLDER: /music
             ND_AUTOIMPORTPLAYLISTS: "true"
+            ND_PROMETHEUS_ENABLED: "true"
           envFrom:
             - secretRef:
                 name: navidrome-secret
@@ -125,3 +126,19 @@ app-template:
       globalMounts:
         - path: /data
       existingClaim: data-navidrome
+
+  serviceMonitor:
+    navidrome:
+      enabled: true
+      # if directory != service name, it will be prefixed to the service name:
+      # ${directory}-${service}
+      # https://github.com/bjw-s/helm-charts/blob/45ec2d739fc787c95947e0f3d68b05e54fe5f077/charts/library/common/templates/lib/service/_valuesToObject.tpl#L20
+      serviceName: navidrome
+      labels:
+        operator.prometheus.io/instance: prometheus-long-term
+      endpoints:
+        - port: http
+          scheme: http
+          path: /metrics
+          interval: 1m
+          scrapeTimeout: 10s
