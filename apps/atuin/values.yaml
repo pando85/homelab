@@ -122,7 +122,10 @@ app-template:
 
   serviceMonitor:
     app:
+      enabled: true
       serviceName: atuin
+      labels:
+        release: monitoring
       endpoints:
         - port: metrics
           scheme: http
