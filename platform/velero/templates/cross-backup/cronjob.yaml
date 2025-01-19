@@ -11,6 +11,7 @@ spec:
           annotations:
             kubernetes.io/egress-bandwidth: "200M"
         spec:
+          priorityClassName: high-priority
           containers:
           - name: rclone
             image: rclone/rclone:1.66.0
