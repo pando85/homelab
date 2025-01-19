@@ -5,6 +5,7 @@ namespace: kube-system
 resources:
   - resources/cilium/bgp-peering-policy.yaml
   - resources/cilium/load-balancer-ip-pool.yaml
+  - resources/priority-class-high.yaml
   - resources/runtime-class.yaml
 
 helmCharts:
