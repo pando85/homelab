@@ -138,3 +138,5 @@ app-template:
       runAsNonRoot: true
       runAsUser: 65534
       runAsGroup: 65534
+    nodeSelector:
+      kubernetes.io/hostname: prusik
