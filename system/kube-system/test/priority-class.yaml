@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: test-priority-class-high
+spec:
+  restartPolicy: Never
+  priorityClassName: high-priority
+  containers:
+    - name: test-priority-class
+      image: busybox
+      command: ["sh", "-c", "sleep 1h"]
