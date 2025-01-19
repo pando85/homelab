@@ -21,7 +21,7 @@ app-template:
                         - dawarich-postgres
                 topologyKey: kubernetes.io/hostname
       containers:
-        app:
+        server:
           image: &image
             repository: freikin/dawarich
             tag: 0.22.3
@@ -156,6 +156,15 @@ app-template:
             - *host
           secretName: dawarich-external-tls-certificate
 
+  persistence:
+    tmp:
+      type: emptyDir
+      advancedMounts:
+        dawarich:
+          server:
+            - path: /var/app/tmp
+          sidekick:
+            - path: /var/app/tmp
   serviceMonitor:
     server:
       enabled: true
