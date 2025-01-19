@@ -54,7 +54,9 @@ app-template:
           command:
             - "web-entrypoint.sh"
           args:
-            - "bin/rails server -p 3000 -b 0.0.0.0"
+            # bin/dev for enabling prometheus exporter
+            # - "bin/rails server -p 3000 -b 0.0.0.0"
+            - "bin/dev"
           probes:
             liveness: &probes
               enabled: true
