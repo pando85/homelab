@@ -78,9 +78,11 @@ app-template:
                 httpGet: *httpGet
                 failureThreshold: 30
                 periodSeconds: 10
-        sidekick:
+        sidekiq:
           image: *image
-          env: *env
+          env:
+            <<: *env
+            PROMETHEUS_EXPORTER_ENABLED: "false"
           command:
             - "sidekiq-entrypoint.sh"
           args:
@@ -167,7 +169,7 @@ app-template:
         dawarich:
           server:
             - path: /var/app/tmp
-          sidekick:
+          sidekiq:
             - path: /var/app/tmp
   serviceMonitor:
     server:
