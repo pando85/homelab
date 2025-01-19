@@ -16,6 +16,8 @@ spec:
       cpu: 500m
       memory: 256Mi
 
+  nodeSelector:
+    kubernetes.io/hostname: prusik
   volume:
     size: 1Gi
 

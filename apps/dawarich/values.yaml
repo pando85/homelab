@@ -21,11 +21,11 @@ app-template:
                         - dawarich-postgres
                 topologyKey: kubernetes.io/hostname
       containers:
-        app: &app
-          image:
+        app:
+          image: &image
             repository: freikin/dawarich
             tag: 0.22.3
-          env:
+          env: &env
             DATABASE_HOST: dawarich-postgres
             DATABASE_USERNAME:
               valueFrom:
@@ -75,11 +75,17 @@ app-template:
                 failureThreshold: 30
                 periodSeconds: 10
         sidekick:
-          <<: *app
+          image: *image
+          env: *env
           command:
             - "sidekiq-entrypoint.sh"
           args:
             - "bundle exec sidekiq"
+          probes:
+            liveness:
+              enabled: false
+            readiness:
+              enabled: false
     redis:
       containers:
         main:
@@ -110,10 +116,6 @@ app-template:
       ports:
         http:
           port: 6379
-
-  defaultPodOptions:
-    nodeSelector:
-      kubernetes.io/hostname: prusik
 
   ingress:
     dawarich:
