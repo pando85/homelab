@@ -16,8 +16,14 @@ spec:
       cpu: 500m
       memory: 256Mi
 
-  nodeSelector:
-    kubernetes.io/hostname: prusik
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - prusik
   volume:
     size: 1Gi
 
