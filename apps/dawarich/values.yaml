@@ -43,6 +43,7 @@ app-template:
             REDIS_URL: redis://dawarich-redis
             APPLICATION_HOSTS: "dawarich.internal.grigri.cloud,dawarich.grigri.cloud"
             PROMETHEUS_EXPORTER_ENABLED: "true"
+            PROMETHEUS_EXPORTER_HOST: "127.0.0.1"
             DISABLE_TELEMETRY: "true"
           resources:
             requests:
