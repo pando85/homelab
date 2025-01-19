@@ -43,9 +43,6 @@ app-template:
             APPLICATION_HOSTS: "dawarich.internal.grigri.cloud,dawarich.grigri.cloud"
             PROMETHEUS_EXPORTER_ENABLED: "true"
             DISABLE_TELEMETRY: "true"
-          envFrom:
-            - secretRef:
-                name: dawarich-db-secret
           resources:
             requests:
               cpu: 250m
@@ -113,6 +110,10 @@ app-template:
       ports:
         http:
           port: 6379
+
+  defaultPodOptions:
+    nodeSelector:
+      kubernetes.io/hostname: prusik
 
   ingress:
     dawarich:
