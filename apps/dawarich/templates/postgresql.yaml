@@ -1,0 +1,42 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: dawarich-postgres
+  labels:
+    backup/retain: weekly
+spec:
+  teamId: dawarich
+  numberOfInstances: 1
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  volume:
+    size: 1Gi
+
+  users:
+    dawarich:
+      - superuser
+      - createdb
+  databases:
+    dawarich: dawarich
+
+  postgresql:
+    version: "16"
+    parameters:
+      archive_mode: "off"
+      max_connections: "4"
+      shared_buffers: 32MB
+      log_checkpoints: "off"
+      log_connections: "off"
+      log_disconnections: "off"
+      log_lock_waits: "off"
+      log_min_duration_statement: "-1"
+      log_statement: none
+      # ZFS settings:
+      full_page_writes: "off"

@@ -1,0 +1,167 @@
+app-template:
+  controllers:
+    dawarich:
+      strategy: RollingUpdate
+      pod:
+        enableServiceLinks: false
+        securityContext:
+          runAsUser: 2000
+          runAsGroup: 2000
+          runAsNonRoot: true
+          fsGroup: 2000
+          fsGroupChangePolicy: OnRootMismatch
+        affinity: &affinity
+          podAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: cluster-name
+                      operator: In
+                      values:
+                        - dawarich-postgres
+                topologyKey: kubernetes.io/hostname
+      containers:
+        app: &app
+          image:
+            repository: freikin/dawarich
+            tag: 0.22.3
+          env:
+            DATABASE_HOST: dawarich-postgres
+            DATABASE_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich.dawarich-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich.dawarich-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+            DATABASE_NAME: dawarich
+            TIME_ZONE: "Europe/Madrid"
+            REDIS_URL: redis://dawarich-redis
+            APPLICATION_HOSTS: "dawarich.internal.grigri.cloud,dawarich.grigri.cloud"
+            PROMETHEUS_EXPORTER_ENABLED: "true"
+            DISABLE_TELEMETRY: "true"
+          envFrom:
+            - secretRef:
+                name: dawarich-db-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+          command:
+            - "web-entrypoint.sh"
+          args:
+            - "bin/rails server -p 3000 -b 0.0.0.0"
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet: &httpGet
+                  path: /api/v1/health
+                  port: &port 3000
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet: *httpGet
+                failureThreshold: 30
+                periodSeconds: 10
+        sidekick:
+          <<: *app
+          command:
+            - "sidekiq-entrypoint.sh"
+          args:
+            - "bundle exec sidekiq"
+    redis:
+      containers:
+        main:
+          image:
+            repository: public.ecr.aws/docker/library/redis
+            tag: 7.4.2
+          env:
+            REDIS_REPLICATION_MODE: master
+          command: ["redis-server"]
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+      pod:
+        affinity: *affinity
+
+  service:
+    dawarich:
+      controller: dawarich
+      ports:
+        http:
+          port: *port
+        metrics:
+          port: 9394
+    redis:
+      controller: redis
+      ports:
+        http:
+          port: 6379
+
+  ingress:
+    dawarich:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        external-dns.alpha.kubernetes.io/enabled: "true"
+      hosts:
+        - host: &host dawarich.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: dawarich
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: dawarich-tls-certificate
+    external:
+      enabled: true
+      className: nginx-external
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host dawarich.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: dawarich
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: dawarich-external-tls-certificate
+
+  serviceMonitor:
+    server:
+      enabled: true
+      serviceName: dawarich
+      labels:
+        release: monitoring
+      endpoints:
+        - port: metrics
+          scheme: http
+          path: /metrics
+          interval: 30s
+          scrapeTimeout: 10s
