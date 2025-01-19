@@ -4,12 +4,13 @@ app-template:
       strategy: RollingUpdate
       pod:
         enableServiceLinks: false
-        securityContext:
-          runAsUser: 2000
-          runAsGroup: 2000
-          runAsNonRoot: true
-          fsGroup: 2000
-          fsGroupChangePolicy: OnRootMismatch
+        # Requires permissions to write in multiple paths as `/var/app/tmp` and `/var/app/db`
+        # securityContext:
+        #   runAsUser: 2000
+        #   runAsGroup: 2000
+        #   runAsNonRoot: true
+        #   fsGroup: 2000
+        #   fsGroupChangePolicy: OnRootMismatch
         affinity: &affinity
           podAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
