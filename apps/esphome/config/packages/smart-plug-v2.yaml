@@ -31,6 +31,7 @@ dashboard_import:
 uart:
   rx_pin: RX
   baud_rate: 4800
+  parity: EVEN
 
 globals:
   - id: total_energy
