@@ -6,7 +6,7 @@ app-template:
       type: statefulset
       # hack to make devices show as online
       initContainers:
-        01-init-config:
+        config:
           image:
             repository: debian
             tag: 12.9-slim
@@ -15,7 +15,7 @@ app-template:
             - -c
           args:
             - >
-              cp --dereference -r /original/config/* /config/
+              /scripts/process_yaml.sh /original/config /config
       containers:
         esphome:
           image:
@@ -87,6 +87,18 @@ app-template:
                 name: esphome-config
             - secret:
                 name: esphome-secrets
+    scripts:
+      enabled: true
+      type: custom
+      globalMounts:
+        - path: /scripts
+      volumeSpec:
+        name: scripts
+        projected:
+          defaultMode: 0755
+          sources:
+            - configMap:
+                name: esphome-scripts
     config-packages:
       enabled: true
       type: custom
