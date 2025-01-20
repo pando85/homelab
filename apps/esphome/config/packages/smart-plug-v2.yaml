@@ -72,18 +72,18 @@ sensor:
     current:
       name: "${friendly_name} Current"
       filters:
-        - throttle_average: ${update_interval}
+        - throttle_average: 60s
         - lambda: if (x < 0.060) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
 
     voltage:
       name: "${friendly_name} Voltage"
       filters:
-        - throttle_average: ${update_interval}
+        - throttle_average: 60s
     power:
       name: "${friendly_name} Power"
       id: power_sensor
       filters:
-        - throttle_average: ${update_interval}
+        - throttle_average: 60s
         - lambda: if (x < 3.0) return 0.0; else return x; #For the chip will report less than 3w power when no load is connected
 
     energy:
@@ -91,7 +91,7 @@ sensor:
       id: energy
       unit_of_measurement: kWh
       filters:
-        - throttle: ${update_interval}
+        - throttle: 60s
         # Multiplication factor from W to kW is 0.001
         - multiply: 0.001
       on_value:
@@ -104,11 +104,11 @@ sensor:
     apparent_power:
       name: "${friendly_name} Apparent Power"
       filters:
-        - throttle_average: ${update_interval}
+        - throttle_average: 60s
     power_factor:
       name: "${friendly_name} Power Factor"
       filters:
-        - throttle_average: ${update_interval}
+        - throttle_average: 60s
 
   - platform: template
     name: "${friendly_name} Total Energy"
@@ -119,7 +119,7 @@ sensor:
     accuracy_decimals: 3
     lambda: |-
       return id(total_energy);
-    update_interval: ${update_interval}
+    update_interval: 60s
 
   - platform: total_daily_energy
     name: "${friendly_name} Total Daily Energy"
