@@ -28,7 +28,8 @@ app-template:
               cpu: 10m
               memory: 1374M
             limits:
-              memory: 2048M
+              cpu: "10"
+              memory: 8Gi
           probes:
             liveness:
               enabled: true
