@@ -18,6 +18,9 @@ mdns:
 
 web_server:
   port: 80
+  auth:
+    username: !secret web_server_username
+    password: !secret web_server_password
 
 dashboard_import:
   package_import_url: github://athom-tech/athom-configs/athom-mini-switch.yaml
