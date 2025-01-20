@@ -3,4 +3,4 @@ kind: ConfigMap
 metadata:
   name: esphome-scripts
 data:
-{{ (.Files.Glob "scripts/*.yaml").AsConfig | indent 2 }}
+{{ (.Files.Glob "scripts/*.sh").AsConfig | indent 2 }}
