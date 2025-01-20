@@ -47,7 +47,7 @@ app-template:
             DISABLE_TELEMETRY: "true"
           resources:
             requests:
-              cpu: 250m
+              cpu: 10m
               memory: 1Gi
             limits:
               cpu: "2"
@@ -92,6 +92,13 @@ app-template:
               enabled: false
             readiness:
               enabled: false
+          resources:
+            requests:
+              cpu: 10m
+              memory: 150Mi
+            limits:
+              cpu: "2"
+              memory: 3Gi
     redis:
       containers:
         main:
