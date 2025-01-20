@@ -52,7 +52,7 @@ app-template:
         01-init-config:
           image:
             repository: debian
-            tag: 12.8-slim
+            tag: 12.9-slim
           command:
             - /bin/sh
             - -c
