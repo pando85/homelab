@@ -1,0 +1,103 @@
+app-template:
+  controllers:
+    lidarr:
+      labels:
+        backup/retain: quaterly
+      type: statefulset
+      containers:
+        lidarr:
+          image:
+            repository: ghcr.io/onedr0p/lidarr-develop
+            tag: 2.5.2@sha256:6b1b51ca85dad4f0376b6f86df4cb24d1d6c621ba9d47c1bde26cdb940f2aeb6
+
+          env:
+            TZ: Europe/Madrid
+
+          resources:
+            requests:
+              cpu: 10m
+              memory: 180Mi
+            limits:
+              memory: 400Mi
+          probes:
+            liveness:
+              enabled: true
+            readiness:
+              enabled: true
+            startup:
+              enabled: true
+              spec:
+                failureThreshold: 30
+                periodSeconds: 5
+
+  service:
+    lidarr:
+      controller: lidarr
+      ports:
+        http:
+          port: 7878
+
+  ingress:
+    lidarr:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host lidarr.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: lidarr
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: lidarr-tls-certificate
+
+    external:
+      enabled: true
+      className: nginx-external
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth?allowed_groups=lidarr-users@idm.grigri.cloud
+        nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+      hosts:
+        - host: &host lidarr.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: lidarr
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: lidarr-external-tls-certificate
+  defaultPodOptions:
+    securityContext:
+      runAsUser: 995
+      runAsGroup: 501
+      fsGroup: 501
+      fsGroupChangePolicy: "OnRootMismatch"
+
+    nodeSelector:
+      kubernetes.io/hostname: prusik
+
+  persistence:
+    config:
+      enabled: true
+      globalMounts:
+        - path: /config
+      existingClaim: config-lidarr
+    peliculas:
+      enabled: true
+      type: hostPath
+      hostPath: /datasets/musica
+      globalMounts:
+        - path: /datasets/musica

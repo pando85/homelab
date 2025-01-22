@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: lidarr
+    app.kubernetes.io/name: lidarr
+    backup: lidarr-zfs
+    backup/retain: quaterly
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: config-lidarr
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
