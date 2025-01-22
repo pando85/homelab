@@ -7,12 +7,14 @@ app-template:
       containers:
         lidarr:
           image:
-            repository: ghcr.io/onedr0p/lidarr-develop
-            tag: 2.5.2@sha256:6b1b51ca85dad4f0376b6f86df4cb24d1d6c621ba9d47c1bde26cdb940f2aeb6
+            repository: ghcr.io/crutonjohn/lidarr-plugins
+            tag: 2.9.5.4543@sha256:ccb6fb2d107e55e24b8f92ebbc08416bfab30decab222be8c00b89f30668ca8f
 
           env:
             TZ: Europe/Madrid
-
+            LIDARR__APP__INSTANCENAME: Lidarr
+            LIDARR__SERVER__PORT: &port 8686
+            LIDARR__LOG__LEVEL: info
           resources:
             requests:
               cpu: 10m
@@ -35,7 +37,7 @@ app-template:
       controller: lidarr
       ports:
         http:
-          port: 8686
+          port: *port
 
   ingress:
     lidarr:
