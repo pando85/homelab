@@ -35,7 +35,7 @@ app-template:
       controller: lidarr
       ports:
         http:
-          port: 7878
+          port: 8686
 
   ingress:
     lidarr:
