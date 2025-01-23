@@ -192,8 +192,9 @@ argo-cd:
       enabled: false
 
     notifiers:
-      service.telegram: |
-        token: $telegram-token
+      service.alertmanager: |
+        targets:
+        - alertmanager-operated.monitoring.svc:9093
 
     resources:
       requests:
