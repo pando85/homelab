@@ -116,11 +116,20 @@ app-template:
       fsGroupChangePolicy: "OnRootMismatch"
 
   persistence:
+    # music with backups
     music:
       enabled: true
       globalMounts:
         - path: /music
       existingClaim: music-navidrome
+    # music from Lidarr
+    lidarr:
+      enabled: true
+      type: hostPath
+      hostPath: /datasets/musica
+      globalMounts:
+        - path: /music/lidarr
+
     data:
       enabled: true
       globalMounts:

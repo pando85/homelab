@@ -93,7 +93,7 @@ app-template:
       globalMounts:
         - path: /config
       existingClaim: config-lidarr
-    peliculas:
+    musica:
       enabled: true
       type: hostPath
       hostPath: /datasets/musica
