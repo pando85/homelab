@@ -207,6 +207,7 @@ argo-cd:
       - recipients:
           - alertmanager
         triggers:
+          - on-deployed
           - on-health-degraded
           - on-sync-failed
 
@@ -215,17 +216,31 @@ argo-cd:
         message: |
           *🚀{{.app.metadata.name}}*
           _Application {{.app.metadata.name}} is now running new version of deployments manifests_
+        alertmanager:
+          labels:
+            severity: warning
+            service: argocd
 
       template.app-health-degraded: |
         message: |
           *💔{{.app.metadata.name}}*
           _Application {{.app.metadata.name}} has degraded._
           [Application details]({{.context.argocdUrl}}/applications/{{.app.metadata.name}})
+        alertmanager:
+          labels:
+            severity: warning
+            service: argocd
+
       template.app-sync-failed: |
         message: |
           *❌{{.app.metadata.name}}*
           _The sync operation of application {{.app.metadata.name}} has failed at {{.app.status.operationState.finishedAt}} with the following error: {{.app.status.operationState.message}}_
           [Sync operation details]({{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true)
+        alertmanager:
+          labels:
+            severity: warning
+            service: argocd
+
       # template.app-sync-running: |
       #   message: |
       #     The sync operation of application {{.app.metadata.name}} has started at {{.app.status.operationState.startedAt}}.
