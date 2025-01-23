@@ -220,7 +220,8 @@ argo-cd:
           labels:
             severity: warning
             service: argocd
-
+          annotations:
+            message: Application {{.app.metadata.name}} is now running new version of deployments manifests
       template.app-health-degraded: |
         message: |
           *💔{{.app.metadata.name}}*
@@ -230,7 +231,8 @@ argo-cd:
           labels:
             severity: warning
             service: argocd
-
+          annotations:
+            message: Application {{.app.metadata.name}} has degraded
       template.app-sync-failed: |
         message: |
           *❌{{.app.metadata.name}}*
@@ -240,6 +242,8 @@ argo-cd:
           labels:
             severity: warning
             service: argocd
+          annotations:
+            message: The sync operation of application {{.app.metadata.name}} has failed at {{.app.status.operationState.finishedAt}} with the following error: {{.app.status.operationState.message}}
 
       # template.app-sync-running: |
       #   message: |
