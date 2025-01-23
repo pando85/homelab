@@ -205,7 +205,7 @@ argo-cd:
 
     subscriptions:
       - recipients:
-          - telegram:-1001533258564
+          - alertmanager
         triggers:
           - on-health-degraded
           - on-sync-failed
