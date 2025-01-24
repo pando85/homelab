@@ -27,7 +27,6 @@ app-template:
             repository: freikin/dawarich
             tag: 0.22.3
           env: &env
-            RAILS_ENV: production
             DATABASE_HOST: dawarich-postgres
             DATABASE_USERNAME:
               valueFrom:
