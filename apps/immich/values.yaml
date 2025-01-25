@@ -79,8 +79,6 @@ app-template:
             TZ: Europe/Madrid
             NVIDIA_VISIBLE_DEVICES: all
             IMMICH_WORKERS_EXCLUDE: 'api'
-            # Guide to choose the model: https://github.com/immich-app/immich/discussions/11862
-            MACHINE_LEARNING_PRELOAD__CLIP__TEXTUAL: "immich-app/ViT-H-14-quickgelu__dfn5b"
           envFrom: *envFrom
           resources:
             requests:
@@ -105,6 +103,8 @@ app-template:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
             MPLCONFIGDIR: /.config/matplotlib
+            # Guide to choose the model: https://github.com/immich-app/immich/discussions/11862
+            MACHINE_LEARNING_PRELOAD__CLIP__TEXTUAL: "immich-app/ViT-H-14-quickgelu__dfn5b"
           envFrom: *envFrom
           resources:
             requests:
