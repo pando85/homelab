@@ -75,12 +75,21 @@
       ],
       versioning: 'loose',
       matchPackageNames: [
-        '/plex/',
+        '/lidarr/',
+        '/prowlarr/',
         '/qbittorrent/',
         '/radarr/',
         '/sonarr/',
-        '/prowlarr/',
       ],
+    },
+    {
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'lidarr',
+      ],
+      automerge: false,
     },
     {
       matchDatasources: [
