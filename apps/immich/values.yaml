@@ -99,10 +99,14 @@ app-template:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
             tag: v1.124.2
+            # For GPU usage: v1.X.X-cuda
           env:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
             MPLCONFIGDIR: /.config/matplotlib
+            # Guide to choose the model: https://github.com/immich-app/immich/discussions/11862
+            # MACHINE_LEARNING_PRELOAD__CLIP__TEXTUAL: "immich-app/ViT-H-14-quickgelu__dfn5b"
+            # MACHINE_LEARNING_PRELOAD__CLIP__VISUAL: "immich-app/ViT-H-14-quickgelu__dfn5b"
           envFrom: *envFrom
           resources:
             requests:
