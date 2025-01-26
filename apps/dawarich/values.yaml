@@ -45,6 +45,11 @@ app-template:
             PROMETHEUS_EXPORTER_ENABLED: "true"
             PROMETHEUS_EXPORTER_HOST: "127.0.0.1"
             DISABLE_TELEMETRY: "true"
+            GEOAPIFY_API_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich-secrets
+                  key: geoapify_api_key
           resources:
             requests:
               cpu: 10m
