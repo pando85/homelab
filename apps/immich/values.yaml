@@ -98,7 +98,7 @@ app-template:
         main:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
-            tag: v1.124.2
+            tag: v1.124.2-cuda
             # For GPU usage: v1.X.X-cuda
           env:
             <<: *env
