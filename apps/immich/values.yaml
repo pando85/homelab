@@ -93,12 +93,13 @@ app-template:
       strategy: RollingUpdate
       pod:
         <<: *pod
-        runtimeClassName: nvidia
+        # runtimeClassName: nvidia
       containers:
         main:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
-            tag: v1.124.2-cuda
+            # GPU use require cuda image. E.g.: v1.124.2-cuda
+            tag: v1.124.2
           env:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
@@ -111,11 +112,11 @@ app-template:
             requests:
               cpu: 300m
               memory: 1Gi
-              nvidia.com/gpu: "1"
+              # nvidia.com/gpu: "1"
             limits:
               cpu: "4"
               memory: 10Gi
-              nvidia.com/gpu: "1"
+              # nvidia.com/gpu: "1"
           probes: *probes
     redis:
       containers:
@@ -224,7 +225,7 @@ app-template:
           main:
             - path: /usr/src/app/.transformers_cache
     model-cache:
-      type: emptyDir
+      existingClaim: immich-data
       advancedMounts:
         ml:
           main:
