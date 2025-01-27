@@ -80,7 +80,6 @@ bgp:
   enabled: false
 
 bpf:
-  lbExternalClusterIP: true
   masquerade: true
 
 # -- This feature set enables virtual BGP routers to be created via
