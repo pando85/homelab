@@ -87,7 +87,7 @@
         'docker',
       ],
       matchPackageNames: [
-        'lidarr',
+        '/lidarr/',
       ],
       automerge: false,
     },
