@@ -7,3 +7,5 @@ token-file: {{ k3s_token_file }}
 {% if 'kube_control_plane' in group_names %}
 {{ k3s_server_config | to_nice_yaml }}
 {% endif %}
+kubelet-arg:
+- "cluster-dns=169.254.25.10"
