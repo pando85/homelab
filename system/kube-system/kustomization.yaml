@@ -5,6 +5,7 @@ namespace: kube-system
 resources:
   - resources/cilium/bgp-peering-policy.yaml
   - resources/cilium/load-balancer-ip-pool.yaml
+  - resources/nodelocaldns/cilium-local-redirect-policy.yaml
   - resources/nodelocaldns/configmap.yaml
   - resources/nodelocaldns/daemonset.yaml
   - resources/nodelocaldns/service.yaml
