@@ -153,7 +153,7 @@ hubble:
 
 installNoConntrackIptablesRules: true
 kubeProxyReplacement: true
-routingMode: native
+localRedirectPolicy: true
 ipv4NativeRoutingCIDR: "10.0.0.0/8"
 
 prometheus:
@@ -181,3 +181,5 @@ operator:
     label: grafana_dashboard
     annotations:
       grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/cilium
+
+routingMode: native
