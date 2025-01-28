@@ -8,13 +8,13 @@ spec:
     serviceMatcher:
       serviceName: kube-dns
       namespace: kube-system
-    toPorts:
-      - name: dns-tcp
-        port: "53"
-        protocol: TCP
-      - name: dns
-        port: "53"
-        protocol: UDP
+      toPorts:
+        - name: dns-tcp
+          port: "53"
+          protocol: TCP
+        - name: dns
+          port: "53"
+          protocol: UDP
   redirectBackend:
     localEndpointSelector:
       matchLabels:
