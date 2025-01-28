@@ -27,7 +27,7 @@ spec:
             - -localip
             - 169.254.25.10
             - -conf
-            - /etc/coredns/Corefile
+            - /etc/Corefile
             - -upstreamsvc
             - kube-dns-upstream
             - -skipteardown=true
@@ -36,14 +36,10 @@ spec:
           image: registry.k8s.io/dns/k8s-dns-node-cache:1.22.28
           imagePullPolicy: IfNotPresent
           livenessProbe:
-            failureThreshold: 10
             httpGet:
-              host: 169.254.25.10
               path: /health
-              port: 9254
-              scheme: HTTP
-            periodSeconds: 10
-            successThreshold: 1
+              port: 8080
+            initialDelaySeconds: 60
             timeoutSeconds: 5
           name: node-cache
           ports:
@@ -62,11 +58,9 @@ spec:
           readinessProbe:
             failureThreshold: 10
             httpGet:
-              host: 169.254.25.10
               path: /health
-              port: 9254
+              port: 8080
               scheme: HTTP
-            periodSeconds: 10
             successThreshold: 1
             timeoutSeconds: 5
           resources:
@@ -96,6 +90,6 @@ spec:
             defaultMode: 420
             items:
               - key: Corefile
-                path: Corefile
+                path: Corefile.base
             name: nodelocaldns
           name: config-volume
