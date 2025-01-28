@@ -2,9 +2,12 @@ apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   labels:
-    k8s-app: kube-dns
+    k8s-app: node-local-dns
   name: nodelocaldns
 spec:
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 10%
   revisionHistoryLimit: 10
   selector:
     matchLabels:
@@ -13,7 +16,12 @@ spec:
     metadata:
       labels:
         k8s-app: node-local-dns
+      annotations:
+        policy.cilium.io/no-track-port: "53"
+        prometheus.io/port: "9253"
+        prometheus.io/scrape: "true"
     spec:
+      serviceAccountName: node-local-dns
       containers:
         - args:
             - -localip
@@ -21,7 +29,10 @@ spec:
             - -conf
             - /etc/coredns/Corefile
             - -upstreamsvc
-            - coredns
+            - kube-dns-upstream
+            - -skipteardown=true
+            - -setupinterface=false
+            - -setupiptables=false
           image: registry.k8s.io/dns/k8s-dns-node-cache:1.22.28
           imagePullPolicy: IfNotPresent
           livenessProbe:
@@ -59,22 +70,15 @@ spec:
             successThreshold: 1
             timeoutSeconds: 5
           resources:
-            limits:
-              memory: 200Mi
             requests:
-              cpu: 100m
-              memory: 70Mi
-          securityContext:
-            privileged: true
+              cpu: 25m
+              memory: 5Mi
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
           volumeMounts:
             - mountPath: /etc/coredns
               name: config-volume
-            - mountPath: /run/xtables.lock
-              name: xtables-lock
       dnsPolicy: Default
-      hostNetwork: true
       nodeSelector:
         kubernetes.io/os: linux
       priorityClassName: system-node-critical
@@ -93,16 +97,5 @@ spec:
             items:
               - key: Corefile
                 path: Corefile
-              - key: hosts
-                path: hosts
             name: nodelocaldns
           name: config-volume
-        - hostPath:
-            path: /run/xtables.lock
-            type: FileOrCreate
-          name: xtables-lock
-  updateStrategy:
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 20%
-    type: RollingUpdate

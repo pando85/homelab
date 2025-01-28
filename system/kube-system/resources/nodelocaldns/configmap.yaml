@@ -20,9 +20,6 @@ data:
         }
         prometheus :9253
         health 169.254.25.10:9254
-        hosts /etc/coredns/hosts {
-          fallthrough
-        }
     }
     in-addr.arpa:53 {
         errors
@@ -54,8 +51,4 @@ data:
         bind 169.254.25.10
         forward . /etc/resolv.conf
         prometheus :9253
-        hosts /etc/coredns/hosts {
-          fallthrough
-        }
     }
-  hosts: ""

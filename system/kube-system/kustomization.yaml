@@ -7,6 +7,8 @@ resources:
   - resources/cilium/load-balancer-ip-pool.yaml
   - resources/nodelocaldns/configmap.yaml
   - resources/nodelocaldns/daemonset.yaml
+  - resources/nodelocaldns/service.yaml
+  - resources/nodelocaldns/serviceaccount.yaml
   - resources/priority-class-high.yaml
   - resources/runtime-class.yaml
 
