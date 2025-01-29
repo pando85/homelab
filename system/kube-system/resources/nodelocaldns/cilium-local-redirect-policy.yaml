@@ -5,9 +5,8 @@ metadata:
   namespace: kube-system
 spec:
   redirectFrontend:
-    serviceMatcher:
-      serviceName: kube-dns
-      namespace: kube-system
+    addressMatcher:
+      ip: 169.254.25.10
       toPorts:
         - name: dns-tcp
           port: "53"
