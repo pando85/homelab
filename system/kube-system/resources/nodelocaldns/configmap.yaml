@@ -49,8 +49,6 @@ data:
         reload
         loop
         bind 0.0.0.0
-        forward . /etc/resolv.conf {
-            force_udp
-        }
+        forward . /etc/resolv.conf
         prometheus :9253
     }
