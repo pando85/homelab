@@ -22,7 +22,7 @@ spec:
     spec:
       containers:
         - name: write
-          image: debian:10.9-slim
+          image: debian
           command:
             - dd
             - if=/dev/zero

@@ -33,6 +33,7 @@ spec:
             - -skipteardown=true
             - -setupinterface=false
             - -setupiptables=false
+          # renovate: datasource=docker
           image: registry.k8s.io/dns/k8s-dns-node-cache:1.22.28
           imagePullPolicy: IfNotPresent
           livenessProbe:
