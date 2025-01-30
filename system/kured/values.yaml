@@ -13,6 +13,7 @@ kured:
     endTime: "8:00"
     timeZone: Europe/Madrid
     rebootCommand: "/usr/bin/systemctl reboot"
+    drainPodSelector: "kured.dev/drain=true"
     # time in seconds given to each pod to terminate gracefully, if negative, the default value specified in the pod will be used (default: -1)
     drainGracePeriod: "180"
     # when time is greater than zero, skip waiting for the pods whose deletion timestamp is older than N seconds while draining a node (default: 0)
