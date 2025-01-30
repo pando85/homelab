@@ -87,15 +87,6 @@
         'docker',
       ],
       matchPackageNames: [
-        '/lidarr/',
-      ],
-      automerge: false,
-    },
-    {
-      matchDatasources: [
-        'docker',
-      ],
-      matchPackageNames: [
         'nextcloud',
         'redis',
       ],
