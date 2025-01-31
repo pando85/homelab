@@ -225,7 +225,7 @@ app-template:
           main:
             - path: /usr/src/app/.transformers_cache
     model-cache:
-      existingClaim: immich-data
+      existingClaim: immich-models
       advancedMounts:
         ml:
           main:
