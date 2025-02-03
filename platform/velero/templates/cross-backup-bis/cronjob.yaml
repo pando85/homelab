@@ -15,7 +15,7 @@ spec:
           containers:
           - name: rclone
             # renovate: datasource=docker
-            image: rclone/rclone:1.66.0
+            image: rclone/rclone:1.69.0
             command:
               - /bin/sh
               - -c
