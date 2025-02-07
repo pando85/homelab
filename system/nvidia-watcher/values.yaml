@@ -9,7 +9,6 @@ app-template:
             repository: bolferdocker/nvidia-watcher
             tag: 0.0.2
           env:
-            DOMAIN_NAME: dbcloud.org
             LABEL_SELECTOR: runtime-class=nvidia
             POD_STATUS_REASON: UnexpectedAdmissionError
             POD_STATUS_PHASE: Failed
