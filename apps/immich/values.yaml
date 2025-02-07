@@ -71,6 +71,8 @@ app-template:
       pod:
         <<: *pod
         runtimeClassName: nvidia
+        labels:
+          runtime-class: nvidia
       containers:
         main:
           image: *image
@@ -94,6 +96,8 @@ app-template:
       pod:
         <<: *pod
         # runtimeClassName: nvidia
+        # labels:
+        #   runtime-class: nvidia
       containers:
         main:
           image:

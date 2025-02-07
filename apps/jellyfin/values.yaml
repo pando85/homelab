@@ -7,6 +7,8 @@ app-template:
       pod:
         enableServiceLinks: false
         runtimeClassName: nvidia
+        labels:
+          runtime-class: nvidia
       containers:
         jellyfin:
           image:
