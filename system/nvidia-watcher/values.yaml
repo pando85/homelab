@@ -1,7 +1,6 @@
 app-template:
   controllers:
     nvidia-watcher:
-      type: statefulset
       containers:
         nvidia-watcher:
           image:
