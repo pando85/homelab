@@ -1,0 +1,7 @@
+apiVersion: v2
+name: nvidia-watcher
+version: 0.0.0
+dependencies:
+  - name: app-template
+    version: 3.6.1
+    repository: https://bjw-s.github.io/helm-charts/

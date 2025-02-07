@@ -1,0 +1,27 @@
+app-template:
+  controllers:
+    nvidia-watcher:
+      type: statefulset
+      containers:
+        nvidia-watcher:
+          image:
+            repository: bolferdocker/nvidia-watcher
+            tag: 0.0.2
+
+          env:
+            TZ: Europe/Madrid
+            DOMAIN_NAME: dbcloud.org
+            LABEL_SELECTOR: runtime-class=nvidia  # Asume que los pods de NVIDIA tienen esta etiqueta
+            POD_STATUS_REASON: UnexpectedAdmissionError
+            POD_STATUS_PHASE: Failed
+
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1800Mi
+            limits:
+              memory: 4000Mi
+
+      serviceAccount:
+        create: false  # O true si quieres que Helm lo cree
+        name: nvidia-watcher
