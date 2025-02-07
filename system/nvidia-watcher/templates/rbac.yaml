@@ -11,9 +11,15 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: pod-watcher
 rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["list", "watch", "get", "delete"]
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - list
+      - watch
+      - get
+      - delete
 ---
 
 kind: ClusterRoleBinding
@@ -28,4 +34,3 @@ subjects:
   - kind: ServiceAccount
     name: nvidia-watcher
     namespace: nvidia-watcher
-
