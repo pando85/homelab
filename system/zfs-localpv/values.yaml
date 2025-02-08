@@ -7,6 +7,8 @@ zfs-localpv:
     # requests:
     #   cpu: 10m
     #   memory: 32Mi
+    nodeSelector:
+      kubernetes.io/arch: amd64
   zfsController:
     resources: {}
     # limits:
