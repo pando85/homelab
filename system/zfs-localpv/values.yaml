@@ -20,3 +20,6 @@ zfs-localpv:
     snapshotter:
       extraArgs:
         - -v=1
+    snapshotController:
+      extraArgs:
+        - -v=1
