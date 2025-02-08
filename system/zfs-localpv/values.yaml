@@ -19,4 +19,4 @@ zfs-localpv:
     #   memory: 32Mi
     snapshotter:
       extraArgs:
-        - -v2
+        - -v=2
