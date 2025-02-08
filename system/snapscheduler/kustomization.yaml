@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: snapscheduler
+
+helmCharts:
+  - includeCRDs: true
+    name: snapscheduler
+    namespace: snapscheduler
+    releaseName: snapscheduler
+    repo: https://backube.github.io/helm-charts/
+    valuesFile: values.yaml
+    version: 3.4.0
+
+patches:
+  - target:
+      kind: Deployment
+      name: snapscheduler
+    patch: |-
+      - op: test
+        path: /spec/template/spec/containers/1/name
+        value: manager
+      - op: add
+        path: /spec/template/spec/containers/1/args/-
+        value: -zap-log-level=error
