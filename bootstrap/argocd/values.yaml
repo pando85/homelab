@@ -9,6 +9,8 @@ argo-cd:
             operator: In
             values:
               - amd64
+    logging:
+      level: warn
   configs:
     cm:
       create: true

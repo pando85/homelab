@@ -8,8 +8,8 @@ loki:
     fsGroupChangePolicy: "OnRootMismatch"
 
   limits_config:
-    max_query_lookback: 90d
-    retention_period: 90d
+    max_query_lookback: 180d
+    retention_period: 180d
   commonConfig:
     replication_factor: 1
   storage:
@@ -51,7 +51,7 @@ singleBinary:
     enabled: true
     # Remove until k8s 1.27
     enableStatefulSetAutoDeletePVC: false
-    size: 200Gi
+    size: 50Gi
 
   resources:
     limits:
