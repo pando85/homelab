@@ -33,7 +33,8 @@ spec:
     version: "16"
     parameters:
       archive_mode: "off"
-      max_connections: "4"
+      # minimal value. If not default to 100
+      max_connections: "25"
       shared_buffers: 32MB
       log_checkpoints: "off"
       log_connections: "off"

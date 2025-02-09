@@ -39,7 +39,8 @@ spec:
     parameters:
       archive_mode: "off"
       # RAILS_MAX_THREADS: 5
-      max_connections: "5"
+      # minimal value. If not default to 100
+      max_connections: "25"
       shared_buffers: 32MB
       log_checkpoints: "off"
       log_connections: "off"
