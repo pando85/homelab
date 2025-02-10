@@ -8,7 +8,7 @@ app-template:
         stump:
           image:
             repository: aaronleopold/stump
-            tag: 0.0.9
+            tag: 0.0.10
           env:
             STUMP_IN_DOCKER: "true"
             STUMP_CONFIG_DIR: /config
