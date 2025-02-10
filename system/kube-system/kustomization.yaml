@@ -28,3 +28,13 @@ helmCharts:
     repo: https://nvidia.github.io/k8s-device-plugin
     valuesFile: nvidia-device-plugin-values.yaml
     version: 0.17.0
+
+patches:
+  - patch: |-
+      - op: add
+        path: "/metadata/annotations/argocd.argoproj.io~1sync-options"
+        value: "Replace=true"
+    target:
+      kind: ConfigMap
+      name: cilium-dashboard
+      version: v1
