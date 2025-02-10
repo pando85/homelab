@@ -10,7 +10,7 @@ app-template:
         unifi:
           image:
             repository: jacobalberty/unifi
-            tag: v9.0.108
+            tag: v9.0.114
 
           env:
             TZ: Europe/Madrid
