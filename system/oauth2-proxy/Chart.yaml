@@ -6,5 +6,5 @@ dependencies:
     version: 7.10.5
     repository: https://oauth2-proxy.github.io/manifests
   - name: app-template
-    version: 3.6.1
+    version: 3.7.0
     repository: https://bjw-s.github.io/helm-charts/
