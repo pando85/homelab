@@ -10,7 +10,7 @@ app-template:
         prowlarr:
           image:
             repository: ghcr.io/onedr0p/prowlarr-nightly
-            tag: 1.31.1.4947@sha256:1d1a500ac02b4491e89abc6f7fd2cfba7f52dbb3e0d11e07f08ae425067c5556
+            tag: 1.31.2.4960@sha256:20d05883fbbec00c030e713334857b8f6f3a12cf770aecf526b529e11684acfa
 
           probes:
             liveness: &probes
