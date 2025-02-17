@@ -41,7 +41,7 @@ app-template:
         main:
           image: &image
             repository: ghcr.io/immich-app/immich-server
-            tag: v1.125.7
+            tag: v1.126.1
           env:
             <<: *env
             IMMICH_WORKERS_INCLUDE: 'api'
