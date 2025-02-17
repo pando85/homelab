@@ -14,7 +14,7 @@ helmCharts:
     releaseName: loki
     repo: https://grafana.github.io/helm-charts
     valuesFile: values.yaml
-    version: 6.25.1
+    version: 6.27.0
   - includeCRDs: true
     name: promtail
     namespace: loki
