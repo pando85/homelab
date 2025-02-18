@@ -50,3 +50,10 @@ spec:
       log_statement: none
       # ZFS settings:
       full_page_writes: "off"
+
+  preparedDatabases:
+    dawarich:
+      extensions:
+        postgis: public
+        postgis_raster: public
+        postgis_topology: public
