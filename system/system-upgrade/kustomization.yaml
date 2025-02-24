@@ -3,5 +3,5 @@ kind: Kustomization
 
 resources:
   # renovate: url-match: datasource=github-releases depName=rancher/system-upgrade-controller
-  - https://github.com/rancher/system-upgrade-controller/releases/download/v0.14.2/system-upgrade-controller.yaml
+  - https://github.com/rancher/system-upgrade-controller/releases/download/v0.15.0/system-upgrade-controller.yaml
   - k3s
