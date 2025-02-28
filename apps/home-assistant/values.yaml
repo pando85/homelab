@@ -113,17 +113,12 @@ app-template:
       containers:
         whisper:
           image:
-            repository: pando85/wyoming-whisper
-            tag: 2.0.0
-          args:
-            - --model
-            - large-v3
-            - --language
-            - es
-            - --device
-            - cuda
-            - --compute-type
-            - int8
+            repository: ghcr.io/linuxserver/faster-whisper
+            tag: 2.4.0-gpu
+          env:
+            TZ: Europe/Madrid
+            WHISPER_MODEL: large-v3-turbo
+            WHISPER_LANG: es
           resources:
             requests:
               cpu: 15m
