@@ -6,7 +6,7 @@
     ':preserveSemverRanges',
     ':disableRateLimiting',
   ],
-  gitAuthor: 'Renovate <4646670+renovate85-bot[bot]@users.noreply.github.com>',
+  gitAuthor: 'Renovate Bot',
   forkProcessing: 'enabled',
   rebaseWhen: 'conflicted',
   commitMessagePrefix: '{{parentDir}}: ',
