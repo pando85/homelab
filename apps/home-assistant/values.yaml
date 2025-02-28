@@ -399,7 +399,7 @@ app-template:
       advancedMounts:
         whisper:
           whisper:
-            - path: /config
+            - path: /data
     piper:
       enabled: true
       type: emptyDir
