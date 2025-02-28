@@ -6,7 +6,7 @@
     ':preserveSemverRanges',
     ':disableRateLimiting',
   ],
-  gitAuthor: 'Renovate Bot',
+  gitAuthor: 'Renovate Bot <renovate@grigri.cloud>',
   forkProcessing: 'enabled',
   rebaseWhen: 'conflicted',
   commitMessagePrefix: '{{parentDir}}: ',
