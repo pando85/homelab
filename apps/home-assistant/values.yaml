@@ -395,8 +395,7 @@ app-template:
             - path: /conf
     whisper:
       enabled: true
-      type: emptyDir
-      sizeLimit: 5Gi
+      existingClaim: home-assistant-models
       advancedMounts:
         whisper:
           whisper:
