@@ -46,6 +46,9 @@ app-template:
       fsGroup: 1001
       fsGroupChangePolicy: 'OnRootMismatch'
 
+    nodeSelector:
+      kubernetes.io/arch: amd64
+
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
