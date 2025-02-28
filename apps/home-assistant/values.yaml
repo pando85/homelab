@@ -123,6 +123,8 @@ app-template:
             - es
             - --device
             - cuda
+            - --compute-type
+            - int8
           resources:
             requests:
               cpu: 15m
