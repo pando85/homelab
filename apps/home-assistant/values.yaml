@@ -11,7 +11,7 @@ app-template:
         hass:
           image:
             repository: ghcr.io/onedr0p/home-assistant
-            tag: 2025.2.5@sha256:0e6dfed23d79e76e9bf0d65afbecb0483534fa9ba4a242141362037d3607524a
+            tag: 2025.2.5@sha256:595ced22062da128b78d249c84594f82649c097bb765a3c833afb3fce7e3a66d
           env:
             TZ: Europe/Madrid
             POSTGRES_USER:
