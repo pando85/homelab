@@ -6,7 +6,9 @@
     ':preserveSemverRanges',
     ':disableRateLimiting',
   ],
-  gitAuthor: 'Renovate Bot <renovate@grigri.cloud>',
+  "gitIgnoredAuthors": [
+    "/^\\d+\\+renovate\\d+-bot\\[bot\\]@users\\.noreply\\.github\\.com$/"
+  ],
   forkProcessing: 'enabled',
   rebaseWhen: 'conflicted',
   commitMessagePrefix: '{{parentDir}}: ',
