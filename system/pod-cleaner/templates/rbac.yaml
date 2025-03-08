@@ -1,8 +1,8 @@
 kind: ServiceAccount
 apiVersion: v1
 metadata:
-  name: nvidia-watcher
-  namespace: nvidia-watcher
+  name: pod-cleaner
+  namespace: pod-cleaner
 
 ---
 
@@ -25,12 +25,12 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: nvidia-watcher-pod-watcher
+  name: pod-cleaner-pod-watcher
 roleRef:
   kind: ClusterRole
   name: pod-watcher
   apiGroup: rbac.authorization.k8s.io
 subjects:
   - kind: ServiceAccount
-    name: nvidia-watcher
-    namespace: nvidia-watcher
+    name: pod-cleaner
+    namespace: pod-cleaner
