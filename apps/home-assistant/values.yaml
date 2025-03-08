@@ -109,7 +109,7 @@ app-template:
       pod:
         runtimeClassName: nvidia
         labels:
-          runtime-class: nvidia
+          pod-cleaner.dbcloud.org/watch: "true"
       containers:
         whisper:
           image:

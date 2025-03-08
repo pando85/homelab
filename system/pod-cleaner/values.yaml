@@ -1,14 +1,14 @@
 app-template:
   controllers:
-    nvidia-watcher:
+    pod-cleaner:
       containers:
-        nvidia-watcher:
+        pod-cleaner:
           image:
             # code from: https://github.com/Daniel-Boluda/homelab/tree/6396459b75dc2af9914ef58a5e01da06c0820179/system/nvidia-watcher/src
             repository: bolferdocker/nvidia-watcher
             tag: 0.0.3
           env:
-            LABEL_SELECTOR: runtime-class=nvidia
+            LABEL_SELECTOR: pod-cleaner.dbcloud.org/watch=true
             POD_STATUS_REASON: UnexpectedAdmissionError
             POD_STATUS_PHASE: Failed
 
@@ -21,4 +21,4 @@ app-template:
 
       serviceAccount:
         create: false
-        name: nvidia-watcher
+        name: pod-cleaner
