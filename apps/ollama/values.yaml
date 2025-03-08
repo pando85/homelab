@@ -4,8 +4,8 @@ ollama:
       enabled: true
       type: 'nvidia'
     models:
-      pull:
-        - qwen2.5:3b
+      pull: []
+        # - qwen2.5:3b
       run: []
 
   extraEnv:
