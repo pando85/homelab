@@ -39,6 +39,9 @@ ollama:
       memory: 12Gi
 
   runtimeClassName: nvidia
+
+  podLabels:
+    pod-cleaner.dbcloud.org/watch: "true"
   podSecurityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true
