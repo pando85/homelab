@@ -29,11 +29,8 @@ open-webui:
       existingClaim: pipelines-data
 
   websocket:
-    # -- Enables websocket support in Open WebUI with env `ENABLE_WEBSOCKET_SUPPORT`
     enabled: true
-    # -- Specifies the websocket manager to use with env `WEBSOCKET_MANAGER`: redis (default)
     manager: redis
-    # -- Specifies the URL of the Redis instance for websocket communication. Template with `redis://[:<password>@]<hostname>:<port>/<db>`
     url: redis://open-webui-redis:6379/0
     redis:
       enabled: true
@@ -60,6 +57,8 @@ open-webui:
     existingClaim: open-webui-data
 
   extraEnvVars:
+    - name: ENABLE_OAUTH_SIGNUP
+      value: "true"
     - name: OPENAI_API_KEY
       valueFrom:
         secretKeyRef:
