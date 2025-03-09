@@ -18,10 +18,10 @@ open-webui:
         requiredDuringSchedulingIgnoredDuringExecution:
           nodeSelectorTerms:
             - matchExpressions:
-                - key: app.kubernetes.io/name
+                - key: app.kubernetes.io/instance
                   operator: In
                   values:
-                    - ollama
+                    - open-webui
     persistence:
       enabled: true
       existingClaim: pipelines-data
@@ -62,16 +62,8 @@ open-webui:
     host: open-webui.grigri.cloud
     tls: true
 
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: app.kubernetes.io/name
-                operator: In
-                values:
-                  - ollama
-
+  nodeSelector:
+    kubernetes.io/hostname: prusik
   persistence:
     enabled: true
     existingClaim: open-webui-data
