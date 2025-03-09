@@ -18,10 +18,14 @@ open-webui:
         requiredDuringSchedulingIgnoredDuringExecution:
           nodeSelectorTerms:
             - matchExpressions:
-                - key: app.kubernetes.io/instance
+                - key: app.kubernetes.io/name
                   operator: In
                   values:
-                    - open-webui
+                    - ollama
+    persistence:
+      enabled: true
+      existingClaim: pipelines-data
+
   websocket:
     # -- Enables websocket support in Open WebUI with env `ENABLE_WEBSOCKET_SUPPORT`
     enabled: true
