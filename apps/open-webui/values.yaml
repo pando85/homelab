@@ -91,13 +91,13 @@ open-webui:
     - name: OAUTH_SCOPES
       value: "openid email profile"
 
-  containerSecurityContext: {}
-    # runAsUser: 1001
-    # runAsGroup: 1001
-    # runAsNonRoot: true
-    # privileged: false
-    # allowPrivilegeEscalation: false
-    # readOnlyRootFilesystem: false
-    # capabilities:
-    #   drop:
-    #     - ALL
+  containerSecurityContext:
+    runAsUser: 1001
+    runAsGroup: 1001
+    runAsNonRoot: true
+    privileged: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: false
+    capabilities:
+      drop:
+        - ALL
