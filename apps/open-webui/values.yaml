@@ -59,6 +59,29 @@ open-webui:
     enabled: true
     existingClaim: open-webui-data
 
+  extraEnvVars:
+    - name: OPENAI_API_KEY
+      valueFrom:
+        secretKeyRef:
+          name: open-webui
+          key: OPENAI_API_KEY
+    - name: OAUTH_CLIENT_ID
+      valueFrom:
+        secretKeyRef:
+          name: open-webui
+          key: OAUTH_CLIENT_ID
+    - name: OAUTH_CLIENT_SECRET
+      valueFrom:
+        secretKeyRef:
+          name: open-webui
+          key: OAUTH_CLIENT_SECRET
+    - name: OPENID_PROVIDER_URL
+      value: https://idm.grigri.cloud/oauth2/openid/open-webui/.well-known/openid-configuration
+    - name: OAUTH_PROVIDER_NAME
+      value: idm.grigri.cloud
+    - name: OAUTH_SCOPES
+      value: "openid email profile"
+
   containerSecurityContext: {}
     # runAsUser: 1001
     # runAsGroup: 1001
