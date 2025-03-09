@@ -63,6 +63,11 @@ open-webui:
   extraEnvVars:
     - name: WEBUI_URL
       value: https://open-webui.grigri.cloud
+    - name: WEBUI_SECRET_KEY
+      valueFrom:
+        secretKeyRef:
+          name: open-webui
+          key: WEBUI_SECRET_KEY
     - name: ENABLE_SIGNUP
       value: "false"
     - name: ENABLE_OAUTH_SIGNUP
