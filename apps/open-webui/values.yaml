@@ -7,7 +7,7 @@ open-webui:
   resources:
     requests:
       cpu: 10m
-      memory: 180Mi
+      memory: 512Mi
     limits:
       memory: 2Gi
 
