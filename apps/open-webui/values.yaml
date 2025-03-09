@@ -18,7 +18,7 @@ open-webui:
         requiredDuringSchedulingIgnoredDuringExecution:
           nodeSelectorTerms:
             - matchExpressions:
-                - key: app.kubernetes.io/instance
+                - key: app.kubernetes.io/component
                   operator: In
                   values:
                     - open-webui
@@ -44,7 +44,7 @@ open-webui:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: app.kubernetes.io/instance
+                  - key: app.kubernetes.io/component
                     operator: In
                     values:
                       - open-webui
@@ -68,13 +68,13 @@ open-webui:
     enabled: true
     existingClaim: open-webui-data
 
-  containerSecurityContext:
-    runAsUser: 1001
-    runAsGroup: 1001
-    runAsNonRoot: true
-    privileged: false
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: false
-    capabilities:
-      drop:
-        - ALL
+  containerSecurityContext: {}
+    # runAsUser: 1001
+    # runAsGroup: 1001
+    # runAsNonRoot: true
+    # privileged: false
+    # allowPrivilegeEscalation: false
+    # readOnlyRootFilesystem: false
+    # capabilities:
+    #   drop:
+    #     - ALL
