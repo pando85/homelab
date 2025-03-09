@@ -2,12 +2,12 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   labels:
+    app.kubernetes.io/component: open-webui-pipelines
     app.kubernetes.io/instance: open-webui
-    app.kubernetes.io/name: open-webui
-  name: open-webui-data
+  name: pipelines-data
 spec:
   accessModes:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 10Gi
+      storage: 2Gi
