@@ -57,6 +57,8 @@ open-webui:
     existingClaim: open-webui-data
 
   extraEnvVars:
+    - name: WEBUI_URL
+      value: https://open-webui.grigri.cloud
     - name: ENABLE_SIGNUP
       value: "false"
     - name: ENABLE_OAUTH_SIGNUP
