@@ -40,6 +40,10 @@ open-webui:
         tag: 7.4.2-alpine3.21
       affinity: *affinity
 
+  image:
+    repository: ghcr.io/open-webui/open-webui
+    tag: 0.5.20
+
   ingress:
     enabled: true
     class: nginx-external
