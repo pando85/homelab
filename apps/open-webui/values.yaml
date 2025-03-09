@@ -57,6 +57,8 @@ open-webui:
     existingClaim: open-webui-data
 
   extraEnvVars:
+    - name: ENABLE_SIGNUP
+      value: "false"
     - name: ENABLE_OAUTH_SIGNUP
       value: "true"
     - name: OPENAI_API_KEY
