@@ -13,15 +13,17 @@ open-webui:
 
   pipelines:
     enabled: true
-    affinity:
-      nodeAffinity:
+    affinity: &affinity
+      podAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
+          - labelSelector:
+              matchExpressions:
                 - key: app.kubernetes.io/component
                   operator: In
                   values:
                     - open-webui
+            topologyKey: kubernetes.io/hostname
+
     persistence:
       enabled: true
       existingClaim: pipelines-data
@@ -39,15 +41,7 @@ open-webui:
       image:
         repository: redis
         tag: 7.4.2-alpine3.21
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: app.kubernetes.io/component
-                    operator: In
-                    values:
-                      - open-webui
+      affinity: *affinity
 
   ingress:
     enabled: true
