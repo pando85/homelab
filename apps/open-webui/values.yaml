@@ -61,6 +61,8 @@ open-webui:
       value: "false"
     - name: ENABLE_OAUTH_SIGNUP
       value: "true"
+    - name: OAUTH_MERGE_ACCOUNTS_BY_EMAIL
+      value: "true"
     - name: OPENAI_API_KEY
       valueFrom:
         secretKeyRef:
