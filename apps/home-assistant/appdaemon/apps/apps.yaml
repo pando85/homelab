@@ -30,7 +30,7 @@ dhw_control:
     enabled: true
     target: agil
   dhw:
-    enabled: false
+    enabled: true
     entity: switch.aquarea_force_dhw_mode
   log_level: DEBUG
 
