@@ -19,6 +19,21 @@ climate_control:
   fallback_cheap_electricity_price: 0.09
   log_level: INFO
 
+dhw_control:
+  module: dhw_control
+  class: DHWControl
+  input_boolean:
+    enable: input_boolean.appdaemon_dhw_enable
+  sensor:
+    pvpc_price: sensor.esios_pvpc
+  notify:
+    enabled: true
+    target: agil
+  dhw:
+    enabled: false
+    entity: switch.aquarea_force_dhw_mode
+  log_level: DEBUG
+
 last_connection_sensor:
   module: last_connection_sensor
   class: LastConnectionSensor

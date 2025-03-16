@@ -1,0 +1,4 @@
+input_boolean:
+  appdaemon_dhw_enable:
+    name: AppDaemon DHW Control Enable
+    icon: mdi:thermometer-auto
