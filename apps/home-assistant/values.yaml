@@ -25,7 +25,9 @@ app-template:
                   name: home-assistant.home-assistant-postgres.credentials.postgresql.acid.zalan.do
                   key: password
             ZZ_DB_URL: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@home-assistant-postgres/home_assistant"
-            OPENAI_BASE_URL: http://open-webui.open-webui.svc/api/
+          envFrom:
+            - secretRef:
+                name: hass-env
           probes:
             liveness:
               enabled: true
