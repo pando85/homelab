@@ -25,9 +25,6 @@ app-template:
                   name: home-assistant.home-assistant-postgres.credentials.postgresql.acid.zalan.do
                   key: password
             ZZ_DB_URL: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@home-assistant-postgres/home_assistant"
-          envFrom:
-            - secretRef:
-                name: hass-env
           probes:
             liveness:
               enabled: true
