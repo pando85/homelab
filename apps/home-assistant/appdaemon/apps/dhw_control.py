@@ -128,7 +128,7 @@ class DHWControl(hass.Hass):
 
         if self.args["notify"]["enabled"]:
             vega_diagram = self._generate_vega_diagram(datetime_to_schedule)
-            msg = f"Programming the DHW control for this hour: [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram}){cheap_msg}"
+            msg = f"Programming the DHW control for this hour: [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         now = datetime.now(pytz.timezone(self.get_timezone()))
