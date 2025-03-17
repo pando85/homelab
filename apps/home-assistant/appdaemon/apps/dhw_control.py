@@ -75,8 +75,8 @@ class DHWControl(hass.Hass):
         if self.args["notify"]["enabled"]:
             await self.notify(msg, name=self.args["notify"]["target"])
         if self.args["dhw"]["enabled"]:
-            force_dhw = await self.get_entity(self.args["dhw"]["entity"])
-            await force_dhw.turn_on()
+            force_dhw_entity = self.get_entity(self.args["dhw"]["entity"])
+            await force_dhw_entity.turn_on()
 
     def _generate_vega_diagram(self, datetime_to_schedule: datetime) -> str:
         data_values = [{"hour": i, "status": "ON" if i == datetime_to_schedule.hour else "OFF"} for i in range(24)]
