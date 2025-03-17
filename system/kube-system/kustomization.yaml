@@ -20,7 +20,7 @@ helmCharts:
     releaseName: cilium
     repo: https://helm.cilium.io/
     valuesFile: cilium-values.yaml
-    version: 1.17.1
+    version: 1.17.2
   - includeCRDs: true
     name: nvidia-device-plugin
     namespace: kube-system
