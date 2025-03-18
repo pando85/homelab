@@ -200,5 +200,20 @@
       groupName: 'k3s upgrade',
       groupSlug: 'k3s-upgrade',
     },
+    {
+      description: 'Group app-template updates in one PR',
+      matchPackagePatterns: [
+        'app-template'
+      ],
+      matchDatasources: [
+        'helm',
+      ],
+      groupName: 'app-template',
+      groupSlug: 'app-template',
+      additionalBranchPrefix: 'app-template-',
+      addLabels: [
+        'renovate/app-template',
+      ],
+    },
   ],
 }
