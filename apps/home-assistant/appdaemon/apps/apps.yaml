@@ -32,7 +32,7 @@ dhw_control:
   dhw:
     enabled: true
     entity: switch.aquarea_force_dhw_mode
-  log_level: DEBUG
+  log_level: INFO
 
 last_connection_sensor:
   module: last_connection_sensor
