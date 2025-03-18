@@ -6,8 +6,8 @@
     ':preserveSemverRanges',
     ':disableRateLimiting',
   ],
-  "gitIgnoredAuthors": [
-    "/^\\d+\\+renovate\\d+-bot\\[bot\\]@users\\.noreply\\.github\\.com$/"
+  gitIgnoredAuthors: [
+    '/^\\d+\\+renovate\\d+-bot\\[bot\\]@users\\.noreply\\.github\\.com$/',
   ],
   forkProcessing: 'enabled',
   rebaseWhen: 'conflicted',
@@ -202,9 +202,6 @@
     },
     {
       description: 'Group app-template updates in one PR',
-      matchPackagePatterns: [
-        'app-template'
-      ],
       matchDatasources: [
         'helm',
       ],
@@ -213,6 +210,9 @@
       additionalBranchPrefix: 'app-template-',
       addLabels: [
         'renovate/app-template',
+      ],
+      matchPackageNames: [
+        '/app-template/',
       ],
     },
   ],
