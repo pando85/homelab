@@ -37,20 +37,20 @@ ollama:
       memory: 20Mi
     limits:
       memory: 2Gi
+      nvidia.com/gpu: 1
 
   runtimeClassName: nvidia
 
   podLabels:
     pod-cleaner.dbcloud.org/watch: "true"
   podSecurityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    capabilities:
-      drop:
-        - ALL
+    fsGroup: 10001
+    runAsGroup: 10001
+    runAsNonRoot: true
+    runAsUser: 10001
+    fsGroupChangePolicy: "OnRootMismatch"
   securityContext:
     runAsNonRoot: false
-    fsGroupChangePolicy: OnRootMismatch
     seccompProfile:
       type: RuntimeDefault
   volumes:
