@@ -267,7 +267,7 @@ spec:
                 - https://vault.internal.grigri.cloud/v1/pki/iot/ca
               crl_distribution_points:
                 - https://vault.internal.grigri.cloud/v1/pki/iot/crl
-          root/generate:
+          root/generate/internal:
             - name: iot.grigri
               common_name: iot.grigri
               ttl: "87600h"
@@ -282,8 +282,6 @@ spec:
               country: "ES"
               locality: "Madrid"
               province: "Madrid"
-              config:
-                exported: internal
           roles:
             - name: internal-certificates-grigri-iot
               allow_localhost: false
