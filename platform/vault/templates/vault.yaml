@@ -267,8 +267,8 @@ spec:
                 - https://vault.internal.grigri.cloud/v1/pki/iot/ca
               crl_distribution_points:
                 - https://vault.internal.grigri.cloud/v1/pki/iot/crl
-          root/generate/internal:
-            - name: iot.grigri
+          root/generate:
+            - name: internal
               common_name: iot.grigri
               ttl: "87600h"
               allow_subdomains: true
