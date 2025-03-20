@@ -282,7 +282,8 @@ spec:
               country: "ES"
               locality: "Madrid"
               province: "Madrid"
-              exported: internal
+              config:
+                exported: internal
           roles:
             - name: internal-certificates-grigri-iot
               allow_localhost: false
