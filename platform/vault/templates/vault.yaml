@@ -182,6 +182,16 @@ spec:
           default_role: admin
           jwt_supported_algs:
             - ES256
+        roles:
+          - name: default
+            allowed_redirect_uris:
+              - https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback"
+              - http://localhost:8250/oidc/callback
+            user_claim: email
+            # oidc_scopes: groups
+            # groups_claim: groups
+            policies: admin
+            ttl: 1h
       - type: kubernetes
         config:
             # uses vault Service Account
