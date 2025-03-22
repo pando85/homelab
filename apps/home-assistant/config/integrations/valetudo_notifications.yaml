@@ -52,7 +52,7 @@ automation:
 binary_sensor:
   - platform: template
     sensors:
-      valetudo_working_state:
-        friendly_name: "Valetudo Working state"
+      valetudo_cleaning:
+        friendly_name: "Valetudo Cleaning"
         device_class: running
-        value_template: "{{ states('sensor.valetudo_detailedinternalrhinoceros_status_flag') != 'none' }}"
+        value_template: "{{ states('vacuum.valetudo_detailedinternalrhinoceros') == 'cleaning' }}"
