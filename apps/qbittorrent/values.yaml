@@ -37,7 +37,7 @@ app-template:
         metrics:
           image:
             repository: ghcr.io/esanchezm/prometheus-qbittorrent-exporter
-            tag: latest@sha256:110888301a3feaca53bf2a965dc40b225923651203429a840b31f71ee1c6cde8
+            tag: latest@sha256:cede87bf9b32635c9647afe50e0e68d0332df52b7359b2a406ec51ed645f12c6
           env:
             QBITTORRENT_HOST: localhost
             QBITTORRENT_PORT: *port
