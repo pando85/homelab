@@ -4,7 +4,7 @@ metadata:
   name: test-limit-egress
   annotations:
     kubernetes.io/egress-bandwidth: "25M"
-    # this annotation is ignored by cilium
+    # this annotation is ignored by cilium, it will be supported in 1.18.0
     kubernetes.io/ingress-bandwidth: "100M"
 spec:
   restartPolicy: Never

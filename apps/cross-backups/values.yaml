@@ -53,6 +53,10 @@ minio:
           - *hostMC
         secretName: mc-s3-tls-certificate
 
+  podAnnotations:
+    # Until 1.18.0 is released, this annotation is ignored by Cilium
+    kubernetes.io/ingress-bandwidth: "100M"
+
   resources:
     requests:
       memory: 2Gi
