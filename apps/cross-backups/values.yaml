@@ -162,7 +162,7 @@ minio:
     #   objectlocking: false
 
   customCommands:
-    - command: "admin bucket quota myminio/dabol --hard 3TB"
+    - command: "quota set myminio/dabol --size 3TB"
 
   metrics:
     serviceMonitor:
