@@ -161,6 +161,9 @@ minio:
     #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
     #   objectlocking: false
 
+  customCommands:
+    - command: "admin bucket quota myminio/dabol --hard 3TB"
+
   metrics:
     serviceMonitor:
       enabled: true
