@@ -8,7 +8,7 @@ app-template:
         radarr:
           image:
             repository: ghcr.io/home-operations/radarr
-            tag: 5.21.0.9792@sha256:9328fc7298bad129b257e1d79095981b38354796f25625f911bde6df5759a346
+            tag: 5.22.0.9808@sha256:2bf6a9a5f30b28f09fa5601b23d095c64739ab0667753b95493a1bcdf194057d
 
           env:
             TZ: Europe/Madrid
