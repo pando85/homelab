@@ -11,6 +11,31 @@ spec:
   # specify a custom bank-vaults image with bankVaultsImage:
   # bankVaultsImage: ghcr.io/banzaicloud/bank-vaults:latest
 
+  resources:
+    vault:
+      requests:
+        memory: 500Mi
+        cpu: 20m
+      limits:
+        memory: 2Gi
+        cpu: 2
+
+    bankVaults:
+      requests:
+        memory: 18Mi
+        cpu: 10m
+      limits:
+        memory: 128Mi
+        cpu: 500m
+
+    prometheusExporter:
+      requests:
+        memory: 8Mi
+        cpu: 10m
+      limits:
+        memory: 128Mi
+        cpu: 500m
+
   # Common annotations for all created resources
   annotations:
     common/annotation: "true"
