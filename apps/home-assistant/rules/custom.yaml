@@ -18,10 +18,11 @@
     severity: warning
 - alert: VacuumCleaningRequired
   # Vacuum robot needs around 45 minutes for cleaning the main rooms.
-  # 45 * 60 / (60 * 60 * 24 * 7) = 0.00446
-  expr: avg_over_time(max (hass_binary_sensor_state{entity="binary_sensor.valetudo_cleaning"})[1w:5m]) < 0.00446
+  expr: sum(sum_over_time(hass_binary_sensor_state{entity="binary_sensor.valetudo_cleaning"}[1w])) > 45
   annotations:
-    description: Vacuum robot is not cleaning the main rooms since the last 7 days.
+    description: |
+      Vacuum robot is not cleaning the main rooms since the last 7 days.
+      It just cleaned {{ $value }} minutes in the last 7 days.
   for: 1d
   labels:
     severity: warning
