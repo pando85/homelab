@@ -50,6 +50,7 @@ app-template:
                 secretKeyRef:
                   name: dawarich-secrets
                   key: geoapify_api_key
+            SELF_HOSTED: "true"
           resources:
             requests:
               cpu: 10m
@@ -182,7 +183,17 @@ app-template:
           server:
             - path: /var/app/tmp
           sidekiq:
-            - path: /var/app/tmp
+            - path: /var/app/storage
+    # Can be migrated to S3
+    imports:
+      enabled: true
+      existingClaim: dawarich-imports
+      advancedMounts:
+        dawarich:
+          server:
+            - path: /var/app/storage
+          sidekiq:
+            - path: /var/app/storage
   serviceMonitor:
     server:
       enabled: true

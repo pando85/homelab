@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/instance: dawarich
+    app.kubernetes.io/name: dawarich
+    backup: dawarich-zfs
+    backup/retain: weekly
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+  name: dawarich-imports
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
