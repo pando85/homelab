@@ -56,4 +56,5 @@ spec:
       serviceAccount: openebs-zfs-controller-sa
       serviceAccountName: openebs-zfs-controller-sa
       terminationGracePeriodSeconds: 30
-
+      nodeSelector:
+        kubernetes.io/arch: amd64
