@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zfs-localpv-backup-gc
+  namespace: zfs-localpv
+  labels:
+    app: openebs-zfs-controller
+    component: openebs-zfs-backup-gc
+    openebs.io/component-name: openebs-zfs-backup-gc
+    openebs.io/version: 2.8.0-develop
+    role: openebs-zfs
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app: openebs-zfs-controller
+      component: openebs-zfs-backup-gc
+  template:
+    metadata:
+      labels:
+        app: openebs-zfs-controller
+        component: openebs-zfs-backup-gc
+        name: openebs-zfs-backup-gc
+        openebs.io/component-name: openebs-zfs-backup-gc
+        openebs.io/version: 2.8.0-develop
+        role: openebs-zfs
+    spec:
+      containers:
+      - args:
+        - --endpoint=$(OPENEBS_CSI_ENDPOINT)
+        - --plugin=$(OPENEBS_CONTROLLER_DRIVER)
+        env:
+        - name: OPENEBS_CONTROLLER_DRIVER
+          value: backupGC
+        - name: OPENEBS_NAMESPACE
+          valueFrom:
+            fieldRef:
+              apiVersion: v1
+              fieldPath: metadata.namespace
+        image: ghcr.io/pando85/zfs-driver:2.8.0-develop@sha256:8864907713fe21d66b52de53703f44cf241845eeca152dc6f822ad3a4ccd8201
+        imagePullPolicy: IfNotPresent
+        name: openebs-zfs-plugin
+        resources:
+          limits:
+            memory: 64Mi
+          requests:
+            cpu: 1m
+            memory: 10Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      priorityClassName: zfs-localpv-zfs-csi-controller-critical
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccount: openebs-zfs-controller-sa
+      serviceAccountName: openebs-zfs-controller-sa
+      terminationGracePeriodSeconds: 30
+
