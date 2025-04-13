@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: write
+spec:
+  containers:
+    - name: write
+      image: debian
+      command:
+        - sleep
+        - "3600"
+      volumeMounts:
+        - mountPath: /mnt/pv
+          name: test
+  volumes:
+    - name: test
+      persistentVolumeClaim:
+        claimName: test
+  restartPolicy: Never
