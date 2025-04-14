@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: kaniop
+
+helmCharts:
+  - includeCRDs: true
+    name: kaniop
+    namespace: kaniop
+    releaseName: kaniop
+    repo: oci://ghcr.io/pando85/helm-charts
+    valuesFile: values.yaml
+    version: 0.0.0-rc1
