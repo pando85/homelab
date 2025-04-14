@@ -1,0 +1,23 @@
+image:
+  repository: ghcr.io/pando85/kaniop
+  tag: latest@sha256:2590c24b5c123a6a5115d9b2f6ad8bb7ee95ecec3da68a512b052fcb33ce3fc1
+
+logging:
+  ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
+  ## Ref: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
+  level: "info"
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 90Mi
+  limits:
+    memory: 256Mi
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: monitoring
+
