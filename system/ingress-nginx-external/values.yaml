@@ -107,13 +107,6 @@ ingress-nginx:
       - name: dshm
         mountPath: /dev/shm
 
-    metrics:
-      enabled: true
-      serviceMonitor:
-        enabled: true
-        additionalLabels:
-          release: monitoring
-
     extraVolumes:
       - name: dshm
         emptyDir:
@@ -121,74 +114,12 @@ ingress-nginx:
           # not working until v1.21? https://github.com/kubernetes/kubernetes/issues/63126
           sizeLimit: 303Mi
 
-    ### START OF SECTION TO DEPLOY A DNS PROXY (CoreDNS) AS SIDECAR CONTAINER TO NGINX ###
-    # We need this DNS Proxy to overcome the issue that under Cilium network infrastructure,
-    # nginx failed to update the list of CoreDNS addresses. Thus, when CoreDNS pods are moved,
-    # nginx tried to connect to no-longer-exist CoreDNS pods which resulted in a failure in DNS resolving.
-    #
-    # We deploy a local DNS Server (CoreDNS) and this acts as a proxy between nginx and kube-system/kube-dns.
-    # By doing this, the nginx instance will always connect to this local DNS server only which eliminating
-    # the needs of refreshing/managing a fleet of CoreDNS Server.
-    #
-    # Link to some related issues:
-    # - https://github.com/kubernetes/ingress-nginx/issues/9222
-    # - https://github.com/projectcalico/calico/issues/4509
-      - name: dns-proxy-config-volume
-        configMap:
-          name: dns-proxy-config
-
-    dnsPolicy: None
-    dnsConfig:
-      nameservers:
-        - 127.0.0.1
-      searches:
-        - ingress-nginx-external.svc.cluster.local
-        - svc.cluster.local
-        - cluster.local
-        - grigri
-    extraContainers:
-      - name: dns-proxy
-        image: coredns/coredns:1.12.1
-        args:
-          - -conf
-          - /etc/coredns/Corefile
-        volumeMounts:
-          - mountPath: /etc/coredns
-            name: dns-proxy-config-volume
-            readOnly: true
-        livenessProbe:
-          failureThreshold: 5
-          httpGet:
-            path: /health
-            port: 8080
-            scheme: HTTP
-          initialDelaySeconds: 60
-          periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 5
-        readinessProbe:
-          failureThreshold: 3
-          httpGet:
-            path: /health
-            port: 8080
-            scheme: HTTP
-          periodSeconds: 10
-          successThreshold: 1
-          timeoutSeconds: 1
-        resources:
-          limits:
-            memory: 128Mi
-          requests:
-            cpu: 10m
-            memory: 13Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            add:
-              - NET_BIND_SERVICE
-            drop:
-              - all
-          readOnlyRootFilesystem: true
+    metrics:
+      enabled: true
+      serviceMonitor:
+        enabled: true
+        additionalLabels:
+          release: monitoring
 
   tcp:
     29518: git/git-forgejo-ssh:22
