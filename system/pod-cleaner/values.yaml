@@ -6,7 +6,7 @@ app-template:
           image:
             # code from: https://github.com/Daniel-Boluda/homelab/tree/6396459b75dc2af9914ef58a5e01da06c0820179/system/nvidia-watcher/src
             repository: bolferdocker/nvidia-watcher
-            tag: 0.0.3
+            tag: 0.0.4
           env:
             LABEL_SELECTOR: pod-cleaner.dbcloud.org/watch=true
             POD_STATUS_REASON: UnexpectedAdmissionError
@@ -22,3 +22,7 @@ app-template:
       serviceAccount:
         create: false
         name: pod-cleaner
+
+  defaultPodOptions:
+    nodeSelector:
+      kubernetes.io/arch: amd64
