@@ -21,24 +21,6 @@ spec:
     # source: https://lyz-code.github.io/blue-book/smartctl/?h=smart#configuring-the-alerts
     - name: smartctl-exporter-blue-book.rules
       rules:
-        - alert: SmartDeviceTemperatureWarning
-          expr: smartctl_device_temperature > 60
-          for: 2m
-          labels:
-            severity: warning
-          annotations:
-            summary: Smart device temperature warning (instance {{ $labels.hostname }})
-            description: "Device temperature  warning (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
-
-        - alert: SmartDeviceTemperatureCritical
-          expr: smartctl_device_temperature > 80
-          for: 2m
-          labels:
-            severity: critical
-          annotations:
-            summary: Smart device temperature critical (instance {{ $labels.hostname }})
-            description: "Device temperature critical  (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
-
         - alert: SmartCriticalWarning
           expr: smartctl_device_critical_warning > 0
           for: 15m
