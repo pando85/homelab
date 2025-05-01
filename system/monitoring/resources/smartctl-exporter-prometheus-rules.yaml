@@ -1,10 +1,10 @@
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
+  name: monitoring-prometheus-smartctl-exporter-custom.rules
   labels:
     app.kubernetes.io/name: prometheus-smartctl-exporter
     release: monitoring
-  name: monitoring-prometheus-smartctl-exporter-custom.rules
 spec:
   groups:
     - name: smartctl-exporter-custom.rules
@@ -18,3 +18,91 @@ spec:
           for: 60m
           labels:
             severity: warning
+    # source: https://lyz-code.github.io/blue-book/smartctl/?h=smart#configuring-the-alerts
+    - name: smartctl-exporter-blue-book.rules
+      rules:
+        - alert: SmartDeviceTemperatureWarning
+          expr: smartctl_device_temperature > 60
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: Smart device temperature warning (instance {{ $labels.hostname }})
+            description: "Device temperature  warning (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: SmartDeviceTemperatureCritical
+          expr: smartctl_device_temperature > 80
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Smart device temperature critical (instance {{ $labels.hostname }})
+            description: "Device temperature critical  (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: SmartCriticalWarning
+          expr: smartctl_device_critical_warning > 0
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: Smart critical warning (instance {{ $labels.hostname }})
+            description: "device has critical warning (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: SmartNvmeWearoutIndicator
+          expr: smartctl_device_available_spare{device=~"nvme.*"} < smartctl_device_available_spare_threshold{device=~"nvme.*"}
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: Smart NVME Wearout Indicator (instance {{ $labels.hostname }})
+            description: "NVMe device is wearing out (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: SmartNvmeMediaError
+          expr: smartctl_device_media_errors > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: Smart NVME Media errors (instance {{ $labels.hostname }})
+            description: "Contains the number of occurrences where the controller detected an unrecovered data integrity error. Errors such as uncorrectable ECC, CRC checksum failure, or LBA tag mismatch are included in this field (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: SmartSmartStatusError
+          expr: smartctl_device_smart_status < 1
+          for: 15m
+          labels:
+            severity: critical
+          annotations:
+            summary: Smart general status error (instance {{ $labels.hostname }})
+            description: " (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: DiskReallocatedSectorsIncreased
+          expr: smartctl_device_attribute{attribute_id="5", attribute_value_type="raw"} > max_over_time(smartctl_device_attribute{attribute_id="5", attribute_value_type="raw"}[1h])
+          labels:
+            severity: warning
+          annotations:
+            summary: "SMART Attribute Reallocated Sectors Count Increased"
+            description: "The SMART attribute 5 (Reallocated Sectors Count) has increased on {{ $labels.device }} (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: DiskSpinRetryCountIncreased
+          expr: smartctl_device_attribute{attribute_id="10", attribute_value_type="raw"} > max_over_time(smartctl_device_attribute{attribute_id="10", attribute_value_type="raw"}[1h])
+          labels:
+            severity: warning
+          annotations:
+            summary: "SMART Attribute Spin Retry Count Increased"
+            description: "The SMART attribute 10 (Spin Retry Count) has increased on {{ $labels.device }} (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: DiskCurrentPendingSectorCountIncreased
+          expr: smartctl_device_attribute{attribute_id="197", attribute_value_type="raw"} > max_over_time(smartctl_device_attribute{attribute_id="197", attribute_value_type="raw"}[1h])
+          labels:
+            severity: warning
+          annotations:
+            summary: "SMART Attribute Current Pending Sector Count Increased"
+            description: "The SMART attribute 197 (Current Pending Sector Count) has increased on {{ $labels.device }} (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: DiskUncorrectableSectorCountIncreased
+          expr: smartctl_device_attribute{attribute_id="198", attribute_value_type="raw"} > max_over_time(smartctl_device_attribute{attribute_id="198", attribute_value_type="raw"}[1h])
+          labels:
+            severity: warning
+          annotations:
+            summary: "SMART Attribute Uncorrectable Sector Count Increased"
+            description: "The SMART attribute 198 (Uncorrectable Sector Count) has increased on {{ $labels.device }} (instance {{ $labels.hostname }})\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
