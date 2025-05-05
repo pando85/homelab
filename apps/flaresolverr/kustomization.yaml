@@ -6,6 +6,6 @@ helmCharts:
   - name: app-template
     namespace: flaresolverr
     releaseName: flaresolverr
-    repo: https://bjw-s.github.io/helm-charts/
+    repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: values.yaml
     version: 3.7.3
