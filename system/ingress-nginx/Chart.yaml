@@ -4,5 +4,5 @@ version: 0.0.0
 dependencies:
   - name: ingress-nginx
     # This fix need to be applied: https://github.com/kubernetes/ingress-nginx/pull/12626
-    version: 4.12.1
+    version: 4.12.2
     repository: https://kubernetes.github.io/ingress-nginx
