@@ -35,8 +35,8 @@
     {
       customType: 'regex',
       description: 'Process custom dependencies with double quotes, after colon, URLs and variables',
-      fileMatch: [
-        '.+\\.ya?ml$',
+      managerFilePatterns: [
+        '/.+\\.ya?ml$/',
       ],
       matchStrings: [
         '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\n.*?"(?<currentValue>.*)"\n',
