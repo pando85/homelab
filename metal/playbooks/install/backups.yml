@@ -44,4 +44,4 @@
         minute: "0"
         hour: "4"
         job: >
-          scp -o PubkeyAcceptedKeyTypes=ssh-rsa -oHostkeyAlgorithms=+ssh-rsa -oKexAlgorithms=+diffie-hellman-group1-sha1 -O root@cz-taw1b.iot.grigri:/etc/gh/config {{ backup_target_dir }}/cz-taw1b/ > /dev/null
+          scp -r -o PubkeyAcceptedKeyTypes=ssh-rsa -oHostkeyAlgorithms=+ssh-rsa -oKexAlgorithms=+diffie-hellman-group1-sha1 -O root@cz-taw1b.iot.grigri:/etc/config {{ backup_target_dir }}/cz-taw1b/config > /dev/null
