@@ -64,7 +64,7 @@ Before deploying, ensure the following configurations are correctly set up:
 
 - **Check Hosts Matching**:
     - Make sure the hosts are matching in the following playbooks:
-        - `/metal/playbooks/install/backup-etcd.yml`
+        - `/metal/playbooks/install/backups.yml`
         - `/metal/playbooks/install/cluster.yml`
         - `/metal/playbooks/install/prepare.yml`
 

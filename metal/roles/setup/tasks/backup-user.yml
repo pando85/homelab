@@ -9,18 +9,28 @@
     name: backup
     shell: /bin/bash
     uid: 990
-    home: /datasets/backups/
+    home: /datasets/backups
     create_home: false
     groups: backup
     append: true
 
-# In pfsense. Check that cron package is installed and then add in `Services -> Cron`:
-#   ```crontab
-#   0 4 * * * /usr/local/bin/rsync -avz /cf/conf/backup/ backup@grigri.grigri:/datasets/backups/pfsense/
-#   ```
+- name: backup-user | Create .ssh directory if it doesn't exist
+  file:
+    path: /datasets/backups/.ssh
+    state: directory
+    owner: backup
+    group: backup
+    mode: '0700'
 
-- name: backup-user | Set pfsense authorized keys
-  authorized_key:
-    user: backup
+- name: backup-user | Generate RSA SSH key for backup user
+  openssh_keypair:
+    path: /datasets/backups/.ssh/id_rsa
+    type: rsa
+    size: 4096
+    owner: backup
+    group: backup
+    mode: '0600'
     state: present
-    key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG4YvPnh7l7sC46/jvN/rESNA2eJ5Y51Tiq+XdJcxBd5 root@pfsense.grigri
+    comment: "backup@{{ ansible_hostname }}"
+  # bug related with ZFS not supporting chattr: https://github.com/ansible/ansible/issues/77217
+  changed_when: false

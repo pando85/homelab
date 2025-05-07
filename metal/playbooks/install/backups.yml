@@ -1,0 +1,47 @@
+# Push backups are preferred for security reasons but if it is not possible pull backups can be used.
+- name: Enable backups
+  hosts: prusik
+  tasks:
+    - name: Check dependencies
+      ansible.builtin.apt:
+        name:
+          - cron
+          - rsync
+        state: present
+
+    - name: Check etcd backups are enabled
+      ansible.builtin.cron:
+        name: "etcd backup"
+        minute: "0"
+        hour: "1,13"
+        job: >
+          rsync -av --delete /var/lib/rancher/k3s/server/db/snapshots/ {{ backup_target_dir }}/k3s/etcd > /dev/null
+
+    # In pfsense. Check that cron package is installed and then add in `Services -> Cron`:
+    #   ```crontab
+    #   0 4 * * * /usr/local/bin/rsync -avz /cf/conf/backup/ backup@prusik.grigri:/datasets/backups/pfsense/
+    #   ```
+
+    - name: Set pfsense authorized keys
+      authorized_key:
+        user: backup
+        state: present
+        key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG4YvPnh7l7sC46/jvN/rESNA2eJ5Y51Tiq+XdJcxBd5 root@pfsense.grigri
+
+    - name: Check cz-taw1b backups directory exists
+      file:
+        path: /datasets/backups/cz-taw1b
+        state: directory
+        owner: backup
+        group: backup
+
+    # Add /datasets/backups/.ssh/id_rsa.pub to cz-taw1b.iot.grigri:/etc/dropbear/authorized_keys
+    - name: Check backups are enabled
+      become: true
+      become_user: backup
+      ansible.builtin.cron:
+        name: "cz-taw1b backup"
+        minute: "0"
+        hour: "4"
+        job: >
+          scp -o PubkeyAcceptedKeyTypes=ssh-rsa -oHostkeyAlgorithms=+ssh-rsa -oKexAlgorithms=+diffie-hellman-group1-sha1 -O root@cz-taw1b.iot.grigri:/etc/gh/config {{ backup_target_dir }}/cz-taw1b/ > /dev/null
