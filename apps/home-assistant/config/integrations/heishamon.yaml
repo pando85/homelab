@@ -1,4 +1,4 @@
-# based on: https://github.com/Egyras/HeishaMon/blob/ff84923a2332e8ad029aa5a93692300808cba879/Integrations/Home%20Assistant/heishamon.yaml
+# based on: https://github.com/Egyras/HeishaMon/blob/c5fa066f557b739761b5e91c0dcae68711c91284/Integrations/Home%20Assistant/heishamon.yaml
 ################################################################
 ## Packages / Heishamon
 ################################################################
@@ -41,6 +41,9 @@
 ## 1.6.0 (27-10-2024)
 ##   Fixed
 ##   - Fix deprecation payload_template for mqtt in version 2025.2.0, see https://github.com/home-assistant/core/issues/123865
+## 1.6.1 (3-11-2024)
+##   Style
+##   - Fix indentation and remove trailing spaces
 
 # Automations #
 ###############
@@ -359,17 +362,17 @@ input_select:
 # sensor #
 ##########
 mqtt:
-  sensor:
+  binary_sensor:
+    - name: Aquarea Availability
+      availability_topic: "panasonic_heat_pump/main/Status"
+      payload_available: online
+      payload_not_available: offline
     #TOP0 - Power state
     - name: Aquarea Power State
       state_topic: "panasonic_heat_pump/main/Heatpump_State"
-      value_template: >-
-        {%- if value == "0" -%}
-          Off
-        {%- elif value == "1" -%}
-          On
-        {%- endif -%}
-
+      payload_on: "On"
+      payload_off: "Off"
+  sensor:
     #TOP1 - Pumpflow
     - name: Aquarea Pump Flow
       state_topic: "panasonic_heat_pump/main/Pump_Flow"
@@ -468,7 +471,7 @@ mqtt:
 
     #TOP15 - Heat power produced
     - name: Aquarea Heat Power Produced
-      state_topic: "panasonic_heat_pump/main/Heat_Energy_Production"
+      state_topic: "panasonic_heat_pump/main/Heat_Power_Production"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
@@ -476,7 +479,7 @@ mqtt:
 
     #TOP16 - Heat power consumed
     - name: Aquarea Heat Power Consumed
-      state_topic: "panasonic_heat_pump/main/Heat_Energy_Consumption"
+      state_topic: "panasonic_heat_pump/main/Heat_Power_Consumption"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
@@ -598,7 +601,7 @@ mqtt:
 
     #TOP38 - Cool power produced
     - name: Aquarea Cool Power Produced
-      state_topic: "panasonic_heat_pump/main/Cool_Energy_Production"
+      state_topic: "panasonic_heat_pump/main/Cool_Power_Production"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
@@ -606,7 +609,7 @@ mqtt:
 
     #TOP39 - Cool power consumed
     - name: Aquarea Cool Power Consumed
-      state_topic: "panasonic_heat_pump/main/Cool_Energy_Consumption"
+      state_topic: "panasonic_heat_pump/main/Cool_Power_Consumption"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
@@ -614,7 +617,7 @@ mqtt:
 
     #TOP40 - DHW power produced
     - name: Aquarea DHW Power Produced
-      state_topic: "panasonic_heat_pump/main/DHW_Energy_Production"
+      state_topic: "panasonic_heat_pump/main/DHW_Power_Production"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
@@ -622,7 +625,7 @@ mqtt:
 
     #TOP41 - DHW power consumed
     - name: Aquarea DHW Power Consumed
-      state_topic: "panasonic_heat_pump/main/DHW_Energy_Consumption"
+      state_topic: "panasonic_heat_pump/main/DHW_Power_Consumption"
       unit_of_measurement: "W"
       device_class: "power"
       state_class: "measurement"
