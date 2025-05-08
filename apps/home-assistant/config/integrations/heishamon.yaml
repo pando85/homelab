@@ -44,7 +44,9 @@
 ## 1.6.1 (3-11-2024)
 ##   Style
 ##   - Fix indentation and remove trailing spaces
-
+## 1.7.0 (8-5-2025)
+##   Added
+##   - Add binary sensor for Aquarea status and power state
 # Automations #
 ###############
 automation:
@@ -363,6 +365,10 @@ input_select:
 ##########
 mqtt:
   binary_sensor:
+    - name: Aquarea Status
+      state_topic: "panasonic_heat_pump/main/Status"
+      payload_on: "online"
+      payload_off: "offline"
     #TOP0 - Power state
     - name: Aquarea Power State
       state_topic: "panasonic_heat_pump/main/Heatpump_State"
