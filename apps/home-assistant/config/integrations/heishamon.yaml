@@ -364,11 +364,13 @@ input_select:
 mqtt:
   binary_sensor:
     - name: Aquarea Availability
+      unique_id: aquarea_availability
       availability_topic: "panasonic_heat_pump/main/Status"
       payload_available: online
       payload_not_available: offline
     #TOP0 - Power state
     - name: Aquarea Power State
+      unique_id: aquarea_power_state
       state_topic: "panasonic_heat_pump/main/Heatpump_State"
       payload_on: "On"
       payload_off: "Off"
