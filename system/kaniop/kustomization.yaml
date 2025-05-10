@@ -9,4 +9,13 @@ helmCharts:
     releaseName: kaniop
     repo: oci://ghcr.io/pando85/helm-charts
     valuesFile: values.yaml
-    version: 0.0.0-rc1
+    version: 0.0.0-alpha.1
+
+patches:
+  - patch: |-
+      - op: add
+        path: "/metadata/annotations/argocd.argoproj.io~1sync-options"
+        value: "Replace=true"
+    target:
+      group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
