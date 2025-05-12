@@ -27,7 +27,7 @@ spec:
     nextcloud: nextcloud
 
   postgresql:
-    version: "16"
+    version: "17"
     parameters:
       archive_mode: "off"
       # minimal value. If not default to 100

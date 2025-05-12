@@ -30,7 +30,7 @@ spec:
     home_assistant: home_assistant
 
   postgresql:
-    version: "16"
+    version: "17"
     parameters:
       archive_mode: "off"
       # minimal value. If not default to 100

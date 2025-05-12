@@ -29,7 +29,7 @@ spec:
     immich: immich
 
   postgresql:
-    version: "16"
+    version: "17"
     parameters:
       archive_mode: "off"
       max_connections: "25"
