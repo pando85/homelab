@@ -3,5 +3,5 @@ name: gitea
 version: 0.0.0
 dependencies:
   - name: forgejo
-    version: 12.3.1
+    version: 12.4.0
     repository: oci://code.forgejo.org/forgejo-helm
