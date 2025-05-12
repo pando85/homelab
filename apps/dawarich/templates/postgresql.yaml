@@ -35,7 +35,7 @@ spec:
     dawarich: dawarich
 
   postgresql:
-    version: "16"
+    version: "17"
     parameters:
       archive_mode: "off"
       # RAILS_MAX_THREADS: 5
