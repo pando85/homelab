@@ -55,7 +55,7 @@ app-template:
           role = "WriteReplica"
 
           [http_client_address_info]
-          x-forwarded-for = ["0.0.0.0/0"]
+          x-forward-for = ["0.0.0.0/0"]
 
           [online_backup]
           path = "/data/kanidm/backups/"
