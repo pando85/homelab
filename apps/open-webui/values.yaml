@@ -42,7 +42,7 @@ open-webui:
 
   image:
     repository: ghcr.io/open-webui/open-webui
-    tag: v0.6.5
+    tag: v0.6.9
 
   ingress:
     enabled: true
