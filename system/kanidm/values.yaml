@@ -11,7 +11,7 @@ app-template:
         kanidmd:
           image:
             repository: kanidm/server
-            tag: 1.6.2
+            tag: 1.5.0
           resources:
             requests:
               cpu: 10m
@@ -41,10 +41,9 @@ app-template:
       enabled: true
       data:
         server.toml: |
-          version = "2"
-
           bindaddress = "0.0.0.0:8443"
           ldapbindaddress = "0.0.0.0:3636"
+          trust_x_forward_for = true
           db_path = "/data/kanidm.db"
           db_fs_type = "zfs"
           tls_chain = "/data/tls/tls.crt"
@@ -53,10 +52,6 @@ app-template:
           domain = "idm.grigri.cloud"
           origin = "https://idm.grigri.cloud"
           role = "WriteReplica"
-
-          [http_client_address_info]
-          x-forward-for-all-source-trusted = true
-
           [online_backup]
           path = "/data/kanidm/backups/"
           schedule = "00 2 * * *"
