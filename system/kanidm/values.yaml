@@ -45,8 +45,6 @@ app-template:
 
           bindaddress = "0.0.0.0:8443"
           ldapbindaddress = "0.0.0.0:3636"
-          #
-          trust_x_forward_for = true
           db_path = "/data/kanidm.db"
           db_fs_type = "zfs"
           tls_chain = "/data/tls/tls.crt"
@@ -55,6 +53,10 @@ app-template:
           domain = "idm.grigri.cloud"
           origin = "https://idm.grigri.cloud"
           role = "WriteReplica"
+
+          [http_client_address_info]
+          x-forwarded-for = ["0.0.0.0/0"]
+
           [online_backup]
           path = "/data/kanidm/backups/"
           schedule = "00 2 * * *"
