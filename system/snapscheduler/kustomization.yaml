@@ -9,7 +9,7 @@ helmCharts:
     releaseName: snapscheduler
     repo: https://backube.github.io/helm-charts/
     valuesFile: values.yaml
-    version: 3.4.0
+    version: 3.5.0
 
 patches:
   - target:
