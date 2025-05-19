@@ -8,7 +8,7 @@ app-template:
         atuin:
           image:
             repository: ghcr.io/atuinsh/atuin
-            tag: v18.6.0
+            tag: v18.6.1
           env:
             ATUIN_HOST: 0.0.0.0
             ATUIN_PORT: &port 8080
