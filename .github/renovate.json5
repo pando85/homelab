@@ -214,6 +214,7 @@
       matchPackageNames: [
         '/app-template/',
       ],
+      commitMessagePrefix: 'app-template: ',
     },
   ],
 }
