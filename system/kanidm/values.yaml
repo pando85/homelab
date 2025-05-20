@@ -4,7 +4,7 @@ app-template:
       labels:
         backup/retain: quaterly
       annotations:
-        configmap.reloader.stakater.com/reload: kanidm-kanidmd-config
+        configmap.reloader.stakater.com/reload: kanidm
         secret.reloader.stakater.com/reload: idm-external-tls-certificate
       type: statefulset
       containers:
@@ -119,7 +119,7 @@ app-template:
         - path: /data/server.toml
           subPath: server.toml
       type: configMap
-      name: kanidm-kanidmd-config
+      name: kanidm
     certs:
       enabled: true
       type: secret
