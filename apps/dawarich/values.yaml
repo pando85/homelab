@@ -176,14 +176,6 @@ app-template:
           secretName: dawarich-external-tls-certificate
 
   persistence:
-    tmp:
-      type: emptyDir
-      advancedMounts:
-        dawarich:
-          server:
-            - path: /var/app/tmp
-          sidekiq:
-            - path: /var/app/storage
     # Can be migrated to S3
     imports:
       enabled: true
