@@ -98,7 +98,7 @@ app-template:
                       operator: In
                       values:
                         - home-assistant
-                    - key: app.kubernetes.io/component
+                    - key: app.kubernetes.io/controller
                       operator: In
                       values:
                         - hass

@@ -60,7 +60,7 @@ oauth2-proxy:
       requiredDuringSchedulingIgnoredDuringExecution:
         - labelSelector:
             matchExpressions:
-              - key: app.kubernetes.io/component
+              - key: app.kubernetes.io/controller
                 operator: In
                 values:
                   - authentication-proxy
@@ -102,7 +102,7 @@ app-template:
                   operator: In
                   values:
                     - oauth2-proxy
-                - key: app.kubernetes.io/component
+                - key: app.kubernetes.io/controller
                   operator: In
                   values:
                     - authentication-proxy

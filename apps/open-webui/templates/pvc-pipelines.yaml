@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   labels:
-    app.kubernetes.io/component: open-webui-pipelines
+    app.kubernetes.io/controller: open-webui-pipelines
     app.kubernetes.io/instance: open-webui
   name: pipelines-data
 spec:
