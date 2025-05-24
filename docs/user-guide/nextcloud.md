@@ -27,7 +27,7 @@
 #### apps
 
 ```bash
-POD_NAME=$(KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud get pod -l app.kubernetes.io/controller=app --no-headers -o custom-columns=":metadata.name")
+POD_NAME=$(KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud get pod -l app.kubernetes.io/component=app --no-headers -o custom-columns=":metadata.name")
 KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud cp config/www/nextcloud/apps/ $POD_NAME:/tmp/
 
 KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud exec -it $POD_NAME -- bash
@@ -39,7 +39,7 @@ chown -R www-data:www-data /var/www/html/apps
 #### data
 
 ```bash
-POD_NAME=$(KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud get pod -l app.kubernetes.io/controller=app --no-headers -o custom-columns=":metadata.name")
+POD_NAME=$(KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud get pod -l app.kubernetes.io/component=app --no-headers -o custom-columns=":metadata.name")
 for DIR in $(find /datasets/nextcloud/ -maxdepth 1 -mindepth 1 -not -path '*/teresa' -not -path '*/pando' -not -path '*/billee'); do
     echo $DIR;
     KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud cp --retries=5 $DIR $POD_NAME:/var/www/html/data/
@@ -132,8 +132,7 @@ su - www-data
 
 Check `https://nextcloud.grigri.cloud/index.php/settings/integrity/failed`.
 
-Always fails in code integrity check without any errors, just hangs forever in the web browser auto
-updater.
+Always fails in code integrity check without any errors, just hangs forever in the web browser auto updater.
 
 ```bash
 chsh -s /bin/bash www-data
