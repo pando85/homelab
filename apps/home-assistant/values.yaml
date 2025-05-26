@@ -67,7 +67,7 @@ app-template:
             tag: 4.5.0
           env:
             HA_URL: http://home-assistant-hass:8123
-            DASH_URL: https://appdaemon.grigri.cloud
+            DASH_URL: http://127.0.0.1:80
             TIMEZONE: Europe/Madrid
           envFrom:
             - secretRef:
