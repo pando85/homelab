@@ -67,7 +67,7 @@ app-template:
             tag: 4.5.0
           env:
             HA_URL: http://home-assistant-hass:8123
-            DASH_URL: http://127.0.0.1:80
+            DASH_URL: http://0.0.0.0:5050
             TIMEZONE: Europe/Madrid
           envFrom:
             - secretRef:
@@ -247,7 +247,7 @@ app-template:
       controller: appdaemon
       ports:
         http:
-          port: 80
+          port: 5050
     whisper:
       controller: whisper
       ports:
