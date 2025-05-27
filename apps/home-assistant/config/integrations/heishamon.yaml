@@ -47,6 +47,9 @@
 ## 1.7.0 (8-5-2025)
 ##   Added
 ##   - Add binary sensor for Aquarea status and power state
+## 1.8.0 (27-5-2025)
+##   Added
+##   - Set input variables for Z1 and Z2 cool temperatures. Renamed the Z1 and Z2 set heat entities.
 # Automations #
 ###############
 automation:
@@ -204,7 +207,7 @@ automation:
         entity_id: automation.set_heatmode_selector
 
   #Fetches Z1 temperature from status and sets the selector accordingly
-  - alias: Set Z1 selector
+  - alias: Set Z1 Heat selector
     trigger:
       platform: mqtt
       topic: "panasonic_heat_pump/main/Z1_Heat_Request_Temp"
@@ -216,13 +219,13 @@ automation:
           {{ "%.1f" % (trigger.payload | int) }}
 
   #Sets Z1 temperature to the selected value
-  - alias: Set Z1
+  - alias: Set Z1 Heat Temperature
     trigger:
       platform: state
       entity_id: input_number.heishamon_heatshift_z1
     action:
       - service: automation.turn_off
-        entity_id: automation.set_Z1_selector
+        entity_id: automation.set_Z1_heat_selector
       - service: mqtt.publish
         data_template:
           topic: panasonic_heat_pump/commands/SetZ1HeatRequestTemperature
@@ -236,10 +239,45 @@ automation:
           milliseconds: 0
         enabled: true
       - service: automation.turn_on
-        entity_id: automation.set_Z1_selector
+        entity_id: automation.set_Z1_heat_selector
+
+  #Fetches Z1 temperature from status and sets the selector accordingly
+  - alias: Set Z1 Cool selector
+    trigger:
+      platform: mqtt
+      topic: "panasonic_heat_pump/main/Z1_Cool_Request_Temp"
+    action:
+      service: input_number.set_value
+      data_template:
+        entity_id: input_number.heishamon_coolshift_z1
+        value: >-
+          {{ "%.1f" % (trigger.payload | int) }}
+
+  #Sets Z1 temperature to the selected value
+  - alias: Set Z1 Cool Temperature
+    trigger:
+      platform: state
+      entity_id: input_number.heishamon_coolshift_z1
+    action:
+      - service: automation.turn_off
+        entity_id: automation.set_Z1_cool_selector
+      - service: mqtt.publish
+        data_template:
+          topic: panasonic_heat_pump/commands/SetZ1CoolRequestTemperature
+          retain: false #IMPORTANT! ALWAYS set retain flag false for commands!
+          payload: >-
+            {{ "%.0f" % (states('input_number.heishamon_coolshift_z1') | int) }}
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 5
+          milliseconds: 0
+        enabled: true
+      - service: automation.turn_on
+        entity_id: automation.set_Z1_cool_selector
 
   #Fetches Z2 temperature from status and sets the selector accordingly
-  - alias: Set Z2 selector
+  - alias: Set Z2 Heat selector
     trigger:
       platform: mqtt
       topic: "panasonic_heat_pump/main/Z2_Heat_Request_Temp"
@@ -251,13 +289,13 @@ automation:
           {{ "%.1f" % (trigger.payload | int) }}
 
   #Sets Z2 temperature to the selected value
-  - alias: Set Z2
+  - alias: Set Z2 Heat Temperature
     trigger:
       platform: state
       entity_id: input_number.heishamon_heatshift_z2
     action:
       - service: automation.turn_off
-        entity_id: automation.set_Z2_selector
+        entity_id: automation.set_Z2_heat_selector
       - service: mqtt.publish
         data_template:
           topic: panasonic_heat_pump/commands/SetZ2HeatRequestTemperature
@@ -271,7 +309,42 @@ automation:
           milliseconds: 0
         enabled: true
       - service: automation.turn_on
-        entity_id: automation.set_Z2_selector
+        entity_id: automation.set_Z2_heat_selector
+
+  #Fetches Z2 temperature from status and sets the selector accordingly
+  - alias: Set Z2 Cool selector
+    trigger:
+      platform: mqtt
+      topic: "panasonic_heat_pump/main/Z2_Cool_Request_Temp"
+    action:
+      service: input_number.set_value
+      data_template:
+        entity_id: input_number.heishamon_coolshift_z2
+        value: >-
+          {{ "%.1f" % (trigger.payload | int) }}
+
+  #Sets Z2 temperature to the selected value
+  - alias: Set Z2 Cool Temperature
+    trigger:
+      platform: state
+      entity_id: input_number.heishamon_coolshift_z2
+    action:
+      - service: automation.turn_off
+        entity_id: automation.set_Z2_cool_selector
+      - service: mqtt.publish
+        data_template:
+          topic: panasonic_heat_pump/commands/SetZ2CoolRequestTemperature
+          retain: false #IMPORTANT! ALWAYS set retain flag false for commands!
+          payload: >-
+            {{ "%.0f" % (states('input_number.heishamon_coolshift_z2') | int) }}
+      - delay:
+          hours: 0
+          minutes: 0
+          seconds: 5
+          milliseconds: 0
+        enabled: true
+      - service: automation.turn_on
+        entity_id: automation.set_Z2_cool_selector
 
   #Fetches tank target temperature from status and sets the selector accordingly
   - alias: Set tank target temperature selector
@@ -318,7 +391,13 @@ input_number:
     step: 1
 
   heishamon_heatshift_z1:
-    name: Set Zone 1 Temperature
+    name: Set Zone 1 Heat Temperature
+    min: -5
+    max: 40
+    step: 1
+
+  heishamon_coolshift_z1:
+    name: Set Zone 1 Cool Temperature
     min: -5
     max: 40
     step: 1
@@ -328,6 +407,13 @@ input_number:
     min: -5
     max: 40
     step: 1
+
+  heishamon_coolshift_z2:
+    name: Set Zone 2 Cool Temperature
+    min: -5
+    max: 40
+    step: 1
+
 
 # input_select #
 ################
