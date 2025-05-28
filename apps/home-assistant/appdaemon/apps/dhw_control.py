@@ -56,7 +56,7 @@ class DHWControl(hass.Hass):
     async def _get_prices(self) -> List[Price]:
         pvpc = await self.get_state(self.args["sensor"]["pvpc_price"], attribute="all")
         self.log(f"{pvpc=}", level="DEBUG")
-        now = datetime.now(pytz.timezone(self.get_timezone()))
+        now = datetime.now(self.get_timezone())
 
         prices = [
             Price(
@@ -131,7 +131,7 @@ class DHWControl(hass.Hass):
             msg = f"Programming the DHW control for this hour: [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
             await self.notify(msg, name=self.args["notify"]["target"])
 
-        now = datetime.now(pytz.timezone(self.get_timezone()))
+        now = datetime.now(self.get_timezone())
         current_hour = datetime(now.year, now.month, now.day, now.hour)
         if current_hour.hour == datetime_to_schedule.hour:
             await self._force_dhw()
