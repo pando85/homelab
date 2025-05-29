@@ -2,6 +2,7 @@ app-template:
   controllers:
     kroki:
       replicas: 1
+      strategy: RollingUpdate
       containers:
         kroki:
           image:
