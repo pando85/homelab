@@ -120,6 +120,7 @@
       ],
       matchPackageNames: [
         'kanidm',
+        'appdaemon'
       ],
       matchCurrentVersion: '!/^0/',
       automerge: false,
