@@ -9,7 +9,6 @@ from statistics import mean
 from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
-import pytz
 
 
 @dataclass

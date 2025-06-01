@@ -4,12 +4,9 @@ import json
 import zlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from itertools import groupby
-from statistics import mean
 from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
-import pytz
 
 
 @dataclass
