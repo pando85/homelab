@@ -37,7 +37,7 @@ open-webui:
       name: open-webui-redis
       image:
         repository: redis
-        tag: 7.4.3-alpine3.21
+        tag: 7.4.4-alpine3.21
       affinity: *affinity
 
   image:
