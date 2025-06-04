@@ -116,22 +116,6 @@
         'docker',
       ],
       matchUpdateTypes: [
-        'minor',
-      ],
-      matchPackageNames: [
-        'kanidm',
-        'appdaemon'
-      ],
-      matchCurrentVersion: '!/^0/',
-      automerge: false,
-      ignoreTests: false,
-      platformAutomerge: false,
-    },
-    {
-      matchDatasources: [
-        'docker',
-      ],
-      matchUpdateTypes: [
         'digest',
       ],
       automerge: true,
@@ -185,6 +169,22 @@
       addLabels: [
         'renovate/k3s',
       ],
+    },
+    {
+      matchDatasources: [
+        'docker',
+      ],
+      matchUpdateTypes: [
+        'minor',
+      ],
+      matchPackageNames: [
+        'kanidm',
+        'acockburn/appdaemon',
+      ],
+      matchCurrentVersion: '!/^0/',
+      automerge: false,
+      ignoreTests: false,
+      platformAutomerge: false,
     },
     {
       description: 'Group k3s changes in one PR',
