@@ -64,7 +64,7 @@ app-template:
         appdaemon:
           image:
             repository: acockburn/appdaemon
-            tag: 4.4.2
+            tag: 4.5.8
           env:
             HA_URL: http://home-assistant-hass:8123
             DASH_URL: http://0.0.0.0:5050
