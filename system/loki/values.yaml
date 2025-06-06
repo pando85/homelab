@@ -51,7 +51,7 @@ singleBinary:
     enabled: true
     # Remove until k8s 1.27
     enableStatefulSetAutoDeletePVC: false
-    size: 50Gi
+    size: 80Gi
 
   resources:
     limits:
