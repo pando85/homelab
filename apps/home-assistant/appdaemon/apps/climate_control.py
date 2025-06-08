@@ -51,7 +51,20 @@ class ClimateControl(hass.Hass):
         is_enabled = await self.get_state(self.args["input_boolean"]["enable"], attribute="state") == "on"
         self.log(f"Climate control is {'enabled' if is_enabled else 'disabled'}")
         if is_enabled:
-            await self._register_schedulers()
+            try:
+                await self._register_schedulers()
+            except Exception as e:
+                self.log(f"Error during daily scheduler registration: {e}", level="ERROR")
+                try:
+                    await self.notify(
+                        f"Error during daily scheduler registration: {e}",
+                        name=self.args["notify"]["target"],
+                    )
+                except Exception as notify_error:
+                    self.log(f"Error sending notification: {notify_error}", level="ERROR")
+                self.log("Retrying in 10 minutes")
+                await asyncio.sleep(600)
+                self._daily_register_schedulers()
 
     async def _get_prices(self) -> List[Price]:
         pvpc = await self.get_state(self.args["sensor"]["pvpc_price"], attribute="all")
