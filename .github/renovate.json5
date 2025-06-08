@@ -178,8 +178,8 @@
         'minor',
       ],
       matchPackageNames: [
-        'kanidm',
-        'acockburn/appdaemon',
+        '/kanidm/',
+        '/appdaemon/',
       ],
       matchCurrentVersion: '!/^0/',
       automerge: false,
