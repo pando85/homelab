@@ -35,7 +35,7 @@
     {
       customType: 'regex',
       description: 'Process custom dependencies with double quotes, after colon, URLs and variables',
-      managerFilePatterns: [
+      fileMatch: [
         '/.+\\.ya?ml$/',
       ],
       matchStrings: [
