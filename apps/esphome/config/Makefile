@@ -14,7 +14,11 @@ requirements:	## install requirements
 .PHONY: secrets.yaml
 secrets:	## update secrets file
 secrets:
-	kubectl -n esphome get secret esphome-secrets -o jsonpath='{ .data.secrets\.yaml }' \
+	@if [ -z "$(KUBE_CONTEXT)" ]; then \
+		echo "Error: KUBE_CONTEXT is not set."; \
+		exit 1; \
+	fi
+	kubectl --context=$(KUBE_CONTEXT) -n esphome get secret esphome-secrets -o jsonpath='{ .data.secrets\.yaml }' \
 		| base64 -d > secrets.yaml
 
 .PHONY: upload

@@ -1,0 +1,9 @@
+substitutions:
+  name: "irrigation-controller-corner"
+  friendly_name: "Irrigation Controller Corner"
+  project_name: "pando85.irrigation-controller"
+  project_version: "0.0.0"
+
+packages:
+  connection: !include ./packages/connection.yaml
+  irrigation-controller: !include ./packages/irrigation-controller.yaml

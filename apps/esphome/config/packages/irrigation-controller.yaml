@@ -1,0 +1,67 @@
+---
+# source: https://devices.esphome.io/devices/ESP32-Relay-X2
+esphome:
+  name: "${name}"
+  name_add_mac_suffix: false
+  project:
+    name: "${project_name}"
+    version: "${project_version}"
+
+esp32:
+  board: esp32dev
+  flash_size: 4MB
+
+logger:
+#  baud_rate: 0
+
+web_server:
+  port: 80
+  auth:
+    username: !secret web_server_username
+    password: !secret web_server_password
+
+dashboard_import:
+  package_import_url: github://athom-tech/athom-configs/athom-mini-switch.yaml
+
+output:
+  - platform: gpio
+    pin: GPIO23
+    id: output_led
+
+light:
+  - platform: binary
+    id: light_led
+    name: "${friendly_name} LED"
+    output: output_led
+
+# Relays exposed as switches
+switch:
+  - platform: gpio
+    pin: GPIO16
+    id: relay_1
+    name: "${friendly_name} Relay 1"
+
+  - platform: gpio
+    pin: GPIO17
+    id: relay_2
+    name: "${friendly_name} Relay 2"
+
+sensor:
+  - platform: uptime
+    name: "${friendly_name} Uptime"
+    disabled_by_default: true
+
+  - platform: wifi_signal
+    name: "${friendly_name} WiFi Signal"
+    update_interval: 60s
+
+binary_sensor:
+
+  - platform: status
+    name: "${friendly_name} Status"
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "${friendly_name} IP Address"
+      disabled_by_default: true
