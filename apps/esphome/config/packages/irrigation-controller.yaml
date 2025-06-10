@@ -34,17 +34,18 @@ light:
     name: "${friendly_name} LED"
     output: output_led
 
-# Relays exposed as switches
 switch:
   - platform: gpio
     pin: GPIO16
     id: relay_1
     name: "${friendly_name} Relay 1"
+    restore_mode: RESTORE_DEFAULT_OFF
 
   - platform: gpio
     pin: GPIO17
     id: relay_2
     name: "${friendly_name} Relay 2"
+    restore_mode: RESTORE_DEFAULT_OFF
 
 sensor:
   - platform: uptime
@@ -65,3 +66,45 @@ text_sensor:
     ip_address:
       name: "${friendly_name} IP Address"
       disabled_by_default: true
+
+number:
+  - platform: template
+    name: "${friendly_name} Zone 1 Duration"
+    id: zone1_duration
+    min_value: 1
+    max_value: 60
+    step: 1
+    unit_of_measurement: "min"
+    optimistic: true
+    initial_value: 10
+    restore_value: true
+
+  - platform: template
+    name: "${friendly_name} Zone 2 Duration"
+    id: zone2_duration
+    min_value: 1
+    max_value: 60
+    step: 1
+    unit_of_measurement: "min"
+    optimistic: true
+    initial_value: 10
+    restore_value: true
+
+sprinkler:
+  - id: irrigation_controller
+    name: "${friendly_name}"
+    main_switch:
+      name: "${friendly_name} Main"
+    valves:
+      - valve_switch: relay_1
+        name: "${friendly_name} Zone 1"
+        run_duration: !lambda "return id(zone1_duration).state * 60;"
+        enable_switch:
+          name: "${friendly_name} Zone 1 Enable"
+      - valve_switch: relay_2
+        name: "${friendly_name} Zone 2"
+        run_duration: !lambda "return id(zone2_duration).state * 60;"
+        enable_switch:
+          name: "${friendly_name} Zone 2 Enable"
+    manual_switch:
+      name: "${friendly_name} Manual Mode"
