@@ -28,12 +28,6 @@ output:
     pin: GPIO23
     id: output_led
 
-light:
-  - platform: binary
-    id: light_led
-    name: "${friendly_name} LED"
-    output: output_led
-
 switch:
   - platform: gpio
     pin: GPIO16
@@ -57,9 +51,20 @@ sensor:
     update_interval: 60s
 
 binary_sensor:
-
   - platform: status
     name: "${friendly_name} Status"
+
+  # Turn on the LED when any relay is on
+  - platform: template
+    name: "Any Relay On"
+    lambda: |-
+      return id(relay_1).state || id(relay_2).state;
+    on_press:
+      then:
+        - output.turn_on: output_led
+    on_release:
+      then:
+        - output.turn_off: output_led
 
 text_sensor:
   - platform: wifi_info
@@ -95,16 +100,35 @@ sprinkler:
     name: "${friendly_name}"
     main_switch:
       name: "${friendly_name} Main"
+    auto_advance_switch: "${friendly_name} Auto Advance"
+    multiplier_number:
+      name: "${friendly_name} Multiplier"
+      initial_value: 1.5
+      min_value: 0.1
+      max_value: 5
+      step: 0.1
     valves:
-      - valve_switch: relay_1
-        name: "${friendly_name} Zone 1"
-        run_duration: !lambda "return id(zone1_duration).state * 60;"
+      - valve_switch: "${friendly_name} Zone 1"
+        valve_switch_id: relay_1
+        run_duration_number:
+          name: "${friendly_name} Zone 1 Duration"
+          unit_of_measurement: "min"
+          initial_value: 15
+          min_value: 1
+          max_value: 60
+          step: 1
         enable_switch:
           name: "${friendly_name} Zone 1 Enable"
-      - valve_switch: relay_2
-        name: "${friendly_name} Zone 2"
-        run_duration: !lambda "return id(zone2_duration).state * 60;"
+      - valve_switch: "${friendly_name} Zone 2"
+        valve_switch_id: relay_2
+        run_duration_number:
+          name: "${friendly_name} Zone 2 Duration"
+          unit_of_measurement: "min"
+          initial_value: 15
+          min_value: 1
+          max_value: 60
+          step: 1
         enable_switch:
           name: "${friendly_name} Zone 2 Enable"
-    manual_switch:
+    standby_switch:
       name: "${friendly_name} Manual Mode"
