@@ -43,7 +43,7 @@ binary_sensor:
 
   # Turn on the LED when any relay is on
   - platform: template
-    name: "{friendly_name} LED"
+    name: "${friendly_name} LED"
     lambda: |-
       return id(relay_1).state || id(relay_2).state;
     on_press:
