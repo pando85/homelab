@@ -26,6 +26,15 @@ secrets:
 %.yaml: requirements secrets
 	esphome run $@
 
+.PHONY: logs
+logs:	## read logs for FILE target. E.g.: make logs FILE='<my device>.yaml'
+logs:	requirements secrets
+	@if [ -z "$(FILE)" ]; then \
+		echo "Usage: make logs FILE='<my device>.yaml'"; \
+		exit 1; \
+	fi
+	esphome logs "$(FILE)"
+
 .PHONY: local-dashboard
 local-dashboard:	## run ESPHome dashboard in local
 	docker run --rm -v "$${PWD}":/config -p 6052:6052 -e ESPHOME_DASHBOARD_USE_PING=true -it \
