@@ -1,6 +1,7 @@
 substitutions:
   name: "irrigation-controller-corner"
   friendly_name: "Irrigation Controller Corner"
+  id_prefix: "ic_corner_"
   project_name: "pando85.irrigation-controller"
   project_version: "0.0.0"
 

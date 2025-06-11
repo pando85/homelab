@@ -28,19 +28,6 @@ output:
     pin: GPIO23
     id: output_led
 
-switch:
-  - platform: gpio
-    pin: GPIO16
-    id: relay_1
-    name: "${friendly_name} Relay 1"
-    restore_mode: RESTORE_DEFAULT_OFF
-
-  - platform: gpio
-    pin: GPIO17
-    id: relay_2
-    name: "${friendly_name} Relay 2"
-    restore_mode: RESTORE_DEFAULT_OFF
-
 sensor:
   - platform: uptime
     name: "${friendly_name} Uptime"
@@ -56,7 +43,7 @@ binary_sensor:
 
   # Turn on the LED when any relay is on
   - platform: template
-    name: "{friendly_name} Any Relay On"
+    name: "{friendly_name} LED"
     lambda: |-
       return id(relay_1).state || id(relay_2).state;
     on_press:
@@ -66,69 +53,164 @@ binary_sensor:
       then:
         - output.turn_off: output_led
 
-text_sensor:
-  - platform: wifi_info
-    ip_address:
-      name: "${friendly_name} IP Address"
-      disabled_by_default: true
-
-number:
-  - platform: template
-    name: "${friendly_name} Zone 1 Duration"
-    id: zone1_duration
-    min_value: 1
-    max_value: 60
-    step: 1
-    unit_of_measurement: "min"
-    optimistic: true
-    initial_value: 10
-    restore_value: true
-
-  - platform: template
-    name: "${friendly_name} Zone 2 Duration"
-    id: zone2_duration
-    min_value: 1
-    max_value: 60
-    step: 1
-    unit_of_measurement: "min"
-    optimistic: true
-    initial_value: 10
-    restore_value: true
-
 sprinkler:
   - id: irrigation_controller
     name: "${friendly_name}"
-    main_switch:
-      name: "${friendly_name} Main"
-    auto_advance_switch: "${friendly_name} Auto Advance"
+    main_switch: "Irrigation Controller Cycle Active"
+    auto_advance_switch: "Auto Advance"
     multiplier_number:
-      name: "${friendly_name} Multiplier"
+      name: "Multiplier"
       initial_value: 1
       min_value: 0.1
       max_value: 5
       step: 0.1
     valves:
-      - valve_switch: "${friendly_name} Zone 1"
+      - valve_switch: "Zone 1 Active"
         valve_switch_id: relay_1
+        enable_switch: "Zone 1 Auto"
         run_duration_number:
-          name: "${friendly_name} Zone 1 Duration"
+          name: "Zone 1 Duration"
           unit_of_measurement: "min"
-          initial_value: 15
+          initial_value: 8
           min_value: 1
           max_value: 60
           step: 1
-        enable_switch:
-          name: "${friendly_name} Zone 1 Enable"
-      - valve_switch: "${friendly_name} Zone 2"
+          icon: "mdi:timer-outline"
+      - valve_switch: "Zone 2 Active"
         valve_switch_id: relay_2
+        enable_switch: "Zone 2 Auto"
         run_duration_number:
-          name: "${friendly_name} Zone 2 Duration"
+          name: "Zone 2 Duration"
           unit_of_measurement: "min"
-          initial_value: 15
+          initial_value: 8
           min_value: 1
           max_value: 60
           step: 1
-        enable_switch:
-          name: "${friendly_name} Zone 2 Enable"
-    standby_switch:
-      name: "${friendly_name} Manual Mode"
+          icon: "mdi:timer-outline"
+    standby_switch: "Manual Mode"
+
+switch:
+  - platform: gpio
+    pin: GPIO16
+    id: relay_1
+    name: "${friendly_name} Relay 1"
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  - platform: gpio
+    pin: GPIO17
+    id: relay_2
+    name: "${friendly_name} Relay 2"
+    restore_mode: RESTORE_DEFAULT_OFF
+
+  # day of week toggle switches
+  - platform: template
+    id: sunday
+    name:  Sunday
+    icon: "mdi:calendar-range"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+  - platform: template
+    id: monday
+    name:  Monday
+    icon: "mdi:calendar-range"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+  - platform: template
+    id: tuesday
+    name:  Tuesday
+    icon: "mdi:calendar-range"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+  - platform: template
+    id: wednesday
+    name:  Wednesday
+    icon: "mdi:calendar-range"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+  - platform: template
+    id: thursday
+    name:  Thursday
+    icon: "mdi:calendar-range"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+  - platform: template
+    id: friday
+    name:  Friday
+    icon: "mdi:calendar-range"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+  - platform: template
+    id: saturday
+    name:  Saturday
+    icon: "mdi:calendar-range"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+
+  # schedule switch
+  - platform: template
+    id: schedule_enabled
+    name: Enable Schedule
+    icon: "mdi:clock-outline"
+    entity_category: config
+    restore_mode: RESTORE_DEFAULT_ON
+    optimistic: true
+
+datetime:
+  - platform: template
+    name: Schedule Start Time
+    entity_category: config
+    id: s1t
+    type: time
+    optimistic: true
+    restore_value: true
+
+time:
+  - platform: homeassistant
+    id: ha_time
+    on_time:
+      # Every 1 minute
+      - seconds: 0
+        minutes: /1
+        then:
+          - script.execute: check_schedule
+    on_time_sync:
+      then:
+        - logger.log: "Synchronized system clock"
+
+
+script:
+    - id: check_schedule
+      then:
+        lambda: |-
+          int dow = id(ha_time).now().day_of_week;
+          if (
+            (dow == 1 && id(sunday).state == true) ||
+            (dow == 2 && id(monday).state == true) ||
+            (dow == 3 && id(tuesday).state == true) ||
+            (dow == 4 && id(wednesday).state == true) ||
+            (dow == 5 && id(thursday).state == true) ||
+            (dow == 6 && id(friday).state == true) ||
+            (dow == 7 && id(saturday).state == true)
+            ) {
+              int hour = id(ha_time).now().hour;
+              int minute = id(ha_time).now().minute;
+              if (
+                  (hour == id(s1t).hour &&
+                  minute == id(s1t).minute &&
+                  id(schedule_enabled).state == true)
+                  ) {
+                id(run_cycle).execute();
+              }
+          }
+
+    - id: run_cycle
+      then:
+        - sprinkler.start_full_cycle: irrigation_controller
+        - lambda: ESP_LOGI("main", "Sprinkler cycle has begun!");
