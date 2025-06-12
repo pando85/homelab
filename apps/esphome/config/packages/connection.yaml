@@ -19,6 +19,7 @@ wifi:
 
   # Avoid scanning, which in case that multiple AP are available it will not connect to the one
   # with the best signal
+  # Issue related: https://github.com/esphome/feature-requests/issues/731
   fast_connect: true
 
   ap:
