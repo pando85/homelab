@@ -17,6 +17,10 @@ wifi:
   password: !secret wifi_password
   domain: !secret domain_devices
 
+  # Avoid scanning, which in case that multiple AP are available it will not connect to the one
+  # with the best signal
+  fast_connect: true
+
   ap:
     ap_timeout: 1h
     ssid: "${friendly_name}"
