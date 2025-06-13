@@ -15,7 +15,7 @@ app-template:
             - -c
           args:
             - >
-              /scripts/process_yaml.sh /original/config /config
+              cp -r --dereference /original/config/* /config
       containers:
         esphome:
           image:
@@ -72,7 +72,10 @@ app-template:
 
   defaultPodOptions:
     nodeSelector:
+      # Required
       kubernetes.io/arch: amd64
+      # Speed up builds
+      kubernetes.io/hostname: prusik
 
   persistence:
     config:
@@ -88,18 +91,6 @@ app-template:
                 name: esphome-config
             - secret:
                 name: esphome-secrets
-    scripts:
-      enabled: true
-      type: custom
-      globalMounts:
-        - path: /scripts
-      volumeSpec:
-        name: scripts
-        projected:
-          defaultMode: 0755
-          sources:
-            - configMap:
-                name: esphome-scripts
     config-packages:
       enabled: true
       type: custom
