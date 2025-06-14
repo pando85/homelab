@@ -80,6 +80,9 @@ binary_sensor:
           - OFF for at most 0.5s
         then:
           - button.press: Reset
+    # Debounce the switch to avoid false positives
+    filters:
+      - delayed_on: 100ms
 
   # Button on mini switch
   - platform: gpio
