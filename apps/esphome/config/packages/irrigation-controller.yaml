@@ -105,49 +105,49 @@ switch:
   # day of week toggle switches
   - platform: template
     id: sunday
-    name:  Sunday
+    name: Sunday
     icon: "mdi:calendar-range"
     entity_category: config
     restore_mode: RESTORE_DEFAULT_ON
     optimistic: true
   - platform: template
     id: monday
-    name:  Monday
+    name: Monday
     icon: "mdi:calendar-range"
     entity_category: config
     restore_mode: RESTORE_DEFAULT_ON
     optimistic: true
   - platform: template
     id: tuesday
-    name:  Tuesday
+    name: Tuesday
     icon: "mdi:calendar-range"
     entity_category: config
     restore_mode: RESTORE_DEFAULT_ON
     optimistic: true
   - platform: template
     id: wednesday
-    name:  Wednesday
+    name: Wednesday
     icon: "mdi:calendar-range"
     entity_category: config
     restore_mode: RESTORE_DEFAULT_ON
     optimistic: true
   - platform: template
     id: thursday
-    name:  Thursday
+    name: Thursday
     icon: "mdi:calendar-range"
     entity_category: config
     restore_mode: RESTORE_DEFAULT_ON
     optimistic: true
   - platform: template
     id: friday
-    name:  Friday
+    name: Friday
     icon: "mdi:calendar-range"
     entity_category: config
     restore_mode: RESTORE_DEFAULT_ON
     optimistic: true
   - platform: template
     id: saturday
-    name:  Saturday
+    name: Saturday
     icon: "mdi:calendar-range"
     entity_category: config
     restore_mode: RESTORE_DEFAULT_ON
@@ -174,6 +174,7 @@ datetime:
 time:
   - platform: homeassistant
     id: ha_time
+    timezone: Europe/Madrid
     on_time:
       # Every 1 minute
       - seconds: 0

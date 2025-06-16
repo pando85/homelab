@@ -31,6 +31,7 @@ captive_portal:
 
 time:
   - platform: sntp
+    timezone: Europe/Madrid
     id: sntp_time
     servers:
       - pfsense.grigri
