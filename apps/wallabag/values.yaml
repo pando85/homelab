@@ -59,7 +59,7 @@ app-template:
               cpu: 10m
               memory: 145Mi
             limits:
-              memory: 252Mi
+              memory: 512Mi
 
           securityContext:
             runAsUser: 0
