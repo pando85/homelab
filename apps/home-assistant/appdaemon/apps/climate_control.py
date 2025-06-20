@@ -9,7 +9,6 @@ from statistics import mean
 from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
-import pytz
 
 
 @dataclass
@@ -69,7 +68,7 @@ class ClimateControl(hass.Hass):
     async def _get_prices(self) -> List[Price]:
         pvpc = await self.get_state(self.args["sensor"]["pvpc_price"], attribute="all")
         self.log(f"{pvpc=}", level="DEBUG")
-        now = datetime.now(pytz.timezone(self.get_timezone()))
+        now = datetime.now(self.get_timezone())
 
         prices = [
             Price(
@@ -214,7 +213,7 @@ class ClimateControl(hass.Hass):
             await self.notify(msg, name=self.args["notify"]["target"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
-        now = datetime.now(pytz.timezone(self.get_timezone()))
+        now = datetime.now(self.get_timezone())
         current_hour = datetime(now.year, now.month, now.day, now.hour)
 
         async def register(*args):
