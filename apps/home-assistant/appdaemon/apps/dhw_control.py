@@ -42,7 +42,7 @@ class DHWControl(hass.Hass):
 
         # Register schedulers every day
         # give enough time to get new data
-        await self.run_daily(self._daily_register_schedulers, "00:00:30")
+        await self.run_daily(self._daily_register_schedulers, "23:22:30")
 
     async def _daily_register_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         is_enabled = await self.get_state(self.args["input_boolean"]["enable"], attribute="state") == "on"
