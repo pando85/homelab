@@ -5,7 +5,7 @@ import appdaemon.plugins.hass.hassapi as hass
 
 class LastConnectionSensor(hass.Hass):
     async def initialize(self):
-        time = datetime.time(0, 0, 0)
+        time = datetime.now(self.get_timezone())
         self.run_minutely(self.update_last_connection, time)
 
     async def update_last_connection(self, cb_args):
