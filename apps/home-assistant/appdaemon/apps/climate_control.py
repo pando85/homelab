@@ -184,7 +184,7 @@ Retrying in 10 minutes""",
         if len(prices) < min_hours:
             msg = f"""Less than {min_hours} hours of data available: {prices}.
 
-            Retrying in 10 minutes"""
+Retrying in 10 minutes"""
             self.log(msg, level="WARNING")
             await self.notify(
                 f"WARNING: {msg}",
