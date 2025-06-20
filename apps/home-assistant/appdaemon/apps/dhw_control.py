@@ -61,7 +61,7 @@ class DHWControl(hass.Hass):
                     self.log(f"Error sending notification: {notify_error}", level="ERROR")
                 self.log("Retrying in 10 minutes")
                 await asyncio.sleep(600)
-                self._daily_register_schedulers()
+                await self._daily_register_schedulers()
 
     async def _get_prices(self) -> List[Price]:
         pvpc = await self.get_state(self.args["sensor"]["pvpc_price"], attribute="all")
@@ -128,7 +128,7 @@ class DHWControl(hass.Hass):
                 name=self.args["notify"]["target"],
             )
             await asyncio.sleep(600)
-            return self._register_schedulers()
+            return await self._register_schedulers()
 
         self.log(f"{prices=}", level="DEBUG")
         cheapest_price = min(prices, key=lambda x: x.value)
