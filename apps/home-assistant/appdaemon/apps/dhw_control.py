@@ -54,7 +54,9 @@ class DHWControl(hass.Hass):
                 self.log(f"Error during daily scheduler registration: {e}", level="ERROR")
                 try:
                     await self.notify(
-                        f"Error during daily scheduler registration: {e}",
+                        f"""Error during daily scheduler registration: {e}
+
+Retrying in 10 minutes""",
                         name=self.args["notify"]["target"],
                     )
                 except Exception as notify_error:
