@@ -224,17 +224,23 @@ Retrying in 10 minutes"""
             self.log(f"Registering {args[0].__name__} at {args[1]}", level="INFO")
             self.timers.append(await self.run_at(*args))
 
+        started = False
+
         for group in groups_to_schedule:
             self.log(f"{current_hour=}", level="DEBUG")
             self.log(f"{group[0]=}", level="DEBUG")
             if current_hour in group:
                 await self._start_hvac()
+                started = True
             elif current_hour > group[0]:
                 continue
             else:
                 await register(self._start_hvac, group[0].strftime("%H:%M:%S"))
 
             await register(self._stop_hvac, (group[-1] + timedelta(hours=1)).strftime("%H:%M:%S"))
+
+        if not started:
+            await self._stop_hvac()
 
     async def _unregister_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         self.log("Unregistering schedulers")
