@@ -50,6 +50,7 @@ class DHWControl(hass.Hass):
         self.log(f"DHW control is {'enabled' if is_enabled else 'disabled'}")
         if is_enabled:
             try:
+                raise asyncio.CancelledError
                 await self._register_schedulers()
             except Exception as e:
                 self.log(f"Error during daily scheduler registration: {e}", level="ERROR")
