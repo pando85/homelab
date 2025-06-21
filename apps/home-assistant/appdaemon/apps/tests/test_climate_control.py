@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from appdaemon import logging
+import pytz
 from climate_control import ClimateControl, Price
 
 
@@ -15,11 +15,13 @@ class AsyncMock(MagicMock):
 def climate_control():
     with patch.object(ClimateControl, "__init__", lambda self: None):
         climate_control = ClimateControl()
-
-        climate_control._logging = logging.Logging(None, "DEBUG")
-        climate_control.logger = climate_control._logging.get_logger()
+        # Patch log to print debug messages
+        def debug_log(msg, level=None):
+            if level == "DEBUG" or level is None:
+                print(f"DEBUG: {msg}")
+        climate_control.log = debug_log
         climate_control.args = MagicMock(return_value={"sensor": {"pvpc_price": "sensor.esios_pvpc"}})
-        climate_control.get_timezone = MagicMock(return_value="Europe/Madrid")
+        climate_control.get_timezone = MagicMock(return_value=pytz.timezone("Europe/Madrid"))
         return climate_control
 
 
