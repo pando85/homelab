@@ -187,7 +187,7 @@ Retrying in 10 minutes""",
             msg = f"""Less than {min_hours} hours of data available: {prices}.
 
 Retrying in 10 minutes"""
-            self.log(msg, level="WARNING")
+            self.log(msg.replace("\n", ""), level="WARNING")
             await self.notify(
                 f"WARNING: {msg}",
                 name=self.args["notify"]["target"],
