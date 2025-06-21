@@ -239,6 +239,7 @@ Retrying in 10 minutes"""
 
             await register(self._stop_hvac, (group[-1] + timedelta(hours=1)).strftime("%H:%M:%S"))
 
+        # if we didn't start the HVAC, we stop it until the next scheduled time
         if not started:
             await self._stop_hvac()
 
