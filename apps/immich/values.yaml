@@ -103,7 +103,7 @@ app-template:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
             # GPU use require cuda image. E.g.: v1.124.2-cuda
-            tag: v1.134.0
+            tag: v1.135.3
           env:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
