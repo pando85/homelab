@@ -6,7 +6,7 @@ metadata:
     backup/retain: quaterly
 spec:
   teamId: immich
-  dockerImage: registry.wuhoo.xyz/jerry/spilo-pgvecto.rs:spilo-16-3.2-p2-pgvectors-0.2.0
+  dockerImage: ghcr.io/pando85/spilo-17-vchord:4.0-p2
   numberOfInstances: 1
 
   resources:
@@ -41,7 +41,7 @@ spec:
       log_min_duration_statement: "-1"
       log_statement: none
       # add vectors.so to shared_preload_libraries
-      shared_preload_libraries: "bg_mon,pg_stat_statements,pgextwlist,pg_auth_mon,set_user,timescaledb,pg_cron,pg_stat_kcache,vectors.so"
+      shared_preload_libraries: "bg_mon,pg_stat_statements,pgextwlist,pg_auth_mon,set_user,timescaledb,pg_cron,pg_stat_kcache,vchord.so"
       # ZFS settings:
       full_page_writes: "off"
 
@@ -52,9 +52,9 @@ spec:
   #     # ```sql
   #     # CREATE EXTENSION cube;
   #     # CREATE EXTENSION earthdistance;
-  #     # ALTER SYSTEM SET shared_preload_libraries = "vectors.so"
-  #     # CREATE EXTENSION vectors;
+  #     # ALTER SYSTEM SET shared_preload_libraries = "vchord.so"
+  #     # CREATE EXTENSION vchord;
   #     # ```
   #       cube: public
   #       earthdistance: public
-  #       vectors: public
+  #       vchord: public
