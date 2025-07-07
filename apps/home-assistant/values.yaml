@@ -149,7 +149,7 @@ app-template:
         piper:
           image:
             repository: rhasspy/wyoming-piper
-            tag: 1.5.4
+            tag: 1.6.2
           args:
             - --voice
             #- en_US-amy-medium
