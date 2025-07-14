@@ -6,7 +6,7 @@ ingress-nginx:
       ## use *either* current default registry/image or repository format or installing chart by providing the values.yaml will fail
       ## repository:
       tag: v1.13.0-fb10c8129
-
+      digest: sha256:4bb44f02636ce564ae459c0221921b368e78a8ce3d40a0855d1124538e31ac60
     admissionWebhooks:
       enabled: enable
       timeoutSeconds: 30
