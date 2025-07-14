@@ -133,6 +133,8 @@ nextcloud:
         max_input_time = 3600
         max_execution_time = 3600
         default_phone_region = ES
+      zz-memory_limit.ini: |-
+        memory_limit=512M
     defaultConfigs:
       .htaccess: true
       redis.config.php: true
