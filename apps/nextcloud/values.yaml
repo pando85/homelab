@@ -99,10 +99,10 @@ nextcloud:
 
   resources:
     limits:
-      memory: 2Gi
+      memory: 4Gi
     requests:
       cpu: 400m
-      memory: 200Mi
+      memory: 512Mi
 
   livenessProbe: &probe
     enabled: true
