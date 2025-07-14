@@ -9,8 +9,8 @@ ingress-nginx:
       ## for backwards compatibility consider setting the full image url via the repository value below
       ## use *either* current default registry/image or repository format or installing chart by providing the values.yaml will fail
       ## repository:
-      tag: v1.13.0-fb10c8129
-      digest: sha256:4bb44f02636ce564ae459c0221921b368e78a8ce3d40a0855d1124538e31ac60
+      tag: v1.13.0-45ef3b819
+      digest: sha256:7f65641559f011129528a05710a7274e1c563d83b1dac5aff2b145ec23add817
     admissionWebhooks:
       enabled: enable
       timeoutSeconds: 30
