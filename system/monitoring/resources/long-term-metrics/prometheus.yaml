@@ -18,9 +18,9 @@ spec:
   externalUrl: http://prometheus-long-term.internal.grigri.cloud/
   hostNetwork: false
   # renovate: datasource=docker
-  image: quay.io/prometheus/prometheus:v3.4.2
+  image: quay.io/prometheus/prometheus:v3.5.0
   # renovate: datasource=docker depName=quay.io/prometheus/prometheus
-  version: v3.4.2
+  version: v3.5.0
   listenLocal: false
   logFormat: logfmt
   logLevel: info
