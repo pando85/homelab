@@ -3,5 +3,5 @@ name: external-dns
 version: 0.0.0
 dependencies:
   - name: external-dns
-    version: 1.17.0
+    version: 1.18.0
     repository: https://kubernetes-sigs.github.io/external-dns/
