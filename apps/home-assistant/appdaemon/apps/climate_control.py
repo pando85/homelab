@@ -44,9 +44,8 @@ class ClimateControl(hass.Hass):
         # Register schedulers every day
         # give enough time to get new data
         await self.run_daily(self._daily_register_schedulers, "00:00:30")
-        # Optionally, you can call the daily register once at startup (non-blocking)
 
-        self.create_task(self._daily_register_schedulers())
+        await self.create_task(self._daily_register_schedulers())
 
     async def _daily_register_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         is_enabled = await self.get_state(self.args["input_boolean"]["enable"], attribute="state") == "on"
