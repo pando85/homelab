@@ -35,15 +35,15 @@ class DHWControl(hass.Hass):
         self._logging
         input_boolean_enable = self.args["input_boolean"]["enable"]
         # Register schedulers if dhw control is enabled
-        self.listen_state(self._register_schedulers, input_boolean_enable, new="on", old="off")
+        await self.listen_state(self._register_schedulers, input_boolean_enable, new="on", old="off")
         # Unregister schedulers if dhw control is enabled
-        self.listen_state(self._unregister_schedulers, input_boolean_enable, new="off", old="on")
+        await self.listen_state(self._unregister_schedulers, input_boolean_enable, new="off", old="on")
 
         # Register schedulers every day
         # give enough time to get new data
-        self.run_daily(self._daily_register_schedulers, "00:00:30")
+        await self.run_daily(self._daily_register_schedulers, "00:00:30")
 
-        self.create_task(self._daily_register_schedulers())
+        await self.create_task(self._daily_register_schedulers())
 
     async def _daily_register_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         is_enabled = await self.get_state(self.args["input_boolean"]["enable"], attribute="state") == "on"

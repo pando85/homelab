@@ -37,13 +37,13 @@ class ClimateControl(hass.Hass):
         self._logging
         input_boolean_enable = self.args["input_boolean"]["enable"]
         # Register schedulers if climate control is enabled
-        self.listen_state(self._register_schedulers, input_boolean_enable, new="on", old="off")
+        await self.listen_state(self._register_schedulers, input_boolean_enable, new="on", old="off")
         # Unregister schedulers if climate control is enabled
-        self.listen_state(self._unregister_schedulers, input_boolean_enable, new="off", old="on")
+        await self.listen_state(self._unregister_schedulers, input_boolean_enable, new="off", old="on")
 
         # Register schedulers every day
         # give enough time to get new data
-        self.run_daily(self._daily_register_schedulers, "00:00:30")
+        await self.run_daily(self._daily_register_schedulers, "00:00:30")
         # Optionally, you can call the daily register once at startup (non-blocking)
 
         self.create_task(self._daily_register_schedulers())
