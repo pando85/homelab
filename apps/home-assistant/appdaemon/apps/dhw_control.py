@@ -160,12 +160,7 @@ Retrying in 10 minutes""",
         self.log(f"{schedulers=}", level="DEBUG")
         # callback is wrapped in a functools.partial, so we need to access the func attribute
         def compare_callback(callback, func):
-                if callback is None:
-                    return False
-                elif isinstance(callback, functools.partial):
-                    return callback.func == func
-                else:
-                    return callback == func
+                return callback.func == func if isinstance(callback, functools.partial) else callback == func
         ids_to_disable = [_id for _id, i in schedulers.items() if not compare_callback(i["callback"], self._daily_register_schedulers)]
         self.log(f"{ids_to_disable=}", level="DEBUG")
         [await self.cancel_timer(_id) for _id in ids_to_disable]

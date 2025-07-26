@@ -250,9 +250,7 @@ Retrying in 10 minutes"""
         self.log(f"{schedulers=}", level="DEBUG")
         # callback is wrapped in a functools.partial, so we need to access the func attribute
         def compare_callback(callback, func):
-                if callback is None:
-                    return False
-                elif isinstance(callback, functools.partial):
+                if isinstance(callback, functools.partial):
                     return callback.func == func
                 else:
                     return callback == func
