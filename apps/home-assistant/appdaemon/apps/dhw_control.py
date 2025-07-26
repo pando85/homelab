@@ -149,6 +149,7 @@ Retrying in 10 minutes""",
         if current_hour.hour == datetime_to_schedule.hour:
             await self._force_dhw()
         elif current_hour < datetime_to_schedule:
+            self.log(f"Registering {self._force_dhw.__name__} at {datetime_to_schedule.strftime('%H:%M:%S')}", level="INFO")
             self.timers.append(await self.run_at(self._force_dhw, datetime_to_schedule.strftime("%H:%M:%S")))
 
     async def _unregister_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
