@@ -118,7 +118,7 @@ Retrying in 10 minutes""",
         return base64.urlsafe_b64encode(zlib.compress(vega_lite_json.encode("utf-8"), 9)).decode("ascii")
 
     async def _register_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
-        await self._unregister_schedulers()
+        #await self._unregister_schedulers()
         self.log("Registering schedulers")
 
         try:
