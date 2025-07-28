@@ -97,5 +97,8 @@ forgejo:
   postgresql:
     enabled: false
 
-  redis-cluster:
+  valkey-cluster:
+    enabled: false
+
+  valkey:
     enabled: false
