@@ -84,7 +84,7 @@ Retrying in 10 minutes""",
 
     async def _force_dhw(self, kwargs={}):
         dry_run_msg = "" if self.args["dhw"]["enabled"] else " (dry run mode)"
-        msg = f"Set force DHW mode{dry_run_msg}"
+        msg = f"Force DHW{dry_run_msg}"
         self.log(msg)
         if self.args["notify"]["enabled"]:
             await self.notify(msg, name=self.args["notify"]["target"])
