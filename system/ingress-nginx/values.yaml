@@ -4,13 +4,6 @@ ingress-nginx:
     image:
       registry: ghcr.io
   controller:
-    image:
-      image: pando85/ingress-nginx/controller
-      ## for backwards compatibility consider setting the full image url via the repository value below
-      ## use *either* current default registry/image or repository format or installing chart by providing the values.yaml will fail
-      ## repository:
-      tag: v1.13.0-45ef3b819
-      digest: sha256:7f65641559f011129528a05710a7274e1c563d83b1dac5aff2b145ec23add817
     admissionWebhooks:
       enabled: enable
       timeoutSeconds: 30
