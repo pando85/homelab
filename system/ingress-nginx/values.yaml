@@ -1,8 +1,5 @@
 ingress-nginx:
 
-  global:
-    image:
-      registry: ghcr.io
   controller:
     admissionWebhooks:
       enabled: enable
