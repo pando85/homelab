@@ -60,3 +60,29 @@ Repeat steps 1–4 above, then:
    ```sh
    cp /tmp/lidarr.db /proc/1/root/config/lidarr.db
    ```
+
+### Configure Tubifarry Plugin in Lidarr
+
+1. Navigate to **System > Plugins**.
+2. Install Tubifarry prod plugin by entering the URL:
+
+   ```
+   https://github.com/TypNull/Tubifarry
+   ```
+
+   and click **Install**.
+
+3. After Lidarr restarts, go back to **System > Plugins**.
+4. Install the Tubifarry develop branch plugin by entering:
+
+   ```
+   https://github.com/TypNull/Tubifarry/tree/develop
+   ```
+
+   and click **Install**.
+
+5. After Lidarr restarts, log back into Lidarr and go to **Settings > Metadata**.
+6. Under **Metadata Consumers**, select **Lidarr Custom**.
+7. Check both boxes and enter your metadata server URL (e.g., `http://host_ip:5001`) in the
+   **Metadata Source** field.
+8. Save changes and restart Lidarr again.
