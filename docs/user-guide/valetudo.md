@@ -1,6 +1,6 @@
-# Valetudo upgrade
+# Valetudo
 
-## Valetudo
+## Valetudo upgrade
 
 ```bash
 ssh root@tanque.iot.grigri
@@ -9,11 +9,13 @@ wget https://github.com/Hypfer/Valetudo/releases/latest/download/valetudo-aarch6
 reboot
 ```
 
-## Firmware
+## Firmware upgrade
 
-**Note:** Dreame doesn't provide any firmware update changelog or information about the new firmware.
+**Note:** Dreame doesn't provide any firmware update changelog or information about the new
+firmware.
 
-Check if there are new firmware versions available on the [Dreame L10S Ultra Dustbuilder](https://builder.dontvacuum.me/_dreame_r2228.html).
+Check if there are new firmware versions available on the
+[Dreame L10S Ultra Dustbuilder](https://builder.dontvacuum.me/_dreame_r2228.html).
 
 ### Backup
 
@@ -30,7 +32,8 @@ scp -r -O root@tanque.iot.grigri:/tmp/backup_mnt.tar.gz .
 
 ### Build firmware
 
-Get the firmware from [the dustbuilder](https://builder.dontvacuum.me/) and download it to the robot.
+Get the firmware from [the dustbuilder](https://builder.dontvacuum.me/) and download it to the
+robot.
 
 Go to [Dreame L10S Ultra](https://builder.dontvacuum.me/_dreame_r2228.html) section.
 
@@ -46,8 +49,8 @@ Get serial number and config value from `pass iot/tanque_firmware`.
 
 ### Install
 
-You need to have your robot already rooted to use this firmware!
-The robot needs to be in its docking station and fully charged!
+You need to have your robot already rooted to use this firmware! The robot needs to be in its
+docking station and fully charged!
 
 0. Connect to robot via SSH using your SSH key
 
@@ -74,9 +77,15 @@ The robot needs to be in its docking station and fully charged!
    ./install.sh
    ```
 
-The robot should install the firmware and reboot. This steps will update the Kernel, Rootfs and MCU firmware
+The robot should install the firmware and reboot. This steps will update the Kernel, Rootfs and MCU
+firmware
 
 **Note:** It takes like 3 minutes to install and reboot since `{"ret":"ok"}` is shown.
+
+## Vacuum stream
+
+To access the vacuum camera you can install and run this project:
+[vacuumstream](https://github.com/pando85/vacuumstreamer).
 
 ## Troubleshooting
 
