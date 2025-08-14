@@ -20,7 +20,7 @@ spec:
                 name: tanque
                 port:
                   number: 1984
-            path: /
+            path: /stream.html?src=tcp_magic
             pathType: ImplementationSpecific
   tls:
     - hosts:
