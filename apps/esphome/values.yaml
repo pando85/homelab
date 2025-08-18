@@ -9,7 +9,7 @@ app-template:
         config:
           image:
             repository: debian
-            tag: 12.11-slim
+            tag: 13.0-slim
           command:
             - /bin/sh
             - -c
