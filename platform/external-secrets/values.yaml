@@ -1,26 +1,25 @@
-external-secrets:
+resources:
+  requests:
+    cpu: 10m
+    memory: 38Mi
+  limits:
+    memory: 64Mi
+
+extraArgs:
+  loglevel: debug
+
+webhook:
   resources:
     requests:
       cpu: 10m
-      memory: 38Mi
+      memory: 21Mi
     limits:
       memory: 64Mi
 
-  extraArgs:
-    loglevel: debug
-
-  webhook:
-    resources:
-      requests:
-        cpu: 10m
-        memory: 21Mi
-      limits:
-        memory: 64Mi
-
-  certController:
-    resources:
-      requests:
-        cpu: 10m
-        memory: 64Mi
-      limits:
-        memory: 128Mi
+certController:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
