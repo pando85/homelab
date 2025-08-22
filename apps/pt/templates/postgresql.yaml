@@ -42,6 +42,10 @@ spec:
   databases:
     pt: pt
 
+  patroni:
+    pg_hba:
+      - hostssl all all 0.0.0.0/0 md5
+      - host    all all 0.0.0.0/0 md5
   postgresql:
     version: "17"
     parameters:
