@@ -56,7 +56,7 @@ spec:
       - hostssl all             all all md5
       - host    all             all all md5
   postgresql:
-    version: "17"
+    version: "16"
     parameters:
       archive_mode: "off"
       # minimal value. If not default to 100
