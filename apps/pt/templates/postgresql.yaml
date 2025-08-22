@@ -1,0 +1,58 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: pt-postgres
+  labels:
+    backup/retain: weekly
+spec:
+  teamId: pt
+
+  numberOfInstances: 1
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - prusik
+
+  enableMasterLoadBalancer: true
+  serviceAnnotations:
+    lbipam.cilium.io/ips: "192.168.193.11"
+    external-dns.alpha.kubernetes.io/enabled: "true"
+    external-dns.alpha.kubernetes.io/hostname: pt.internal.grigri.cloud
+  volume:
+    size: 500Mi
+
+  users:
+    pt:
+      - superuser
+      - createdb
+  databases:
+    pt: pt
+
+  postgresql:
+    version: "17"
+    parameters:
+      archive_mode: "off"
+      # minimal value. If not default to 100
+      max_connections: "25"
+      shared_buffers: 32MB
+      log_checkpoints: "off"
+      log_connections: "off"
+      log_disconnections: "off"
+      log_lock_waits: "off"
+      log_min_duration_statement: "-1"
+      log_statement: none
+      # ZFS settings:
+      full_page_writes: "off"
