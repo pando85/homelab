@@ -30,6 +30,8 @@ spec:
   masterServiceAnnotations:
     lbipam.cilium.io/ips: "192.168.193.5"
     external-dns.alpha.kubernetes.io/enabled: "true"
+  allowedSourceRanges:
+    - 0.0.0.0/0
   volume:
     size: 500Mi
 
