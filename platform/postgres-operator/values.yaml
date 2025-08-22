@@ -23,6 +23,9 @@ postgres-operator:
 
   configLoadBalancer:
     external_traffic_policy: "Local"
+    db_hosted_zone: internal.grigri.cloud
+    master_dns_name_format: "{cluster}.{hostedzone}"
+
   # configDebug:
   #   # toggles verbose debug logs from the operator
   #   debug_logging: false
