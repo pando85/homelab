@@ -25,7 +25,7 @@ app-template:
         server:
           image: &image
             repository: freikin/dawarich
-            tag: 0.30.8
+            tag: 0.30.11
           env: &env
             DATABASE_HOST: dawarich-postgres
             DATABASE_USERNAME:
