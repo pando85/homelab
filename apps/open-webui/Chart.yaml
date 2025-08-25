@@ -3,5 +3,5 @@ name: open-webui
 version: 0.0.0
 dependencies:
   - name: open-webui
-    version: 7.3.0
+    version: 7.6.0
     repository: https://helm.openwebui.com/
