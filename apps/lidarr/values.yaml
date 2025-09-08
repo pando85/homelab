@@ -8,7 +8,7 @@ app-template:
         lidarr:
           image:
             repository: ghcr.io/crutonjohn/lidarr-plugins
-            tag: "2.14.1.4716"
+            tag: "2.14.2.4764"
           env:
             TZ: Europe/Madrid
           resources:
