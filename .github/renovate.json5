@@ -217,5 +217,22 @@
       ],
       commitMessagePrefix: 'app-template: ',
     },
+    {
+      description: 'Group Immich updates in one PR',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        '/immich-server/',
+        '/immich-machine-learning/',
+      ],
+      groupName: 'immich',
+      groupSlug: 'immich',
+      additionalBranchPrefix: 'immich-',
+      addLabels: [
+        'renovate/immich',
+      ],
+      commitMessagePrefix: 'immich: ',
+    },
   ],
 }
