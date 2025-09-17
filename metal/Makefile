@@ -1,7 +1,7 @@
 .POSIX:
 
 WORKON_HOME ?= .direnv
-PYTHON_VERSION:=$(shell python --version | cut -d " " -f 2)
+PYTHON_VERSION := $(shell python --version | cut -d " " -f 2 | awk -F. '{print $$1"."$$2}')
 VENV_BASE ?= $(WORKON_HOME)/python-$(PYTHON_VERSION)
 PYTHON := ${VENV_BASE}/bin/python3
 PYTHON_BIN_DIR := ${VENV_BASE}/bin
@@ -24,7 +24,7 @@ venv:
 requirements:
 requirements: venv
 	@echo Install requirements
-	@${PYTHON} -m pip install -r requirements.txt > /dev/null
+	@${PYTHON_BIN_DIR}/pip install -r requirements.txt > /dev/null
 
 .PHONY: requirements-ansible
 requirements-ansible:
