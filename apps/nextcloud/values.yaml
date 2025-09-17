@@ -82,13 +82,29 @@ nextcloud:
     host: nextcloud-postgres
   cronjob:
     enabled: true
-    resources:
-      limits:
-        cpu: 400m
-        memory: 512Mi
-      requests:
-        cpu: 10m
-        memory: 40Mi
+    type: cronjob
+    cronjob:
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - nextcloud
+                  - key: app.kubernetes.io/component
+                    operator: In
+                    values:
+                      - app
+              topologyKey: kubernetes.io/hostname
+      resources:
+        limits:
+          cpu: 400m
+          memory: 512Mi
+        requests:
+          cpu: 10m
+          memory: 40Mi
 
   persistence:
     enabled: true
