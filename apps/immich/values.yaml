@@ -41,7 +41,7 @@ app-template:
         main:
           image: &image
             repository: ghcr.io/immich-app/immich-server
-            tag: v1.142.0
+            tag: v1.142.1
           env:
             <<: *env
             IMMICH_WORKERS_INCLUDE: 'api'
@@ -103,7 +103,7 @@ app-template:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
             # GPU use require cuda image. E.g.: v1.124.2-cuda
-            tag: v1.142.0
+            tag: v1.142.1
           env:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
