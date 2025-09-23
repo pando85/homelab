@@ -6,6 +6,7 @@ metadata:
     backup/retain: quaterly
 spec:
   teamId: immich
+  # renovate: datasource=docker depName=ghcr.io/pando85/spilo-17-vchord
   dockerImage: ghcr.io/pando85/spilo-17-vchord:4.0-p2
   numberOfInstances: 1
 
