@@ -7,7 +7,7 @@ metadata:
 spec:
   teamId: immich
   # renovate: datasource=docker versioning=regex:^(?<major>\d+)\.(?<minor>\d+)-p(?<patch>\d+)$
-  dockerImage: ghcr.io/pando85/spilo-17-vchord:4.0-p2
+  dockerImage: ghcr.io/pando85/spilo-17-vchord:4.0-p3
   numberOfInstances: 1
 
   resources:
