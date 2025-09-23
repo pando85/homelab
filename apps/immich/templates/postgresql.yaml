@@ -6,7 +6,7 @@ metadata:
     backup/retain: quaterly
 spec:
   teamId: immich
-  # renovate: datasource=docker depName=ghcr.io/pando85/spilo-17-vchord
+  # renovate: datasource=docker versioning=regex:^(?<major>\d+)\.(?<minor>\d+)-p(?<patch>\d+)$
   dockerImage: ghcr.io/pando85/spilo-17-vchord:4.0-p2
   numberOfInstances: 1
 
