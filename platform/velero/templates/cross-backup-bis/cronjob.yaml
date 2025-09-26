@@ -3,7 +3,7 @@ kind: CronJob
 metadata:
   name: rclone-sync-bis
 spec:
-  schedule: "30 2 * * 4"
+  schedule: "30 2 * * 5"
   jobTemplate:
     spec:
       template:
