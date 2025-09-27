@@ -93,6 +93,20 @@ Checklist (keep order):
   logic).
 - Not waiting for cert-manager/external-secrets webhooks—causes transient failures.
 
+## Deployment Restrictions
+
+**CRITICAL: NEVER automatically execute deployment commands.**
+
+- **NEVER run**: `make bootstrap`, `make metal`, `make dev`, or any deployment/apply commands
+- **NEVER execute**: `kubectl apply`, `helm install/upgrade`, `ansible-playbook`, or similar
+- **NEVER use**: `run_in_terminal` for deployment, infrastructure changes, or cluster operations
+- **ALWAYS**: Only suggest commands for user to run manually
+- **EXPLAIN**: We use GitOps and manual deployment is just used for Ansible. Let the user run these
+  commands themselves.
+
+This repository manages production infrastructure. All deployments must be user-initiated and
+controlled to prevent accidental changes, downtime, or configuration drift.
+
 ## Copilot Guidance
 
 When generating changes:
@@ -101,6 +115,7 @@ When generating changes:
 - Maintain alphabetical order when clearly intended (labels, annotations); avoid churn.
 - Reuse existing patterns; avoid new abstractions unless clearly additive.
 - Suggest validation (k3d spin-up, helm template) for changes impacting core/system charts.
+- **NEVER automatically deploy or apply changes** - only edit files and provide guidance.
 
 ## Security & Secrets
 
