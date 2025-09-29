@@ -6,8 +6,41 @@
 
 ## pfSense
 
-Manual configuration and backups in grigri. Check `metal/roles/grigri_setup/tasks/backup-user.yml`
-file.
+Manual configuration and backups in prusik. Backup user is created in
+`metal/roles/setup/tasks/backup-user.yml` and backup is configured (partly manually) on this file
+`metal/playbooks/install/backups.yml`.
+
+## Disaster Recovery
+
+A backup for disaster recovery is stored in pass:
+
+```bash
+pass grigri/pfsense.config.xml > /tmp/pfsense.config.xml
+```
+
+For reinstalling PfSense, you will need to connect the null modem serial RS232 cable and connect
+with Linux:
+
+```bash
+sudo picocom -b 115200 /dev/ttyUSB0
+```
+
+**Note**: `screen` could be used too.
+
+You will need to use a PfSense USB installer image and configure PPPoE WAN to boot.
+
+PPPoE is on `igb0` interface and credentials are in pass `grigri/digi_pppoe`.
+
+If you cannot install it in this way you could install it from an offline ISO image from
+[PfSense old images](https://atxfiles.netgate.com/mirror/downloads/).
+
+For creating a bootable USB stick from ISO you can use the
+[Etcher tool](https://www.balena.io/etcher/).
+
+After download the image, create the USB stick and connect it to the router, you will need to
+connect to the serial console and follow the installation steps.
+
+Then you can restore the configuration from the XML file.
 
 ## gs724t
 
