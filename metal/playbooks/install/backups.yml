@@ -26,7 +26,7 @@
       authorized_key:
         user: backup
         state: present
-        key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG4YvPnh7l7sC46/jvN/rESNA2eJ5Y51Tiq+XdJcxBd5 root@pfsense.grigri
+        key: ssh-ed25519 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO/+NzMEvmyB8XEK3dwYGQTS1sjJwURuD0CFkg45o2Tv root@pfsense.grigri
 
     - name: Check cz-taw1b backups directory exists
       file:
