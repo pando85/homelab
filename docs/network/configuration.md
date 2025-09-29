@@ -6,41 +6,50 @@
 
 ## pfSense
 
-Manual configuration and backups in prusik. Backup user is created in
-`metal/roles/setup/tasks/backup-user.yml` and backup is configured (partly manually) on this file
-`metal/playbooks/install/backups.yml`.
+Manual configuration and backups are managed on the host `prusik`.
 
-## Disaster Recovery
+- **Backup user**: Created via
+  [`metal/roles/setup/tasks/backup-user.yml`](../../metal/roles/setup/tasks/backup-user.yml)
+- **Backup configuration**: See
+  [`metal/playbooks/install/backups.yml`](../../metal/playbooks/install/backups.yml) (partially
+  manual)
 
-A backup for disaster recovery is stored in pass:
+### Disaster Recovery Workflow
 
-```bash
+**1. Retrieve the disaster recovery pfSense configuration backup:**
+
+```sh
 pass grigri/pfsense.config.xml > /tmp/pfsense.config.xml
 ```
 
-For reinstalling PfSense, you will need to connect the null modem serial RS232 cable and connect
-with Linux:
+**2. Reinstalling pfSense:**
 
-```bash
-sudo picocom -b 115200 /dev/ttyUSB0
-```
+- Connect a null modem RS232 serial cable to the device.
+- On Linux, open the serial console:
 
-**Note**: `screen` could be used too.
+  ```sh
+  sudo picocom -b 115200 /dev/ttyUSB0
+  # Alternatively:
+  # screen /dev/ttyUSB0 115200
+  ```
 
-You will need to use a PfSense USB installer image and configure PPPoE WAN to boot.
+- Use a pfSense USB installer image. Configure the WAN interface for PPPoE during setup.
 
-PPPoE is on `igb0` interface and credentials are in pass `grigri/digi_pppoe`.
+  - WAN: `igb0`
+  - PPPoE credentials: stored in `pass grigri/digi_pppoe`
 
-If you cannot install it in this way you could install it from an offline ISO image from
-[PfSense old images](https://atxfiles.netgate.com/mirror/downloads/).
+- If the standard installer is unavailable, download an offline ISO from
+  [PfSense old images](https://atxfiles.netgate.com/mirror/downloads/).
+- Create a bootable USB stick using [Etcher](https://www.balena.io/etcher/).
 
-For creating a bootable USB stick from ISO you can use the
-[Etcher tool](https://www.balena.io/etcher/).
+**3. Installation steps:**
 
-After download the image, create the USB stick and connect it to the router, you will need to
-connect to the serial console and follow the installation steps.
+- Insert the USB stick into the router.
+- Connect via serial console and follow the pfSense installation prompts.
 
-Then you can restore the configuration from the XML file.
+**4. Restore configuration:**
+
+- After installation, restore the configuration from the XML backup file.
 
 ## gs724t
 
