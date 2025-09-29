@@ -139,6 +139,12 @@ serviceMonitor:
     - module: tcp_connect
       name: irrigation-controller-mid
       url: irrigation-controller-mid.iot.grigri:6053
+    - module: ping
+      name: cerezo
+      url: cerezo.grigri
+    - module: ping
+      name: limonero
+      url: limonero.grigri
 
 resources:
   requests:
