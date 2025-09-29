@@ -11,6 +11,8 @@ app-template:
             LABEL_SELECTOR: pod-cleaner.dbcloud.org/watch=true
             POD_STATUS_REASON: UnexpectedAdmissionError
             POD_STATUS_PHASE: Failed
+            ENABLE_ALLOCATABLE: false
+            ENABLE_SMOKE: false
 
           resources:
             requests:
