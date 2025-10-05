@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kanidm-kanidmd-headless
+  namespace: kanidm
+  labels:
+    app.kubernetes.io/instance: kanidm
+    app.kubernetes.io/name: kanidm
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/controller: kanidmd
+    app.kubernetes.io/instance: kanidm
+    app.kubernetes.io/name: kanidm
+  ports:
+    - name: http
+      port: 8443
+      protocol: TCP
+      targetPort: 8443
+    - name: replication
+      port: 8444
+      protocol: TCP
+      targetPort: 8444

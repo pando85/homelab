@@ -58,7 +58,7 @@ app-template:
           versions = 1
 
           [replication]
-          origin = "repl://localhost:8444"
+          origin = "repl://kanidm-0.kanidm-kanidmd-headless:8444"
           bindaddress = "0.0.0.0:8444"
 
   service:
