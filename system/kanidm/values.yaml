@@ -57,6 +57,10 @@ app-template:
           schedule = "00 2 * * *"
           versions = 1
 
+          [replication]
+          origin = "repl://localhost:8444"
+          bindaddress = "0.0.0.0:8444"
+
   service:
     kanidmd:
       controller: kanidmd
