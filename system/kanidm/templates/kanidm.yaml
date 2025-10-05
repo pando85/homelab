@@ -31,7 +31,7 @@ spec:
   externalReplicationNodes:
     # Name of the external replication node. This just have internal use.
     - name: kanidm-deployed
-      hostname: kanidm-0.kanidm-kanidmd-headless
+      hostname: kanidm-kanidmd
       port: 8444
       certificate:
         key: tls.der.b64url
