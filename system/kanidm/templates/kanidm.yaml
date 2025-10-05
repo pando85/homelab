@@ -1,0 +1,140 @@
+apiVersion: kaniop.rs/v1beta1
+kind: Kanidm
+metadata:
+  name: kanidm
+spec:
+  domain: idm.grigri.cloud
+  replicaGroups:
+    - name: default
+      replicas: 1
+      role: read_only_replica
+      primaryNode: false
+      resources:
+        requests:
+          cpu: 10m
+          memory: 90Mi
+        limits:
+          memory: 2Gi
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              kanidm.kaniop.rs/cluster: kanidm
+              kanidm.kaniop.rs/replica-group: default
+          maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+
+  # List of external replication nodes. This is used to configure replication between
+  # different Kanidm clusters.
+  #
+  # **WARNING**: `admin` and `idm_admin` passwords are going to be reset.
+  externalReplicationNodes:
+    # Name of the external replication node. This just have internal use.
+    - name: kanidm-deployed
+      hostname: kanidm-kanidmd
+      port: 8444
+      certificate:
+        key: tls.der.b64url
+        name: kanidm-replication-certificate
+      # Defines the type of replication to use. Defaults to MutualPull.
+      #
+      # Valid options:
+      # - mutual-pull: Both nodes can initiate replication with each other (default)
+      # - allow-pull: This node allows the external node to pull changes, but won't initiate
+      # - pull: This node will pull changes from the external node
+      type: pull
+      # Select external replication node as the primary node. This means that if database conflicts
+      # occur the content of the primary will take precedence over the rest of the nodes.
+      # Note: just one external replication node or replication group can be selected as primary.
+      # Defaults to false.
+      automaticRefresh: true
+
+  image: kanidm/server:1.7.3
+  logLevel: info
+
+  env:
+    - name: KANIDM_TRUST_X_FORWARD_FOR
+      value: "true"
+    - name: KANIDM_DB_FS_TYPE
+      value: "zfs"
+    - name: KANIDM_ONLINE_BACKUP_SCHEDULE
+      value: "00 2 * * *"
+    - name: KANIDM_ONLINE_BACKUP_VERSIONS
+      value: "1"
+  # Namespaces to match for KanidmOAuth2Clients discovery.
+  #
+  # An empty label selector matches all namespaces.
+  # A null label selector (default value) matches the current namespace only.
+  oauth2ClientNamespaceSelector: {}
+
+  storage:
+    volumeClaimTemplate:
+      metadata:
+        labels:
+          app.kubernetes.io/instance: kanidm
+          app.kubernetes.io/name: kanidm
+          backup: kanidm-zfs
+          backup/retain: quaterly
+        annotations:
+          argocd.argoproj.io/sync-options: Prune=false
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 100Mi
+
+  ldapPortName: ldaps
+  tlsSecretName: idm-external-tls-certificate
+
+  # # Service defines the service configuration for the Kanidm server.
+  # service:
+  #   # Annotations is an unstructured key value map stored with a resource that may be set by
+  #   # external tools to store and retrieve arbitrary metadata. They are not queryable and should
+  #   # be preserved when modifying objects.
+  #   # More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
+  #   annotations:
+  #     service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+  #   # Specify the Service's type where the Kanidm Service is exposed
+  #   # Please note that some Ingress controllers like https://github.com/kubernetes/ingress-gce
+  #   # forces you to expose your Service on a NodePort
+  #   # Defaults to ClusterIP. Valid options are ExternalName, ClusterIP, NodePort, and
+  #   # LoadBalancer. "ClusterIP" allocates a cluster-internal IP address for load-balancing to
+  #   # endpoints. Endpoints are determined by the selector or if that is not specified, by manual
+  #   # construction of an Endpoints object or EndpointSlice objects. If clusterIP is "None",
+  #   # no virtual IP is allocated and the endpoints are published as a set of endpoints rather
+  #   # than a virtual IP. "NodePort" builds on ClusterIP and allocates a port on every node which
+  #   # routes to the same endpoints as the clusterIP. "LoadBalancer" builds on NodePort and creates
+  #   # an external load-balancer (if supported in the current cloud) which routes to the same
+  #   # endpoints as the clusterIP. "ExternalName" aliases this service to the specified
+  #   # externalName. Several other fields do not apply to ExternalName services.
+  #   # More info: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  #   type: ClusterIP
+
+  # # Ingress defines the ingress configuration for the Kanidm server. Domain will be the host
+  # # for the ingress. TLS is required.
+  # ingress:
+  #   # Annotations is an unstructured key value map stored with a resource that may be set by
+  #   # external tools to store and retrieve arbitrary metadata. They are not queryable and should
+  #   # be preserved when modifying objects.
+  #   # More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
+  #   annotations:
+  #     nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+  #   # ingressClassName is the name of an IngressClass cluster resource. Ingress controller
+  #   # implementations use this field to know whether they should be serving this Ingress resource,
+  #   # by a transitive connection (controller -\> IngressClass -\> Ingress resource). Although the
+  #   # `kubernetes.io/ingress.class` annotation (simple constant name) was never formally defined,
+  #   # it was widely supported by Ingress controllers to create a direct binding between Ingress
+  #   # controller and Ingress resources. Newly created Ingress resources should prefer using the
+  #   # field. However, even though the annotation is officially deprecated, for backwards
+  #   # compatibility reasons, ingress controllers should still honor that annotation if present.
+  #   ingressClassName: nginx
+  #   # Defines the name of the secret that contains the TLS private key and certificate for the
+  #   # server. If not defined, the default will be the Kanidm name appended with `-tls`.
+  #   tlsSecretName: my-idm-tls
+
+  securityContext:
+    runAsUser: 389
+    runAsGroup: 389
+    fsGroup: 389
+    fsGroupChangePolicy: "OnRootMismatch"
