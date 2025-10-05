@@ -35,7 +35,7 @@ spec:
       port: 8444
       certificate:
         key: tls.der.b64url
-        name: kanidm-replication-certificate
+        name: kanidm-0-certificate
       # Defines the type of replication to use. Defaults to MutualPull.
       #
       # Valid options:
