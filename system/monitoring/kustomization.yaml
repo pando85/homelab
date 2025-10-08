@@ -28,6 +28,8 @@ resources:
   - resources/blackbox-exporter-dashboard-configmap.yaml
   - resources/grafana-admin-secret.yaml
   - resources/grafana-secret.yaml
+  - resources/kanidm-groups-grafana.yaml
+  - resources/kanidm-oauth2-client-grafana.yaml
   - resources/long-term-metrics/datasource-configmap.yaml
   - resources/long-term-metrics/ingress.yaml
   - resources/long-term-metrics/prometheus.yaml

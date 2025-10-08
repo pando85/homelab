@@ -1,0 +1,32 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: grafana
+  namespace: kaniop
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: grafana
+
+  origin: https://grafana.grigri.cloud/login/generic_oauth
+
+  redirectUrl:
+    - https://grafana.grigri.cloud/login/generic_oauth
+
+  scopeMap:
+    - group: grafana-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  supScopeMap:
+    - group: grafana-admins
+      scopes:
+        - admin
+
+  preferShortUsername: true
+  strictRedirectUrl: true
