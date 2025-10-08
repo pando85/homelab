@@ -17,7 +17,6 @@ app-template:
               memory: 90Mi
             limits:
               memory: 2Gi
-
           probes:
             liveness: &probe
               enabled: true
@@ -83,6 +82,7 @@ app-template:
           secretName: idm-external-tls-certificate
 
   defaultPodOptions:
+    hostname: kanidm-kanidmd
     securityContext:
       runAsUser: 389
       runAsGroup: 389
