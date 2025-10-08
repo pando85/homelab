@@ -1,0 +1,33 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: immich
+  namespace: immich
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: immich
+
+  origin: https://photos.grigri.cloud/auth/login
+
+  redirectUrl:
+    - https://photos.grigri.cloud/auth/login
+    - app.immich:///oauth-callback
+
+  scopeMap:
+    - group: immich-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  supScopeMap:
+    - group: immich-admins
+      scopes:
+        - admin
+
+  preferShortUsername: true
+  strictRedirectUrl: true
