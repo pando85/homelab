@@ -1,0 +1,10 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: k8s-oauth2-proxy-users
+  namespace: oauth2-proxy
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
