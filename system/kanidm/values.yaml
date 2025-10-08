@@ -4,8 +4,7 @@ app-template:
       labels:
         backup/retain: quaterly
       annotations:
-        configmap.reloader.stakater.com/reload: kanidm
-        secret.reloader.stakater.com/reload: idm-external-tls-certificate
+        secret.reloader.stakater.com/reload: kanidm-config,idm-external-tls-certificate
       type: statefulset
       containers:
         kanidmd:
@@ -35,31 +34,6 @@ app-template:
             readiness: *probe
             startup:
               enabled: false
-
-  configMaps:
-    kanidmd-config:
-      enabled: true
-      data:
-        server.toml: |
-          bindaddress = "0.0.0.0:8443"
-          ldapbindaddress = "0.0.0.0:3636"
-          trust_x_forward_for = true
-          db_path = "/data/kanidm.db"
-          db_fs_type = "zfs"
-          tls_chain = "/data/tls/tls.crt"
-          tls_key = "/data/tls/tls.key"
-          log_level = "info"
-          domain = "idm.grigri.cloud"
-          origin = "https://idm.grigri.cloud"
-          role = "WriteReplica"
-          [online_backup]
-          path = "/data/kanidm/backups/"
-          schedule = "00 2 * * *"
-          versions = 1
-
-          [replication]
-          origin = "repl://kanidm-kanidmd:8444"
-          bindaddress = "0.0.0.0:8444"
 
   service:
     kanidmd:
@@ -126,8 +100,8 @@ app-template:
       globalMounts:
         - path: /data/server.toml
           subPath: server.toml
-      type: configMap
-      name: kanidm
+      type: secret
+      name: kanidm-config
     certs:
       enabled: true
       type: secret
