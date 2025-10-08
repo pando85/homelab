@@ -1,0 +1,21 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: jellyfin-users
+  namespace: jellyfin
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: jellyfin-admins
+  namespace: jellyfin
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
