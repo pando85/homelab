@@ -66,7 +66,16 @@ spec:
   # An empty label selector matches all namespaces.
   # A null label selector (default value) matches the current namespace only.
   oauth2ClientNamespaceSelector: {}
-
+  # Namespaces to match for KanidmGroups discovery.
+  #
+  # An empty label selector matches all namespaces.
+  # A null label selector (default value) matches the current namespace only.
+  groupNamespaceSelector: {}
+  # Namespaces to match for KanidmPersonAccounts discovery.
+  #
+  # An empty label selector matches all namespaces.
+  # A null label selector (default value) matches the current namespace only.
+  personNamespaceSelector: {}
   storage:
     volumeClaimTemplate:
       metadata:
