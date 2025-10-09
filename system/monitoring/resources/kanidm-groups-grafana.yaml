@@ -13,7 +13,6 @@ apiVersion: kaniop.rs/v1beta1
 kind: KanidmGroup
 metadata:
   name: grafana-admins
-  namespace: kaniop
 spec:
   kanidmRef:
     name: kanidm
