@@ -7,21 +7,16 @@ spec:
   kanidmRef:
     name: kanidm
     namespace: kanidm
-
   displayname: grafana
-
   origin: https://grafana.grigri.cloud/login/generic_oauth
-
   redirectUrl:
     - https://grafana.grigri.cloud/login/generic_oauth
-
   scopeMap:
     - group: grafana-users
       scopes:
+        - email
         - openid
         - profile
-        - email
-
   supScopeMap:
     - group: grafana-admins
       scopes:
