@@ -1,0 +1,27 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: open-webui
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: open-webui
+
+  origin: https://open-webui.grigri.cloud/oauth/oidc/callback
+
+  redirectUrl:
+    - https://open-webui.grigri.cloud/oauth/oidc/callback
+
+  scopeMap:
+    - group: open-webui-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  preferShortUsername: true
+  strictRedirectUrl: true
+  jwtLegacyCryptoEnable: true
