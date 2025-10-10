@@ -1,0 +1,28 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: nextcloud
+  namespace: nextcloud
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: nextcloud
+
+  origin: https://nextcloud.grigri.cloud/apps/user_oidc/code
+
+  redirectUrl:
+    - https://nextcloud.grigri.cloud/apps/user_oidc/code
+
+  scopeMap:
+    - group: nextcloud-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  preferShortUsername: true
+  strictRedirectUrl: true
+  jwtLegacyCryptoEnable: true
