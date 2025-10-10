@@ -1,0 +1,28 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: minio
+  namespace: minio
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: minio
+
+  origin: https://mc-s3.internal.grigri.cloud/oauth_callback
+
+  redirectUrl:
+    - https://mc-s3.internal.grigri.cloud/oauth_callback
+
+  scopeMap:
+    - group: minio-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  preferShortUsername: true
+  strictRedirectUrl: true
+  allowInsecureClientDisablePkce: true
