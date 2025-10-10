@@ -1,0 +1,26 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: git
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: git
+
+  origin: https://git.grigri.cloud/user/oauth2/kanidm/callback
+
+  redirectUrl:
+    - https://git.grigri.cloud/user/oauth2/kanidm/callback
+
+  scopeMap:
+    - group: git-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  preferShortUsername: true
+  strictRedirectUrl: true

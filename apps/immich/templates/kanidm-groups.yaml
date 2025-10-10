@@ -3,7 +3,6 @@ apiVersion: kaniop.rs/v1beta1
 kind: KanidmGroup
 metadata:
   name: immich-users
-  namespace: immich
 spec:
   kanidmRef:
     name: kanidm
@@ -14,7 +13,6 @@ apiVersion: kaniop.rs/v1beta1
 kind: KanidmGroup
 metadata:
   name: immich-admins
-  namespace: immich
 spec:
   kanidmRef:
     name: kanidm

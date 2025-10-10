@@ -2,22 +2,21 @@
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmOAuth2Client
 metadata:
-  name: nextcloud
-  namespace: nextcloud
+  name: jellyseerr
 spec:
   kanidmRef:
     name: kanidm
     namespace: kanidm
 
-  displayname: nextcloud
+  displayname: jellyseerr
 
-  origin: https://nextcloud.grigri.cloud/apps/user_oidc/code
+  origin: http://requests.grigri.cloud/login/oidc/callback
 
   redirectUrl:
-    - https://nextcloud.grigri.cloud/apps/user_oidc/code
+    - http://requests.grigri.cloud/login/oidc/callback
 
   scopeMap:
-    - group: nextcloud-users
+    - group: jellyseerr-users
       scopes:
         - openid
         - profile
@@ -25,4 +24,4 @@ spec:
 
   preferShortUsername: true
   strictRedirectUrl: true
-  jwtLegacyCryptoEnable: true
+  allowInsecureClientDisablePkce: true

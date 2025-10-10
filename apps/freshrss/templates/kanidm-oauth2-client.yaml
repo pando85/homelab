@@ -2,25 +2,25 @@
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmOAuth2Client
 metadata:
-  name: dbcloud
-  namespace: kaniop
+  name: freshrss
 spec:
   kanidmRef:
     name: kanidm
     namespace: kanidm
 
-  displayname: dbcloud
+  displayname: freshrss
 
-  origin: https://keycloak.dbcloud.org/realms/master/broker/grigri/endpoint
+  origin: https://freshrss.grigri.cloud/i/oidc/
 
   redirectUrl:
-    - https://keycloak.dbcloud.org/realms/master/broker/grigri/endpoint
+    - https://freshrss.grigri.cloud/i/oidc/
 
   scopeMap:
-    - group: dbcloud-users
+    - group: freshrss-users
       scopes:
         - openid
         - profile
         - email
 
   strictRedirectUrl: true
+  allowInsecureClientDisablePkce: true

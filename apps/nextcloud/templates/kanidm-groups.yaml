@@ -2,8 +2,7 @@
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmGroup
 metadata:
-  name: freshrss-users
-  namespace: freshrss
+  name: nextcloud-users
 spec:
   kanidmRef:
     name: kanidm

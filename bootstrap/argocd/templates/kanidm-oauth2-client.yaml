@@ -2,27 +2,26 @@
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmOAuth2Client
 metadata:
-  name: jellyseerr
-  namespace: jellyseerr
+  name: argocd
 spec:
   kanidmRef:
     name: kanidm
     namespace: kanidm
 
-  displayname: jellyseerr
+  displayname: argocd
 
-  origin: http://requests.grigri.cloud/login/oidc/callback
+  origin: https://argocd.internal.grigri.cloud/auth/callback
 
   redirectUrl:
-    - http://requests.grigri.cloud/login/oidc/callback
+    - https://argocd.internal.grigri.cloud/pkce/verify
+    - https://argocd.internal.grigri.cloud/auth/callback
 
   scopeMap:
-    - group: jellyseerr-users
+    - group: argocd-users
       scopes:
         - openid
         - profile
         - email
 
-  preferShortUsername: true
   strictRedirectUrl: true
   allowInsecureClientDisablePkce: true

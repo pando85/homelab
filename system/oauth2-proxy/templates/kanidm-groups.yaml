@@ -2,8 +2,7 @@
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmGroup
 metadata:
-  name: nextcloud-users
-  namespace: nextcloud
+  name: k8s-oauth2-proxy-users
 spec:
   kanidmRef:
     name: kanidm

@@ -2,8 +2,7 @@
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmGroup
 metadata:
-  name: git-users
-  namespace: git
+  name: vault-admins
 spec:
   kanidmRef:
     name: kanidm
