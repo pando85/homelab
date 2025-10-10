@@ -8,21 +8,16 @@ spec:
   kanidmRef:
     name: kanidm
     namespace: kanidm
-
   displayname: vault
-
   origin: https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback
-
   redirectUrl:
     - http://localhost:8250/oidc/callback
     - https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback
-
   scopeMap:
     - group: vault-admins
       scopes:
         - openid
         - profile
         - email
-
   preferShortUsername: true
   strictRedirectUrl: true
