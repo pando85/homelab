@@ -1,0 +1,28 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: argocd
+
+  origin: https://argocd.internal.grigri.cloud/auth/callback
+
+  redirectUrl:
+    - https://argocd.internal.grigri.cloud/pkce/verify
+    - https://argocd.internal.grigri.cloud/auth/callback
+
+  scopeMap:
+    - group: argocd-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  strictRedirectUrl: true
+  allowInsecureClientDisablePkce: true
