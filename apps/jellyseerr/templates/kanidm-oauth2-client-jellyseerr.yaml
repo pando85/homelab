@@ -1,0 +1,28 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: jellyseerr
+  namespace: jellyseerr
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: jellyseerr
+
+  origin: http://requests.grigri.cloud/login/oidc/callback
+
+  redirectUrl:
+    - http://requests.grigri.cloud/login/oidc/callback
+
+  scopeMap:
+    - group: jellyseerr-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  preferShortUsername: true
+  strictRedirectUrl: true
+  allowInsecureClientDisablePkce: true
