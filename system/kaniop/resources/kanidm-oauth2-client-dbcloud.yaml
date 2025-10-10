@@ -1,0 +1,26 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: dbcloud
+  namespace: kaniop
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: dbcloud
+
+  origin: https://keycloak.dbcloud.org/realms/master/broker/grigri/endpoint
+
+  redirectUrl:
+    - https://keycloak.dbcloud.org/realms/master/broker/grigri/endpoint
+
+  scopeMap:
+    - group: dbcloud-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  strictRedirectUrl: true
