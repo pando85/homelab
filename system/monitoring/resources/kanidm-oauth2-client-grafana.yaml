@@ -14,9 +14,9 @@ spec:
   scopeMap:
     - group: grafana-users
       scopes:
-        - email
         - openid
         - profile
+        - email
   supScopeMap:
     - group: grafana-admins
       scopes:
