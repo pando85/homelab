@@ -115,7 +115,7 @@ grafana:
         grafana.grafana.com/dashboards.target-directory: "/tmp/dashboards/kubernetes"
       searchNamespace: ALL
 
-  envFromSecret: grafana-secret
+  envFromSecret: grafana-kanidm-oauth2-credentials
 
   grafana.ini:
     server:
@@ -128,8 +128,8 @@ grafana:
       enabled: true
       allow_sign_up: true
       name: idm.grigri.cloud
-      client_id: $__env{GRAFANA_SSO_CLIENT_ID}
-      client_secret: $__env{GRAFANA_SSO_CLIENT_SECRET}
+      client_id: $__env{CLIENT_ID}
+      client_secret: $__env{CLIENT_SECRET}
       scopes: openid profile email
       auth_url: https://idm.grigri.cloud/ui/oauth2
       token_url: https://idm.grigri.cloud/oauth2/token
