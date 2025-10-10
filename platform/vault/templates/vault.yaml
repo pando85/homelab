@@ -188,11 +188,11 @@ spec:
   istioEnabled: false
 
   envsConfig:
-    - name: OIDC_CLIENT_SECRET
+    - name: CLIENT_SECRET
       valueFrom:
         secretKeyRef:
-          name: vault-secrets
-          key: OIDC_CLIENT_SECRET
+          name: vault-kanidm-oauth2-credentials
+          key: CLIENT_SECRET
 
   externalConfig:
     auth:
@@ -203,7 +203,7 @@ spec:
         config:
           oidc_discovery_url: https://idm.grigri.cloud/oauth2/openid/vault
           oidc_client_id: vault
-          oidc_client_secret: "${env `OIDC_CLIENT_SECRET`}"
+          oidc_client_secret: "${env `CLIENT_SECRET`}"
           default_role: admin
           jwt_supported_algs:
             - ES256
