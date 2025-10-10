@@ -1,0 +1,28 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: k8s-oauth2-proxy
+  namespace: oauth2-proxy
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: k8s-oauth2-proxy
+
+  origin: https://auth.grigri.cloud/oauth2/callback
+
+  redirectUrl:
+    - https://auth.grigri.cloud/oauth2/callback
+
+  scopeMap:
+    - group: k8s-oauth2-proxy-users
+      scopes:
+        - openid
+        - profile
+        - email
+        - groups
+
+  preferShortUsername: true
+  strictRedirectUrl: true
