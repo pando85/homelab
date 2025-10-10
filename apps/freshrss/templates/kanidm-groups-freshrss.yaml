@@ -1,0 +1,10 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: freshrss-users
+  namespace: freshrss
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
