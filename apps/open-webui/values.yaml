@@ -82,13 +82,13 @@ open-webui:
     - name: OAUTH_CLIENT_ID
       valueFrom:
         secretKeyRef:
-          name: open-webui
-          key: OAUTH_CLIENT_ID
+          name: open-webui-kanidm-oauth2-credentials
+          key: CLIENT_ID
     - name: OAUTH_CLIENT_SECRET
       valueFrom:
         secretKeyRef:
-          name: open-webui
-          key: OAUTH_CLIENT_SECRET
+          name: open-webui-kanidm-oauth2-credentials
+          key: CLIENT_SECRET
     - name: OPENID_PROVIDER_URL
       value: https://idm.grigri.cloud/oauth2/openid/open-webui/.well-known/openid-configuration
     - name: OAUTH_PROVIDER_NAME
