@@ -94,53 +94,19 @@ spec:
             storage: 100Mi
 
   ldapPortName: ldaps
-  tlsSecretName: idm-external-tls-certificate
 
-  # # Service defines the service configuration for the Kanidm server.
-  # service:
-  #   # Annotations is an unstructured key value map stored with a resource that may be set by
-  #   # external tools to store and retrieve arbitrary metadata. They are not queryable and should
-  #   # be preserved when modifying objects.
-  #   # More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
-  #   annotations:
-  #     service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
-  #   # Specify the Service's type where the Kanidm Service is exposed
-  #   # Please note that some Ingress controllers like https://github.com/kubernetes/ingress-gce
-  #   # forces you to expose your Service on a NodePort
-  #   # Defaults to ClusterIP. Valid options are ExternalName, ClusterIP, NodePort, and
-  #   # LoadBalancer. "ClusterIP" allocates a cluster-internal IP address for load-balancing to
-  #   # endpoints. Endpoints are determined by the selector or if that is not specified, by manual
-  #   # construction of an Endpoints object or EndpointSlice objects. If clusterIP is "None",
-  #   # no virtual IP is allocated and the endpoints are published as a set of endpoints rather
-  #   # than a virtual IP. "NodePort" builds on ClusterIP and allocates a port on every node which
-  #   # routes to the same endpoints as the clusterIP. "LoadBalancer" builds on NodePort and creates
-  #   # an external load-balancer (if supported in the current cloud) which routes to the same
-  #   # endpoints as the clusterIP. "ExternalName" aliases this service to the specified
-  #   # externalName. Several other fields do not apply to ExternalName services.
-  #   # More info: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
-  #   type: ClusterIP
-
-  # # Ingress defines the ingress configuration for the Kanidm server. Domain will be the host
-  # # for the ingress. TLS is required.
-  # ingress:
-  #   # Annotations is an unstructured key value map stored with a resource that may be set by
-  #   # external tools to store and retrieve arbitrary metadata. They are not queryable and should
-  #   # be preserved when modifying objects.
-  #   # More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations
-  #   annotations:
-  #     nginx.ingress.kubernetes.io/backend-protocol: HTTPS
-  #   # ingressClassName is the name of an IngressClass cluster resource. Ingress controller
-  #   # implementations use this field to know whether they should be serving this Ingress resource,
-  #   # by a transitive connection (controller -\> IngressClass -\> Ingress resource). Although the
-  #   # `kubernetes.io/ingress.class` annotation (simple constant name) was never formally defined,
-  #   # it was widely supported by Ingress controllers to create a direct binding between Ingress
-  #   # controller and Ingress resources. Newly created Ingress resources should prefer using the
-  #   # field. However, even though the annotation is officially deprecated, for backwards
-  #   # compatibility reasons, ingress controllers should still honor that annotation if present.
-  #   ingressClassName: nginx
-  #   # Defines the name of the secret that contains the TLS private key and certificate for the
-  #   # server. If not defined, the default will be the Kanidm name appended with `-tls`.
-  #   tlsSecretName: my-idm-tls
+  ingress:
+    annotations:
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+      # Enable source IP-based load balancing for consistent routing
+      nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    ingressClassName: nginx-external
+    tlsSecretName: idm-external-tls-certificate
+    extraTlsHosts:
+      - ldaps.idm.internal.grigri.cloud
 
   securityContext:
     runAsUser: 389
