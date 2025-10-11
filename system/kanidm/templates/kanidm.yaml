@@ -7,7 +7,7 @@ spec:
   replicaGroups:
     - name: default
       replicas: 1
-      role: read_only_replica
+      role: write_replica
       primaryNode: false
       resources:
         requests:
