@@ -6,7 +6,7 @@ spec:
   domain: idm.grigri.cloud
   replicaGroups:
     - name: default
-      replicas: 1
+      replicas: 2
       role: write_replica
       primaryNode: true
       resources:
