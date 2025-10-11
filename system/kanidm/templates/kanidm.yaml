@@ -36,20 +36,9 @@ spec:
       value: "00 2 * * *"
     - name: KANIDM_ONLINE_BACKUP_VERSIONS
       value: "1"
-  # Namespaces to match for KanidmOAuth2Clients discovery.
-  #
-  # An empty label selector matches all namespaces.
-  # A null label selector (default value) matches the current namespace only.
+
   oauth2ClientNamespaceSelector: {}
-  # Namespaces to match for KanidmGroups discovery.
-  #
-  # An empty label selector matches all namespaces.
-  # A null label selector (default value) matches the current namespace only.
   groupNamespaceSelector: {}
-  # Namespaces to match for KanidmPersonAccounts discovery.
-  #
-  # An empty label selector matches all namespaces.
-  # A null label selector (default value) matches the current namespace only.
   personNamespaceSelector: {}
   storage:
     volumeClaimTemplate:
