@@ -24,31 +24,6 @@ spec:
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: DoNotSchedule
 
-  # List of external replication nodes. This is used to configure replication between
-  # different Kanidm clusters.
-  #
-  # **WARNING**: `admin` and `idm_admin` passwords are going to be reset.
-  externalReplicationNodes:
-    # Name of the external replication node. This just have internal use.
-    - name: kanidm-deployed
-      hostname: kanidm-kanidmd
-      port: 8444
-      certificate:
-        key: tls.der.b64url
-        name: kanidm-0-certificate
-      # Defines the type of replication to use. Defaults to MutualPull.
-      #
-      # Valid options:
-      # - mutual-pull: Both nodes can initiate replication with each other (default)
-      # - allow-pull: This node allows the external node to pull changes, but won't initiate
-      # - pull: This node will pull changes from the external node
-      type: pull
-      # Select external replication node as the primary node. This means that if database conflicts
-      # occur the content of the primary will take precedence over the rest of the nodes.
-      # Note: just one external replication node or replication group can be selected as primary.
-      # Defaults to false.
-      automaticRefresh: true
-
   image: kanidm/server:1.7.3
   logLevel: info
 
