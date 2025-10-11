@@ -24,4 +24,4 @@ spec:
         - email
 
   strictRedirectUrl: true
-  allowInsecureClientDisablePkce: true
+  allowInsecureClientDisablePkce: false
