@@ -79,7 +79,7 @@ velero:
           s3ForcePathStyle: "true"
           s3Url: http://minio.minio.svc:9000
 
-    uploaderType: restic
+    uploaderType: kopia
     fsBackupTimeout: 32h
     defaultItemOperationTimeout: 32h
     garbageCollectionFrequency: 24h
