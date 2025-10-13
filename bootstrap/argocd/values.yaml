@@ -282,11 +282,11 @@ argo-cd:
       #     send:
       #     - app-sync-running
       #     when: app.status.operationState.phase in ['Running']
-      # trigger.on-sync-status-unknown: |
-      #   - description: Application status is 'Unknown'
-      #     send:
-      #     - app-sync-status-unknown
-      #     when: app.status.sync.status == 'Unknown'
+      trigger.on-sync-status-unknown: |
+        - description: Application status is 'Unknown'
+          send:
+          - app-sync-status-unknown
+          when: app.status.sync.status == 'Unknown'
       # trigger.on-sync-succeeded: |
       #   - description: Application syncing has succeeded
       #     send:
