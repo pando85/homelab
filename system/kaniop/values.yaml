@@ -19,3 +19,15 @@ metrics:
     enabled: true
     additionalLabels:
       release: monitoring
+
+  prometheusRules:
+    enabled: true
+    additionalLabels:
+      release: monitoring
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    additionalLabels:
+      release: monitoring
+    annotations:
+      grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/kaniop
