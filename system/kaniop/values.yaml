@@ -9,8 +9,9 @@ logging:
 resources:
   requests:
     cpu: 10m
-    memory: 90Mi
+    memory: 14Mi
   limits:
+    cpu: 2
     memory: 256Mi
 
 metrics:
