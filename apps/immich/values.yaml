@@ -3,7 +3,7 @@ variables:
     DB_PORT: "5432"
     ENABLE_MAPBOX: "true"
     # "IMMICH_LOG_LEVEL" must be one of [verbose, debug, log, warn, error, fatal]
-    IMMICH_LOG_LEVEL: debug
+    IMMICH_LOG_LEVEL: log
     NODE_ENV: "production"
     REDIS_HOSTNAME: immich-redis
     REDIS_PORT: "6379"
@@ -108,6 +108,7 @@ app-template:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
             MPLCONFIGDIR: /.config/matplotlib
+            TRANSFORMERS_CACHE: /cache
             # Guide to choose the model: https://github.com/immich-app/immich/discussions/11862
             MACHINE_LEARNING_PRELOAD__CLIP__TEXTUAL: "immich-app/nllb-clip-large-siglip__mrl"
             # MACHINE_LEARNING_PRELOAD__CLIP__VISUAL: "immich-app/ViT-H-14-quickgelu__dfn5b"
