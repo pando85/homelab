@@ -93,6 +93,8 @@ app-template:
               # nvidia.com/gpu: "1"
     ml:
       strategy: RollingUpdate
+      pod:
+        <<: *pod
         # runtimeClassName: nvidia
         # labels:
         #   pod-cleaner.dbcloud.org/watch: "true"
@@ -108,7 +110,7 @@ app-template:
             MPLCONFIGDIR: /.config/matplotlib
             TRANSFORMERS_CACHE: /cache
             # Guide to choose the model: https://github.com/immich-app/immich/discussions/11862
-            #MACHINE_LEARNING_PRELOAD__CLIP__TEXTUAL: "immich-app/nllb-clip-large-siglip__mrl"
+            MACHINE_LEARNING_PRELOAD__CLIP__TEXTUAL: "immich-app/nllb-clip-large-siglip__mrl"
             # MACHINE_LEARNING_PRELOAD__CLIP__VISUAL: "immich-app/ViT-H-14-quickgelu__dfn5b"
           envFrom: *envFrom
           resources:
@@ -234,6 +236,8 @@ app-template:
           main:
             - path: /cache
             - path: /.config
+            # huggingface try to access: ~/.cache/huggingface/token
+            - path: /.cache
 
   serviceMonitor:
     server:
