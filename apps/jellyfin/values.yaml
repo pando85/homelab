@@ -12,8 +12,8 @@ app-template:
       containers:
         jellyfin:
           image:
-            repository: jellyfin/jellyfin
-            tag: 10.11.0-rc8
+            repository: ghcr.io/jellyfin/jellyfin
+            tag: 10.11.0
 
           probes:
             liveness: &probes
