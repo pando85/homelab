@@ -235,6 +235,12 @@ app-template:
           main:
             - path: /cache
             - path: /.config/matplotlib
+    model-tmp:
+      type: emptyDir
+      advancedMounts:
+        ml:
+          main:
+            - path: /tmp
 
   serviceMonitor:
     server:
