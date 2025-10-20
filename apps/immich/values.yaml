@@ -234,7 +234,7 @@ app-template:
         ml:
           main:
             - path: /cache
-            - path: /.config/matplotlib
+            - path: /.config
 
   serviceMonitor:
     server:
