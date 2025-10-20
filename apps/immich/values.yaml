@@ -236,7 +236,9 @@ app-template:
           main:
             - path: /cache
             - path: /.config
-            # huggingface try to access: ~/.cache/huggingface/token
+            # huggingface try to access:
+            # - ~/.cache/huggingface/token
+            # - /.cache/huggingface/xet/
             - path: /.cache
 
   serviceMonitor:
