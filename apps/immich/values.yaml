@@ -93,8 +93,6 @@ app-template:
               # nvidia.com/gpu: "1"
     ml:
       strategy: RollingUpdate
-      pod:
-        <<: *pod
         # runtimeClassName: nvidia
         # labels:
         #   pod-cleaner.dbcloud.org/watch: "true"
