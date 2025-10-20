@@ -33,7 +33,6 @@ output:
 sensor:
   - platform: uptime
     name: "${friendly_name} Uptime"
-    disabled_by_default: true
 
   - platform: wifi_signal
     name: "${friendly_name} WiFi Signal"

@@ -17,13 +17,14 @@ wifi:
   password: !secret wifi_password
   domain: !secret domain_devices
 
-  # Avoid scanning, which in case that multiple AP are available it will not connect to the one
-  # with the best signal
+  # Enable scanning to connect to the AP with the best signal
   # Issue related: https://github.com/esphome/feature-requests/issues/731
-  fast_connect: true
+  fast_connect: false
 
+  reboot_timeout: 3h
+  power_save_mode: none
   ap:
-    ap_timeout: 1h
+    ap_timeout: 5min
     ssid: "${friendly_name}"
     password: !secret wifi_fallback_ap_password
 
