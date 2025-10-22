@@ -1,7 +1,5 @@
 image:
   repository: ghcr.io/pando85/kaniop
-  # test prevent concurrent clients creation
-  tag: latest@sha256:3cb7424a314608c2e736b66a0366c3d1cd286aeef9576c8014813e16af48d34f
 
 logging:
   ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
