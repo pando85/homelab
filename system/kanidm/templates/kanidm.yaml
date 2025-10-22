@@ -24,6 +24,7 @@ spec:
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: DoNotSchedule
 
+  # renovate: datasource=docker
   image: kanidm/server:1.7.3
   logLevel: info
 
