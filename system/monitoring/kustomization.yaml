@@ -37,7 +37,6 @@ resources:
   - resources/pfsense-darkstat-scrape-config.yaml
   - resources/pfsense-node-exporter-dashboard-configmap.yaml
   - resources/pfsense-node-exporter-scrape-config.yaml
-  - resources/smartctl-exporter-dashboard-configmap.yaml
   - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/temperature-dashboard-configmap.yaml
   - resources/temperature-prometheus-rules.yaml
@@ -97,3 +96,15 @@ patches:
       kind: CustomResourceDefinition
       name: thanosrulers.monitoring.coreos.com
       version: v1
+
+configMapGenerator:
+  - name: smartctl-dashboards
+    files:
+      - dashboards/smartctl.json
+generatorOptions:
+  annotations:
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+    argocd.argoproj.io/sync-options: Replace=true
+    k8s-sidecar-target-directory: /tmp/dashboards/smartctl
+  labels:
+    grafana_dashboard: "1"
