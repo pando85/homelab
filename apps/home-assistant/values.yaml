@@ -178,7 +178,10 @@ app-template:
         openwakeword:
           image:
             repository: rhasspy/wyoming-openwakeword
-            tag: 2.0.0
+            tag: 1.10.0
+          args:
+            - --preload-model
+            - alexa
           resources:
             requests:
               cpu: 15m
