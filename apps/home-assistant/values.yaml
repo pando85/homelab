@@ -183,6 +183,9 @@ app-template:
             requests:
               cpu: 15m
               memory: 150Mi
+            limits:
+              cpu: 500m
+              memory: 1Gi
           probes:
             liveness:
               enabled: true
