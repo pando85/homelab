@@ -25,6 +25,7 @@ metrics:
     enabled: true
     additionalLabels:
       release: monitoring
+    # TODO: remove after 0.0.0-beta.10+
     overrides:
       KaniopK8sApiErrors:
         expr: sum by(status_code) (increase(kaniop_kubernetes_client_http_requests_total{status_code=~"[4-5].."}[5m])) > 0
