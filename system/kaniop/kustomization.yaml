@@ -9,7 +9,7 @@ helmCharts:
     releaseName: kaniop
     repo: oci://ghcr.io/pando85/helm-charts
     valuesFile: values.yaml
-    version: 0.0.0-beta.9
+    version: 0.0.0-beta.10
 
 patches:
   - patch: |-
