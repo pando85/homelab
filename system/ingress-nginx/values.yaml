@@ -4,7 +4,8 @@ ingress-nginx:
     admissionWebhooks:
       enabled: enable
       timeoutSeconds: 30
-      # Remove after testing 1.30.0
+      # It is needed to recreate the admission webhook certificate. Other possibility is to change
+      # to cert-manager management.
       patch:
         enabled: false
 
