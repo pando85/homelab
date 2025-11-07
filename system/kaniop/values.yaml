@@ -25,10 +25,6 @@ metrics:
     enabled: true
     additionalLabels:
       release: monitoring
-    # TODO: remove after 0.0.0-beta.10+
-    overrides:
-      KaniopK8sApiErrors:
-        expr: sum by(status_code) (increase(kaniop_kubernetes_client_http_requests_total{status_code=~"[4-5].."}[5m])) > 0
   dashboards:
     enabled: true
     label: grafana_dashboard
@@ -36,3 +32,19 @@ metrics:
       release: monitoring
     annotations:
       grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/kaniop
+
+webhook:
+  enabled: true
+  logging:
+    ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
+    ## Ref: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
+    level: "info,kaniop_webhook=debug"
+  certManager:
+    enabled: true
+  resources:
+    requests:
+      cpu: 10m
+      memory: 14Mi
+    limits:
+      cpu: 2
+      memory: 128Mi
