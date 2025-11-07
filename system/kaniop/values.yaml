@@ -38,7 +38,7 @@ webhook:
   logging:
     ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
     ## Ref: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
-    level: "info,kaniop_webhook=debug"
+    level: "debug,kaniop_webhook=debug"
   certManager:
     enabled: true
   resources:
