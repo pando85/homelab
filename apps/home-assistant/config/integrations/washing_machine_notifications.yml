@@ -1,0 +1,59 @@
+automation:
+  alias: Washing machine notifications (state + event)
+  description: Notify when the washer finishes or encounters an error event.
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: sensor.lavadora_current_status
+      to: "end"
+      id: finished
+    - platform: event
+      event_type: lavadora_error
+      id: lavadora_error_event
+
+  variables:
+    error_messages: >
+      {{
+        {
+          'out_of_balance_error': 'The load is unbalanced. Please redistribute and restart the cycle.',
+          'water_drain_error': 'The washer cannot drain water. Check the drain hose and filter.',
+          'power_fail_error': 'Power failure detected during the cycle.',
+          'locked_motor_error': 'Motor locked or blocked — check drum for obstructions.',
+          'water_level_sensor_error': 'Water level sensor error — washer may not fill or drain correctly.',
+          'temperature_sensor_error': 'Temperature sensor error — heating may be affected.',
+          'unable_to_lock_error': 'Door lock failed to engage — door may not be secured.',
+          'door_open_error': 'Door is open — please close the door to continue.',
+          'water_supply_error': 'Water supply issue — check taps and inlet hose.',
+          'overfill_error': 'Overfill detected — there may be a leak or valve issue.'
+        }
+      }}
+
+  action:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: finished
+          sequence:
+            - service: notify.all
+              data:
+                title: "Washing machine — Finished"
+                message: >
+                  The washing machine finished its cycle successfully.
+
+        - conditions:
+            - condition: trigger
+              id: lavadora_error_event
+          sequence:
+            - variables:
+                error_code: >
+                  {{ trigger.event.data.event_type
+                     if trigger.event and trigger.event.data.event_type is defined
+                     else state_attr('event.lavadora_error', 'event_type') | default('unknown') }}
+                error_message: >
+                  {{ error_messages.get(error_code, 'Unknown error (' ~ error_code ~ ') occurred.') }}
+            - service: notify.all
+              data:
+                title: "Washing machine — Error"
+                message: >
+                  Washing machine reported an error:
+                  {{ error_message }}

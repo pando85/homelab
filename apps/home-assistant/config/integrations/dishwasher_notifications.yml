@@ -1,0 +1,61 @@
+automation:
+  alias: Dishwasher notifications (state + event)
+  description: Notify when the dishwasher finishes or reports an error event.
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: sensor.lavavajillas_current_status
+      to: "end"
+      id: finished
+    - platform: event
+      event_type: lavavajillas_error
+      id: lavavajillas_error_event
+
+  variables:
+    error_messages: >
+      {{
+        {
+          'water_drain_error': 'The dishwasher cannot drain water. Check the drain hose and filter.',
+          'motor_error': 'Motor error — the motor may be blocked or faulty.',
+          'temperature_sensor_error': 'Temperature sensor error — heating may be affected.',
+          'bubble_error': 'Excessive bubbles detected — check detergent type/amount.',
+          'water_leakage_error': 'Water leakage detected — inspect for leaks and turn off water if needed.',
+          'heater_circuit_error': 'Heater circuit error — heating element or control circuit issue.',
+          'water_supply_error': 'Water supply issue — check inlet hose and water tap.'
+        }
+      }}
+
+  action:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: finished
+          sequence:
+            - service: notify.all
+              data:
+                title: "Dishwasher — Finished"
+                message: >
+                  The dishwasher finished its cycle successfully.
+                  (Status sensor: {{ states('sensor.lavavajillas_current_status') }})
+        - conditions:
+            - condition: trigger
+              id: lavavajillas_error_event
+          sequence:
+            - variables:
+                error_code: >
+                  {{ (trigger.event.data.event_type
+                      if trigger.event is defined and trigger.event.data is defined and trigger.event.data.event_type is defined
+                      else state_attr('event.lavavajillas_error','event_type')) | default('unknown') }}
+                error_message: >
+                  {{ error_messages.get(error_code, 'Unknown error (' ~ error_code ~ ') occurred.') }}
+            - service: notify.all
+              data:
+                title: "Dishwasher — Error"
+                message: >
+                  Dishwasher reported an error:
+                  {{ error_message }}
+                  {% if trigger.event is defined and trigger.event.data is defined %}
+
+                  Raw event payload: {{ trigger.event.data }}
+                  {% endif %}
+    - default: []
