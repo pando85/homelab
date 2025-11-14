@@ -91,6 +91,8 @@ velero:
   # The number of seconds to allow for graceful termination of the pod. defaults is 1h
   terminationGracePeriodSeconds: 1800
 
+  upgradeCRDs: false
+
   metrics:
     serviceMonitor:
       enabled: true
