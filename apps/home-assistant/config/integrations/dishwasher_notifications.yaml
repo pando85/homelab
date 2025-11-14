@@ -58,4 +58,3 @@ automation:
 
                   Raw event payload: {{ trigger.event.data }}
                   {% endif %}
-    - default: []
