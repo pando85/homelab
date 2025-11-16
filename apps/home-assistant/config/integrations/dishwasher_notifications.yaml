@@ -32,7 +32,6 @@ automation:
                 title: "Dishwasher — Finished"
                 message: >
                   The dishwasher finished its cycle successfully\\.
-                  (Status sensor: {{ states('sensor.lavavajillas_current_status') }})
         - conditions:
             - condition: trigger
               id: lavavajillas_error_event
@@ -51,6 +50,4 @@ automation:
                   Dishwasher reported an error:
                   {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') | replace('{', '\\{') | replace('}', '\\}') }}
                   {% if trigger.event is defined and trigger.event.data is defined %}
-
-                  Raw event payload: {{ trigger.event.data }}
-                  {% endif %}
+                parse_mode: plain_text
