@@ -31,7 +31,7 @@ automation:
               data:
                 title: "Dishwasher — Finished"
                 message: >
-                  The dishwasher finished its cycle successfully\\.
+                  The dishwasher finished its cycle successfully\.
         - conditions:
             - condition: trigger
               id: lavavajillas_error_event

@@ -51,4 +51,5 @@ automation:
               data:
                 title: "Washing machine — Error"
                 message: >
-                  The washing machine finished its cycle successfully\.
+                  Washing machine reported an error:
+                  {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') | replace('{', '\\{') | replace('}', '\\}') }}
