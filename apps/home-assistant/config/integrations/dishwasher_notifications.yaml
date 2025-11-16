@@ -12,18 +12,14 @@ automation:
       id: lavavajillas_error_event
 
   variables:
-    error_messages: >
-      {{
-        {
-          'water_drain_error': 'The dishwasher cannot drain water\\. Check the drain hose and filter\\.',
-          'motor_error': 'Motor error — the motor may be blocked or faulty\\.',
-          'temperature_sensor_error': 'Temperature sensor error — heating may be affected\\.',
-          'bubble_error': 'Excessive bubbles detected — check detergent type/amount\\.',
-          'water_leakage_error': 'Water leakage detected — inspect for leaks and turn off water if needed\\.',
-          'heater_circuit_error': 'Heater circuit error — heating element or control circuit issue\\.',
-          'water_supply_error': 'Water supply issue — check inlet hose and water tap\\.'
-        }
-      }}
+    error_messages:
+      water_drain_error: 'The dishwasher cannot drain water. Check the drain hose and filter.'
+      motor_error: 'Motor error — the motor may be blocked or faulty.'
+      temperature_sensor_error: 'Temperature sensor error — heating may be affected.'
+      bubble_error: 'Excessive bubbles detected — check detergent type/amount.'
+      water_leakage_error: 'Water leakage detected — inspect for leaks and turn off water if needed.'
+      heater_circuit_error: 'Heater circuit error — heating element or control circuit issue.'
+      water_supply_error: 'Water supply issue — check inlet hose and water tap.'
 
   action:
     - choose:
@@ -53,7 +49,7 @@ automation:
                 title: "Dishwasher — Error"
                 message: >
                   Dishwasher reported an error:
-                  {{ error_message }}
+                  {{ error_message | replace('.', '\\.') }}
                   {% if trigger.event is defined and trigger.event.data is defined %}
 
                   Raw event payload: {{ trigger.event.data }}
