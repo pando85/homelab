@@ -53,4 +53,3 @@ automation:
                 message: >
                   Washing machine reported an error:
                   {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') | replace('{', '\\{') | replace('}', '\\}') }}
-                parse_mode: plain_text
