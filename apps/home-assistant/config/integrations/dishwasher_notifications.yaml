@@ -49,5 +49,4 @@ automation:
                 message: >
                   Dishwasher reported an error:
                   {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') | replace('{', '\\{') | replace('}', '\\}') }}
-                  {% if trigger.event is defined and trigger.event.data is defined %}
                 parse_mode: plain_text
