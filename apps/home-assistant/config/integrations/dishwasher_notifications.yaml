@@ -15,13 +15,13 @@ automation:
     error_messages: >
       {{
         {
-          'water_drain_error': 'The dishwasher cannot drain water. Check the drain hose and filter.',
-          'motor_error': 'Motor error — the motor may be blocked or faulty.',
-          'temperature_sensor_error': 'Temperature sensor error — heating may be affected.',
-          'bubble_error': 'Excessive bubbles detected — check detergent type/amount.',
-          'water_leakage_error': 'Water leakage detected — inspect for leaks and turn off water if needed.',
-          'heater_circuit_error': 'Heater circuit error — heating element or control circuit issue.',
-          'water_supply_error': 'Water supply issue — check inlet hose and water tap.'
+          'water_drain_error': 'The dishwasher cannot drain water\\. Check the drain hose and filter\\.',
+          'motor_error': 'Motor error — the motor may be blocked or faulty\\.',
+          'temperature_sensor_error': 'Temperature sensor error — heating may be affected\\.',
+          'bubble_error': 'Excessive bubbles detected — check detergent type/amount\\.',
+          'water_leakage_error': 'Water leakage detected — inspect for leaks and turn off water if needed\\.',
+          'heater_circuit_error': 'Heater circuit error — heating element or control circuit issue\\.',
+          'water_supply_error': 'Water supply issue — check inlet hose and water tap\\.'
         }
       }}
 
@@ -35,7 +35,7 @@ automation:
               data:
                 title: "Dishwasher — Finished"
                 message: >
-                  The dishwasher finished its cycle successfully.
+                  The dishwasher finished its cycle successfully\\.
                   (Status sensor: {{ states('sensor.lavavajillas_current_status') }})
         - conditions:
             - condition: trigger
