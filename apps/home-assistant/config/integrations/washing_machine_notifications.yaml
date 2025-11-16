@@ -52,4 +52,4 @@ automation:
                 title: "Washing machine — Error"
                 message: >
                   Washing machine reported an error:
-                  {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') }}
+                  {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') | replace('{', '\\{') | replace('}', '\\}') }}
