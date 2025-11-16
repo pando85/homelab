@@ -34,7 +34,7 @@ automation:
               data:
                 title: "Washing machine — Finished"
                 message: >
-                  The washing machine finished its cycle successfully\\.
+                  The washing machine finished its cycle successfully\.
 
         - conditions:
             - condition: trigger
@@ -51,5 +51,4 @@ automation:
               data:
                 title: "Washing machine — Error"
                 message: >
-                  Washing machine reported an error:
-                  {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') | replace('{', '\\{') | replace('}', '\\}') }}
+                  The washing machine finished its cycle successfully\.
