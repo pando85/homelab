@@ -49,7 +49,7 @@ automation:
                 title: "Dishwasher — Error"
                 message: >
                   Dishwasher reported an error:
-                  {{ error_message | replace('.', '\\.') }}
+                  {{ error_message | replace('.', '\\.') | replace('(', '\\(') | replace(')', '\\)') }}
                   {% if trigger.event is defined and trigger.event.data is defined %}
 
                   Raw event payload: {{ trigger.event.data }}
