@@ -1,6 +1,6 @@
 image:
   repository: ghcr.io/pando85/kaniop
-  tag: sha256:c4a10215e48c04aa4b47301132ac0952892763f562b3055b6059b9bf817db85d
+  tag: latest@sha256:c4a10215e48c04aa4b47301132ac0952892763f562b3055b6059b9bf817db85d
 
 logging:
   ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
