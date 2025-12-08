@@ -3,5 +3,5 @@ name: mintpsicologia
 version: 0.0.0
 dependencies:
   - name: wordpress
-    version: 28.0.1
+    version: 28.0.2
     repository: https://charts.bitnami.com/bitnami
