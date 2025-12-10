@@ -49,10 +49,8 @@ automation:
                 Tanque
                 {{ message }}
 
-binary_sensor:
-  - platform: template
-    sensors:
-      valetudo_cleaning:
-        friendly_name: "Valetudo Cleaning"
+template:
+  - binary_sensor:
+      - name: "Valetudo Cleaning"
         device_class: running
-        value_template: "{{ states('vacuum.valetudo_detailedinternalrhinoceros') == 'cleaning' }}"
+        state: "{{ states('vacuum.valetudo_detailedinternalrhinoceros') == 'cleaning' }}"
