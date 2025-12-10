@@ -1,4 +1,8 @@
 minio:
+  image:
+    repository: ghcr.io/pando85/minio
+    tag: RELEASE.2025-10-15T17-29-55Z
+
   mode: standalone
 
   drivesPerNode: 1
