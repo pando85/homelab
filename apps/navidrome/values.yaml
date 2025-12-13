@@ -62,9 +62,9 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
         # Enable subsonic client
         nginx.ingress.kubernetes.io/auth-snippet: |
-            if ( $request_uri ~ "/rest" ) {
-                return 200;
-            }
+          if ( $request_uri ~ "^/(rest|share)" ) {
+              return 200;
+          }
       hosts:
         - host: &host navidrome.internal.grigri.cloud
           paths:
@@ -92,9 +92,9 @@ app-template:
 
         # Enable subsonic client
         nginx.ingress.kubernetes.io/auth-snippet: |
-            if ( $request_uri ~ "/rest" ) {
-                return 200;
-            }
+          if ( $request_uri ~ "^/(rest|share)" ) {
+              return 200;
+          }
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
