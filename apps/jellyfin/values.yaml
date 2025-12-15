@@ -13,7 +13,7 @@ app-template:
         jellyfin:
           image:
             repository: ghcr.io/jellyfin/jellyfin
-            tag: 10.11.4
+            tag: 10.11.5
 
           probes:
             liveness: &probes
