@@ -25,7 +25,7 @@ spec:
           whenUnsatisfiable: DoNotSchedule
 
   # renovate: datasource=docker
-  image: kanidm/server:1.8.3
+  image: kanidm/server:1.8.5
   logLevel: info
 
   env:
