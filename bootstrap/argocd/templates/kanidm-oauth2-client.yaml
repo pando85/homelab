@@ -10,7 +10,7 @@ spec:
 
   displayname: argocd
 
-  origin: https://argocd.internal.grigri.cloud/auth/callback
+  origin: https://argocd.internal.grigri.cloud/
 
   redirectUrl:
     - https://argocd.internal.grigri.cloud/pkce/verify

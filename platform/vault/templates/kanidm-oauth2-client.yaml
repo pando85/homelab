@@ -8,7 +8,7 @@ spec:
     name: kanidm
     namespace: kanidm
   displayname: vault
-  origin: https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback
+  origin: https://vault.internal.grigri.cloud/
   redirectUrl:
     - http://localhost:8250/oidc/callback
     - https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback

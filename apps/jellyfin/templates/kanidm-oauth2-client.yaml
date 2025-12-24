@@ -10,7 +10,7 @@ spec:
 
   displayname: jellyfin
 
-  origin: https://jellyfin.grigri.cloud/sso/OID/redirect/idm.grigri.cloud
+  origin: https://jellyfin.grigri.cloud/
 
   redirectUrl:
     - https://jellyfin.grigri.cloud/sso/OID/redirect/idm.grigri.cloud

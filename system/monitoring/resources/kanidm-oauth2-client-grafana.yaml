@@ -8,7 +8,7 @@ spec:
     name: kanidm
     namespace: kanidm
   displayname: grafana
-  origin: https://grafana.grigri.cloud/login/generic_oauth
+  origin: https://grafana.grigri.cloud/
   redirectUrl:
     - https://grafana.grigri.cloud/login/generic_oauth
   scopeMap:

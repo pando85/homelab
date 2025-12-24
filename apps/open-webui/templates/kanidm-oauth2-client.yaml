@@ -10,7 +10,7 @@ spec:
 
   displayname: open-webui
 
-  origin: https://open-webui.grigri.cloud/oauth/oidc/callback
+  origin: https://open-webui.grigri.cloud/
 
   redirectUrl:
     - https://open-webui.grigri.cloud/oauth/oidc/callback

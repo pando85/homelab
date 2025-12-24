@@ -10,7 +10,7 @@ spec:
 
   displayname: immich
 
-  origin: https://photos.grigri.cloud/auth/login
+  origin: https://photos.grigri.cloud/
 
   redirectUrl:
     - https://photos.grigri.cloud/auth/login

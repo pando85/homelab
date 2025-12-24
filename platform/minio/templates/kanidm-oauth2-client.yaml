@@ -10,7 +10,7 @@ spec:
 
   displayname: minio
 
-  origin: https://mc-s3.internal.grigri.cloud/oauth_callback
+  origin: https://mc-s3.internal.grigri.cloud/
 
   redirectUrl:
     - https://mc-s3.internal.grigri.cloud/oauth_callback

@@ -10,7 +10,7 @@ spec:
 
   displayname: k8s-oauth2-proxy
 
-  origin: https://auth.grigri.cloud/oauth2/callback
+  origin: https://navidrome.grigri.cloud/
 
   redirectUrl:
     - https://auth.grigri.cloud/oauth2/callback

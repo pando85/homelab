@@ -10,7 +10,7 @@ spec:
 
   displayname: freshrss
 
-  origin: https://freshrss.grigri.cloud/i/oidc/
+  origin: https://freshrss.grigri.cloud/
 
   redirectUrl:
     - https://freshrss.grigri.cloud/i/oidc/

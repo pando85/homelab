@@ -10,7 +10,7 @@ spec:
 
   displayname: dbcloud
 
-  origin: https://keycloak.dbcloud.org/realms/master/broker/grigri/endpoint
+  origin: https://keycloak.dbcloud.org/
 
   redirectUrl:
     - https://keycloak.dbcloud.org/realms/master/broker/grigri/endpoint

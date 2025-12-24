@@ -10,7 +10,7 @@ spec:
 
   displayname: nextcloud
 
-  origin: https://nextcloud.grigri.cloud/apps/user_oidc/code
+  origin: https://nextcloud.grigri.cloud/
 
   redirectUrl:
     - https://nextcloud.grigri.cloud/apps/user_oidc/code
