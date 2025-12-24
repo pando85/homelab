@@ -27,7 +27,7 @@ forgejo:
 
   resources:
     limits:
-      memory: 512Mi
+      memory: 2Gi
     requests:
       cpu: 10m
       memory: 128Mi
