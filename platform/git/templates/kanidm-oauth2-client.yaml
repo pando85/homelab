@@ -10,7 +10,7 @@ spec:
 
   displayname: git
 
-  origin: https://git.grigri.cloud/user/oauth2/kanidm/callback
+  origin: https://git.grigri.cloud/
 
   redirectUrl:
     - https://git.grigri.cloud/user/oauth2/kanidm/callback
