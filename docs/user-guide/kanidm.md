@@ -2,7 +2,8 @@
 
 ## LDAP connection
 
-For login with LDAP accounts your user has to have enabled the POSIX attributes and need to set a Unix password.
+For login with LDAP accounts your user has to have enabled the POSIX attributes and need to set a
+Unix password.
 
 ## Modify ACP
 
@@ -104,4 +105,10 @@ kanidm service-account validity expire-at anonymous '2024-11-14T00:00:00+01:00'
 
 ```bash
 kanidm group account-policy auth-expiry idm_all_accounts 2592000
+```
+
+## Service account permissions to validate credentials
+
+```bash
+kanidm group add-members idm_people_pii_read
 ```
