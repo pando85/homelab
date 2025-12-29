@@ -20,6 +20,11 @@ class Price:
             raise ValueError
 
 
+def chunk_list(lst: List, chunk_size: int) -> List[List]:
+    """Split a list into chunks of specified size."""
+    return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
+
+
 def is_float(value):
     try:
         _ = float(value)
@@ -92,8 +97,9 @@ Retrying in 10 minutes""",
             force_dhw_entity = self.get_entity(self.args["dhw"]["entity"])
             await force_dhw_entity.turn_on()
 
-    def _generate_vega_diagram(self, datetime_to_schedule: datetime) -> str:
-        data_values = [{"hour": i, "status": "ON" if i == datetime_to_schedule.hour else "OFF"} for i in range(24)]
+    def _generate_vega_diagram(self, datetimes_to_schedule: List[datetime]) -> str:
+        scheduled_hours = {dt.hour for dt in datetimes_to_schedule}
+        data_values = [{"hour": i, "status": "ON" if i in scheduled_hours else "OFF"} for i in range(24)]
 
         vega_lite_spec = {
             "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
@@ -135,23 +141,35 @@ Retrying in 10 minutes""",
             return await self._register_schedulers()
 
         self.log(f"{prices=}", level="DEBUG")
-        cheapest_price = min(prices, key=lambda x: x.value)
-        self.log(f"{cheapest_price=}", level="DEBUG")
 
-        datetime_to_schedule = cheapest_price.datetime
+        # Get interval_hours from config (default 24 = once per day)
+        interval_hours = self.args.get("interval_hours", 24)
+        if interval_hours not in (1, 2, 3, 4, 6, 8, 12, 24):
+            self.log(f"Invalid interval_hours {interval_hours}, must be a divisor of 24. Using 24.", level="WARNING")
+            interval_hours = 24
+
+        # Split prices into chunks based on interval and find cheapest in each
+        price_chunks = chunk_list(prices, interval_hours)
+        cheapest_prices = [min(chunk, key=lambda x: x.value) for chunk in price_chunks if chunk]
+        self.log(f"{interval_hours=}, {cheapest_prices=}", level="DEBUG")
+
+        datetimes_to_schedule = [p.datetime for p in cheapest_prices]
 
         if self.args["notify"]["enabled"]:
-            vega_diagram = self._generate_vega_diagram(datetime_to_schedule)
-            msg = f"Programming the DHW control for this hour: [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
+            vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
+            hours_str = ", ".join(dt.strftime("%H:%M") for dt in datetimes_to_schedule)
+            msg = f"Programming the DHW control for these hours: {hours_str} [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         now = datetime.now(self.get_timezone())
         current_hour = datetime(now.year, now.month, now.day, now.hour)
-        if current_hour.hour == datetime_to_schedule.hour:
-            await self._force_dhw()
-        elif current_hour < datetime_to_schedule:
-            self.log(f"Registering {self._force_dhw.__name__} at {datetime_to_schedule.strftime('%H:%M:%S')}", level="INFO")
-            self.timers.append(await self.run_at(self._force_dhw, datetime_to_schedule.strftime("%H:%M:%S")))
+
+        for datetime_to_schedule in datetimes_to_schedule:
+            if current_hour.hour == datetime_to_schedule.hour:
+                await self._force_dhw()
+            elif current_hour < datetime_to_schedule:
+                self.log(f"Registering {self._force_dhw.__name__} at {datetime_to_schedule.strftime('%H:%M:%S')}", level="INFO")
+                self.timers.append(await self.run_at(self._force_dhw, datetime_to_schedule.strftime("%H:%M:%S")))
 
     async def _unregister_schedulers(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         self.log("Unregistering schedulers")

@@ -32,6 +32,9 @@ dhw_control:
   dhw:
     enabled: true
     entity: switch.aquarea_force_dhw_mode
+  # interval_hours: How often to trigger DHW (hours). Must be a divisor of 24.
+  # 24 = once per day (default), 12 = twice, 8 = 3 times, 6 = 4 times, etc.
+  interval_hours: 12
   log_level: INFO
 
 last_connection_sensor:
