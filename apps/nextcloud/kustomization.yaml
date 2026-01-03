@@ -3,13 +3,14 @@ kind: Kustomization
 namespace: nextcloud
 
 resources:
-  - resources/snapshots-postgresql.yaml
-  - resources/postgresql.yaml
-  - resources/snapshots.yaml
+  - resources/external-secret-coturn.yaml
+  - resources/external-secrets.yaml
   - resources/kanidm-groups.yaml
   - resources/kanidm-oauth2-client.yaml
+  - resources/postgresql.yaml
   - resources/pvc.yaml
-  - resources/external-secrets.yaml
+  - resources/snapshots-postgresql.yaml
+  - resources/snapshots.yaml
 
 helmCharts:
   - name: nextcloud
@@ -23,4 +24,10 @@ helmCharts:
     releaseName: nextcloud
     repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: redis.yaml
+    version: 4.5.0
+  - name: app-template
+    namespace: nextcloud
+    releaseName: coturn
+    repo: https://bjw-s-labs.github.io/helm-charts/
+    valuesFile: coturn.yaml
     version: 4.5.0

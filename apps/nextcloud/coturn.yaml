@@ -1,0 +1,56 @@
+controllers:
+  coturn:
+    replicas: 1
+    strategy: Recreate
+    containers:
+      app:
+        image:
+          repository: ghcr.io/coturn/coturn
+          tag: 4.7.0@sha256:a00afb5b4890de4df22bbe70379c6b316685dffee297d53cac1271dcb91fab93
+        args:
+          - -c
+          - /config/turnserver.conf
+
+service:
+  app:
+    controller: coturn
+    type: LoadBalancer
+    externalTrafficPolicy: Local
+    annotations:
+      lbipam.cilium.io/ips: "192.168.193.11"
+    ports:
+      turn-udp:
+        port: 3478
+        targetPort: 3478
+        protocol: UDP
+      turn-udp-alt:
+        port: 3479
+        targetPort: 3479
+        protocol: UDP
+      turn-tcp:
+        port: 3478
+        targetPort: 3478
+        protocol: TCP
+      turn-tcp-alt:
+        port: 3479
+        targetPort: 3479
+        protocol: TCP
+      turn-tls:
+        port: 5349
+        targetPort: 5349
+        protocol: TCP
+
+persistence:
+  config:
+    type: secret
+    name: coturn-secret
+    globalMounts:
+      - path: /config/turnserver.conf
+        subPath: turnserver.conf
+        readOnly: true
+  tls:
+    type: secret
+    name: nextcloud-tls-certificate
+    globalMounts:
+      - path: /tls
+        readOnly: true
