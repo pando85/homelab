@@ -13,13 +13,29 @@ controllers:
           - -c
           - /config/turnserver.conf
 
+defaultPodOptions:
+  nodeSelector:
+    kubernetes.io/hostname: prusik
+
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: kubernetes.io/hostname
+
 service:
   coturn:
     controller: coturn
     type: LoadBalancer
     externalTrafficPolicy: Local
     annotations:
-      lbipam.cilium.io/ips: "192.168.193.11"
+      lbipam.cilium.io/sharing-key: "nextcloud"
+      lbipam.cilium.io/sharing-cross-namespace: "*"
     ports:
       turn-udp:
         port: 3478
