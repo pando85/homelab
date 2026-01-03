@@ -12,7 +12,7 @@ controllers:
           - /config/turnserver.conf
 
 service:
-  app:
+  coturn:
     controller: coturn
     type: LoadBalancer
     externalTrafficPolicy: Local
@@ -39,6 +39,13 @@ service:
         port: 5349
         targetPort: 5349
         protocol: TCP
+  prometheus:
+    controller: coturn
+    ports:
+      http:
+        port: 9641
+        targetPort: 9641
+        protocol: TCP
 
 persistence:
   config:
@@ -54,3 +61,19 @@ persistence:
     globalMounts:
       - path: /tls
         readOnly: true
+
+serviceMonitor:
+  coturn:
+    enabled: true
+    # if release name != service name, it will be prefixed to the service name:
+    # ${release_name}-${service}
+    # https://github.com/bjw-s/helm-charts/blob/45ec2d739fc787c95947e0f3d68b05e54fe5f077/charts/library/common/templates/lib/service/_valuesToObject.tpl#L20
+    serviceName: coturn-prometheus
+    labels:
+      release: monitoring
+    endpoints:
+      - port: http
+        scheme: http
+        path: /metrics
+        interval: 1m
+        scrapeTimeout: 10s
