@@ -13,7 +13,7 @@
   lineinfile:
     path: /boot/armbianEnv.txt
     regex: "^extraargs="
-    line: 'extraargs="apparmor=0 cgroup_enable=memory cgroup_memory=1"'
+    line: 'extraargs=apparmor=0 cgroup_enable=memory cgroup_memory=1 swapaccount=1'
   # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
