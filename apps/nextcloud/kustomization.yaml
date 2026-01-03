@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: nextcloud
 
 resources:
+  - resources/certificate-turn.yaml
   - resources/external-secret-coturn.yaml
   - resources/external-secrets.yaml
   - resources/kanidm-groups.yaml

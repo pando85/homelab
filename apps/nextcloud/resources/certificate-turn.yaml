@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/component: coturn
+    app.kubernetes.io/instance: coturn
+    app.kubernetes.io/name: coturn
+  name: turn-tls-certificate
+spec:
+  dnsNames:
+    - turn.grigri.cloud
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: letsencrypt-prod-dns
+  secretName: turn-tls-certificate
+  usages:
+    - digital signature
+    - key encipherment

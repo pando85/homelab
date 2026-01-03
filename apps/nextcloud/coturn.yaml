@@ -34,9 +34,10 @@ service:
     type: LoadBalancer
     externalTrafficPolicy: Local
     annotations:
-      lbipam.cilium.io/ips: "192.168.193.4"
-      lbipam.cilium.io/sharing-key: "nextcloud"
-      lbipam.cilium.io/sharing-cross-namespace: "*"
+      lbipam.cilium.io/ips: "192.168.193.5"
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      external-dns.alpha.kubernetes.io/hostname: turn.grigri.cloud
     ports:
       turn-udp:
         port: 3478
@@ -76,7 +77,7 @@ persistence:
         readOnly: true
   tls:
     type: secret
-    name: nextcloud-tls-certificate
+    name: turn-tls-certificate
     globalMounts:
       - path: /tls
         readOnly: true
