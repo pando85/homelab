@@ -1,5 +1,5 @@
-ansible~=9.4
-ansible-core~=2.16
+ansible~=12.2
+ansible-core~=2.17
 netaddr~=1.2
 pbr~=6.0
 jmespath~=1.0
