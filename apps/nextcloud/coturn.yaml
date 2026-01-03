@@ -34,6 +34,7 @@ service:
     type: LoadBalancer
     externalTrafficPolicy: Local
     annotations:
+      lbipam.cilium.io/ips: "192.168.193.4"
       lbipam.cilium.io/sharing-key: "nextcloud"
       lbipam.cilium.io/sharing-cross-namespace: "*"
     ports:
