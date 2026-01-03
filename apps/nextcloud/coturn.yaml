@@ -1,5 +1,7 @@
 controllers:
   coturn:
+    annotations:
+      reloader.stakater.com/auto: "true"
     replicas: 1
     strategy: Recreate
     containers:
