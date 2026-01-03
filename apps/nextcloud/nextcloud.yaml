@@ -1,0 +1,285 @@
+image:
+  repository: nextcloud
+  tag: 32.0.3
+
+deploymentLabels:
+  backup/retain: quaterly
+
+replicaCount: 1
+ingress:
+  enabled: true
+  className: nginx-external
+  annotations:
+    external-dns.alpha.kubernetes.io/enabled: "true"
+    external-dns.alpha.kubernetes.io/target: grigri.cloud
+    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+    # default Nextcloud timeout in:
+    # `grep timeout /var/www/html/lib/private/Installer.php`
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    # fix timeouts uploading big files disabling proxy buffering
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-body-size: 35G
+    nginx.ingress.kubernetes.io/server-snippet: |-
+      server_tokens off;
+      proxy_hide_header X-Powered-By;
+
+      # Rule borrowed from `.htaccess` to handle Microsoft DAV clients
+      location = / {
+          if ( $http_user_agent ~ ^DavClnt ) {
+              return 302 /remote.php/webdav/$is_args$args;
+          }
+      }
+
+      location = /robots.txt {
+          allow all;
+          log_not_found off;
+          access_log off;
+      }
+
+      # Make a regex exception for `/.well-known` so that clients can still
+      # access it despite the existence of the regex rule
+      # `location ~ /(\.|autotest|...)` which would otherwise handle requests
+      # for `/.well-known`.
+      location ^~ /.well-known {
+          # The following 6 rules are borrowed from `.htaccess`
+
+          location = /.well-known/carddav     { return 301 /remote.php/dav/; }
+          location = /.well-known/caldav      { return 301 /remote.php/dav/; }
+          # Anything else is dynamically handled by Nextcloud
+          location ^~ /.well-known            { return 301 /index.php$uri; }
+
+          try_files $uri $uri/ =404;
+      }
+
+      # Rules borrowed from `.htaccess` to hide certain paths from clients
+      location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)(?:$|/)  { return 404; }
+      location ~ ^/(?:\.|autotest|occ|issue|indie|db_|console)              { return 404; }
+
+    nginx.ingress.kubernetes.io/enable-global-auth: "false"
+  tls:
+    - hosts:
+        - nextcloud.grigri.cloud
+      secretName: nextcloud-tls-certificate
+
+redis:
+  enabled: false
+
+internalDatabase:
+  enabled: false
+externalDatabase:
+  enabled: true
+  type: postgresql
+  database: nextcloud
+  existingSecret:
+    enabled: true
+    secretName: nextcloud.nextcloud-postgres.credentials.postgresql.acid.zalan.do
+    usernameKey: username
+    passwordKey: password
+  host: nextcloud-postgres
+cronjob:
+  enabled: true
+  type: cronjob
+  cronjob:
+    affinity:
+      podAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - nextcloud
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                    - app
+            topologyKey: kubernetes.io/hostname
+    resources:
+      limits:
+        cpu: 400m
+        memory: 512Mi
+      requests:
+        cpu: 10m
+        memory: 40Mi
+    securityContext:
+      runAsUser: 33
+      runAsGroup: 33
+      runAsNonRoot: true
+      readOnlyRootFilesystem: true
+
+persistence:
+  enabled: true
+  existingClaim: nextcloud-nextcloud-data
+
+  nextcloudData:
+    enabled: false
+
+resources:
+  limits:
+    memory: 4Gi
+  requests:
+    cpu: 400m
+    memory: 512Mi
+
+livenessProbe: &probe
+  enabled: true
+  periodSeconds: 60
+  timeoutSeconds: 10
+readinessProbe: *probe
+startupProbe:
+  enabled: true
+  periodSeconds: 20
+
+nextcloud:
+  host: nextcloud.grigri.cloud
+  existingSecret:
+    enabled: true
+    secretName: nextcloud
+    usernameKey: username
+    passwordKey: password
+    smtpUsernameKey: smtp_username
+    smtpPasswordKey: smtp_password
+    smtpHostKey: smtp_host
+  # 1 for enabling updates even when using a custom command
+  # value of NEXTCLOUD_UPDATE envar
+  update: 1
+  phpConfigs:
+    uploadLimit.ini: |
+      upload_max_filesize = 10G
+      post_max_size = 10G
+      max_input_time = 3600
+      max_execution_time = 3600
+      default_phone_region = ES
+    zz-memory_limit.ini: |-
+      memory_limit=512M
+  defaultConfigs:
+    .htaccess: true
+    redis.config.php: true
+  configs:
+    limit-request-body.conf: |
+      LimitRequestBody 0
+    log.config.php: |-
+      <?php
+      $CONFIG = array (
+        'loglevel' => 2,
+      );
+    proxy.config.php: |-
+      <?php
+      $CONFIG = array (
+        'trusted_proxies' =>
+        array(
+            0 => '10.42.0.0/16',
+        ),
+        'forwarded_for_headers' =>
+        array (
+          0 => 'HTTP_X_FORWARDED_FOR',
+        ),
+      );
+    # Circumvention for client freezes - https://github.com/nextcloud/desktop/issues/5094
+    bulkupload.config.php: |-
+      <?php
+      $CONFIG = array (
+        'bulkupload.enabled' => false,
+      );
+    encryption.config.php: |-
+      <?php
+      $CONFIG = array (
+        'secret' =>  getenv('SECRET'),
+        'passwordsalt' => getenv('PASSWORDSALT'),
+      );
+    oidc.config.php: |-
+      <?php
+      $CONFIG = array (
+        'overwriteprotocol' => 'https',
+        'allow_local_remote_servers' => true,
+        'user_oidc' => [
+            'use_pkce' => true,
+        ],
+        'allow_user_to_change_display_name' => false,
+        'lost_password_link' => 'disabled',
+      );
+    cron.config.php: |-
+      <?php
+      $CONFIG = array (
+        'maintenance_window_start' => 1,
+        'overwrite.cli.url' => 'https://nextcloud.grigri.cloud',
+      );
+    contacts.config.php: |-
+      <?php
+      $CONFIG = array (
+        'default_phone_region' => 'ES',
+      );
+
+  hooks:
+    post-upgrade: |
+      #!/bin/bash
+      set -e
+      /var/www/html/occ maintenance:repair --include-expensive
+      /var/www/html/occ db:add-missing-indices
+
+  extraEnv:
+    # workaround for fix auto-update with postgres with SSL enabled
+    # https://github.com/nextcloud/docker/issues/2053#issuecomment-1676392064
+    - name: PGSSLCERT
+      value: "/tmp/postgresql.crt"
+    - name: REDIS_HOST
+      value: redis
+    - name: REDIS_HOST_PORT
+      value: "6379"
+    - name: REDIS_HOST_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: nextcloud
+          key: redis_password
+    - name: SECRET
+      valueFrom:
+        secretKeyRef:
+          name: nextcloud
+          key: secret
+    - name: PASSWORDSALT
+      valueFrom:
+        secretKeyRef:
+          name: nextcloud
+          key: passwordsalt
+  extraInitContainers:
+    - name: replace-timeout
+      image: busybox
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          sed -i 's/^\([[:space:]]*\)\$timeout = \$this->isCLI ? 0 : 120;/\1$timeout = $this->isCLI ? 0 : 1200;/' /var/www/html/lib/private/Installer.php
+      volumeMounts:
+        - mountPath: /var/www/html
+          name: nextcloud-main
+          subPath: html
+
+  mail:
+    enabled: true
+    fromAddress: grigriserver
+    domain: gmail.com
+    smtp:
+      secure: tls
+      port: 587
+      authtype: LOGIN
+  # LDAP TLS connection
+  extraVolumes:
+    - name: ca-bundle
+      hostPath:
+        path: /etc/ssl/certs/ca-certificates.crt
+        type: File
+  extraVolumeMounts:
+    - name: ca-bundle
+      mountPath: /etc/ssl/certs/ca-certificates.crt
+      readOnly: true
+    - name: nextcloud-config
+      mountPath: /etc/apache2/conf-enabled/limit-request-body.conf
+      subPath: limit-request-body.conf
+
+securityContext:
+  fsGroupChangePolicy: "OnRootMismatch"
+
+nodeSelector:
+  kubernetes.io/hostname: prusik

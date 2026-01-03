@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: nextcloud
+
+resources:
+  - resources/snapshots-postgresql.yaml
+  - resources/postgresql.yaml
+  - resources/snapshots.yaml
+  - resources/kanidm-groups.yaml
+  - resources/kanidm-oauth2-client.yaml
+  - resources/pvc.yaml
+  - resources/external-secrets.yaml
+
+helmCharts:
+  - name: nextcloud
+    namespace: nextcloud
+    releaseName: nextcloud
+    repo: https://nextcloud.github.io/helm/
+    valuesFile: nextcloud.yaml
+    version: 8.7.0
+  - name: app-template
+    namespace: nextcloud
+    releaseName: nextcloud
+    repo: https://bjw-s-labs.github.io/helm-charts/
+    valuesFile: redis.yaml
+    version: 4.5.0
