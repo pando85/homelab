@@ -9,12 +9,12 @@
   notify:
     - restart apparmor
 
-- name: apparmor | Disable apparmor in armbian
+- name: apparmor | Disable apparmor in armbian and configure cgroups
   lineinfile:
     path: /boot/armbianEnv.txt
     regex: "^extraargs="
-    line: 'extraargs=apparmor=0'
-  # armbian has no variables to be distingued
+    line: 'extraargs="apparmor=0 cgroup_enable=memory cgroup_memory=1"'
+  # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
     - restart server
@@ -24,7 +24,7 @@
     path: /etc/default/grub
     regexp: '^GRUB_CMDLINE_LINUX='
     line: 'GRUB_CMDLINE_LINUX="apparmor=0"'
-  # armbian has no variables to be distingued
+  # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
     - update grub
