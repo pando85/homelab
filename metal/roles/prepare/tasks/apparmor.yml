@@ -9,11 +9,11 @@
   notify:
     - restart apparmor
 
-- name: apparmor | Disable apparmor in armbian and configure cgroups
+- name: apparmor | Disable apparmor in armbian and configure pure cgroup v2
   lineinfile:
     path: /boot/armbianEnv.txt
     regex: "^extraargs="
-    line: 'extraargs=apparmor=0 cgroup_memory=1 cgroup_enable=cpuset'
+    line: 'extraargs=apparmor=0 systemd.unified_cgroup_hierarchy=1'
   # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
