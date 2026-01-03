@@ -4,7 +4,7 @@ image:
 logging:
   ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
   ## Ref: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
-  level: "info,kaniop=debug"
+  level: "info,kaniop=info"
 
 resources:
   requests:
