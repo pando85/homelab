@@ -5,7 +5,6 @@ namespace: nextcloud
 resources:
   - resources/coturn/certificate.yaml
   - resources/coturn/external-secret.yaml
-  - resources/coturn/network-policy.yaml
   - resources/external-secrets.yaml
   - resources/kanidm-groups.yaml
   - resources/kanidm-oauth2-client.yaml
