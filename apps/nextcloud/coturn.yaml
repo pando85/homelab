@@ -12,6 +12,12 @@ controllers:
         args:
           - -c
           - /config/turnserver.conf
+        resources:
+          requests:
+            cpu: 20m
+            memory: 64M
+          limits:
+            memory: 256M
 
 defaultPodOptions:
   nodeSelector:
