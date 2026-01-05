@@ -9,6 +9,10 @@ spec:
       replicas: 2
       role: write_replica
       primaryNode: true
+      # reload TLS certs automatically
+      statefulSetAnnotations:
+        reloader.stakater.com/auto: 'true'
+
       resources:
         requests:
           cpu: 10m
