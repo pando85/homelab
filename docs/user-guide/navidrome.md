@@ -17,4 +17,5 @@ kubectl --context=grigri -n navidrome cp /tmp/path/ $(kubectl -n navidrome get p
 ```
 
 After updating the metadata, you may need to rescan the music library from the Navidrome web
-interface and remove missing files: https://navidrome.grigri.cloud/app/#/missing
+interface and remove missing files:
+[https://navidrome.grigri.cloud/app/#/missing](https://navidrome.grigri.cloud/app/#/missing).
