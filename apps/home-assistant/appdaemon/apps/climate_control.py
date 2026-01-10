@@ -213,7 +213,7 @@ Retrying in 10 minutes"""
                 if is_cheap
                 else ""
             )
-            msg = f"Programming the climate control for these hours: ![](https://kroki.grigri.cloud/vegalite/png/{vega_diagram}){cheap_msg}"
+            msg = f"Programming the climate control for these hours: [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram}){cheap_msg}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
