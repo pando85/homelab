@@ -17,7 +17,7 @@ climate_control:
     on_mode: Heat+DHW
     off_mode: DHW
   fallback_cheap_electricity_price: 0.09
-  log_level: INFO
+  log_level: DEBUG
 
 dhw_control:
   module: dhw_control
