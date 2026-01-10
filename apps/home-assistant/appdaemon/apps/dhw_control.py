@@ -158,7 +158,7 @@ Retrying in 10 minutes""",
         if self.args["notify"]["enabled"]:
             vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
             hours_str = ", ".join(dt.strftime("%H:%M") for dt in datetimes_to_schedule)
-            msg = f"Programming the DHW control for these hours: {hours_str} [](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
+            msg = f"Programming the DHW control for these hours: {hours_str} [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         now = datetime.now(self.get_timezone())
