@@ -1,5 +1,18 @@
 # Navidrome
 
+## Library
+
+We have two different libraries:
+
+- Main library: `/music/` (mounted from `navidrome-music` PVC)
+- Lidarr library: `/music/lidarr/` (mounted from `/datasets/music` on the host)
+
+Main library is backuped by Velero. Lidarr library is not backed up. If you want to move something
+from Lidarr library to main library, you need to copy files from `/music/lidarr/` to `/music/` in
+the proper directory and adjust the metadata accordingly.
+
+**Note:** Lidarr does not know about files in the main library.
+
 ## Update music metadata
 
 ```bash
