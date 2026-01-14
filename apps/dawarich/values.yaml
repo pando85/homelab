@@ -43,7 +43,7 @@ app-template:
             REDIS_URL: redis://dawarich-redis
             APPLICATION_HOSTS: "dawarich.internal.grigri.cloud,dawarich.grigri.cloud"
             PROMETHEUS_EXPORTER_ENABLED: "true"
-            PROMETHEUS_EXPORTER_HOST: "127.0.0.1"
+            PROMETHEUS_EXPORTER_HOST: "0.0.0.0"
             DISABLE_TELEMETRY: "true"
             GEOAPIFY_API_KEY:
               valueFrom:
@@ -62,8 +62,7 @@ app-template:
             - "web-entrypoint.sh"
           args:
             # bin/dev for enabling prometheus exporter
-            # - "bin/rails server -p 3000 -b 0.0.0.0"
-            - "bin/dev"
+            - "bin/rails server -p 3000 -b 0.0.0.0"
           probes:
             liveness: &probes
               enabled: true
