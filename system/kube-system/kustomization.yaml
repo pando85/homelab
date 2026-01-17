@@ -28,6 +28,13 @@ helmCharts:
     repo: https://nvidia.github.io/k8s-device-plugin
     valuesFile: nvidia-device-plugin-values.yaml
     version: 0.18.0
+  - includeCRDs: true
+    name: kata-deploy
+    namespace: kube-system
+    releaseName: kata-deploy
+    repo: oci://ghcr.io/kata-containers/kata-deploy-charts/
+    valuesFile: kata-deploy-values.yaml
+    version: 3.24.0
 
 patches:
   - patch: |-

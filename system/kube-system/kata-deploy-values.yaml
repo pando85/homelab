@@ -1,0 +1,12 @@
+k8sDistribution: "k3s"
+
+debug: false
+
+defaultShim:
+  amd64: qemu
+  arm64: qemu
+
+runtimeClasses:
+  enabled: true
+  createDefault: false
+  defaultName: "kata"
