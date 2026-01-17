@@ -44,5 +44,5 @@ defaultShim:
 
 runtimeClasses:
   enabled: true
-  createDefault: false
+  createDefault: true
   defaultName: "kata"
