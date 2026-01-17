@@ -1,5 +1,7 @@
 k8sDistribution: "k3s"
 
+nodeSelector:
+  kubernetes.io/arch: amd64
 debug: false
 
 shims:
