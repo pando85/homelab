@@ -1,6 +1,7 @@
 k8sDistribution: "k3s"
 
 nodeSelector:
+  # grigri is not working with QMP loop error
   kubernetes.io/hostname: prusik
 
 debug: true
