@@ -26,10 +26,10 @@ helmCharts:
     releaseName: nextcloud
     repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: redis.yaml
-    version: 4.6.0
+    version: 4.6.2
   - name: app-template
     namespace: nextcloud
     releaseName: coturn
     repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: coturn.yaml
-    version: 4.6.0
+    version: 4.6.2
