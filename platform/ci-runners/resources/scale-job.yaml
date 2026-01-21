@@ -74,13 +74,15 @@ spec:
               - -c
               - |
                 dockerd-entrypoint.sh 2>&1 &
-
+                # PID of forgejo-runner
                 while kill -0 10 2>/dev/null; do
                   echo "watching main job execution"
                   sleep 10
                 done;
 
                 echo "main continaer exited, stopping dind"
+                # PID of docker entrypoint
+                kill 13
                 exit 0
             env:
               - name: DOCKER_TLS_CERTDIR
