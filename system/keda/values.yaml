@@ -1,5 +1,5 @@
 networkPolicy:
-  enabled: true
+  enabled: false
   flavor: "cilium"
   cilium:
     operator:
