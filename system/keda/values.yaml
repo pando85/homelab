@@ -34,6 +34,24 @@ resources:
       cpu: 100m
       memory: 100Mi
 
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - prusik
+      - weight: 50
+        preference:
+          matchExpressions:
+            - key: kubernetes.io/arch
+              operator: In
+              values:
+                - amd64
+
 prometheus:
   metricServer:
     enabled: true
