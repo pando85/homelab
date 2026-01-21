@@ -89,14 +89,10 @@ bgpControlPlane:
   secretsNamespace:
     name: kube-system
 
-enableRuntimeDeviceDetection: true
-
-loadBalancer:
-  standalone: false
-  algorithm: maglev
-  # DSR for TCP and SNAT for UDP
-  mode: hybrid
-  acceleration: best-effort
+socketLB:
+  # Disable for Kata containers compatibility:
+  # https://docs.cilium.io/en/latest/network/kubernetes/kubeproxy-free/#socketlb-host-netns-only
+  hostNamespaceOnly: true
 
 hubble:
   enabled: true
@@ -155,6 +151,13 @@ installNoConntrackIptablesRules: true
 kubeProxyReplacement: true
 localRedirectPolicy: true
 ipv4NativeRoutingCIDR: "10.0.0.0/8"
+
+loadBalancer:
+  standalone: false
+  algorithm: maglev
+  # DSR for TCP and SNAT for UDP
+  mode: hybrid
+  acceleration: best-effort
 
 prometheus:
   enabled: true
