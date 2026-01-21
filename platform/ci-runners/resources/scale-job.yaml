@@ -101,6 +101,6 @@ spec:
         name: "runner"
         address: "https://git.grigri.cloud/"
         global: "true"
-        labels: "ubuntu-24.04,docker"
+        labels: "ubuntu-latest,ubuntu-24.04,docker"
       authenticationRef:
         name: forgejo-runner-creds
