@@ -1,0 +1,200 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: runner-registration
+data:
+  registration.yaml: |
+    log:
+      #
+      # What is displayed in the output of the runner process but not sent
+      # to the Forgejo instance.
+      #
+      level: info
+      #
+      # What is sent to the Forgejo instance and therefore
+      # visible in the web UI for a given job.
+      #
+      job_level: info
+
+    runner:
+      # Where to store the registration result.
+      file: .runner
+      # Execute how many tasks concurrently at the same time.
+      capacity: 1
+      # Extra environment variables to run jobs.
+      envs:
+        A_TEST_ENV_NAME_1: a_test_env_value_1
+        A_TEST_ENV_NAME_2: a_test_env_value_2
+      # Extra environment variables to run jobs from a file.
+      # It will be ignored if it's empty or the file doesn't exist.
+      env_file: .env
+      # The timeout for a job to be finished.
+      # Please note that the Forgejo instance also has a timeout (3h by default) for the job.
+      # So the job could be stopped by the Forgejo instance if it's timeout is shorter than this.
+      timeout: 3h
+      # The timeout for the runner to wait for running jobs to finish when
+      # shutting down because a TERM or INT signal has been received.  Any
+      # running jobs that haven't finished after this timeout will be
+      # cancelled.
+      # If unset or zero the jobs will be cancelled immediately.
+      shutdown_timeout: 3h
+      # Whether skip verifying the TLS certificate of the instance.
+      insecure: false
+      # The timeout for fetching the job from the Forgejo instance.
+      fetch_timeout: 5s
+      # The interval for fetching the job from the Forgejo instance.
+      fetch_interval: 2s
+      # The interval for reporting the job status and logs to the Forgejo instance.
+      report_interval: 1s
+      # At the end of a job, retry configuration for sending logs to remote.
+      # report_retry:
+      #   # Maximum number of retry attempts.
+      #   max_retries: 10
+      #   # Initial delay between retries.  Delay between retries doubles up to `max_delay`.
+      #   initial_delay: 100ms
+      #   # Maximum delay between retries, defaults to 0, 0 is treated as no maximum.
+      #   max_delay: 0
+      # The labels of a runner are used to determine which jobs the runner can run, and how to run them.
+      # Like: ["macos-arm64:host", "ubuntu-latest:docker://node:20-bookworm", "ubuntu-22.04:docker://node:20-bookworm"]
+      # If it's empty when registering, it will ask for inputting labels.
+      # If it's empty when executing the `daemon`, it will use labels in the `.runner` file.
+      labels: []
+
+    cache:
+      #
+      # When enabled, workflows will be given the ACTIONS_CACHE_URL environment variable
+      # used by the https://code.forgejo.org/actions/cache action. The server at this
+      # URL must implement a compliant REST API and it must also be reachable from
+      # the container or host running the workflows.
+      #
+      # See also https://forgejo.org/docs/next/user/actions/advanced-features/#cache
+      #
+      # When it is not enabled, none of the following options apply.
+      #
+      # It works as follows:
+      #
+      # - the workflow is given a one time use ACTIONS_CACHE_URL
+      # - a cache proxy listens to ACTIONS_CACHE_URL
+      # - the cache proxy securely communicates with the cache server using
+      #   a shared secret
+      #
+      enabled: true
+      #
+      #######################################################################
+      #
+      # Only used for the internal cache server.
+      #
+      # If external_server is not set, the Forgejo runner will spawn a
+      # cache server that will be used by the cache proxy.
+      #
+      #######################################################################
+      #
+      # The port bound by the internal cache server.
+      # 0 means to use a random available port.
+      #
+      port: 0
+      #
+      # The directory to store the cache data.
+      #
+      # If empty, the cache data will be stored in $HOME/.cache/actcache.
+      #
+      dir: ""
+      #
+      #######################################################################
+      #
+      # Only used for the external cache server.
+      #
+      # If external_server is set, the internal cache server is not
+      # spawned.
+      #
+      #######################################################################
+      #
+      # The URL of the cache server. The URL should generally end with
+      # "/". The cache proxy will forward requests to the external
+      # server. The requests are authenticated with the "secret" that is
+      # shared with the external server.
+      #
+      external_server: ""
+      #
+      # The shared cache secret used to secure the communications between
+      # the cache proxy and the cache server.
+      #
+      # If empty, it will be generated to a new secret automatically when
+      # the server starts and it will stay the same until it restarts.
+      #
+      secret: ""
+      #
+      #######################################################################
+      #
+      # Common to the internal and external cache server
+      #
+      #######################################################################
+      #
+      # The IP or hostname (195.84.20.30 or example.com) to use when constructing
+      # ACTIONS_CACHE_URL which is the URL of the cache proxy.
+      #
+      # If empty it will be detected automatically.
+      #
+      # If the containers or host running the workflows reside on a
+      # different network than the Forgejo runner (for instance when the
+      # docker server used to create containers is not running on the same
+      # host as the Forgejo runner), it may be impossible to figure that
+      # out automatically. In that case you can specify which IP or
+      # hostname to use to reach the internal cache server created by the
+      # Forgejo runner.
+      #
+      host: ""
+      #
+      # The port bound by the internal cache proxy.
+      # 0 means to use a random available port.
+      #
+      proxy_port: 0
+      #
+      # Overrides the ACTIONS_CACHE_URL variable passed to workflow
+      # containers. The URL should generally not end with "/". This should only
+      # be used if the runner host is not reachable from the workflow containers,
+      # and requires further setup.
+      #
+      actions_cache_url_override: ""
+
+    container:
+      # Specifies the network to which the container will connect.
+      # Could be host, bridge or the name of a custom network.
+      # If it's empty, create a network automatically.
+      network: ""
+      # Whether to create networks with IPv6 enabled. Requires the Docker daemon to be set up accordingly.
+      # Only takes effect if "network" is set to "".
+      enable_ipv6: false
+      # Whether to use privileged mode or not when launching task containers (privileged mode is required for Docker-in-Docker).
+      privileged: false
+      # And other options to be used when the container is started (eg, --volume /etc/ssl/certs:/etc/ssl/certs:ro).
+      options:
+      # The parent directory of a job's working directory.
+      # If it's empty, /workspace will be used.
+      workdir_parent:
+      # Volumes (including bind mounts) can be mounted to containers. Glob syntax is supported, see https://github.com/gobwas/glob
+      # You can specify multiple volumes. If the sequence is empty, no volumes can be mounted.
+      # For example, if you only allow containers to mount the `data` volume and all the json files in `/src`, you should change the config to:
+      # valid_volumes:
+      #   - data
+      #   - /etc/ssl/certs
+      # If you want to allow any volume, please use the following configuration:
+      # valid_volumes:
+      #   - '**'
+      valid_volumes: []
+      # Overrides the docker host set by the DOCKER_HOST environment variable, and mounts on the job container.
+      # If "-" or "", no docker host will be mounted in the job container
+      # If "automount", an available docker host will automatically be found and mounted in the job container (e.g. /var/run/docker.sock).
+      # If it's a url, the specified docker host will be mounted in the job container
+      # Example urls: unix:///run/docker.socket or ssh://user@host
+      # The specified socket is mounted within the job container at /var/run/docker.sock
+      docker_host: "-"
+      # Pull docker image(s) even if already present
+      force_pull: false
+      # Rebuild local docker image(s) even if already present
+      force_rebuild: false
+
+    host:
+      # The parent directory of a job's working directory.
+      # If it's empty, $HOME/.cache/act/ will be used.
+      workdir_parent:

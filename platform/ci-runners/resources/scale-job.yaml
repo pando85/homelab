@@ -1,0 +1,106 @@
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: upload-platform-forgejo-runner
+  labels:
+    app.kubernetes.io/name: forgejo-runner
+spec:
+  jobTargetRef:
+    template:
+      metadata:
+        labels:
+          app.kubernetes.io/name: forgejo-runner
+      spec:
+        runtimeClassName: kata
+        containers:
+          - name: runner
+            # renovate: datasource=docker
+            image: ghcr.io/pando85/forgejo-runner:12.5.3
+            command:
+              - sh
+              - -c
+              - |
+                while ! nc -z localhost 2376 </dev/null; do
+                  echo 'waiting for docker daemon...'
+                  sleep 5
+                done
+
+                cp /config/.runner /data/.runner
+
+                exec forgejo-runner -c /registration/registration.yaml one-job
+            securityContext:
+              privileged: true
+              runAsUser: 0
+            env:
+              - name: DOCKER_HOST
+                value: tcp://localhost:2376
+              - name: DOCKER_CERT_PATH
+                value: /certs/client
+              - name: DOCKER_TLS_VERIFY
+                value: "1"
+            volumeMounts:
+              - name: docker-certs
+                mountPath: /certs
+              - name: runner-data
+                mountPath: /data
+              - name: runner-registration
+                mountPath: /registration
+                readOnly: false
+              - name: runner-config
+                mountPath: /config
+                readOnly: false
+          - name: daemon
+            # renovate: datasource=docker
+            image: docker:29.1.5-dind
+            command:
+              - sh
+              - -c
+              - |
+                dockerd-entrypoint.sh 2>&1 &
+
+                while kill -0 7 2>/dev/null
+                  do sleep 10
+                  echo "watching main job execution"
+                done;
+
+                sleep 10
+
+                echo "main continaer exited, stopping dind"
+                exit 0
+            env:
+              - name: DOCKER_TLS_CERTDIR
+                value: /certs
+              - name: DOCKER_HOST
+                value: tcp://0.0.0.0:2376
+            securityContext:
+              privileged: true
+              runAsUser: 0
+            volumeMounts:
+              - name: docker-certs
+                mountPath: /certs
+        volumes:
+          - name: runner-data
+            emptyDir: {}
+          - name: runner-config
+            secret:
+              secretName: runner-config
+          - name: runner-registration
+            configMap:
+              name: runner-registration
+          - name: docker-certs
+            emptyDir: {}
+        restartPolicy: Never
+        shareProcessNamespace: true
+  minReplicaCount: 0
+  maxReplicaCount: 20
+  pollingInterval: 30
+  triggers:
+    - type: forgejo-runner
+      metadata:
+        name: "runner"
+        address: "https://git.grigri.cloud/"
+        global: "true"
+        labels: "ubuntu-24.04,docker"
+      authenticationRef:
+        name: forgejo-runner-creds
