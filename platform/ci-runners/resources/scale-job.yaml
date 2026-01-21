@@ -68,21 +68,6 @@ spec:
           - name: daemon
             # renovate: datasource=docker
             image: docker:29.1.5-dind
-            command:
-              - sh
-              - -c
-              - |
-                dockerd-entrypoint.sh 2>&1 &
-
-                while kill -0 7 2>/dev/null
-                  do sleep 10
-                  echo "watching main job execution"
-                done;
-
-                sleep 10
-
-                echo "main continaer exited, stopping dind"
-                exit 0
             env:
               - name: DOCKER_TLS_CERTDIR
                 value: /certs
@@ -94,11 +79,6 @@ spec:
             volumeMounts:
               - name: docker-certs
                 mountPath: /certs
-        # workaround until Kata container works with nodelocaldns
-        dnsPolicy: "None"
-        dnsConfig:
-          nameservers:
-            - 192.168.192.1
         volumes:
           - name: runner-data
             emptyDir: {}
