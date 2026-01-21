@@ -17,14 +17,15 @@ spec:
         initContainers:
           - name: set-mtu
             # renovate: datasource=docker
-            image: debian:13.1
+            image: busybox:1.37.0
             command:
               - sh
               - -c
               - |
-                DEFAULT_GW="$(ip route show default | awk '{print $3}')"
-                DEVICE="$(ip route show default | awk '{print $5}')"
-                ip route replace default via "$DEFAULT_GW" dev "$DEVICE" mtu 1450
+                sleep 9999
+                GW="$(ip route show default | awk '{print $3}')"
+                DEV="$(ip route show default | awk '{print $5}')"
+                ip route replace default via "$GW" dev "$DEV" mtu 1450
             securityContext:
               capabilities:
                 add:
