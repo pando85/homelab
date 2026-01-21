@@ -114,7 +114,7 @@ spec:
         shareProcessNamespace: true
   minReplicaCount: 0
   maxReplicaCount: 20
-  pollingInterval: 30
+  pollingInterval: 10
   triggers:
     - type: forgejo-runner
       metadata:
