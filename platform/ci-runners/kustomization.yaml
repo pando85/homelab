@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: ci-runners
 resources:
   - resources/configmap.yaml
+  - resources/docker-daemon-configmap.yaml
   - resources/external-secret-keda.yaml
   - resources/external-secret-runner.yaml
   - resources/scale-job.yaml

@@ -90,6 +90,10 @@ spec:
               name: runner-registration
           - name: docker-certs
             emptyDir: {}
+          # workaround for ZFS: io.containerd.snapshotter.v1.overlayfs not working
+          - name: docker-daemon-config
+            configMap:
+              name: docker-daemon-config
         restartPolicy: Never
         shareProcessNamespace: true
   minReplicaCount: 0
