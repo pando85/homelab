@@ -42,6 +42,7 @@ spec:
                   sleep 5
                 done
 
+                sleep 9999
                 cp /config/.runner .
                 exec forgejo-runner -c /registration/registration.yaml one-job
             securityContext:
