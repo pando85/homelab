@@ -2,7 +2,7 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledJob
 metadata:
-  name: upload-platform-forgejo-runner
+  name: ci-runner
   labels:
     app.kubernetes.io/name: forgejo-runner
 spec:
@@ -13,6 +13,21 @@ spec:
           app.kubernetes.io/name: forgejo-runner
       spec:
         runtimeClassName: kata
+        # source: https://docs.cilium.io/en/latest/network/kubernetes/kata/
+        initContainers:
+          - name: set-mtu
+            # renovate: datasource=docker
+            image: busybox:1.37.0
+            command:
+              - sh
+              - -c
+              - |
+                DEFAULT="$(ip route show default)"
+                ip route replace "$DEFAULT" mtu 1450
+            securityContext:
+              capabilities:
+                add:
+                  - NET_ADMIN
         containers:
           - name: runner
             # renovate: datasource=docker
