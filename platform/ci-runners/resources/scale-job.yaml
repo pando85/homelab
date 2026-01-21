@@ -81,8 +81,8 @@ spec:
                 done;
 
                 echo "main continaer exited, stopping dind"
-                # PID of docker entrypoint
-                kill 13
+                # PID of docker
+                kill 14
                 exit 0
             env:
               - name: DOCKER_TLS_CERTDIR
