@@ -1,0 +1,45 @@
+networkPolicy:
+  enabled: true
+  flavor: "cilium"
+  cilium:
+    operator:
+      extraEgressRules: []
+
+logging:
+  operator:
+    # allowed values: `debug`, `info`, `error`, or an integer value greater than 0, specified as string
+    level: info
+    format: json
+
+resources:
+  operator:
+    limits:
+      cpu: 1
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+  metricServer:
+    limits:
+      cpu: 1
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+  webhooks:
+    limits:
+      cpu: 1
+      memory: 1000Mi
+    requests:
+      cpu: 100m
+      memory: 100Mi
+
+prometheus:
+  metricServer:
+    enabled: true
+    port: 8080
+    portName: metrics
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: monitoring
