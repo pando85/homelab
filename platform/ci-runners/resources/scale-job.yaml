@@ -75,8 +75,7 @@ spec:
               - |
                 dockerd-entrypoint.sh 2>&1 &
 
-                MAIN_PID=$(pgrep -o forgejo-runner)
-                while kill -0 "$MAIN_PID" 2>/dev/null; do
+                while kill -0 10 2>/dev/null; do
                   echo "watching main job execution"
                   sleep 10
                 done;
