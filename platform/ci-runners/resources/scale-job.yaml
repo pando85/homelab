@@ -68,6 +68,21 @@ spec:
           - name: daemon
             # renovate: datasource=docker
             image: docker:29.1.5-dind
+            # finish the docker daemon when the main container exits
+            command:
+              - sh
+              - -c
+              - |
+                dockerd-entrypoint.sh 2>&1 &
+
+                MAIN_PID=$(pgrep -o forgejo-runner)
+                while kill -0 "$MAIN_PID" 2>/dev/null; do
+                  echo "watching main job execution"
+                  sleep 10
+                done;
+
+                echo "main continaer exited, stopping dind"
+                exit 0
             env:
               - name: DOCKER_TLS_CERTDIR
                 value: /certs
