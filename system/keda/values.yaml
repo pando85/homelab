@@ -1,4 +1,5 @@
 networkPolicy:
+  # enabling it makes liveness and readiness probes fail
   enabled: false
   flavor: "cilium"
   cilium:
