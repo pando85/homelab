@@ -26,12 +26,11 @@ spec:
                   sleep 5
                 done
 
-                cp /config/.runner /data/.runner
-                sleep 99999
+                cp /config/.runner .
                 exec forgejo-runner -c /registration/registration.yaml one-job
             securityContext:
               privileged: true
-              runAsUser: 0
+              runAsUser: 1001
             env:
               - name: DOCKER_HOST
                 value: tcp://localhost:2376
@@ -43,7 +42,7 @@ spec:
               - name: docker-certs
                 mountPath: /certs
               - name: runner-data
-                mountPath: /data
+                mountPath: /home/runner
               - name: runner-registration
                 mountPath: /registration
                 readOnly: false
@@ -79,6 +78,11 @@ spec:
             volumeMounts:
               - name: docker-certs
                 mountPath: /certs
+        # workaround until Kata container works with nodelocaldns
+        dnsPolicy: "None"
+        dnsConfig:
+          nameservers:
+            - 10.43.0.10
         volumes:
           - name: runner-data
             emptyDir: {}
