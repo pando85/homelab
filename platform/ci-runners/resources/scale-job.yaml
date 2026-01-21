@@ -17,7 +17,7 @@ spec:
         initContainers:
           - name: set-mtu
             # renovate: datasource=docker
-            image: busybox:1.37.0
+            image: debian:13.1
             command:
               - sh
               - -c
