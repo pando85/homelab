@@ -27,7 +27,7 @@ spec:
                 done
 
                 cp /config/.runner /data/.runner
-
+                sleep 99999
                 exec forgejo-runner -c /registration/registration.yaml one-job
             securityContext:
               privileged: true
