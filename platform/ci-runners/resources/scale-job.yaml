@@ -80,6 +80,8 @@ spec:
             volumeMounts:
               - name: docker-certs
                 mountPath: /certs
+              - name: docker-storage
+                mountPath: /var/lib/docker
         volumes:
           - name: runner-data
             emptyDir: {}
@@ -91,6 +93,18 @@ spec:
               name: runner-registration
           - name: docker-certs
             emptyDir: {}
+          - name: docker-storage
+            ephemeral:
+              volumeClaimTemplate:
+                metadata:
+                  labels:
+                    type: runner-docker-volume
+                spec:
+                  accessModes:
+                    - ReadWriteOnce
+                  resources:
+                    requests:
+                      storage: 10Gi
         restartPolicy: Never
         shareProcessNamespace: true
   minReplicaCount: 0
