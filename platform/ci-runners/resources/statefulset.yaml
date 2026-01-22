@@ -78,6 +78,11 @@ spec:
             - sh
             - -c
             - |
+              if [[ $(df -PT /var/lib/docker | awk 'NR==2 {print $2}') == virtiofs ]]; then
+                truncate -s 50G /docker/disk.img &&
+                mkfs.ext4 /docker/disk.img &&
+                mount /docker/disk.img /var/lib/docker;
+              fi &&
               dockerd-entrypoint.sh 2>&1 &
               # PID of forgejo-runner
               while kill -0 10 2>/dev/null; do
@@ -103,7 +108,7 @@ spec:
             - name: docker-daemon-config
               mountPath: /etc/docker
             - name: ci-runner-docker
-              mountPath: /var/lib/docker
+              mountPath: /docker
       volumes:
         - name: runner-data
           emptyDir: {}
@@ -115,10 +120,6 @@ spec:
             name: runner-registration
         - name: docker-certs
           emptyDir: {}
-        # workaround for ZFS: io.containerd.snapshotter.v1.overlayfs not working
-        - name: docker-daemon-config
-          configMap:
-            name: docker-daemon-config
         - name: ci-runner-cache
           persistentVolumeClaim:
             claimName: ci-runner-cache

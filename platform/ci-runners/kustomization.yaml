@@ -3,7 +3,6 @@ kind: Kustomization
 namespace: ci-runners
 resources:
   - resources/configmap.yaml
-  - resources/docker-daemon-configmap.yaml
   - resources/external-secret-keda.yaml
   - resources/external-secret-runner.yaml
   # Ephemeral workers need caches for forgejo runner and docker, so I will keep a simpler config
