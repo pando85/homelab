@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: ci-runner
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   selector:
     matchLabels:
@@ -80,7 +82,7 @@ spec:
               # PID of forgejo-runner
               while kill -0 10 2>/dev/null; do
                 echo "watching main job execution"
-                sleep 10
+                sleep 60
               done;
 
               echo "main continaer exited, stopping dind"
