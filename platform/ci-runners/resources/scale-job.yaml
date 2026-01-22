@@ -97,6 +97,8 @@ spec:
                 mountPath: /certs
               - name: docker-daemon-config
                 mountPath: /etc/docker
+              - name: runner-data
+                mountPath: /home/runner
         volumes:
           - name: runner-data
             emptyDir: {}

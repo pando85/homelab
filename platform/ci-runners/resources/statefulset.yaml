@@ -107,6 +107,8 @@ spec:
               mountPath: /certs
             - name: ci-runner-docker
               mountPath: /docker
+            - name: runner-data
+              mountPath: /home/runner
       volumes:
         - name: runner-data
           emptyDir: {}
