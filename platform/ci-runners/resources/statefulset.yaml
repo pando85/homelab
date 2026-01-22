@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ci-runner
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ci-runner
+  serviceName: ci-runner
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ci-runner
+    spec:
+      runtimeClassName: kata
+      # source: https://docs.cilium.io/en/latest/network/kubernetes/kata/
+      initContainers:
+        - name: set-mtu
+          # renovate: datasource=docker
+          image: busybox:1.37.0
+          command:
+            - sh
+            - -c
+            - |
+              GW="$(ip route show default | awk 'NR==1 {print $3}')"
+              DEV="$(ip route show default | awk 'NR==1 {print $5}')"
+              ip route replace default via "$GW" dev "$DEV" mtu 1450
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+      containers:
+        - name: runner
+          # renovate: datasource=docker
+          image: ghcr.io/pando85/forgejo-runner:12.5.3
+          command:
+            - sh
+            - -c
+            - |
+              while ! nc -z localhost 2376 </dev/null; do
+                echo 'waiting for docker daemon...'
+                sleep 5
+              done
+
+              cp /config/.runner .
+              exec forgejo-runner -c /registration/registration.yaml daemon
+          securityContext:
+            privileged: true
+            runAsUser: 1001
+          env:
+            - name: DOCKER_HOST
+              value: tcp://localhost:2376
+            - name: DOCKER_CERT_PATH
+              value: /certs/client
+            - name: DOCKER_TLS_VERIFY
+              value: "1"
+          volumeMounts:
+            - name: docker-certs
+              mountPath: /certs
+            - name: runner-data
+              mountPath: /home/runner
+            - name: runner-registration
+              mountPath: /registration
+              readOnly: false
+            - name: runner-config
+              mountPath: /config
+              readOnly: false
+            - name: ci-runner-cache
+              mountPath: /cache
+        - name: daemon
+          # renovate: datasource=docker
+          image: docker:29.1.5-dind
+          # finish the docker daemon when the main container exits
+          command:
+            - sh
+            - -c
+            - |
+              dockerd-entrypoint.sh 2>&1 &
+              # PID of forgejo-runner
+              while kill -0 10 2>/dev/null; do
+                echo "watching main job execution"
+                sleep 10
+              done;
+
+              echo "main continaer exited, stopping dind"
+              # PID of docker
+              kill 14
+              exit 0
+          env:
+            - name: DOCKER_TLS_CERTDIR
+              value: /certs
+            - name: DOCKER_HOST
+              value: tcp://0.0.0.0:2376
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          volumeMounts:
+            - name: docker-certs
+              mountPath: /certs
+            - name: docker-daemon-config
+              mountPath: /etc/docker
+            - name: ci-runner-docker
+              mountPath: /var/lib/docker
+      volumes:
+        - name: runner-data
+          emptyDir: {}
+        - name: runner-config
+          secret:
+            secretName: runner-config
+        - name: runner-registration
+          configMap:
+            name: runner-registration
+        - name: docker-certs
+          emptyDir: {}
+        # workaround for ZFS: io.containerd.snapshotter.v1.overlayfs not working
+        - name: docker-daemon-config
+          configMap:
+            name: docker-daemon-config
+        - name: ci-runner-cache
+          persistentVolumeClaim:
+            claimName: ci-runner-cache
+        - name: ci-runner-docker
+          persistentVolumeClaim:
+            claimName: ci-runner-docker
+      resources:
+        requests:
+          memory: "100Mi"
+          cpu: "100m"
+        limits:
+          memory: "15Gi"
+          cpu: "8"
+      restartPolicy: Always
+      shareProcessNamespace: true

@@ -20,11 +20,11 @@ data:
       # Where to store the registration result.
       file: .runner
       # Execute how many tasks concurrently at the same time.
-      capacity: 1
+      capacity: 20
       # Extra environment variables to run jobs.
-      envs:
-        A_TEST_ENV_NAME_1: a_test_env_value_1
-        A_TEST_ENV_NAME_2: a_test_env_value_2
+      envs: {}
+        # A_TEST_ENV_NAME_1: a_test_env_value_1
+        # A_TEST_ENV_NAME_2: a_test_env_value_2
       # Extra environment variables to run jobs from a file.
       # It will be ignored if it's empty or the file doesn't exist.
       env_file: .env
@@ -98,7 +98,7 @@ data:
       #
       # If empty, the cache data will be stored in $HOME/.cache/actcache.
       #
-      dir: ""
+      dir: /cache
       #
       #######################################################################
       #
@@ -188,7 +188,7 @@ data:
       # If it's a url, the specified docker host will be mounted in the job container
       # Example urls: unix:///run/docker.socket or ssh://user@host
       # The specified socket is mounted within the job container at /var/run/docker.sock
-      docker_host: "-"
+      docker_host: "automount"
       # Pull docker image(s) even if already present
       force_pull: false
       # Rebuild local docker image(s) even if already present
