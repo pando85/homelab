@@ -67,7 +67,7 @@ spec:
                 readOnly: false
           - name: daemon
             # renovate: datasource=docker
-            image: docker:29.1.5-dind
+            image: docker:29.1.5
             # finish the docker daemon when the main container exits
             command:
               - sh
