@@ -25,3 +25,4 @@ spec:
 
   preferShortUsername: true
   strictRedirectUrl: true
+  allowInsecureClientDisablePkce: true
