@@ -77,12 +77,17 @@ forgejo:
         LEVEL: info
       cron:
         NOTICE_ON_SUCCESS: false
+      mailer:
+        ENABLED: true
+        SMTP_PORT: 587
       migrations:
         ALLOWED_DOMAINS: "*"
 
     additionalConfigSources:
       - secret:
           secretName: gitea-app-ini-database
+      - secret:
+          secretName: gitea-mailer-config
 
     oauth:
       - name: kanidm
