@@ -60,11 +60,11 @@ app-template:
                 secretKeyRef:
                   name: dawarich-kanidm-oauth2-credentials
                   key: CLIENT_SECRET
-            OIDC_ISSUER: https://idm.grigri.cloud/oauth2/openid/dawarich/
+            OIDC_ISSUER: https://idm.grigri.cloud/oauth2/openid/dawarich
             OIDC_REDIRECT_URI: https://dawarich.grigri.cloud/users/auth/openid_connect/callback
             OIDC_AUTO_REGISTER: false
             OIDC_PROVIDER_NAME: idm.grigri.cloud
-            ALLOW_EMAIL_PASSWORD_REGISTRATION: true
+            ALLOW_EMAIL_PASSWORD_REGISTRATION: false
             SELF_HOSTED: "true"
           resources:
             requests:
