@@ -50,6 +50,21 @@ app-template:
                 secretKeyRef:
                   name: dawarich-secrets
                   key: geoapify_api_key
+            OIDC_CLIENT_ID:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich-kanidm-oauth2-credentials
+                  key: CLIENT_ID
+            OIDC_CLIENT_SECRET:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich-kanidm-oauth2-credentials
+                  key: CLIENT_SECRET
+            OIDC_ISSUER: https://idm.grigri.cloud/oauth2/openid/dawarich/
+            OIDC_REDIRECT_URI: https://dawarich.grigri.cloud/users/auth/openid_connect/callback
+            OIDC_AUTO_REGISTER: false
+            OIDC_PROVIDER_NAME: idm.grigri.cloud
+            ALLOW_EMAIL_PASSWORD_REGISTRATION: true
             SELF_HOSTED: "true"
           resources:
             requests:
