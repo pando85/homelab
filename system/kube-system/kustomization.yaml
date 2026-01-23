@@ -32,7 +32,7 @@ helmCharts:
     name: kata-deploy
     namespace: kube-system
     releaseName: kata-deploy
-    repo: oci://ghcr.io/kata-containers/kata-deploy-charts/
+    repo: oci://ghcr.io/kata-containers/kata-deploy-charts
     valuesFile: kata-deploy-values.yaml
     version: 3.25.0
 
