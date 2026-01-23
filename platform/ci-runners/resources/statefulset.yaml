@@ -34,7 +34,7 @@ spec:
                 - NET_ADMIN
       containers:
         - name: runner
-          image: ghcr.io/pando85/forgejo-runner:12.6.0
+          image: ghcr.io/pando85/forgejo-runner:12.6.0@sha256:8ac93a0c8314519fd846ae34d5752230d789020059068adfd64d16be135651f0
           command:
             - sh
             - -c
