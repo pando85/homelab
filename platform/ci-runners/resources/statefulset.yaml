@@ -61,7 +61,7 @@ spec:
             - name: docker-certs
               mountPath: /certs
             - name: runner-data
-              mountPath: /home/runner
+              mountPath: /workspace
             - name: runner-registration
               mountPath: /registration
               readOnly: false
@@ -108,7 +108,7 @@ spec:
             - name: ci-runner-docker
               mountPath: /docker
             - name: runner-data
-              mountPath: /home/runner
+              mountPath: /workspace
       volumes:
         - name: runner-data
           emptyDir: {}

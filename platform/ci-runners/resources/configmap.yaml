@@ -197,4 +197,4 @@ data:
     host:
       # The parent directory of a job's working directory.
       # If it's empty, $HOME/.cache/act/ will be used.
-      workdir_parent:
+      workdir_parent: /workspace
