@@ -16,7 +16,6 @@ spec:
         # source: https://docs.cilium.io/en/latest/network/kubernetes/kata/
         initContainers:
           - name: set-mtu
-            # renovate: datasource=docker
             image: busybox:1.37.0
             command:
               - sh
@@ -31,7 +30,6 @@ spec:
                   - NET_ADMIN
         containers:
           - name: runner
-            # renovate: datasource=docker
             image: ghcr.io/pando85/forgejo-runner:12.6.0
             command:
               - sh
@@ -66,7 +64,6 @@ spec:
                 mountPath: /config
                 readOnly: false
           - name: daemon
-            # renovate: datasource=docker
             image: docker:29.1.5
             # finish the docker daemon when the main container exits
             command:
