@@ -67,6 +67,7 @@ forgejo:
         LOG_SQL: false
       service:
         DISABLE_REGISTRATION: true
+        ENABLE_NOTIFY_MAIL: true
       session:
         PROVIDER: memory
       cache:
