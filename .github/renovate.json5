@@ -77,7 +77,6 @@
       ],
       versioning: 'loose',
       matchPackageNames: [
-        '/forgejo-runner/',
         '/lidarr/',
         '/prowlarr/',
         '/qbittorrent/',
