@@ -87,13 +87,15 @@
     },
     {
       matchDatasources: [
-        'docker'
+        'docker',
       ],
       matchPackageNames: [
         '/forgejo-runner/',
-        ],
+      ],
       pinDigests: true,
-      digest: true,
+      digest: {
+        enabled: true,
+      },
     },
     {
       matchDatasources: [
