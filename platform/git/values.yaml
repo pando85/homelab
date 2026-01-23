@@ -69,7 +69,7 @@ forgejo:
         DISABLE_REGISTRATION: true
         ENABLE_NOTIFY_MAIL: true
       session:
-        PROVIDER: memory
+        PROVIDER: db
       cache:
         ADAPTER: memory
       queue:
@@ -89,6 +89,8 @@ forgejo:
           secretName: gitea-app-ini-database
       - secret:
           secretName: gitea-mailer-config
+      - secret:
+          secretName: gitea-redis
 
     oauth:
       - name: kanidm
@@ -107,3 +109,57 @@ forgejo:
 
   valkey:
     enabled: false
+
+app-template:
+  global:
+    fullnameOverride: redis
+  controllers:
+    redis:
+      containers:
+        redis:
+          image:
+            repository: redis
+            tag: 8.4.0
+
+          command:
+            - sh
+          args:
+            - -c
+            - >-
+              redis-server --requirepass $REDIS_PASSWORD
+          resources:
+            requests:
+              cpu: 23m
+              memory: 64M
+            limits:
+              memory: 64M
+
+          env:
+            REDIS_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: redis
+                  key: password
+
+  defaultPodOptions:
+    nodeSelector:
+      kubernetes.io/hostname: prusik
+
+    affinity:
+      podAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - forgejo
+            topologyKey: kubernetes.io/hostname
+
+  service:
+    redis:
+      controller: redis
+      ports:
+        redis:
+          enabled: true
+          port: 6379

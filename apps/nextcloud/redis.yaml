@@ -19,7 +19,6 @@ controllers:
             cpu: 23m
             memory: 64M
           limits:
-            cpu: 500m
             memory: 64M
 
         env:
