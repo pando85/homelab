@@ -77,12 +77,23 @@
       ],
       versioning: 'loose',
       matchPackageNames: [
+        '/forgejo-runner/',
         '/lidarr/',
         '/prowlarr/',
         '/qbittorrent/',
         '/radarr/',
         '/sonarr/',
       ],
+    },
+    {
+      matchDatasources: [
+        'docker'
+      ],
+      matchPackageNames: [
+        '/forgejo-runner/',
+        ],
+      pinDigests: true,
+      digest: true,
     },
     {
       matchDatasources: [
