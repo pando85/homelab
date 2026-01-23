@@ -90,18 +90,6 @@
         'docker',
       ],
       matchPackageNames: [
-        '/forgejo-runner/',
-      ],
-      pinDigests: true,
-      digest: {
-        enabled: true,
-      },
-    },
-    {
-      matchDatasources: [
-        'docker',
-      ],
-      matchPackageNames: [
         'nextcloud',
         'redis',
       ],
