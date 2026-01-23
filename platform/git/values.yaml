@@ -71,7 +71,7 @@ forgejo:
       session:
         PROVIDER: db
       cache:
-        ADAPTER: memory
+        ADAPTER: redis
       queue:
         TYPE: level
       log:
