@@ -27,7 +27,7 @@
     'custom.regex',
   ],
   kubernetes: {
-    managerFilePatterns: ["/\\.yaml$/"]
+    managerFilePatterns: ["/ci-runners/resources/statefulset.yaml$/"]
   },
   'pre-commit': {
     enabled: true,
