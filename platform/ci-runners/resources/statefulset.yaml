@@ -34,7 +34,6 @@ spec:
                 - NET_ADMIN
       containers:
         - name: runner
-          # renovate: datasource=docker
           image: ghcr.io/pando85/forgejo-runner:12.6.0
           command:
             - sh

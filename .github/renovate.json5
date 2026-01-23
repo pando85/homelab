@@ -22,9 +22,13 @@
     'helm-values',
     'helmv3',
     'kustomize',
+    'kubernetes',
     'pre-commit',
     'custom.regex',
   ],
+  kubernetes: {
+    managerFilePatterns: ["/\\.yaml$/"]
+  },
   'pre-commit': {
     enabled: true,
     commitMessagePrefix: 'pre-commit: ',
@@ -123,6 +127,18 @@
       ignoreTests: true,
       automergeType: 'pr',
       platformAutomerge: true,
+    },
+    {
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        '/forgejo-runner/',
+      ],
+      pinDigests: true,
+      digest: {
+        enabled: true,
+      },
     },
     {
       matchPackageNames: [
