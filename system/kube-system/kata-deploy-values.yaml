@@ -4,7 +4,7 @@ nodeSelector:
   # grigri is not working with QMP loop error
   kubernetes.io/hostname: prusik
 
-debug: true
+debug: false
 
 shims:
   qemu:
