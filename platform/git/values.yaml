@@ -73,6 +73,7 @@ forgejo:
         ENABLE_NOTIFY_MAIL: true
       session:
         PROVIDER: db
+        PROVIDER_CONFIG: ""
       cache:
         ADAPTER: redis
       queue:
