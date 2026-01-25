@@ -33,13 +33,14 @@
         hass_sensor_battery_percent{
           entity="sensor.valetudo_detailedinternalrhinoceros_battery_level"
         }[1h]
-      )
-    ) < 0 and on (pod)
+      ) < 0
+    )
+    and on (pod)
     (
-      max by (entity, pod)(
+      min_over_time(
         hass_binary_sensor_state{
           entity="binary_sensor.valetudo_docked"
-        }
+        }[15m]
       ) == 1
     )
   annotations:
