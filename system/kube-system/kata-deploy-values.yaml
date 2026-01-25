@@ -16,7 +16,7 @@ shims:
   dragonball:
     enabled: false
   fc:
-    enabled: false
+    enabled: true
   qemu-runtime-rs:
     enabled: false
   qemu-nvidia-gpu:
