@@ -6,7 +6,7 @@ controllers:
       app:
         image:
           repository: ghcr.io/diygod/rsshub
-          tag: 026-01-24
+          tag: 2026-01-24
         env:
           NODE_ENV: production
           CACHE_TYPE: redis

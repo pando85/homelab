@@ -4,7 +4,7 @@ controllers:
     containers:
       app:
         image:
-          repository: docker pull ghcr.io/hyoban/puppeteer-real-browser-hono
+          repository: ghcr.io/hyoban/puppeteer-real-browser-hono
           tag: sha-6c6cbbc
           pullPolicy: IfNotPresent
         securityContext:
