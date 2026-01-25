@@ -1,0 +1,38 @@
+global:
+  fullnameOverride: redis
+controllers:
+  redis:
+    containers:
+      redis:
+        image:
+          repository: redis
+          tag: 8.4.0
+        resources:
+          requests:
+            cpu: 23m
+            memory: 64M
+          limits:
+            memory: 64M
+
+defaultPodOptions:
+  nodeSelector:
+    kubernetes.io/hostname: prusik
+
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - nextcloud
+          topologyKey: kubernetes.io/hostname
+
+service:
+  redis:
+    controller: redis
+    ports:
+      redis:
+        enabled: true
+        port: 6379

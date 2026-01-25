@@ -1,0 +1,35 @@
+controllers:
+  real-browser:
+    strategy: RollingUpdate
+    containers:
+      app:
+        image:
+          repository: docker pull ghcr.io/hyoban/puppeteer-real-browser-hono
+          tag: sha-6c6cbbc
+          pullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 999
+          runAsGroup: 999
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+        resources:
+          requests:
+            cpu: 23m
+            memory: 64M
+          limits:
+            memory: 2Gi
+    pod:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+
+service:
+  real-browser:
+    controller: real-browser
+    ports:
+      http:
+        port: 3000
+        targetPort: 3000
