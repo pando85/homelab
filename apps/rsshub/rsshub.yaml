@@ -54,6 +54,10 @@ defaultPodOptions:
     fsGroupChangePolicy: OnRootMismatch
     seccompProfile:
       type: RuntimeDefault
+
+  nodeSelector:
+    kubernetes.io/hostname: prusik
+
 service:
   app:
     controller: rsshub

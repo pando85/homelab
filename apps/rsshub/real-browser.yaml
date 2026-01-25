@@ -33,3 +33,18 @@ service:
       http:
         port: 3000
         targetPort: 3000
+
+defaultPodOptions:
+  nodeSelector:
+    kubernetes.io/hostname: prusik
+
+  affinity:
+    podAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - rsshub
+          topologyKey: kubernetes.io/hostname
