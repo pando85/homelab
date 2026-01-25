@@ -15,7 +15,7 @@ spec:
       labels:
         app.kubernetes.io/name: ci-runner
     spec:
-      runtimeClassName: kata
+      runtimeClassName: kata-fc
       # source: https://docs.cilium.io/en/latest/network/kubernetes/kata/
       initContainers:
         - name: set-mtu
