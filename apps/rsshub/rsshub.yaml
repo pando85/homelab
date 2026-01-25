@@ -16,6 +16,7 @@ controllers:
           LOG_LEVEL: warning
           NO_LOGFILES: true
           SENTRY: false
+          CACHE_EXPIRE: 28800  # 8 hours
         # envFrom:
         #   - secretRef:
         #       name: rsshub-secret
