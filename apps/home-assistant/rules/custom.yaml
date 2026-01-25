@@ -26,3 +26,26 @@
   for: 1d
   labels:
     severity: warning
+- alert: VacuumDischargingDocked
+  expr: |
+    min by (entity, pod)(
+      delta(
+        hass_sensor_battery_percent{
+          entity="sensor.valetudo_detailedinternalrhinoceros_battery_level"
+        }[1h]
+      )
+    ) < 0 and on (pod)
+    (
+      max by (entity, pod)(
+        hass_binary_sensor_state{
+          entity="binary_sensor.valetudo_docked"
+        }
+      ) == 1
+    )
+  annotations:
+    description: |
+      Vacuum robot is discharging while being docked.
+      Battery level changed by {{ $value }} % in the last hour while being docked.
+  for: 30m
+  labels:
+    severity: warning

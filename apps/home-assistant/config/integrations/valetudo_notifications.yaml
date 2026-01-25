@@ -54,3 +54,6 @@ template:
       - name: "Valetudo Cleaning"
         device_class: running
         state: "{{ states('vacuum.valetudo_detailedinternalrhinoceros') == 'cleaning' }}"
+      - name: "Valetudo Docked"
+        device_class: running
+        state: "{{ states('vacuum.valetudo_detailedinternalrhinoceros') == 'docked' }}"
