@@ -52,6 +52,9 @@
     ansible_user: "{{ prepare_username }}"
   reboot:
 
+- name: disable swap  # noqa: name[casing]
+  command: swapoff -a
+
 - name: restart apparmor  # noqa: name[casing]
   service:
     name: apparmor

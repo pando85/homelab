@@ -116,6 +116,20 @@
   tags:
     - disable-armbian-services
 
+- name: Disable swap in fstab
+  lineinfile:
+    path: /etc/fstab
+    regexp: '^.*swap.*$'
+    state: absent
+  notify: disable swap
+
+- meta: flush_handlers
+
+- name: Remove swap file
+  file:
+    path: /swap.img
+    state: absent
+
 - name: Move logs to RAM
   import_tasks: logs2ram.yml
   when:
