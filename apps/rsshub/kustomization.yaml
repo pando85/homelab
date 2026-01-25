@@ -18,9 +18,3 @@ helmCharts:
     repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: redis.yaml
     version: 4.6.2
-  - name: app-template
-    namespace: rsshub
-    releaseName: real-browser
-    repo: https://bjw-s-labs.github.io/helm-charts/
-    valuesFile: real-browser.yaml
-    version: 4.6.2

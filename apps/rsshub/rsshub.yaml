@@ -6,12 +6,11 @@ controllers:
       app:
         image:
           repository: ghcr.io/diygod/rsshub
-          tag: 2026-01-24
+          tag: chromium-bundled-2026-01-20
         env:
           NODE_ENV: production
           CACHE_TYPE: redis
           REDIS_URL: "redis://redis:6379/0"
-          PUPPETEER_REAL_BROWSER_SERVICE: "ws://real-browser:3000"
           PORT: &port 80
           LISTEN_INADDR_ANY: 1
           LOG_LEVEL: warning
