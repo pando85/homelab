@@ -74,6 +74,7 @@ forgejo:
       session:
         PROVIDER: db
         PROVIDER_CONFIG: ""
+        SESSION_LIFE_TIME: 2592000
       cache:
         ADAPTER: redis
       queue:
