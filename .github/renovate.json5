@@ -77,6 +77,20 @@
     },
     {
       matchDatasources: [
+        'docker'
+      ],
+      matchPackageNames: [
+        'nextcloud',
+        'redis'
+      ],
+      matchUpdateTypes: [
+        'minor',
+        'patch'
+      ],
+      minimumReleaseAge: '0 days',
+    },
+    {
+      matchDatasources: [
         'docker',
       ],
       matchPackageNames: [
