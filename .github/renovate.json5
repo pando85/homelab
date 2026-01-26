@@ -62,20 +62,6 @@
       ],
     },
     {
-      matchManagers: [
-        'github-actions',
-      ],
-      matchUpdateTypes: [
-        'minor',
-        'patch',
-      ],
-      matchCurrentVersion: '!/^0/',
-      automerge: true,
-      automergeType: 'pr',
-      ignoreTests: true,
-      platformAutomerge: true,
-    },
-    {
       matchDatasources: [
         'docker',
       ],
@@ -105,10 +91,25 @@
     {
       matchDatasources: [
         'docker',
+        'github-actions',
+        'helm',
+      ],
+      matchUpdateTypes: [
+        'patch',
+      ],
+      automerge: true,
+      ignoreTests: true,
+      automergeType: 'pr',
+      platformAutomerge: true,
+    },
+    {
+      matchDatasources: [
+        'docker',
+        'github-actions',
+        'helm',
       ],
       matchUpdateTypes: [
         'minor',
-        'patch',
       ],
       matchCurrentVersion: '!/^0/',
       automerge: true,
@@ -156,20 +157,6 @@
       minimumReleaseAge: '30 days',
     },
     {
-      matchDatasources: [
-        'helm',
-      ],
-      matchUpdateTypes: [
-        'minor',
-        'patch',
-      ],
-      matchCurrentVersion: '!/^0/',
-      automerge: true,
-      automergeType: 'pr',
-      ignoreTests: true,
-      platformAutomerge: true,
-    },
-    {
       matchPackageNames: [
         'k3s-io/k3s',
       ],
@@ -198,7 +185,6 @@
         '/kanidm/',
         '/appdaemon/',
       ],
-      matchCurrentVersion: '!/^0/',
       automerge: false,
       ignoreTests: false,
       platformAutomerge: false,
