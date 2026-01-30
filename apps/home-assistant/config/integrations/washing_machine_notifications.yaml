@@ -7,8 +7,8 @@ automation:
       entity_id: sensor.lavadora_current_status
       to: "end"
       id: finished
-    - platform: event
-      event_type: lavadora_error
+    - platform: state
+      entity_id: event.lavadora_error
       id: lavadora_error_event
 
   variables:
@@ -41,10 +41,7 @@ automation:
               id: lavadora_error_event
           sequence:
             - variables:
-                error_code: >
-                  {{ trigger.event.data.event_type
-                     if trigger.event and trigger.event.data.event_type is defined
-                     else state_attr('event.lavadora_error', 'event_type') | default('unknown') }}
+                error_code: "{{ state_attr('event.lavadora_error', 'event_type') | default('unknown') }}"
                 error_message: >
                   {{ error_messages.get(error_code, 'Unknown error (' ~ error_code ~ ') occurred.') }}
             - service: notify.all
