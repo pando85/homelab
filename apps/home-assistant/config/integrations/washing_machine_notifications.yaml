@@ -44,6 +44,8 @@ automation:
                 error_code: "{{ state_attr('event.lavadora_error', 'event_type') | default('unknown') }}"
                 error_message: >
                   {{ error_messages.get(error_code, 'Unknown error (' ~ error_code ~ ') occurred.') }}
+            - condition: template
+              value_template: "{{ error_code is not none }}"
             - service: notify.all
               data:
                 title: "Washing machine — Error"
