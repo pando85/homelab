@@ -47,7 +47,7 @@ app-template:
       className: nginx-external
       annotations:
         external-dns.alpha.kubernetes.io/enabled: "true"
-        external-dns.alpha.kubernetes.io/target: forkline.dev
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       hosts:
         - host: &host forkline.dev
