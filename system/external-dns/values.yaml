@@ -19,6 +19,7 @@ external-dns:
     - ingress
   domainFilters:
     - grigri.cloud
+    - forkline.dev
   serviceMonitor:
     enabled: true
     additionalLabels:
