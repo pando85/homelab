@@ -65,10 +65,10 @@ app-template:
   persistence:
     data:
       enabled: true
+      type: configMap
+      name: forkline-web-config
       globalMounts:
         - path: /usr/share/nginx/html
-      existingClaim: forkline-web-data
-
     config:
       enabled: true
       type: configMap
