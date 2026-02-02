@@ -1,43 +1,39 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Basic -->
+  <!-- Core -->
   <meta charset="utf-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Primary SEO -->
-  <title>Forkline — Cloud Coding Agents for the Next Era of Software</title>
-  <meta name="description" content="Forkline is building the next generation of cloud coding agents. Autonomous, scalable, and production-grade AI for software development." />
-  <meta name="keywords" content="coding agents, AI coding, cloud development, autonomous agents, developer tools, SaaS, software engineering AI" />
+  <!-- SEO -->
+  <title>Forkline — Cloud Coding Agents</title>
+  <meta name="description" content="Forkline is building cloud-native coding agents. Autonomous software development for the next generation of engineering teams." />
+  <meta name="keywords" content="cloud coding agents, AI coding, autonomous agents, developer tools, SaaS, software engineering AI" />
   <meta name="author" content="Forkline" />
   <meta name="robots" content="index, follow" />
 
   <!-- Canonical -->
   <link rel="canonical" href="https://forkline.ai/" />
 
-  <!-- Open Graph (LinkedIn, Slack, etc.) -->
+  <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Forkline — The Coding Agent Revolution" />
-  <meta property="og:description" content="The breakpoint is here. Forkline is building cloud-native coding agents for serious software teams." />
+  <meta property="og:description" content="The breakpoint is here. Cloud-native coding agents are coming." />
   <meta property="og:url" content="https://forkline.ai/" />
   <meta property="og:site_name" content="Forkline" />
-  <!-- Optional later -->
-  <!-- <meta property="og:image" content="https://forkline.ai/og-image.png" /> -->
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Forkline — The Coding Agent Revolution" />
-  <meta name="twitter:description" content="Cloud coding agents. Autonomous software engineering at scale." />
-  <!-- <meta name="twitter:image" content="https://forkline.ai/og-image.png" /> -->
+  <meta name="twitter:title" content="Forkline — Cloud Coding Agents" />
+  <meta name="twitter:description" content="Autonomous coding agents. Built for real software systems." />
 
-  <!-- Performance -->
+  <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet" />
 
-  <!-- Minimal modern font -->
-  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@200;300;400;500&display=swap" rel="stylesheet">
-  <!-- Structured Data (JSON-LD) -->
+  <!-- Structured Data -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -45,7 +41,7 @@
     "name": "Forkline",
     "applicationCategory": "DeveloperTool",
     "operatingSystem": "Cloud",
-    "description": "Forkline builds cloud-native coding agents for autonomous software development.",
+    "description": "Cloud-native coding agents for autonomous software development.",
     "url": "https://forkline.ai",
     "publisher": {
       "@type": "Organization",
@@ -56,15 +52,15 @@
 
   <style>
     :root {
-      --bg-dark: #050b1a;
+      --bg-main: #040914;
       --bg-gradient: radial-gradient(
-        circle at top,
-        #0b1a3a 0%,
-        #050b1a 60%
+        80% 80% at 50% 0%,
+        #0b1a38 0%,
+        #040914 65%
       );
-      --text-primary: #eaf0ff;
-      --text-secondary: #9fb2e8;
-      --accent: #4f7cff;
+      --text-main: #e6ebff;
+      --text-muted: #9aa7d1;
+      --accent: #5b7cff;
     }
 
     * {
@@ -75,9 +71,9 @@
       margin: 0;
       padding: 0;
       height: 100%;
-      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-      background: var(--bg-dark);
-      color: var(--text-primary);
+      font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+      background: var(--bg-main);
+      color: var(--text-main);
     }
 
     body {
@@ -90,53 +86,58 @@
     main {
       text-align: center;
       padding: 2rem;
-      max-width: 960px;
+      max-width: 1000px;
+    }
+
+    .tag {
+      display: inline-block;
+      margin-bottom: 1.75rem;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.85rem;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      color: var(--accent);
+      border: 1px solid rgba(91, 124, 255, 0.35);
+      border-radius: 999px;
+      background: rgba(91, 124, 255, 0.08);
     }
 
     h1 {
-      font-size: clamp(2.5rem, 5vw, 4rem);
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      margin-bottom: 1rem;
+      font-size: clamp(2.6rem, 5vw, 4.2rem);
+      font-weight: 400;
+      letter-spacing: -0.015em;
+      line-height: 1.05;
+      margin: 0 0 1.2rem;
     }
 
     h2 {
-      font-size: clamp(1.2rem, 2.5vw, 1.6rem);
-      font-weight: 400;
-      color: var(--text-secondary);
-      margin-bottom: 2.5rem;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 0.4rem 0.8rem;
-      border-radius: 999px;
-      background: rgba(79, 124, 255, 0.15);
-      color: var(--accent);
-      font-weight: 600;
-      font-size: 0.85rem;
-      margin-bottom: 1.5rem;
+      font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+      font-weight: 300;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+      margin: 0;
     }
 
     footer {
       position: absolute;
       bottom: 1.5rem;
-      font-size: 0.85rem;
-      color: #6f83b8;
+      font-size: 0.8rem;
+      font-weight: 300;
+      color: #6e7fb4;
     }
   </style>
 </head>
 
 <body>
   <main>
-    <div class="badge">Cloud Coding Agents</div>
+    <div class="tag">Cloud Coding Agents</div>
 
     <h1>Coding agent revolution is coming</h1>
     <h2>The breakpoint is here</h2>
   </main>
 
   <footer>
-    © 2026 Forkline. All rights reserved.
+    © 2026 Forkline
   </footer>
 </body>
 </html>
