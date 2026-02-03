@@ -10,7 +10,7 @@ argo-cd:
             values:
               - amd64
     logging:
-      level: warn
+      level: debug
   configs:
     cm:
       create: true
