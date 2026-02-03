@@ -1,0 +1,5 @@
+configs:
+  "git.grigri.cloud":
+    auth:
+      username: "{{ lookup('passwordstore', 'k8s.grigri/forgejo/PAT_packages_read', subkey='login') }}"
+      password: "{{ lookup('passwordstore', 'k8s.grigri/forgejo/PAT_packages_read') }}"
