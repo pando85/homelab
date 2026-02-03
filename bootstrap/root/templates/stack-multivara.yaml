@@ -3,7 +3,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: {{ $stack.name }}
+  name: multivara-{{ $stack.name }}
   namespace: {{ $.Release.Namespace }}
 spec:
   generators:
