@@ -1,0 +1,44 @@
+{{- range $index, $stack := .Values.multivara.stacks }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ $stack.name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  generators:
+    - git:
+        repoURL: {{ $.Values.multivara.gitops.repo }}
+        revision: {{ $.Values.multivara.gitops.revision }}
+        directories:
+          - path: grigri.cloud/{{ $stack.name }}/*
+  template:
+    metadata:
+      name: '{{ `{{path.basename}}` }}'
+    spec:
+      destination:
+        name: in-cluster
+        namespace: '{{ default `{{path.basename}}` $stack.namespace }}'
+      project: default
+      {{- if $stack.ignoreDifferences }}
+      ignoreDifferences:
+        {{- toYaml $stack.ignoreDifferences | nindent 8 }}
+      {{- end }}
+      source:
+        repoURL: {{ $.Values.multivara.gitops.repo }}
+        path: '{{ `{{path}}` }}'
+        targetRevision: {{ $.Values.multivara.gitops.revision }}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        retry:
+          limit: 10
+          backoff:
+            duration: 1m
+            factor: 2
+            maxDuration: 16m
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+{{- end }}
