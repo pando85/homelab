@@ -78,6 +78,8 @@ forgejo:
       service:
         DISABLE_REGISTRATION: true
         ENABLE_NOTIFY_MAIL: true
+      webhook:
+        ALLOWED_HOST_LIST: '*'
       session:
         PROVIDER: db
         PROVIDER_CONFIG: ""
