@@ -81,8 +81,20 @@
       dest: "{{ k3s_config_file }}"
     - src: k3s.service.j2
       dest: "{{ k3s_service_file }}"
-    - src: registries.yaml.j2
-      dest: "/etc/rancher/k3s/registries.yaml"
+  notify: Restart k3s
+
+- name: Ensure containerd certs directory exists
+  file:
+    path: /var/lib/rancher/k3s/agent/etc/containerd/certs.d/git.grigri.cloud
+    state: directory
+    mode: "0755"
+  notify: Restart k3s
+
+- name: Copy containerd hosts.toml
+  template:
+    src: host.toml.j2
+    dest: /var/lib/rancher/k3s/agent/etc/containerd/certs.d/git.grigri.cloud/hosts.toml
+    mode: "0644"
   notify: Restart k3s
 
 - name: Enable k3s service

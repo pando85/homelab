@@ -1,0 +1,6 @@
+server = "https://git.grigri.cloud"
+
+[host."https://git.grigri.cloud"]
+  capabilities = ["pull", "resolve", "push"]
+  [host."https://git.grigri.cloud".header]
+    authorization = "Basic {{ (lookup('passwordstore', 'k8s.grigri/forgejo/PAT_packages_read', subkey='login') + ':' + lookup('passwordstore', 'k8s.grigri/forgejo/PAT_packages_read')) | b64encode }}"
