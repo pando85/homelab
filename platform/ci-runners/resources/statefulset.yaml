@@ -110,6 +110,8 @@ spec:
               mountPath: /docker
             - name: runner-data
               mountPath: /workspace
+            - name: ci-runner-cache
+              mountPath: /cache
       securityContext:
         privileged: true
         fsGroup: 1001
