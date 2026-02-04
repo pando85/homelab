@@ -108,6 +108,9 @@ spec:
               mountPath: /docker
             - name: runner-data
               mountPath: /workspace
+      securityContext:
+        fsGroup: 1001
+        runAsGroup: 1001
       volumes:
         - name: runner-data
           emptyDir: {}
