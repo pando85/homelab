@@ -30,7 +30,7 @@ spec:
               ip route replace default via "$GW" dev "$DEV" mtu 1450
           securityContext:
             privileged: true
-            runAsUser: 1001
+            runAsUser: 0
             capabilities:
               add:
                 - NET_ADMIN
