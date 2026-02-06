@@ -144,8 +144,9 @@ grafana:
   serviceMonitor:
     enabled: true
     path: /metrics
-    labels:
-      release: monitoring
+    # Already included in Grafana service monitor, this duplicate breaks kustomize
+    #labels:
+    #  release: monitoring
 
 coreDns:
   enabled: true
