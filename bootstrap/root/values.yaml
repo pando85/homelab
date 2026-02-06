@@ -32,3 +32,4 @@ multivara:
     revision: main
   stacks:
     - name: apps
+    - name: platform
