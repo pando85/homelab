@@ -1,0 +1,110 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: postgresql-alerts
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: postgresql.volume.alerts
+      rules:
+        - alert: PostgresPersistentVolumeFillingUp
+          annotations:
+            description:
+              The PersistentVolume claimed by {{ $labels.persistentvolumeclaim
+              }} in Namespace {{ $labels.namespace }} {{ with $labels.cluster -}} on Cluster
+              {{ . }} {{- end }} is only {{ $value | humanizePercentage }} free.
+            runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumefillingup
+            summary: PersistentVolume is filling up.
+          expr: |-
+            (
+              kubelet_volume_stats_available_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics", persistentvolumeclaim=~".*-postgres.*"}
+              /
+              kubelet_volume_stats_capacity_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics", persistentvolumeclaim=~".*-postgres.*"}
+            ) < 0.1
+            and
+            kubelet_volume_stats_used_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics", persistentvolumeclaim=~".*-postgres.*"} < 0
+            unless on (cluster, namespace, persistentvolumeclaim)
+            kube_persistentvolumeclaim_access_mode{ access_mode="ReadOnlyMany"} == 1
+            unless on (cluster, namespace, persistentvolumeclaim)
+            kube_persistentvolumeclaim_labels{label_excluded_from_alerts="true"} == 1
+          for: 1m
+          labels:
+            team: infra
+            severity: critical
+
+        - alert: PostgresPersistentVolumeFillingUp
+          annotations:
+            description:
+              The PersistentVolume claimed by {{ $labels.persistentvolumeclaim
+              }} in Namespace {{ $labels.namespace }} {{ with $labels.cluster -}} on Cluster
+              {{ . }} {{- end }} is only {{ $value | humanizePercentage }} free and will fill up in less than 4 days.
+            runbook_url: https://runbooks.prometheus-operator.dev/runbooks/kubernetes/kubepersistentvolumefillingup
+            summary: PersistentVolume is filling up.
+          expr: |-
+            (
+              kubelet_volume_stats_available_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics", persistentvolumeclaim=~".*-postgres.*"}
+              /
+              kubelet_volume_stats_capacity_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics", persistentvolumeclaim=~".*-postgres.*"}
+            ) < 0.75
+            and
+            kubelet_volume_stats_used_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics", persistentvolumeclaim=~".*-postgres.*"} < 0
+            and
+            predict_linear(kubelet_volume_stats_available_bytes{job="kubelet", namespace=~".*", metrics_path="/metrics", persistentvolumeclaim=~".*-postgres.*"}[6h], 4 * 24 * 3600) > 0
+            unless on (cluster, namespace, persistentvolumeclaim)
+            kube_persistentvolumeclaim_access_mode{ access_mode="ReadOnlyMany"} == 1
+            unless on (cluster, namespace, persistentvolumeclaim)
+            kube_persistentvolumeclaim_labels{label_excluded_from_alerts="true"} == 1
+          for: 1m
+          labels:
+            team: infra
+            severity: warning
+
+        - alert: LogicalBackupIsTakingTooLongToBeScheduled
+          expr: |-
+            max_over_time(kube_job_spec_completions{job_name=~"logical-backup-.*"}[15m]) - max_over_time(kube_job_status_succeeded{job_name=~"logical-backup-.*"}[15m]) > 0 and
+            max_over_time(kube_job_status_active{job_name=~"logical-backup-.*"}[15m]) == 0 and max_over_time(kube_job_status_active{job_name=~"logical-backup-.*"}[2m]) == 0 and
+            time() - kube_job_created > 3600 and
+            time() - kube_job_created < 4000
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            description: "Logical backup is taking more than 1h to schedule job {{ $labels.namespace }} / {{ $labels.job_name }}"
+            summary: Logical backup is taking too long to schedule.
+
+        - alert: LogicalBackupIsTakingTooLongToRun
+          expr: max_over_time(kube_job_spec_completions{job_name=~"logical-backup-.*"}[15m]) - max_over_time(kube_job_status_succeeded{job_name=~"logical-backup-.*"}[15m]) > 0 and min_over_time(kube_job_status_active{job_name=~"logical-backup-.*"}[1d]) == 1
+          for: 1d
+          labels:
+            severity: warning
+          annotations:
+            description: "Logical backup is taking more than 1d to finish job {{ $labels.namespace }} / {{ $labels.job_name }}"
+            summary: Logical backup is taking too long to finish.
+
+        - alert: PostgresqlDown
+          expr: pg_up == 0
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: Postgresql down (instance {{ $labels.instance }})
+            description: "Postgresql instance is down\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: PostgresqlReplicationLag
+          expr: pg_replication_lag_seconds > 5
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: Postgresql replication lag (instance {{ $labels.instance }})
+            description: "The PostgreSQL replication lag is high (> 5s)\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+
+        - alert: PostgresqlTooManyConnections
+          expr: sum by (instance, job, server) (pg_stat_activity_count) > min by (instance, job, server) (pg_settings_max_connections * 0.8)
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: Postgresql too many connections (instance {{ $labels.instance }})
+            description: "PostgreSQL instance has too many connections (> 80%).\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
