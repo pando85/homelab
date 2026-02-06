@@ -147,6 +147,15 @@ argo-cd:
         value: "300s"
 
     metrics: *metrics
+    volumeMounts:
+      - name: helm-auth
+        mountPath: /helm-working-dir/registry/
+        readOnly: true
+
+    volumes:
+      - name: helm-auth
+        secret:
+          secretName: argocd-repo-creds-helm-git-grigri-cloud-workaround
 
   redis:
     resources:
