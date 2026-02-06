@@ -4,6 +4,9 @@ metadata:
   name: ci-runner-cache-cleanup
 spec:
   schedule: "0 0 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
   jobTemplate:
     spec:
       template:
@@ -12,7 +15,7 @@ spec:
             - name: cleanup
               # renovate: datasource=docker
               image: busybox:1.37.0
-              command: ["sh", "-c", "find /cache -type f -mtime +7 -delete"]
+              command: ["sh", "-c", "find /cache -type f -mtime +7 -print -delete"]
               volumeMounts:
                 - name: ci-runner-cache
                   mountPath: /cache
