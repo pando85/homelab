@@ -48,6 +48,13 @@ spec:
 
               cp /config/.runner .
               exec forgejo-runner -c /registration/registration.yaml daemon
+          resources:
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+            limits:
+              memory: "5Gi"
+              cpu: "4"
           securityContext:
             privileged: true
             runAsUser: 1001
@@ -112,6 +119,13 @@ spec:
               mountPath: /workspace
             - name: ci-runner-cache
               mountPath: /cache
+          resources:
+            requests:
+              memory: "100Mi"
+              cpu: "100m"
+            limits:
+              memory: "4Gi"
+              cpu: "2"
       securityContext:
         privileged: true
         fsGroup: 1001
@@ -134,12 +148,13 @@ spec:
         - name: ci-runner-docker
           persistentVolumeClaim:
             claimName: ci-runner-docker
-      resources:
-        requests:
-          memory: "100Mi"
-          cpu: "100m"
-        limits:
-          memory: "15Gi"
-          cpu: "8"
+      # not working with kata runtime
+      #resources:
+      #  requests:
+      #    memory: "100Mi"
+      #    cpu: "100m"
+      #  limits:
+      #    memory: "15Gi"
+      #    cpu: "8"
       restartPolicy: Always
       shareProcessNamespace: true
