@@ -53,7 +53,7 @@ spec:
               memory: "100Mi"
               cpu: "100m"
             limits:
-              memory: "14Gi"
+              memory: "10Gi"
               cpu: "12"
           securityContext:
             privileged: true
@@ -124,7 +124,7 @@ spec:
               memory: "100Mi"
               cpu: "100m"
             limits:
-              memory: "2Gi"
+              memory: "1Gi"
               cpu: "2"
       securityContext:
         privileged: true
@@ -135,7 +135,7 @@ spec:
         - name: runner-data
           emptyDir:
             medium: Memory
-            sizeLimit: 5Gi
+            sizeLimit: 3Gi
         - name: runner-config
           secret:
             secretName: runner-config
