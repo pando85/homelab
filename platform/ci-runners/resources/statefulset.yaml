@@ -133,7 +133,9 @@ spec:
         runAsUser: 1001
       volumes:
         - name: runner-data
-          emptyDir: {}
+          emptyDir:
+            medium: Memory
+            sizeLimit: 5Gi
         - name: runner-config
           secret:
             secretName: runner-config
