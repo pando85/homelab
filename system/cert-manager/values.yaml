@@ -12,7 +12,8 @@ cert-manager:
   extraArgs:
     # When this flag is enabled, secrets will be automatically removed when the certificate resource is deleted
     - --enable-certificate-owner-ref=true
-
+    - --dns01-recursive-nameservers-only
+    - --dns01-recursive-nameservers=8.8.8.8:53,1.1.1.1:53
   global:
     leaderElection:
       namespace: cert-manager
