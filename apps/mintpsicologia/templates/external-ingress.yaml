@@ -51,4 +51,4 @@ spec:
   tls:
     - hosts:
         - www.mintpsicologia.es
-      secretName: mintpsicologia-external-tls
+      secretName: mintpsicologia-www-external-tls
