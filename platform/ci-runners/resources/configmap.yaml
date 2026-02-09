@@ -20,7 +20,7 @@ data:
       # Where to store the registration result.
       file: .runner
       # Execute how many tasks concurrently at the same time.
-      capacity: 2
+      capacity: 3
       # Extra environment variables to run jobs.
       envs: {}
         # A_TEST_ENV_NAME_1: a_test_env_value_1
