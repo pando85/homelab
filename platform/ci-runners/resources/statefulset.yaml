@@ -80,7 +80,7 @@ spec:
               mountPath: /cache
         - name: daemon
           # renovate: datasource=docker
-          image: docker:29.2.0
+          image: docker:29.2.1
           # finish the docker daemon when the main container exits
           command:
             - sh
