@@ -76,18 +76,15 @@ bandwidthManager:
   # -- Activate BBR TCP congestion control for Pods
   bbr: true
 
-bgp:
-  enabled: false
-
-bpf:
-  masquerade: true
-
 # -- This feature set enables virtual BGP routers to be created via
 # CiliumBGPPeeringPolicy CRDs.
 bgpControlPlane:
   enabled: true
   secretsNamespace:
     name: kube-system
+
+bpf:
+  masquerade: true
 
 socketLB:
   # Disable for Kata containers compatibility:
