@@ -95,17 +95,30 @@ app-template:
           if ( $request_uri ~ "^/(rest|share)" ) {
               return 200;
           }
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          if ($request_uri ~ "^/api/") {
-            auth_request_set $auth_status $upstream_status;
-            if ($auth_status = 401) {
-              return 401;
-            }
-          }
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
             - path: /
+              pathType: Prefix
+              service:
+                identifier: navidrome
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: navidrome-external-tls-certificate
+
+    api:
+      enabled: true
+      className: nginx-external
+      annotations:
+        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth?allowed_groups=navidrome-users@idm.grigri.cloud
+        nginx.ingress.kubernetes.io/auth-response-headers: "X-Auth-Request-Preferred-Username"
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+      hosts:
+        - host: &host navidrome.grigri.cloud
+          paths:
+            - path: /api
               pathType: Prefix
               service:
                 identifier: navidrome
