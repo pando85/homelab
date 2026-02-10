@@ -1,308 +1,307 @@
-argo-cd:
-  global:
-    affinity:
-      podAntiAffinity: soft
-      nodeAffinity:
-        type: hard
-        matchExpressions:
-          - key: beta.kubernetes.io/arch
-            operator: In
-            values:
-              - amd64
-    logging:
-      level: warn
-  configs:
-    cm:
-      create: true
+global:
+  affinity:
+    podAntiAffinity: soft
+    nodeAffinity:
+      type: hard
+      matchExpressions:
+        - key: kubernetes.io/arch
+          operator: In
+          values:
+            - amd64
+  logging:
+    level: warn
+configs:
+  cm:
+    create: true
 
-      url: https://argocd.internal.grigri.cloud
+    url: https://argocd.internal.grigri.cloud
 
-      exec.enabled: "true"
+    exec.enabled: "true"
 
-      oidc.config: |
-        name: idm.grigri.cloud
-        issuer: https://idm.grigri.cloud/oauth2/openid/argocd
-        clientID: $oidc.kanidm.clientID
-        clientSecret: $oidc.kanidm.clientSecret
+    oidc.config: |
+      name: idm.grigri.cloud
+      issuer: https://idm.grigri.cloud/oauth2/openid/argocd
+      clientID: $oidc.kanidm.clientID
+      clientSecret: $oidc.kanidm.clientSecret
 
-        # Optional list of allowed aud claims. If omitted or empty, defaults to the clientID value above (and the
-        # cliClientID, if that is also specified). If you specify a list and want the clientID to be allowed, you must
-        # explicitly include it in the list.
-        # Token verification will pass if any of the token's audiences matches any of the audiences in this list.
-        allowedAudiences:
-        - argocd
+      # Optional list of allowed aud claims. If omitted or empty, defaults to the clientID value above (and the
+      # cliClientID, if that is also specified). If you specify a list and want the clientID to be allowed, you must
+      # explicitly include it in the list.
+      # Token verification will pass if any of the token's audiences matches any of the audiences in this list.
+      allowedAudiences:
+      - argocd
 
-        # Optional. If false, tokens without an audience will always fail validation. If true, tokens without an audience
-        # will always pass validation.
-        # Defaults to true for Argo CD < 2.6.0. Defaults to false for Argo CD >= 2.6.0.
-        skipAudienceCheckWhenTokenHasNoAudience: false
+      # Optional. If false, tokens without an audience will always fail validation. If true, tokens without an audience
+      # will always pass validation.
+      # Defaults to true for Argo CD < 2.6.0. Defaults to false for Argo CD >= 2.6.0.
+      skipAudienceCheckWhenTokenHasNoAudience: false
 
-        # Optional set of OIDC scopes to request. If omitted, defaults to: ["openid", "profile", "email", "groups"]
-        requestedScopes: ["openid", "profile", "email"]
-        # PKCE not working, it is not sending the code_challenge
-        enablePKCEAuthentication: true
-      # Disable git polling
-      timeout.reconciliation: "0"
+      # Optional set of OIDC scopes to request. If omitted, defaults to: ["openid", "profile", "email", "groups"]
+      requestedScopes: ["openid", "profile", "email"]
+      # PKCE not working, it is not sending the code_challenge
+      enablePKCEAuthentication: true
+    # Disable git polling
+    timeout.reconciliation: "0"
 
-      statusbadge.enabled: true
-      # The health assessement of argoproj.io/Application CRD has been removed in argocd 1.8
-      # (see https://github.com/argoproj/argo-cd/issues/3781 for more information)
-      # You might need to restore it if you are using app-of-apps pattern and orchestrating
-      # syncronization using sync waves. Add the following resource customization in argocd-cm:
-      resource.customizations.health.argoproj.io_Application: |
-        hs = {}
-        hs.status = "Progressing"
-        hs.message = ""
-        if obj.status ~= nil then
-          if obj.status.health ~= nil then
-            hs.status = obj.status.health.status
-            if obj.status.health.message ~= nil then
-              hs.message = obj.status.health.message
-            end
+    statusbadge.enabled: true
+    # The health assessement of argoproj.io/Application CRD has been removed in argocd 1.8
+    # (see https://github.com/argoproj/argo-cd/issues/3781 for more information)
+    # You might need to restore it if you are using app-of-apps pattern and orchestrating
+    # syncronization using sync waves. Add the following resource customization in argocd-cm:
+    resource.customizations.health.argoproj.io_Application: |
+      hs = {}
+      hs.status = "Progressing"
+      hs.message = ""
+      if obj.status ~= nil then
+        if obj.status.health ~= nil then
+          hs.status = obj.status.health.status
+          if obj.status.health.message ~= nil then
+            hs.message = obj.status.health.message
           end
         end
-        return hs
+      end
+      return hs
 
-      kustomize.buildOptions: --enable-helm
+    kustomize.buildOptions: --enable-helm
 
-    params:
-      controller.status.processors: 5
-      controller.operation.processors: 5
-      controller.repo.server.timeout.seconds: 300
-      controller.sync.timeout.seconds: 600
-      controller.diff.server.side: "false"
+  params:
+    controller.status.processors: 5
+    controller.operation.processors: 5
+    controller.repo.server.timeout.seconds: 300
+    controller.sync.timeout.seconds: 600
+    controller.diff.server.side: "false"
 
-      server.insecure: true
+    server.insecure: true
 
-    rbac:
-      create: true
+  rbac:
+    create: true
 
-      # policy.csv is an file containing user-defined RBAC policies and role definitions (optional).
-      # Policy rules are in the form:
-      #   p, subject, resource, action, object, effect
-      # Role definitions and bindings are in the form:
-      #   g, subject, inherited-subject
-      # See https://github.com/argoproj/argo-cd/blob/master/docs/operator-manual/rbac.md for additional information.
-      policy.csv: |
-        # Grant all members of each LDAP group
-        p, role:none, *, *, */*, deny
-        #g, wheel, role:admin
-        # workaround until fix DN in dex (see LDAP config part)
-        g, pando855@gmail.com, role:admin
+    # policy.csv is an file containing user-defined RBAC policies and role definitions (optional).
+    # Policy rules are in the form:
+    #   p, subject, resource, action, object, effect
+    # Role definitions and bindings are in the form:
+    #   g, subject, inherited-subject
+    # See https://github.com/argoproj/argo-cd/blob/master/docs/operator-manual/rbac.md for additional information.
+    policy.csv: |
+      # Grant all members of each LDAP group
+      p, role:none, *, *, */*, deny
+      #g, wheel, role:admin
+      # workaround until fix DN in dex (see LDAP config part)
+      g, pando855@gmail.com, role:admin
 
-      scopes: "[groups, email]"
+    scopes: "[groups, email]"
 
-    secret:
-      createSecret: false
+  secret:
+    createSecret: false
 
-  server:
-    resources:
-      limits:
-        cpu: 200m
-        memory: 512Mi
-      requests:
-        cpu: 10m
-        memory: 64Mi
+server:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 512Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
 
-    ingress:
+  ingress:
+    enabled: true
+    ingressClassName: nginx-internal
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      external-dns.alpha.kubernetes.io/enabled: "true"
+    hostname: argocd.internal.grigri.cloud
+    tls: true
+  metrics: &metrics
+    enabled: true
+    serviceMonitor:
       enabled: true
-      ingressClassName: nginx-internal
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        external-dns.alpha.kubernetes.io/enabled: "true"
-      hostname: argocd.internal.grigri.cloud
-      tls: true
-    metrics: &metrics
-      enabled: true
-      serviceMonitor:
-        enabled: true
-        additionalLabels:
-          release: monitoring
-  dex:
+      additionalLabels:
+        release: monitoring
+dex:
+  enabled: false
+
+controller:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 3
+      memory: 3Gi
+
+  metrics: *metrics
+
+repoServer:
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 2.5
+      memory: 2Gi
+  env:
+    - name: ARGOCD_EXEC_TIMEOUT
+      value: "300s"
+
+  metrics: *metrics
+  volumeMounts:
+    - name: helm-auth
+      mountPath: /helm-working-dir/registry/
+      readOnly: true
+
+  volumes:
+    - name: helm-auth
+      secret:
+        secretName: argocd-repo-creds-helm-git-grigri-cloud-workaround
+
+redis:
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+
+  metrics:
     enabled: false
 
-  controller:
-    resources:
-      requests:
-        cpu: 200m
-        memory: 512Mi
-      limits:
-        cpu: 3
-        memory: 3Gi
+  exporter:
+    enabled: false
 
-    metrics: *metrics
+applicationSet:
+  enabled: true
+  resources:
+    limits:
+      cpu: 400m
+      memory: 256Mi
+    requests:
+      cpu: 10m
+      memory: 78Mi
 
-  repoServer:
-    autoscaling:
-      enabled: false
-    resources:
-      requests:
-        cpu: 100m
-        memory: 512Mi
-      limits:
-        cpu: 2.5
-        memory: 2Gi
-    env:
-      - name: ARGOCD_EXEC_TIMEOUT
-        value: "300s"
+notifications:
+  enabled: true
 
-    metrics: *metrics
-    volumeMounts:
-      - name: helm-auth
-        mountPath: /helm-working-dir/registry/
-        readOnly: true
+  # -- Argo CD dashboard url; used in place of {{.context.argocdUrl}} in templates
+  argocdUrl: https://argocd.internal.grigri.cloud
+  updateStrategy:
+    type: Recreate
 
-    volumes:
-      - name: helm-auth
-        secret:
-          secretName: argocd-repo-creds-helm-git-grigri-cloud-workaround
+  secret:
+    create: false
 
-  redis:
-    resources:
-      limits:
-        cpu: 200m
-        memory: 128Mi
-      requests:
-        cpu: 10m
-        memory: 64Mi
+  metrics:
+    enabled: false
 
-    metrics:
-      enabled: false
+  notifiers:
+    service.alertmanager: |
+      targets:
+      - alertmanager-operated.monitoring.svc:9093
 
-    exporter:
-      enabled: false
+  resources:
+    requests:
+      cpu: 10m
+      memory: 24Mi
+    limits:
+      memory: 128Mi
 
-  applicationSet:
-    enabled: true
-    resources:
-      limits:
-        cpu: 400m
-        memory: 256Mi
-      requests:
-        cpu: 10m
-        memory: 78Mi
+  subscriptions:
+    - recipients:
+        - alertmanager
+      triggers:
+        - on-health-degraded
+        - on-sync-failed
 
-  notifications:
-    enabled: true
+  templates:
+    template.app-deployed: |
+      message: |
+        *🚀{{.app.metadata.name}}*
+        _Application {{.app.metadata.name}} is now running new version of deployments manifests_
+      alertmanager:
+        labels:
+          severity: warning
+          service: argocd
+        annotations:
+          message: |
+            Application {{.app.metadata.name}} is now running new version of deployments manifests
+    template.app-health-degraded: |
+      message: |
+        *💔{{.app.metadata.name}}*
+        _Application {{.app.metadata.name}} has degraded._
+        [Application details]({{.context.argocdUrl}}/applications/{{.app.metadata.name}})
+      alertmanager:
+        labels:
+          severity: warning
+          service: argocd
+        annotations:
+          message: |
+            Application {{.app.metadata.name}} has degraded
+    template.app-sync-failed: |
+      message: |
+        *❌{{.app.metadata.name}}*
+        _The sync operation of application {{.app.metadata.name}} has failed at {{.app.status.operationState.finishedAt}} with the following error: {{.app.status.operationState.message}}_
+        [Sync operation details]({{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true)
+      alertmanager:
+        labels:
+          severity: warning
+          service: argocd
+        annotations:
+          message: |
+            The sync operation of application {{.app.metadata.name}} has failed at {{.app.status.operationState.finishedAt}} with the following error: {{.app.status.operationState.message}}
 
-    # -- Argo CD dashboard url; used in place of {{.context.argocdUrl}} in templates
-    argocdUrl: https://argocd.internal.grigri.cloud
-    updateStrategy:
-      type: Recreate
+    # template.app-sync-running: |
+    #   message: |
+    #     The sync operation of application {{.app.metadata.name}} has started at {{.app.status.operationState.startedAt}}.
+    #     Sync operation details are available at: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true .
+    # template.app-sync-status-unknown: |
+    #   message: |
+    #     {{if eq .serviceType "slack"}}:exclamation:{{end}} Application {{.app.metadata.name}} sync is 'Unknown'.
+    #     Application details: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}.
+    #     {{if ne .serviceType "slack"}}
+    #     {{range $c := .app.status.conditions}}
+    #         * {{$c.message}}
+    #     {{end}}
+    #     {{end}}
+    # template.app-sync-succeeded: |
+    #   message: |
+    #     {{if eq .serviceType "slack"}}:white_check_mark:{{end}} Application {{.app.metadata.name}} has been successfully synced at {{.app.status.operationState.finishedAt}}.
+    #     Sync operation details are available at: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true .
 
-    secret:
-      create: false
-
-    metrics:
-      enabled: false
-
-    notifiers:
-      service.alertmanager: |
-        targets:
-        - alertmanager-operated.monitoring.svc:9093
-
-    resources:
-      requests:
-        cpu: 10m
-        memory: 24Mi
-      limits:
-        memory: 128Mi
-
-    subscriptions:
-      - recipients:
-          - alertmanager
-        triggers:
-          - on-health-degraded
-          - on-sync-failed
-
-    templates:
-      template.app-deployed: |
-        message: |
-          *🚀{{.app.metadata.name}}*
-          _Application {{.app.metadata.name}} is now running new version of deployments manifests_
-        alertmanager:
-          labels:
-            severity: warning
-            service: argocd
-          annotations:
-            message: |
-              Application {{.app.metadata.name}} is now running new version of deployments manifests
-      template.app-health-degraded: |
-        message: |
-          *💔{{.app.metadata.name}}*
-          _Application {{.app.metadata.name}} has degraded._
-          [Application details]({{.context.argocdUrl}}/applications/{{.app.metadata.name}})
-        alertmanager:
-          labels:
-            severity: warning
-            service: argocd
-          annotations:
-            message: |
-              Application {{.app.metadata.name}} has degraded
-      template.app-sync-failed: |
-        message: |
-          *❌{{.app.metadata.name}}*
-          _The sync operation of application {{.app.metadata.name}} has failed at {{.app.status.operationState.finishedAt}} with the following error: {{.app.status.operationState.message}}_
-          [Sync operation details]({{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true)
-        alertmanager:
-          labels:
-            severity: warning
-            service: argocd
-          annotations:
-            message: |
-              The sync operation of application {{.app.metadata.name}} has failed at {{.app.status.operationState.finishedAt}} with the following error: {{.app.status.operationState.message}}
-
-      # template.app-sync-running: |
-      #   message: |
-      #     The sync operation of application {{.app.metadata.name}} has started at {{.app.status.operationState.startedAt}}.
-      #     Sync operation details are available at: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true .
-      # template.app-sync-status-unknown: |
-      #   message: |
-      #     {{if eq .serviceType "slack"}}:exclamation:{{end}} Application {{.app.metadata.name}} sync is 'Unknown'.
-      #     Application details: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}.
-      #     {{if ne .serviceType "slack"}}
-      #     {{range $c := .app.status.conditions}}
-      #         * {{$c.message}}
-      #     {{end}}
-      #     {{end}}
-      # template.app-sync-succeeded: |
-      #   message: |
-      #     {{if eq .serviceType "slack"}}:white_check_mark:{{end}} Application {{.app.metadata.name}} has been successfully synced at {{.app.status.operationState.finishedAt}}.
-      #     Sync operation details are available at: {{.context.argocdUrl}}/applications/{{.app.metadata.name}}?operation=true .
-
-    triggers:
-      trigger.on-deployed: |
-        - description: Application is synced and healthy. Triggered once per commit.
-          oncePer: app.status.sync.revision
-          send:
-          - app-deployed
-          when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
-      trigger.on-health-degraded: |
-        - description: Application has degraded
-          send:
-          - app-health-degraded
-          when: app.status.health.status == 'Degraded' and app.metadata.name != 'root'
-      trigger.on-sync-failed: |
-        - description: Application syncing has failed
-          send:
-          - app-sync-failed
-          when: app.status.operationState.phase in ['Error', 'Failed']
-      # trigger.on-sync-running: |
-      #   - description: Application is being synced
-      #     send:
-      #     - app-sync-running
-      #     when: app.status.operationState.phase in ['Running']
-      trigger.on-sync-status-unknown: |
-        - description: Application status is 'Unknown'
-          send:
-          - app-sync-status-unknown
-          when: app.status.sync.status == 'Unknown'
-      # trigger.on-sync-succeeded: |
-      #   - description: Application syncing has succeeded
-      #     send:
-      #     - app-sync-succeeded
-      #     when: app.status.operationState.phase in ['Succeeded']
-      #
-      # For more information: https://argocd-notifications.readthedocs.io/en/stable/triggers/#default-triggers
-      # defaultTriggers: |
-      #   - on-sync-status-unknown
+  triggers:
+    trigger.on-deployed: |
+      - description: Application is synced and healthy. Triggered once per commit.
+        oncePer: app.status.sync.revision
+        send:
+        - app-deployed
+        when: app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+    trigger.on-health-degraded: |
+      - description: Application has degraded
+        send:
+        - app-health-degraded
+        when: app.status.health.status == 'Degraded' and app.metadata.name != 'root'
+    trigger.on-sync-failed: |
+      - description: Application syncing has failed
+        send:
+        - app-sync-failed
+        when: app.status.operationState.phase in ['Error', 'Failed']
+    # trigger.on-sync-running: |
+    #   - description: Application is being synced
+    #     send:
+    #     - app-sync-running
+    #     when: app.status.operationState.phase in ['Running']
+    trigger.on-sync-status-unknown: |
+      - description: Application status is 'Unknown'
+        send:
+        - app-sync-status-unknown
+        when: app.status.sync.status == 'Unknown'
+    # trigger.on-sync-succeeded: |
+    #   - description: Application syncing has succeeded
+    #     send:
+    #     - app-sync-succeeded
+    #     when: app.status.operationState.phase in ['Succeeded']
+    #
+    # For more information: https://argocd-notifications.readthedocs.io/en/stable/triggers/#default-triggers
+    # defaultTriggers: |
+    #   - on-sync-status-unknown

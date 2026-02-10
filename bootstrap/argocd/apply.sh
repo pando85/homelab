@@ -1,9 +1,6 @@
 #!/bin/sh
 
-helm template \
-    --include-crds \
-    --namespace argocd \
-    argocd . \
+kubectl kustomize --enable-helm --load-restrictor=LoadRestrictionsNone --enable-alpha-plugins . \
     | kubectl -n argocd apply -f -
 
 kubectl -n argocd wait --timeout=60s --for condition=Established \

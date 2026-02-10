@@ -1,0 +1,40 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - resources/argocd-secrets.yaml
+  - resources/external-secret-oci-helm-workaround.yaml
+  - resources/ingress-external.yaml
+  - resources/k8s-secret-store/rbac.yaml
+  - resources/k8s-secret-store/secret-store.yaml
+  - resources/kanidm-groups.yaml
+  - resources/kanidm-oauth2-client.yaml
+
+helmCharts:
+  - includeCRDs: true
+    name: argo-cd
+    namespace: argocd
+    releaseName: argocd
+    repo: https://argoproj.github.io/argo-helm
+    valuesFile: values.yaml
+    version: 9.4.1
+
+patches:
+  - patch: |-
+      - op: add
+        path: "/metadata/annotations/argocd.argoproj.io~1sync-options"
+        value: "Replace=true"
+    target:
+      group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+
+configMapGenerator:
+  - name: argocd-dashboards
+    files:
+      - dashboards/argocd.json
+generatorOptions:
+  annotations:
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+    argocd.argoproj.io/sync-options: Replace=true
+    k8s-sidecar-target-directory: /tmp/dashboards/argocd
+  labels:
+    grafana_dashboard: "1"
