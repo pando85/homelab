@@ -92,15 +92,12 @@ spec:
                 mount /docker/disk.img /var/lib/docker;
               fi &&
               dockerd-entrypoint.sh 2>&1 &
-              # PID of forgejo-runner
-              while kill -0 10 2>/dev/null; do
-                echo "watching main job execution"
+              while pgrep forgejo-runner > /dev/null && pgrep dockerd > /dev/null; do
+                echo "watching main job execution and docker daemon"
                 sleep 60
               done;
 
-              echo "main continaer exited, stopping dind"
-              # PID of docker
-              kill 14
+              echo "one of the processes exited, stopping dind"
               exit 0
           env:
             - name: DOCKER_TLS_CERTDIR
