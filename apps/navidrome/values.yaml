@@ -96,11 +96,12 @@ app-template:
               return 200;
           }
         nginx.ingress.kubernetes.io/server-snippet: |
+          brotli off;
           gzip off;
           proxy_set_header Accept-Encoding "";
           sub_filter_types text/html;
           sub_filter_once off;
-          sub_filter '</body>' '<script>if(location.hash==="#/login"){location.replace("/")}</script></body>';
+          sub_filter '</html>' '<script>if(location.hash==="#/login"){location.replace("/")}</script></html>';
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
