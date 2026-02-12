@@ -95,20 +95,10 @@ app-template:
           if ( $request_uri ~ "^/(rest|share)" ) {
               return 200;
           }
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          # Disable upstream compression so sub_filter can operate
-          proxy_set_header Accept-Encoding "";
-
+        nginx.ingress.kubernetes.io/server-snippet: |
           sub_filter_types text/html;
           sub_filter_once on;
-
-          sub_filter '</body>' '<script>
-          (function() {
-            if (window.location.hash && window.location.hash.indexOf("#/login") === 0) {
-              window.location.replace("/app");
-            }
-          })();
-          </script></body>';
+          sub_filter '</body>' '<script>if(location.hash.startsWith("#/login"))location.replace("/app");</script></body>';
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
