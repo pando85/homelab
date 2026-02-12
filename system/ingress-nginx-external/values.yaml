@@ -21,7 +21,7 @@ ingress-nginx:
       allow-snippet-annotations: true
       annotations-risk-level: Critical
       use-gzip: "false"
-      enable-brotli: "false"
+      enable-brotli: "true"
       brotli-level: "6"
       # Added text/html and application/vnd.api+json + default ones:
       # https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/#gzip-types
