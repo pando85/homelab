@@ -96,7 +96,9 @@ app-template:
               return 200;
           }
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          location = /app/#/login {
+          # Redirect requests where the browser encoded the '#' fragment as '%23'
+          # Example: /app/%23/login  -> redirect to /app
+          if ($request_uri ~ "%23/login") {
             return 302 /app;
           }
       hosts:
