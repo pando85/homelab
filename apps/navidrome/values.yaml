@@ -96,11 +96,16 @@ app-template:
               return 200;
           }
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          # Redirect requests where the browser encoded the '#' fragment as '%23'
-          # Example: /app/%23/login  -> redirect to /app
-          if ($request_uri ~ "%23/login") {
-            return 302 /app;
-          }
+          # prevent upstream from sending gzip so sub_filter can operate
+          proxy_set_header Accept-Encoding "";
+
+          # only operate on text/html responses (default sub_filter_types is text/html)
+          sub_filter_types text/html;
+
+          # insert our tiny redirect script before </head>
+          sub_filter '</head>' '<script>(function(){ try{ if(window.location.hash && window.location.hash.indexOf("#/login")===0){ window.location.replace("/app"); } }catch(e){} })();</script></head>';
+          # ensure sub_filter runs at most once per response
+          sub_filter_once on;
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
