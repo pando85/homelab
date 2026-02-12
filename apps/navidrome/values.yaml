@@ -95,6 +95,10 @@ app-template:
           if ( $request_uri ~ "^/(rest|share)" ) {
               return 200;
           }
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          location = /app/login {
+            return 302 /app;
+          }
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
