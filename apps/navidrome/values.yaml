@@ -96,7 +96,7 @@ app-template:
               return 200;
           }
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          location = /app/login {
+          location = /app/#/login {
             return 302 /app;
           }
       hosts:
