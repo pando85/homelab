@@ -15,7 +15,7 @@ ingress-nginx:
       enable-annotation-validation: "false"
 
     config:
-      # auto value takes all nodes in cgroups v2 (dell_v2)
+      # auto value takes all nodes in cgroups v2
       worker-processes: 1
       hsts: "true"
       http-snippet: |
