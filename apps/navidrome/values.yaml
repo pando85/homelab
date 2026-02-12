@@ -96,16 +96,19 @@ app-template:
               return 200;
           }
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          # prevent upstream from sending gzip so sub_filter can operate
+          # Disable upstream compression so sub_filter can operate
           proxy_set_header Accept-Encoding "";
 
-          # only operate on text/html responses (default sub_filter_types is text/html)
           sub_filter_types text/html;
-
-          # insert our tiny redirect script before </head>
-          sub_filter '</head>' '<script>(function(){ try{ if(window.location.hash && window.location.hash.indexOf("#/login")===0){ window.location.replace("/app"); } }catch(e){} })();</script></head>';
-          # ensure sub_filter runs at most once per response
           sub_filter_once on;
+
+          sub_filter '</body>' '<script>
+          (function() {
+            if (window.location.hash && window.location.hash.indexOf("#/login") === 0) {
+              window.location.replace("/app");
+            }
+          })();
+          </script></body>';
       hosts:
         - host: &host navidrome.grigri.cloud
           paths:
