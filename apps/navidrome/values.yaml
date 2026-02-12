@@ -95,6 +95,7 @@ app-template:
           if ( $request_uri ~ "^/(rest|share)" ) {
               return 200;
           }
+        # this try to avoid /app/#/login but gzip encoding breaks it
         nginx.ingress.kubernetes.io/server-snippet: |
           brotli off;
           gzip off;
