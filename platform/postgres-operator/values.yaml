@@ -44,7 +44,8 @@ configKubernetes:
     - backup/retain
 
 configPostgresPodResources:
-  default_cpu_limit: "0"
+  # disable with 0 was not working
+  default_cpu_limit: "8"
 
 configLoadBalancer:
   external_traffic_policy: "Local"
