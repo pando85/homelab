@@ -12,9 +12,9 @@ spec:
   resources:
     requests:
       cpu: 10m
-      memory: 128Mi
-    limits:
       memory: 256Mi
+    limits:
+      memory: 512Mi
 
   volume:
     size: 2Gi
@@ -32,7 +32,11 @@ spec:
       archive_mode: "off"
       # minimal value. If not default to 100
       max_connections: "100"
-      shared_buffers: 32MB
+      shared_buffers: "256MB"
+      work_mem: "16MB"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "20"
+      checkpoint_completion_target: "0.9"
       log_checkpoints: "off"
       log_connections: "off"
       log_disconnections: "off"
