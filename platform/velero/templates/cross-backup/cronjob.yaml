@@ -4,8 +4,11 @@ metadata:
   name: rclone-sync
 spec:
   schedule: "30 2 * * 4"
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
   jobTemplate:
     spec:
+      ttlSecondsAfterFinished: 3600
       template:
         metadata:
           annotations:
@@ -28,7 +31,7 @@ spec:
             resources:
               requests:
                 memory: 1Gi
-                cpu: "1.5"
+                cpu: "500m"
               limits:
                 memory: 8Gi
                 cpu: "4"

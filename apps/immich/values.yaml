@@ -115,7 +115,7 @@ app-template:
           envFrom: *envFrom
           resources:
             requests:
-              cpu: 300m
+              cpu: 100m
               memory: 1Gi
               # nvidia.com/gpu: "1"
             limits:
