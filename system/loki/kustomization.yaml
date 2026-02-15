@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: loki
 
 resources:
+  - resources/configmap-grafana-datasource-loki.yaml
   - resources/prometheus-rules-alerts.yaml
   - resources/prometheus-rules-rules.yaml
   - resources/service-monitor.yaml
