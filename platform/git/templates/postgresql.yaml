@@ -37,11 +37,14 @@ spec:
       random_page_cost: "1.1"
       effective_io_concurrency: "20"
       checkpoint_completion_target: "0.9"
+      # Don't wait for HDD sync on each commit
+      synchronous_commit: "off"
+      wal_writer_delay: "100ms"
       log_checkpoints: "off"
       log_connections: "off"
       log_disconnections: "off"
       log_lock_waits: "off"
       log_min_duration_statement: "-1"
       log_statement: none
-      # ZFS settings:
-      full_page_writes: "off"
+      # ZFS settings because recordsize is 128k not 8k
+      full_page_writes: "on"

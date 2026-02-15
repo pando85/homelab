@@ -33,7 +33,14 @@ spec:
     parameters:
       archive_mode: "off"
       max_connections: "25"
-      shared_buffers: 32MB
+      shared_buffers: "256MB"
+      work_mem: "16MB"
+      random_page_cost: "1.1"
+      effective_io_concurrency: "20"
+      checkpoint_completion_target: "0.9"
+      # Don't wait for HDD sync on each commit
+      synchronous_commit: "off"
+      wal_writer_delay: "100ms"
       log_checkpoints: "off"
       log_connections: "off"
       log_disconnections: "off"
@@ -42,8 +49,8 @@ spec:
       log_statement: none
       # add vectors.so to shared_preload_libraries
       shared_preload_libraries: "bg_mon,pg_stat_statements,pgextwlist,pg_auth_mon,set_user,timescaledb,pg_cron,pg_stat_kcache,vchord.so"
-      # ZFS settings:
-      full_page_writes: "off"
+      # ZFS settings because recordsize is 128k not 8k
+      full_page_writes: "on"
 
   # preparedDatabases:
   #   immich:

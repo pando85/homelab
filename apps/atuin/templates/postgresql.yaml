@@ -48,5 +48,5 @@ spec:
       log_lock_waits: "off"
       log_min_duration_statement: "-1"
       log_statement: none
-      # ZFS settings:
-      full_page_writes: "off"
+      # ZFS settings because recordsize is 128k not 8k
+      full_page_writes: "on"
