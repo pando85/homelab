@@ -2879,8 +2879,8 @@
         "allValue": ".+",
         "current": {
           "selected": false,
-          "text": "production-mamba",
-          "value": "production-mamba"
+          "text": "git",
+          "value": "git"
         },
         "datasource": {
           "uid": "$datasource"
@@ -2907,8 +2907,8 @@
         "allValue": ".+",
         "current": {
           "selected": false,
-          "text": "mamba-postgres-pro-mamba-scheduler-api",
-          "value": "mamba-postgres-pro-mamba-scheduler-api"
+          "text": "git",
+          "value": "git"
         },
         "datasource": {
           "uid": "$datasource"
@@ -2935,8 +2935,8 @@
         "allValue": ".+",
         "current": {
           "selected": false,
-          "text": "pro_mamba_scheduler_api",
-          "value": "pro_mamba_scheduler_api"
+          "text": "git",
+          "value": "git"
         },
         "datasource": {
           "uid": "$datasource"
