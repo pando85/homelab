@@ -104,6 +104,10 @@ grafana:
       requests:
         cpu: 10m
         memory: 256Mi
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      searchNamespace: ALL
     dashboards:
       enabled: true
       label: grafana_dashboard
