@@ -2,7 +2,7 @@ tempo:
   resources:
     requests:
       cpu: 50m
-      memory: 1Gi
+      memory: 200Mi
     limits:
       cpu: 2000m
       memory: 6Gi
