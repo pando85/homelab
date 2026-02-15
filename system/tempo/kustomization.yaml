@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: tempo
+
+resources:
+  - resources/configmap-grafana-datasource-tempo.yaml
+  - resources/prometheus-rules.yaml
+
+helmCharts:
+  - name: tempo
+    repo: https://grafana.github.io/helm-charts
+    version: 1.24.4
+    releaseName: tempo
+    namespace: tempo
+    includeCRDs: true
+    valuesFile: values.yaml
+
+configMapGenerator:
+  - name: tempo-dashboards
+    namespace: tempo
+    files:
+      - dashboards/tempo-operational.json
+      - dashboards/tempo-reads.json
+      - dashboards/tempo-resources.json
+      - dashboards/tempo-rollout-progress.json
+      - dashboards/tempo-tenants.json
+      - dashboards/tempo-writes.json
+generatorOptions:
+  annotations:
+    k8s-sidecar-target-directory: /tmp/dashboards/tempo
+    argocd.argoproj.io/sync-options: ServerSideApply=true
+  labels:
+    grafana_dashboard: "1"

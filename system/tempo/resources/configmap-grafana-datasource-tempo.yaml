@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-datasource-config
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  tempo-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+    - name: Tempo
+      type: tempo
+      uid: tempo
+      access: proxy
+      url: http://tempo-gateway.tempo.svc.cluster.local
+      jsonData:
+        tracesToLogsV2:
+          customQuery: false
+          datasourceUid: loki
+      isDefault: false
+      version: 2

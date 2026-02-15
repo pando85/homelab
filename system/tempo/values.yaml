@@ -1,0 +1,95 @@
+tempo:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 6Gi
+  memBallastSizeMbs: 1024
+  multitenancyEnabled: false
+  reportingEnabled: false
+  metricsGenerator:
+    enabled: true
+    remoteWriteUrl: "http://prometheus-operated.monitoring:9090/api/v1/write"
+    processor:
+      local_blocks:
+        flush_to_storage: true
+        filter_server_spans: false
+        max_block_duration: 1m
+      service_graphs:
+        wait: 10s
+        max_items: 10000
+      span_metrics:
+        enable_target_info: true
+    # -- Registry configuration for metrics generator (optional)
+    registry: {}
+    #   collection_interval: 15s
+    #   external_labels:
+    #     cluster: "primary"
+    # -- Storage configuration for metrics generator
+    # This section configures the storage path and remote write endpoints
+    storage:
+      path: "/var/tempo/metrics"
+    traces_storage:
+      path: "/var/tempo/traces"
+  # -- Configuration options for the ingester.
+  # Refers to: https://grafana.com/docs/tempo/latest/configuration/#ingester
+  ingester:
+    flush_check_period: 10s
+    trace_idle_period: 10s
+    max_block_duration: 30m
+    complete_block_timeout: 1h
+  querier:
+    max_concurrent_queries: 20
+  queryFrontend:
+    search:
+      concurrent_jobs: 500
+  retention: 24h
+  # -- The standard overrides configuration section. This can include a `defaults` object for applying to all tenants (not to be confused with the `global` property of the same name, which overrides `max_byte_per_trace` for all tenants). For an example on how to enable the metrics generator using the `overrides` object, see the 'Activate metrics generator' section below. Refer to [Standard overrides](https://grafana.com/docs/tempo/latest/configuration/#standard-overrides) for more details.
+  overrides:
+    # -- Default config values for all tenants, can be overridden by per-tenant overrides. If a tenant's specific overrides are not found in the `per_tenant_overrides` block, the values in this `default` block will be used. Configs inside this block should follow the new overrides indentation format
+    defaults: {}
+    #  metrics_generator:
+    #    processors:
+    #      - service-graphs
+    #      - span-metrics
+
+    # -- Path to the per tenant override config file. The values of the `per_tenant_overrides` config below will be written to the default path `/conf/overrides.yaml`. Users can set tenant-specific overrides settings in a separate file and point per_tenant_override_config to it if not using the per_tenant_overrides block below.
+    per_tenant_override_config: /conf/overrides.yaml
+  # -- The `per tenant` aka `tenant-specific` runtime overrides. This allows overriding values set in the configuration on a per-tenant basis. Note that *all* values must be given for each per-tenant configuration block. Refer to [Runtime overrides](https://grafana.com/docs/tempo/latest/configuration/#runtime-overrides) and [Tenant-Specific overrides](https://grafana.com/docs/tempo/latest/configuration/#tenant-specific-overrides) documentation for more details.
+  per_tenant_overrides: {}
+    # 'tenant-id':
+    #  metrics_generator:
+    #    processors:
+    #      - service-graphs
+    #      - span-metrics
+  storage:
+    trace:
+      backend: local
+      local:
+        path: /var/tempo/traces
+      wal:
+        path: /var/tempo/wal
+  receivers:
+    jaeger: {}
+    opencensus:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+        http:
+          endpoint: "0.0.0.0:4318"
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+
+persistence:
+  enabled: true
+  enableStatefulSetAutoDeletePVC: true
+  accessModes:
+    - ReadWriteOnce
+  size: 10Gi
