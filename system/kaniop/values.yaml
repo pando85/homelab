@@ -6,6 +6,12 @@ logging:
   ## Ref: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
   level: "info,kaniop=info"
 
+tracing:
+  enabled: true
+  service: tempo
+  namespace: tempo
+  port: 4317
+
 resources:
   requests:
     cpu: 10m
