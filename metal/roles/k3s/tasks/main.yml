@@ -83,12 +83,28 @@
       dest: "{{ k3s_service_file }}"
   notify: Restart k3s
 
-- name: Copy containerd config file
+- name: Create containerd config directory
+  file:
+    path: "{{ k3s_containerd_config_dir }}"
+    state: directory
+    mode: "0755"
+  notify: Restart k3s
+
+- name: Configure containerd with kata and gVisor runtimes
   copy:
-    src: config.toml.tmpl
-    dest: /var/lib/rancher/k3s/agent/etc/containerd/config.toml
+    src: config-v3-runtimes.toml.tmpl
+    dest: "{{ k3s_containerd_config_dir }}/config-v3.toml.tmpl"
     mode: "0644"
   notify: Restart k3s
+  when: ansible_architecture != "aarch64"
+
+- name: Configure containerd
+  copy:
+    src: config-v3.toml.tmpl
+    dest: "{{ k3s_containerd_config_dir }}/config-v3.toml.tmpl"
+    mode: "0644"
+  notify: Restart k3s
+  when: ansible_architecture == "aarch64"
 
 - name: Ensure containerd certs directory exists
   file:
