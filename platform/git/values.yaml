@@ -98,7 +98,7 @@ forgejo:
         LEVEL: info
       cron:
         NOTICE_ON_SUCCESS: false
-        CLEANUP_OLD_ACTIONS:
+        delete_old_actions:
           ENABLED: true
           RUN_AT_START: false
           SCHEDULE: "@midnight"
