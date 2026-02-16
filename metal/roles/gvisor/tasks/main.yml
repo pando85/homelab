@@ -1,32 +1,35 @@
 - name: gVisor | Install dependencies
   apt:
     name:
-      - apt-transport-https
       - ca-certificates
       - curl
-      - gnupg
+      - gpg
     state: present
     update_cache: true
 
-- name: gVisor | Download GPG key
-  ansible.builtin.get_url:
-    url: https://gvisor.dev/archive.key
-    dest: /usr/share/keyrings/gvisor-archive-keyring.asc
-  register: gvisor_download_gpg
+- name: gVisor | Create keyrings directory
+  file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
 
-- name: gVisor | Import GPG key
-  ansible.builtin.command:
-    cmd: gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg /usr/share/keyrings/gvisor-archive-keyring.asc
+- name: gVisor | Download and dearmor GPG key
+  ansible.builtin.shell: |
+    set -o pipefail
+    curl -fsSL https://gvisor.dev/archive.key | gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
   args:
-    chdir: /usr/share/keyrings
-  when: gvisor_download_gpg.changed
+    creates: /usr/share/keyrings/gvisor-archive-keyring.gpg
+
+- name: gVisor | Set GPG key permissions
+  file:
+    path: /usr/share/keyrings/gvisor-archive-keyring.gpg
+    mode: "0644"
 
 - name: gVisor | Add repository
-  copy:
-    content: |
-      deb [arch=amd64 signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main
-    dest: /etc/apt/sources.list.d/gvisor.list
-    mode: "0644"
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64 signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main"
+    filename: gvisor
+    state: present
 
 - name: gVisor | Install runsc
   apt:
