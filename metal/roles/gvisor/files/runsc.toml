@@ -1,2 +1,2 @@
 [runsc_config]
-allow_suid = true
+allow-suid = "true"

@@ -4,6 +4,5 @@ shim_debug = true
 runtime_type = "io.containerd.runsc.v1"
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runsc.options]
 SystemdCgroup = true
-[plugins.'io.containerd.grpc.v1.runtime'.containerd.runtimes.runsc.options]
 TypeUrl = "io.containerd.runsc.v1.options"
 ConfigPath = "/etc/containerd/runsc.toml"
