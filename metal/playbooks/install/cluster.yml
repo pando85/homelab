@@ -7,6 +7,10 @@
     - name: geerlingguy.ntp
       tags:
         - ntp
+    - name: gvisor
+      when: ansible_architecture != "aarch64"
+      tags:
+        - gvisor
     - name: k3s
       tags:
         - k3s
