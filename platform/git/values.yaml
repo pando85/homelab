@@ -36,8 +36,8 @@ forgejo:
     limits:
       memory: 2Gi
     requests:
-      cpu: 10m
-      memory: 128Mi
+      cpu: 200m
+      memory: 256Mi
   deployment:
     annotations:
       reloader.stakater.com/auto: "true"
@@ -143,10 +143,10 @@ app-template:
               redis-server --requirepass $REDIS_PASSWORD
           resources:
             requests:
-              cpu: 23m
-              memory: 64M
+              cpu: 50m
+              memory: 128Mi
             limits:
-              memory: 64M
+              memory: 256Mi
 
           env:
             REDIS_PASSWORD:
