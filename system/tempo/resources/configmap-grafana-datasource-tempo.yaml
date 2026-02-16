@@ -13,7 +13,7 @@ data:
       type: tempo
       uid: tempo
       access: proxy
-      url: http://tempo.tempo.svc.cluster.local
+      url: http://tempo.tempo.svc.cluster.local:3200
       jsonData:
         tracesToLogsV2:
           customQuery: false
