@@ -1,0 +1,48 @@
+- name: gVisor | Install dependencies
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+    state: present
+    update_cache: true
+
+- name: gVisor | Download GPG key
+  ansible.builtin.get_url:
+    url: https://gvisor.dev/archive.key
+    dest: /usr/share/keyrings/gvisor-archive-keyring.asc
+  register: gvisor_download_gpg
+
+- name: gVisor | Import GPG key
+  ansible.builtin.command:
+    cmd: gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg /usr/share/keyrings/gvisor-archive-keyring.asc
+  args:
+    chdir: /usr/share/keyrings
+  when: gvisor_download_gpg.changed
+
+- name: gVisor | Add repository
+  copy:
+    content: |
+      deb [arch=amd64 signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main
+    dest: /etc/apt/sources.list.d/gvisor.list
+    mode: "0644"
+
+- name: gVisor | Install runsc
+  apt:
+    name: runsc
+    state: present
+    update_cache: true
+
+- name: gVisor | Ensure containerd config directory exists
+  file:
+    path: /var/lib/rancher/k3s/agent/etc/containerd
+    state: directory
+    mode: "0755"
+
+- name: gVisor | Copy containerd config template
+  template:
+    src: config.toml.tmpl.j2
+    dest: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+    mode: "0644"
+  notify: Restart k3s
