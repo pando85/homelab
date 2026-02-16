@@ -28,6 +28,14 @@ wordpress:
     requests:
       memory: 512Mi
       cpu: 50m
+  podSecurityContext:
+    enabled: true
+    fsGroupChangePolicy: Always
+  readinessProbe:
+    enabled: true
+    periodSeconds: 20
+    timeoutSeconds: 10
+
   service:
     type: ClusterIP
   persistence:
