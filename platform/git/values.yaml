@@ -6,6 +6,10 @@ forgejo:
   strategy:
     type: "Recreate"
 
+  podSecurityContext:
+    fsGroup: 1000
+    fsGroupChangePolicy: "OnRootMismatch"
+
   ingress:
     enabled: true
     className: nginx-external
