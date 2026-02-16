@@ -30,7 +30,7 @@ wordpress:
       cpu: 50m
   podSecurityContext:
     enabled: true
-    fsGroupChangePolicy: Always
+    fsGroupChangePolicy: "OnRootMismatch"
   readinessProbe:
     enabled: true
     periodSeconds: 20
