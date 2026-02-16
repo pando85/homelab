@@ -7,12 +7,13 @@
     - name: geerlingguy.ntp
       tags:
         - ntp
+    - name: gvisor
+      when: ansible_architecture != "aarch64"
+      tags:
+        - gvisor
     - name: k3s
       tags:
         - k3s
-    - name: gvisor
-      tags:
-        - gvisor
 
 - name: Label Kubernetes nodes
   ansible.builtin.import_playbook: k8s-node-labels.yml

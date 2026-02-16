@@ -15,8 +15,8 @@
 
 - name: gVisor | Download and dearmor GPG key
   ansible.builtin.shell: |
-    set -o pipefail
-    curl -fsSL https://gvisor.dev/archive.key | gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+    curl -fsSL https://gvisor.dev/archive.key |
+    gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
   args:
     creates: /usr/share/keyrings/gvisor-archive-keyring.gpg
 
@@ -39,13 +39,13 @@
 
 - name: gVisor | Ensure containerd config directory exists
   file:
-    path: /var/lib/rancher/k3s/agent/etc/containerd
+    path: /opt/gvisor/containerd/config.d
     state: directory
     mode: "0755"
 
 - name: gVisor | Copy containerd config template
-  template:
-    src: config.toml.tmpl.j2
-    dest: /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
+  copy:
+    src: gvisor-deploy.toml
+    dest: /opt/gvisor/containerd/config.d/gvisor-deploy.toml
     mode: "0644"
   notify: Restart k3s

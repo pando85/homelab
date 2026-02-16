@@ -83,6 +83,13 @@
       dest: "{{ k3s_service_file }}"
   notify: Restart k3s
 
+- name: Copy containerd config file
+  copy:
+    src: config.toml.tmpl
+    dest: /var/lib/rancher/k3s/agent/etc/containerd/config.toml
+    mode: "0644"
+  notify: Restart k3s
+
 - name: Ensure containerd certs directory exists
   file:
     path: /var/lib/rancher/k3s/agent/etc/containerd/certs.d/git.grigri.cloud

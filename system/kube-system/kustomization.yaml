@@ -11,7 +11,8 @@ resources:
   - resources/nodelocaldns/service.yaml
   - resources/nodelocaldns/serviceaccount.yaml
   - resources/priority-class-high.yaml
-  - resources/runtime-class.yaml
+  - resources/runtime-class-gvisor.yaml
+  - resources/runtime-class-nvidia.yaml
 
 helmCharts:
   - includeCRDs: true
