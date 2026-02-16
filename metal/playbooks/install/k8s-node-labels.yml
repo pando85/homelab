@@ -3,6 +3,12 @@
   environment:
     KUBECONFIG: ../../kubeconfig.yaml
   tasks:
+    - name: Initialize inventory node labels
+      set_fact:
+        inventory_node_labels: []
+      tags:
+        - node-labels
+
     - name: Populate inventory node label
       vars:
         inventory_node_labels: []
@@ -31,6 +37,12 @@
       changed_when: false
       tags:
         - node-labels
+
+    - name: Initialize inventory node annotations
+      set_fact:
+        inventory_node_annotations: []
+      tags:
+        - node-annotations
 
     - name: Populate inventory node annotations
       vars:
