@@ -37,6 +37,19 @@
     state: present
     update_cache: true
 
+- name: gVisor | Ensure etc containerd config directory exists
+  file:
+    path: /etc/containerd/
+    state: directory
+    mode: "0755"
+
+- name: gVisor | Copy runsc config
+  copy:
+    src: runsc.toml
+    dest: /etc/containerd/runsc.toml
+    mode: "0644"
+  notify: Restart k3s
+
 - name: gVisor | Ensure containerd config directory exists
   file:
     path: /opt/gvisor/containerd/config.d
