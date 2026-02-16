@@ -37,7 +37,7 @@ spec:
       containers:
         - name: runner
           # renovate: sha256: datasource=docker
-          image: ghcr.io/pando85/forgejo-runner:12.6.4@sha256:3569c1887f7bdca8619e09853eec02422e09ff0249a413a71368c6a5f0db8046
+          image: ghcr.io/pando85/forgejo-runner:12.6.4
           command:
             - sh
             - -c
