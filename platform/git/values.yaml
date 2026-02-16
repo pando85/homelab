@@ -91,11 +91,18 @@ forgejo:
       cache:
         ADAPTER: redis
       queue:
-        TYPE: level
+        TYPE: redis
+      actions:
+        ENABLED: true
       log:
         LEVEL: info
       cron:
         NOTICE_ON_SUCCESS: false
+        CLEANUP_OLD_ACTIONS:
+          ENABLED: true
+          RUN_AT_START: false
+          SCHEDULE: "@midnight"
+          OLDER_THAN: 168h
       mailer:
         ENABLED: true
         SMTP_PORT: 587
