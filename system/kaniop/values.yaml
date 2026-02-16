@@ -10,7 +10,7 @@ tracing:
   enabled: true
   service: tempo
   namespace: tempo
-  port: 4317
+  port: 4318
 
 resources:
   requests:
