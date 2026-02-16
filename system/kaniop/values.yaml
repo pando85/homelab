@@ -7,10 +7,10 @@ logging:
   level: "info,kaniop=info"
 
 tracing:
-  enabled: true
+  enabled: false
   service: tempo
   namespace: tempo
-  port: 4318
+  port: 4317
 
 resources:
   requests:
