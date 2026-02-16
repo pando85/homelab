@@ -68,6 +68,12 @@ wordpress:
         accessModes:
           - ReadWriteOnce
         size: 2Gi
+    resources:
+      requests:
+        cpu: 10m
+        memory: 150Mi
+      limits:
+        memory: 512Mi
   memcached:
     enabled: true
     affinity:
