@@ -22,7 +22,6 @@ app-template:
             - secretRef:
                 name: atuin-database
           args:
-            - server
             - start
           probes:
             liveness: &probes
