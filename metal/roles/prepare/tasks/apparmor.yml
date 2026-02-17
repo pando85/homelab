@@ -13,7 +13,7 @@
   lineinfile:
     path: /boot/armbianEnv.txt
     regex: "^extraargs="
-    line: 'extraargs=apparmor=0 systemd.unified_cgroup_hierarchy=1'
+    line: 'extraargs=apparmor=0 systemd.unified_cgroup_hierarchy=0'
   # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
@@ -23,7 +23,7 @@
   ansible.builtin.lineinfile:
     path: /etc/default/grub
     regexp: '^GRUB_CMDLINE_LINUX='
-    line: 'GRUB_CMDLINE_LINUX="apparmor=0"'
+    line: 'GRUB_CMDLINE_LINUX="apparmor=0 systemd.unified_cgroup_hierarchy=0"'
   # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
