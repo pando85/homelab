@@ -9,21 +9,21 @@
   notify:
     - restart apparmor
 
-- name: apparmor | Disable apparmor in armbian and configure pure cgroup v1
+- name: apparmor | Disable apparmor in armbian and configure pure cgroup v2
   lineinfile:
     path: /boot/armbianEnv.txt
     regex: "^extraargs="
-    line: 'extraargs=apparmor=0 systemd.unified_cgroup_hierarchy=0'
+    line: 'extraargs=apparmor=0 systemd.unified_cgroup_hierarchy=1'
   # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
     - restart server
 
-- name: apparmor | Disable apparmor and configure pure cgroup v1 in grub
+- name: apparmor | Disable apparmor
   ansible.builtin.lineinfile:
     path: /etc/default/grub
     regexp: '^GRUB_CMDLINE_LINUX='
-    line: 'GRUB_CMDLINE_LINUX="apparmor=0 systemd.unified_cgroup_hierarchy=0"'
+    line: 'GRUB_CMDLINE_LINUX="apparmor=0"'
   # armbian has no variables to be distinguishable
   ignore_errors: true
   notify:
