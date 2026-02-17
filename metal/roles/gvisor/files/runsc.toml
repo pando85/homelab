@@ -1,3 +1,5 @@
 [runsc_config]
 allow-suid = "true"
 systemd-cgroup = "true"
+net-raw = "true"
+allow-packet-socket-write = "true"
