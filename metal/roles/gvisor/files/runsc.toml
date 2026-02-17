@@ -1,2 +1,3 @@
 [runsc_config]
 allow-suid = "true"
+systemd-cgroup = "true"
