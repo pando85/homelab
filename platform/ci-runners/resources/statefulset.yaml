@@ -54,8 +54,8 @@ spec:
               memory: "100Mi"
               cpu: "100m"
             limits:
-              memory: "10Gi"
-              cpu: "12"
+              memory: "14Gi"
+              cpu: "14"
           securityContext:
             privileged: true
             runAsUser: 1001
