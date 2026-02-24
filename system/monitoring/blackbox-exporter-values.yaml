@@ -3,20 +3,7 @@ fullnameOverride: blackbox-exporter
 replicas: 1
 
 ingress:
-  enabled: true
-  ingressClassName: nginx-internal
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-    external-dns.alpha.kubernetes.io/enabled: "true"
-  hosts:
-    - host: &host blackbox-exporter.internal.grigri.cloud
-      paths:
-        - path: /
-          pathType: Prefix
-  tls:
-    - hosts:
-        - *host
-      secretName: blackbox-exporter-tls-certificate
+  enabled: false
 
 podSecurityContext:
   sysctls:
