@@ -41,7 +41,8 @@ spec:
       archive_mode: "off"
       # minimal value. If not default to 100
       max_connections: "25"
-      shared_buffers: 32MB
+      shared_buffers: 64MB
+      work_mem: 16MB
       log_checkpoints: "off"
       log_connections: "off"
       log_disconnections: "off"

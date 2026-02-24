@@ -39,4 +39,4 @@ spec:
       log_min_duration_statement: "-1"
       log_statement: none
       # ZFS settings because recordsize is 128k not 8k
-      full_page_writes: "on"
+      full_page_writes: "off"

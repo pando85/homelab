@@ -50,7 +50,7 @@ spec:
       # add vectors.so to shared_preload_libraries
       shared_preload_libraries: "bg_mon,pg_stat_statements,pgextwlist,pg_auth_mon,set_user,timescaledb,pg_cron,pg_stat_kcache,vchord.so"
       # ZFS settings because recordsize is 128k not 8k
-      full_page_writes: "on"
+      full_page_writes: "off"
 
   # preparedDatabases:
   #   immich:
