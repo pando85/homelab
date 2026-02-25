@@ -204,7 +204,7 @@ spec:
           oidc_discovery_url: https://idm.grigri.cloud/oauth2/openid/vault
           oidc_client_id: vault
           oidc_client_secret: "${env `CLIENT_SECRET`}"
-          default_role: admin
+          default_role: default
           jwt_supported_algs:
             - ES256
         roles:
@@ -213,7 +213,7 @@ spec:
               - https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback"
               - http://localhost:8250/oidc/callback
             user_claim: email
-            # oidc_scopes: groups
+            oidc_scopes: email openid profile
             # groups_claim: groups
             policies: admin
             ttl: 1h
