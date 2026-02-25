@@ -210,7 +210,7 @@ spec:
         roles:
           - name: default
             allowed_redirect_uris:
-              - https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback"
+              - https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback
               - http://localhost:8250/oidc/callback
             user_claim: email
             oidc_scopes: email openid profile
