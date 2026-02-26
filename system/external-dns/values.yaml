@@ -1,6 +1,6 @@
 external-dns:
   interval: 2m
-  # logLevel: debug
+  logLevel: debug
   provider:
     name: cloudflare
   env:
