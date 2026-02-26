@@ -1,7 +1,7 @@
 minio:
   image:
-    repository: ghcr.io/pando85/minio
-    tag: RELEASE.2025-10-15T17-29-55Z
+    repository: pgsty/minio
+    tag: RELEASE.2026-02-14T12-00-00Z
 
   mode: standalone
 
