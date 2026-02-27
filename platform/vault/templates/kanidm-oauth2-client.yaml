@@ -9,6 +9,9 @@ spec:
     namespace: kanidm
   displayname: vault
   origin: https://vault.internal.grigri.cloud/
+  # TODO: recreate to public to allow localhost redirects
+  # public: true
+  # allowLocalhostRedirect: true
   redirectUrl:
     - http://localhost:8250/oidc/callback
     - https://vault.internal.grigri.cloud/ui/vault/auth/oidc/oidc/callback
