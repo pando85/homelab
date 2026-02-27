@@ -78,6 +78,7 @@ storage_source \"file\" {
 }
 storage_destination \"raft\" {
   path = \"/vault/file\"
+  node_id = \"vault-0\"
 }
 cluster_addr = \"https://vault.vault:8201\"
 EOF
