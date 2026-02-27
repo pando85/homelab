@@ -158,8 +158,8 @@ spec:
         tls_cert_file: /vault/tls/server.crt
         tls_key_file: /vault/tls/server.key
         cluster_address: "0.0.0.0:8201"
-    api_addr: "https://vault.vault:8200"
-    cluster_addr: "https://vault.vault:8201"
+    api_addr: https://vault.vault:8200
+    cluster_addr: https://${.Env.POD_NAME}:8201
     ui: true
     disable_mlock: false
 
