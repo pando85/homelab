@@ -149,11 +149,9 @@ spec:
   # See https://www.vaultproject.io/docs/configuration/ for more information.
   config:
     storage:
-      file:
+      raft:
         path: "${ .Env.VAULT_STORAGE_FILE }"
-      #raft:
-      #  path: "${ .Env.VAULT_STORAGE_FILE }"
-      #  node_id: "vault-0"
+        node_id: "vault-0"
     listener:
       tcp:
         address: "0.0.0.0:8200"
