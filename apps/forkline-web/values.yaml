@@ -45,8 +45,6 @@ app-template:
     external:
       enabled: true
       className: nginx-external
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       hosts:
         - host: &host forkline.dev
           paths:
