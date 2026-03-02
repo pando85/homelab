@@ -35,7 +35,7 @@ helmCharts:
     releaseName: kata-deploy
     repo: oci://ghcr.io/kata-containers/kata-deploy-charts
     valuesFile: kata-deploy-values.yaml
-    version: 3.27.0
+    version: 3.26.0
 
 patches:
   - patch: |-
