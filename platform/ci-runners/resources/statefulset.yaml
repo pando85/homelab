@@ -105,6 +105,7 @@ spec:
             - name: DOCKER_HOST
               value: tcp://0.0.0.0:2376
           securityContext:
+            privileged: true
             runAsUser: 0
           volumeMounts:
             - name: docker-certs
