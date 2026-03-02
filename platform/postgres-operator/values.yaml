@@ -5,7 +5,6 @@ image:
 
 configGeneral:
   enable_shm_volume: false
-  max_instances: 1
   kubernetes_use_configmaps: true
   sidecars:
     - name: prometheus-exporter
