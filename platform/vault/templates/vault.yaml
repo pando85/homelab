@@ -192,13 +192,6 @@ spec:
   # Marks presence of Istio, which influences things like port namings
   istioEnabled: false
 
-  envsConfig:
-    - name: CLIENT_SECRET
-      valueFrom:
-        secretKeyRef:
-          name: vault-kanidm-oauth2-credentials
-          key: CLIENT_SECRET
-
   externalConfig:
     auth:
       - type: oidc
@@ -208,7 +201,6 @@ spec:
         config:
           oidc_discovery_url: https://idm.grigri.cloud/oauth2/openid/vault
           oidc_client_id: vault
-          oidc_client_secret: "${env `CLIENT_SECRET`}"
           default_role: default
           jwt_supported_algs:
             - ES256
