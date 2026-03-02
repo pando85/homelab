@@ -80,45 +80,26 @@ spec:
             - name: ci-runner-cache
               mountPath: /cache
         - name: daemon
+          # renovate: datasource=docker
           image: docker:29.2.1
+          # finish the docker daemon when the main container exits
           command:
             - sh
-            - -ec
+            - -c
             - |
-              # POSIX sh: no [[ ]]
-              if [ "$(df -PT /var/lib/docker | awk 'NR==2 {print $2}')" = "virtiofs" ]; then
-                truncate -s 50G /docker/disk.img
-                mkfs.ext4 -F /docker/disk.img
-                mount /docker/disk.img /var/lib/docker
-              fi
-
+              if [[ $(df -PT /var/lib/docker | awk 'NR==2 {print $2}') == virtiofs ]]; then
+                truncate -s 50G /docker/disk.img &&
+                mkfs.ext4 /docker/disk.img &&
+                mount /docker/disk.img /var/lib/docker;
+              fi &&
               dockerd-entrypoint.sh 2>&1 &
-              DOCKERD_PID="$!"
-
-              cleanup() {
-                echo "stopping dockerd (pid=$DOCKERD_PID)"
-                # Try graceful first
-                kill -TERM "$DOCKERD_PID" 2>/dev/null || true
-                # Give it a moment, then hard kill if needed
-                for i in 1 2 3 4 5; do
-                  kill -0 "$DOCKERD_PID" 2>/dev/null || break
-                  sleep 1
-                done
-                kill -KILL "$DOCKERD_PID" 2>/dev/null || true
-                wait "$DOCKERD_PID" 2>/dev/null || true
-              }
-
-              trap cleanup INT TERM EXIT
-
-              # Keep running while both processes exist.
-              # shareProcessNamespace: true makes pgrep see the runner container process.
-              while pgrep -x forgejo-runner >/dev/null 2>&1 && kill -0 "$DOCKERD_PID" >/dev/null 2>&1; do
+              while pgrep forgejo-runner > /dev/null && pgrep dockerd > /dev/null; do
                 echo "watching main job execution and docker daemon"
-                sleep 10
-              done
+                sleep 60
+              done;
 
-              echo "runner or dockerd exited -> stopping dind"
-              cleanup
+              echo "one of the processes exited, stopping dind"
+              pkill dockerd || true
               exit 0
           env:
             - name: DOCKER_TLS_CERTDIR
