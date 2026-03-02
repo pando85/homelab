@@ -73,10 +73,8 @@ spec:
               mountPath: /workspace
             - name: runner-registration
               mountPath: /registration
-              readOnly: false
             - name: runner-config
               mountPath: /config
-              readOnly: false
             - name: ci-runner-cache
               mountPath: /cache
         - name: daemon
@@ -107,7 +105,6 @@ spec:
             - name: DOCKER_HOST
               value: tcp://0.0.0.0:2376
           securityContext:
-            privileged: true
             runAsUser: 0
           volumeMounts:
             - name: docker-certs
