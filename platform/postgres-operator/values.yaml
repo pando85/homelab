@@ -5,6 +5,7 @@ image:
 
 configGeneral:
   enable_shm_volume: false
+  max_instances: 1
   sidecars:
     - name: prometheus-exporter
       # renovate: datasource=docker depName=quay.io/prometheuscommunity/postgres-exporter
