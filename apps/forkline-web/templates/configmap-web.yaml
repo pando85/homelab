@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: forkline-web-config
-data:
-{{ (.Files.Glob "public/*").AsConfig | indent 2 }}

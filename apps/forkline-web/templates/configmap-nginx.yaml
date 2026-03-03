@@ -1,6 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: nginx-config
-data:
-{{ (.Files.Glob "config/*.conf").AsConfig | indent 2 }}
