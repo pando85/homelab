@@ -22,6 +22,12 @@ spec:
         - profile
         - email
         - groups
+    - group: navidrome-users
+      scopes:
+        - openid
+        - profile
+        - email
+        - groups
 
   preferShortUsername: true
   strictRedirectUrl: true
