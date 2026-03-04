@@ -13,6 +13,7 @@ resources:
   - resources/priority-class-high.yaml
   - resources/runtime-class-gvisor.yaml
   - resources/runtime-class-nvidia.yaml
+  - resources/kata-nvidia-coordinator.yaml
 
 helmCharts:
   - includeCRDs: true
@@ -45,4 +46,9 @@ patches:
     target:
       kind: ConfigMap
       name: cilium-dashboard
+      version: v1
+  - path: resources/kata-deploy-rbac-patch.yaml
+    target:
+      kind: ClusterRole
+      name: kata-deploy-role
       version: v1
