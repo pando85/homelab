@@ -1,6 +1,3 @@
 - op: add
   path: /rules/4/verbs/-
-  value: update
-- op: add
-  path: /rules/4/verbs/-
   value: patch
