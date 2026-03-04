@@ -18,6 +18,7 @@ spec:
             - /bin/sh
             - -c
             - |
+              set -e
               echo "Waiting for kata-deploy to be ready..."
               kubectl rollout status ds/kata-deploy -n kube-system --timeout=300s
               echo "Restarting nvidia device plugin..."
