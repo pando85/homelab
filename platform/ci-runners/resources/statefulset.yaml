@@ -42,9 +42,16 @@ spec:
             - sh
             - -c
             - |
+              retries=0
+              max_retries=10
               while ! nc -z localhost 2376 </dev/null; do
-                echo 'waiting for docker daemon...'
+                echo "waiting for docker daemon... ($retries/$max_retries)"
                 sleep 5
+                retries=$((retries+1))
+                if [ "$retries" -ge "$max_retries" ]; then
+                  echo "docker daemon not available after $max_retries attempts, restarting container"
+                  exit 1
+                fi
               done
 
               cp /config/.runner .
@@ -143,7 +150,7 @@ spec:
                 command:
                   - sh
                   - -c
-                  - "pkill -TERM dockerd || true; pkill -TERM containerd || true; sleep 2"
+                  - "pkill -TERM dockerd || true; pkill -TERM containerd || true; kill -TERM 1 || true; sleep 2"
 
       securityContext:
         fsGroup: 1001
