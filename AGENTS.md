@@ -72,13 +72,15 @@ helm lint apps/<name>/
 - Format: Conventional Commits with sentence-case or lower-case subject
 - No enforced type-enum (types are suggestions)
 - Blank line before body required
+- Types are the service name being modified matching the directory name (e.g. `monitoring:`,
+  `kube-system:`, `oauth2-proxy:`, `metal:`, `argocd:`)
 
 Example:
 
 ```
 add new monitoring dashboard
 
-feat(monitoring): add grafana dashboard for stump
+stump: Add grafana dashboard
 ```
 
 ### Helm Charts
