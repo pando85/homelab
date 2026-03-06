@@ -21,6 +21,12 @@ helmCharts:
     repo: https://prometheus-community.github.io/helm-charts
     valuesFile: smartctl-exporter-values.yaml
     version: 0.16.0
+  - name: prometheus-pushgateway
+    namespace: monitoring
+    releaseName: pushgateway
+    repo: https://prometheus-community.github.io/helm-charts
+    valuesFile: pushgateway-values.yaml
+    version: 3.6.0
 
 resources:
   - resources/alertmanager-secret.yaml

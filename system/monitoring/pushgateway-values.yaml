@@ -1,0 +1,32 @@
+automountServiceAccountToken: false
+
+securityContext:
+  fsGroup: 65534
+  fsGroupChangePolicy: "OnRootMismatch"
+  runAsNonRoot: true
+  runAsUser: 65534
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: monitoring
+  interval: 1m
+  scrapeTimeout: 10s
+  honorLabels: true
