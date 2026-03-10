@@ -3,6 +3,8 @@ kind: Deployment
 metadata:
   name: kata-nvidia-coordinator
   namespace: kube-system
+  annotations:
+    reloader.stakater.com/auto: "true"
 spec:
   replicas: 1
   selector:
