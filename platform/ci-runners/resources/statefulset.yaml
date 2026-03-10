@@ -149,14 +149,14 @@ spec:
           livenessProbe:
             tcpSocket:
               port: 2376
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
           readinessProbe:
             tcpSocket:
               port: 2376
-            initialDelaySeconds: 5
+            initialDelaySeconds: 15
             periodSeconds: 5
             timeoutSeconds: 2
             failureThreshold: 3
