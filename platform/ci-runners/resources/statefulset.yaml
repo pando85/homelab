@@ -87,30 +87,44 @@ spec:
         - name: daemon
           # renovate: datasource=docker
           image: docker:29.3.0
-          # finish the docker daemon when the main container exits
-          command:
-            - sh
-            - -c
-            - |
-              if [[ $(df -PT /var/lib/docker | awk 'NR==2 {print $2}') == virtiofs ]]; then
-                truncate -s 50G /docker/disk.img &&
-                mkfs.ext4 /docker/disk.img &&
-                mount /docker/disk.img /var/lib/docker;
-              fi &&
-              dockerd-entrypoint.sh 2>&1 &
-              while pgrep forgejo-runner > /dev/null && pgrep dockerd > /dev/null; do
-                echo "watching main job execution and docker daemon"
-                sleep 60
-              done;
-
-              echo "one of the processes exited, stopping dind"
-              pkill dockerd || true
-              exit 0
           env:
+            - name: TINI_SUBREAPER
+              value: "1"
             - name: DOCKER_TLS_CERTDIR
               value: /certs
             - name: DOCKER_HOST
               value: tcp://0.0.0.0:2376
+          command:
+            - sh
+            - -c
+            - |
+              exec /usr/local/bin/docker-init -g -- sh -c '
+                cleanup() {
+                  echo "Received termination signal, stopping docker daemon..."
+                  pkill -TERM dockerd 2>/dev/null || true
+                  pkill -TERM containerd 2>/dev/null || true
+                  sleep 2
+                  exit 0
+                }
+
+                trap cleanup TERM INT
+
+                if [[ $(df -PT /var/lib/docker | awk "NR==2 {print \$2}") == virtiofs ]]; then
+                  truncate -s 50G /docker/disk.img &&
+                  mkfs.ext4 /docker/disk.img &&
+                  mount /docker/disk.img /var/lib/docker
+                fi &&
+
+                dockerd-entrypoint.sh 2>&1 &
+                DOCKERD_PID=$!
+
+                while pgrep forgejo-runner > /dev/null && kill -0 $DOCKERD_PID 2>/dev/null; do
+                  sleep 5
+                done
+
+                echo "one of the processes exited, stopping dind"
+                cleanup
+              '
           securityContext:
             privileged: true
             runAsUser: 0
@@ -150,7 +164,7 @@ spec:
                 command:
                   - sh
                   - -c
-                  - "pkill -TERM dockerd || true; pkill -TERM containerd || true; kill -TERM 1 || true; sleep 2"
+                  - "pkill -TERM dockerd 2>/dev/null || true; sleep 2"
 
       securityContext:
         fsGroup: 1001
@@ -177,13 +191,13 @@ spec:
           persistentVolumeClaim:
             claimName: ci-runner-docker
       # not working with kata runtime
-      #resources:
-      #  requests:
-      #    memory: "100Mi"
-      #    cpu: "100m"
-      #  limits:
-      #    memory: "15Gi"
-      #    cpu: "8"
+      # resources:
+      #   requests:
+      #     memory: "100Mi"
+      #     cpu: "100m"
+      #   limits:
+      #     memory: "15Gi"
+      #     cpu: "8"
       restartPolicy: Always
       shareProcessNamespace: true
-      terminationGracePeriodSeconds: 15
+      terminationGracePeriodSeconds: 30
