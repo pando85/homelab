@@ -69,18 +69,19 @@ helm lint apps/<name>/
 
 ### Commit Messages
 
-- Format: Conventional Commits with sentence-case or lower-case subject
-- No enforced type-enum (types are suggestions)
-- Blank line before body required
-- Types are the service name being modified matching the directory name (e.g. `monitoring:`,
-  `kube-system:`, `oauth2-proxy:`, `metal:`, `argocd:`)
+- **Format:** `<scope>: <imperative-description>`
+- **Scope:** Directory or service name being modified (e.g., `kube-system:`, `vault:`, `monitoring:`)
+- **Description:** Imperative mood, no period, concise (e.g., "Add", "Update", "Fix", "Remove", "Change")
+- **Special scopes:** `metal` (Ansible/infrastructure), `docs` (documentation), `renovate` (renovate config)
 
-Example:
+Examples:
 
 ```
-add new monitoring dashboard
-
-stump: Add grafana dashboard
+kube-system: Add kata-nvidia coordinator operator
+vault: Change to svg logo
+monitoring: Update Helm release kube-prometheus-stack to v82.10.1
+metal: Add k3s node provisioning role
+docs: Improve AGENTS.md for coding
 ```
 
 ### Helm Charts

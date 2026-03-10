@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kata-nvidia-coordinator
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kata-nvidia-coordinator
+  template:
+    metadata:
+      labels:
+        app: kata-nvidia-coordinator
+    spec:
+      serviceAccountName: kata-nvidia-coordinator
+      containers:
+        - name: controller
+          image: alpine/kubectl:1.32.3
+          command:
+            - /bin/sh
+            - /scripts/controller.sh
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+      volumes:
+        - name: script
+          configMap:
+            name: kata-nvidia-coordinator-script
