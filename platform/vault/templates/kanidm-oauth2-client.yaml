@@ -23,4 +23,4 @@ spec:
   preferShortUsername: true
   strictRedirectUrl: true
   image:
-    url: https://raw.githubusercontent.com/docker-library/docs/90d4d43bdfccd5cb21e5fd964d32b0074af0f357/vault/logo.svg
+    url: https://raw.githubusercontent.com/hashicorp/vault/refs/heads/main/ui/public/favicon.png
