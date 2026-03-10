@@ -13,7 +13,7 @@ data:
     DEBOUNCE_SECONDS=60
 
     get_pod_states() {
-      kubectl get pods -l app=kata-deploy -n "$NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.name}:{.metadata.creationTimestamp}:{.status.containerStatuses[0].restartCount} {end}'
+      kubectl get pods -l name=kata-deploy -n "$NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.name}:{.metadata.creationTimestamp}:{.status.containerStatuses[0].restartCount} {end}'
     }
 
     wait_for_kata_ready() {
