@@ -16,7 +16,7 @@ spec:
       serviceAccountName: kata-nvidia-coordinator
       containers:
         - name: controller
-          image: alpine/kubectl:1.32.3
+          image: alpine/kubectl:1.34.2
           command:
             - /bin/sh
             - /scripts/controller.sh
