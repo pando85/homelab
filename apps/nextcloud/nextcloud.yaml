@@ -83,6 +83,9 @@ cronjob:
   enabled: true
   type: cronjob
   cronjob:
+    successfulJobsHistoryLimit: 3
+    failedJobsHistoryLimit: 0
+    backoffLimit: 5
     affinity:
       podAffinity:
         requiredDuringSchedulingIgnoredDuringExecution:
