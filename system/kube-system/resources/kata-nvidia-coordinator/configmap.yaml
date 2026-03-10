@@ -12,11 +12,12 @@ data:
     NVIDIA_DS=kube-system-nvidia-device-plugin
     DEBOUNCE_SECONDS=60
 
-    get_kata_generation() {
-      kubectl get ds "$KATA_DS" -n "$NAMESPACE" -o jsonpath='{.metadata.generation}'
+    get_pod_states() {
+      kubectl get pods -l app=kata-deploy -n "$NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.name}:{.metadata.creationTimestamp}:{.status.containerStatuses[0].restartCount} {end}'
     }
 
     wait_for_kata_ready() {
+      echo "$(date): Waiting for kata-deploy to be ready..."
       kubectl rollout status ds/"$KATA_DS" -n "$NAMESPACE" --timeout=300s
     }
 
@@ -28,19 +29,21 @@ data:
     }
 
     echo "$(date): Starting kata-nvidia coordinator..."
-    LAST_GENERATION=$(get_kata_generation)
-    echo "$(date): Initial kata-deploy generation: $LAST_GENERATION"
+    LAST_STATE=$(get_pod_states)
+    echo "$(date): Initial kata-deploy pod state: $LAST_STATE"
 
     while true; do
-      CURRENT_GENERATION=$(get_kata_generation)
+      CURRENT_STATE=$(get_pod_states)
 
-      if [ "$CURRENT_GENERATION" != "$LAST_GENERATION" ]; then
-        echo "$(date): kata-deploy generation changed: $LAST_GENERATION -> $CURRENT_GENERATION"
+      if [ "$CURRENT_STATE" != "$LAST_STATE" ]; then
+        echo "$(date): kata-deploy pod state changed"
+        echo "$(date): Old: $LAST_STATE"
+        echo "$(date): New: $CURRENT_STATE"
         wait_for_kata_ready
         echo "$(date): Waiting $DEBOUNCE_SECONDS seconds for stability..."
         sleep "$DEBOUNCE_SECONDS"
         restart_nvidia
-        LAST_GENERATION=$CURRENT_GENERATION
+        LAST_STATE=$(get_pod_states)
       fi
 
       sleep 10
