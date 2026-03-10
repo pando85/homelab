@@ -10,32 +10,7 @@ data:
     NAMESPACE=kube-system
     KATA_DS=kata-deploy
     NVIDIA_DS=kube-system-nvidia-device-plugin
-    LEASE_NAME=kata-nvidia-coordinator
     DEBOUNCE_SECONDS=60
-
-    create_lease() {
-      kubectl apply -f - <<EOF >/dev/null 2>&1
-    apiVersion: coordination.k8s.io/v1
-    kind: Lease
-    metadata:
-      name: $LEASE_NAME
-      namespace: $NAMESPACE
-    spec:
-      holderIdentity: "$HOSTNAME"
-      leaseDurationSeconds: 30
-      acquireTime: "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    EOF
-    }
-
-    is_leader() {
-      local holder
-      holder=$(kubectl get lease "$LEASE_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.holderIdentity}' 2>/dev/null)
-      [ "$holder" = "$HOSTNAME" ]
-    }
-
-    renew_lease() {
-      kubectl patch lease "$LEASE_NAME" -n "$NAMESPACE" --type=merge -p "{\"spec\":{\"holderIdentity\":\"$HOSTNAME\",\"renewTime\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}}" >/dev/null 2>&1
-    }
 
     get_kata_generation() {
       kubectl get ds "$KATA_DS" -n "$NAMESPACE" -o jsonpath='{.metadata.generation}'
@@ -56,22 +31,16 @@ data:
     echo "$(date): Starting kata-nvidia coordinator..."
 
     while true; do
-      if is_leader || create_lease; then
-        if is_leader; then
-          renew_lease
-          CURRENT_GENERATION=$(get_kata_generation)
+      CURRENT_GENERATION=$(get_kata_generation)
 
-          if [ -n "$LAST_GENERATION" ] && [ "$CURRENT_GENERATION" != "$LAST_GENERATION" ]; then
-            echo "$(date): kata-deploy generation changed: $LAST_GENERATION -> $CURRENT_GENERATION"
-            wait_for_kata_ready
-            echo "$(date): Waiting $DEBOUNCE_SECONDS seconds for stability..."
-            sleep "$DEBOUNCE_SECONDS"
-            restart_nvidia
-          fi
-
-          LAST_GENERATION=$CURRENT_GENERATION
-        fi
+      if [ -n "$LAST_GENERATION" ] && [ "$CURRENT_GENERATION" != "$LAST_GENERATION" ]; then
+        echo "$(date): kata-deploy generation changed: $LAST_GENERATION -> $CURRENT_GENERATION"
+        wait_for_kata_ready
+        echo "$(date): Waiting $DEBOUNCE_SECONDS seconds for stability..."
+        sleep "$DEBOUNCE_SECONDS"
+        restart_nvidia
       fi
 
+      LAST_GENERATION=$CURRENT_GENERATION
       sleep 10
     done
