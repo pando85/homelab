@@ -118,14 +118,20 @@ spec:
                 fi &&
 
                 dockerd-entrypoint.sh 2>&1 &
-                DOCKERD_PID=$!
+                  DOCKERD_PID=$!
 
-                while pgrep forgejo-runner > /dev/null && kill -0 $DOCKERD_PID 2>/dev/null; do
-                  sleep 5
-                done
+                  RUNNER_STARTED=false
+                  while kill -0 $DOCKERD_PID 2>/dev/null; do
+                    if pgrep forgejo-runner > /dev/null; then
+                      RUNNER_STARTED=true
+                    elif [ "$RUNNER_STARTED" = true ]; then
+                      echo "forgejo-runner exited, stopping dind"
+                      break
+                    fi
+                    sleep 5
+                  done
 
-                echo "one of the processes exited, stopping dind"
-                cleanup
+                  cleanup
               '
           securityContext:
             privileged: true
