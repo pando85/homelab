@@ -22,3 +22,5 @@ spec:
         - email
   preferShortUsername: true
   strictRedirectUrl: true
+  image:
+    url: https://www.hashicorp.com/_next/static/media/vault_on-dark.97792f64.svg
