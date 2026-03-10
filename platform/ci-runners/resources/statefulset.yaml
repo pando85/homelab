@@ -110,8 +110,10 @@ spec:
                 trap cleanup TERM INT
 
                 if [[ $(df -PT /var/lib/docker | awk "NR==2 {print \$2}") == virtiofs ]]; then
-                  truncate -s 50G /docker/disk.img &&
-                  mkfs.ext4 /docker/disk.img &&
+                  if [[ ! -f /docker/disk.img ]]; then
+                    truncate -s 50G /docker/disk.img &&
+                    mkfs.ext4 /docker/disk.img
+                  fi &&
                   mount /docker/disk.img /var/lib/docker
                 fi &&
 
