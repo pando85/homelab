@@ -98,7 +98,7 @@ spec:
             - sh
             - -c
             - |
-              exec /usr/local/bin/docker-init -g -- sh -c '
+              exec /usr/local/bin/docker-init -- sh -c '
                 cleanup() {
                   echo "Received termination signal, stopping docker daemon..."
                   pkill -TERM dockerd 2>/dev/null || true
