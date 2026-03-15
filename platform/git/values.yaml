@@ -88,6 +88,9 @@ forgejo:
         PROVIDER: db
         PROVIDER_CONFIG: ""
         SESSION_LIFE_TIME: 2592000
+        GC_INTERVAL_TIME: 86400
+      security:
+        LOGIN_REMEMBER_DAYS: 30
       cache:
         ADAPTER: redis
       queue:
