@@ -80,7 +80,7 @@ forgejo:
         CONN_MAX_LIFE_TIME: 300s
         LOG_SQL: false
       service:
-        DISABLE_REGISTRATION: true
+        DISABLE_REGISTRATION: false
         ENABLE_NOTIFY_MAIL: true
       webhook:
         ALLOWED_HOST_LIST: '*'
