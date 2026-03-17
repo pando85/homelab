@@ -14,3 +14,5 @@ zfs_arc_max_gb: 5
 
 l2arc_write_max_mb: 300
 l2arc_write_boost_mb: 500
+
+swap_file_size_mb: 16384

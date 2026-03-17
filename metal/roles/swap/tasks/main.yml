@@ -1,0 +1,82 @@
+---
+- name: Swap | Check current swap status
+  ansible.builtin.command: swapon --show --noheadings
+  register: swap_current
+  changed_when: false
+  check_mode: false
+  tags:
+    - swap
+
+- name: Swap | Check if swap file already enabled
+  ansible.builtin.set_fact:
+    swap_already_enabled: "{{ swap_file_path in swap_current.stdout }}"
+  tags:
+    - swap
+
+- name: Swap | Configure swap
+  when: not swap_already_enabled
+  tags:
+    - swap
+  block:
+    - name: Swap | Check if swap file exists
+      ansible.builtin.stat:
+        path: "{{ swap_file_path }}"
+      register: swap_file_stat
+
+    - name: Swap | Create swap file
+      ansible.builtin.command:
+        cmd: fallocate -l {{ swap_file_size_mb | int }}M {{ swap_file_path }}
+        creates: "{{ swap_file_path }}"
+      when: not swap_file_stat.stat.exists
+
+    - name: Swap | Set swap file permissions
+      ansible.builtin.file:
+        path: "{{ swap_file_path }}"
+        mode: "0600"
+        state: file
+      when: not swap_file_stat.stat.exists
+
+    - name: Swap | Format swap file
+      ansible.builtin.command: mkswap {{ swap_file_path }}
+      when: not swap_file_stat.stat.exists
+      changed_when: true
+
+    - name: Swap | Enable swap file
+      ansible.builtin.command: swapon {{ swap_file_path }}
+      changed_when: true
+
+- name: Swap | Add swap to fstab
+  ansible.builtin.mount:
+    path: none
+    src: "{{ swap_file_path }}"
+    fstype: swap
+    opts: sw
+    passno: "0"
+    dump: "0"
+    state: present
+  tags:
+    - swap
+
+- name: Swap | Configure swappiness
+  ansible.builtin.sysctl:
+    name: vm.swappiness
+    value: "{{ swap_swappiness | string }}"
+    state: present
+    reload: true
+    sysctl_file: "{{ swap_sysctl_file }}"
+  tags:
+    - swap
+
+- name: Swap | Verify swap is active
+  ansible.builtin.command: swapon --show
+  register: swap_show
+  changed_when: false
+  check_mode: false
+  tags:
+    - swap
+
+- name: Swap | Display swap status
+  ansible.builtin.debug:
+    msg: "{{ swap_show.stdout_lines }}"
+  tags:
+    - swap
