@@ -64,7 +64,7 @@ forgejo:
 
     config:
       oauth2_client:
-        ENABLE_AUTO_REGISTRATION: true
+        ENABLE_AUTO_REGISTRATION: false
         OPENID_CONNECT_SCOPES: email
       server:
         LANDING_PAGE: explore
