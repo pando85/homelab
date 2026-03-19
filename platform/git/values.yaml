@@ -64,7 +64,7 @@ forgejo:
 
     config:
       oauth2_client:
-        ENABLE_AUTO_REGISTRATION: false
+        ENABLE_AUTO_REGISTRATION: true
         OPENID_CONNECT_SCOPES: email
       server:
         LANDING_PAGE: explore
@@ -80,7 +80,7 @@ forgejo:
         CONN_MAX_LIFE_TIME: 300s
         LOG_SQL: false
       service:
-        DISABLE_REGISTRATION: false
+        DISABLE_REGISTRATION: true
         ENABLE_NOTIFY_MAIL: true
       webhook:
         ALLOWED_HOST_LIST: '*'
