@@ -82,6 +82,9 @@ forgejo:
       service:
         DISABLE_REGISTRATION: true
         ENABLE_NOTIFY_MAIL: true
+        ALLOW_ONLY_EXTERNAL_REGISTRATION: true
+        ENABLE_INTERNAL_SIGNIN: true
+        SHOW_REGISTRATION_BUTTON: false
       webhook:
         ALLOWED_HOST_LIST: '*'
       session:
