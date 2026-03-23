@@ -48,22 +48,24 @@ jobs:
           echo "DRY_RUN=${{ github.event.inputs.dryRun || env.DRY_RUN }}" >> "$GITHUB_ENV"
           echo "LOG_LEVEL=${{ github.event.inputs.logLevel || env.LOG_LEVEL }}" >> "$GITHUB_ENV"
 
-      - name: Validate github.com PAT
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"
-          code="$(curl -sS -o /tmp/gh_user.json -w '%{http_code}' \
-            -H 'Authorization: Bearer ${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}' \
-            https://api.github.com/user)"
-          echo "HTTP=$code"
-          test "$code" = "200"
-
       - name: Renovate
         # yamllint disable-line rule:comments
         uses: renovatebot/github-action@0b17c4eb901eca44d018fb25744a50a74b2042df # v46.1.4
         env:
           RENOVATE_GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}
+          RENOVATE_HOST_RULES: >-
+            [
+              {
+                "hostType": "github",
+                "matchHost": "api.github.com",
+                "token": "${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"
+              },
+              {
+                "hostType": "github",
+                "matchHost": "github.com",
+                "token": "${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"
+              }
+            ]
         with:
           configurationFile: .github/renovate-config.json
           token: "${{ steps.generate-token.outputs.token }}"
