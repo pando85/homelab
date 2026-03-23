@@ -52,19 +52,12 @@ jobs:
         # yamllint disable-line rule:comments
         uses: renovatebot/github-action@0b17c4eb901eca44d018fb25744a50a74b2042df # v46.1.4
         env:
-          RENOVATE_GITHUB_COM_TOKEN: ${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}
           RENOVATE_HOST_RULES: >-
             [
-              {
-                "hostType": "github",
-                "matchHost": "api.github.com",
-                "token": "${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"
-              },
-              {
-                "hostType": "github",
-                "matchHost": "github.com",
-                "token": "${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"
-              }
+              {"hostType":"github","matchHost":"api.github.com","token":"${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"},
+              {"hostType":"github","matchHost":"github.com","token":"${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"},
+              {"hostType":"github-tags","matchHost":"api.github.com","token":"${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"},
+              {"hostType":"github-changelog","matchHost":"api.github.com","token":"${{ secrets.RENOVATE_GITHUB_COM_TOKEN }}"}
             ]
         with:
           configurationFile: .github/renovate-config.json
