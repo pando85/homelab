@@ -86,7 +86,7 @@ spec:
               mountPath: /cache
         - name: daemon
           # renovate: datasource=docker
-          image: docker:29.3.0
+          image: docker:29.3.1
           env:
             - name: TINI_SUBREAPER
               value: "1"
