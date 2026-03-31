@@ -103,6 +103,25 @@ minio:
             - "s3:GetBucketLocation"
             - "s3:ListBucket"
             - "s3:ListBucketMultipartUploads"
+    - name: sdelrioReadWritePolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sdelrio/*'
+          actions:
+            - "s3:AbortMultipartUpload"
+            - "s3:GetObject"
+            - "s3:DeleteObject"
+            - "s3:PutObject"
+            - "s3:ListMultipartUploadParts"
+        - resources:
+            - 'arn:aws:s3:::sdelrio/'
+          actions:
+            - "s3:CreateBucket"
+            - "s3:DeleteBucket"
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
+            - "s3:ListBucketMultipartUploads"
   users:
     - accessKey: milla
       existingSecret: cross-backups-users
@@ -112,6 +131,10 @@ minio:
       existingSecret: cross-backups-users
       existingSecretKey: dabolPassword
       policy: dabolReadWritePolicy
+    - accessKey: sdelrio
+      existingSecret: cross-backups-users
+      existingSecretKey: sdelrioPassword
+      policy: sdelrioReadWritePolicy
     ## Username, password and policy to be assigned to the user
     ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
     ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
@@ -136,10 +159,12 @@ minio:
       versioning: false
       objectlocking: false
     - name: dabol
-      # Policy to be set on the
-      # bucket [none|download|upload|public]
       policy: none
-      # Purge if bucket exists already
+      purge: false
+      versioning: false
+      objectlocking: false
+    - name: sdelrio
+      policy: none
       purge: false
       versioning: false
       objectlocking: false
