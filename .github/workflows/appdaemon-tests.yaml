@@ -1,0 +1,38 @@
+---
+name: AppDaemon Tests
+
+# yamllint disable-line rule:truthy
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'apps/home-assistant/appdaemon/**'
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'apps/home-assistant/appdaemon/**'
+
+jobs:
+  test:
+    name: Run AppDaemon Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r apps/home-assistant/appdaemon/requirements_test.txt
+          pip install pytz
+
+      - name: Run tests
+        run: |
+          cd apps/home-assistant/appdaemon/apps
+          pytest tests/ -v
