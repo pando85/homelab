@@ -30,7 +30,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r apps/home-assistant/appdaemon/requirements_test.txt
-          pip install pytz
+          pip install pytz appdaemon
 
       - name: Run tests
         run: |
