@@ -173,6 +173,48 @@ spec:
                   - sh
                   - -c
                   - "pkill -TERM dockerd 2>/dev/null || true; sleep 2"
+        - name: docker-gc
+          # renovate: datasource=docker
+          image: docker:29.3.1
+          env:
+            - name: DOCKER_HOST
+              value: tcp://localhost:2376
+            - name: DOCKER_CERT_PATH
+              value: /certs/client
+            - name: DOCKER_TLS_VERIFY
+              value: "1"
+          command:
+            - sh
+            - -c
+            - |
+              interval_seconds=$((12 * 60 * 60))
+              retention=72h
+
+              while true; do
+                until docker info >/dev/null 2>&1; do
+                  echo "waiting for docker daemon..."
+                  sleep 10
+                done
+
+                echo "pruning docker images older than ${retention}"
+                docker image prune -af --filter "until=${retention}" || true
+
+                echo "pruning docker build cache older than ${retention}"
+                docker builder prune -af --filter "until=${retention}" || true
+
+                echo "sleeping for ${interval_seconds}s"
+                sleep "${interval_seconds}"
+              done
+          volumeMounts:
+            - name: docker-certs
+              mountPath: /certs
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
 
       securityContext:
         fsGroup: 1001
