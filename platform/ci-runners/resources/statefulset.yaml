@@ -162,29 +162,29 @@ spec:
               command:
                 - sh
                 - -c
-                - docker --host unix:///sock/docker.sock version --format '{{.Server.Version}}' >/dev/null 2>&1
+                - test -S /sock/docker.sock
             periodSeconds: 5
-            timeoutSeconds: 5
+            timeoutSeconds: 2
             failureThreshold: 24
           livenessProbe:
             exec:
               command:
                 - sh
                 - -c
-                - docker --host unix:///sock/docker.sock version --format '{{.Server.Version}}' >/dev/null 2>&1
+                - pgrep dockerd >/dev/null
             initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 5
+            timeoutSeconds: 2
             failureThreshold: 3
           readinessProbe:
             exec:
               command:
                 - sh
                 - -c
-                - docker --host unix:///sock/docker.sock version --format '{{.Server.Version}}' >/dev/null 2>&1
+                - test -S /sock/docker.sock
             initialDelaySeconds: 5
             periodSeconds: 5
-            timeoutSeconds: 5
+            timeoutSeconds: 2
             failureThreshold: 3
           lifecycle:
             preStop:
