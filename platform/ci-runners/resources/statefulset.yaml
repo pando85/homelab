@@ -175,6 +175,8 @@ spec:
           # renovate: datasource=docker
           image: docker:29.3.1
           env:
+            - name: HOME
+              value: /tmp
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
           command:
