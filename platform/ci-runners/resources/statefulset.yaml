@@ -116,6 +116,13 @@ spec:
                 dockerd-entrypoint.sh --host=unix:///sock/docker.sock --host=tcp://0.0.0.0:2376 2>&1 &
                   DOCKERD_PID=$!
 
+                  while [ ! -S /sock/docker.sock ]; do
+                    sleep 1
+                  done
+
+                  chgrp 1001 /sock/docker.sock
+                  chmod 660 /sock/docker.sock
+
                   RUNNER_STARTED=false
                   while kill -0 $DOCKERD_PID 2>/dev/null; do
                     if pgrep forgejo-runner > /dev/null; then
