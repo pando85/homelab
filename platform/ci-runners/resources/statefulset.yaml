@@ -157,25 +157,34 @@ spec:
             limits:
               memory: "6Gi"
               cpu: "4"
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - docker --host unix:///sock/docker.sock version --format '{{.Server.Version}}' >/dev/null 2>&1
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 24
           livenessProbe:
             exec:
               command:
                 - sh
                 - -c
-                - docker --host unix:///sock/docker.sock info >/dev/null 2>&1
-            initialDelaySeconds: 30
+                - docker --host unix:///sock/docker.sock version --format '{{.Server.Version}}' >/dev/null 2>&1
+            initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 2
+            timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
             exec:
               command:
                 - sh
                 - -c
-                - docker --host unix:///sock/docker.sock info >/dev/null 2>&1
-            initialDelaySeconds: 15
+                - docker --host unix:///sock/docker.sock version --format '{{.Server.Version}}' >/dev/null 2>&1
+            initialDelaySeconds: 5
             periodSeconds: 5
-            timeoutSeconds: 2
+            timeoutSeconds: 5
             failureThreshold: 3
           lifecycle:
             preStop:
