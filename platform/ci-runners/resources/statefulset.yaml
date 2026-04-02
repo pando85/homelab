@@ -158,15 +158,21 @@ spec:
               memory: "6Gi"
               cpu: "4"
           livenessProbe:
-            tcpSocket:
-              port: 2376
+            exec:
+              command:
+                - sh
+                - -c
+                - docker --host unix:///sock/docker.sock info >/dev/null 2>&1
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 2
             failureThreshold: 3
           readinessProbe:
-            tcpSocket:
-              port: 2376
+            exec:
+              command:
+                - sh
+                - -c
+                - docker --host unix:///sock/docker.sock info >/dev/null 2>&1
             initialDelaySeconds: 15
             periodSeconds: 5
             timeoutSeconds: 2
