@@ -44,7 +44,7 @@ spec:
             - |
               retries=0
               max_retries=10
-              while ! nc -z localhost 2376 </dev/null; do
+              while [ ! -S /sock/docker.sock ]; do
                 echo "waiting for docker daemon... ($retries/$max_retries)"
                 sleep 5
                 retries=$((retries+1))
@@ -68,14 +68,8 @@ spec:
             runAsUser: 1001
           env:
             - name: DOCKER_HOST
-              value: tcp://localhost:2376
-            - name: DOCKER_CERT_PATH
-              value: /certs/client
-            - name: DOCKER_TLS_VERIFY
-              value: "1"
+              value: unix:///sock/docker.sock
           volumeMounts:
-            - name: docker-certs
-              mountPath: /certs
             - name: runner-data
               mountPath: /workspace
             - name: runner-registration
@@ -84,6 +78,8 @@ spec:
               mountPath: /config
             - name: ci-runner-cache
               mountPath: /cache
+            - name: docker-run
+              mountPath: /sock
         - name: daemon
           # renovate: datasource=docker
           image: docker:29.3.1
@@ -117,7 +113,7 @@ spec:
                   mount /docker/disk.img /var/lib/docker
                 fi &&
 
-                dockerd-entrypoint.sh 2>&1 &
+                dockerd-entrypoint.sh --host=unix:///sock/docker.sock --host=tcp://0.0.0.0:2376 2>&1 &
                   DOCKERD_PID=$!
 
                   RUNNER_STARTED=false
@@ -145,13 +141,15 @@ spec:
               mountPath: /workspace
             - name: ci-runner-cache
               mountPath: /cache
+            - name: docker-run
+              mountPath: /sock
           resources:
             requests:
-              memory: "100Mi"
-              cpu: "100m"
+              memory: "256Mi"
+              cpu: "250m"
             limits:
-              memory: "5Gi"
-              cpu: "3"
+              memory: "6Gi"
+              cpu: "4"
           livenessProbe:
             tcpSocket:
               port: 2376
@@ -178,11 +176,7 @@ spec:
           image: docker:29.3.1
           env:
             - name: DOCKER_HOST
-              value: tcp://localhost:2376
-            - name: DOCKER_CERT_PATH
-              value: /certs/client
-            - name: DOCKER_TLS_VERIFY
-              value: "1"
+              value: unix:///sock/docker.sock
           command:
             - sh
             - -c
@@ -206,8 +200,8 @@ spec:
                 sleep "${interval_seconds}"
               done
           volumeMounts:
-            - name: docker-certs
-              mountPath: /certs
+            - name: docker-run
+              mountPath: /sock
           resources:
             requests:
               memory: "32Mi"
@@ -225,7 +219,7 @@ spec:
         - name: runner-data
           emptyDir:
             medium: Memory
-            sizeLimit: 3Gi
+            sizeLimit: 8Gi
         - name: runner-config
           secret:
             secretName: runner-config
@@ -233,6 +227,8 @@ spec:
           configMap:
             name: runner-registration
         - name: docker-certs
+          emptyDir: {}
+        - name: docker-run
           emptyDir: {}
         - name: ci-runner-cache
           persistentVolumeClaim:
