@@ -164,8 +164,8 @@ spec:
                 - -c
                 - test -S /sock/docker.sock
             periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 24
+            timeoutSeconds: 5
+            failureThreshold: 36
           livenessProbe:
             exec:
               command:
@@ -174,8 +174,8 @@ spec:
                 - pgrep dockerd >/dev/null
             initialDelaySeconds: 5
             periodSeconds: 10
-            timeoutSeconds: 2
-            failureThreshold: 3
+            timeoutSeconds: 5
+            failureThreshold: 5
           readinessProbe:
             exec:
               command:
@@ -184,8 +184,8 @@ spec:
                 - test -S /sock/docker.sock
             initialDelaySeconds: 5
             periodSeconds: 5
-            timeoutSeconds: 2
-            failureThreshold: 3
+            timeoutSeconds: 5
+            failureThreshold: 5
           lifecycle:
             preStop:
               exec:
