@@ -58,10 +58,10 @@ spec:
               exec forgejo-runner -c /registration/registration.yaml daemon
           resources:
             requests:
-              memory: "100Mi"
+              memory: "4Gi"
               cpu: "100m"
             limits:
-              memory: "14Gi"
+              memory: "18Gi"
               cpu: "14"
           securityContext:
             privileged: true
@@ -155,7 +155,7 @@ spec:
               memory: "256Mi"
               cpu: "250m"
             limits:
-              memory: "6Gi"
+              memory: "8Gi"
               cpu: "4"
           startupProbe:
             exec:
