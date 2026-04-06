@@ -15,25 +15,6 @@ spec:
       labels:
         app.kubernetes.io/name: ci-runner
     spec:
-      runtimeClassName: kata
-      # source: https://docs.cilium.io/en/latest/network/kubernetes/kata/
-      initContainers:
-        - name: set-mtu
-          # renovate: datasource=docker
-          image: busybox:1.37.0
-          command:
-            - sh
-            - -c
-            - |
-              GW="$(ip route show default | awk 'NR==1 {print $3}')"
-              DEV="$(ip route show default | awk 'NR==1 {print $5}')"
-              ip route replace default via "$GW" dev "$DEV" mtu 1450
-          securityContext:
-            privileged: true
-            runAsUser: 0
-            capabilities:
-              add:
-                - NET_ADMIN
       containers:
         - name: runner
           # renovate: sha256: datasource=docker
@@ -105,14 +86,6 @@ spec:
 
                 trap cleanup TERM INT
 
-                if [[ $(df -PT /var/lib/docker | awk "NR==2 {print \$2}") == virtiofs ]]; then
-                  if [[ ! -f /docker/disk.img ]]; then
-                    truncate -s 50G /docker/disk.img &&
-                    mkfs.ext4 /docker/disk.img
-                  fi &&
-                  mount /docker/disk.img /var/lib/docker
-                fi &&
-
                 dockerd-entrypoint.sh --host=unix:///sock/docker.sock --host=tcp://0.0.0.0:2376 2>&1 &
                   DOCKERD_PID=$!
 
@@ -143,7 +116,7 @@ spec:
             - name: docker-certs
               mountPath: /certs
             - name: ci-runner-docker
-              mountPath: /docker
+              mountPath: /var/lib/docker
             - name: runner-data
               mountPath: /workspace
             - name: ci-runner-cache
@@ -283,6 +256,9 @@ spec:
           volumeMounts:
             - name: docker-run
               mountPath: /sock
+            - name: ci-runner-docker
+              mountPath: /var/lib/docker
+              readOnly: true
           resources:
             requests:
               memory: "32Mi"
