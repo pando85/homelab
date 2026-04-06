@@ -205,8 +205,11 @@ spec:
             - sh
             - -c
             - |
-              interval_seconds=$((12 * 60 * 60))
-              retention=72h
+              CHECK_INTERVAL=1800
+              THRESHOLD_LOW=80
+              THRESHOLD_MED=85
+              THRESHOLD_HIGH=90
+              THRESHOLD_CRITICAL=95
               runner_started=false
 
               cleanup() {
@@ -214,6 +217,10 @@ spec:
               }
 
               trap cleanup TERM INT
+
+              get_disk_usage() {
+                df -P /var/lib/docker 2>/dev/null | awk 'NR==2 {print $5}' | tr -d '%' || echo 0
+              }
 
               while true; do
                 if pgrep forgejo-runner >/dev/null; then
@@ -233,15 +240,37 @@ spec:
                   sleep 10
                 done
 
-                echo "pruning docker images older than ${retention}"
-                docker image prune -af --filter "until=${retention}" || true
+                usage=$(get_disk_usage)
+                echo "docker disk usage: ${usage}%"
 
-                echo "pruning docker build cache older than ${retention}"
-                docker builder prune -af --filter "until=${retention}" || true
+                if [ "$usage" -ge "$THRESHOLD_LOW" ]; then
+                  if [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then
+                    echo "critical disk usage (${usage}%), aggressive cleanup (6h retention)"
+                    docker image prune -af --filter "until=6h" || true
+                    docker builder prune -af --filter "until=6h" || true
+                    docker container prune -f || true
+                  elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
+                    echo "high disk usage (${usage}%), pruning unused images (24h retention)"
+                    docker image prune -af --filter "until=24h" || true
+                    docker builder prune -af --filter "until=24h" || true
+                  elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
+                    echo "medium disk usage (${usage}%), pruning build cache (24h retention)"
+                    docker builder prune -af --filter "until=24h" || true
+                  else
+                    echo "low disk usage (${usage}%), pruning dangling images and containers"
+                    docker image prune -f || true
+                    docker container prune -f || true
+                  fi
 
-                echo "sleeping for ${interval_seconds}s"
+                  new_usage=$(get_disk_usage)
+                  echo "cleanup complete, new usage: ${new_usage}%"
+                else
+                  echo "disk usage below threshold (${usage}%), skipping cleanup"
+                fi
+
+                echo "sleeping for ${CHECK_INTERVAL}s"
                 slept_seconds=0
-                while [ "$slept_seconds" -lt "$interval_seconds" ]; do
+                while [ "$slept_seconds" -lt "$CHECK_INTERVAL" ]; do
                   if ! pgrep forgejo-runner >/dev/null; then
                     echo "forgejo-runner exited, stopping docker-gc"
                     exit 0
