@@ -1,3 +1,34 @@
+# PostgreSQL ZFS Tuning for Forgejo/Git Performance
+#
+# Context: git.grigri.cloud runs on prusik node with ZFS storage on HDD RAIDZ1.
+# The HDDs (4x 12TB Seagate) have high read latency (~20-36ms) causing git
+# operations to spike to 10+ seconds P95 latency.
+#
+# ZFS Dataset: datasets/openebs/restored-3eeb806f-98c4-4ff4-a2b7-ef6f676077a1
+# Current: recordsize=128K, compression=on, logbias=latency
+#
+# Recommended ZFS Tuning (apply on prusik):
+#   zfs set recordsize=16K <dataset>     # Git objects are small files (16K optimal)
+#   zfs set logbias=throughput <dataset>  # Better for batch operations
+#
+# Note: recordsize change only affects NEW writes. To fully benefit:
+#   1. Stop Forgejo: kubectl scale deployment git-forgejo -n git --replicas=0
+#   2. Create new dataset with 16K recordsize
+#   3. rsync data to new dataset (applies new block size on write)
+#   4. Update PV/PVC to point to new dataset
+#   5. Start Forgejo
+#
+# PostgreSQL tuning rationale:
+#   - random_page_cost=1.1: ZFS ARC cache makes random reads nearly as fast as sequential
+#   - effective_io_concurrency=20: Higher concurrency for ZFS parallel reads
+#   - full_page_writes=off: ZFS always writes full blocks, no torn page risk
+#     (only safe with recordsize >= 8K, which we have)
+#   - synchronous_commit=off: Don't wait for WAL flush on each commit (HDD bottleneck)
+#   - wal_writer_delay=100ms: Batch WAL writes to reduce HDD I/O
+#
+# Performance impact: These settings trade some durability guarantees for significantly
+# better performance on HDD storage. Data loss risk: ~100ms of transactions on power failure.
+#
 apiVersion: "acid.zalan.do/v1"
 kind: postgresql
 metadata:
@@ -6,38 +37,31 @@ metadata:
     backup/retain: quaterly
 spec:
   teamId: gitea
-
   numberOfInstances: 1
-
   resources:
     requests:
       cpu: 10m
       memory: 256Mi
     limits:
       memory: 512Mi
-
   volume:
     size: 2Gi
-
   users:
     gitea:
       - superuser
       - createdb
   databases:
     gitea: gitea
-
   postgresql:
     version: "17"
     parameters:
       archive_mode: "off"
-      # minimal value. If not default to 100
       max_connections: "100"
       shared_buffers: "256MB"
       work_mem: "16MB"
       random_page_cost: "1.1"
       effective_io_concurrency: "20"
       checkpoint_completion_target: "0.9"
-      # Don't wait for HDD sync on each commit
       synchronous_commit: "off"
       wal_writer_delay: "100ms"
       log_checkpoints: "off"
@@ -46,5 +70,4 @@ spec:
       log_lock_waits: "off"
       log_min_duration_statement: "-1"
       log_statement: none
-      # ZFS settings because recordsize is 128k not 8k
       full_page_writes: "off"
