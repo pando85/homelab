@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workspace-gc-script
+data:
+  cleanup.sh: |
+    CHECK_INTERVAL=300
+    THRESHOLD_LOW=70
+    THRESHOLD_MED=80
+    THRESHOLD_HIGH=90
+    THRESHOLD_CRITICAL=95
+    PRESERVE_DIRS=".pnpm-store tool_cache"
+    runner_started=false
+
+    cleanup() {
+      exit 0
+    }
+    trap cleanup TERM INT
+
+    get_workspace_usage() {
+      df -P /workspace | tail -1 | sed 's/.*[[:space:]]\([0-9]*\)%.*/\1/'
+    }
+
+    while true; do
+      if pgrep forgejo-runner >/dev/null; then
+        runner_started=true
+      elif [ "$runner_started" = true ]; then
+        echo "forgejo-runner exited, stopping workspace-gc"
+        exit 0
+      fi
+
+      usage=$(get_workspace_usage)
+      echo "workspace disk usage: ${usage}%"
+
+      if [ "$usage" -ge "$THRESHOLD_LOW" ]; then
+        if [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then
+          retention_minutes=5
+        elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
+          retention_minutes=10
+        elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
+          retention_minutes=30
+        else
+          retention_minutes=60
+        fi
+
+        echo "cleanup starting (${usage}%), retention: ${retention_minutes}m"
+
+        for dir in /workspace/*; do
+          [ -d "$dir" ] || continue
+          dirname=$(basename "$dir")
+          skip=false
+          for preserve in $PRESERVE_DIRS; do
+            if [ "$dirname" = "$preserve" ]; then
+              skip=true
+              break
+            fi
+          done
+          if [ "$skip" = true ]; then
+            continue
+          fi
+          age_minutes=$(( ($(date +%s) - $(stat -c %Y "$dir" 2>/dev/null || echo 0)) / 60 ))
+          if [ "$age_minutes" -gt "$retention_minutes" ]; then
+            echo "removing $dir (age: ${age_minutes}m)"
+            rm -rf "$dir" || true
+          fi
+        done
+
+        new_usage=$(get_workspace_usage)
+        echo "cleanup complete, new usage: ${new_usage}%"
+      fi
+
+      sleep $CHECK_INTERVAL
+    done
