@@ -280,7 +280,9 @@ spec:
               PRESERVE_DIRS=".pnpm-store tool_cache"
               runner_started=false
 
-              cleanup() { exit 0 }
+              cleanup() {
+                exit 0
+              }
               trap cleanup TERM INT
 
               get_workspace_usage() {
