@@ -4,7 +4,7 @@ metadata:
   name: workspace-gc-script
 data:
   cleanup.sh: |
-    CHECK_INTERVAL=300
+    CHECK_INTERVAL=15
     THRESHOLD_LOW=70
     THRESHOLD_MED=80
     THRESHOLD_HIGH=90
