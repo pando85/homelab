@@ -351,8 +351,9 @@ spec:
               cpu: "50m"
 
       securityContext:
-        fsGroup: 1001
         fsGroupChangePolicy: "OnRootMismatch"
+        supplementalGroups:
+          - 1001
         runAsGroup: 1001
         runAsUser: 1001
       volumes:
