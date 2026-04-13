@@ -8,7 +8,7 @@ app-template:
         nginx:
           image:
             repository: nginx
-            tag: 1.29.7-alpine
+            tag: 1.29.8-alpine
 
           securityContext:
             runAsUser: 0
