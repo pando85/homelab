@@ -13,3 +13,4 @@ book/
 *kubeconfig.yaml
 Chart.lock
 charts
+.playwright-mcp
