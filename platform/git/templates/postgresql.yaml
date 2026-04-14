@@ -45,7 +45,7 @@ spec:
     limits:
       memory: 512Mi
   volume:
-    size: 2Gi
+    size: 10Gi
   users:
     gitea:
       - superuser
