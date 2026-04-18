@@ -34,8 +34,11 @@ app-template:
                   port: *port
                 timeoutSeconds: 1
             startup:
-              <<: *probe
+              enabled: true
+              custom: true
               spec:
+                tcpSocket:
+                  port: *port
                 failureThreshold: 30
                 periodSeconds: 10
             readiness: *probe
