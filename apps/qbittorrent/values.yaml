@@ -33,6 +33,11 @@ app-template:
                 tcpSocket:
                   port: *port
                 timeoutSeconds: 1
+            startup:
+              <<: *probe
+              spec:
+                failureThreshold: 30
+                periodSeconds: 10
             readiness: *probe
         metrics:
           image:
