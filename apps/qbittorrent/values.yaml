@@ -21,7 +21,7 @@ app-template:
               cpu: 100m
               memory: 800Mi
             limits:
-              memory: 6Gi
+              memory: 8Gi
 
           probes:
             liveness: &probe
@@ -64,6 +64,20 @@ app-template:
                   port: *metrics_port
                 timeoutSeconds: 1
             readiness: *metrics_probe
+
+      initContainers:
+        config-patch:
+          image:
+            repository: busybox
+            tag: 1.37
+          command:
+            - sh
+            - -c
+            - |
+              CONFIG_FILE=/config/qBittorrent/qBittorrent.conf
+              if [ -f "$CONFIG_FILE" ]; then
+                sed -i 's/^MemoryWorkingSetLimit=.*/MemoryWorkingSetLimit=7000/' "$CONFIG_FILE"
+              fi
 
   defaultPodOptions:
     securityContext:
