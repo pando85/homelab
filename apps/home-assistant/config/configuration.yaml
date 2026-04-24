@@ -2,7 +2,7 @@
 default_config:
 
 homeassistant:
-  # Load packages
+  secrets: !include gitops/secrets/secrets.yaml
   packages: !include_dir_named integrations
 
 script: !include_dir_merge_named script
@@ -22,5 +22,3 @@ recorder:
 prometheus:
   namespace: hass
   requires_auth: false
-
-notify: !include secrets/notify.yaml

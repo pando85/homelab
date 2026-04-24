@@ -27,7 +27,7 @@ automation:
             - condition: trigger
               id: finished
           sequence:
-            - service: notify.all
+            - action: script.telegram_notify_all
               data:
                 title: "Dishwasher — Finished"
                 message: >
@@ -42,7 +42,7 @@ automation:
                   {{ error_messages.get(error_code, 'Unknown error (' ~ error_code ~ ') occurred.') }}
             - condition: template
               value_template: "{{ error_code is not none }}"
-            - service: notify.all
+            - action: script.telegram_notify_all
               data:
                 title: "Dishwasher — Error"
                 message: >

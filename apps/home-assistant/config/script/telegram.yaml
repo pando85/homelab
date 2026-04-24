@@ -1,0 +1,73 @@
+telegram_notify_agil:
+  alias: Telegram Notify Agil
+  description: Send Telegram notification to Agil
+  icon: mdi:telegram
+  fields:
+    message:
+      description: Message text
+      example: "Notification message"
+      required: true
+      selector:
+        text:
+    title:
+      description: Optional title
+      example: "Alert"
+      selector:
+        text:
+  sequence:
+    - action: telegram_bot.send_message
+      data:
+        chat_id: !secret chat_id_agil
+        message: "{{ message }}"
+        title: "{{ title | default('') }}"
+
+telegram_notify_all:
+  alias: Telegram Notify All
+  description: Send Telegram notification to group chat
+  icon: mdi:telegram
+  mode: single
+  fields:
+    message:
+      description: Message text
+      example: "Notification message"
+      required: true
+      selector:
+        text:
+    title:
+      description: Optional title
+      example: "Alert"
+      selector:
+        text:
+    photo_url:
+      description: Optional photo URL
+      example: "http://example.com/image.png"
+      selector:
+        text:
+    photo_caption:
+      description: Optional photo caption (overrides message)
+      selector:
+        text:
+  sequence:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ photo_url | default('') != '' }}"
+          sequence:
+            - action: telegram_bot.send_message
+              data:
+                chat_id: !secret chat_id_all
+                message: "{{ message }}"
+                title: "{{ title | default('') }}"
+                data:
+                  photo:
+                    - url: "{{ photo_url }}"
+                      caption: "{{ photo_caption | default(message) }}"
+        - conditions:
+            - condition: template
+              value_template: "{{ photo_url | default('') == '' }}"
+          sequence:
+            - action: telegram_bot.send_message
+              data:
+                chat_id: !secret chat_id_all
+                message: "{{ message }}"
+                title: "{{ title | default('') }}"
