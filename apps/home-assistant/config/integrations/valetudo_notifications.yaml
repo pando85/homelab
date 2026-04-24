@@ -39,13 +39,15 @@ automation:
     message: "{{ strings[msg_type] | default(strings['default_msg']) }}"
 
   action:
-    - action: script.telegram_notify_all
+    - service: notify.all
       data:
         message: required but not used when sending photo
-        photo_url: http://home-assistant-valetudopng:3000/api/map/image
-        photo_caption: |
-          Tanque
-          {{ message }}
+        data:
+          photo:
+            - url: http://home-assistant-valetudopng:3000/api/map/image
+              caption: |
+                Tanque
+                {{ message }}
 
 template:
   - binary_sensor:

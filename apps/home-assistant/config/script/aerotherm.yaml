@@ -32,7 +32,7 @@ set_heat_mode:
       data:
         option: "{{ heatmode }}"
     - alias: Notify
-      action: script.telegram_notify_agil
+      service: notify.agil
       data:
         message: |
           Set heat mode to `{{ heatmode }}`.
