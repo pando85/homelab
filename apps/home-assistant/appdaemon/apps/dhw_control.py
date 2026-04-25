@@ -9,6 +9,8 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
+from utils import escape_markdownv2
+
 
 @dataclass
 class Price:
@@ -61,9 +63,11 @@ class DHWControl(hass.Hass):
                 self.log(f"Error during daily scheduler registration: {e}", level="ERROR")
                 try:
                     await self.notify(
-                        f"""Error during daily scheduler registration: {e}
+                        escape_markdownv2(
+                            f"""Error during daily scheduler registration: {e}
 
-Retrying in 10 minutes""",
+Retrying in 10 minutes"""
+                        ),
                         name=self.args["notify"]["target"],
                     )
                 except Exception as notify_error:
@@ -92,7 +96,7 @@ Retrying in 10 minutes""",
         msg = f"Force DHW{dry_run_msg}"
         self.log(msg)
         if self.args["notify"]["enabled"]:
-            await self.notify(msg, name=self.args["notify"]["target"])
+            await self.notify(escape_markdownv2(msg), name=self.args["notify"]["target"])
         if self.args["dhw"]["enabled"]:
             force_dhw_entity = self.get_entity(self.args["dhw"]["entity"])
             await force_dhw_entity.turn_on()
@@ -134,7 +138,7 @@ Retrying in 10 minutes""",
             # Retry in 10 minutes
             self.log(f"Error getting prices: {e}", level="ERROR")
             await self.notify(
-                "Error getting prices: retrying in 10 minutes",
+                escape_markdownv2("Error getting prices: retrying in 10 minutes"),
                 name=self.args["notify"]["target"],
             )
             await asyncio.sleep(600)
@@ -158,7 +162,9 @@ Retrying in 10 minutes""",
         if self.args["notify"]["enabled"]:
             vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
             hours_str = ", ".join(dt.strftime("%H:%M") for dt in datetimes_to_schedule)
-            msg = f"Programming the DHW control for these hours: {hours_str} [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
+            escaped_text = escape_markdownv2(f"Programming the DHW control for these hours: {hours_str} ")
+            link = f"[​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
+            msg = f"{escaped_text}{link}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         now = datetime.now(self.get_timezone())

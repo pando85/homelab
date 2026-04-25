@@ -11,6 +11,8 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
+from utils import escape_markdownv2
+
 
 @dataclass
 class Price:
@@ -58,9 +60,11 @@ class ClimateControl(hass.Hass):
                 self.log(f"Error during daily scheduler registration: {e}", level="ERROR")
                 try:
                     await self.notify(
-                        f"""Error during daily scheduler registration: {e}
+                        escape_markdownv2(
+                            f"""Error during daily scheduler registration: {e}
 
-Retrying in 10 minutes""",
+Retrying in 10 minutes"""
+                        ),
                         name=self.args["notify"]["target"],
                     )
                 except Exception as notify_error:
@@ -89,7 +93,7 @@ Retrying in 10 minutes""",
         msg = f"Set HVAC mode to `{mode}`{dry_run_msg}"
         self.log(msg)
         if self.args["notify"]["enabled"]:
-            await self.notify(msg, name=self.args["notify"]["target"])
+            await self.notify(escape_markdownv2(msg), name=self.args["notify"]["target"])
         if self.args["climate"]["enabled"]:
             await self.set_state(self.args["climate"]["entity"], state=mode)
             while await self.get_state(self.args["climate"]["entity"]) != mode:
@@ -150,7 +154,7 @@ Retrying in 10 minutes""",
             # Retry in 10 minutes
             self.log(f"Error getting prices: {e}", level="ERROR")
             await self.notify(
-                "Error getting prices: retrying in 10 minutes",
+                escape_markdownv2("Error getting prices: retrying in 10 minutes"),
                 name=self.args["notify"]["target"],
             )
             await asyncio.sleep(600)
@@ -175,7 +179,7 @@ Retrying in 10 minutes""",
         else:
             cheap_price_limit = self.args["fallback_cheap_electricity_price"]
             await self.notify(
-                f"Error getting historical prices: fallback price to {cheap_price_limit} €",
+                escape_markdownv2(f"Error getting historical prices: fallback price to {cheap_price_limit} €"),
                 name=self.args["notify"]["target"],
             )
 
@@ -189,7 +193,7 @@ Retrying in 10 minutes""",
 Retrying in 10 minutes"""
             self.log(msg.replace("\n", ""), level="WARNING")
             await self.notify(
-                f"WARNING: {msg}",
+                escape_markdownv2(f"WARNING: {msg}"),
                 name=self.args["notify"]["target"],
             )
             await self._start_hvac()
@@ -207,13 +211,14 @@ Retrying in 10 minutes"""
         if self.args["notify"]["enabled"]:
             vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
             cheap_msg = (
-                """
-                Electricity is cheap today!
-                """
+                "\nElectricity is cheap today!"
                 if is_cheap
                 else ""
             )
-            msg = f"Programming the climate control for these hours: [​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram}){cheap_msg}"
+            escaped_text = escape_markdownv2(f"Programming the climate control for these hours: ")
+            link = f"[​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
+            escaped_cheap_msg = escape_markdownv2(cheap_msg)
+            msg = f"{escaped_text}{link}{escaped_cheap_msg}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
