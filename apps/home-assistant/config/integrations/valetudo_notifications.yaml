@@ -34,7 +34,7 @@ automation:
   variables:
     strings:
       success_msg: "Cleaning task succeeded\\."
-      error_msg: "The robot has encountered an issue: {{ states('sensor.valetudo_detailedinternalrhinoceros_error') | replace('_', '\\_') | replace('*', '\\*') | replace('[', '\\[') | replace(']', '\\]') | replace('(', '\\(') | replace(')', '\\(') | replace('~', '\\~') | replace('>', '\\>') | replace('#', '\\#') | replace('+', '\\+') | replace('-', '\\-') | replace('=', '\\=') | replace('|', '\\|') | replace('{', '\\{') | replace('}', '\\}') | replace('.', '\\.') | replace('!', '\\!') }}"
+      error_msg: "The robot has encountered an issue: {{ states('sensor.valetudo_detailedinternalrhinoceros_error') | replace('_', '\\_') | replace('*', '\\*') | replace('[', '\\[') | replace(']', '\\]') | replace('(', '\\(') | replace(')', '\\)') | replace('~', '\\~') | replace('>', '\\>') | replace('#', '\\#') | replace('+', '\\+') | replace('-', '\\-') | replace('=', '\\=') | replace('|', '\\|') | replace('{', '\\{') | replace('}', '\\}') | replace('.', '\\.') | replace('!', '\\!') }}"
       default_msg: "Everything is working fine\\."
     message: "{{ strings[msg_type] | default(strings['default_msg']) }}"
 
