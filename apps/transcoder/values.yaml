@@ -52,7 +52,7 @@ app-template:
         rabbitmq:
           image:
             repository: rabbitmq
-            tag: 4.2.5
+            tag: 4.3.0
           probes:
             liveness: &probes
               enabled: true
