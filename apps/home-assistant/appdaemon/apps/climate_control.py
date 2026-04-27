@@ -45,8 +45,8 @@ class ClimateControl(hass.Hass):
         await self.listen_state(self._unregister_schedulers, input_boolean_enable, new="off", old="on")
 
         # Register schedulers every day
-        # give enough time to get new data
-        await self.run_daily(self._daily_register_schedulers, "00:00:30")
+        # delay to avoid midnight busy period and give time for new data
+        await self.run_daily(self._daily_register_schedulers, "00:05:00")
 
         await self.create_task(self._daily_register_schedulers())
 
@@ -162,7 +162,12 @@ Retrying in 10 minutes"""
 
         self.log(f"{prices=}", level="DEBUG")
 
-        historical_data = await self.get_history(entity_id=self.args["sensor"]["pvpc_price"], days=10)
+        historical_data = await self.get_history(
+            entity_id=self.args["sensor"]["pvpc_price"],
+            days=10,
+            minimal_response=True,
+            no_attributes=True,
+        )
         if historical_data is not None:
             historical_prices = [
                 Price(value=float(j["state"]), datetime=j["last_changed"])
