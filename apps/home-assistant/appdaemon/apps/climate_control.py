@@ -46,7 +46,7 @@ class ClimateControl(hass.Hass):
 
         # Register schedulers every day
         # delay to avoid midnight busy period and give time for new data
-        await self.run_daily(self._daily_register_schedulers, "00:05:00")
+        await self.run_daily(self._daily_register_schedulers, "00:00:40")
 
         await self.create_task(self._daily_register_schedulers())
 
