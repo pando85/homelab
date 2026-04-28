@@ -9,7 +9,7 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from utils import escape_markdownv2
+from utils import escape_markdownv2, retry_with_backoff
 
 
 @dataclass
@@ -77,7 +77,12 @@ Retrying in 10 minutes"""
                 await self._daily_register_schedulers()
 
     async def _get_prices(self) -> List[Price]:
-        pvpc = await self.get_state(self.args["sensor"]["pvpc_price"], attribute="all")
+        pvpc = await retry_with_backoff(
+            lambda: self.get_state(self.args["sensor"]["pvpc_price"], attribute="all"),
+            max_retries=3,
+            initial_delay=2.0,
+            operation_name="get_pvpc_price",
+        )
         self.log(f"{pvpc=}", level="DEBUG")
         now = datetime.now(self.get_timezone())
 

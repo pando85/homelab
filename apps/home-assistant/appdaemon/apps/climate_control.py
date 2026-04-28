@@ -11,7 +11,7 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from utils import escape_markdownv2
+from utils import escape_markdownv2, retry_with_backoff
 
 
 @dataclass
@@ -74,7 +74,12 @@ Retrying in 10 minutes"""
                 await self._daily_register_schedulers()
 
     async def _get_prices(self) -> List[Price]:
-        pvpc = await self.get_state(self.args["sensor"]["pvpc_price"], attribute="all")
+        pvpc = await retry_with_backoff(
+            lambda: self.get_state(self.args["sensor"]["pvpc_price"], attribute="all"),
+            max_retries=3,
+            initial_delay=2.0,
+            operation_name="get_pvpc_price",
+        )
         self.log(f"{pvpc=}", level="DEBUG")
         now = datetime.now(self.get_timezone())
 
@@ -162,11 +167,17 @@ Retrying in 10 minutes"""
 
         self.log(f"{prices=}", level="DEBUG")
 
-        historical_data = await self.get_history(
-            entity_id=self.args["sensor"]["pvpc_price"],
-            days=10,
-            minimal_response=True,
-            no_attributes=True,
+        historical_data = await retry_with_backoff(
+            lambda: self.get_history(
+                entity_id=self.args["sensor"]["pvpc_price"],
+                days=7,
+                minimal_response=True,
+                no_attributes=True,
+            ),
+            max_retries=3,
+            initial_delay=2.0,
+            logger=self.logger if hasattr(self, "logger") else None,
+            operation_name="get_history",
         )
         if historical_data is not None:
             historical_prices = [
