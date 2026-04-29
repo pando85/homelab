@@ -174,8 +174,9 @@ Retrying in 10 minutes"""
                 minimal_response=True,
                 no_attributes=True,
             ),
-            max_retries=3,
+            max_retries=10,
             initial_delay=2.0,
+            max_delay=30.0,
             logger=self.logger if hasattr(self, "logger") else None,
             operation_name="get_history",
         )
