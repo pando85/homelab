@@ -14,9 +14,6 @@ loki:
     replication_factor: 1
   storage:
     type: "filesystem"
-    bucketNames:
-      # fail if not set
-      chunks: "workaround-undefined-error"
 
   schemaConfig:
     configs:
