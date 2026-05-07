@@ -22,6 +22,7 @@ app-template:
               memory: 800Mi
             limits:
               memory: 8Gi
+              cpu: "2"
 
           probes:
             liveness: &probe
@@ -85,6 +86,12 @@ app-template:
               CONFIG_FILE=/config/qBittorrent/qBittorrent.conf
               if [ -f "$CONFIG_FILE" ]; then
                 sed -i 's/^MemoryWorkingSetLimit=.*/MemoryWorkingSetLimit=7000/' "$CONFIG_FILE"
+                sed -i 's/^Session\\MaxConnections=.*/Session\\MaxConnections=300/' "$CONFIG_FILE"
+                sed -i 's/^Session\\MaxConnectionsPerTorrent=.*/Session\\MaxConnectionsPerTorrent=20/' "$CONFIG_FILE"
+                sed -i 's/^Session\\MaxActiveTorrents=.*/Session\\MaxActiveTorrents=1000/' "$CONFIG_FILE"
+                sed -i 's/^Session\\MaxActiveUploads=.*/Session\\MaxActiveUploads=50/' "$CONFIG_FILE"
+                sed -i 's/^Session\\MaxConcurrentHTTPAnnounces=.*/Session\\MaxConcurrentHTTPAnnounces=10/' "$CONFIG_FILE"
+                sed -i 's/^Session\\RequestQueueSize=.*/Session\\RequestQueueSize=200/' "$CONFIG_FILE"
               fi
 
   defaultPodOptions:
