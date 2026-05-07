@@ -99,6 +99,10 @@ app-template:
                 sed -i 's/^Session\\GlobalDLSpeedLimit=.*/Session\\GlobalDLSpeedLimit=8000/' "$CONFIG_FILE"
                 sed -i 's/^Session\\PeerTurnover=.*/Session\\PeerTurnover=2/' "$CONFIG_FILE"
                 sed -i 's/^Session\\SendBufferWatermark=.*/Session\\SendBufferWatermark=300/' "$CONFIG_FILE"
+                sed -i 's/^Session\\ConnectionSpeed=.*/Session\\ConnectionSpeed=10/' "$CONFIG_FILE"
+                sed -i 's/^Session\\PeerTurnoverInterval=.*/Session\\PeerTurnoverInterval=600/' "$CONFIG_FILE"
+                sed -i 's/^Session\\PeerTurnoverCutoff=.*/Session\\PeerTurnoverCutoff=50/' "$CONFIG_FILE"
+                sed -i 's/^Session\\SocketBacklogSize=.*/Session\\SocketBacklogSize=10/' "$CONFIG_FILE"
               fi
 
   defaultPodOptions:
