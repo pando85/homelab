@@ -1,0 +1,37 @@
+---
+# CVE-2026-31431 + Dirty-Frag: Disable vulnerable kernel modules.
+# - algif_aead: CVE-2026-31431
+# - esp4, esp6, rxrpc: Dirty-Frag
+# None of these modules are required by any cluster workload.
+- name: "Disable vulnerable kernel modules (CVE-2026-31431, Dirty-Frag)"
+  hosts: all
+  become: true
+  vars:
+    vuln_modules:
+      - algif_aead
+      - esp4
+      - esp6
+      - rxrpc
+  tasks:
+    - name: Prevent modules from loading via modprobe
+      ansible.builtin.copy:
+        dest: /etc/modprobe.d/disable-vuln-modules.conf
+        content: |
+          {% for mod in vuln_modules %}
+          install {{ mod }} /bin/false
+          {% endfor %}
+        owner: root
+        group: root
+        mode: "0644"
+      tags:
+        - CVE-2026-31431
+        - Dirty-Frag
+    - name: Unload modules if currently loaded
+      community.general.modprobe:
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ vuln_modules }}"
+      failed_when: false
+      tags:
+        - CVE-2026-31431
+        - Dirty-Frag
