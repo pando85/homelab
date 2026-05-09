@@ -26,11 +26,12 @@ app-template:
                       NS_NAME=$(basename "$NS")
                       ADDR=$(ip netns exec "$NS_NAME" ip -o addr show eth0 2>/dev/null | awk '/inet /{print $4}' | cut -d/ -f1)
                       if [ "$ADDR" = "$POD_IP" ]; then
-                        CURRENT=$(ip netns exec "$NS_NAME" tc qdisc show dev eth0 2>/dev/null | grep tbf)
+                        CURRENT=$(ip netns exec "$NS_NAME" tc filter show dev eth0 ingress 2>/dev/null | grep police)
                         if [ -z "$CURRENT" ]; then
                           echo "$(date): Applying ${RATE_LIMIT} rate limit in netns ${NS_NAME} for pod IP ${POD_IP}"
-                          ip netns exec "$NS_NAME" tc qdisc replace dev eth0 root tbf \
-                            rate "${RATE_LIMIT}" burst 1540 latency 50ms 2>&1
+                          ip netns exec "$NS_NAME" tc qdisc add dev eth0 clsact 2>/dev/null
+                          ip netns exec "$NS_NAME" tc filter add dev eth0 ingress matchall \
+                            action police rate "${RATE_LIMIT}" burst 1540 conform-exceed drop 2>&1
                         fi
                         break
                       fi
