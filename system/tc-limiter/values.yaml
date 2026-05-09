@@ -42,7 +42,7 @@ app-template:
               done
           env:
             TARGET_POD_SELECTOR: "cross-backups-minio"
-            RATE_LIMIT: "50mbit"
+            RATE_LIMIT: "100mbit"
             CHECK_INTERVAL: "10"
           securityContext:
             capabilities:
