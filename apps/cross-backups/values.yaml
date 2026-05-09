@@ -58,6 +58,12 @@ minio:
           - *hostMC
         secretName: mc-s3-tls-certificate
 
+  podAnnotations:
+    # Cilium EDT bandwidth manager only supports egress, so ingress-bandwidth is a no-op.
+    # Rate limiting is done via nginx ingress annotations (limit_rate + limit-connections)
+    # which uses TCP backpressure to throttle external clients through pfSense.
+    kubernetes.io/ingress-bandwidth: "50M"
+
   resources:
     requests:
       memory: 2Gi
