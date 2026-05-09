@@ -19,13 +19,13 @@ app-template:
                   'http://localhost/v1/endpoint' 2>/dev/null)
                 if [ -n "$ENDPOINT_JSON" ]; then
                   POD_IP=$(echo "$ENDPOINT_JSON" | jq -r \
-                    '.[] | select(.status["external-identifiers"]["k8s-pod-name"] | test("'${TARGET_POD_SELECTOR}'")) | .status.networking.addressing[0].ipv4' \
+                    ".[] | select(.status[\"external-identifiers\"][\"k8s-pod-name\"] // \"\" | contains(\"${TARGET_POD_SELECTOR}\")) | .status.networking.addressing[0].ipv4 // \"\"" \
                     2>/dev/null | head -1)
                   if [ -n "$POD_IP" ]; then
                     for NS in /var/run/netns/cni-*; do
+                      NS_NAME=$(basename "$NS")
                       ADDR=$(ip netns exec "$NS_NAME" ip -o addr show eth0 2>/dev/null | awk '/inet /{print $4}' | cut -d/ -f1)
                       if [ "$ADDR" = "$POD_IP" ]; then
-                        NS_NAME=$(basename "$NS")
                         CURRENT=$(ip netns exec "$NS_NAME" tc qdisc show dev eth0 2>/dev/null | grep tbf)
                         if [ -z "$CURRENT" ]; then
                           echo "$(date): Applying ${RATE_LIMIT} rate limit in netns ${NS_NAME} for pod IP ${POD_IP}"
