@@ -23,7 +23,7 @@ app-template:
                     2>/dev/null | head -1)
                   if [ -n "$POD_IP" ]; then
                     for NS in /var/run/netns/cni-*; do
-                      ADDR=$(ip netns exec "$(basename "$NS")" ip -o addr show eth0 2>/dev/null | grep -oP 'inet \K[0-9.]+')
+                      ADDR=$(ip netns exec "$NS_NAME" ip -o addr show eth0 2>/dev/null | awk '/inet /{print $4}' | cut -d/ -f1)
                       if [ "$ADDR" = "$POD_IP" ]; then
                         NS_NAME=$(basename "$NS")
                         CURRENT=$(ip netns exec "$NS_NAME" tc qdisc show dev eth0 2>/dev/null | grep tbf)
