@@ -31,8 +31,10 @@ minio:
       # https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html
       nginx.ingress.kubernetes.io/server-snippet: |
         ignore_invalid_headers off;
+      nginx.ingress.kubernetes.io/limit-connections: "4"
       nginx.ingress.kubernetes.io/configuration-snippet: |
         chunked_transfer_encoding off;
+        limit_rate 6m;
     hosts:
       - &host cross-backups.grigri.cloud
     tls:
@@ -55,10 +57,6 @@ minio:
       - hosts:
           - *hostMC
         secretName: mc-s3-tls-certificate
-
-  podAnnotations:
-    # Until 1.18.0 is released, this annotation is ignored by Cilium
-    kubernetes.io/ingress-bandwidth: "50M"
 
   resources:
     requests:
