@@ -31,10 +31,8 @@ minio:
       # https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html
       nginx.ingress.kubernetes.io/server-snippet: |
         ignore_invalid_headers off;
-      nginx.ingress.kubernetes.io/limit-connections: "4"
-      nginx.ingress.kubernetes.io/configuration-snippet: |
         chunked_transfer_encoding off;
-        limit_rate 6m;
+      nginx.ingress.kubernetes.io/limit-connections: "4"
     hosts:
       - &host cross-backups.grigri.cloud
     tls:
@@ -59,9 +57,9 @@ minio:
         secretName: mc-s3-tls-certificate
 
   podAnnotations:
-    # Cilium EDT bandwidth manager only supports egress, so ingress-bandwidth is a no-op.
-    # Rate limiting is done via nginx ingress annotations (limit_rate + limit-connections)
-    # which uses TCP backpressure to throttle external clients through pfSense.
+    # Cilium ingress-bandwidth only works for inter-node traffic, not same-node.
+    # Since ingress-nginx-external and MinIO are both on prusik, this is a no-op.
+    # Ingress rate limiting is done via tc-limiter DaemonSet (system/tc-limiter/).
     kubernetes.io/ingress-bandwidth: "50M"
 
   resources:

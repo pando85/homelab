@@ -1,0 +1,64 @@
+app-template:
+  controllers:
+    tc-limiter:
+      type: daemonset
+      strategy: RollingUpdate
+      containers:
+        tc-limiter:
+          image:
+            repository: alpine
+            tag: "3.21"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              apk add --no-cache curl jq iproute2 > /dev/null 2>&1
+              echo "tc-limiter started: watching for ${TARGET_POD_SELECTOR} at ${RATE_LIMIT}"
+              while true; do
+                ENDPOINT_JSON=$(curl -sf --unix-socket /var/run/cilium/cilium.sock \
+                  'http://localhost/v1/endpoint' 2>/dev/null)
+                if [ -n "$ENDPOINT_JSON" ]; then
+                  INTERFACE=$(echo "$ENDPOINT_JSON" | jq -r \
+                    '.[] | select(.status["external-identifiers"]["k8s-pod-name"] | test("'${TARGET_POD_SELECTOR}'")) | .status.networking["interface-name"]' \
+                    2>/dev/null)
+                  if [ -n "$INTERFACE" ]; then
+                    CURRENT=$(tc qdisc show dev "$INTERFACE" 2>/dev/null | grep tbf)
+                    if [ -z "$CURRENT" ]; then
+                      echo "$(date): Applying ${RATE_LIMIT} rate limit on ${INTERFACE}"
+                      tc qdisc replace dev "$INTERFACE" root tbf \
+                        rate "${RATE_LIMIT}" burst 1540 latency 50ms 2>&1
+                    fi
+                  fi
+                fi
+                sleep "${CHECK_INTERVAL}"
+              done
+          env:
+            TARGET_POD_SELECTOR: "cross-backups-minio"
+            RATE_LIMIT: "50mbit"
+            CHECK_INTERVAL: "10"
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+
+  defaultPodOptions:
+    hostNetwork: true
+    securityContext:
+      runAsUser: 0
+      runAsGroup: 0
+    nodeSelector:
+      kubernetes.io/hostname: prusik
+
+  persistence:
+    cilium-socket:
+      type: hostPath
+      hostPath: /var/run/cilium/cilium.sock
+      globalMounts:
+        - path: /var/run/cilium/cilium.sock
+          readOnly: true
