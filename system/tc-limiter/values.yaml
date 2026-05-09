@@ -18,16 +18,23 @@ app-template:
                 ENDPOINT_JSON=$(curl -sf --unix-socket /var/run/cilium/cilium.sock \
                   'http://localhost/v1/endpoint' 2>/dev/null)
                 if [ -n "$ENDPOINT_JSON" ]; then
-                  INTERFACE=$(echo "$ENDPOINT_JSON" | jq -r \
-                    '.[] | select(.status["external-identifiers"]["k8s-pod-name"] | test("'${TARGET_POD_SELECTOR}'")) | .status.networking["interface-name"]' \
-                    2>/dev/null)
-                  if [ -n "$INTERFACE" ]; then
-                    CURRENT=$(tc qdisc show dev "$INTERFACE" 2>/dev/null | grep tbf)
-                    if [ -z "$CURRENT" ]; then
-                      echo "$(date): Applying ${RATE_LIMIT} rate limit on ${INTERFACE}"
-                      tc qdisc replace dev "$INTERFACE" root tbf \
-                        rate "${RATE_LIMIT}" burst 1540 latency 50ms 2>&1
-                    fi
+                  POD_IP=$(echo "$ENDPOINT_JSON" | jq -r \
+                    '.[] | select(.status["external-identifiers"]["k8s-pod-name"] | test("'${TARGET_POD_SELECTOR}'")) | .status.networking.addressing[0].ipv4' \
+                    2>/dev/null | head -1)
+                  if [ -n "$POD_IP" ]; then
+                    for NS in /var/run/netns/cni-*; do
+                      ADDR=$(ip netns exec "$(basename "$NS")" ip -o addr show eth0 2>/dev/null | grep -oP 'inet \K[0-9.]+')
+                      if [ "$ADDR" = "$POD_IP" ]; then
+                        NS_NAME=$(basename "$NS")
+                        CURRENT=$(ip netns exec "$NS_NAME" tc qdisc show dev eth0 2>/dev/null | grep tbf)
+                        if [ -z "$CURRENT" ]; then
+                          echo "$(date): Applying ${RATE_LIMIT} rate limit in netns ${NS_NAME} for pod IP ${POD_IP}"
+                          ip netns exec "$NS_NAME" tc qdisc replace dev eth0 root tbf \
+                            rate "${RATE_LIMIT}" burst 1540 latency 50ms 2>&1
+                        fi
+                        break
+                      fi
+                    done
                   fi
                 fi
                 sleep "${CHECK_INTERVAL}"
@@ -40,6 +47,7 @@ app-template:
             capabilities:
               add:
                 - NET_ADMIN
+                - SYS_ADMIN
           resources:
             requests:
               cpu: 10m
@@ -49,6 +57,7 @@ app-template:
 
   defaultPodOptions:
     hostNetwork: true
+    hostPID: true
     securityContext:
       runAsUser: 0
       runAsGroup: 0
@@ -62,3 +71,8 @@ app-template:
       globalMounts:
         - path: /var/run/cilium/cilium.sock
           readOnly: true
+    cni-netns:
+      type: hostPath
+      hostPath: /var/run/netns
+      globalMounts:
+        - path: /var/run/netns
