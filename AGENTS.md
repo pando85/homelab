@@ -223,6 +223,19 @@ dockerImage: postgres:16
 - Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources
 - Forgetting `Prune=false` on PVCs causes data loss on sync
 
+## Cilium Networking
+
+- Cilium v1.18+ uses TCX BPF which **bypasses all host-side `tc` qdiscs** — TBF, clsact on `lxc*`
+  veth devices and `cilium_host` all show 0 bytes
+- `kubernetes.io/ingress-bandwidth` pod annotation does **NOT work for same-node traffic** (Cilium
+  BPF has `!from_host` check that skips local traffic)
+- To rate-limit pod ingress: use tc clsact policer inside pod CNI netns (see
+  `system/tc-limiter/` and `docs/troubleshooting/bandwidth-limiting.md`)
+- pfSense CPU bottleneck is interrupt processing on PPPoE — limit high-throughput services at the
+  pod level before traffic reaches the router
+- Check troubleshooting docs (`docs/troubleshooting/`) for service-specific tuning guidance before
+  adjusting settings — they may contain recommended values and root cause analyses
+
 ## Licensing
 
 GPLv3 (see LICENSE.md). Generated code must be compatible.

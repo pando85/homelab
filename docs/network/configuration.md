@@ -16,6 +16,14 @@ Manual configuration and backups are managed on the host `prusik`.
 
 ### Disaster Recovery Workflow
 
+### Bandwidth Limiting
+
+High-throughput services can saturate pfSense CPU (GX-412TC SOC) via PPPoE interrupt processing.
+Rate limiting is applied at the pod level using tc clsact policers inside CNI network namespaces,
+managed by the `system/tc-limiter/` DaemonSet.
+
+See [Bandwidth Limiting Troubleshooting](../troubleshooting/bandwidth-limiting.md) for details.
+
 **1. Retrieve the disaster recovery pfSense configuration backup:**
 
 ```sh
