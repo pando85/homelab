@@ -24,6 +24,7 @@ app-template:
       containers:
         server:
           image: &image
+            # renovate: datasource=docker depName=freikin/dawarich
             repository: freikin/dawarich
             tag: 1.7.7
           env: &env
@@ -132,6 +133,7 @@ app-template:
       containers:
         main:
           image:
+            # renovate: datasource=docker depName=redis versioning=semver-coerced
             repository: public.ecr.aws/docker/library/redis
             tag: 8.6.3
           env:
@@ -151,8 +153,6 @@ app-template:
       ports:
         http:
           port: *port
-        metrics:
-          port: 9394
     redis:
       controller: redis
       ports:
