@@ -45,6 +45,16 @@ app-template:
             APPLICATION_HOSTS: "dawarich.internal.grigri.cloud,dawarich.grigri.cloud"
             PROMETHEUS_EXPORTER_ENABLED: "true"
             SIDEKIQ_METRICS_URL: "http://localhost:9394/metrics"
+            METRICS_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich-metrics
+                  key: username
+            METRICS_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich-metrics
+                  key: password
             DISABLE_TELEMETRY: "true"
             GEOAPIFY_API_KEY:
               valueFrom:
@@ -211,3 +221,10 @@ app-template:
           path: /metrics
           interval: 30s
           scrapeTimeout: 10s
+          basicAuth:
+            username:
+              name: dawarich-metrics
+              key: username
+            password:
+              name: dawarich-metrics
+              key: password
