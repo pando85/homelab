@@ -43,7 +43,17 @@ app-template:
             REDIS_URL: redis://dawarich-redis
             APPLICATION_HOSTS: "dawarich.internal.grigri.cloud,dawarich.grigri.cloud"
             PROMETHEUS_EXPORTER_ENABLED: "true"
-            PROMETHEUS_EXPORTER_HOST: "0.0.0.0"
+            SIDEKIQ_METRICS_URL: "http://localhost:9394/metrics"
+            METRICS_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich-secrets
+                  key: metrics_username
+            METRICS_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: dawarich-secrets
+                  key: metrics_password
             DISABLE_TELEMETRY: "true"
             GEOAPIFY_API_KEY:
               valueFrom:
@@ -101,7 +111,7 @@ app-template:
           image: *image
           env:
             <<: *env
-            PROMETHEUS_EXPORTER_ENABLED: "false"
+            PROMETHEUS_EXPORTER_ENABLED: "true"
           command:
             - "sidekiq-entrypoint.sh"
           args:
@@ -206,8 +216,15 @@ app-template:
       labels:
         release: monitoring
       endpoints:
-        - port: metrics
+        - port: http
           scheme: http
           path: /metrics
           interval: 30s
           scrapeTimeout: 10s
+          basicAuth:
+            username:
+              name: dawarich-secrets
+              key: metrics_username
+            password:
+              name: dawarich-secrets
+              key: metrics_password
