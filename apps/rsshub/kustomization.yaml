@@ -11,10 +11,10 @@ helmCharts:
     releaseName: rsshub
     repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: rsshub.yaml
-    version: 4.6.2
+    version: 5.0.0
   - name: app-template
     namespace: rsshub
     releaseName: redis
     repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: redis.yaml
-    version: 4.6.2
+    version: 5.0.0
