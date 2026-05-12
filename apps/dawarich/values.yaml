@@ -23,6 +23,7 @@ app-template:
                 topologyKey: kubernetes.io/hostname
       containers:
         server:
+          # renovate: datasource=docker depName=freikin/dawarich
           image: &image
             repository: freikin/dawarich
             tag: 1.7.7
@@ -122,6 +123,7 @@ app-template:
     redis:
       containers:
         main:
+          # renovate: datasource=docker depName=redis
           image:
             repository: public.ecr.aws/docker/library/redis
             tag: 8.6.3
