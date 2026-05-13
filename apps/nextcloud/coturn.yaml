@@ -1,3 +1,5 @@
+global:
+  createDefaultServiceAccount: false
 controllers:
   coturn:
     annotations:
