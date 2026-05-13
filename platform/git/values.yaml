@@ -144,6 +144,7 @@ forgejo:
 app-template:
   global:
     fullnameOverride: redis
+    createDefaultServiceAccount: false
   controllers:
     redis:
       containers:
