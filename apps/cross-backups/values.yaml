@@ -32,7 +32,6 @@ minio:
       nginx.ingress.kubernetes.io/server-snippet: |
         ignore_invalid_headers off;
         chunked_transfer_encoding off;
-      nginx.ingress.kubernetes.io/limit-connections: "4"
     hosts:
       - &host cross-backups.grigri.cloud
     tls:
