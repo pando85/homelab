@@ -294,7 +294,7 @@ spec:
         - name: runner-data
           emptyDir:
             medium: Memory
-            sizeLimit: 8Gi
+            sizeLimit: 16Gi
         - name: runner-config
           secret:
             secretName: runner-config
