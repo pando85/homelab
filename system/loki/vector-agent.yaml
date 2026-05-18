@@ -103,6 +103,7 @@ customConfig:
         if length(string(.message) ?? "") > 262000 {
           .message = slice!(string!(.message), 0, 262000) + " [truncated]"
         }
+        .app = string(.kubernetes.pod_labels.app) ?? ""
 
     journal_labels:
       type: remap
@@ -135,7 +136,7 @@ customConfig:
         node_name: "{{`{{ kubernetes.pod_node_name }}`}}"
         filename: "{{`{{ file }}`}}"
         instance: "{{`{{ kubernetes.pod_name }}`}}"
-        app: "{{`{{ kubernetes.pod_labels.app }}`}}"
+        app: "{{`{{ app }}`}}"
         job: "{{`{{ kubernetes.container_name }}`}}"
 
     loki_journal:
