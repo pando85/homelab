@@ -103,7 +103,9 @@ customConfig:
         if length(string(.message) ?? "") > 262000 {
           .message = slice!(string!(.message), 0, 262000) + " [truncated]"
         }
-        .app = string(.kubernetes.pod_labels.app) ?? ""
+        .app = string(.kubernetes.pod_labels["app.kubernetes.io/name"]) ?? string(.kubernetes.pod_labels.app) ?? string(.kubernetes.pod_labels["k8s-app"]) ?? string(.kubernetes.container_name) ?? ""
+        .instance = string(.kubernetes.pod_labels["app.kubernetes.io/instance"]) ?? string(.kubernetes.pod_labels.instance) ?? ""
+        .job = string!(.kubernetes.pod_namespace) + "/" + string!(.app)
 
     journal_labels:
       type: remap
@@ -135,9 +137,9 @@ customConfig:
         stream: "{{`{{ stream }}`}}"
         node_name: "{{`{{ kubernetes.pod_node_name }}`}}"
         filename: "{{`{{ file }}`}}"
-        instance: "{{`{{ kubernetes.pod_name }}`}}"
+        instance: "{{`{{ instance }}`}}"
         app: "{{`{{ app }}`}}"
-        job: "{{`{{ kubernetes.container_name }}`}}"
+        job: "{{`{{ job }}`}}"
 
     loki_journal:
       type: loki
