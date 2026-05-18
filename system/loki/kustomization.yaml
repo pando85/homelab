@@ -6,6 +6,7 @@ resources:
   - resources/configmap-grafana-datasource-loki.yaml
   - resources/prometheus-rules-alerts.yaml
   - resources/prometheus-rules-rules.yaml
+  - resources/prometheus-rules-vector-alerts.yaml
   - resources/service-monitor.yaml
 
 helmCharts:
@@ -16,10 +17,11 @@ helmCharts:
     repo: https://grafana-community.github.io/helm-charts
     valuesFile: values.yaml
     version: 16.0.0
-  - includeCRDs: true
-    name: promtail
+  - name: vector
+    repo: https://helm.vector.dev
+    version: 0.52.0
+    releaseName: vector-agent
     namespace: loki
-    releaseName: loki
-    repo: https://grafana.github.io/helm-charts
-    valuesFile: promtail.yaml
-    version: 6.17.1
+    includeCRDs: false
+    skipTests: true
+    valuesFile: vector-agent.yaml

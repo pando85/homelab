@@ -1,0 +1,72 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: vector-alerts
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: vector_alerts
+      rules:
+        - alert: VectorPodDown
+          annotations:
+            message: |
+              Vector DaemonSet has {{ printf "%.0f" $value }} pod(s) missing. Some nodes are not shipping logs.
+          expr: |
+            kube_daemonset_status_desired_number_scheduled{daemonset="vector-agent", namespace="loki"}
+              - kube_daemonset_status_number_available{daemonset="vector-agent", namespace="loki"}
+              > 0
+          for: 2m
+          labels:
+            severity: warning
+            team: infra
+
+        - alert: VectorHighBufferFill
+          annotations:
+            message: |
+              Vector buffer {{ $labels.component_id }} on {{ $labels.host }} is {{ printf "%.0f" $value }}% full — approaching block threshold.
+          expr: |
+            (
+              vector_buffer_events{component_id=~"loki_pods|loki_journal"}
+                / vector_buffer_max_size_events{component_id=~"loki_pods|loki_journal"}
+            ) * 100 > 80
+          for: 5m
+          labels:
+            severity: warning
+            team: infra
+
+        - alert: VectorSinkStalled
+          annotations:
+            message: |
+              Vector sink {{ $labels.component_id }} on {{ $labels.host }} has events queued but is sending nothing — Loki may be unreachable.
+          expr: |
+            vector_buffer_events{component_id=~"loki_pods|loki_journal"} > 0
+              and
+            rate(vector_component_sent_events_total{component_id=~"loki_pods|loki_journal"}[5m]) == 0
+          for: 10m
+          labels:
+            severity: warning
+            team: infra
+
+        - alert: VectorBufferBackpressure
+          annotations:
+            message: |
+              Vector buffer {{ $labels.component_id }} on {{ $labels.host }} is receiving events faster than it drains — Loki may be slow or falling behind.
+          expr: |
+            rate(vector_buffer_received_events_total{component_id=~"loki_pods|loki_journal"}[5m])
+              > rate(vector_buffer_sent_events_total{component_id=~"loki_pods|loki_journal"}[5m]) * 1.2
+          for: 10m
+          labels:
+            severity: warning
+            team: infra
+
+        - alert: VectorComponentErrors
+          annotations:
+            message: |
+              Vector component {{ $labels.component_id }} on {{ $labels.host }} has a sustained error rate of {{ printf "%.2f" $value }}/s.
+          expr: |
+            rate(vector_component_errors_total{component_id=~"loki_pods|loki_journal"}[5m]) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+            team: infra

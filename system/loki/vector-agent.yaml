@@ -1,0 +1,152 @@
+# Agent role means Vector runs as a DaemonSet and mounts host log paths automatically.
+role: "Agent"
+
+# renovate: datasource=docker depName=timberio/vector
+image:
+  repository: timberio/vector
+  tag: 0.54.0-debian
+
+persistence:
+  hostPath:
+    enabled: true
+
+# /var/log is mounted automatically by the Agent role (covers pod logs + journal).
+# These extra mounts add the runtime journal path and machine-id, both required
+# by the journald source to read systemd logs.
+extraVolumes:
+  - name: journal-run
+    hostPath:
+      path: /run/log/journal
+  - name: journal-var
+    hostPath:
+      path: /var/log/journal
+  - name: machine-id
+    hostPath:
+      path: /etc/machine-id
+extraVolumeMounts:
+  - name: journal-run
+    mountPath: /run/log/journal
+    readOnly: true
+  - name: journal-var
+    mountPath: /var/log/journal
+    readOnly: true
+  - name: machine-id
+    mountPath: /etc/machine-id
+    readOnly: true
+
+containerPorts:
+  - name: prom-exporter
+    containerPort: 9090
+    protocol: TCP
+  - name: api
+    containerPort: 8686
+    protocol: TCP
+
+podMonitor:
+  enabled: true
+  additionalLabels:
+    release: "monitoring"
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: api
+readinessProbe:
+  httpGet:
+    path: /health
+    port: api
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 200Mi
+  requests:
+    cpu: 10m
+    memory: 85Mi
+
+customConfig:
+  data_dir: /vector-data-dir
+
+  api:
+    enabled: true
+    address: 0.0.0.0:8686
+
+  sources:
+    kubernetes_logs:
+      type: kubernetes_logs
+      max_line_bytes: 262144 # 256KB — matches Loki's default max_line_size
+      pod_annotation_fields:
+        pod_annotations: ""
+        pod_ip: ""
+        pod_ips: ""
+        pod_uid: ""
+        pod_owner: ""
+        container_image: ""
+      node_annotation_fields:
+        node_labels: ""
+      namespace_annotation_fields:
+        namespace_labels: ""
+
+    journal:
+      type: journald
+      since_now: false
+
+    internal_metrics:
+      type: internal_metrics
+
+  transforms:
+    truncate:
+      type: remap
+      inputs:
+        - kubernetes_logs
+      source: |-
+        if length(string(.message) ?? "") > 262000 {
+          .message = slice!(string!(.message), 0, 262000) + " [truncated]"
+        }
+
+    journal_labels:
+      type: remap
+      inputs:
+        - journal
+      source: |-
+        .systemd_unit = string(._SYSTEMD_UNIT) ?? ""
+        .node_name = string(._HOSTNAME) ?? ""
+        .syslog_identifier = string(.SYSLOG_IDENTIFIER) ?? ""
+
+  sinks:
+    prom_exporter:
+      type: prometheus_exporter
+      inputs:
+        - internal_metrics
+      address: 0.0.0.0:9090
+
+    loki_pods:
+      type: loki
+      inputs:
+        - truncate
+      endpoint: "http://loki:3100"
+      encoding:
+        codec: text
+      labels:
+        namespace: "{{`{{ kubernetes.pod_namespace }}`}}"
+        pod: "{{`{{ kubernetes.pod_name }}`}}"
+        container: "{{`{{ kubernetes.container_name }}`}}"
+        stream: "{{`{{ stream }}`}}"
+        node_name: "{{`{{ kubernetes.pod_node_name }}`}}"
+        filename: "{{`{{ file }}`}}"
+        instance: "{{`{{ kubernetes.pod_name }}`}}"
+        app: "{{`{{ kubernetes.pod_labels.app }}`}}"
+        job: "{{`{{ kubernetes.container_name }}`}}"
+
+    loki_journal:
+      type: loki
+      inputs:
+        - journal_labels
+      endpoint: "http://loki:3100"
+      encoding:
+        codec: text
+      labels:
+        job: systemd-journal
+        systemd_unit: "{{`{{ systemd_unit }}`}}"
+        node_name: "{{`{{ node_name }}`}}"
+        syslog_identifier: "{{`{{ syslog_identifier }}`}}"
