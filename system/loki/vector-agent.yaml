@@ -103,9 +103,9 @@ customConfig:
         if length(string(.message) ?? "") > 262000 {
           .message = slice!(string!(.message), 0, 262000) + " [truncated]"
         }
-        .app = string(get!(.kubernetes.pod_labels, ["app.kubernetes.io/name"])) ?? string(.kubernetes.pod_labels.app) ?? string(get!(.kubernetes.pod_labels, ["k8s-app"])) ?? string(.kubernetes.container_name) ?? ""
-        .instance = string(get!(.kubernetes.pod_labels, ["app.kubernetes.io/instance"])) ?? string(.kubernetes.pod_labels.instance) ?? ""
-        .job = string!(.kubernetes.pod_namespace) + "/" + string!(.app)
+        .app = string(.kubernetes.pod_labels.app) ?? string(.kubernetes.pod_labels."app.kubernetes.io/name") ?? ""
+        .instance = string(.kubernetes.pod_labels.instance) ?? string(.kubernetes.pod_labels."app.kubernetes.io/instance") ?? ""
+        .job = (string(.kubernetes.pod_namespace) ?? "") + "/" + (string(.kubernetes.pod_labels.app) ?? string(.kubernetes.pod_labels."app.kubernetes.io/name") ?? string(.kubernetes.container_name) ?? "")
 
     journal_labels:
       type: remap
