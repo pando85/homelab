@@ -76,6 +76,7 @@ app-template:
             OIDC_AUTO_REGISTER: false
             OIDC_PROVIDER_NAME: idm.grigri.cloud
             ALLOW_EMAIL_PASSWORD_REGISTRATION: false
+            ALLOW_EMAIL_PASSWORD_LOGIN: false
             SELF_HOSTED: "true"
           resources:
             requests:
