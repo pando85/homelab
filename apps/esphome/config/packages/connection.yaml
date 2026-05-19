@@ -21,7 +21,7 @@ wifi:
   # Issue related: https://github.com/esphome/feature-requests/issues/731
   fast_connect: false
 
-  reboot_timeout: 3h
+  reboot_timeout: 24h
   power_save_mode: none
   ap:
     ap_timeout: 5min
