@@ -32,7 +32,7 @@ spec:
     version: "17"
     parameters:
       archive_mode: "off"
-      max_connections: "25"
+      max_connections: "40"
       shared_buffers: "256MB"
       work_mem: "16MB"
       random_page_cost: "1.1"
