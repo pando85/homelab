@@ -55,6 +55,9 @@ serviceMonitor:
 
   targets:
     - module: http_2xx
+      name: forkline.dev
+      url: https://forkline.dev
+    - module: http_2xx
       name: rash-sh.github.io
       url: https://rash-sh.github.io
     - module: http_2xx
