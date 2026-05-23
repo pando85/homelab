@@ -7,6 +7,10 @@ metadata:
 spec:
   advertisements:
     - advertisementType: "Service"
+      selector:
+        matchExpressions:
+          - key: cilium.io/bgp-skip
+            operator: DoesNotExist
       service:
         addresses:
           - LoadBalancerIP
