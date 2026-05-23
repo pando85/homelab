@@ -303,20 +303,20 @@ class TestGenerateVegaDiagram:
     def test_generate_vega_diagram_basic(self, climate_control):
         datetimes = [datetime(2023, 1, 1, h) for h in [8, 12, 18]]
         result = climate_control._generate_vega_diagram(datetimes)
-        
+
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_generate_vega_diagram_empty(self, climate_control):
         result = climate_control._generate_vega_diagram([])
-        
+
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_generate_vega_diagram_all_hours(self, climate_control):
         datetimes = [datetime(2023, 1, 1, h) for h in range(24)]
         result = climate_control._generate_vega_diagram(datetimes)
-        
+
         assert isinstance(result, str)
 
 
@@ -328,18 +328,18 @@ class TestChangeHvacMode:
         climate_control.set_state = AsyncMock()
         climate_control.sleep = AsyncMock()
         climate_control.notify = AsyncMock()
-        
+
         await climate_control._change_hvac_mode("Heat")
-        
+
         climate_control.set_state.assert_called()
 
     @pytest.mark.asyncio
     async def test_change_hvac_mode_dry_run(self, climate_control):
         climate_control.args["climate"]["enabled"] = False
         climate_control.notify = AsyncMock()
-        
+
         await climate_control._change_hvac_mode("Heat")
-        
+
         climate_control.notify.assert_called()
 
     @pytest.mark.asyncio
@@ -349,9 +349,9 @@ class TestChangeHvacMode:
         climate_control.get_state = AsyncMock(return_value="Heat")
         climate_control.set_state = AsyncMock()
         climate_control.sleep = AsyncMock()
-        
+
         await climate_control._change_hvac_mode("Heat")
-        
+
         climate_control.set_state.assert_called()
 
 
@@ -360,9 +360,9 @@ class TestStartHvac:
     async def test_start_hvac(self, climate_control):
         climate_control.get_state = AsyncMock(return_value="Heat+DHW")
         climate_control._change_hvac_mode = AsyncMock()
-        
+
         await climate_control._start_hvac()
-        
+
         climate_control._change_hvac_mode.assert_called_with("Heat+DHW")
 
 
@@ -370,9 +370,9 @@ class TestStopHvac:
     @pytest.mark.asyncio
     async def test_stop_hvac(self, climate_control):
         climate_control._change_hvac_mode = AsyncMock()
-        
+
         await climate_control._stop_hvac()
-        
+
         climate_control._change_hvac_mode.assert_called_with(climate_control.args["climate"]["off_mode"])
 
 
@@ -381,18 +381,18 @@ class TestDailyRegisterSchedulers:
     async def test_daily_register_schedulers_disabled(self, climate_control):
         climate_control.get_state = AsyncMock(return_value="off")
         climate_control._register_schedulers = AsyncMock()
-        
+
         await climate_control._daily_register_schedulers()
-        
+
         climate_control._register_schedulers.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_daily_register_schedulers_enabled(self, climate_control):
         climate_control.get_state = AsyncMock(return_value="on")
         climate_control._register_schedulers = AsyncMock()
-        
+
         await climate_control._daily_register_schedulers()
-        
+
         climate_control._register_schedulers.assert_called_once()
 
     @pytest.mark.asyncio
@@ -400,10 +400,10 @@ class TestDailyRegisterSchedulers:
         climate_control.get_state = AsyncMock(return_value="on")
         climate_control._register_schedulers = AsyncMock(side_effect=[Exception("Test error"), None])
         climate_control.notify = AsyncMock()
-        
+
         with patch('climate_control.asyncio.sleep', new_callable=AsyncMock):
             await climate_control._daily_register_schedulers()
-        
+
         assert climate_control._register_schedulers.call_count == 2
 
 
@@ -415,9 +415,9 @@ class TestUnregisterSchedulers:
             climate_control.AD.sched = MagicMock()
             climate_control.AD.sched.schedule = {}
             climate_control.cancel_timer = AsyncMock()
-            
+
             await climate_control._unregister_schedulers()
-            
+
             climate_control.cancel_timer.assert_not_called()
 
     @pytest.mark.asyncio
@@ -432,9 +432,9 @@ class TestUnregisterSchedulers:
                 }
             }
             climate_control.cancel_timer = AsyncMock()
-            
+
             await climate_control._unregister_schedulers()
-            
+
             assert climate_control.cancel_timer.call_count == 2
 
 
@@ -442,9 +442,9 @@ class TestTerminate:
     @pytest.mark.asyncio
     async def test_terminate(self, climate_control):
         climate_control._unregister_schedulers = AsyncMock()
-        
+
         await climate_control.terminate()
-        
+
         climate_control._unregister_schedulers.assert_called_once()
 
 
@@ -496,9 +496,9 @@ class TestResilience:
         climate_control.set_state = AsyncMock()
         climate_control.sleep = AsyncMock()
         climate_control.notify = AsyncMock()
-        
+
         await climate_control._change_hvac_mode("Heat")
-        
+
         assert climate_control.get_state.call_count == 3
         assert climate_control.sleep.call_count == 2
 
@@ -507,9 +507,9 @@ class TestResilience:
         climate_control.get_state = AsyncMock(return_value="on")
         climate_control._register_schedulers = AsyncMock()
         climate_control.notify = AsyncMock(side_effect=Exception("Notify failed"))
-        
+
         await climate_control._daily_register_schedulers()
-        
+
         climate_control._register_schedulers.assert_called_once()
 
     @pytest.mark.asyncio

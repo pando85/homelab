@@ -173,7 +173,7 @@ class TestGetPrices:
     @pytest.mark.asyncio
     async def test_get_prices_none_response(self, dhw_control):
         dhw_control.get_state = AsyncMock(return_value=None)
-        
+
         with pytest.raises(TypeError):
             await dhw_control._get_prices()
 
@@ -182,20 +182,20 @@ class TestGenerateVegaDiagram:
     def test_generate_vega_diagram_basic(self, dhw_control):
         datetimes = [datetime(2023, 1, 1, h) for h in [8, 12, 18]]
         result = dhw_control._generate_vega_diagram(datetimes)
-        
+
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_generate_vega_diagram_empty(self, dhw_control):
         result = dhw_control._generate_vega_diagram([])
-        
+
         assert isinstance(result, str)
         assert len(result) > 0
 
     def test_generate_vega_diagram_all_hours(self, dhw_control):
         datetimes = [datetime(2023, 1, 1, h) for h in range(24)]
         result = dhw_control._generate_vega_diagram(datetimes)
-        
+
         assert isinstance(result, str)
 
 
@@ -207,9 +207,9 @@ class TestForceDHW:
         entity_mock.turn_on = AsyncMock()
         dhw_control.get_entity = MagicMock(return_value=entity_mock)
         dhw_control.notify = AsyncMock()
-        
+
         await dhw_control._force_dhw()
-        
+
         entity_mock.turn_on.assert_called_once()
 
     @pytest.mark.asyncio
@@ -219,9 +219,9 @@ class TestForceDHW:
         entity_mock.turn_on = AsyncMock()
         dhw_control.get_entity = MagicMock(return_value=entity_mock)
         dhw_control.notify = AsyncMock()
-        
+
         await dhw_control._force_dhw()
-        
+
         entity_mock.turn_on.assert_not_called()
 
     @pytest.mark.asyncio
@@ -232,9 +232,9 @@ class TestForceDHW:
         entity_mock.turn_on = AsyncMock()
         dhw_control.get_entity = MagicMock(return_value=entity_mock)
         dhw_control.notify = AsyncMock()
-        
+
         await dhw_control._force_dhw()
-        
+
         dhw_control.notify.assert_not_called()
 
 
@@ -258,7 +258,7 @@ class TestRegisterSchedulers:
         dhw_control.notify = AsyncMock()
         pvpc_sensor_data = {"attributes": {}}
         dhw_control.get_state = AsyncMock(return_value=pvpc_sensor_data)
-        
+
         with patch('dhw_control.asyncio.sleep', new_callable=AsyncMock):
             with patch.object(dhw_control, 'get_timezone', return_value=pytz.timezone("Europe/Madrid")):
                 await dhw_control._register_schedulers()
@@ -269,18 +269,18 @@ class TestDailyRegisterSchedulers:
     async def test_daily_register_schedulers_disabled(self, dhw_control):
         dhw_control.get_state = AsyncMock(return_value="off")
         dhw_control._register_schedulers = AsyncMock()
-        
+
         await dhw_control._daily_register_schedulers()
-        
+
         dhw_control._register_schedulers.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_daily_register_schedulers_enabled(self, dhw_control):
         dhw_control.get_state = AsyncMock(return_value="on")
         dhw_control._register_schedulers = AsyncMock()
-        
+
         await dhw_control._daily_register_schedulers()
-        
+
         dhw_control._register_schedulers.assert_called_once()
 
     @pytest.mark.asyncio
@@ -288,10 +288,10 @@ class TestDailyRegisterSchedulers:
         dhw_control.get_state = AsyncMock(return_value="on")
         dhw_control._register_schedulers = AsyncMock(side_effect=[Exception("Test error"), None])
         dhw_control.notify = AsyncMock()
-        
+
         with patch('dhw_control.asyncio.sleep', new_callable=AsyncMock):
             await dhw_control._daily_register_schedulers()
-        
+
         assert dhw_control._register_schedulers.call_count == 2
 
 
@@ -303,9 +303,9 @@ class TestUnregisterSchedulers:
             dhw_control.AD.sched = MagicMock()
             dhw_control.AD.sched.schedule = {}
             dhw_control.cancel_timer = AsyncMock()
-            
+
             await dhw_control._unregister_schedulers()
-            
+
             dhw_control.cancel_timer.assert_not_called()
 
     @pytest.mark.asyncio
@@ -320,9 +320,9 @@ class TestUnregisterSchedulers:
                 }
             }
             dhw_control.cancel_timer = AsyncMock()
-            
+
             await dhw_control._unregister_schedulers()
-            
+
             assert dhw_control.cancel_timer.call_count == 2
 
 
@@ -330,9 +330,9 @@ class TestTerminate:
     @pytest.mark.asyncio
     async def test_terminate(self, dhw_control):
         dhw_control._unregister_schedulers = AsyncMock()
-        
+
         await dhw_control.terminate()
-        
+
         dhw_control._unregister_schedulers.assert_called_once()
 
 
@@ -344,7 +344,7 @@ class TestResilience:
         entity_mock.turn_on = AsyncMock(side_effect=Exception("Entity error"))
         dhw_control.get_entity = MagicMock(return_value=entity_mock)
         dhw_control.notify = AsyncMock()
-        
+
         with pytest.raises(Exception):
             await dhw_control._force_dhw()
 
@@ -355,6 +355,6 @@ class TestResilience:
         entity_mock.turn_on = AsyncMock()
         dhw_control.get_entity = MagicMock(return_value=entity_mock)
         dhw_control.notify = AsyncMock(side_effect=Exception("Notify failed"))
-        
+
         with pytest.raises(Exception):
             await dhw_control._force_dhw()
