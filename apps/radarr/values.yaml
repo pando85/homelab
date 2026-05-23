@@ -69,14 +69,7 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
         # Allow API access for external clients with apiKey query parameter
         nginx.ingress.kubernetes.io/auth-snippet: |
-          set $auth_bypass 0;
-          if ($arg_apiKey) {
-            set $auth_bypass 1;
-          }
-          if ($uri !~ "^/api/v3/") {
-            set $auth_bypass 0;
-          }
-          if ($auth_bypass = 1) {
+          if ($request_uri ~ "^/api/v3/.*[?&]apiKey=[^&]+") {
             return 200;
           }
       hosts:
