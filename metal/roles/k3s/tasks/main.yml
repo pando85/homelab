@@ -90,6 +90,13 @@
     mode: "0755"
   notify: Restart k3s
 
+- name: Create containerd drop-in directory
+  file:
+    path: "{{ k3s_containerd_config_dir }}/config-v3.toml.d"
+    state: directory
+    mode: "0755"
+  when: ansible_architecture != "aarch64"
+
 - name: Configure containerd with kata and gVisor runtimes
   copy:
     src: config-v3-runtimes.toml.tmpl

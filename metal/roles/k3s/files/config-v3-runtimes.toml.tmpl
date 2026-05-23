@@ -2,7 +2,7 @@
 version = 3
 root = {{ printf "%q" .NodeConfig.Containerd.Root }}
 state = {{ printf "%q" .NodeConfig.Containerd.State }}
-imports = ["/opt/kata/containerd/config.d/kata-deploy.toml", "/opt/gvisor/containerd/config.d/gvisor-deploy.toml"]
+imports = ["/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.d/*.toml", "/opt/gvisor/containerd/config.d/gvisor-deploy.toml"]
 
 [grpc]
   address = {{ deschemify .NodeConfig.Containerd.Address | printf "%q" }}

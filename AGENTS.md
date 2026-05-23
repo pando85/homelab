@@ -207,6 +207,8 @@ dockerImage: postgres:16
   `helm install/upgrade`, `ansible-playbook`
 - **ALWAYS:** Only suggest commands for user to run manually
 - **REASON:** This is a production GitOps repository. Deployments must be user-initiated.
+- **Metal node provisioning:** `cd metal && ANSIBLE_EXTRA_ARGS="-t k3s" make cluster`
+  (user must run manually; tags can be adjusted e.g. `-t k3s,gvisor`)
 
 ## Security
 
@@ -222,6 +224,8 @@ dockerImage: postgres:16
 - Introducing CRDs without `--include-crds` in helm template
 - Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources
 - Forgetting `Prune=false` on PVCs causes data loss on sync
+- Kata-deploy 3.31.0+ requires containerd drop-in directory (`config-v3.toml.d`) — see
+  `docs/troubleshooting/kata-containerd-dropin.md`
 
 ## Cilium Networking
 
