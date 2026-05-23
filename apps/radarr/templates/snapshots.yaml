@@ -4,7 +4,7 @@ metadata:
   name: radarr-backups
 spec:
   retention:
-    maxCount: 20
+    maxCount: 5
   schedule: "0 1 * * *" # UTC
   claimSelector:
     matchLabels:
