@@ -46,6 +46,8 @@ securityContext:
       - SETGID
       # Allow to execute program that changes UID (e.g. required for package installation)
       - SETUID
+      # Required for BGP v2 to bind to privileged port 179
+      - NET_BIND_SERVICE
     # -- Capabilities for the `mount-cgroup` init container
     cleanCiliumState:
       # Most of the capabilities here are the same ones used in the
