@@ -3,7 +3,9 @@ kind: Kustomization
 namespace: kube-system
 
 resources:
-  - resources/cilium/bgp-peering-policy.yaml
+  - resources/cilium/bgp-cluster-config.yaml
+  - resources/cilium/bgp-peer-config.yaml
+  - resources/cilium/bgp-advertisement.yaml
   - resources/cilium/load-balancer-ip-pool.yaml
   - resources/nodelocaldns/cilium-local-redirect-policy.yaml
   - resources/nodelocaldns/configmap.yaml
