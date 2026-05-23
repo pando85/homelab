@@ -19,7 +19,7 @@ qBittorrent has two types of limits that are often confused:
 
 ### Memory Limits
 - Container memory limit: Too low causes OOMKilled restarts, disrupting all connections
-- Each torrent + peers consumes memory; 2000+ torrents need 4-6 GiB
+- Each torrent + peers consumes memory; 2000+ torrents need 6-8 GiB
 
 ## Symptoms and Root Causes
 
@@ -34,7 +34,7 @@ Torrents in `queuedUP` state cannot connect to peers at all. They're waiting in 
 - 1900 torrents stuck in queue, never connecting
 - Total peers: ~100-300 (very low)
 
-**Fix:** Increase `max_active_uploads` to 400-600 (25-30% of seeding count)
+**Fix:** Increase `max_active_uploads` to cover 40-50% of seeding count (see Lessons Learned)
 
 ### Symptom: Slow downloads despite many seeds
 
@@ -187,6 +187,59 @@ max_connec ≈ router_safe (8000 with 400k limit)
    - `queuedUP` should drop to < 5%
    - Peer connections should increase
    - Upload/download speeds should improve
+
+## Lessons Learned
+
+### Memory does NOT scale with active upload slots
+
+**Finding (May 2026):** Increasing `max_active_uploads` from 600 → 1000 had negligible
+memory impact. Memory settled at ~6 Gi regardless of the active upload count.
+
+**Reason:** Memory is driven by the total torrent count (session metadata, piece maps),
+not by how many torrents are in the active upload set. Moving a torrent from `queuedUP`
+to `stalledUP` (active but 0 peers) adds almost no memory since no peer state is allocated.
+
+**Implication:** It is safe to increase `max_active_uploads` aggressively as long as the
+container memory limit has headroom for the total torrent count. The memory floor is
+~2.5-3 Gi per 1000 torrents regardless of queue settings.
+
+### stalledUP is the dominant state with DHT/PeX/LSD disabled
+
+**Finding:** With anonymous mode enabled and DHT/PeX/LSD disabled, peer discovery relies
+solely on tracker HTTP announces. This causes ~50% of active torrents to be `stalledUP`
+(active in the seeding pool but 0 connected peers) even with ample queue slots.
+
+**Implication:** Increasing `max_active_uploads` moves torrents from `queuedUP` → `stalledUP`,
+which still improves seeding because stalled torrents can respond to incoming connections.
+But to significantly increase `uploading` counts, peer discovery must improve (enable DHT/PeX
+or add more trackers).
+
+### Incremental tuning workflow works well
+
+**Validated approach (May 2026, 2396 torrents):**
+
+1. Start with conservative increase (e.g. +50% of current `max_active_uploads`)
+2. Monitor at 10-minute intervals: queuedUP, stalledUP, uploading, peers, memory
+3. Expect: queuedUP drops, stalledUP absorbs, uploading ramps over 20-30 min
+4. Memory stabilizes in ~60 min post-restart; compare against pre-change baseline
+5. If queuedUP plateaus above 5%, another round of increases is safe (memory permitting)
+
+**Results from 600 → 1000 increase:**
+
+| Metric | Before | After (30 min) | Change |
+|--------|--------|----------------|--------|
+| queuedUP | 1,586 (66%) | 1,187 (50%) | -25% |
+| uploading | 26 | 37 | +42% |
+| Peer connections | 135 | 304 | +125% |
+| Memory | 6.2 Gi | 6.1 Gi | Negligible |
+| Restarts | 0 | 0 | Stable |
+
+### Queue plateaus at MaxActiveUploads limit
+
+When `queuedUP` stops decreasing after a config change, it means the active upload pool
+(`stalledUP` + `uploading` + `forcedUP`) has saturated `max_active_uploads`. The remaining
+queuedUP count equals `total_torrents - max_active_uploads - forcedUP`. To eliminate the
+queue, `max_active_uploads` must exceed the total torrent count.
 
 ## Common Pitfalls
 
