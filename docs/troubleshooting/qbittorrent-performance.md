@@ -145,20 +145,20 @@ ssh pfsense.grigri "pfctl -s states | grep -c 'SYN_SENT:CLOSED'"
 
 | Setting | Recommended | Purpose |
 |---------|-------------|---------|
-| `max_active_uploads` | 400-600 | Queue slots - allows torrents to seek peers |
+| `max_active_uploads` | 600-1000 | Queue slots - allows torrents to seek peers |
 | `max_active_downloads` | 10-20 | Queue slots for downloads |
-| `max_active_torrents` | 600-800 | Total queue limit |
+| `max_active_torrents` | 800-1200 | Total queue limit |
 | `max_uploads` | 60-100 | Bandwidth slots - actual upload transfers |
 | `max_uploads_per_torrent` | 4-6 | Per-torrent upload slots |
 | `max_connec` | 5000-8000 | Total peer connections (router dependent) |
 | `max_connec_per_torrent` | 20-25 | Per-torrent peers |
-| Memory limit | 6 GiB | Prevent OOMKilled |
+| Memory limit | 10 GiB | Prevent OOMKilled |
 
 ### Relationship Summary
 
 ```
 seeding_torrents ≈ 2000
-max_active_uploads ≈ 25-30% of seeding = 500-600
+max_active_uploads ≈ 40-50% of seeding = 800-1000
 max_uploads ≈ bandwidth_based (9 MB/s ÷ 90 KB/s/slot = 100)
 max_connec ≈ router_safe (8000 with 400k limit)
 ```
@@ -194,7 +194,7 @@ max_connec ≈ router_safe (8000 with 400k limit)
 |---------|--------|-----|
 | `max_active_uploads` = 100 with 2000 seeding | 1900 torrents queued | Increase to 500+ |
 | `max_connec` = 500 with 2000 seeding | SYN_SENT overflow | Increase to 5000+ |
-| Memory = 3.5 GiB with 2000 torrents | OOMKilled restarts | Increase to 6 GiB |
+| Memory = 3.5 GiB with 2000 torrents | OOMKilled restarts | Increase to 10 GiB |
 | `max_uploads_per_torrent` = 1 | Single torrent hogs bandwidth | Use 4-6 |
 
 ## Quick Fixes
