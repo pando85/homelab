@@ -1,10 +1,16 @@
-# Cilium BPG control plane
+# Cilium BGP Control Plane
 
 Cilium replaces MetalLB for creating K8s LBs based on BGP.
 
+## API Version
+
+Cilium 1.19+ uses the v2 BGP API (`cilium.io/v2`). The v2alpha1 `CiliumBGPPeeringPolicy` was
+removed. See [troubleshooting/cilium-1.19-bgp-migration.md](../troubleshooting/cilium-1.19-bgp-migration.md)
+for migration details.
+
 ## Deployment
 
-Ansible set up the configuration and ArgoCD deploys Cilium.
+Ansible sets up the configuration and ArgoCD deploys Cilium.
 
 ## Router config
 
