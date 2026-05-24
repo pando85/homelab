@@ -51,6 +51,7 @@ wordpress:
     annotations:
       external-dns.alpha.kubernetes.io/enabled: "true"
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     tls: true
     extraHosts:
   mariadb:
