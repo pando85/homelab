@@ -267,7 +267,7 @@ spec:
               memory: "128Mi"
               cpu: "100m"
         - name: workspace-gc
-          image: busybox:1.37.0
+          image: busybox:1.38.0
           command:
             - sh
             - /scripts/cleanup.sh
