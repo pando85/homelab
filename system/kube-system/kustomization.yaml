@@ -15,7 +15,6 @@ resources:
   - resources/priority-class-high.yaml
   - resources/runtime-class-gvisor.yaml
   - resources/runtime-class-nvidia.yaml
-  - resources/kata-nvidia-coordinator
 
 helmCharts:
   - includeCRDs: true
