@@ -7,18 +7,18 @@ data:
   controller.sh: |
     #!/bin/sh
 
-    NAMESPACE=kube-system
+    NAMESPACE=gpu-operator
     KATA_DS=kata-deploy
-    NVIDIA_DS=kube-system-nvidia-device-plugin
+    NVIDIA_DS=nvidia-device-plugin-daemonset
     DEBOUNCE_SECONDS=60
 
     get_pod_states() {
-      kubectl get pods -l name=kata-deploy -n "$NAMESPACE" -o jsonpath='{range .items[*]}{.metadata.name}:{.metadata.creationTimestamp}:{.status.containerStatuses[0].restartCount} {end}'
+      kubectl get pods -l name=kata-deploy -n kube-system -o jsonpath='{range .items[*]}{.metadata.name}:{.metadata.creationTimestamp}:{.status.containerStatuses[0].restartCount} {end}'
     }
 
     wait_for_kata_ready() {
       echo "$(date): Waiting for kata-deploy to be ready..."
-      kubectl rollout status ds/"$KATA_DS" -n "$NAMESPACE" --timeout=300s
+      kubectl rollout status ds/"$KATA_DS" -n kube-system --timeout=300s
     }
 
     restart_nvidia() {

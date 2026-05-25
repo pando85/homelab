@@ -22,7 +22,7 @@ rules:
     resources:
       - daemonsets
     resourceNames:
-      - kube-system-nvidia-device-plugin
+      - nvidia-device-plugin-daemonset
     verbs:
       - patch
   - apiGroups:

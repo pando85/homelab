@@ -1,0 +1,21 @@
+driver:
+  # Pre-installed via Ansible (nvidia-headless-550-server + nvidia-patch for NVENC)
+  enabled: false
+
+toolkit:
+  # Pre-installed via Ansible (nvidia-container-runtime apt package)
+  enabled: false
+
+operator:
+  runtimeClass: nvidia
+
+devicePlugin:
+  config:
+    name: time-slicing-config
+    default: any
+
+dcgmExporter:
+  enabled: true
+
+gfd:
+  enabled: true
