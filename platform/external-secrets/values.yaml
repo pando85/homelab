@@ -5,6 +5,16 @@ resources:
   limits:
     memory: 64Mi
 
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/arch
+              operator: In
+              values:
+                - amd64
+
 extraArgs:
   loglevel: debug
 
@@ -16,6 +26,16 @@ webhook:
     limits:
       memory: 64Mi
 
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                  - amd64
+
 certController:
   resources:
     requests:
@@ -23,3 +43,13 @@ certController:
       memory: 64Mi
     limits:
       memory: 128Mi
+
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                  - amd64
