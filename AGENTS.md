@@ -94,6 +94,8 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   that leak ZFS space. Audit periodically: see `docs/troubleshooting/cluster-hygiene.md`
 - High pod restart counts don't always mean problems — check `Last State.Reason` (exit 255 =
   node reboot, not app crash). See `docs/troubleshooting/cluster-hygiene.md`
+- Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
+  (`24.11.1`). See `docs/troubleshooting/armbian-kernel-bpf-masquerade.md`
 
 ## Subsystem Details
 
