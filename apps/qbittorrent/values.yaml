@@ -103,6 +103,10 @@ app-template:
                 sed -i 's/^Session\\PeerTurnoverInterval=.*/Session\\PeerTurnoverInterval=300/' "$CONFIG_FILE"
                 sed -i 's/^Session\\PeerTurnoverCutoff=.*/Session\\PeerTurnoverCutoff=90/' "$CONFIG_FILE"
                 sed -i 's/^Session\\SocketBacklogSize=.*/Session\\SocketBacklogSize=30/' "$CONFIG_FILE"
+                sed -i 's/^Session\\DHTEnabled=.*/Session\\DHTEnabled=true/' "$CONFIG_FILE"
+                sed -i 's/^Session\\PeXEnabled=.*/Session\\PeXEnabled=true/' "$CONFIG_FILE"
+                sed -i 's/^Session\\LSDEnabled=.*/Session\\LSDEnabled=true/' "$CONFIG_FILE"
+                sed -i 's/^Session\\AnonymousModeEnabled=.*/Session\\AnonymousModeEnabled=false/' "$CONFIG_FILE"
               fi
 
   defaultPodOptions:
