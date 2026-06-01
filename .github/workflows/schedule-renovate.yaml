@@ -14,8 +14,7 @@ on:
         default: "info"
         required: false
   schedule:
-    - cron: "0/15 4-10 * * 1"
-    - cron: "0 5 * * *"
+    - cron: "0 * * * *"
   push:
     branches:
       - master
