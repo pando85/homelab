@@ -23,9 +23,10 @@ spec:
     radarr:
       - superuser
       - createdb
-  databases:
-    radarr-main: radarr
-    radarr-log: radarr
+  # databases with hyphens are rejected by the Zalando operator
+  # ("invalid name"). Created manually instead:
+  #   CREATE DATABASE "radarr-main" OWNER radarr;
+  #   CREATE DATABASE "radarr-log" OWNER radarr;
 
   postgresql:
     version: "17"
