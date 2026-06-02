@@ -4,6 +4,7 @@ app-template:
       labels:
         backup/retain: quaterly
       type: statefulset
+      replicas: 0
       containers:
         sonarr:
           image:
