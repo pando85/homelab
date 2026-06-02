@@ -1,7 +1,7 @@
-# Sonarr SQLite to PostgreSQL Migration Plan
+# Sonarr SQLite to PostgreSQL Migration
 
-Preventative migration (Sonarr not yet showing lock errors) following the same procedure used for
-Radarr. See `docs/troubleshooting/radarr-sqlite-to-postgres.md` for pitfall details.
+Completed 2026-06-02. Preventative migration following the same procedure used for Radarr.
+See `docs/troubleshooting/radarr-sqlite-to-postgres.md` for pitfall details.
 
 ## Current State
 
@@ -401,3 +401,30 @@ If something goes wrong:
 - Delete pgloader jobs: `kubectl delete job -n sonarr pgloader-sonarr-main pgloader-sonarr-log`
 - Remove local backups: `rm -rf /tmp/sonarr-migration`
 - Optionally shrink Sonarr PVC (still has old SQLite files taking space)
+
+## Results
+
+| Metric | Before (SQLite) | After (Postgres) |
+|--------|----------------|-----------------|
+| DB size | 160 MB (sonarr.db) + 8 MB (logs.db) | 73 MB (main) + ~6 MB (log) |
+| Memory | 254 Mi | 176 Mi (Sonarr) + 205 Mi (Postgres) |
+| "database is locked" errors | 0 (preventative) | 0 |
+| Series | 198 | 198 |
+| Episodes | 9,182 | 9,182 |
+| Episode files | 4,810 | 4,810 |
+| pgloader time | - | 7.7s (main) + 1.2s (log) |
+
+### Commits (4 total)
+
+1. `sonarr: Add Postgres cluster and snapshot schedule` — postgresql.yaml + snapshots-postgres.yaml
+2. `sonarr: Add Postgres env vars and increase memory limit` — values.yaml (env vars + 700Mi→1Gi)
+3. `sonarr: Scale down for Postgres data migration` — values.yaml (replicas: 0)
+4. `sonarr: Scale up after Postgres migration` — values.yaml (removed replicas: 0)
+
+### Notes
+
+- pgloader migrated 75,571 rows (main) and 33,498 rows (log) with 0 errors
+- Postgres memory limit: 512 Mi (actual usage ~205 Mi)
+- Sonarr memory limit: 1 Gi (actual usage ~176 Mi)
+- Local backups at `/tmp/sonarr-migration/` for rollback safety
+- SQLite files still on PVC at `/config/sonarr.db` and `/config/logs.db` (untouched)
