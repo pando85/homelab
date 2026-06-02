@@ -96,6 +96,8 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   node reboot, not app crash). See `docs/troubleshooting/cluster-hygiene.md`
 - Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
   (`24.11.1`). See `docs/troubleshooting/armbian-kernel-bpf-masquerade.md`
+- Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
+  them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
 
 ## Subsystem Details
 
