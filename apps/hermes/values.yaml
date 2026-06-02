@@ -13,7 +13,7 @@ app-template:
             # renovate: datasource=docker depName=nousresearch/hermes-agent
             repository: nousresearch/hermes-agent
             tag: v2026.5.29.2
-          command: ["gateway", "run"]
+          args: ["gateway", "run"]
           securityContext:
             runAsUser: 0
           env:
