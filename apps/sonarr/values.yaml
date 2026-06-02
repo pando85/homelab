@@ -12,13 +12,27 @@ app-template:
 
           env:
             TZ: Europe/Madrid
+            SONARR__POSTGRES__HOST: sonarr-postgres
+            SONARR__POSTGRES__PORT: "5432"
+            SONARR__POSTGRES__MAINDB: sonarr-main
+            SONARR__POSTGRES__LOGDB: sonarr-log
+            SONARR__POSTGRES__USER:
+              valueFrom:
+                secretKeyRef:
+                  name: sonarr.sonarr-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            SONARR__POSTGRES__PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: sonarr.sonarr-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
 
           resources:
             requests:
               cpu: 150m
               memory: 170Mi
             limits:
-              memory: 700Mi
+              memory: 1Gi
 
           probes:
             liveness: &probe
