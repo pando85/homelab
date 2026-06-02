@@ -1,0 +1,36 @@
+app-template:
+  controllers:
+    hermes:
+      labels:
+        backup/retain: quaterly
+      type: statefulset
+      pod:
+        enableServiceLinks: false
+        runtimeClassName: kata
+      containers:
+        hermes:
+          image:
+            # renovate: datasource=docker depName=nousresearch/hermes-agent
+            repository: nousresearch/hermes-agent
+            tag: v2026.5.29.2
+          command: ["gateway", "run"]
+          securityContext:
+            runAsUser: 0
+          env:
+            TZ: Europe/Madrid
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 4Gi
+  defaultPodOptions:
+    nodeSelector:
+      kubernetes.io/hostname: prusik
+  persistence:
+    data:
+      enabled: true
+      globalMounts:
+        - path: /opt/data
+      existingClaim: hermes-data

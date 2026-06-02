@@ -1,0 +1,7 @@
+apiVersion: v2
+name: hermes
+version: 0.0.0
+dependencies:
+  - name: app-template
+    version: 5.0.1
+    repository: https://bjw-s-labs.github.io/helm-charts/
