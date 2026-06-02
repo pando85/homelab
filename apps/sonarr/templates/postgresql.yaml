@@ -1,0 +1,43 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: sonarr-postgres
+  labels:
+    backup/retain: quaterly
+spec:
+  teamId: sonarr
+
+  numberOfInstances: 1
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+  volume:
+    size: 2Gi
+
+  users:
+    sonarr:
+      - superuser
+      - createdb
+  # databases with hyphens are rejected by the Zalando operator
+  # ("invalid name"). Created manually instead:
+  #   CREATE DATABASE "sonarr-main" OWNER sonarr;
+  #   CREATE DATABASE "sonarr-log" OWNER sonarr;
+
+  postgresql:
+    version: "17"
+    parameters:
+      archive_mode: "off"
+      max_connections: "25"
+      shared_buffers: 128MB
+      log_checkpoints: "off"
+      log_connections: "off"
+      log_disconnections: "off"
+      log_lock_waits: "off"
+      log_min_duration_statement: "-1"
+      log_statement: none
+      full_page_writes: "off"
