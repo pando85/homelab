@@ -1,126 +1,70 @@
 ---
 name: debug
-description: Debug live issues in the homelab Kubernetes cluster using kubectl and Grafana observability tools.
+description: Use ONLY when debugging live homelab Kubernetes/K3s cluster issues with read-only kubectl or Grafana observability.
 ---
 
-## Purpose
+## Scope
 
-Diagnose and troubleshoot issues in the homelab K3s cluster by combining Kubernetes
-direct inspection with Grafana observability (metrics, logs, dashboards, alerts).
+Diagnose live issues in the `grigri` K3s cluster by combining read-only Kubernetes inspection with
+Grafana observability. Do not use this skill for static chart edits, docs-only work, or general code
+review.
 
-## When to use
+## Safety Rules
 
-Use this skill when asked to debug, troubleshoot, investigate, or diagnose issues
-with applications or infrastructure running in the homelab cluster.
+- Every Kubernetes command must include `--context=grigri`.
+- Use read-only commands only: `get`, `describe`, `logs`, `top`.
+- Never run `kubectl apply`, `delete`, `edit`, `patch`, `rollout`, `scale`, Helm deploy commands, or
+  Ansible deployment commands.
+- If a fix is identified, report it and suggest commands for the user to run manually.
 
-## Cluster Access
+## Fast Workflow
 
-All `kubectl` commands **must** use the grigri context:
+1. Identify scope: app, namespace, symptom, and when it started.
+2. Check Kubernetes state with `kubectl --context=grigri`.
+3. Check Grafana alerts, metrics, logs, or dashboard queries as needed.
+4. Correlate events with logs, metrics, ArgoCD syncs, and recent repository changes.
+5. Report root cause, evidence, and safe next steps.
+
+## Kubernetes Checks
 
 ```bash
-kubectl --context=grigri <command>
-```
-
-### Common kubectl Debugging Commands
-
-```bash
-# Overview of cluster health
 kubectl --context=grigri get nodes
-kubectl --context=grigri get pods -A | grep -v Running
-
-# Inspect a specific pod
-kubectl --context=grigri describe pod <pod-name> -n <namespace>
-kubectl --context=grigri logs <pod-name> -n <namespace> --tail=100
-kubectl --context=grigri logs <pod-name> -n <namespace> --previous
-
-# Resource usage
+kubectl --context=grigri get pods -A
+kubectl --context=grigri describe pod <pod> -n <namespace>
+kubectl --context=grigri logs <pod> -n <namespace> --tail=100
+kubectl --context=grigri logs <pod> -n <namespace> --previous
 kubectl --context=grigri top pods -n <namespace>
-kubectl --context=grigri top nodes
-
-# Events
 kubectl --context=grigri get events -n <namespace> --sort-by='.lastTimestamp'
-
-# ArgoCD application status
 kubectl --context=grigri get applications -n argocd
-kubectl --context=grigri describe application <app-name> -n argocd
 ```
 
-## Grafana Observability (MCP Tools)
+Look for pod states, events, image pulls, scheduling failures, OOMKills, resource pressure,
+ExternalSecret status, PVC status, and ArgoCD sync errors.
 
-Use the `grafana-grigri` MCP tools for metrics, logs, and alerting. The Grafana
-instance is at https://prometheus.internal.grigri.cloud.
+## Grafana Checks
 
-### Workflow: Metrics (Prometheus)
+Use `grafana-grigri` tools for the live cluster.
 
-1. **Discover metrics** — `list_prometheus_metric_names` with a regex filter
-2. **Find label values** — `list_prometheus_label_values` for filtering
-3. **Query** — `query_prometheus` with PromQL for instant or range queries
-4. **Histograms** — `query_prometheus_histogram` for latency percentiles
+Metrics:
 
-Example flow:
-```
-list_prometheus_metric_names(datasourceUid=..., regex="http_requests")
-  → list_prometheus_label_values(datasourceUid=..., labelName="job")
-    → query_prometheus(datasourceUid=..., expr='rate(http_requests_total[5m])', ...)
-```
+1. Discover metrics with `list_prometheus_metric_names`.
+2. Find filters with `list_prometheus_label_values`.
+3. Query with `query_prometheus` or `query_prometheus_histogram`.
 
-### Workflow: Logs (Loki)
+Logs:
 
-1. **Check stream size** — `query_loki_stats` with a label selector
-2. **Discover labels** — `list_loki_label_names` / `list_loki_label_values`
-3. **Search logs** — `query_loki_logs` with full LogQL
-4. **Detect patterns** — `query_loki_patterns` for anomaly detection
+1. Check stream size with `query_loki_stats` using a selector only.
+2. Discover labels with `list_loki_label_names` and `list_loki_label_values`.
+3. Search with `query_loki_logs` using LogQL filters.
 
-Example flow:
-```
-query_loki_stats(datasourceUid=..., logql='{app="nginx"}')
-  → list_loki_label_values(datasourceUid=..., labelName="app")
-    → query_loki_logs(datasourceUid=..., logql='{app="nginx"} |= "error"', limit=50)
-```
+Dashboards and alerts:
 
-### Workflow: Alerts & Dashboards
+- Use `list_alert_rules` and `get_alert_rule_by_uid` for firing or pending alerts.
+- Use `get_dashboard_summary` before loading large dashboards.
+- Use `get_dashboard_panel_queries` to inspect dashboard PromQL or LogQL.
+- Use `list_datasources` if a Prometheus or Loki datasource UID is unknown.
 
-- **Alerts** — `list_alert_rules` to find firing/pending alerts; `get_alert_rule_by_uid` for detail
-- **Dashboards** — `get_dashboard_summary` for overview; `get_dashboard_panel_queries` to see queries
-- **Datasources** — `list_datasources` to find Prometheus/Loki UIDs
-
-### Finding Datasource UIDs
-
-If the datasource UID is unknown:
-```
-list_datasources() → filter by type (prometheus, loki)
-```
-
-## Debugging Strategy
-
-### 1. Identify the Scope
-
-- What app/namespace is affected?
-- When did the issue start?
-- Is it a deployment, networking, resource, or application issue?
-
-### 2. Check Kubernetes State
-
-Use `kubectl --context=grigri` to check:
-- Pod status (CrashLoopBackOff, ImagePullBackOff, OOMKilled)
-- Events (scheduling failures, config errors)
-- Resource pressure (CPU/memory limits)
-
-### 3. Check Observability
-
-Use `grafana-grigri` MCP tools to:
-- Check for firing alerts related to the app
-- Query metrics for anomalies (error rate spike, latency increase)
-- Search logs for error messages or stack traces
-- Review relevant dashboard panels
-
-### 4. Cross-Reference
-
-- Correlate kubectl events with metric spikes or log errors
-- Check if a recent ArgoCD sync or Helm upgrade preceded the issue
-- Verify ExternalSecrets are syncing from Vault
-
-## Common Issue Patterns
+## Common Patterns
 
 | Symptom | Check |
 |---------|-------|
@@ -133,11 +77,3 @@ Use `grafana-grigri` MCP tools to:
 | PVC issues | `kubectl get pvc`, check storage class and capacity |
 | ArgoCD sync failure | `kubectl describe application`, check sync status and errors |
 | Vault/ESO issues | Check `externalsecrets` and `secretstore` status |
-
-## Important Notes
-
-- This is a **production** cluster. Only run read-only kubectl commands.
-- **NEVER** run `kubectl apply`, `kubectl delete`, `kubectl edit`, or any mutating command.
-- The `grafana-grigri` tools are read-only by design.
-- If a fix is identified, suggest the command for the user to run manually.
-- Time ranges for Grafana queries default to last hour. Adjust when investigating older issues.

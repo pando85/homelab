@@ -1,6 +1,7 @@
 # AGENTS.md
 
-Guidelines for agentic coding agents working in this homelab repository.
+Concise repository guidance for agentic coding agents. Keep this file short: add detailed runbooks
+under `docs/`, and only keep high-signal reminders here.
 
 ## Repository Overview
 
@@ -13,17 +14,17 @@ cert-manager, ingress-nginx, Renovate, ZFS, Cilium (BGP).
 **Cluster Access:** This is a GitOps repository. Use `kubectl --context=grigri` to see what is
 running in the cluster. Metrics are available at https://prometheus.internal.grigri.cloud
 
-## Directory Structure
+## Repository Map
 
 ```
-apps/          # Application Helm charts (one subfolder per app)
-system/        # Cluster-wide components (ingress, cert-manager, monitoring, identity)
-platform/      # Supporting operators/platform services (Vault, external-secrets, git, reloader)
-bootstrap/     # ArgoCD bootstrap layer
-metal/         # Ansible playbooks, inventory, roles for K3s node provisioning
-scripts/       # Utility scripts (deploy-dir.rh for Helm rendering)
-test/          # Local k3d test cluster helpers
-docs/          # Documentation site
+apps/      # Application Helm charts, one release per folder
+system/    # Cluster-wide components: ingress, cert-manager, monitoring, identity
+platform/  # Supporting operators/services: Vault, external-secrets, git, reloader
+bootstrap/ # ArgoCD bootstrap layer
+metal/     # Ansible inventory, playbooks, roles for K3s node provisioning
+scripts/   # Utility scripts, including deploy-dir.rh for Helm rendering
+test/      # Local k3d test helpers
+docs/      # MkDocs documentation and runbooks
 ```
 
 ## Build/Lint/Test Commands
@@ -51,6 +52,8 @@ helm lint apps/<name>/
 - **Helm:** Use `app-template` from bjw-s. See `docs/conventions/helm.md` for full patterns
 - **Ansible:** `safety` profile. See `docs/conventions/ansible.md`
 - **Renovate:** Always add hints above image refs — see `docs/conventions/helm.md#renovate-integration`
+- **Docs:** Put durable troubleshooting details in `docs/troubleshooting/`; keep `AGENTS.md` to links
+  and one-line reminders. See `docs/conventions/documenting-learnings.md`
 
 ## Commit Messages
 
@@ -74,6 +77,13 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - **ALWAYS:** Only suggest commands for user to run manually
 - **Metal node provisioning:** `cd metal && ANSIBLE_EXTRA_ARGS="-t k3s" make cluster`
   (user must run manually)
+
+## Skill Usage
+
+- Use the `debug` skill only for live cluster investigation with read-only `kubectl` and Grafana
+  observability.
+- Do not copy runbook steps into agent instructions. Link to the relevant docs page instead.
+- Prefer focused, path-specific docs over adding broad always-loaded guidance.
 
 ## Security
 
@@ -99,7 +109,7 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
 
-## Subsystem Details
+## Subsystem Docs
 
 - **Cilium networking:** See `docs/conventions/cilium.md` for BGP, TCX, bandwidth limiting details
 - **Documenting learnings:** See `docs/conventions/documenting-learnings.md` for when/how to write
