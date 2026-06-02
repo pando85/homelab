@@ -12,13 +12,27 @@ app-template:
 
           env:
             TZ: Europe/Madrid
+            RADARR__POSTGRES__HOST: radarr-postgres
+            RADARR__POSTGRES__PORT: "5432"
+            RADARR__POSTGRES__MAINDB: radarr-main
+            RADARR__POSTGRES__LOGDB: radarr-log
+            RADARR__POSTGRES__USER:
+              valueFrom:
+                secretKeyRef:
+                  name: radarr.radarr-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            RADARR__POSTGRES__PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: radarr.radarr-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
 
           resources:
             requests:
               cpu: 10m
               memory: 180Mi
             limits:
-              memory: 800Mi
+              memory: 1Gi
           probes:
             liveness:
               enabled: true
