@@ -3,7 +3,7 @@ kind: postgresql
 metadata:
   name: radarr-postgres
   labels:
-    backup/retain: weekly
+    backup/retain: quaterly
 spec:
   teamId: radarr
 
