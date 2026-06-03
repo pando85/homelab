@@ -76,6 +76,41 @@ kubectl --context=grigri exec -n monitoring <grafana-pod> -- \
 kubectl --context=grigri exec -n <ns> <pod> -- nslookup google.com
 ```
 
+## Observed Incident: Vector Buffer Fill on Odroid HC4 (2026-06-03)
+
+**Node:** `k8s-odroid-hc4-3` (ARM64, kernel 6.6.63)
+
+**Symptom:** `VectorHighBufferFill` alert fired — `loki_journal` buffer on `vector-agent-p7vxd`
+at 97% and climbing. The buffer had been growing steadily for ~6 hours.
+
+**Key finding:** Stale BPF can affect specific connections selectively. On the same pod:
+- `loki_journal` sink (endpoint `http://loki:3100`): DNS resolution completely broken,
+  buffer filling, retries exhausting, events dropped
+- `loki_pods` sink (same `http://loki:3100` endpoint): working normally, 0% buffer fill
+
+Vector logs showed repeated DNS failures on a single stuck request (`request_id=1718`):
+```
+HTTP error. error=error trying to connect: dns error: failed to lookup address information: Temporary failure in name resolution
+```
+
+**Diagnosis commands used:**
+```bash
+# Check buffer fill percentage per agent
+# PromQL: (vector_buffer_events{component_id=~"loki_pods|loki_journal"} / vector_buffer_max_size_events{component_id=~"loki_pods|loki_journal"}) * 100
+
+# Check vector logs for DNS errors
+kubectl --context=grigri logs vector-agent-p7vxd -n loki --tail=100 | grep -iE "error|dns|buffer"
+
+# Check sent bytes — loki_journal was 0 on affected pod, loki_pods was normal
+# PromQL: rate(vector_component_sent_bytes_total{component_id=~"loki_pods|loki_journal"}[5m])
+```
+
+**Fix:** Restarting the Cilium pod on `k8s-odroid-hc4-3` restored DNS. Buffer dropped to 0%
+immediately (Vector had already exhausted retries and dropped the queued events).
+
+**Impact:** Journal logs from this node were lost for the period between DNS failure and retry
+exhaustion (~2 hours of buffered events dropped).
+
 ## Notes
 
 - This is distinct from the Armbian kernel BPF masquerade regression
