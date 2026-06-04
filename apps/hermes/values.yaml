@@ -33,6 +33,7 @@ app-template:
   defaultPodOptions:
     securityContext:
       fsGroup: 10000
+      fsGroupChangePolicy: OnRootMismatch
     nodeSelector:
       kubernetes.io/hostname: prusik
   service:
