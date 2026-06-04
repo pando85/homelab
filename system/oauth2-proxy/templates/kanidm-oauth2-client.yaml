@@ -28,6 +28,12 @@ spec:
         - profile
         - email
         - groups
+    - group: hermes-users
+      scopes:
+        - openid
+        - profile
+        - email
+        - groups
 
   preferShortUsername: true
   strictRedirectUrl: true
