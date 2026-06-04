@@ -28,7 +28,7 @@ app-template:
               cpu: 500m
               memory: 1Gi
             limits:
-              cpu: "2"
+              cpu: "8"
               memory: 4Gi
   defaultPodOptions:
     securityContext:
