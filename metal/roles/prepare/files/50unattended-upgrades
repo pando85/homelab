@@ -10,14 +10,13 @@ Unattended-Upgrade::Allowed-Origins {
 };
 
 Unattended-Upgrade::Package-Blacklist {
-    // The following matches all packages starting with linux-
-    // Use $ to explicitely define the end of a package name. Without
-    // the $, "libc6" would match all of them.
-    // Special characters need escaping
-    // The following matches packages like xen-system-amd64, xen-utils-4.1,
-    // xenstore-utils and libxenstore3.0
-    // For more information about Python regular expressions, see
-    // https://docs.python.org/3/howto/regex.html
+    // NVIDIA packages must be managed by the GPU Operator only.
+    // Unattended upgrades of host NVIDIA drivers cause driver/library
+    // version mismatches when the operator manages containerized drivers.
+    "nvidia-.*";
+    "libnvidia-.*";
+    "cuda-.*";
+    "xserver-xorg-video-nvidia-.*";
 };
 
 Unattended-Upgrade::Automatic-Reboot "false";
