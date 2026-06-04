@@ -110,6 +110,10 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   manifest as partial breakage (some connections work, others don't) — e.g. Vector buffer filling
   on one sink while another on the same pod is fine. Fix: delete the Cilium pod.
   See `docs/troubleshooting/cilium-stale-bpf-egress.md`
+- Unattended-upgrades must blacklist NVIDIA packages — host-level driver upgrades conflict with
+  the GPU Operator's containerized driver management, causing `Driver/library version mismatch`.
+  Fix: `cd metal && ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare`
+  See `docs/troubleshooting/nvidia-driver-version-mismatch.md`
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
 
