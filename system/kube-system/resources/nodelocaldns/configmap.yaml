@@ -15,7 +15,7 @@ data:
         reload
         loop
         bind 0.0.0.0
-        forward . 10.43.0.10 {
+        forward . 10.0.3.93 10.0.4.147 {
             force_tcp
         }
         prometheus :9253
@@ -27,7 +27,7 @@ data:
         reload
         loop
         bind 0.0.0.0
-        forward . 10.43.0.10 {
+        forward . 10.0.3.93 10.0.4.147 {
             force_tcp
         }
         prometheus :9253
@@ -38,7 +38,7 @@ data:
         reload
         loop
         bind 0.0.0.0
-        forward . 10.43.0.10 {
+        forward . 10.0.3.93 10.0.4.147 {
             force_tcp
         }
         prometheus :9253

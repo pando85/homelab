@@ -11,6 +11,7 @@ resources:
   - resources/nodelocaldns/configmap.yaml
   - resources/nodelocaldns/daemonset.yaml
   - resources/nodelocaldns/service.yaml
+  - resources/nodelocaldns/service-upstream.yaml
   - resources/nodelocaldns/serviceaccount.yaml
   - resources/priority-class-high.yaml
   - resources/runtime-class-gvisor.yaml
