@@ -100,19 +100,28 @@ kubectl --context=grigri exec -n <namespace> <cluster>-0 -c postgres -- patronic
 
 Commit and push.
 
-### Cleanup: Remove leaked ZFS volume on source node
+### Cleanup: Remove leaked ZFS volumes and orphaned PVCs
 
-The old PV transitions to `Released` but the ZFS dataset remains. Clean up on the source node:
+After scaling back to 1, the `-1` replica PVCs remain as orphans (Bound but unused). The original
+`-0` PVCs on the source node are Released. All need manual cleanup.
 
 ```bash
-# Find the released PV
-kubectl --context=grigri get pv | grep Released
+# 1. Delete orphaned -1 PVCs (Bound but no pod using them)
+kubectl --context=grigri delete pvc pgdata-$CLUSTER-1 -n $NAMESPACE
 
-# On the source node, destroy the ZFS dataset
-ssh <source-node> "zfs destroy <pool>/<dataset>"
+# 2. Delete released PVs
+kubectl --context=grigri get pv | grep Released
+kubectl --context=grigri delete pv <released-pv-name>
+
+# 3. Orphaned -1 PVs become Released after PVC deletion — delete those too
+kubectl --context=grigri delete pv <orphaned-pv-name>
+
+# 4. Destroy ZFS datasets (may need -r for snapshots)
+ssh <source-node> "zfs destroy -r <pool>/<dataset>"
 ```
 
-See `docs/troubleshooting/cluster-hygiene.md` for batch cleanup commands.
+PV deletion does **not** automatically destroy the underlying ZFS dataset. The `-r` flag is needed
+when ZFS snapshots exist as children.
 
 ## Batching Multiple Clusters
 
