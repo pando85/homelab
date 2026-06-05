@@ -31,9 +31,7 @@ app-template:
               cpu: "8"
               memory: 4Gi
   defaultPodOptions:
-    securityContext:
-      fsGroup: 10000
-      fsGroupChangePolicy: OnRootMismatch
+    securityContext: {}
     nodeSelector:
       kubernetes.io/hostname: prusik
   service:

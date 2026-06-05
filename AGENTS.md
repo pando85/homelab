@@ -102,6 +102,10 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   `docs/troubleshooting/kata-containerd-dropin.md`
 - `openebs-zfspv` storage class uses `reclaimPolicy: Retain` — deleted PVCs leave released PVs
   that leak ZFS space. Audit periodically: see `docs/troubleshooting/cluster-hygiene.md`
+- `openebs-zfspv` with `fstype: zfs` + `fsGroup` causes slow pod startup (recursive chown on
+  every mount). `fsGroupChangePolicy: OnRootMismatch` doesn't help — kubelet resets setgid bit.
+  If the app manages its own file ownership (runs as volume owner or has init chown), remove
+  `fsGroup` entirely. See `docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md`
 - High pod restart counts don't always mean problems — check `Last State.Reason` (exit 255 =
   node reboot, not app crash). See `docs/troubleshooting/cluster-hygiene.md`
 - Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
