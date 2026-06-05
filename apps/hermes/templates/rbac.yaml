@@ -50,3 +50,30 @@ roleRef:
   kind: Role
   name: hermes-agent-jellyfin
   apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hermes-agent-navidrome
+  namespace: navidrome
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hermes-agent-navidrome
+  namespace: navidrome
+subjects:
+  - kind: ServiceAccount
+    name: hermes-agent
+    namespace: hermes
+roleRef:
+  kind: Role
+  name: hermes-agent-navidrome
+  apiGroup: rbac.authorization.k8s.io

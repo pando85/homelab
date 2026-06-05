@@ -18,7 +18,8 @@ app-template:
             tag: v2026.5.29.2
           args: ["gateway", "run"]
           securityContext:
-            runAsUser: 0
+            runAsUser: 10000
+            runAsGroup: 10000
           env:
             TZ: Europe/Madrid
             HERMES_DASHBOARD: "1"
