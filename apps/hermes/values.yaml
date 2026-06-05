@@ -7,9 +7,19 @@ app-template:
       pod:
         enableServiceLinks: false
         runtimeClassName: kata
-        automountServiceAccountToken: false
+        automountServiceAccountToken: true
       serviceAccount:
         name: hermes-agent
+      initContainers:
+        fix-sa-token:
+          image:
+            repository: public.ecr.aws/docker/library/busybox
+            tag: "1.38"
+          command:
+            - sh
+            - -c
+          args:
+            - mkdir -p /shared/serviceaccount && cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /shared/serviceaccount/ && chmod -R 0644 /shared/serviceaccount/
       containers:
         hermes:
           image:
@@ -68,25 +78,11 @@ app-template:
         - path: /opt/data
       existingClaim: hermes-data
     sa-token:
-      type: custom
-      volumeSpec:
-        projected:
-          defaultMode: 0644
-          sources:
-            - serviceAccountToken:
-                path: token
-                audience: https://kubernetes.default.svc.cluster.local
-                expirationSeconds: 3607
-            - configMap:
-                name: kube-root-ca.crt
-                items:
-                  - key: ca.crt
-                    path: ca.crt
-            - downwardAPI:
-                items:
-                  - fieldRef:
-                      fieldPath: metadata.namespace
-                    path: namespace
-      globalMounts:
-        - path: /var/run/secrets/kubernetes.io/serviceaccount
-          readOnly: true
+      type: emptyDir
+      advancedMounts:
+        hermes:
+          fix-sa-token:
+            - path: /shared/serviceaccount
+          hermes:
+            - path: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
