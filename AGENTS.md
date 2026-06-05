@@ -114,6 +114,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   needs a corefile-watcher sidecar to forward directly to CoreDNS pod IPs, avoiding redirect loop.
   `addressMatcher` has post-reboot bugs (PR #45522). See
   `docs/troubleshooting/nodelocaldns-cilium-lrp.md`
+- ArgoCD has `selfHeal: true` with real-time cluster watches — `kubectl apply` will be detected
+  and reverted almost instantly. Always commit/push first, let ArgoCD sync, then verify.
+  See `docs/troubleshooting/argocd-gitops-workflow.md`
 - Unattended-upgrades must blacklist NVIDIA packages — host-level driver upgrades conflict with
   the GPU Operator's containerized driver management, causing `Driver/library version mismatch`.
   Fix: `cd metal && ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare`
