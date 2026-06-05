@@ -116,8 +116,8 @@ exhaustion (~2 hours of buffered events dropped).
 - This is distinct from the Armbian kernel BPF masquerade regression
   (`docs/troubleshooting/armbian-kernel-bpf-masquerade.md`) which affects only UDP SNAT on ARM64.
   This issue affects all traffic from pod network to host network.
-- The NodeLocal DNS + Cilium kube-proxy replacement combination is inherently fragile because
-  `169.254.25.10` is not managed by Cilium's service controller. Consider whether NodeLocal DNS is
-  needed when Cilium already provides efficient DNS load balancing.
+- The NodeLocal DNS + Cilium LRP combination has known bugs in v1.18+/v1.19. See
+  `docs/troubleshooting/nodelocaldns-cilium-lrp.md` for the full migration from addressMatcher
+  to serviceMatcher with dynamic upstream discovery.
 - Root cause of the BPF state staleness is unclear — may be related to long Cilium pod uptime
   combined with endpoint churn (pod creation/deletion) accumulating inconsistencies in BPF maps.

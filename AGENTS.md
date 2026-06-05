@@ -110,6 +110,10 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   manifest as partial breakage (some connections work, others don't) — e.g. Vector buffer filling
   on one sink while another on the same pod is fine. Fix: delete the Cilium pod.
   See `docs/troubleshooting/cilium-stale-bpf-egress.md`
+- Cilium LRP `skipRedirectFromBackend` is broken in v1.19.4 — nodelocaldns with `serviceMatcher`
+  needs a corefile-watcher sidecar to forward directly to CoreDNS pod IPs, avoiding redirect loop.
+  `addressMatcher` has post-reboot bugs (PR #45522). See
+  `docs/troubleshooting/nodelocaldns-cilium-lrp.md`
 - Unattended-upgrades must blacklist NVIDIA packages — host-level driver upgrades conflict with
   the GPU Operator's containerized driver management, causing `Driver/library version mismatch`.
   Fix: `cd metal && ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare`
