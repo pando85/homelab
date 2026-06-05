@@ -19,7 +19,7 @@ app-template:
             - sh
             - -c
           args:
-            - mkdir -p /shared/serviceaccount && cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /shared/serviceaccount/ && chmod -R 0644 /shared/serviceaccount/
+            - mkdir -p /shared/serviceaccount && cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /shared/serviceaccount/ && find /shared/serviceaccount -type d -exec chmod 0755 {} \; && find /shared/serviceaccount -type f -exec chmod 0644 {} \;
       containers:
         hermes:
           image:
@@ -109,5 +109,5 @@ app-template:
           fix-sa-token:
             - path: /shared/serviceaccount
           hermes:
-            - path: /var/run/secrets/kubernetes.io/serviceaccount
+            - path: /var/run/secrets/hermes-k8s
               readOnly: true
