@@ -40,8 +40,9 @@ spec:
                 -o /usr/local/bin/kubectl && chmod +x /usr/local/bin/kubectl
               CURRENT=""
               update_corefile() {
-                IPS=$(kubectl get endpoints kube-dns-upstream -n kube-system \
-                  -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null \
+                IPS=$(kubectl get endpointslices -n kube-system \
+                  -l kubernetes.io/service-name=kube-dns-upstream \
+                  -o jsonpath='{.items[*].endpoints[*].addresses[0]}' 2>/dev/null \
                   | tr ' ' '\n' | sort | tr '\n' ' ')
                 if [ -n "${IPS}" ] && [ "${IPS}" != "${CURRENT}" ]; then
                   echo "$(date): upstream endpoints changed to: ${IPS}"
@@ -52,7 +53,8 @@ spec:
                 fi
               }
               update_corefile
-              kubectl get endpoints kube-dns-upstream -n kube-system --watch -o name \
+              kubectl get endpointslices -n kube-system \
+                -l kubernetes.io/service-name=kube-dns-upstream --watch -o name \
                 | while read -r _; do update_corefile; done
           volumeMounts:
             - name: template-volume

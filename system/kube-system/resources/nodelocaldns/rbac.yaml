@@ -3,10 +3,6 @@ kind: ClusterRole
 metadata:
   name: node-local-dns
 rules:
-  - apiGroups: [""]
-    resources: ["endpoints", "services"]
-    verbs: ["list", "watch", "get"]
-    resourceNames: ["kube-dns-upstream"]
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
     verbs: ["list", "watch", "get"]
