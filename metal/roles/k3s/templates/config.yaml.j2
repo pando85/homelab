@@ -8,4 +8,4 @@ token-file: {{ k3s_token_file }}
 {{ k3s_server_config | to_nice_yaml }}
 {% endif %}
 kubelet-arg:
-- "cluster-dns=169.254.25.10"
+- "cluster-dns=10.43.0.10"

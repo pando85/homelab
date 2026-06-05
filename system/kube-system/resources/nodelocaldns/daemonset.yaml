@@ -24,12 +24,8 @@ spec:
       serviceAccountName: node-local-dns
       containers:
         - args:
-            - -localip
-            - 169.254.25.10
             - -conf
             - /etc/Corefile
-            - -upstreamsvc
-            - kube-dns-upstream
             - -skipteardown=true
             - -setupinterface=false
             - -setupiptables=false
@@ -45,11 +41,9 @@ spec:
           name: node-cache
           ports:
             - containerPort: 53
-              hostPort: 53
               name: dns
               protocol: UDP
             - containerPort: 53
-              hostPort: 53
               name: dns-tcp
               protocol: TCP
             - containerPort: 9253

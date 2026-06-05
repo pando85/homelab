@@ -4,16 +4,11 @@ metadata:
   name: nodelocaldns
   namespace: kube-system
 spec:
+  skipRedirectFromBackend: true
   redirectFrontend:
-    addressMatcher:
-      ip: 169.254.25.10
-      toPorts:
-        - name: dns-tcp
-          port: "53"
-          protocol: TCP
-        - name: dns
-          port: "53"
-          protocol: UDP
+    serviceMatcher:
+      serviceName: kube-dns
+      namespace: kube-system
   redirectBackend:
     localEndpointSelector:
       matchLabels:
