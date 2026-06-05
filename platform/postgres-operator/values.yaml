@@ -38,7 +38,7 @@ configMajorVersionUpgrade:
 
 configKubernetes:
   enable_owner_references: false
-  enable_pod_antiaffinity: false
+  enable_pod_antiaffinity: true
   pdb_master_label_selector: false
   enable_pod_disruption_budget: false
   inherited_labels:
