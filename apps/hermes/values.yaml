@@ -7,7 +7,7 @@ app-template:
       pod:
         enableServiceLinks: false
         runtimeClassName: kata
-        automountServiceAccountToken: true
+        automountServiceAccountToken: false
       serviceAccount:
         name: hermes-agent
       containers:
@@ -67,3 +67,26 @@ app-template:
       globalMounts:
         - path: /opt/data
       existingClaim: hermes-data
+    sa-token:
+      type: custom
+      volumeSpec:
+        projected:
+          defaultMode: 0644
+          sources:
+            - serviceAccountToken:
+                path: token
+                audience: https://kubernetes.default.svc.cluster.local
+                expirationSeconds: 3607
+            - configMap:
+                name: kube-root-ca.crt
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+            - downwardAPI:
+                items:
+                  - fieldRef:
+                      fieldPath: metadata.namespace
+                    path: namespace
+      globalMounts:
+        - path: /var/run/secrets/kubernetes.io/serviceaccount
+          readOnly: true
