@@ -86,7 +86,7 @@ app-template:
             - serviceAccountToken:
                 path: token
                 audience: https://kubernetes.default.svc.cluster.local
-                expirationSeconds: 3607
+                expirationSeconds: 7776000
             - configMap:
                 name: kube-root-ca.crt
                 items:
