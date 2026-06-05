@@ -24,6 +24,8 @@ spec:
       serviceAccountName: node-local-dns
       containers:
         - args:
+            - -localip
+            - "0.0.0.0"
             - -conf
             - /etc/Corefile
             - -skipteardown=true
