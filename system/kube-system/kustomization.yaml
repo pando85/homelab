@@ -10,6 +10,7 @@ resources:
   - resources/nodelocaldns/cilium-local-redirect-policy.yaml
   - resources/nodelocaldns/configmap.yaml
   - resources/nodelocaldns/daemonset.yaml
+  - resources/nodelocaldns/rbac.yaml
   - resources/nodelocaldns/service.yaml
   - resources/nodelocaldns/service-upstream.yaml
   - resources/nodelocaldns/serviceaccount.yaml

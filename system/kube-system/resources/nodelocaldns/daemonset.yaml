@@ -23,13 +23,48 @@ spec:
     spec:
       serviceAccountName: node-local-dns
       containers:
-        - args:
+        - name: corefile-watcher
+          # renovate: datasource=docker
+          image: alpine:3.22
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+          command:
+            - sh
+            - -c
+            - |
+              apk add --no-cache curl > /dev/null 2>&1
+              TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              CURRENT=""
+              while true; do
+                IPS=$(curl -sf \
+                  --cacert /var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+                  -H "Authorization: Bearer ${TOKEN}" \
+                  "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}/api/v1/namespaces/kube-system/endpoints/kube-dns-upstream" \
+                  | grep -oE '"ip":\s*"[^"]*"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | tr '\n' ' ' \
+                  || true)
+                if [ -n "${IPS}" ] && [ "${IPS}" != "${CURRENT}" ]; then
+                  echo "$(date): upstream endpoints changed to: ${IPS}"
+                  sed "s|UPSTREAM_DNS_SERVERS|${IPS}|g" /etc/coredns-template/Corefile.template > /etc/coredns/Corefile
+                  CURRENT="${IPS}"
+                elif [ -z "${IPS}" ] && [ -z "${CURRENT}" ]; then
+                  echo "$(date): waiting for upstream endpoints..."
+                fi
+                sleep 30
+              done
+          volumeMounts:
+            - name: template-volume
+              mountPath: /etc/coredns-template
+              readOnly: true
+            - name: corefile
+              mountPath: /etc/coredns
+        - name: node-cache
+          args:
             - -localip
             - "0.0.0.0"
             - -conf
-            - /etc/Corefile
-            - -upstreamsvc
-            - kube-dns-upstream
+            - /etc/coredns/Corefile
             - -skipteardown=true
             - -setupinterface=false
             - -setupiptables=false
@@ -42,7 +77,6 @@ spec:
               port: 8080
             initialDelaySeconds: 60
             timeoutSeconds: 5
-          name: node-cache
           ports:
             - containerPort: 53
               name: dns
@@ -69,8 +103,8 @@ spec:
           terminationMessagePath: /dev/termination-log
           terminationMessagePolicy: File
           volumeMounts:
-            - mountPath: /etc/coredns
-              name: config-volume
+            - name: corefile
+              mountPath: /etc/coredns
       dnsPolicy: Default
       nodeSelector:
         kubernetes.io/os: linux
@@ -85,10 +119,12 @@ spec:
         - effect: NoExecute
           operator: Exists
       volumes:
-        - configMap:
+        - name: template-volume
+          configMap:
             defaultMode: 420
             items:
-              - key: Corefile
-                path: Corefile.base
+              - key: Corefile.template
+                path: Corefile.template
             name: nodelocaldns
-          name: config-volume
+        - name: corefile
+          emptyDir: {}

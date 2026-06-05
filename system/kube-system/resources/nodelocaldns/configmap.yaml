@@ -5,7 +5,7 @@ metadata:
     k8s-app: kube-dns
   name: nodelocaldns
 data:
-  Corefile: |
+  Corefile.template: |
     cluster.local:53 {
         errors
         cache {
@@ -15,7 +15,7 @@ data:
         reload
         loop
         bind 0.0.0.0
-        forward . 10.0.3.93 10.0.4.147 {
+        forward . UPSTREAM_DNS_SERVERS {
             force_tcp
         }
         prometheus :9253
@@ -27,7 +27,7 @@ data:
         reload
         loop
         bind 0.0.0.0
-        forward . 10.0.3.93 10.0.4.147 {
+        forward . UPSTREAM_DNS_SERVERS {
             force_tcp
         }
         prometheus :9253
@@ -38,7 +38,7 @@ data:
         reload
         loop
         bind 0.0.0.0
-        forward . 10.0.3.93 10.0.4.147 {
+        forward . UPSTREAM_DNS_SERVERS {
             force_tcp
         }
         prometheus :9253
