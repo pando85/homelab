@@ -20,6 +20,10 @@ app-template:
           securityContext:
             runAsUser: 10000
             runAsGroup: 10000
+            capabilities:
+              add:
+                - SETGID
+                - SETUID
           env:
             TZ: Europe/Madrid
             HERMES_DASHBOARD: "1"
