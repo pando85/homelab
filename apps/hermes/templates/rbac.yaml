@@ -57,12 +57,22 @@ metadata:
   name: hermes-agent-navidrome
   namespace: navidrome
 rules:
+  # Encontrar el pod por label
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get", "list"]
+  # Ejecutar comandos (sqlite3, mkdir, rm, kill -USR1)
   - apiGroups: [""]
     resources: ["pods/exec"]
     verbs: ["create"]
+  # Copiar playlists al pod
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  # Ver secrets (Last.fm API, Spotify, etc.) - opcional
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
