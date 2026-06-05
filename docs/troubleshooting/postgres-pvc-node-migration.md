@@ -158,3 +158,9 @@ all if the target node is down, which is worse than running on the "wrong" node 
   `DeadlineExceeded`, restart the `zfs-localpv-controller` deployment in `zfs-localpv` namespace.
 - **Do NOT use `kubectl patch` on postgresql CRDs.** ArgoCD will revert changes instantly. All
   spec changes must go through Git commits.
+- **App pods may lose database connectivity after postgres pod restart.** Radarr (and likely
+  Sonarr) do not automatically reconnect when the postgres connection drops. Restart the app pod
+  after the migration completes:
+  ```bash
+  kubectl --context=grigri delete pod <app-pod> -n <namespace>
+  ```
