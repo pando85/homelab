@@ -111,6 +111,59 @@ immediately (Vector had already exhausted retries and dropped the queued events)
 **Impact:** Journal logs from this node were lost for the period between DNS failure and retry
 exhaustion (~2 hours of buffered events dropped).
 
+## Observed Incident: Router Outage — prusik BPF Stale (2026-06-06)
+
+**Node:** prusik (x86_64, Cilium v1.19.4)
+
+**Trigger:** Router outage (~7h earlier). Network recovery caused widespread pod restarts across
+the cluster. After recovery, Cilium BPF on prusik became stale.
+
+**Symptoms:**
+
+- `vault-0` (vault ns, on prusik): readiness probe timeouts (90+ failures in 23h). Vault
+  responded when queried from inside the pod, but kubelet probes timed out crossing the BPF
+  datapath. Service endpoint kept flipping in/out of ready.
+- `nodelocaldns` corefile-watcher sidecar: restarting every ~20min on all 3 nodes (76-82
+  restarts each). CoreDNS pod IPs kept changing after restarts, triggering sidecar restarts.
+- `hermes-0`: restarted during the incident.
+- `bazarr`: OOMKilled (1Gi limit) + subcleaner sidecar 53 restarts.
+- `jellyfin`: 17 restarts, 137 liveness probe timeouts over 23h.
+
+**Fix:** Deleting the Cilium pod on prusik (`cilium-swmbt`) resolved the vault-0 readiness
+failures. Only one transitional failure occurred after the restart, then stable for 3+ minutes
+(vs. multiple failures per minute before).
+
+```bash
+kubectl --context=grigri delete pod cilium-swmbt -n kube-system
+```
+
+**Diagnosis commands used:**
+
+```bash
+# High restart counts (indicating post-outage instability)
+kubectl --context=grigri get pods -A -o json | \
+  jq -r '.items[] | select(.status.containerStatuses != null) |
+  .metadata.namespace + "/" + .metadata.name + ": restarts=" +
+  (.status.containerStatuses | map(.restartCount) | add | tostring)' | sort -t= -k2 -rn
+
+# Vault readiness events (ongoing probe failures)
+kubectl --context=grigri get events -n vault --field-selector involvedObject.name=vault-0 \
+  --sort-by='.lastTimestamp'
+```
+
+## Upstream Issue Tracking
+
+| Issue | Description | Status | Affects v1.19.4? |
+|-------|-------------|--------|-------------------|
+| [#45077](https://github.com/cilium/cilium/issues/45077) | Host loses egress on Cilium agent restart (orphaned cgroup BPF programs) | Open, no assignee | Unconfirmed (v1.18 confirmed) |
+| [#43944](https://github.com/cilium/cilium/issues/43944) | LRP shows invalid IP for nodelocaldns | Open, assigned to ysksuzuki/ajmmm | Yes |
+| [#44138](https://github.com/cilium/cilium/issues/44138) | Rethink LRP API (skipRedirectFromBackend, addressMatcher scope) | Open, design phase | Yes |
+| [PR #45522](https://github.com/cilium/cilium/pull/45522) | addressMatcher refuse-override guard | Merged, backported to v1.19 | Fix included in v1.19.4 |
+
+No ETA on any open issue. The only mitigation for BPF staleness remains deleting the Cilium pod
+on the affected node. For nodelocaldns, the `serviceMatcher` + corefile-watcher sidecar remains
+the recommended workaround until #43944 is resolved.
+
 ## Notes
 
 - This is distinct from the Armbian kernel BPF masquerade regression
