@@ -55,7 +55,11 @@ minio:
           - *hostMC
         secretName: mc-s3-tls-certificate
 
-  podAnnotations: {}
+  podAnnotations:
+    # Cilium ingress-bandwidth only works for inter-node traffic, not same-node.
+    # Since ingress-nginx-external and MinIO are both on prusik, this is a no-op.
+    # Ingress rate limiting is done via tc-limiter DaemonSet (system/tc-limiter/).
+    # kubernetes.io/ingress-bandwidth: "50M"
 
   resources:
     requests:
