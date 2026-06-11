@@ -106,6 +106,128 @@ env:
 - Mounts `/var/run/netns` (CNI network namespaces) and `/var/run/cilium/cilium.sock`
 - Uses `ip netns exec` instead of `nsenter` (not available in Alpine/BusyBox)
 
+## tc-limiter Socket Staleness (June 2026)
+
+### Problem
+
+tc-limiter mounts `/var/run/cilium` as a hostPath. When Cilium restarts, it recreates
+`cilium.sock` with a new inode. Without `mountPropagation: HostToContainer`, the
+tc-limiter container continues seeing the old (orphaned) socket and gets `Connection refused`
+on every API call — silently failing to apply rate limits.
+
+### Symptoms
+
+- tc-limiter logs show startup message but no "Applying rate limit" entries
+- `curl --unix-socket /var/run/cilium/cilium.sock` returns exit code 7 (Connection refused)
+- Socket timestamp in container is older than Cilium pod start time
+- No tc filters on pod's eth0: `ip netns exec <cni-ns> tc filter show dev eth0 ingress` is empty
+
+### Fix
+
+Ensure `mountPropagation: HostToContainer` on both hostPath mounts in
+`system/tc-limiter/values.yaml`:
+
+```yaml
+persistence:
+  cilium-socket:
+    type: hostPath
+    hostPath: /var/run/cilium
+    globalMounts:
+      - path: /var/run/cilium
+        mountPropagation: HostToContainer
+  cni-netns:
+    type: hostPath
+    hostPath: /var/run/netns
+    globalMounts:
+      - path: /var/run/netns
+        mountPropagation: HostToContainer
+```
+
+### Verification
+
+```bash
+# Check tc-limiter can reach Cilium API
+kubectl --context=grigri exec -n tc-limiter -l app.kubernetes.io/name=tc-limiter -- \
+  curl -sf --unix-socket /var/run/cilium/cilium.sock 'http://localhost/v1/endpoint' | head -5
+
+# Check tc rules are applied
+kubectl --context=grigri logs -n tc-limiter -l app.kubernetes.io/name=tc-limiter --tail=10
+# Should show: "Applying 100mbit rate limit in netns cni-..."
+
+# Verify on the node
+ssh prusik "sudo ip netns exec <cni-ns> tc -s filter show dev eth0 ingress"
+# Should show: "action order 1: police ... rate 100Mbit ... action drop" with non-zero overlimits
+```
+
+## Top Traffic Suspects
+
+When pfSense shows high CPU / interrupt load, these are the most likely causes ordered by
+historical impact:
+
+### 1. rclone backup syncs → cross-backups MinIO
+
+- **Source:** External rclone clients (e.g. `79.116.82.10`, `79.117.29.85`)
+- **Path:** WAN → pfSense → ingress-nginx-external → cross-backups-minio
+- **Pattern:** Sustained 35-50 MB/s upload, heavy HEAD request storms for file existence
+  checks + large PUT multipart uploads (50-80 MB chunks)
+- **Buckets:** `milla` (personal backups), `dabol` (quarterly backups)
+- **CronJobs:** `rclone-sync` (Thu 02:30 UTC), `rclone-sync-bis` (Fri 02:30 UTC) in velero ns
+- **Mitigation:** tc-limiter at 100mbit on Minio pod; add `--bwlimit` to rclone as defense-in-depth
+- **Check:**
+  ```bash
+  kubectl --context=grigri logs -n ingress-nginx-external -l app.kubernetes.io/name=ingress-nginx-external --tail=500 | grep cross-backup
+  kubectl --context=grigri get jobs -n velero
+  ```
+
+### 2. qBittorrent seeding
+
+- **Source:** BitTorrent peers over WAN
+- **Path:** WAN → pfSense → ingress-nginx-external / Cilium host-lb → qbittorrent
+- **Pattern:** Up to 9 MB/s upload (limited by app), ~2000 seeding torrents, 500-3000 peer
+  connections creating high state table entries and packet rate
+- **Mitigation:** App-level bandwidth limit (5 MB/s upload), connection limits in qBittorrent config
+- **See:** `docs/troubleshooting/qbittorrent-performance.md`
+
+### 3. Ingress-nginx-external (pass-through)
+
+- Not a consumer itself, but aggregates all external traffic — shows high cumulative bandwidth
+- Use ingress logs to identify the actual backend:
+  ```bash
+  kubectl --context=grigri logs -n ingress-nginx-external -l app.kubernetes.io/name=ingress-nginx-external --tail=1000 \
+    | awk '{print $1}' | sort | uniq -c | sort -rn | head -20
+  ```
+
+### 4. Velero/rclone egress (outbound backups)
+
+- **Source:** rclone jobs in velero namespace pushing backups to remote storage
+- **Pattern:** Sustained egress, limited by `kubernetes.io/egress-bandwidth: 100M` annotation
+- **Check:** `kubectl --context=grigri get jobs -n velero`
+
+## Quick Diagnosis Workflow
+
+When pfSense load is high:
+
+```bash
+# 1. Check pfSense CPU and interrupt %
+ssh pfsense.grigri "top -S -n | head -15"
+
+# 2. Check WAN traffic rate
+ssh pfsense.grigri "netstat -I igb0 -w 1 -c 2"
+
+# 3. Check top network consumers (Prometheus, instant query)
+#   topk(10, sum by (namespace, pod) (rate(container_network_receive_bytes_total[5m])))
+
+# 4. Check ingress access logs for the source
+kubectl --context=grigri logs -n ingress-nginx-external -l app.kubernetes.io/name=ingress-nginx-external --tail=500 \
+  | awk '{print $1}' | sort | uniq -c | sort -rn | head -10
+
+# 5. Verify tc-limiter is working
+kubectl --context=grigri logs -n tc-limiter -l app.kubernetes.io/name=tc-limiter --tail=10
+
+# 6. Check active rclone jobs
+kubectl --context=grigri get jobs -n velero
+```
+
 ## Traffic Path (External → Pod)
 
 ```
