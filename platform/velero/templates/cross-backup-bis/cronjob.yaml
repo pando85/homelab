@@ -12,7 +12,7 @@ spec:
       template:
         metadata:
           annotations:
-            kubernetes.io/egress-bandwidth: "200M"
+            kubernetes.io/egress-bandwidth: "100M"
         spec:
           priorityClassName: high-priority
           containers:
