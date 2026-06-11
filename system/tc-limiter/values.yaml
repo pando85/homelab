@@ -68,12 +68,13 @@ app-template:
   persistence:
     cilium-socket:
       type: hostPath
-      hostPath: /var/run/cilium/cilium.sock
+      hostPath: /var/run/cilium
       globalMounts:
-        - path: /var/run/cilium/cilium.sock
-          readOnly: true
+        - path: /var/run/cilium
+          mountPropagation: HostToContainer
     cni-netns:
       type: hostPath
       hostPath: /var/run/netns
       globalMounts:
         - path: /var/run/netns
+          mountPropagation: HostToContainer
