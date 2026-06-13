@@ -31,6 +31,12 @@ ingress-nginx:
       # Added text/html and application/vnd.api+json + default ones:
       # https://kubernetes.github.io/ingress-nginx/user-guide/nginx-configuration/configmap/#gzip-types
       brotli-types: text/html and application/vnd.api+json application/xml+rss application/atom+xml application/javascript application/x-javascript application/json application/rss+xml application/vnd.ms-fontobject application/x-font-ttf application/x-web-app-manifest+json application/xhtml+xml application/xml font/opentype image/svg+xml image/x-icon text/css text/plain text/x-component
+      # Security headers - applied globally to all ingresses
+      configuration-snippet: |
+        more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+        more_set_headers "X-Frame-Options: DENY";
+        more_set_headers "X-Content-Type-Options: nosniff";
+        more_set_headers "Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()";
 
     ingressClassResource:
       name: nginx-internal
