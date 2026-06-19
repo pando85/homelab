@@ -3,7 +3,6 @@ kind: Kustomization
 resources:
   - resources/argocd-secrets.yaml
   - resources/external-secret-oci-helm-workaround.yaml
-  - resources/external-secret-oci-helm-workaround-tea.yaml
   - resources/ingress-external.yaml
   - resources/k8s-secret-store/rbac.yaml
   - resources/k8s-secret-store/secret-store.yaml
