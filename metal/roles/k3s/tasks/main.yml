@@ -127,6 +127,20 @@
     mode: "0644"
   notify: Restart k3s
 
+- name: Ensure containerd certs directory exists for tea.millaguie.net
+  file:
+    path: /var/lib/rancher/k3s/agent/etc/containerd/certs.d/tea.millaguie.net
+    state: directory
+    mode: "0755"
+  notify: Restart k3s
+
+- name: Copy containerd hosts.toml for tea.millaguie.net
+  template:
+    src: host-tea.toml.j2
+    dest: /var/lib/rancher/k3s/agent/etc/containerd/certs.d/tea.millaguie.net/hosts.toml
+    mode: "0644"
+  notify: Restart k3s
+
 - name: Enable k3s service
   systemd:
     name: k3s

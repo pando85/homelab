@@ -1,0 +1,6 @@
+server = "https://tea.millaguie.net"
+
+[host."https://tea.millaguie.net"]
+  capabilities = ["pull", "resolve"]
+  [host."https://tea.millaguie.net".header]
+    authorization = "Basic {{ (lookup('passwordstore', 'k8s.grigri/tea/PAT_packages_read', subkey='login') + ':' + lookup('passwordstore', 'k8s.grigri/tea/PAT_packages_read')) | b64encode }}"
