@@ -33,3 +33,10 @@ multivara:
   stacks:
     - name: apps
     - name: platform
+
+kiais:
+  gitops:
+    repo: https://tea.millaguie.net/kiais/gitops
+    revision: main
+  stacks:
+    - name: apps
