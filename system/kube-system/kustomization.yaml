@@ -25,7 +25,7 @@ helmCharts:
     releaseName: cilium
     repo: https://helm.cilium.io/
     valuesFile: cilium-values.yaml
-    version: 1.19.4
+    version: 1.19.5
   - includeCRDs: true
     name: kata-deploy
     namespace: kube-system
