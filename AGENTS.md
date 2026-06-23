@@ -130,6 +130,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - tc-limiter hostPath mounts need `mountPropagation: HostToContainer` — otherwise Cilium socket
   goes stale after restart and rate limiting silently stops working.
   See `docs/troubleshooting/bandwidth-limiting.md`
+- Stump v0.1.5+ migration `m20260519_192218_reading_sessions_v2` can fail mid-way, leaving legacy
+  tables. Restore from snapshot and complete migration manually.
+  See `docs/troubleshooting/stump-migration-failure.md`
 
 ## Subsystem Docs
 
