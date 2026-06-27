@@ -5,6 +5,8 @@
       /
       sum by (host) (rate(nginx_ingress_controller_requests{controller_class="k8s.io/ingress-nginx-external"}[5m]))
     ) > 0.05
+    and
+    sum by (host) (rate(nginx_ingress_controller_requests{controller_class="k8s.io/ingress-nginx-external"}[5m])) > 1
   for: 2m
   labels:
     severity: warning
@@ -19,6 +21,8 @@
       /
       sum by (host) (rate(nginx_ingress_controller_requests{controller_class="k8s.io/ingress-nginx-external"}[5m]))
     ) > 0.25
+    and
+    sum by (host) (rate(nginx_ingress_controller_requests{controller_class="k8s.io/ingress-nginx-external"}[5m])) > 1
   for: 2m
   labels:
     severity: critical
