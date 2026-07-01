@@ -1,0 +1,2454 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../armbian-kernel-bpf-masquerade/">
+      
+      
+        <link rel="next" href="../cilium-1.19-bgp-migration/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Pod Bandwidth Limiting - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#pod-bandwidth-limiting" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Pod Bandwidth Limiting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-does-not-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Does NOT Work
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Does NOT Work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cilium-kubernetesioingress-bandwidth-annotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cilium kubernetes.io/ingress-bandwidth Annotation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#host-side-tc-qdiscs-tbf-clsact" class="md-nav__link">
+    <span class="md-ellipsis">
+      Host-side tc Qdiscs (TBF, clsact)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nginx-limit_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Nginx limit_rate
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-works-tc-policer-inside-pod-network-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Works: tc Policer Inside Pod Network Namespace
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Works: tc Policer Inside Pod Network Namespace">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#solution-clsact-ingress-policer" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution: clsact Ingress Policer
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why It Works
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-its-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verifying It's Working
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemonset-systemtc-limiter" class="md-nav__link">
+    <span class="md-ellipsis">
+      DaemonSet: system/tc-limiter/
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DaemonSet: system/tc-limiter/">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Requirements
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tc-limiter-socket-staleness-june-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      tc-limiter Socket Staleness (June 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="tc-limiter Socket Staleness (June 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#symptoms" class="md-nav__link">
+    <span class="md-ellipsis">
+      Symptoms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fix
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#top-traffic-suspects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top Traffic Suspects
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Top Traffic Suspects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-rclone-backup-syncs-cross-backups-minio" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. rclone backup syncs → cross-backups MinIO
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-qbittorrent-seeding" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. qBittorrent seeding
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-ingress-nginx-external-pass-through" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Ingress-nginx-external (pass-through)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-velerorclone-egress-outbound-backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Velero/rclone egress (outbound backups)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-diagnosis-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Diagnosis Workflow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#traffic-path-external-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      Traffic Path (External → Pod)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pfsense-cpu-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      pfSense CPU Context
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Diagnostics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check-if-tc-policer-is-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check if tc policer is active
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-pfsense-cpu-via-grafana" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check pfSense CPU via Grafana
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-wan-throughput" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check WAN throughput
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-cross-backups-traffic" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check cross-backups traffic
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-does-not-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Does NOT Work
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Does NOT Work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cilium-kubernetesioingress-bandwidth-annotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cilium kubernetes.io/ingress-bandwidth Annotation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#host-side-tc-qdiscs-tbf-clsact" class="md-nav__link">
+    <span class="md-ellipsis">
+      Host-side tc Qdiscs (TBF, clsact)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#nginx-limit_rate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Nginx limit_rate
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-works-tc-policer-inside-pod-network-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      What Works: tc Policer Inside Pod Network Namespace
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What Works: tc Policer Inside Pod Network Namespace">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#solution-clsact-ingress-policer" class="md-nav__link">
+    <span class="md-ellipsis">
+      Solution: clsact Ingress Policer
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why It Works
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verifying-its-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verifying It's Working
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemonset-systemtc-limiter" class="md-nav__link">
+    <span class="md-ellipsis">
+      DaemonSet: system/tc-limiter/
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="DaemonSet: system/tc-limiter/">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Requirements
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tc-limiter-socket-staleness-june-2026" class="md-nav__link">
+    <span class="md-ellipsis">
+      tc-limiter Socket Staleness (June 2026)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="tc-limiter Socket Staleness (June 2026)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#problem_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#symptoms" class="md-nav__link">
+    <span class="md-ellipsis">
+      Symptoms
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Fix
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#top-traffic-suspects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Top Traffic Suspects
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Top Traffic Suspects">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-rclone-backup-syncs-cross-backups-minio" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. rclone backup syncs → cross-backups MinIO
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-qbittorrent-seeding" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. qBittorrent seeding
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-ingress-nginx-external-pass-through" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Ingress-nginx-external (pass-through)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-velerorclone-egress-outbound-backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Velero/rclone egress (outbound backups)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-diagnosis-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Diagnosis Workflow
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#traffic-path-external-pod" class="md-nav__link">
+    <span class="md-ellipsis">
+      Traffic Path (External → Pod)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pfsense-cpu-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      pfSense CPU Context
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Quick Diagnostics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Diagnostics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check-if-tc-policer-is-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check if tc policer is active
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-pfsense-cpu-via-grafana" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check pfSense CPU via Grafana
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-wan-throughput" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check WAN throughput
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#check-cross-backups-traffic" class="md-nav__link">
+    <span class="md-ellipsis">
+      Check cross-backups traffic
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="pod-bandwidth-limiting">Pod Bandwidth Limiting</h1>
+<h2 id="problem">Problem</h2>
+<p>High-throughput services (e.g., cross-backups MinIO receiving 300+ Mbps uploads from external
+sources) saturate pfSense CPU via interrupt processing on the PPPoE WAN interface. pfSense runs on
+an AMD GX-412TC SOC (4 cores, 1 GHz) which handles packet processing in software — high throughput
+directly translates to high CPU in interrupt context.</p>
+<h2 id="what-does-not-work">What Does NOT Work</h2>
+<h3 id="cilium-kubernetesioingress-bandwidth-annotation">Cilium <code>kubernetes.io/ingress-bandwidth</code> Annotation</h3>
+<p>The <code>kubernetes.io/ingress-bandwidth</code> pod annotation is a <strong>no-op for same-node traffic</strong>. Cilium
+BPF code (in <code>l3.h</code>) has a <code>!from_host</code> check that explicitly skips traffic originating from the
+same node. When client and server pods are co-located (e.g., ingress-nginx-external and MinIO both
+on node <code>prusik</code>), the annotation is never enforced.</p>
+<h3 id="host-side-tc-qdiscs-tbf-clsact">Host-side <code>tc</code> Qdiscs (TBF, clsact)</h3>
+<p>Cilium v1.18+ uses TCX (BPF token-based attach) which <strong>bypasses all <code>tc</code> qdiscs</strong> on host-side
+devices:</p>
+<ul>
+<li><strong><code>lxc*</code> veth devices</strong> (host side of pod veth pair): TBF root qdisc, clsact filters — all show
+  0 bytes processed</li>
+<li><strong><code>cilium_host</code> device</strong>: clsact filters — also 0 bytes</li>
+<li><strong>TCX intercepts packets before the tc layer</strong> on the host side</li>
+</ul>
+<p>This means you cannot shape or police traffic using <code>tc</code> on any host-side network interface when
+Cilium TCX is active.</p>
+<h3 id="nginx-limit_rate">Nginx <code>limit_rate</code></h3>
+<p>The nginx ingress annotation <code>nginx.ingress.kubernetes.io/limit-rate</code> only throttles HTTP response
+bodies (downloads). It does <strong>not</strong> limit upload request bodies.</p>
+<h2 id="what-works-tc-policer-inside-pod-network-namespace">What Works: tc Policer Inside Pod Network Namespace</h2>
+<p>TCX is not attached inside the pod's network namespace. Inside the pod, <code>eth0</code> is a regular
+interface where <code>tc</code> works normally.</p>
+<h3 id="solution-clsact-ingress-policer">Solution: clsact Ingress Policer</h3>
+<p>Apply a clsact ingress policer inside the pod's CNI network namespace:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Find the pod&#39;s CNI netns on the node</span>
+<span class="nv">POD_IP</span><span class="o">=</span><span class="s2">&quot;10.0.4.101&quot;</span>
+<span class="nv">NODE</span><span class="o">=</span><span class="s2">&quot;prusik&quot;</span>
+
+<span class="c1"># Get the CNI netns name (matches pod IP)</span>
+<span class="nv">NS_NAME</span><span class="o">=</span><span class="k">$(</span>ssh<span class="w"> </span><span class="nv">$NODE</span><span class="w"> </span><span class="s2">&quot;for ns in /var/run/netns/*; do</span>
+<span class="s2">  ip netns exec \$(basename \$ns) ip -4 addr show eth0 2&gt;/dev/null | grep -q &#39;</span><span class="nv">$POD_IP</span><span class="s2">&#39; &amp;&amp; basename \$ns &amp;&amp; break</span>
+<span class="s2">done&quot;</span><span class="k">)</span>
+
+<span class="c1"># Apply clsact ingress policer</span>
+ssh<span class="w"> </span><span class="nv">$NODE</span><span class="w"> </span><span class="s2">&quot;sudo ip netns exec </span><span class="nv">$NS_NAME</span><span class="s2"> tc qdisc del dev eth0 clsact 2&gt;/dev/null; \</span>
+<span class="s2">  sudo ip netns exec </span><span class="nv">$NS_NAME</span><span class="s2"> tc qdisc add dev eth0 clsact &amp;&amp; \</span>
+<span class="s2">  sudo ip netns exec </span><span class="nv">$NS_NAME</span><span class="s2"> tc filter add dev eth0 ingress matchall \</span>
+<span class="s2">    action police rate 100Mbit burst 1540 conform-exceed drop&quot;</span>
+</code></pre></div>
+<h3 id="why-it-works">Why It Works</h3>
+<ol>
+<li>Packets enter the pod via <code>eth0</code> after Cilium routing</li>
+<li>The clsact policer drops excess packets</li>
+<li>TCP congestion control detects drops and reduces send rate</li>
+<li>Overall throughput drops to the configured limit within 1-2 minutes</li>
+<li>Fewer packets reach pfSense → lower interrupt load</li>
+</ol>
+<h3 id="verifying-its-working">Verifying It's Working</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Check tc statistics inside pod netns</span>
+ssh<span class="w"> </span><span class="nv">$NODE</span><span class="w"> </span><span class="s2">&quot;sudo ip netns exec </span><span class="nv">$NS_NAME</span><span class="s2"> tc -s filter show dev eth0 ingress&quot;</span>
+<span class="c1"># Look for: &quot;action drop&quot; with non-zero &quot;overlimits&quot; counter</span>
+
+<span class="c1"># Check pfSense CPU</span>
+<span class="c1"># Via Grafana: 100 - avg(rate(node_cpu_seconds_total{instance=&quot;pfsense.grigri&quot;,mode=&quot;idle&quot;}[5m])) * 100</span>
+<span class="c1"># Or via Prometheus datasource UID: prometheus</span>
+</code></pre></div>
+<h2 id="daemonset-systemtc-limiter">DaemonSet: system/tc-limiter/</h2>
+<p>The persistent GitOps solution is <code>system/tc-limiter/</code> — a DaemonSet that:</p>
+<ol>
+<li>Connects to Cilium unix socket (<code>/var/run/cilium/cilium.sock</code>) to get endpoint IP mappings</li>
+<li>Iterates CNI network namespaces (<code>/var/run/netns/*</code>) to find the matching pod</li>
+<li>Applies the clsact ingress policer inside the matched pod's netns</li>
+<li>Runs on node <code>prusik</code> only (via <code>nodeSelector</code>)</li>
+</ol>
+<h3 id="configuration">Configuration</h3>
+<p>The rate limit is controlled via the <code>RATE_LIMIT</code> environment variable in
+<code>system/tc-limiter/values.yaml</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">env</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">RATE_LIMIT</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;100mbit&quot;</span>
+</code></pre></div>
+<h3 id="requirements">Requirements</h3>
+<ul>
+<li>Runs as <code>runAsUser: 0</code> with <code>NET_ADMIN</code> and <code>SYS_ADMIN</code> capabilities</li>
+<li><code>hostNetwork: true</code> for network namespace access</li>
+<li>Mounts <code>/var/run/netns</code> (CNI network namespaces) and <code>/var/run/cilium/cilium.sock</code></li>
+<li>Uses <code>ip netns exec</code> instead of <code>nsenter</code> (not available in Alpine/BusyBox)</li>
+</ul>
+<h2 id="tc-limiter-socket-staleness-june-2026">tc-limiter Socket Staleness (June 2026)</h2>
+<h3 id="problem_1">Problem</h3>
+<p>tc-limiter mounts <code>/var/run/cilium</code> as a hostPath. When Cilium restarts, it recreates
+<code>cilium.sock</code> with a new inode. Without <code>mountPropagation: HostToContainer</code>, the
+tc-limiter container continues seeing the old (orphaned) socket and gets <code>Connection refused</code>
+on every API call — silently failing to apply rate limits.</p>
+<h3 id="symptoms">Symptoms</h3>
+<ul>
+<li>tc-limiter logs show startup message but no "Applying rate limit" entries</li>
+<li><code>curl --unix-socket /var/run/cilium/cilium.sock</code> returns exit code 7 (Connection refused)</li>
+<li>Socket timestamp in container is older than Cilium pod start time</li>
+<li>No tc filters on pod's eth0: <code>ip netns exec &lt;cni-ns&gt; tc filter show dev eth0 ingress</code> is empty</li>
+</ul>
+<h3 id="fix">Fix</h3>
+<p>Ensure <code>mountPropagation: HostToContainer</code> on both hostPath mounts in
+<code>system/tc-limiter/values.yaml</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">persistence</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">cilium-socket</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hostPath</span>
+<span class="w">    </span><span class="nt">hostPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/run/cilium</span>
+<span class="w">    </span><span class="nt">globalMounts</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/run/cilium</span>
+<span class="w">        </span><span class="nt">mountPropagation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HostToContainer</span>
+<span class="w">  </span><span class="nt">cni-netns</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hostPath</span>
+<span class="w">    </span><span class="nt">hostPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/run/netns</span>
+<span class="w">    </span><span class="nt">globalMounts</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/run/netns</span>
+<span class="w">        </span><span class="nt">mountPropagation</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HostToContainer</span>
+</code></pre></div>
+<h3 id="verification">Verification</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Check tc-limiter can reach Cilium API</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-n<span class="w"> </span>tc-limiter<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>tc-limiter<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>curl<span class="w"> </span>-sf<span class="w"> </span>--unix-socket<span class="w"> </span>/var/run/cilium/cilium.sock<span class="w"> </span><span class="s1">&#39;http://localhost/v1/endpoint&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-5
+
+<span class="c1"># Check tc rules are applied</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>tc-limiter<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>tc-limiter<span class="w"> </span>--tail<span class="o">=</span><span class="m">10</span>
+<span class="c1"># Should show: &quot;Applying 100mbit rate limit in netns cni-...&quot;</span>
+
+<span class="c1"># Verify on the node</span>
+ssh<span class="w"> </span>prusik<span class="w"> </span><span class="s2">&quot;sudo ip netns exec &lt;cni-ns&gt; tc -s filter show dev eth0 ingress&quot;</span>
+<span class="c1"># Should show: &quot;action order 1: police ... rate 100Mbit ... action drop&quot; with non-zero overlimits</span>
+</code></pre></div>
+<h2 id="top-traffic-suspects">Top Traffic Suspects</h2>
+<p>When pfSense shows high CPU / interrupt load, these are the most likely causes ordered by
+historical impact:</p>
+<h3 id="1-rclone-backup-syncs-cross-backups-minio">1. rclone backup syncs → cross-backups MinIO</h3>
+<ul>
+<li><strong>Source:</strong> External rclone clients (e.g. <code>79.116.82.10</code>, <code>79.117.29.85</code>)</li>
+<li><strong>Path:</strong> WAN → pfSense → ingress-nginx-external → cross-backups-minio</li>
+<li><strong>Pattern:</strong> Sustained 35-50 MB/s upload, heavy HEAD request storms for file existence
+  checks + large PUT multipart uploads (50-80 MB chunks)</li>
+<li><strong>Buckets:</strong> <code>milla</code> (personal backups), <code>dabol</code> (quarterly backups)</li>
+<li><strong>CronJobs:</strong> <code>rclone-sync</code> (Thu 02:30 UTC), <code>rclone-sync-bis</code> (Fri 02:30 UTC) in velero ns</li>
+<li><strong>Mitigation:</strong> tc-limiter at 100mbit on Minio pod; add <code>--bwlimit</code> to rclone as defense-in-depth</li>
+<li><strong>Check:</strong>
+  <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>ingress-nginx-external<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>ingress-nginx-external<span class="w"> </span>--tail<span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>cross-backup
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>get<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>-n<span class="w"> </span>velero
+</code></pre></div></li>
+</ul>
+<h3 id="2-qbittorrent-seeding">2. qBittorrent seeding</h3>
+<ul>
+<li><strong>Source:</strong> BitTorrent peers over WAN</li>
+<li><strong>Path:</strong> WAN → pfSense → ingress-nginx-external / Cilium host-lb → qbittorrent</li>
+<li><strong>Pattern:</strong> Up to 9 MB/s upload (limited by app), ~2000 seeding torrents, 500-3000 peer
+  connections creating high state table entries and packet rate</li>
+<li><strong>Mitigation:</strong> App-level bandwidth limit (5 MB/s upload), connection limits in qBittorrent config</li>
+<li><strong>See:</strong> <code>docs/troubleshooting/qbittorrent-performance.md</code></li>
+</ul>
+<h3 id="3-ingress-nginx-external-pass-through">3. Ingress-nginx-external (pass-through)</h3>
+<ul>
+<li>Not a consumer itself, but aggregates all external traffic — shows high cumulative bandwidth</li>
+<li>Use ingress logs to identify the actual backend:
+  <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>ingress-nginx-external<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>ingress-nginx-external<span class="w"> </span>--tail<span class="o">=</span><span class="m">1000</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">&#39;{print $1}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
+</code></pre></div></li>
+</ul>
+<h3 id="4-velerorclone-egress-outbound-backups">4. Velero/rclone egress (outbound backups)</h3>
+<ul>
+<li><strong>Source:</strong> rclone jobs in velero namespace pushing backups to remote storage</li>
+<li><strong>Pattern:</strong> Sustained egress, limited by <code>kubernetes.io/egress-bandwidth: 100M</code> annotation</li>
+<li><strong>Check:</strong> <code>kubectl --context=grigri get jobs -n velero</code></li>
+</ul>
+<h2 id="quick-diagnosis-workflow">Quick Diagnosis Workflow</h2>
+<p>When pfSense load is high:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># 1. Check pfSense CPU and interrupt %</span>
+ssh<span class="w"> </span>pfsense.grigri<span class="w"> </span><span class="s2">&quot;top -S -n | head -15&quot;</span>
+
+<span class="c1"># 2. Check WAN traffic rate</span>
+ssh<span class="w"> </span>pfsense.grigri<span class="w"> </span><span class="s2">&quot;netstat -I igb0 -w 1 -c 2&quot;</span>
+
+<span class="c1"># 3. Check top network consumers (Prometheus, instant query)</span>
+<span class="c1">#   topk(10, sum by (namespace, pod) (rate(container_network_receive_bytes_total[5m])))</span>
+
+<span class="c1"># 4. Check ingress access logs for the source</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>ingress-nginx-external<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>ingress-nginx-external<span class="w"> </span>--tail<span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>awk<span class="w"> </span><span class="s1">&#39;{print $1}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span><span class="p">|</span><span class="w"> </span>uniq<span class="w"> </span>-c<span class="w"> </span><span class="p">|</span><span class="w"> </span>sort<span class="w"> </span>-rn<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-10
+
+<span class="c1"># 5. Verify tc-limiter is working</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>tc-limiter<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>tc-limiter<span class="w"> </span>--tail<span class="o">=</span><span class="m">10</span>
+
+<span class="c1"># 6. Check active rclone jobs</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>get<span class="w"> </span><span class="nb">jobs</span><span class="w"> </span>-n<span class="w"> </span>velero
+</code></pre></div>
+<h2 id="traffic-path-external-pod">Traffic Path (External → Pod)</h2>
+<div class="highlight"><pre><span></span><code>External Source → pfSense WAN (pppoe0) → LAN (igb1.101)
+  → prusik host → cilium_host (TCX egress BPF)
+  → Cilium internal routing → lxc veth (host side, TCX active)
+  → pod eth0 (no TCX, tc works) → application
+</code></pre></div>
+<h2 id="pfsense-cpu-context">pfSense CPU Context</h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Unthrottled</th>
+<th>With 50Mbit limit</th>
+<th>With 100Mbit limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU usage</td>
+<td>63%+</td>
+<td>~7%</td>
+<td>~8%</td>
+</tr>
+<tr>
+<td>Interrupt %</td>
+<td>30%+</td>
+<td>~1.2%</td>
+<td>~1.5%</td>
+</tr>
+<tr>
+<td>WAN throughput</td>
+<td>300+ Mbps</td>
+<td>~3 Mbps</td>
+<td>~100 Mbps</td>
+</tr>
+</tbody>
+</table>
+<p>The pfSense state table limit (402,000) was never the issue — only ~1,300 entries were in use.
+The bottleneck is purely CPU interrupt processing on the PPPoE interface.</p>
+<h2 id="quick-diagnostics">Quick Diagnostics</h2>
+<h3 id="check-if-tc-policer-is-active">Check if tc policer is active</h3>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>tc-limiter<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>tc-limiter<span class="w"> </span>--tail<span class="o">=</span><span class="m">20</span>
+</code></pre></div>
+<h3 id="check-pfsense-cpu-via-grafana">Check pfSense CPU via Grafana</h3>
+<p>PromQL (datasource UID: <code>prometheus</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="mi">100</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="o">(</span><span class="k">avg</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="nv">instance</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="kr">rate</span><span class="o">(</span><span class="nv">node_cpu_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">pfsense.grigri</span><span class="p">&quot;,</span><span class="nl">mode</span><span class="o">=</span><span class="p">&quot;</span><span class="s">idle</span><span class="p">&quot;}[</span><span class="s">5m</span><span class="p">]</span><span class="o">))</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">100</span><span class="o">)</span>
+<span class="k">avg</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="nv">instance</span><span class="o">)</span><span class="w"> </span><span class="o">(</span><span class="kr">rate</span><span class="o">(</span><span class="nv">node_cpu_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">pfsense.grigri</span><span class="p">&quot;,</span><span class="nl">mode</span><span class="o">=</span><span class="p">&quot;</span><span class="s">interrupt</span><span class="p">&quot;}[</span><span class="s">5m</span><span class="p">]</span><span class="o">))</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">100</span>
+</code></pre></div>
+<h3 id="check-wan-throughput">Check WAN throughput</h3>
+<div class="highlight"><pre><span></span><code><span class="kr">rate</span><span class="o">(</span><span class="nv">node_network_receive_bytes_total</span><span class="p">{</span><span class="nl">device</span><span class="o">=</span><span class="p">&quot;</span><span class="s">pppoe0</span><span class="p">&quot;,</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">pfsense.grigri</span><span class="p">&quot;}[</span><span class="s">2m</span><span class="p">]</span><span class="o">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">8</span>
+</code></pre></div>
+<h3 id="check-cross-backups-traffic">Check cross-backups traffic</h3>
+<div class="highlight"><pre><span></span><code><span class="kr">rate</span><span class="o">(</span><span class="nv">container_network_receive_bytes_total</span><span class="p">{</span><span class="nl">namespace</span><span class="o">=</span><span class="p">&quot;</span><span class="s">cross-backups</span><span class="p">&quot;}[</span><span class="s">2m</span><span class="p">]</span><span class="o">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">8</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
