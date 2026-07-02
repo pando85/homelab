@@ -33,11 +33,11 @@ app-template:
                 - SYS_ADMIN
           resources:
             requests:
-              cpu: 100m
+              cpu: 50m
+              # Sized to the at-startup Go compile peak (~200Mi), not steady state
+              # (~26Mi): every pod restart recompiles, so reserve room for it. No
+              # memory limit so a larger compile can never be OOMkilled.
               memory: 256Mi
-            limits:
-              cpu: "1"
-              memory: 512Mi
 
   defaultPodOptions:
     hostNetwork: true
