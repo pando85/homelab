@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tc-limiter-source
+  labels:
+    app.kubernetes.io/name: tc-limiter
+data:
+  main.go: |
+{{ .Files.Get "files/main.go" | indent 4 }}

@@ -6,44 +6,27 @@ app-template:
       containers:
         tc-limiter:
           image:
-            repository: alpine
-            tag: "3.24"
-          command:
-            - /bin/sh
-            - -c
+            # renovate: datasource=docker depName=golang
+            repository: golang
+            tag: "1.24-alpine"
+          command: ["/bin/sh", "-c"]
+          # The controller source lives in files/main.go (injected via the
+          # tc-limiter-source ConfigMap) and is compiled at container start.
+          # Stdlib-only -> fast build, no module download, multi-arch via the
+          # golang image (runs on amd64 + arm64 nodes).
+          args:
             - |
-              apk add --no-cache curl jq iproute2 > /dev/null 2>&1
-              echo "tc-limiter started: watching for ${TARGET_POD_SELECTOR} at ${RATE_LIMIT}"
-              while true; do
-                ENDPOINT_JSON=$(curl -sf --unix-socket /var/run/cilium/cilium.sock \
-                  'http://localhost/v1/endpoint' 2>/dev/null)
-                if [ -n "$ENDPOINT_JSON" ]; then
-                  POD_IP=$(echo "$ENDPOINT_JSON" | jq -r \
-                    ".[] | select(.status[\"external-identifiers\"][\"k8s-pod-name\"] // \"\" | contains(\"${TARGET_POD_SELECTOR}\")) | .status.networking.addressing[0].ipv4 // \"\"" \
-                    2>/dev/null | head -1)
-                  if [ -n "$POD_IP" ]; then
-                    for NS in /var/run/netns/cni-*; do
-                      NS_NAME=$(basename "$NS")
-                      ADDR=$(ip netns exec "$NS_NAME" ip -o addr show eth0 2>/dev/null | awk '/inet /{print $4}' | cut -d/ -f1)
-                      if [ "$ADDR" = "$POD_IP" ]; then
-                        CURRENT=$(ip netns exec "$NS_NAME" tc filter show dev eth0 ingress 2>/dev/null | grep police)
-                        if [ -z "$CURRENT" ]; then
-                          echo "$(date): Applying ${RATE_LIMIT} rate limit in netns ${NS_NAME} for pod IP ${POD_IP}"
-                          ip netns exec "$NS_NAME" tc qdisc add dev eth0 clsact 2>/dev/null
-                          ip netns exec "$NS_NAME" tc filter add dev eth0 ingress matchall \
-                            action police rate "${RATE_LIMIT}" burst 1540 conform-exceed drop 2>&1
-                        fi
-                        break
-                      fi
-                    done
-                  fi
-                fi
-                sleep "${CHECK_INTERVAL}"
-              done
+              set -eu
+              export GOCACHE=/tmp/gocache
+              echo "tc-limiter: installing iproute2 and building controller..."
+              apk add --no-cache iproute2 >/dev/null
+              go build -trimpath -o /tmp/tc-limiter /src/main.go
+              exec /tmp/tc-limiter
           env:
             TARGET_POD_SELECTOR: "cross-backups-minio"
             RATE_LIMIT: "100mbit"
-            CHECK_INTERVAL: "10"
+            CHECK_INTERVAL: "10s"
+            FORCE_REFRESH_INTERVAL: "5m"
           securityContext:
             capabilities:
               add:
@@ -51,10 +34,11 @@ app-template:
                 - SYS_ADMIN
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
+              cpu: 100m
+              memory: 256Mi
             limits:
-              memory: 64Mi
+              cpu: "1"
+              memory: 512Mi
 
   defaultPodOptions:
     hostNetwork: true
@@ -66,6 +50,11 @@ app-template:
       kubernetes.io/hostname: prusik
 
   persistence:
+    source:
+      type: configMap
+      name: tc-limiter-source
+      globalMounts:
+        - path: /src
     cilium-socket:
       type: hostPath
       hostPath: /var/run/cilium
