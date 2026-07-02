@@ -68,11 +68,13 @@ func main() {
 	lastForce := time.Now()
 	for {
 		force := time.Since(lastForce) >= forceInterval
-		applied, err := reconcile(httpc, selector, rate, burst, force)
-		if err != nil {
+		if _, err := reconcile(httpc, selector, rate, burst, force); err != nil {
 			slog.Warn("reconcile failed", "error", err)
 		}
-		if applied && force {
+		// Reset the force timer whenever a force cycle is attempted, success or
+		// failure, so a failing force backs off to the next interval instead of
+		// pinning force=true and retrying every check cycle.
+		if force {
 			lastForce = time.Now()
 		}
 		time.Sleep(checkInterval)
@@ -229,16 +231,27 @@ func applyLimit(ns, rate string, burst int) error {
 	return nil
 }
 
+// ensureClsact guarantees a clsact qdisc on eth0. It probes for presence first
+// (rather than matching on error strings, which vary across iproute2 versions:
+// "File exists" vs "Exclusivity flag on, cannot modify") and re-checks after a
+// failed add to tolerate races.
 func ensureClsact(ns string) error {
+	if clsactExists(ns) {
+		return nil
+	}
 	out, err := exec.Command("ip", "netns", "exec", ns, "tc", "qdisc", "add", "dev", "eth0", "clsact").CombinedOutput()
 	if err != nil {
-		msg := string(out)
-		if strings.Contains(msg, "exists") || strings.Contains(msg, "File exists") {
-			return nil // already present
+		if clsactExists(ns) { // raced with another process
+			return nil
 		}
-		return fmt.Errorf("tc qdisc add clsact: %w: %s", err, strings.TrimSpace(msg))
+		return fmt.Errorf("tc qdisc add clsact: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+func clsactExists(ns string) bool {
+	out, err := exec.Command("ip", "netns", "exec", ns, "tc", "qdisc", "show", "dev", "eth0").CombinedOutput()
+	return err == nil && strings.Contains(string(out), "clsact")
 }
 
 // burstFor picks a policer burst of ~4 ms of traffic (min 4 MTUs), which is far
