@@ -112,7 +112,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   (`24.11.1`). See `docs/troubleshooting/armbian-kernel-bpf-masquerade.md`
 - Cilium BPF datapath can go stale on a node — pod egress breaks while host network works. Can
   manifest as partial breakage (some connections work, others don't) — e.g. Vector buffer filling
-  on one sink while another on the same pod is fine. Fix: delete the Cilium pod.
+  on one sink while another on the same pod is fine. Also triggered by node reboots (BPF link
+  orphaning, upstream #46065); enabling NetworkPolicy turns the latent staleness into an active
+  probe-failure outage. Fix: delete the Cilium pod.
   See `docs/troubleshooting/cilium-stale-bpf-egress.md`
 - Cilium LRP `skipRedirectFromBackend` is broken in v1.19.4 — nodelocaldns with `serviceMatcher`
   needs a corefile-watcher sidecar to forward directly to CoreDNS pod IPs, avoiding redirect loop.
@@ -121,6 +123,13 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - ArgoCD has `selfHeal: true` with real-time cluster watches — `kubectl apply` will be detected
   and reverted almost instantly. Always commit/push first, let ArgoCD sync, then verify.
   See `docs/troubleshooting/argocd-gitops-workflow.md`
+- ArgoCD repo-server has a probe death-spiral with default chart probes (1s timeout) — the pod
+  is killed during slow cold start before the metrics/health port (8084) binds, causing a restart
+  loop that never converges. Fix: enable `startupProbe` + raise `timeoutSeconds` to 5. See
+  `docs/troubleshooting/argocd-repo-server-probe-death-spiral.md`
+- ArgoCD `argo-cd` chart >= 10.0 defaults `networkPolicy.create: true` — keep it `false` because
+  it interacts with Cilium's stale-datapath bug on rebooted nodes (kubelet probes get dropped).
+  See `docs/troubleshooting/argocd-repo-server-probe-death-spiral.md`
 - Unattended-upgrades must blacklist NVIDIA packages — host-level driver upgrades conflict with
   the GPU Operator's containerized driver management, causing `Driver/library version mismatch`.
   Fix: `cd metal && ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare`

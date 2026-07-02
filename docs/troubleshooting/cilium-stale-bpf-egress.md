@@ -151,18 +151,61 @@ kubectl --context=grigri get events -n vault --field-selector involvedObject.nam
   --sort-by='.lastTimestamp'
 ```
 
+## Observed Incident: ArgoCD NetworkPolicy + Post-Reboot Stale Datapath — prusik (2026-07-02)
+
+**Node:** prusik (amd64, kernel 6.8.0-134, Cilium v1.19.5)
+
+**Trigger:** prusik rebooted ~14h earlier (kernel patched 6.8.0-124 → 6.8.0-134). The Cilium pod
+(`cilium-n68ct`) was recreated ~4h after the reboot to clear an earlier stale-datapath episode
+(~20 pods showed the "14h ago" node-reboot restart stamp; the Cilium pod was only 10h old).
+
+**Symptom:** Enabling ArgoCD's per-component NetworkPolicy (`global.networkPolicy.create: true`)
+caused kubelet startup/liveness probes to `argocd-repo-server` (and other prusik pods) to time
+out (`context deadline exceeded`). Meanwhile Prometheus (in-cluster path) could still scrape the
+same pod's metrics port (8084) at HTTP 200 in <30ms.
+
+This is the classic stale-datapath signature:
+
+- **Host → pod traffic (kubelet probes)** — dropped (governed by NetworkPolicy ingress via BPF,
+  which the stale datapath fails to evaluate correctly)
+- **Pod → pod / in-cluster traffic** — works (not gated by the stale policy path)
+
+**Diagnosis — confirming it's Cilium, not the app or kernel:**
+
+- Probes fail only when NetworkPolicy isolation is active; removing the NP → probes pass
+- Non-ArgoCD pods on prusik (`kanidm`, CI runners) show the same probe-failure pattern
+- Prometheus scraping (in-cluster path) succeeds while kubelet probing (host path) fails
+- **Deleting the Cilium pod fixes it** — this rules out a kernel BPF regression (a kernel bug
+  would persist across userspace restart)
+
+**Fix:**
+
+```bash
+kubectl --context=grigri delete pod cilium-n68ct -n kube-system
+```
+
+Keep `global.networkPolicy.create: false` in ArgoCD values until Cilium ships a version with the
+fixes for #46065 / #45233 (see upstream table below). Restarting the Cilium pod after every node
+reboot remains the only reliable workaround.
+
 ## Upstream Issue Tracking
 
-| Issue | Description | Status | Affects v1.19.4? |
+| Issue | Description | Status | Affects v1.19.5? |
 |-------|-------------|--------|-------------------|
+| [#46065](https://github.com/cilium/cilium/issues/46065) | `CgroupInetSockRelease` BPF link orphaned on agent restart — deleting the pod restores it (v1.19.x regression) | Open, no fix | **Yes (v1.19.x-specific)** |
+| [#45233](https://github.com/cilium/cilium/issues/45233) | NetworkPolicy silently missing from endpoint BPF policy on fresh node bootstrap | Open, no fix | **Yes** |
+| [PR #46741](https://github.com/cilium/cilium/pull/46741) | Gate agent readiness on eBPF datapath (proper fix — prevents false-Ready on stale datapath) | Open, unmerged | Would prevent the symptom |
 | [#45077](https://github.com/cilium/cilium/issues/45077) | Host loses egress on Cilium agent restart (orphaned cgroup BPF programs) | Open, no assignee | Unconfirmed (v1.18 confirmed) |
 | [#43944](https://github.com/cilium/cilium/issues/43944) | LRP shows invalid IP for nodelocaldns | Open, assigned to ysksuzuki/ajmmm | Yes |
 | [#44138](https://github.com/cilium/cilium/issues/44138) | Rethink LRP API (skipRedirectFromBackend, addressMatcher scope) | Open, design phase | Yes |
 | [PR #45522](https://github.com/cilium/cilium/pull/45522) | addressMatcher refuse-override guard | Merged, backported to v1.19 | Fix included in v1.19.4 |
 
-No ETA on any open issue. The only mitigation for BPF staleness remains deleting the Cilium pod
-on the affected node. For nodelocaldns, the `serviceMatcher` + corefile-watcher sidecar remains
-the recommended workaround until #43944 is resolved.
+No ETA on any open issue. v1.19.5 (latest stable as of 2026-07) includes none of the above fixes.
+The only mitigation for BPF staleness remains deleting the Cilium pod on the affected node. For
+nodelocaldns, the `serviceMatcher` + corefile-watcher sidecar remains the recommended workaround
+until #43944 is resolved. NetworkPolicy isolation should be kept disabled until #46065 / #45233
+ship in a release — it turns the latent stale-datapath bug into an active probe-failure outage on
+any node that recently rebooted.
 
 ## Notes
 
@@ -172,5 +215,15 @@ the recommended workaround until #43944 is resolved.
 - The NodeLocal DNS + Cilium LRP combination has known bugs in v1.18+/v1.19. See
   `docs/troubleshooting/nodelocaldns-cilium-lrp.md` for the full migration from addressMatcher
   to serviceMatcher with dynamic upstream discovery.
-- Root cause of the BPF state staleness is unclear — may be related to long Cilium pod uptime
-  combined with endpoint churn (pod creation/deletion) accumulating inconsistencies in BPF maps.
+- Root cause of the BPF state staleness is now linked to two upstream issues: BPF link orphaning
+  on agent restart ([#46065](https://github.com/cilium/cilium/issues/46065), a v1.19.x regression)
+  and NetworkPolicy missing from endpoint BPF on fresh node bootstrap
+  ([#45233](https://github.com/cilium/cilium/issues/45233)). Both are triggered by node reboots
+  or Cilium pod restarts. The proper fix (readiness-gating on datapath state, PR #46741) is not
+  yet merged.
+- Diagnostic shortcut: **if deleting the Cilium pod fixes it, it's not a kernel bug.** Kernel
+  BPF/JIT regressions persist across userspace restarts; this bug clears on agent restart because
+  the stale BPF programs are recompiled and reattached from a clean state.
+- NetworkPolicy enforcement turns the latent staleness into an active outage: it makes kubelet
+  health probes (host → pod) dependent on correct BPF policy evaluation, which the stale datapath
+  cannot provide. Keep `networkPolicy.create: false` until #46065 / #45233 are fixed.
