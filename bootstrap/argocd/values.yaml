@@ -11,8 +11,7 @@ global:
   logging:
     level: warn
   networkPolicy:
-    create: true
-    defaultDenyIngress: true
+    create: false
 configs:
   cm:
     create: true
