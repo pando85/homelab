@@ -26,7 +26,6 @@ app-template:
             TARGET_POD_SELECTOR: "cross-backups-minio"
             RATE_LIMIT: "100mbit"
             CHECK_INTERVAL: "10s"
-            FORCE_REFRESH_INTERVAL: "5m"
           securityContext:
             capabilities:
               add:

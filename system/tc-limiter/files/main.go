@@ -49,12 +49,11 @@ func main() {
 	selector := envDefault("TARGET_POD_SELECTOR", "cross-backups-minio")
 	rate := envDefault("RATE_LIMIT", "100mbit")
 	checkInterval := envDuration("CHECK_INTERVAL", 10*time.Second)
-	forceInterval := envDuration("FORCE_REFRESH_INTERVAL", 5*time.Minute)
 	burst := burstFor(rate)
 
 	slog.Info("tc-limiter starting",
 		"selector", selector, "rate", rate, "burst", burst,
-		"check_interval", checkInterval, "force_refresh_interval", forceInterval)
+		"check_interval", checkInterval)
 
 	httpc := &http.Client{
 		Timeout: 5 * time.Second,
@@ -65,67 +64,59 @@ func main() {
 		},
 	}
 
-	lastForce := time.Now()
 	for {
-		force := time.Since(lastForce) >= forceInterval
-		if _, err := reconcile(httpc, selector, rate, burst, force); err != nil {
+		if err := reconcile(httpc, selector, rate, burst); err != nil {
 			slog.Warn("reconcile failed", "error", err)
-		}
-		// Reset the force timer whenever a force cycle is attempted, success or
-		// failure, so a failing force backs off to the next interval instead of
-		// pinning force=true and retrying every check cycle.
-		if force {
-			lastForce = time.Now()
 		}
 		time.Sleep(checkInterval)
 	}
 }
 
 // reconcile locates the target pod, verifies the current policer, and re-applies
-// it on drift, when missing, or when a forced refresh is due. It returns whether
-// an apply happened.
-func reconcile(httpc *http.Client, selector, rate string, burst int, force bool) (bool, error) {
+// it on drift or when missing. Every cycle reads the authoritative tc state, so
+// no separate "force" pass is needed to keep the limit applied.
+func reconcile(httpc *http.Client, selector, rate string, burst int) error {
 	ip, err := targetPodIP(httpc, selector)
 	if err != nil {
-		return false, fmt.Errorf("query cilium endpoints: %w", err)
+		return fmt.Errorf("query cilium endpoints: %w", err)
 	}
 	if ip == "" {
 		slog.Debug("target pod not found yet", "selector", selector)
-		return false, nil
+		return nil
 	}
 
 	ns, ok, err := netnsForIP(ip)
 	if err != nil {
-		return false, fmt.Errorf("locate netns for ip %s: %w", ip, err)
+		return fmt.Errorf("locate netns for ip %s: %w", ip, err)
 	}
 	if !ok {
 		slog.Debug("no netns matches pod ip yet", "ip", ip)
-		return false, nil
+		return nil
 	}
 
 	current, err := currentRate(ns)
 	if err != nil {
-		slog.Warn("verify read failed, forcing apply", "netns", ns, "error", err)
+		slog.Warn("verify read failed, applying anyway", "netns", ns, "error", err)
 		if aerr := applyLimit(ns, rate, burst); aerr != nil {
-			return false, fmt.Errorf("apply: %w", aerr)
+			return fmt.Errorf("apply: %w", aerr)
 		}
 		slog.Info("applied limit (verify unavailable)", "netns", ns, "ip", ip, "rate", rate)
-		return true, nil
+		return nil
 	}
 
-	if !force && rateMatches(current, rate) {
+	if rateMatches(current, rate) {
 		slog.Debug("limit intact", "netns", ns, "ip", ip, "rate", current)
-		return false, nil
+		return nil
 	}
 
 	if err := applyLimit(ns, rate, burst); err != nil {
-		return false, fmt.Errorf("apply: %w", err)
+		return fmt.Errorf("apply: %w", err)
 	}
 
 	if got, verr := currentRate(ns); verr == nil {
 		if rateMatches(got, rate) {
 			slog.Info("applied and verified limit", "netns", ns, "ip", ip,
-				"rate", rate, "previous", current, "forced", force)
+				"rate", rate, "previous", current)
 		} else {
 			slog.Warn("applied but post-verify mismatch", "netns", ns,
 				"ip", ip, "rate", rate, "got", got)
@@ -133,7 +124,7 @@ func reconcile(httpc *http.Client, selector, rate string, burst int, force bool)
 	} else {
 		slog.Warn("applied but post-verify read failed", "netns", ns, "error", verr)
 	}
-	return true, nil
+	return nil
 }
 
 // targetPodIP queries the local Cilium agent for the first endpoint whose pod
@@ -221,12 +212,16 @@ func applyLimit(ns, rate string, burst int) error {
 	if err := ensureClsact(ns); err != nil {
 		return err
 	}
-	out, err := exec.Command("ip", "netns", "exec", ns, "tc", "filter", "replace", "dev", "eth0",
+	// 'tc filter replace' does not work for matchall+police filters: it returns
+	// EEXIST ("File exists") instead of replacing. Delete-then-add is idempotent
+	// and works whether or not a filter is already present.
+	exec.Command("ip", "netns", "exec", ns, "tc", "filter", "del", "dev", "eth0", "ingress", "pref", "1").Run()
+	out, err := exec.Command("ip", "netns", "exec", ns, "tc", "filter", "add", "dev", "eth0",
 		"ingress", "pref", "1", "proto", "ip", "matchall",
 		"action", "police", "rate", rate, "burst", strconv.Itoa(burst), "conform-exceed", "drop",
 	).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("tc filter replace: %w: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("tc filter add: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
