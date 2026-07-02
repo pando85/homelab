@@ -11,7 +11,8 @@ global:
   logging:
     level: warn
   networkPolicy:
-    create: false
+    create: true
+    defaultDenyIngress: true
 configs:
   cm:
     create: true
@@ -143,9 +144,14 @@ repoServer:
       cpu: 2.5
       memory: 2Gi
   livenessProbe:
-    enabled: false
+    timeoutSeconds: 5
+    failureThreshold: 5
   readinessProbe:
-    enabled: false
+    timeoutSeconds: 5
+    failureThreshold: 5
+  startupProbe:
+    enabled: true
+    timeoutSeconds: 5
   env:
     - name: ARGOCD_EXEC_TIMEOUT
       value: "300s"
