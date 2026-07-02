@@ -9,7 +9,9 @@ global:
           values:
             - amd64
   logging:
-    level: debug
+    level: warn
+  networkPolicy:
+    create: false
 configs:
   cm:
     create: true
