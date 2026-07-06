@@ -7,16 +7,6 @@ app-template:
         reloader.stakater.com/auto: "true"
       type: statefulset
       replicas: 1
-      initContainers:
-        01-fix-aiohttp:
-          image:
-            repository: python
-            tag: 3.14-alpine
-          command:
-            - /bin/sh
-            - -c
-          args:
-            - pip install --target /patched-sitepackages 'aiohttp==3.13.5'
       containers:
         hass:
           image:
@@ -24,7 +14,6 @@ app-template:
             tag: 2026.7.1@sha256:77612bf97ff111c5517f708b7893e6d4400e0104db24cdd69e30105c95b7bfcc
           env:
             TZ: Europe/Madrid
-            PYTHONPATH: /patched-sitepackages
             POSTGRES_USER:
               valueFrom:
                 secretKeyRef:
@@ -345,14 +334,6 @@ app-template:
           secretName: hass-valetudopng-tls-certificate
 
   persistence:
-    patched-sitepackages:
-      type: emptyDir
-      advancedMounts:
-        hass:
-          01-fix-aiohttp:
-            - path: /patched-sitepackages
-          hass:
-            - path: /patched-sitepackages
     config:
       enabled: true
       existingClaim: home-assistant-config
