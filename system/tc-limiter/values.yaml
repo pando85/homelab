@@ -8,7 +8,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=golang
             repository: golang
-            tag: "1.24-alpine"
+            tag: "1.26-alpine"
           command: ["/bin/sh", "-c"]
           # The controller source lives in files/main.go (injected via the
           # tc-limiter-source ConfigMap) and is compiled at container start.
