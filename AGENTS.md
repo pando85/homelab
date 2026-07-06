@@ -142,6 +142,12 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - Stump v0.1.5+ migration `m20260519_192218_reading_sessions_v2` can fail mid-way, leaving legacy
   tables. Restore from snapshot and complete migration manually.
   See `docs/troubleshooting/stump-migration-failure.md`
+- `home-operations/home-assistant` uses a venv at `/config/.venv` with `--system-site-packages`.
+  System packages are read-only; install user packages with `/config/.venv/bin/uv pip install`.
+  See `docs/troubleshooting/home-assistant-python-packages.md`
+- `home-operations/home-assistant:2026.7.1` ships with aiohttp 3.14.1 (system) which removed
+  `decode_text` parameter, breaking WebSocket API. Fix: install `aiohttp==3.14.0` in venv.
+  See `docs/troubleshooting/home-assistant-aiohttp-incompatibility.md`
 
 ## Subsystem Docs
 
