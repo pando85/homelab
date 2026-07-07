@@ -4,6 +4,7 @@ variables:
     ENABLE_MAPBOX: "true"
     # "IMMICH_LOG_LEVEL" must be one of [verbose, debug, log, warn, error, fatal]
     IMMICH_LOG_LEVEL: log
+    IMMICH_VERSION: v3
     NODE_ENV: "production"
     REDIS_HOSTNAME: immich-redis
     REDIS_PORT: "6379"
@@ -41,7 +42,7 @@ app-template:
         main:
           image: &image
             repository: ghcr.io/immich-app/immich-server
-            tag: v2.7.5
+            tag: v3.0.1
           env:
             <<: *env
             IMMICH_WORKERS_INCLUDE: 'api'
@@ -103,7 +104,7 @@ app-template:
           image:
             repository: ghcr.io/immich-app/immich-machine-learning
             # GPU use require cuda image. E.g.: v1.124.2-cuda
-            tag: v2.7.5
+            tag: v3.0.1
           env:
             <<: *env
             NVIDIA_VISIBLE_DEVICES: all
