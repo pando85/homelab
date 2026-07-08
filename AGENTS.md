@@ -148,6 +148,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - `home-operations/home-assistant:2026.7.1` ships with aiohttp 3.14.1 (system) which removed
   `decode_text` parameter, breaking WebSocket API. Fix: install `aiohttp==3.14.0` in venv.
   See `docs/troubleshooting/home-assistant-aiohttp-incompatibility.md`
+- ESIOS API (`api.esios.ree.es`) returns ZIP archives with `Content-Type: text/html` instead of
+  JSON for `/archives/70/download_json`, breaking `pvpc_updated` integration. Workaround: patch
+  `pvpc_data.py` to handle ZIP format. See `docs/troubleshooting/pvpc-updated-esios-api-zip-response.md`
 
 ## Subsystem Docs
 
