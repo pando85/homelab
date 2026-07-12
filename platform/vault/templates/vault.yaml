@@ -161,7 +161,7 @@ spec:
     api_addr: https://vault.vault:8200
     cluster_addr: https://${.Env.POD_NAME}:8201
     ui: true
-    disable_mlock: false
+    disable_mlock: true
 
   vaultEnvsConfig:
     - name: VAULT_LOG_LEVEL
