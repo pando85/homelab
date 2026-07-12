@@ -161,7 +161,7 @@ spec:
     api_addr: https://vault.vault:8200
     cluster_addr: https://${.Env.POD_NAME}:8201
     ui: true
-    disable_mlock: true
+    disable_mlock: false
 
   vaultEnvsConfig:
     - name: VAULT_LOG_LEVEL
@@ -181,13 +181,11 @@ spec:
   #     hostnames:
   #     - "vault.local"
 
-  # It is possible to override the Vault container directly:
-  # vaultContainerSpec:
-  #   lifecycle:
-  #     postStart:
-  #       exec:
-  #         command:
-  #              - setcap cap_ipc_lock=+ep /vault/plugins/orchestrate
+  vaultContainerSpec:
+    securityContext:
+      capabilities:
+        add:
+          - IPC_LOCK
 
   # Marks presence of Istio, which influences things like port namings
   istioEnabled: false
