@@ -25,16 +25,6 @@ stacks:
           - /data/tls.key
   - name: platform
   - name: apps
-    ignoreDifferences:
-      - group: ''
-        kind: PersistentVolumeClaim
-        name: config-stump
-        jsonPointers:
-          - /spec/storageClassName
-          - /spec/volumeMode
-          - /spec/volumeName
-          - /metadata/annotations/pv.kubernetes.io~1bind-completed
-          - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
 
 multivara:
   gitops:
