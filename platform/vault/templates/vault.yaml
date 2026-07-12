@@ -161,6 +161,10 @@ spec:
     api_addr: https://vault.vault:8200
     cluster_addr: https://${.Env.POD_NAME}:8201
     ui: true
+    # Vault 2.0.2+ removed cap_ipc_lock from the binary (hashicorp/vault@54f1daa),
+    # making IPC_LOCK capability at the container level ineffective.
+    # Set disable_mlock to true per HashiCorp's recommendation.
+    # Swap is disabled on Kubernetes nodes, so memory won't page to disk.
     disable_mlock: true
 
   vaultEnvsConfig:
