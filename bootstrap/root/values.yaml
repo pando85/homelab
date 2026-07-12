@@ -33,6 +33,7 @@ stacks:
           - /spec/storageClassName
           - /spec/volumeMode
           - /spec/volumeName
+          - /metadata/labels
           - /metadata/annotations/pv.kubernetes.io~1bind-completed
           - /metadata/annotations/kubectl.kubernetes.io~1last-applied-configuration
 
