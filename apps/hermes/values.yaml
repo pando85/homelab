@@ -25,7 +25,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=nousresearch/hermes-agent
             repository: nousresearch/hermes-agent
-            tag: v2026.5.29.2
+            tag: v2026.7.7.2
           args: ["gateway", "run"]
           securityContext:
             runAsUser: 0
