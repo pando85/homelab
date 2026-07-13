@@ -3,7 +3,7 @@ name: gitea
 version: 0.0.0
 dependencies:
   - name: forgejo
-    version: 17.1.1
+    version: 17.1.2
     repository: oci://code.forgejo.org/forgejo-helm
   - name: app-template
     version: 5.0.1
