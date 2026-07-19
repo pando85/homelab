@@ -33,10 +33,12 @@
 - alert: IngressNginxExternalHighLatency
   expr: |
     histogram_quantile(0.95,
-      sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{controller_class="k8s.io/ingress-nginx-external",host!="cross-backups.grigri.cloud"}[5m])) by (host, le)
+      sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{controller_class="k8s.io/ingress-nginx-external"}[5m])) by (host, le)
     ) > 5
     and
-    sum by (host) (rate(nginx_ingress_controller_request_duration_seconds_count{controller_class="k8s.io/ingress-nginx-external",host!="cross-backups.grigri.cloud"}[5m])) > 1
+    sum by (host) (rate(nginx_ingress_controller_request_duration_seconds_count{controller_class="k8s.io/ingress-nginx-external"}[5m])) > 1
+    unless on (host)
+    host == "cross-backups.grigri.cloud"
   for: 5m
   labels:
     severity: warning
