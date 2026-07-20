@@ -16,7 +16,7 @@ helmCharts:
     releaseName: loki
     repo: https://grafana-community.github.io/helm-charts
     valuesFile: values.yaml
-    version: 18.4.4
+    version: 18.5.1
   - name: vector
     repo: https://helm.vector.dev
     version: 0.56.0
