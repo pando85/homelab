@@ -26,7 +26,7 @@ app-template:
           image: &image
             # renovate: datasource=docker depName=freikin/dawarich
             repository: freikin/dawarich
-            tag: 1.9.2
+            tag: 1.10.1
           env: &env
             DATABASE_HOST: dawarich-postgres
             DATABASE_USERNAME:
