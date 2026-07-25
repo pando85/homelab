@@ -34,6 +34,8 @@ app-template:
               value: Europe/Madrid
             - name: HERMES_DASHBOARD
               value: "1"
+            - name: HERMES_DASHBOARD_PUBLIC_URL
+              value: https://hermes.internal.grigri.cloud
             - name: HERMES_DASHBOARD_OIDC_ISSUER
               value: https://idm.grigri.cloud/oauth2/openid/hermes
             - name: HERMES_DASHBOARD_OIDC_CLIENT_ID
