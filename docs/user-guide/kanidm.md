@@ -31,7 +31,125 @@ kanidm group list -D idm_admin | rg name | rg users
 kanidm group add-members ${GROUP_NAME} demo-user -D idm_admin
 ```
 
-## Add app to SSO
+## Add app to SSO (GitOps with Kaniop)
+
+Preferred method. The [Kaniop operator](https://github.com/kaniop/kaniop) manages OAuth2 clients
+and groups declaratively via CRDs. ArgoCD syncs the resources and the operator creates the client
+in Kanidm plus a Kubernetes secret with the credentials.
+
+### 1. Create the group
+
+`apps/<name>/templates/kanidm-group.yaml`:
+
+```yaml
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: <app>-users
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+```
+
+Optionally add an `<app>-admins` group if the app supports admin scope maps.
+
+### 2. Create the OAuth2 client
+
+`apps/<name>/templates/kanidm-oauth2-client.yaml`:
+
+```yaml
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: <app>
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: <app>
+
+  origin: https://<app>.grigri.cloud/
+
+  redirectUrl:
+    - https://<app>.grigri.cloud/<callback-path>
+
+  scopeMap:
+    - group: <app>-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  # Optional: admin scope map
+  # supScopeMap:
+  #   - group: <app>-admins
+  #     scopes:
+  #       - admin
+
+  preferShortUsername: true
+  strictRedirectUrl: true
+```
+
+Common optional flags:
+
+| Flag | When to use |
+|------|-------------|
+| `allowInsecureClientDisablePkce: true` | App doesn't support PKCE |
+| `public: true` | Public client (no secret, e.g. SPA/native) |
+| `allowLocalhostRedirect: true` | CLI tools that redirect to localhost |
+| `jwtLegacyCryptoEnable: true` | App needs legacy JWT encryption |
+
+### 3. Consume the secret
+
+The operator creates a secret named `<app>-kanidm-oauth2-credentials` with keys `CLIENT_ID` and
+`CLIENT_SECRET`. Reference it in your chart's env vars:
+
+```yaml
+env:
+  - name: OIDC_CLIENT_ID
+    valueFrom:
+      secretKeyRef:
+        name: <app>-kanidm-oauth2-credentials
+        key: CLIENT_ID
+  - name: OIDC_CLIENT_SECRET
+    valueFrom:
+      secretKeyRef:
+        name: <app>-kanidm-oauth2-credentials
+        key: CLIENT_SECRET
+```
+
+The OIDC issuer URL follows this pattern:
+
+```
+https://idm.grigri.cloud/oauth2/openid/<app>
+```
+
+### 4. Add users to the group
+
+Users must be added manually by an admin after the group is created:
+
+```bash
+kanidm group add-members <app>-users ${USER} -D idm_admin
+```
+
+### 5. Verify
+
+After ArgoCD syncs, check the client is ready:
+
+```bash
+kubectl --context=grigri get kanidmoauth2client <app> -n <namespace>
+kubectl --context=grigri get secret <app>-kanidm-oauth2-credentials -n <namespace>
+```
+
+The status should show `ready: true` and all conditions `True`.
+
+---
+
+### Manual CLI method (legacy)
 
 Example with Grafana:
 
