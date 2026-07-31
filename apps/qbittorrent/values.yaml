@@ -101,7 +101,7 @@ app-template:
                 sed -i 's/^Session\\MaxConnections=.*/Session\\MaxConnections=5000/' "$CONFIG_FILE"
                 sed -i 's/^Session\\MaxConnectionsPerTorrent=.*/Session\\MaxConnectionsPerTorrent=25/' "$CONFIG_FILE"
                 sed -i 's/^Session\\MaxActiveTorrents=.*/Session\\MaxActiveTorrents=3000/' "$CONFIG_FILE"
-                sed -i 's/^Session\\MaxActiveUploads=.*/Session\\MaxActiveUploads=15/' "$CONFIG_FILE"
+                sed -i 's/^Session\\MaxActiveUploads=.*/Session\\MaxActiveUploads=2000/' "$CONFIG_FILE"
                 sed -i 's/^Session\\MaxUploads=.*/Session\\MaxUploads=100/' "$CONFIG_FILE"
                 sed -i 's/^Session\\MaxUploadsPerTorrent=.*/Session\\MaxUploadsPerTorrent=6/' "$CONFIG_FILE"
                 sed -i 's/^Session\\MaxConcurrentHTTPAnnounces=.*/Session\\MaxConcurrentHTTPAnnounces=10/' "$CONFIG_FILE"
