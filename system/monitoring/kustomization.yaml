@@ -46,6 +46,9 @@ resources:
   - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/temperature-dashboard-configmap.yaml
   - resources/temperature-prometheus-rules.yaml
+  - resources/z800-gpu-scrape-config.yaml
+  - resources/z800-llama-scrape-config.yaml
+  - resources/z800-node-scrape-config.yaml
 
 patches:
   - patch: |-

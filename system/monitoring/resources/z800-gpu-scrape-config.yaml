@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: z800-nvidia-gpu-exporter
+  labels:
+    release: monitoring
+spec:
+  staticConfigs:
+    - targets:
+        - z800.grigri:9445
+  scrapeInterval: 15s
+  relabelings:
+    - sourceLabels:
+        - __address__
+      separator: ":"
+      regex: "(.*):(.*)"
+      replacement: "${1}"
+      targetLabel: instance
+      action: replace
+    - replacement: nvidia-gpu-exporter
+      targetLabel: job
+      action: replace

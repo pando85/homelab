@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: z800-llama-server
+  labels:
+    release: monitoring
+spec:
+  staticConfigs:
+    - targets:
+        - z800.grigri:8080
+  metricsPath: /metrics
+  scrapeInterval: 15s
+  relabelings:
+    - sourceLabels:
+        - __address__
+      separator: ":"
+      regex: "(.*):(.*)"
+      replacement: "${1}"
+      targetLabel: instance
+      action: replace
+    - replacement: llama-server
+      targetLabel: job
+      action: replace
