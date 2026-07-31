@@ -151,6 +151,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - ESIOS API (`api.esios.ree.es`) returns ZIP archives with `Content-Type: text/html` instead of
   JSON for `/archives/70/download_json`, breaking `pvpc_updated` integration. Workaround: patch
   `pvpc_data.py` to handle ZIP format. See `docs/troubleshooting/pvpc-updated-esios-api-zip-response.md`
+- qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
+  in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)
+  and increase startup probe timeout. See `docs/troubleshooting/qbittorrent-hdd-io-saturation.md`
 
 ## Subsystem Docs
 
