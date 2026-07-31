@@ -51,7 +51,7 @@ app-template:
               spec:
                 tcpSocket:
                   port: *port
-                failureThreshold: 30
+                failureThreshold: 60
                 periodSeconds: 10
             readiness: *probe
         metrics:
