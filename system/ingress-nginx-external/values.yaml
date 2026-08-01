@@ -12,6 +12,12 @@ ingress-nginx:
       # auto value takes all nodes in cgroups v2
       worker-processes: 1
       hsts: "true"
+      # OpenTelemetry: enable OTel module, exporter to Tempo, trust incoming spans
+      enable-opentelemetry: "true"
+      opentelemetry-trust-incoming-spans: "true"
+      otlp-exporter: "grpc://tempo.tempo:4317"
+      otel-service-name: "nginx-external"
+      otel-sampler: "always_on"
       http-snippet: |
         proxy_cache_path /dev/shm levels=1:2 keys_zone=static-cache:2m max_size=300m inactive=7d use_temp_path=off;
         proxy_cache_key $scheme$proxy_host$request_uri;
