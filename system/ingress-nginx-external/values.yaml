@@ -8,6 +8,10 @@ ingress-nginx:
       # Disable until PR merged: https://github.com/kubernetes/ingress-nginx/pull/12626
       enable-annotation-validation: "false"
 
+    extraEnvs:
+      - name: OTEL_EXPORTER_OTLP_ENDPOINT
+        value: "http://tempo.tempo:4317"
+
     config:
       # auto value takes all nodes in cgroups v2
       worker-processes: 1
