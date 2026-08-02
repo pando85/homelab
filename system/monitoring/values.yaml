@@ -112,7 +112,7 @@ grafana:
         grafana.grafana.com/dashboards.target-directory: "/tmp/dashboards/kubernetes"
       searchNamespace: ALL
 
-  extraInitContainers:
+  extraContainers:
     - name: fix-derived-fields
       image: curlimages/curl:8.14.1
       imagePullPolicy: IfNotPresent
@@ -122,7 +122,6 @@ grafana:
         - |
           echo "Waiting for Grafana to be ready..."
           until curl -sf http://localhost:3000/api/health; do
-            echo "Grafana not ready yet, waiting..."
             sleep 2
           done
           echo "Grafana is ready, waiting 10s for provisioning..."
@@ -149,7 +148,8 @@ grafana:
             -d "$PATCHED_DS" \
             http://localhost:3000/api/datasources/uid/loki
 
-          echo "Done!"
+          echo "Done! Keeping container alive..."
+          sleep infinity
       volumeMounts:
         - name: grafana-admin-secret
           mountPath: /etc/grafana-admin-secret
