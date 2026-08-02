@@ -112,7 +112,7 @@ grafana:
         grafana.grafana.com/dashboards.target-directory: "/tmp/dashboards/kubernetes"
       searchNamespace: ALL
 
-  extraContainers:
+  extraContainers: |
     - name: fix-derived-fields
       image: curlimages/curl:8.14.1
       imagePullPolicy: IfNotPresent
