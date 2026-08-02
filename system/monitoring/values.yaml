@@ -116,6 +116,17 @@ grafana:
     - name: fix-derived-fields
       image: curlimages/curl:8.14.1
       imagePullPolicy: IfNotPresent
+      env:
+        - name: GF_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: username
+        - name: GF_ADMIN_PASS
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: password
       command:
         - /bin/sh
         - -c
@@ -127,12 +138,8 @@ grafana:
           echo "Grafana is ready, waiting 10s for provisioning..."
           sleep 10
 
-          echo "Fetching admin credentials..."
-          GRAFANA_USER=$(cat /etc/grafana-admin-creds/username)
-          GRAFANA_PASS=$(cat /etc/grafana-admin-creds/password)
-
           echo "Fetching Loki datasource..."
-          LOKI_DS=$(curl -sf -u "$GRAFANA_USER:$GRAFANA_PASS" http://localhost:3000/api/datasources/uid/loki)
+          LOKI_DS=$(curl -sf -u "$GF_ADMIN_USER:$GF_ADMIN_PASS" http://localhost:3000/api/datasources/uid/loki)
 
           if [ -z "$LOKI_DS" ]; then
             echo "ERROR: Could not fetch Loki datasource"
@@ -143,22 +150,15 @@ grafana:
           PATCHED_DS=$(echo "$LOKI_DS" | jq '.jsonData.derivedFields |= map(if .name == "traceId" or .name == "trace_id" then .url = "http://tempo.tempo:3200/trace/${__value.raw}" else . end)')
 
           echo "Updating datasource..."
-          curl -sf -X PUT -u "$GRAFANA_USER:$GRAFANA_PASS" \
+          curl -sf -X PUT -u "$GF_ADMIN_USER:$GF_ADMIN_PASS" \
             -H "Content-Type: application/json" \
             -d "$PATCHED_DS" \
             http://localhost:3000/api/datasources/uid/loki
 
           echo "Done! Keeping container alive..."
           sleep infinity
-      volumeMounts:
-        - name: grafana-admin-creds
-          mountPath: /etc/grafana-admin-creds
-          readOnly: true
 
-  extraVolumes:
-    - name: grafana-admin-creds
-      secret:
-        secretName: grafana-admin-secret
+  extraVolumes: []
 
   envFromSecret: grafana-kanidm-oauth2-credentials
 
