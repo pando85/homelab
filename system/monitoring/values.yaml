@@ -197,6 +197,8 @@ prometheus:
     replicas: 1
     retentionSize: 100GB
     retention: 240d
+    extraArgs:
+      - --web.enable-remote-write-receiver
     resources:
       requests:
         cpu: 1
