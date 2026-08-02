@@ -22,7 +22,7 @@ data:
             - datasourceUid: tempo
               matcherRegex: '"traceId":"([a-f0-9]+)"'
               name: traceId
-              url: '${__value.raw}'
+              url: 'http://tempo.tempo:3200/api/traces/test'
               urlDisplayLabel: 'View Trace'
             # isidoro / nginx log formats that use snake_case trace_id
             - datasourceUid: tempo
