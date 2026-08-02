@@ -155,7 +155,7 @@ grafana:
           mountPath: /etc/grafana-admin-secret
           readOnly: true
 
-  extraVolumes:
+  extraVolumes: |
     - name: grafana-admin-secret
       secret:
         secretName: grafana-admin-secret
