@@ -16,12 +16,7 @@ data:
       url: http://tempo.tempo.svc.cluster.local:3200
       jsonData:
         tracesToLogsV2:
+          customQuery: false
           datasourceUid: loki
-          spanId: spanId
-          traceId: traceId
-          tags:
-            - traceId
-          filterByTraceID: true
-          filterBySpanID: false
       isDefault: false
       version: 2
