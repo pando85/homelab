@@ -16,7 +16,7 @@ data:
       url: http://tempo.tempo.svc.cluster.local:3200
       jsonData:
         tracesToLogsV2:
-          datasourceUid: P8E80F9AEF21F6940
+          datasourceUid: loki
           spanId: spanId
           traceId: traceId
           tags:
