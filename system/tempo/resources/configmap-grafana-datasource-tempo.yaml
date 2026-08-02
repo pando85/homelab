@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: tempo-datasource-config
-  namespace: monitoring
+  namespace: tempo
   labels:
     grafana_datasource: "1"
 data:
@@ -16,7 +16,12 @@ data:
       url: http://tempo.tempo.svc.cluster.local:3200
       jsonData:
         tracesToLogsV2:
-          customQuery: false
-          datasourceUid: loki
+          datasourceUid: P8E80F9AEF21F6940
+          spanId: spanId
+          traceId: traceId
+          tags:
+            - traceId
+          filterByTraceID: true
+          filterBySpanID: false
       isDefault: false
       version: 2
