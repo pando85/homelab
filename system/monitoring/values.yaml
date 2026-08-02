@@ -198,7 +198,7 @@ prometheus:
     retentionSize: 100GB
     retention: 240d
     additionalArgs:
-      - --web.enable-remote-write-receiver
+      - name: web.enable-remote-write-receiver
     resources:
       requests:
         cpu: 1
