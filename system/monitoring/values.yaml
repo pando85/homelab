@@ -112,52 +112,48 @@ grafana:
         grafana.grafana.com/dashboards.target-directory: "/tmp/dashboards/kubernetes"
       searchNamespace: ALL
 
-  extraContainers: |
+  extraContainers:
     - name: fix-derived-fields
-      image: curlimages/curl:8.14.1
-      imagePullPolicy: IfNotPresent
-      env:
-        - name: GF_ADMIN_USER
-          valueFrom:
-            secretKeyRef:
-              name: grafana-admin-secret
-              key: username
-        - name: GF_ADMIN_PASS
-          valueFrom:
-            secretKeyRef:
-              name: grafana-admin-secret
-              key: password
+      image: curlimages/curl:latest
       command:
         - /bin/sh
         - -c
         - |
-          echo "Waiting for Grafana to be ready..."
+          # Wait for Grafana to be ready
           until curl -sf http://localhost:3000/api/health; do
             sleep 2
           done
-          echo "Grafana is ready, waiting 10s for provisioning..."
-          sleep 10
+          sleep 10  # Wait for provisioning to complete
 
-          echo "Fetching Loki datasource..."
-          LOKI_DS=$(curl -sf -u "$GF_ADMIN_USER:$GF_ADMIN_PASS" http://localhost:3000/api/datasources/uid/loki)
+          # Get admin credentials from environment
+          GRAFANA_USER=$GF_SECURITY_ADMIN_USER
+          GRAFANA_PASS=$GF_SECURITY_ADMIN_PASSWORD
 
-          if [ -z "$LOKI_DS" ]; then
-            echo "ERROR: Could not fetch Loki datasource"
-            exit 1
-          fi
+          # Fetch current datasource
+          LOKI_DS=$(curl -sf -u "$GRAFANA_USER:$GRAFANA_PASS" http://localhost:3000/api/datasources/uid/loki)
 
-          echo "Patching derivedFields URLs..."
+          # Patch derivedFields URLs
           PATCHED_DS=$(echo "$LOKI_DS" | jq '.jsonData.derivedFields |= map(if .name == "traceId" or .name == "trace_id" then .url = "http://tempo.tempo:3200/trace/${__value.raw}" else . end)')
 
-          echo "Updating datasource..."
-          curl -sf -X PUT -u "$GF_ADMIN_USER:$GF_ADMIN_PASS" \
+          # Update datasource
+          curl -sf -X PUT -u "$GRAFANA_USER:$GRAFANA_PASS" \
             -H "Content-Type: application/json" \
             -d "$PATCHED_DS" \
             http://localhost:3000/api/datasources/uid/loki
 
-          echo "Done! Keeping container alive..."
+          # Keep container alive
           sleep infinity
-
+      env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: username
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: password
   extraVolumes: []
 
   envFromSecret: grafana-kanidm-oauth2-credentials

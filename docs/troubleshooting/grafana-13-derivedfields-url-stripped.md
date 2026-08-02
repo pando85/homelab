@@ -44,11 +44,54 @@ The `$$` escaping is the documented approach for YAML provisioning (to escape `$
 
 ## Workaround
 
-After the datasource is provisioned, manually edit the Loki datasource in the Grafana UI:
-1. Go to Configuration → Data Sources → Loki
-2. In the "Derived fields" section, edit the traceId field
-3. Set the "URL/query" field to `${__value.raw}`
-4. Save the datasource
+Use a sidecar container that runs alongside Grafana to patch the datasource via the Grafana API after provisioning:
+
+```yaml
+extraContainers:
+  - name: fix-derived-fields
+    image: curlimages/curl:latest
+    command:
+      - /bin/sh
+      - -c
+      - |
+        # Wait for Grafana to be ready
+        until curl -sf http://localhost:3000/api/health; do
+          sleep 2
+        done
+        sleep 10  # Wait for provisioning to complete
+
+        # Get admin credentials from environment
+        GRAFANA_USER=$GF_SECURITY_ADMIN_USER
+        GRAFANA_PASS=$GF_SECURITY_ADMIN_PASSWORD
+
+        # Fetch current datasource
+        LOKI_DS=$(curl -sf -u "$GRAFANA_USER:$GRAFANA_PASS" http://localhost:3000/api/datasources/uid/loki)
+
+        # Patch derivedFields URLs
+        PATCHED_DS=$(echo "$LOKI_DS" | jq '.jsonData.derivedFields |= map(if .name == "traceId" or .name == "trace_id" then .url = "http://tempo.tempo:3200/trace/${__value.raw}" else . end)')
+
+        # Update datasource
+        curl -sf -X PUT -u "$GRAFANA_USER:$GRAFANA_PASS" \
+          -H "Content-Type: application/json" \
+          -d "$PATCHED_DS" \
+          http://localhost:3000/api/datasources/uid/loki
+
+        # Keep container alive
+        sleep infinity
+    env:
+      - name: GF_SECURITY_ADMIN_USER
+        valueFrom:
+          secretKeyRef:
+            name: grafana-admin-secret
+            key: username
+      - name: GF_SECURITY_ADMIN_PASSWORD
+        valueFrom:
+          secretKeyRef:
+            name: grafana-admin-secret
+            key: password
+```
+
+**Note:** The sidecar container must have `jq` installed to parse JSON. Use `curlimages/curl` (which includes `jq`) or install it in the container.
 
 ## Related issues
 
@@ -58,4 +101,6 @@ After the datasource is provisioned, manually edit the Loki datasource in the Gr
 
 ## Status
 
-Configuration is committed with the documented `$$` escaping. The `url` field will be empty until manually configured in the Grafana UI or until Grafana fixes the provisioning bug.
+**Workaround implemented** in `system/monitoring/values.yaml`. The sidecar container patches the Loki datasource after provisioning to set the correct `url` field for derivedFields.
+
+**Resolution:** Wait for Grafana to fix the provisioning bug in a future release, or manually configure the datasource in the Grafana UI (not recommended for GitOps).
