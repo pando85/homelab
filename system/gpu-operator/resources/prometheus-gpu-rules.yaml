@@ -1,0 +1,102 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  labels:
+    app: kube-prometheus-stack
+    release: monitoring
+  name: prometheus-gpu-rules
+spec:
+  groups:
+    - name: gpu-alert.rules
+      rules:
+        - alert: GpuMetricsMissing
+          expr: |
+            kube_node_status_capacity{resource="nvidia_com_gpu", node="prusik"} > 0
+            unless on (node)
+            label_replace(count by (Hostname) (DCGM_FI_DEV_GPU_TEMP), "node", "$1", "Hostname", "(.+)")
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            description:
+              GPU node {{$labels.node}} advertises nvidia.com/gpu capacity but has not
+              delivered DCGM metrics for 15 minutes (dcgm-exporter down or node broken)
+            message: GPU node {{$labels.node}} delivers no DCGM metrics
+            summary: GPU metrics missing for a GPU node
+        - alert: GpuHighTemperature
+          expr: DCGM_FI_DEV_GPU_TEMP > 85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            description:
+              GPU {{$labels.gpu}} on node {{$labels.Hostname}} is at {{$value}}C
+              for more than 10 minutes
+            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} is at {{$value}}C
+            summary: GPU temperature is high
+        - alert: GpuCriticalTemperature
+          expr: DCGM_FI_DEV_GPU_TEMP > 95
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            description:
+              GPU {{$labels.gpu}} on node {{$labels.Hostname}} is at {{$value}}C
+              for more than 3 minutes - imminent thermal shutdown
+            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} is at {{$value}}C
+            summary: GPU temperature is critical
+        - alert: GpuXidError
+          expr: DCGM_FI_DEV_XID_ERRORS > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            description:
+              GPU {{$labels.gpu}} on node {{$labels.Hostname}} reports XID error
+              {{$value}} (hardware/driver error, see NVIDIA XID documentation)
+            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} reports XID error {{$value}}
+            summary: GPU reports an XID error
+        - alert: GpuSlotsMissing
+          expr: kube_node_status_capacity{resource="nvidia_com_gpu", node="prusik"} < 8
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            description:
+              GPU node {{$labels.node}} advertises only {{$value}} of 8 expected
+              nvidia.com/gpu slots (device plugin or time-slicing config broken)
+            message: GPU node {{$labels.node}} advertises only {{$value}} of 8 GPU slots
+            summary: GPU node advertises too few GPU slots
+        - alert: GpuThrottling
+          expr: |
+            (
+                floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 8) % 2
+              + floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 32) % 2
+              + floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 64) % 2
+              + floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 128) % 2
+            ) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            description:
+              GPU {{$labels.gpu}} on node {{$labels.Hostname}} is throttling clocks
+              due to hardware slowdown, thermal or power brake (throttle reasons
+              bitmask, idle/app-clocks/sw-power-cap excluded)
+            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} is throttling
+            summary: GPU is thermal/power throttling
+        - alert: GpuPodPending
+          expr: |
+            sum by (namespace, pod) (kube_pod_container_resource_requests{resource="nvidia_com_gpu"})
+            and on (namespace, pod)
+            kube_pod_status_phase{phase="Pending"} == 1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            description:
+              Pod {{$labels.pod}} in {{$labels.namespace}} requests {{$value}}
+              nvidia.com/gpu slot(s) and is Pending for more than 10 minutes -
+              most likely no free GPU slot
+            message: GPU pod {{$labels.pod}} in {{$labels.namespace}} is Pending for 10m
+            summary: Pod cannot allocate a GPU slot
