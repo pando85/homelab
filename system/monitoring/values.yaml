@@ -128,8 +128,8 @@ grafana:
           sleep 10
 
           echo "Fetching admin credentials..."
-          GRAFANA_USER=$(cat /etc/grafana-admin-secret/username)
-          GRAFANA_PASS=$(cat /etc/grafana-admin-secret/password)
+          GRAFANA_USER=$(cat /etc/grafana-admin-creds/username)
+          GRAFANA_PASS=$(cat /etc/grafana-admin-creds/password)
 
           echo "Fetching Loki datasource..."
           LOKI_DS=$(curl -sf -u "$GRAFANA_USER:$GRAFANA_PASS" http://localhost:3000/api/datasources/uid/loki)
@@ -151,12 +151,12 @@ grafana:
           echo "Done! Keeping container alive..."
           sleep infinity
       volumeMounts:
-        - name: grafana-admin-secret
-          mountPath: /etc/grafana-admin-secret
+        - name: grafana-admin-creds
+          mountPath: /etc/grafana-admin-creds
           readOnly: true
 
   extraVolumes: |
-    - name: grafana-admin-secret
+    - name: grafana-admin-creds
       secret:
         secretName: grafana-admin-secret
 
