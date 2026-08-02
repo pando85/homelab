@@ -23,6 +23,6 @@ generatorOptions:
   annotations:
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd.argoproj.io/sync-options: Replace=true
-    k8s-sidecar-target-directory: /tmp/dashboards/gpu
+    grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/gpu
   labels:
     grafana_dashboard: "1"
