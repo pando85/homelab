@@ -112,6 +112,54 @@ grafana:
         grafana.grafana.com/dashboards.target-directory: "/tmp/dashboards/kubernetes"
       searchNamespace: ALL
 
+  extraInitContainers:
+    - name: fix-derived-fields
+      image: curlimages/curl:8.14.1
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for Grafana to be ready..."
+          until curl -sf http://localhost:3000/api/health; do
+            echo "Grafana not ready yet, waiting..."
+            sleep 2
+          done
+          echo "Grafana is ready, waiting 10s for provisioning..."
+          sleep 10
+
+          echo "Fetching admin credentials..."
+          GRAFANA_USER=$(cat /etc/grafana-admin-secret/username)
+          GRAFANA_PASS=$(cat /etc/grafana-admin-secret/password)
+
+          echo "Fetching Loki datasource..."
+          LOKI_DS=$(curl -sf -u "$GRAFANA_USER:$GRAFANA_PASS" http://localhost:3000/api/datasources/uid/loki)
+
+          if [ -z "$LOKI_DS" ]; then
+            echo "ERROR: Could not fetch Loki datasource"
+            exit 1
+          fi
+
+          echo "Patching derivedFields URLs..."
+          PATCHED_DS=$(echo "$LOKI_DS" | jq '.jsonData.derivedFields |= map(if .name == "traceId" or .name == "trace_id" then .url = "http://tempo.tempo:3200/trace/${__value.raw}" else . end)')
+
+          echo "Updating datasource..."
+          curl -sf -X PUT -u "$GRAFANA_USER:$GRAFANA_PASS" \
+            -H "Content-Type: application/json" \
+            -d "$PATCHED_DS" \
+            http://localhost:3000/api/datasources/uid/loki
+
+          echo "Done!"
+      volumeMounts:
+        - name: grafana-admin-secret
+          mountPath: /etc/grafana-admin-secret
+          readOnly: true
+
+  extraVolumes:
+    - name: grafana-admin-secret
+      secret:
+        secretName: grafana-admin-secret
+
   envFromSecret: grafana-kanidm-oauth2-credentials
 
   grafana.ini:
