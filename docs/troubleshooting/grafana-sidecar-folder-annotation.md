@@ -70,5 +70,6 @@ Grafana's dashboard list.
 
 ## Related
 
-- `system/monitoring/kustomization.yaml` — smartctl dashboards still use the ignored
-  `k8s-sidecar-target-directory` annotation; fixing them requires the same change.
+All dashboard provisioning in this repo uses `grafana.grafana.com/dashboards.target-directory`
+in `generatorOptions.annotations`: `system/gpu-operator`, `system/monitoring` (smartctl),
+`system/tempo`, `platform/postgres-operator`, and `bootstrap/argocd`.

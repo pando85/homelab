@@ -27,7 +27,7 @@ configMapGenerator:
       - dashboards/tempo-writes.json
 generatorOptions:
   annotations:
-    k8s-sidecar-target-directory: /tmp/dashboards/tempo
+    grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/tempo
     argocd.argoproj.io/sync-options: ServerSideApply=true
   labels:
     grafana_dashboard: "1"
