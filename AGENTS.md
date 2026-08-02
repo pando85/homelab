@@ -95,6 +95,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 
 - Forgetting `helm dependency build` after updating `Chart.yaml`
 - Missing Renovate hints causes images to not auto-update
+- Grafana dashboard sidecar only honors `grafana.grafana.com/dashboards.target-directory`, not
+  `k8s-sidecar-target-directory` — using the latter silently drops the dashboard at the root
+  folder. See `docs/troubleshooting/grafana-sidecar-folder-annotation.md`
 - Introducing CRDs without `--include-crds` in helm template
 - Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources
 - Forgetting `Prune=false` on PVCs causes data loss on sync
