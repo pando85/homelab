@@ -13,6 +13,8 @@ spec:
         namespace: monitoring
         pathPrefix: /
         port: http-web
+  additionalArgs:
+    - name: web.enable-remote-write-receiver
   enableAdminAPI: false
   evaluationInterval: 1m
   externalUrl: http://prometheus-long-term.internal.grigri.cloud/
