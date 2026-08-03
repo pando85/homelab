@@ -10,7 +10,7 @@ helmGlobals:
 helmCharts:
   - name: postgres-operator
     repo: https://opensource.zalando.com/postgres-operator/charts/postgres-operator/
-    version: 1.15.1
+    version: 2.0.1
     includeCRDs: true
     releaseName: postgres-operator
     namespace: postgres-operator
