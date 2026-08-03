@@ -106,3 +106,9 @@ open-webui:
     capabilities:
       drop:
         - ALL
+
+  copyAppData:
+    command:
+      - sh
+      - -c
+      - "cp -R -n /app/backend/data/* /tmp/app-data/ 2>/dev/null || true"
