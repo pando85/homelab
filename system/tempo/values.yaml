@@ -20,6 +20,10 @@ tempo:
       service_graphs:
         wait: 10s
         max_items: 10000
+        peer_attributes:
+          - peer.service
+          - db.name
+          - db.system
       span_metrics:
         enable_target_info: true
     # -- Registry configuration for metrics generator (optional)
