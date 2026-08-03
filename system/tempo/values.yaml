@@ -49,7 +49,7 @@ tempo:
   queryFrontend:
     search:
       concurrent_jobs: 500
-  retention: 24h
+  retention: 7d
   # -- The standard overrides configuration section. This can include a `defaults` object for applying to all tenants (not to be confused with the `global` property of the same name, which overrides `max_byte_per_trace` for all tenants). For an example on how to enable the metrics generator using the `overrides` object, see the 'Activate metrics generator' section below. Refer to [Standard overrides](https://grafana.com/docs/tempo/latest/configuration/#standard-overrides) for more details.
   overrides:
     # -- Default config values for all tenants, can be overridden by per-tenant overrides. If a tenant's specific overrides are not found in the `per_tenant_overrides` block, the values in this `default` block will be used. Configs inside this block should follow the new overrides indentation format
@@ -96,4 +96,4 @@ persistence:
   enableStatefulSetAutoDeletePVC: true
   accessModes:
     - ReadWriteOnce
-  size: 10Gi
+  size: 30Gi
