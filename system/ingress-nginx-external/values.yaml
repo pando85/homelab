@@ -19,7 +19,7 @@ ingress-nginx:
       # OpenTelemetry: enable OTel module, exporter to Tempo, trust incoming spans
       enable-opentelemetry: "true"
       opentelemetry-trust-incoming-spans: "true"
-      otlp-exporter: "tempo.tempo:4317"
+      otlp-exporter: "otel-collector.otel-collector:4317"
       otel-service-name: "nginx-external"
       otel-sampler: "AlwaysOn"
       # Append the OpenTelemetry trace id to access logs so Loki can correlate

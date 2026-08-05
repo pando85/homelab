@@ -1,0 +1,76 @@
+mode: deployment
+replicaCount: 1
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: 0.115.0
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    # Transform nginx SERVER spans to CLIENT spans to fix service graph
+    transform/nginx:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - set(span.kind.string, "Client") where resource.attributes["service.name"] == "nginx-external"
+
+    # Tail-based sampling: keep errors and slow traces, sample 10% of normal traffic
+    tail_sampling:
+      policies:
+        - name: errors-policy
+          type: status_code
+          status_code: {status_codes: [ERROR]}
+        - name: latency-policy
+          type: latency
+          latency: {threshold_ms: 5000}
+        - name: default-policy
+          type: probabilistic
+          probabilistic: {sampling_percentage: 10}
+
+    # Batch spans before exporting to reduce load on Tempo
+    batch:
+      send_batch_size: 1000
+      timeout: 5s
+
+  exporters:
+    otlp/tempo:
+      endpoint: tempo.tempo:4317
+      tls:
+        insecure: true
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [transform/nginx, tail_sampling, batch]
+        exporters: [otlp/tempo]
+
+service:
+  type: ClusterIP
+  ports:
+    otlp-grpc:
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    otlp-http:
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
