@@ -58,6 +58,15 @@ config:
       endpoint: tempo.tempo:4317
       tls:
         insecure: true
+      retry_on_failure:
+        enabled: true
+        initial_interval: 5s
+        max_interval: 30s
+        max_elapsed_time: 300s
+      sending_queue:
+        enabled: true
+        num_consumers: 10
+        queue_size: 1000
 
   service:
     telemetry:
