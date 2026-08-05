@@ -44,9 +44,6 @@ tempo:
     trace_idle_period: 10s
     max_block_duration: 30m
     complete_block_timeout: 1h
-    forwarders:
-      - name: metrics-generator
-        backend: metrics-generator
   querier:
     max_concurrent_queries: 20
   queryFrontend:
