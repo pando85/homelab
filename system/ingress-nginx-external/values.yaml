@@ -10,7 +10,7 @@ ingress-nginx:
 
     extraEnvs:
       - name: OTEL_EXPORTER_OTLP_ENDPOINT
-        value: "http://tempo.tempo:4317"
+        value: "http://otel-collector-opentelemetry-collector.otel-collector:4317"
 
     config:
       # auto value takes all nodes in cgroups v2
