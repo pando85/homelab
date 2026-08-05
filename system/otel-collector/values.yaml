@@ -60,6 +60,9 @@ config:
         insecure: true
 
   service:
+    telemetry:
+      logs:
+        level: error
     pipelines:
       traces:
         receivers: [otlp]
