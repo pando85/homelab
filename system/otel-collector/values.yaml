@@ -16,6 +16,9 @@ resources:
 
 config:
   receivers:
+    # Disable unused receivers (chart defaults include jaeger, zipkin)
+    jaeger: null
+    zipkin: null
     otlp:
       protocols:
         grpc:
@@ -80,3 +83,12 @@ ports:
     servicePort: 4318
     protocol: TCP
     appProtocol: grpc
+  # Disable unused receiver ports
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
