@@ -4,6 +4,7 @@ image:
   repository: zalando/postgres-operator
 
 configGeneral:
+  docker_image: ghcr.io/zalando/spilo-17:4.1-p2
   enable_shm_volume: false
   kubernetes_use_configmaps: true
   sidecars:
@@ -35,6 +36,7 @@ configMajorVersionUpgrade:
   # "off": no upgrade, "manual": manifest triggers action, "full": minimal version violation triggers too
   major_version_upgrade_mode: "full"
   minimal_major_version: "14"
+  target_major_version: "17"
 
 configKubernetes:
   enable_owner_references: false
