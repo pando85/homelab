@@ -6,7 +6,7 @@ metadata:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: hermes-agent-radarr
+  name: hermes-2-agent-radarr
   namespace: radarr
 rules:
   - apiGroups: [""]
@@ -24,13 +24,13 @@ subjects:
     namespace: hermes-2
 roleRef:
   kind: Role
-  name: hermes-agent-radarr
+  name: hermes-2-agent-radarr
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: hermes-agent-jellyfin
+  name: hermes-2-agent-jellyfin
   namespace: jellyfin
 rules:
   - apiGroups: [""]
@@ -48,13 +48,13 @@ subjects:
     namespace: hermes-2
 roleRef:
   kind: Role
-  name: hermes-agent-jellyfin
+  name: hermes-2-agent-jellyfin
   apiGroup: rbac.authorization.k8s.io
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: hermes-agent-navidrome
+  name: hermes-2-agent-navidrome
   namespace: navidrome
 rules:
   - apiGroups: [""]
@@ -81,5 +81,5 @@ subjects:
     namespace: hermes-2
 roleRef:
   kind: Role
-  name: hermes-agent-navidrome
+  name: hermes-2-agent-navidrome
   apiGroup: rbac.authorization.k8s.io
