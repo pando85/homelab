@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: hermes-agent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hermes-agent-radarr
+  namespace: radarr
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hermes-2-agent-radarr
+  namespace: radarr
+subjects:
+  - kind: ServiceAccount
+    name: hermes-agent
+    namespace: hermes-2
+roleRef:
+  kind: Role
+  name: hermes-agent-radarr
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hermes-agent-jellyfin
+  namespace: jellyfin
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/exec"]
+    verbs: ["get", "list", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hermes-2-agent-jellyfin
+  namespace: jellyfin
+subjects:
+  - kind: ServiceAccount
+    name: hermes-agent
+    namespace: hermes-2
+roleRef:
+  kind: Role
+  name: hermes-agent-jellyfin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: hermes-agent-navidrome
+  namespace: navidrome
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: hermes-2-agent-navidrome
+  namespace: navidrome
+subjects:
+  - kind: ServiceAccount
+    name: hermes-agent
+    namespace: hermes-2
+roleRef:
+  kind: Role
+  name: hermes-agent-navidrome
+  apiGroup: rbac.authorization.k8s.io

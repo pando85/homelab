@@ -1,0 +1,128 @@
+app-template:
+  controllers:
+    hermes-2:
+      labels:
+        backup/retain: quaterly
+      type: statefulset
+      pod:
+        enableServiceLinks: false
+        runtimeClassName: kata
+        automountServiceAccountToken: false
+      serviceAccount:
+        name: hermes-agent
+      initContainers:
+        fix-sa-token:
+          image:
+            repository: public.ecr.aws/docker/library/busybox
+            tag: "1.38"
+          command:
+            - sh
+            - -c
+          args:
+            - mkdir -p /shared/serviceaccount && cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /shared/serviceaccount/ && find /shared/serviceaccount -type d -exec chmod 0755 {} \; && find /shared/serviceaccount -type f -exec chmod 0644 {} \;
+      containers:
+        hermes-2:
+          image:
+            # renovate: datasource=docker depName=nousresearch/hermes-agent
+            repository: nousresearch/hermes-agent
+            tag: v2026.7.7.2
+          args: ["gateway", "run"]
+          securityContext:
+            runAsUser: 0
+          env:
+            - name: TZ
+              value: Europe/Madrid
+            - name: HERMES_DASHBOARD
+              value: "1"
+            - name: HERMES_DASHBOARD_PUBLIC_URL
+              value: https://hermes-2.internal.grigri.cloud
+            - name: HERMES_DASHBOARD_OIDC_ISSUER
+              value: https://idm.grigri.cloud/oauth2/openid/hermes-2
+            - name: HERMES_DASHBOARD_OIDC_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-2-kanidm-oauth2-credentials
+                  key: CLIENT_ID
+            - name: HERMES_DASHBOARD_OIDC_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-2-kanidm-oauth2-credentials
+                  key: CLIENT_SECRET
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "8"
+              memory: 4Gi
+  defaultPodOptions:
+    securityContext: {}
+    nodeSelector:
+      kubernetes.io/hostname: prusik
+  service:
+    dashboard:
+      ports:
+        http:
+          port: 9119
+  ingress:
+    dashboard:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth?allowed_groups=hermes-users@idm.grigri.cloud
+        nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
+        nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
+      hosts:
+        - host: hermes-2.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: dashboard
+                port: http
+      tls:
+        - hosts:
+            - hermes-2.internal.grigri.cloud
+          secretName: hermes-2-dashboard-tls-certificate
+  persistence:
+    data:
+      enabled: true
+      globalMounts:
+        - path: /opt/data
+      existingClaim: hermes-2-data
+    sa-token-source:
+      type: custom
+      volumeSpec:
+        projected:
+          defaultMode: 0644
+          sources:
+            - serviceAccountToken:
+                path: token
+                audience: https://kubernetes.default.svc.cluster.local
+                expirationSeconds: 7776000
+            - configMap:
+                name: kube-root-ca.crt
+                items:
+                  - key: ca.crt
+                    path: ca.crt
+            - downwardAPI:
+                items:
+                  - fieldRef:
+                      fieldPath: metadata.namespace
+                    path: namespace
+      advancedMounts:
+        hermes-2:
+          fix-sa-token:
+            - path: /var/run/secrets/kubernetes.io/serviceaccount
+              readOnly: true
+    sa-token:
+      type: emptyDir
+      advancedMounts:
+        hermes-2:
+          fix-sa-token:
+            - path: /shared/serviceaccount
+          hermes-2:
+            - path: /var/run/secrets/hermes-k8s
+              readOnly: true
