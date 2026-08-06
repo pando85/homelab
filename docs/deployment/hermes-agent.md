@@ -138,9 +138,10 @@ spec:
 
 Copy from an existing instance and update:
 
+- Role names: `hermes-agent-*` → `hermes-N-agent-*` (must be unique per instance to avoid ArgoCD shared resource conflicts)
 - RoleBinding names: `hermes-agent-*` → `hermes-N-agent-*`
 - RoleBinding subjects namespace: `namespace: hermes` → `namespace: hermes-N`
-- Keep Role names unchanged (they're cluster-scoped per target namespace)
+- RoleBinding roleRef names: update to reference the new Role names
 
 ### 8. Validate and Deploy
 
