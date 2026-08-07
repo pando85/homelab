@@ -4,6 +4,7 @@ namespace: gpu-operator
 
 resources:
   - time-slicing-config.yaml
+  - resources/prometheus-gpu-rules.yaml
 
 helmCharts:
   - name: gpu-operator
@@ -13,3 +14,15 @@ helmCharts:
     namespace: gpu-operator
     includeCRDs: true
     valuesFile: values.yaml
+
+configMapGenerator:
+  - name: dcgm-exporter-dashboard
+    files:
+      - dashboards/dcgm-exporter.json
+generatorOptions:
+  annotations:
+    argocd.argoproj.io/compare-options: IgnoreExtraneous
+    argocd.argoproj.io/sync-options: Replace=true
+    grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/gpu
+  labels:
+    grafana_dashboard: "1"

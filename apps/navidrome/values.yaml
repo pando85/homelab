@@ -22,6 +22,7 @@ app-template:
             ND_MUSICFOLDER: /music
             ND_AUTOIMPORTPLAYLISTS: "true"
             ND_PROMETHEUS_ENABLED: "true"
+            ND_WATCHERWAIT: "5m"
           envFrom:
             - secretRef:
                 name: navidrome-secret

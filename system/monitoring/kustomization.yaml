@@ -8,13 +8,13 @@ helmCharts:
     releaseName: monitoring
     repo: https://prometheus-community.github.io/helm-charts
     valuesFile: values.yaml
-    version: 87.19.2
+    version: 88.1.3
   - name: prometheus-blackbox-exporter
     namespace: monitoring
     releaseName: monitoring
     repo: https://prometheus-community.github.io/helm-charts
     valuesFile: blackbox-exporter-values.yaml
-    version: 11.15.1
+    version: 11.16.0
   - name: prometheus-smartctl-exporter
     namespace: monitoring
     releaseName: monitoring
@@ -46,6 +46,9 @@ resources:
   - resources/smartctl-exporter-prometheus-rules.yaml
   - resources/temperature-dashboard-configmap.yaml
   - resources/temperature-prometheus-rules.yaml
+  - resources/z800-gpu-scrape-config.yaml
+  - resources/z800-llama-scrape-config.yaml
+  - resources/z800-node-scrape-config.yaml
 
 patches:
   - patch: |-
@@ -111,6 +114,6 @@ generatorOptions:
   annotations:
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd.argoproj.io/sync-options: Replace=true
-    k8s-sidecar-target-directory: /tmp/dashboards/smartctl
+    grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/smartctl
   labels:
     grafana_dashboard: "1"

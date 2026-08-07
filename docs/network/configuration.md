@@ -59,6 +59,34 @@ pass grigri/pfsense.config.xml > /tmp/pfsense.config.xml
 
 - After installation, restore the configuration from the XML backup file.
 
+### Automation Options
+
+pfSense is currently managed manually. Future automation options under consideration:
+
+**REST API** — [pfSense-pkg-RESTAPI](https://github.com/pfrest/pfSense-pkg-RESTAPI) (837 stars)
+provides 200+ endpoints + GraphQL at `/api/v2/...`. Not built-in; install via package manager.
+Supports Basic Auth, API Key, and JWT authentication.
+
+```bash
+# Install on pfSense CE
+pkg-static add https://github.com/pfrest/pfSense-pkg-RESTAPI/releases/latest/download/pfSense-2.8.1-pkg-RESTAPI.pkg
+```
+
+**MCP Servers** — Several community implementations exist:
+
+| Project | Approach | Notes |
+|---------|----------|-------|
+| [gensecaihq/pfsense-mcp-server](https://github.com/gensecaihq/pfsense-mcp-server) | REST/XML-RPC/SSH | Most mature (82 stars), built-in guardrails |
+| [abl030/pfsense-mcp](https://github.com/abl030/pfsense-mcp) | REST API v2 | Auto-generates 677 tools from OpenAPI spec |
+| [stepanov1975/pfsense-mcp-server](https://github.com/stepanov1975/pfsense-mcp-server) | REST API | Read-only, safe for diagnostics |
+
+**CLI (SSH)** — Enable via console menu option 14 or GUI. Key tools:
+- `pfctl` — firewall rules, states, NAT
+- `pfSsh.php playback <script>` — built-in PHP scripts
+- Direct access to `/cf/conf/config.xml`
+
+**Status:** No decision made. Continuing manual management for now.
+
 ## gs724t
 
 - `Ipv4 Network Interface Configuration -> IP Configuration`:

@@ -8,7 +8,7 @@ debug: false
 
 shims:
   qemu:
-    enabled: true
+    enabled: false
   clh:
     enabled: false
   cloud-hypervisor:
@@ -18,7 +18,7 @@ shims:
   fc:
     enabled: true
   qemu-runtime-rs:
-    enabled: false
+    enabled: true
   qemu-nvidia-gpu:
     enabled: false
   qemu-nvidia-gpu-snp:
@@ -43,8 +43,8 @@ shims:
     enabled: false
 
 defaultShim:
-  amd64: qemu
-  arm64: qemu
+  amd64: qemu-runtime-rs
+  arm64: qemu-runtime-rs
 
 runtimeClasses:
   enabled: true

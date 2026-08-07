@@ -16,7 +16,7 @@ helmCharts:
     releaseName: argocd
     repo: https://argoproj.github.io/argo-helm
     valuesFile: values.yaml
-    version: 10.2.1
+    version: 10.2.2
 
 patches:
   - patch: |-
@@ -35,6 +35,6 @@ generatorOptions:
   annotations:
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd.argoproj.io/sync-options: Replace=true
-    k8s-sidecar-target-directory: /tmp/dashboards/argocd
+    grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/argocd
   labels:
     grafana_dashboard: "1"

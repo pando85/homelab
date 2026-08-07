@@ -1,0 +1,106 @@
+mode: deployment
+replicaCount: 1
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+  tag: 0.158.0
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+config:
+  receivers:
+    # Disable unused receivers (chart defaults include jaeger, zipkin)
+    jaeger: null
+    zipkin: null
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+
+  processors:
+    # Transform nginx SERVER spans to CLIENT spans to fix service graph
+    transform/nginx:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - set(span.kind.string, "Client") where resource.attributes["service.name"] == "nginx-external"
+
+    # Tail-based sampling: keep errors and slow traces, sample 10% of normal traffic
+    tail_sampling:
+      policies:
+        - name: errors-policy
+          type: status_code
+          status_code: {status_codes: [ERROR]}
+        - name: latency-policy
+          type: latency
+          latency: {threshold_ms: 5000}
+        - name: default-policy
+          type: probabilistic
+          probabilistic: {sampling_percentage: 10}
+
+    # Batch spans before exporting to reduce load on Tempo
+    batch:
+      send_batch_size: 1000
+      timeout: 5s
+
+  exporters:
+    otlp/tempo:
+      endpoint: tempo.tempo:4317
+      tls:
+        insecure: true
+      retry_on_failure:
+        enabled: true
+        initial_interval: 5s
+        max_interval: 30s
+        max_elapsed_time: 300s
+      sending_queue:
+        enabled: true
+        num_consumers: 10
+        queue_size: 1000
+
+  service:
+    telemetry:
+      logs:
+        level: error
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [transform/nginx, tail_sampling, batch]
+        exporters: [otlp/tempo]
+
+service:
+  type: ClusterIP
+
+# Port configuration (top-level, not under service)
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+    appProtocol: grpc
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+    appProtocol: grpc
+  # Disable unused receiver ports
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false

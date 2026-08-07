@@ -6,7 +6,7 @@ metadata:
     grafana_datasource: "1"
   namespace: monitoring
 data:
-  datasource.yaml: |-
+  long-term-prometheus-datasource.yaml: |-
     apiVersion: 1
     datasources:
     - name: Prometheus long term

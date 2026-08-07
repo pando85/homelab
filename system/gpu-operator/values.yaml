@@ -16,6 +16,10 @@ devicePlugin:
 
 dcgmExporter:
   enabled: true
+  serviceMonitor:
+    enabled: true
+    additionalLabels:
+      release: monitoring
 
 gfd:
   enabled: true

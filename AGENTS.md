@@ -95,6 +95,16 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 
 - Forgetting `helm dependency build` after updating `Chart.yaml`
 - Missing Renovate hints causes images to not auto-update
+- Grafana dashboard sidecar only honors `grafana.grafana.com/dashboards.target-directory`, not
+  `k8s-sidecar-target-directory` — using the latter silently drops the dashboard at the root
+  folder. See `docs/troubleshooting/grafana-sidecar-folder-annotation.md`
+- Grafana datasource sidecar writes ConfigMap data keys as filenames — if two ConfigMaps use the
+  same data key (e.g., `datasource.yaml`), they collide (last-writer-wins) and cause continuous
+  reload churn. Use unique keys per ConfigMap (e.g., `loki-datasource.yaml`,
+  `tempo-datasource.yaml`). See `docs/troubleshooting/grafana-datasource-sidecar-collision.md`
+- Grafana 13.1.1 strips the `url` field from Loki `derivedFields` during provisioning, even with
+  `$$` escaping. Workaround: manually set the URL in the Grafana UI. See
+  `docs/troubleshooting/grafana-13-derivedfields-url-stripped.md`
 - Introducing CRDs without `--include-crds` in helm template
 - Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources
 - Forgetting `Prune=false` on PVCs causes data loss on sync
@@ -151,6 +161,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - ESIOS API (`api.esios.ree.es`) returns ZIP archives with `Content-Type: text/html` instead of
   JSON for `/archives/70/download_json`, breaking `pvpc_updated` integration. Workaround: patch
   `pvpc_data.py` to handle ZIP format. See `docs/troubleshooting/pvpc-updated-esios-api-zip-response.md`
+- qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
+  in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)
+  and increase startup probe timeout. See `docs/troubleshooting/qbittorrent-hdd-io-saturation.md`
 
 ## Subsystem Docs
 

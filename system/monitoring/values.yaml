@@ -112,6 +112,50 @@ grafana:
         grafana.grafana.com/dashboards.target-directory: "/tmp/dashboards/kubernetes"
       searchNamespace: ALL
 
+  extraContainers:
+    - name: fix-derived-fields
+      image: curlimages/curl:latest
+      command:
+        - /bin/sh
+        - -c
+        - |
+          # Wait for Grafana to be ready
+          until curl -sf http://localhost:3000/api/health; do
+            sleep 2
+          done
+          sleep 10  # Wait for provisioning to complete
+
+          # Get admin credentials from environment
+          GRAFANA_USER=$GF_SECURITY_ADMIN_USER
+          GRAFANA_PASS=$GF_SECURITY_ADMIN_PASSWORD
+
+          # Fetch current datasource
+          LOKI_DS=$(curl -sf -u "$GRAFANA_USER:$GRAFANA_PASS" http://localhost:3000/api/datasources/uid/loki)
+
+          # Patch derivedFields URLs
+          PATCHED_DS=$(echo "$LOKI_DS" | jq '.jsonData.derivedFields |= map(if .name == "traceId" or .name == "trace_id" then .url = "http://tempo.tempo:3200/trace/${__value.raw}" else . end)')
+
+          # Update datasource
+          curl -sf -X PUT -u "$GRAFANA_USER:$GRAFANA_PASS" \
+            -H "Content-Type: application/json" \
+            -d "$PATCHED_DS" \
+            http://localhost:3000/api/datasources/uid/loki
+
+          # Keep container alive
+          sleep infinity
+      env:
+        - name: GF_SECURITY_ADMIN_USER
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: username
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-admin-secret
+              key: password
+  extraVolumes: []
+
   envFromSecret: grafana-kanidm-oauth2-credentials
 
   grafana.ini:
@@ -197,6 +241,8 @@ prometheus:
     replicas: 1
     retentionSize: 100GB
     retention: 240d
+    additionalArgs:
+      - name: web.enable-remote-write-receiver
     resources:
       requests:
         cpu: 1

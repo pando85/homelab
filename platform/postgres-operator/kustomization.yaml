@@ -10,7 +10,7 @@ helmGlobals:
 helmCharts:
   - name: postgres-operator
     repo: https://opensource.zalando.com/postgres-operator/charts/postgres-operator/
-    version: 1.15.1
+    version: 2.0.1
     includeCRDs: true
     releaseName: postgres-operator
     namespace: postgres-operator
@@ -26,6 +26,6 @@ generatorOptions:
   annotations:
     argocd.argoproj.io/compare-options: IgnoreExtraneous
     argocd.argoproj.io/sync-options: Replace=true
-    k8s-sidecar-target-directory: /tmp/dashboards/postgres
+    grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/postgres
   labels:
     grafana_dashboard: "1"

@@ -4,6 +4,7 @@ namespace: loki
 
 resources:
   - resources/configmap-grafana-datasource-loki.yaml
+  - resources/ingress.yaml
   - resources/prometheus-rules-alerts.yaml
   - resources/prometheus-rules-rules.yaml
   - resources/prometheus-rules-vector-alerts.yaml
@@ -16,7 +17,7 @@ helmCharts:
     releaseName: loki
     repo: https://grafana-community.github.io/helm-charts
     valuesFile: values.yaml
-    version: 18.5.4
+    version: 18.7.1
   - name: vector
     repo: https://helm.vector.dev
     version: 0.57.0

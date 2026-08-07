@@ -1,0 +1,11 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: hermes-2-zfs-backups
+spec:
+  retention:
+    maxCount: 5
+  schedule: "0 1 * * *" # UTC
+  claimSelector:
+    matchLabels:
+      backup: hermes-2-zfs
