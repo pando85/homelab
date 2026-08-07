@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+    external-dns.alpha.kubernetes.io/enabled: "true"
+  name: loki
+spec:
+  ingressClassName: nginx-internal
+  rules:
+    - host: loki.internal.grigri.cloud
+      http:
+        paths:
+          - backend:
+              service:
+                name: loki
+                port:
+                  number: 3100
+            path: /
+            pathType: ImplementationSpecific
+  tls:
+    - hosts:
+        - loki.internal.grigri.cloud
+      secretName: loki-general-tls
