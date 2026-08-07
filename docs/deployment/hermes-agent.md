@@ -134,9 +134,13 @@ spec:
 
 **Note**: No `kanidm-group.yaml` — all instances share the existing `hermes-users` group.
 
-### 7. Create `templates/rbac.yaml`
+### 7. Create `templates/rbac.yaml` (Optional)
 
-Copy from an existing instance and update:
+**Only needed if the agent requires internal cluster access** (e.g., exec into other pods).
+
+If the agent only needs external access (Telegram, web dashboard), skip this file entirely.
+
+If needed, copy from an existing instance and update:
 
 - Role names: `hermes-agent-*` → `hermes-N-agent-*` (must be unique per instance to avoid ArgoCD shared resource conflicts)
 - RoleBinding names: `hermes-agent-*` → `hermes-N-agent-*`
@@ -163,47 +167,102 @@ git push
 
 ## Post-Deployment Configuration
 
-After ArgoCD syncs and the pod is running:
+After ArgoCD syncs and the pod is running, configure the agent by copying files to the PVC.
 
-### Configure Inference Provider
+### Configuration Files (on PVC)
 
-```bash
-kubectl --context=grigri exec -n hermes-N hermes-N-0 -- /opt/hermes/.venv/bin/hermes
-```
+All runtime configuration is stored on the PVC at `/opt/data/`:
 
-Edit `/opt/data/config.yaml`:
+| File | Purpose |
+|------|---------|
+| `config.yaml` | Main config: model, skills, plugins, dashboard settings |
+| `auth.json` | API credentials for inference providers |
+| `.env` | Environment variables: Telegram bot token, allowed users |
 
-```yaml
-model:
-  default: balanced
-  provider: custom
-  base_url: https://isidoro.grigri.cloud/v1
+**Important**: These files are NOT managed by GitOps. Copy them from an existing instance or create new ones.
 
-custom_providers:
-  - name: isidoro
-    base_url: https://isidoro.grigri.cloud/v1
-```
-
-API key goes in `/opt/data/auth.json` under pool key `custom:isidoro`.
-
-### Enable Skills/Plugins
-
-Edit `/opt/data/config.yaml`:
-
-```yaml
-plugins:
-  enabled:
-    - plugin-name
-
-skills:
-  disabled: []  # Remove from disabled = enabled
-```
-
-### Connect Messaging Channels
+### Copy Configuration from Existing Instance
 
 ```bash
-kubectl --context=grigri exec -n hermes-N hermes-N-0 -- /opt/hermes/.venv/bin/hermes gateway add
+# Copy config files from hermes to hermes-N
+kubectl --context=grigri exec -n hermes hermes-0 -- cat /opt/data/config.yaml > /tmp/config.yaml
+kubectl --context=grigri exec -n hermes hermes-0 -- cat /opt/data/auth.json > /tmp/auth.json
+kubectl --context=grigri exec -n hermes hermes-0 -- cat /opt/data/.env > /tmp/.env
+
+# Update instance-specific values in config.yaml:
+# - dashboard.public_url: https://hermes-N.internal.grigri.cloud
+# - dashboard.oauth.self-hosted.issuer: https://idm.grigri.cloud/oauth2/openid/hermes-N
+
+# Copy to new instance
+kubectl --context=grigri cp /tmp/config.yaml hermes-N/hermes-N-0:/opt/data/config.yaml
+kubectl --context=grigri cp /tmp/auth.json hermes-N/hermes-N-0:/opt/data/auth.json
+kubectl --context=grigri cp /tmp/.env hermes-N/hermes-N-0:/opt/data/.env
 ```
+
+### Configure Telegram
+
+Edit `/opt/data/.env` on the PVC:
+
+```bash
+# Telegram Bot Token (from @BotFather)
+TELEGRAM_BOT_TOKEN=<bot-token-from-botfather>
+
+# Comma-separated list of allowed user IDs
+TELEGRAM_ALLOWED_USERS=<user-id-1>,<user-id-2>
+
+# Default chat for cron delivery
+TELEGRAM_HOME_CHANNEL=<user-id-1>
+```
+
+**Getting Telegram User IDs**: Users must send a message to the bot first, then check updates:
+
+```bash
+curl -s "https://api.telegram.org/bot<TOKEN>/getUpdates" | jq '.result[].message.from'
+```
+
+### Restart Gateway
+
+After configuration changes, restart the gateway:
+
+```bash
+kubectl --context=grigri exec -n hermes-N hermes-N-0 -- pkill -f "hermes gateway"
+# s6-overlay will auto-restart the gateway
+```
+
+### Verify Configuration
+
+```bash
+# Check gateway status
+kubectl --context=grigri exec -n hermes-N hermes-N-0 -- /opt/hermes/.venv/bin/hermes gateway status
+
+# Check config
+kubectl --context=grigri exec -n hermes-N hermes-N-0 -- /opt/hermes/.venv/bin/hermes config show
+
+# Check logs
+kubectl --context=grigri logs -n hermes-N hermes-N-0 --tail=50
+```
+
+## Common Pitfalls
+
+### ArgoCD Shared Resource Conflicts
+
+If RBAC Roles have the same name across instances (e.g., `hermes-agent-radarr` in both `hermes` and `hermes-2`), ArgoCD reports `SharedResourceWarning` and the app stays `OutOfSync`. **Solution**: Use unique Role names per instance (`hermes-N-agent-*`).
+
+### Dashboard Refuses to Bind (No Auth Provider)
+
+Dashboard logs `Refusing to bind dashboard to 0.0.0.0` and ingress returns 502. **Solution**: Ensure `HERMES_DASHBOARD_OIDC_ISSUER` is set and the Kanidm OAuth2 client is registered with the correct origin and redirect URL.
+
+### Kanidm Rejects Redirect URI
+
+Login redirects to Kanidm but shows an error. **Solution**: Set `HERMES_DASHBOARD_PUBLIC_URL` to the exact external URL (with `https://`). Kanidm requires an exact match.
+
+### Telegram Bot Not Responding
+
+Gateway logs show `No messaging platforms enabled`. **Solution**: Ensure `.env` file has `TELEGRAM_BOT_TOKEN` set and the file is readable by the hermes user. Restart the gateway after changes.
+
+### OIDC Issuer Must Be Unique
+
+Each instance needs its own Kanidm OAuth2 client with a unique issuer URL (`openid/hermes-N`). Sharing the same issuer across instances causes redirect conflicts.
 
 ## Checklist
 
