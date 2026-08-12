@@ -181,6 +181,11 @@ All runtime configuration is stored on the PVC at `/opt/data/`:
 
 **Important**: These files are NOT managed by GitOps. Copy them from an existing instance or create new ones.
 
+Standalone CLI tools and their runtime credentials must also be placed under `/opt/data`; files
+installed into the container root filesystem disappear when the pod is recreated. See
+[Persistent CLI Tools in Hermes](../troubleshooting/hermes-persistent-cli-tools.md) for the `fj`
+installation and authentication pattern.
+
 ### Copy Configuration from Existing Instance
 
 ```bash
@@ -274,6 +279,7 @@ Each instance needs its own Kanidm OAuth2 client with a unique issuer URL (`open
 - [ ] Inference provider configured
 - [ ] Required skills/plugins enabled
 - [ ] Messaging channels connected (if needed)
+- [ ] Required standalone CLI tools and their configuration are stored under `/opt/data`
 
 ## Useful Commands
 

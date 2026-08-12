@@ -150,6 +150,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   `memories/`, or `skills/` from another instance — this overwrites the target's unique identity.
   Only copy `auth.json` if needed. Recovery requires ZFS snapshot rollback.
   See `docs/troubleshooting/hermes-config-overwrite-recovery.md`
+- Hermes standalone tools and their configuration must live under the `/opt/data` PVC; installs in
+  the container root filesystem or `/root` disappear on pod recreation. For `fj`, use a persistent
+  XDG data wrapper. See `docs/troubleshooting/hermes-persistent-cli-tools.md`
 - tc-limiter hostPath mounts need `mountPropagation: HostToContainer` — otherwise Cilium socket
   goes stale after restart and rate limiting silently stops working.
   See `docs/troubleshooting/bandwidth-limiting.md`

@@ -120,6 +120,13 @@ API key stored in `/opt/data/auth.json` under pool key `custom:isidoro`.
 - **Skills** are controlled by `skills.disabled` list. Removed from disabled = enabled.
 - Changes to `/opt/data/config.yaml` survive pod restarts (PVC) but are not GitOps-managed.
 
+## Persistent CLI Tools
+
+The container root filesystem is ephemeral. Install standalone tools and their configuration on
+the `/opt/data` PVC instead of `/usr/local/bin` or `/root`. See
+[Persistent CLI Tools in Hermes](hermes-persistent-cli-tools.md) for the persistent `fj` layout,
+token scopes, and verification steps.
+
 ## Useful Commands
 
 ```bash
