@@ -146,6 +146,10 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
   See `docs/troubleshooting/nvidia-driver-version-mismatch.md`
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
+- Hermes instance config overwrite: when deploying a new Hermes instance, never copy `config.yaml`,
+  `memories/`, or `skills/` from another instance — this overwrites the target's unique identity.
+  Only copy `auth.json` if needed. Recovery requires ZFS snapshot rollback.
+  See `docs/troubleshooting/hermes-config-overwrite-recovery.md`
 - tc-limiter hostPath mounts need `mountPropagation: HostToContainer` — otherwise Cilium socket
   goes stale after restart and rate limiting silently stops working.
   See `docs/troubleshooting/bandwidth-limiting.md`

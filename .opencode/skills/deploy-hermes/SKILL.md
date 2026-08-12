@@ -67,23 +67,26 @@ Wait for ArgoCD sync (check with `kubectl --context=grigri get application herme
 
 ### 5. Post-Deployment Configuration
 
-Copy configuration files from existing instance:
+**IMPORTANT: Do NOT copy `config.yaml` from another instance** — this overwrites the new instance's
+unique identity. Only copy `auth.json` if you need to share API credentials.
 
 ```bash
-# Copy from hermes to new instance
-kubectl --context=grigri exec -n hermes hermes-0 -- cat /opt/data/config.yaml > /tmp/config.yaml
+# Only copy auth.json if needed (API credentials)
 kubectl --context=grigri exec -n hermes hermes-0 -- cat /opt/data/auth.json > /tmp/auth.json
-kubectl --context=grigri exec -n hermes hermes-0 -- cat /opt/data/.env > /tmp/.env
-
-# Update instance-specific values in config.yaml:
-# - dashboard.public_url
-# - dashboard.oauth.self-hosted.issuer
-
-# Copy to new instance
-kubectl --context=grigri cp /tmp/config.yaml hermes-N/hermes-N-0:/opt/data/config.yaml
 kubectl --context=grigri cp /tmp/auth.json hermes-N/hermes-N-0:/opt/data/auth.json
-kubectl --context=grigri cp /tmp/.env hermes-N/hermes-N-0:/opt/data/.env
 ```
+
+The `config.yaml` will be auto-generated with defaults when the gateway starts. Edit it to
+configure the model, dashboard URL, and OAuth issuer:
+
+```bash
+# Edit config.yaml to set instance-specific values
+kubectl --context=grigri exec -n hermes-N hermes-N-0 -- vi /opt/data/config.yaml
+```
+
+Required settings in `config.yaml`:
+- `dashboard.public_url`: `https://hermes-N.internal.grigri.cloud`
+- `dashboard.oauth.self-hosted.issuer`: `https://idm.grigri.cloud/oauth2/openid/hermes-N`
 
 ### 6. Configure Telegram
 
@@ -138,15 +141,24 @@ file is readable. Restart gateway after changes.
 Each instance needs its own Kanidm OAuth2 client with unique issuer (`openid/hermes-N`). Sharing
 causes redirect conflicts.
 
+### Config Overwrite Warning
+
+**NEVER copy `config.yaml`, `memories/`, or `skills/` from another instance** — this overwrites
+the target's unique identity (personalities, MCPs, memories). Only copy `auth.json` if needed.
+If you accidentally overwrite, recovery requires ZFS snapshot rollback.
+See `docs/troubleshooting/hermes-config-overwrite-recovery.md`
+
 ## Configuration Files (on PVC)
 
-| File | Purpose |
-|------|---------|
-| `/opt/data/config.yaml` | Model, skills, plugins, dashboard settings |
-| `/opt/data/auth.json` | API credentials for inference providers |
-| `/opt/data/.env` | Environment variables (Telegram token, allowed users) |
+| File | Purpose | Copy from other instance? |
+|------|---------|---------------------------|
+| `/opt/data/config.yaml` | Model, skills, plugins, dashboard settings | **NO** — has unique identity |
+| `/opt/data/auth.json` | API credentials for inference providers | YES — if needed |
+| `/opt/data/.env` | Environment variables (Telegram token, allowed users) | **NO** — create fresh |
+| `/opt/data/memories/` | Instance memories and knowledge | **NO** — unique to instance |
+| `/opt/data/skills/` | Instance-specific skills and MCPs | **NO** — unique to instance |
 
-These are NOT managed by GitOps. Copy from existing instance or create new.
+These are NOT managed by GitOps. Create new config for each instance.
 
 ## Verification Checklist
 
