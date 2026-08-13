@@ -1,0 +1,26 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: hermes-4
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+
+  displayname: hermes-4
+
+  origin: https://hermes-4.internal.grigri.cloud/
+
+  redirectUrl:
+    - https://hermes-4.internal.grigri.cloud/auth/callback
+
+  scopeMap:
+    - group: hermes-users
+      scopes:
+        - openid
+        - profile
+        - email
+
+  preferShortUsername: true
+  strictRedirectUrl: true
