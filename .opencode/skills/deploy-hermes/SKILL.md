@@ -148,6 +148,17 @@ the target's unique identity (personalities, MCPs, memories). Only copy `auth.js
 If you accidentally overwrite, recovery requires ZFS snapshot rollback.
 See `docs/troubleshooting/hermes-config-overwrite-recovery.md`
 
+### Authentication Issues (401 Errors)
+
+If the instance fails with HTTP 401 errors after configuration:
+1. **Don't manually edit `config.yaml`** — copy the entire working config from another instance
+2. **Ensure `auth.json` has `base_url`** populated for all credentials
+3. **Fix file permissions** — `auth.json` must be owned by `hermes:hermes` with `600` permissions
+4. **Delete `state.db`** to clear stale credential cache
+5. **Delete the pod** (don't just pkill) for a clean restart
+
+See `docs/troubleshooting/hermes-authentication-credential-issues.md`
+
 ## Configuration Files (on PVC)
 
 | File | Purpose | Copy from other instance? |

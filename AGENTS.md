@@ -153,6 +153,11 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - Hermes standalone tools and their configuration must live under the `/opt/data` PVC; installs in
   the container root filesystem or `/root` disappear on pod recreation. For `fj`, use a persistent
   XDG data wrapper. See `docs/troubleshooting/hermes-persistent-cli-tools.md`
+- Hermes auth failures (401 errors) after config edits: manual `config.yaml` edits drop required
+  fields, `auth.json` may have empty `base_url`, and `state.db` caches stale credentials. Fix:
+  copy working config from another instance, ensure `base_url` is set in auth.json, delete
+  `state.db`, and **delete the pod** (don't just pkill). See
+  `docs/troubleshooting/hermes-authentication-credential-issues.md`
 - tc-limiter hostPath mounts need `mountPropagation: HostToContainer` — otherwise Cilium socket
   goes stale after restart and rate limiting silently stops working.
   See `docs/troubleshooting/bandwidth-limiting.md`
