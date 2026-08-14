@@ -11,5 +11,7 @@ helmCharts:
     valuesFile: values.yaml
     version: 0.11.1
 
+# TODO: Remove patch-tmp-volume.yaml after kaniop chart supports custom volumes or
+# the image no longer requires /tmp writes (upstream issue pending)
 patches:
   - path: patch-tmp-volume.yaml
