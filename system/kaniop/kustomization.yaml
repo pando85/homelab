@@ -10,3 +10,6 @@ helmCharts:
     repo: oci://ghcr.io/pando85/helm-charts
     valuesFile: values.yaml
     version: 0.11.1
+
+patches:
+  - path: patch-tmp-volume.yaml
