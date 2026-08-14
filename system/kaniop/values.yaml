@@ -1,5 +1,7 @@
 image:
   repository: ghcr.io/pando85/kaniop
+  # renovate: datasource=docker depName=ghcr.io/pando85/kaniop
+  tag: "latest@sha256:921a27141a2789aee69519d94dd9f45bbae62e054ef74b4bb6cdeccf109ed636"
 
 logging:
   ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
@@ -41,6 +43,10 @@ metrics:
 
 webhook:
   enabled: true
+  image:
+    repository: ghcr.io/pando85/kaniop-webhook
+    # renovate: datasource=docker depName=ghcr.io/pando85/kaniop-webhook
+    tag: "latest@sha256:68fabf7b2e782cba8b72a1c930f00bead15520f7cea8c153118719af499975fb"
   logging:
     ## Log level defined by RUST_LOG environment variable. Example: info,kaniop=trace
     ## Ref: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/fmt/index.html#filtering-events-with-environment-variables
