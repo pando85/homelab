@@ -154,7 +154,6 @@ grafana:
             secretKeyRef:
               name: grafana-admin-secret
               key: password
-  extraVolumes: []
 
   envFromSecret: grafana-kanidm-oauth2-credentials
 
