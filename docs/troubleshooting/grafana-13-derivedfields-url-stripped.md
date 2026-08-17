@@ -101,6 +101,10 @@ extraContainers:
 
 ## Status
 
-**Workaround implemented** in `system/monitoring/values.yaml`. The sidecar container patches the Loki datasource after provisioning to set the correct `url` field for derivedFields.
+**Fixed in Grafana 13.1.3.** The `url` field in `derivedFields` is now preserved during provisioning. The workaround sidecar has been removed from `system/monitoring/values.yaml`.
 
-**Resolution:** Wait for Grafana to fix the provisioning bug in a future release, or manually configure the datasource in the Grafana UI (not recommended for GitOps).
+## Related issues
+
+- Grafana issue #63651: https://github.com/grafana/grafana/issues/63651
+- Grafana issue #63657: https://github.com/grafana/grafana/issues/63657
+- Similar issues reported with FluxCD, Kustomize, Helm, and Terraform doing variable substitution on `$`
