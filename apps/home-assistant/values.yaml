@@ -154,10 +154,14 @@ app-template:
             - --voice
             #- en_US-amy-medium
             - es_ES-sharvard-medium
+            - --use-cuda
           resources:
             requests:
               cpu: 15m
               memory: 150Mi
+              nvidia.com/gpu: 1
+            limits:
+              nvidia.com/gpu: 1
           probes:
             liveness:
               enabled: true
