@@ -3,5 +3,5 @@ name: special-web
 version: 0.0.0
 dependencies:
   - name: app-template
-    version: 5.0.1
+    version: 5.1.0
     repository: https://bjw-s-labs.github.io/helm-charts/
