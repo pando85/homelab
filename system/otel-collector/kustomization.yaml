@@ -5,7 +5,7 @@ namespace: otel-collector
 helmCharts:
   - name: opentelemetry-collector
     repo: https://open-telemetry.github.io/opentelemetry-helm-charts
-    version: 0.169.0
+    version: 0.170.0
     releaseName: otel-collector
     namespace: otel-collector
     valuesFile: values.yaml
