@@ -1,0 +1,6 @@
+livenessProbe:
+  timeoutSeconds: 5
+  failureThreshold: 6
+readinessProbe:
+  timeoutSeconds: 5
+  failureThreshold: 6

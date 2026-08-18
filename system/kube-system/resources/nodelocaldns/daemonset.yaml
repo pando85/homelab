@@ -53,9 +53,13 @@ spec:
                 fi
               }
               update_corefile
-              kubectl get endpointslices -n kube-system \
-                -l kubernetes.io/service-name=kube-dns-upstream --watch -o name \
-                | while read -r _; do update_corefile; done
+              while true; do
+                kubectl get endpointslices -n kube-system \
+                  -l kubernetes.io/service-name=kube-dns-upstream --watch -o name \
+                  | while read -r _; do update_corefile; done
+                echo "$(date): watch connection closed, reconnecting..."
+                sleep 1
+              done
           volumeMounts:
             - name: template-volume
               mountPath: /etc/coredns-template
