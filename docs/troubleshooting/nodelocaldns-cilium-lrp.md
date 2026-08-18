@@ -115,3 +115,36 @@ The new setup uses `serviceMatcher` with kube-dns service:
 - Better failure mode: if LRP breaks, pods fall through to CoreDNS directly
 - Sidecar dynamically discovers CoreDNS pod IPs to avoid redirect loop
 - kubelet cluster-dns changed from 169.254.25.10 to 10.43.0.10 (requires Ansible)
+
+## Corefile-Watcher Sidecar Restarts (2026-08-18)
+
+**Symptom:** nodelocaldns pods show 2400+ restarts, but DNS is healthy (SERVFAIL rate = 0).
+
+**Root Cause:** The `corefile-watcher` sidecar runs `kubectl --watch` to monitor endpoint
+changes. The Kubernetes API server closes watch connections every ~30-50 minutes (normal
+behavior). When the pipe closes, the `while` loop exits, the script completes, and kubelet
+restarts the container. The actual `node-cache` container has only 4 restarts from node
+reboots.
+
+**Fix:** Wrap the watch loop in an infinite reconnect loop:
+
+```sh
+update_corefile
+while true; do
+  kubectl get endpointslices -n kube-system \
+    -l kubernetes.io/service-name=kube-dns-upstream --watch -o name \
+    | while read -r _; do update_corefile; done
+  echo "$(date): watch connection closed, reconnecting..."
+  sleep 1
+done
+```
+
+**Diagnosis:**
+```bash
+# Check which container is restarting
+kubectl --context=grigri get pod -n kube-system <nodelocaldns-pod> -o json | \
+  jq '.status.containerStatuses[] | {name, restartCount}'
+
+# Check sidecar logs — should show "watch connection closed, reconnecting..."
+kubectl --context=grigri logs -n kube-system <nodelocaldns-pod> -c corefile-watcher --tail=5
+```

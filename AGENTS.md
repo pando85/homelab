@@ -176,6 +176,9 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 - qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
   in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)
   and increase startup probe timeout. See `docs/troubleshooting/qbittorrent-hdd-io-saturation.md`
+- vault-operator chart template doesn't support `failureThreshold` in probe config — only
+  `timeoutSeconds`, `periodSeconds`, `successThreshold`, `initialDelaySeconds` are rendered.
+  See `docs/troubleshooting/vault-operator-probe-timeout.md`
 
 ## Subsystem Docs
 
