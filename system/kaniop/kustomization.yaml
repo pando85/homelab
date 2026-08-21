@@ -3,18 +3,10 @@ kind: Kustomization
 namespace: kaniop
 
 helmCharts:
-  - includeCRDs: true
+  - includeCRDs: false
     name: kaniop
     namespace: kaniop
     releaseName: kaniop
     repo: oci://ghcr.io/pando85/helm-charts
     valuesFile: values.yaml
     version: 0.12.0
-
-patches:
-  - target:
-      kind: CustomResourceDefinition
-    patch: |
-      - op: add
-        path: /metadata/annotations/argocd.argoproj.io~1sync-options
-        value: Replace=true
