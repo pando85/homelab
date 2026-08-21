@@ -1,0 +1,1 @@
+mkdocs-include-dir-to-nav==1.2.0
