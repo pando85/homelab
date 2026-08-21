@@ -1,0 +1,14 @@
+{{- if .Values.restore.enabled }}
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmRestore
+metadata:
+  name: {{ .Release.Name }}-restore
+spec:
+  restoreImage: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+  source:
+    local:
+      fileName: {{ .Values.restore.fileName | quote }}
+  targetRef:
+    name: kanidm
+    uid: {{ .Values.restore.targetUid | quote }}
+{{- end }}

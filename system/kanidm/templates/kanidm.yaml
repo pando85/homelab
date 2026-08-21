@@ -37,10 +37,10 @@ spec:
       value: "true"
     - name: KANIDM_DB_FS_TYPE
       value: "zfs"
-    - name: KANIDM_ONLINE_BACKUP_SCHEDULE
-      value: "00 2 * * *"
-    - name: KANIDM_ONLINE_BACKUP_VERSIONS
-      value: "1"
+
+  backup:
+    schedule: "00 2 * * *"
+    versions: 7
 
   oauth2ClientNamespaceSelector: {}
   groupNamespaceSelector: {}
