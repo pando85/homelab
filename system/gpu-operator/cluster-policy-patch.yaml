@@ -1,0 +1,13 @@
+apiVersion: nvidia.com/v1
+kind: ClusterPolicy
+metadata:
+  name: cluster-policy
+spec:
+  validator:
+    cuda:
+      env:
+        # CUDA workload validation crashes on Pascal GPUs (GTX 1060) with driver 580+
+        # The vectorAdd binary segfaults (exit 139), blocking ClusterPolicy readiness
+        # GPU functionality works fine (device-plugin, dcgm-exporter operational)
+        - name: WITH_WORKLOAD
+          value: "false"

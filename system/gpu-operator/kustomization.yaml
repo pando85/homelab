@@ -15,6 +15,9 @@ helmCharts:
     includeCRDs: true
     valuesFile: values.yaml
 
+patches:
+  - path: cluster-policy-patch.yaml
+
 configMapGenerator:
   - name: dcgm-exporter-dashboard
     files:
