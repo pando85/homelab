@@ -151,7 +151,7 @@ app-template:
         redis:
           image:
             repository: redis
-            tag: 8.10.0
+            tag: 8.10.1
 
           command:
             - sh
