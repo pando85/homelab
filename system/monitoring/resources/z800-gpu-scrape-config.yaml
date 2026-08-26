@@ -20,3 +20,6 @@ spec:
     - replacement: nvidia-dcgm-exporter
       targetLabel: job
       action: replace
+    - replacement: z800
+      targetLabel: hostname
+      action: replace

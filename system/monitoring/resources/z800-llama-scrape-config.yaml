@@ -21,3 +21,6 @@ spec:
     - replacement: llama-server
       targetLabel: job
       action: replace
+    - replacement: z800
+      targetLabel: hostname
+      action: replace
