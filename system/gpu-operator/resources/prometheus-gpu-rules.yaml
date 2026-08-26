@@ -13,7 +13,7 @@ spec:
           expr: |
             kube_node_status_capacity{resource="nvidia_com_gpu", node="prusik"} > 0
             unless on (node)
-            label_replace(count by (Hostname) (DCGM_FI_DEV_GPU_TEMP), "node", "$1", "Hostname", "(.+)")
+            label_replace(count by (hostname) (DCGM_FI_DEV_GPU_TEMP), "node", "$1", "hostname", "(.+)")
           for: 15m
           labels:
             severity: warning
@@ -30,9 +30,9 @@ spec:
             severity: warning
           annotations:
             description:
-              GPU {{$labels.gpu}} on node {{$labels.Hostname}} is at {{$value}}C
+              GPU {{$labels.gpu}} on node {{$labels.hostname}} is at {{$value}}C
               for more than 10 minutes
-            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} is at {{$value}}C
+            message: GPU {{$labels.gpu}} on {{$labels.hostname}} is at {{$value}}C
             summary: GPU temperature is high
         - alert: GpuCriticalTemperature
           expr: DCGM_FI_DEV_GPU_TEMP > 95
@@ -41,9 +41,9 @@ spec:
             severity: critical
           annotations:
             description:
-              GPU {{$labels.gpu}} on node {{$labels.Hostname}} is at {{$value}}C
+              GPU {{$labels.gpu}} on node {{$labels.hostname}} is at {{$value}}C
               for more than 3 minutes - imminent thermal shutdown
-            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} is at {{$value}}C
+            message: GPU {{$labels.gpu}} on {{$labels.hostname}} is at {{$value}}C
             summary: GPU temperature is critical
         - alert: GpuXidError
           expr: DCGM_FI_DEV_XID_ERRORS > 0
@@ -52,9 +52,9 @@ spec:
             severity: warning
           annotations:
             description:
-              GPU {{$labels.gpu}} on node {{$labels.Hostname}} reports XID error
+              GPU {{$labels.gpu}} on node {{$labels.hostname}} reports XID error
               {{$value}} (hardware/driver error, see NVIDIA XID documentation)
-            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} reports XID error {{$value}}
+            message: GPU {{$labels.gpu}} on {{$labels.hostname}} reports XID error {{$value}}
             summary: GPU reports an XID error
         - alert: GpuSlotsMissing
           expr: kube_node_status_capacity{resource="nvidia_com_gpu", node="prusik"} < 8
@@ -80,10 +80,10 @@ spec:
             severity: warning
           annotations:
             description:
-              GPU {{$labels.gpu}} on node {{$labels.Hostname}} is throttling clocks
+              GPU {{$labels.gpu}} on node {{$labels.hostname}} is throttling clocks
               due to hardware slowdown, thermal or power brake (throttle reasons
               bitmask, idle/app-clocks/sw-power-cap excluded)
-            message: GPU {{$labels.gpu}} on {{$labels.Hostname}} is throttling
+            message: GPU {{$labels.gpu}} on {{$labels.hostname}} is throttling
             summary: GPU is thermal/power throttling
         - alert: GpuPodPending
           expr: |
