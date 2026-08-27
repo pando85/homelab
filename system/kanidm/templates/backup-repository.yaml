@@ -6,8 +6,7 @@ spec:
   s3:
     bucket: kaniop
     prefix: kanidm
-    endpoint: http://minio.minio.svc:9000
-    forcePathStyle: true
+    endpoint: https://s3.internal.grigri.cloud
   authentication:
     reader:
       secretRef:
