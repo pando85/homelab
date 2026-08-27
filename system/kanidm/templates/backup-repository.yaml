@@ -1,0 +1,20 @@
+apiVersion: kaniop.rs/v1alpha1
+kind: KanidmBackupRepository
+metadata:
+  name: kanidm
+spec:
+  s3:
+    bucket: kaniop
+    prefix: kanidm
+    endpoint: http://minio.minio.svc:9000
+    forcePathStyle: true
+  authentication:
+    reader:
+      secretRef:
+        name: kanidm-backup-s3
+    writer:
+      secretRef:
+        name: kanidm-backup-s3
+    deleter:
+      secretRef:
+        name: kanidm-backup-s3

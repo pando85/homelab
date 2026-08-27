@@ -58,11 +58,34 @@ minio:
     requests:
       memory: 2Gi
 
+  policies:
+    - name: kaniopBackupPolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::kaniop/*'
+          actions:
+            - "s3:AbortMultipartUpload"
+            - "s3:GetObject"
+            - "s3:DeleteObject"
+            - "s3:PutObject"
+            - "s3:ListMultipartUploadParts"
+        - resources:
+            - 'arn:aws:s3:::kaniop'
+          actions:
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
+            - "s3:ListBucketMultipartUploads"
+
   users:
     - accessKey: velero
       existingSecret: minio-users
       existingSecretKey: veleroPassword
       policy: readwrite
+    - accessKey: kaniop
+      existingSecret: minio-users
+      existingSecretKey: kaniopPassword
+      policy: kaniopBackupPolicy
     ## Username, password and policy to be assigned to the user
     ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
     ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
@@ -83,6 +106,11 @@ minio:
       # bucket [none|download|upload|public]
       policy: none
       # Purge if bucket exists already
+      purge: false
+      versioning: false
+      objectlocking: false
+    - name: kaniop
+      policy: none
       purge: false
       versioning: false
       objectlocking: false

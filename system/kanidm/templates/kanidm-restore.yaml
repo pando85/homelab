@@ -8,6 +8,9 @@ spec:
   source:
     local:
       fileName: {{ .Values.restore.fileName | quote }}
+  safetyBackup:
+    repositoryRef:
+      name: kanidm
   targetRef:
     name: kanidm
     uid: {{ .Values.restore.targetUid | quote }}
