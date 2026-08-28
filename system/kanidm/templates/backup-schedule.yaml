@@ -1,0 +1,16 @@
+apiVersion: kaniop.rs/v1alpha1
+kind: KanidmBackupSchedule
+metadata:
+  name: kanidm
+spec:
+  kanidmRef:
+    name: kanidm
+  repositoryRef:
+    name: kanidm
+  schedule: "*/5 * * * *"
+  timeZone: UTC
+  retention:
+    keepLast: 8
+    daily: 7
+    weekly: 4
+    monthly: 12
