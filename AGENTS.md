@@ -74,9 +74,14 @@ monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 
 - **NEVER run:** `make bootstrap`, `make metal`, `make dev`, `kubectl apply`,
   `helm install/upgrade`, `ansible-playbook`
+- **NEVER run:** `kubectl delete`, `kubectl edit`, `kubectl patch` on cluster resources
 - **ALWAYS:** Only suggest commands for user to run manually
+- **ALL cluster changes MUST go through GitOps:** commit/push to repo, let ArgoCD sync
 - **Metal node provisioning:** `cd metal && ANSIBLE_EXTRA_ARGS="-t k3s" make cluster`
   (user must run manually)
+
+**Why:** ArgoCD has `selfHeal: true` with real-time cluster watches. Any direct `kubectl` mutations
+will be detected and reverted almost instantly. The git repository is the single source of truth.
 
 ## Skill Usage
 
