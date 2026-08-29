@@ -7,7 +7,7 @@ spec:
     name: kanidm
   repositoryRef:
     name: kanidm
-  schedule: "0 3 * * *"
+  schedule: "*/5 * * * *"
   timeZone: UTC
   retention:
     keepLast: 8

@@ -39,7 +39,7 @@ spec:
       value: "zfs"
 
   backup:
-    schedule: "00 2 * * *"
+    schedule: "*/5 * * * *"
     versions: 7
 
   oauth2ClientNamespaceSelector: {}
