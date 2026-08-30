@@ -38,10 +38,6 @@ spec:
     - name: KANIDM_DB_FS_TYPE
       value: "zfs"
 
-  backup:
-    schedule: "*/5 * * * *"
-    versions: 7
-
   oauth2ClientNamespaceSelector: {}
   groupNamespaceSelector: {}
   personNamespaceSelector: {}
