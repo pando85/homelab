@@ -7,6 +7,7 @@ spec:
     bucket: kaniop
     prefix: kanidm
     endpoint: https://s3.internal.grigri.cloud
+    region: us-east-1
     forcePathStyle: true
   authentication:
     reader:
