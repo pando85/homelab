@@ -3,7 +3,7 @@ kind: Kanidm
 metadata:
   name: kanidm
   annotations:
-    argocd.argoproj.io/sync-options: ServerSideApply=true,DisableClientSideApplyMigration=true
+    argocd.argoproj.io/sync-options: ServerSideApply=true
 spec:
   domain: idm.grigri.cloud
   replicaGroups:
