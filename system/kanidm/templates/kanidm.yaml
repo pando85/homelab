@@ -2,6 +2,8 @@ apiVersion: kaniop.rs/v1beta1
 kind: Kanidm
 metadata:
   name: kanidm
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true,DisableClientSideApplyMigration=true
 spec:
   domain: idm.grigri.cloud
   replicaGroups:
