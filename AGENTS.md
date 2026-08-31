@@ -184,6 +184,11 @@ will be detected and reverted almost instantly. The git repository is the single
 - vault-operator chart template doesn't support `failureThreshold` in probe config — only
   `timeoutSeconds`, `periodSeconds`, `successThreshold`, `initialDelaySeconds` are rendered.
   See `docs/troubleshooting/vault-operator-probe-timeout.md`
+- Kaniop `KanidmBackupSchedule.spec.schedule` is immutable — changing schedule requires
+  delete/recreate. Discovery controller runs every 5 min and creates CRs for ALL S3 manifests
+  (1000 limit). Retention only deletes CRs, not orphaned S3 data. To clean up: delete schedule,
+  delete CRs, clean S3 with `mc rm --recursive --force --versions`, then recreate schedule.
+  See `docs/troubleshooting/kaniop-backup-system.md`
 
 ## Subsystem Docs
 
