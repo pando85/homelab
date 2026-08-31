@@ -1,4 +1,4 @@
-# renovate: datasource=docker depName=ghcr.io/searxng/searxng
+# renovate: datasource=docker depName=searxng/searxng
 controllers:
   searxng:
     annotations:
@@ -6,8 +6,8 @@ controllers:
     containers:
       app:
         image:
-          repository: ghcr.io/searxng/searxng
-          tag: 2025.7.19-b95a3e9
+          repository: docker.io/searxng/searxng
+          tag: 2026.8.29-d226b78bc
         env:
           SEARXNG_BASE_URL: https://searxng.internal.grigri.cloud/
           SEARXNG_SECRET:
