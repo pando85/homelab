@@ -7,7 +7,7 @@ controllers:
       app:
         image:
           repository: ghcr.io/searxng/searxng
-          tag: 2025.8.0
+          tag: 2025.7.19-b95a3e9
         env:
           SEARXNG_BASE_URL: https://searxng.internal.grigri.cloud/
           SEARXNG_SECRET:
