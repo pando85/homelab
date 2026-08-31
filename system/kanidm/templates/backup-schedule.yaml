@@ -2,6 +2,7 @@ apiVersion: kaniop.rs/v1alpha1
 kind: KanidmBackupSchedule
 metadata:
   name: kanidm
+  namespace: kanidm
 spec:
   kanidmRef:
     name: kanidm
