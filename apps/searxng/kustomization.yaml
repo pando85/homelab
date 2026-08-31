@@ -5,6 +5,7 @@ namespace: searxng
 resources:
   - resources/configmap.yaml
   - resources/external-secret.yaml
+  - resources/kanidm-group.yaml
 
 helmCharts:
   - name: app-template
