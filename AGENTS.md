@@ -189,6 +189,9 @@ will be detected and reverted almost instantly. The git repository is the single
   (1000 limit). Retention only deletes CRs, not orphaned S3 data. To clean up: delete schedule,
   delete CRs, clean S3 with `mc rm --recursive --force --versions`, then recreate schedule.
   See `docs/troubleshooting/kaniop-backup-system.md`
+- Kanidm restore requires `KanidmRestore` CR with matching `targetRef.uid`, pinned `restoreImage`,
+  and safety backup (or break-glass annotations). Restore job permission bug (#1005) causes failures.
+  See `docs/troubleshooting/kanidm-restore-procedure.md`
 
 ## Subsystem Docs
 
