@@ -36,9 +36,23 @@ Discovery controller scans S3 every 5 minutes and creates CRs for all manifests,
 ### Retention Only Works on CRs
 Retention controller applies policy to existing `KanidmBackup` CRs only. It does NOT delete orphaned S3 data (backups without CRs).
 
+### Deleting a Backup CR Deletes S3 Data
+
+`KanidmBackup` uses the `kanidmbackups.kaniop.rs/finalizer` finalizer. Normal CR deletion runs a data-mover deletion Job that removes the manifest and payload from S3.
+
+Never delete a copied or discovered backup CR merely to clean Kubernetes state. To preserve S3 data, remove the finalizer before deleting the CR:
+
+```bash
+kubectl --context=grigri patch kanidmbackup <name> -n <namespace> \
+  --type=merge -p '{"metadata":{"finalizers":null}}'
+kubectl --context=grigri delete kanidmbackup <name> -n <namespace>
+```
+
+Verify the S3 manifest and payload before and after cleanup.
+
 ### Cleanup Orphaned S3 Backups
 When S3 has orphaned backups that need removal:
 1. Delete `KanidmBackupSchedule` (stops discovery)
-2. Delete all `KanidmBackup` CRs
-3. Clean S3 with `mc rm --recursive --force --versions` (requires mc client)
+2. Clean S3 with an S3 client after confirming the exact backup prefix
+3. Remove matching stale CRs only after deciding whether their finalizers should run
 4. Recreate `KanidmBackupSchedule`
