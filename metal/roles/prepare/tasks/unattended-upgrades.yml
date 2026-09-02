@@ -19,6 +19,23 @@
     - unattended-upgrades | restart systemd service
     - unattended-upgrades | ignore armbian changes
 
+- name: unattended-upgrades | Create apt daily upgrade timer override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/apt-daily-upgrade.timer.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: unattended-upgrades | Configure apt daily upgrade window
+  ansible.builtin.copy:
+    src: apt-daily-upgrade-override.conf
+    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/override.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: unattended-upgrades | restart apt daily upgrade timer
+
 - name: unattended-upgrades | Start systemd service
   systemd:
     name: unattended-upgrades

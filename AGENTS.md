@@ -149,6 +149,9 @@ will be detected and reverted almost instantly. The git repository is the single
   the GPU Operator's containerized driver management, causing `Driver/library version mismatch`.
   Fix: `cd metal && ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare`
   See `docs/troubleshooting/nvidia-driver-version-mismatch.md`
+- Unattended-upgrades can restart k3s during backup windows, causing `PartiallyFailed` Velero backups.
+  Use a broad maintenance window (Mon + Wed–Sun 08:00–18:00) instead of blacklisting systemd packages.
+  See `docs/troubleshooting/velero-backup-failures.md`
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
 - Hermes instance config overwrite: when deploying a new Hermes instance, never copy `config.yaml`,

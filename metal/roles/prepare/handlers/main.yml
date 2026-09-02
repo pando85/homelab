@@ -38,6 +38,13 @@
     enabled: true
     state: restarted
 
+- name: unattended-upgrades | restart apt daily upgrade timer  # noqa: name[casing]
+  ansible.builtin.systemd_service:
+    name: apt-daily-upgrade.timer
+    daemon_reload: true
+    enabled: true
+    state: restarted
+
 - name: unattended-upgrades | ignore armbian changes  # noqa: name[casing]
   command: dpkg-divert --no-rename --add /etc/apt/apt.conf.d/02-armbian-periodic
   when:
