@@ -69,20 +69,6 @@ app-template:
 
     auth:
       containers:
-        init-db:
-          image:
-            repository: postgres
-            tag: "17"
-          command:
-            - sh
-            - -c
-            - |
-              PGPASSWORD=$(cat /run/secrets/postgres-auth/password) psql -h readest-postgres -U supabase_auth_admin -d readest -c "CREATE SCHEMA IF NOT EXISTS auth;"
-          volumeMounts:
-            - name: postgres-auth-secret
-              mountPath: /run/secrets/postgres-auth
-              readOnly: true
-        auth:
         auth:
           image:
             # renovate: datasource=docker depName=supabase/gotrue
@@ -260,7 +246,3 @@ app-template:
 
   defaultPodOptions:
     enableServiceLinks: false
-    volumes:
-      - name: postgres-auth-secret
-        secret:
-          secretName: supabase-auth-admin.readest-postgres.credentials.postgresql.acid.zalan.do
