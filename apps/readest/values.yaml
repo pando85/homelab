@@ -8,7 +8,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=ghcr.io/readest/readest
             repository: ghcr.io/readest/readest
-            tag: 0.9.20
+            tag: 0.12.6
           env:
             SUPABASE_URL: http://readest-kong:8000
             SUPABASE_PUBLIC_URL: https://readest.internal.grigri.cloud
@@ -130,7 +130,7 @@ app-template:
             GOTRUE_API_PORT: 9999
             API_EXTERNAL_URL: https://readest.internal.grigri.cloud
             GOTRUE_DB_DRIVER: postgres
-            GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:$(POSTGRES_PASSWORD)@readest-postgres:5432/readest
+            GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:$(SUPABASE_AUTH_ADMIN_PASSWORD)@readest-postgres:5432/readest
             GOTRUE_SITE_URL: https://readest.internal.grigri.cloud
             GOTRUE_URI_ALLOW_LIST: https://readest.internal.grigri.cloud/**
             GOTRUE_DISABLE_SIGNUP: "false"
@@ -158,10 +158,10 @@ app-template:
                   name: readest-kanidm-oauth2-credentials
                   key: CLIENT_SECRET
             GOTRUE_EXTERNAL_OIDC_URL: https://idm.grigri.cloud/oauth2/openid/readest
-            POSTGRES_PASSWORD:
+            SUPABASE_AUTH_ADMIN_PASSWORD:
               valueFrom:
                 secretKeyRef:
-                  name: readest.readest-postgres.credentials.postgresql.acid.zalan.do
+                  name: readest.readest-postgres.supabase_auth_admin.credentials.postgresql.acid.zalan.do
                   key: password
           probes:
             liveness: &authProbes
@@ -200,7 +200,7 @@ app-template:
             repository: postgrest/postgrest
             tag: v14.3
           env:
-            PGRST_DB_URI: postgres://authenticator:$(POSTGRES_PASSWORD)@readest-postgres:5432/readest
+            PGRST_DB_URI: postgres://authenticator:$(AUTHENTICATOR_PASSWORD)@readest-postgres:5432/readest
             PGRST_DB_SCHEMAS: public,graphql_public
             PGRST_DB_ANON_ROLE: anon
             PGRST_JWT_SECRET:
@@ -215,10 +215,10 @@ app-template:
                   name: readest-secrets
                   key: secret
             PGRST_APP_SETTINGS_JWT_EXP: "3600"
-            POSTGRES_PASSWORD:
+            AUTHENTICATOR_PASSWORD:
               valueFrom:
                 secretKeyRef:
-                  name: readest.readest-postgres.credentials.postgresql.acid.zalan.do
+                  name: readest.readest-postgres.authenticator.credentials.postgresql.acid.zalan.do
                   key: password
           probes:
             liveness: &restProbes

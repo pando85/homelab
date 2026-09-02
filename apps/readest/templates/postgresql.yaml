@@ -19,10 +19,14 @@ spec:
     readest:
       - superuser
       - createdb
-    supabase_auth_admin: []
-    authenticator: []
-    pgbouncer: []
-    supabase_storage_admin: []
+    supabase_auth_admin:
+      - superuser
+    authenticator:
+      - superuser
+    pgbouncer:
+      - superuser
+    supabase_storage_admin:
+      - superuser
   databases:
     readest: readest
   preparedDatabases:
