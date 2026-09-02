@@ -172,8 +172,7 @@ app-template:
               enabled: true
               custom: true
               spec:
-                httpGet:
-                  path: /
+                tcpSocket:
                   port: 3000
                 initialDelaySeconds: 0
                 periodSeconds: 10
@@ -184,8 +183,7 @@ app-template:
               enabled: true
               custom: true
               spec:
-                httpGet:
-                  path: /
+                tcpSocket:
                   port: 3000
                 failureThreshold: 30
                 periodSeconds: 10
