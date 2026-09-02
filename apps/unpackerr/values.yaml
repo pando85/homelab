@@ -5,7 +5,7 @@ app-template:
         unpackerr:
           image:
             repository: golift/unpackerr
-            tag: 0.15.2
+            tag: v0.16.1
 
           env:
             TZ: Europe/Madrid
