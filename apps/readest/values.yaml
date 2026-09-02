@@ -79,16 +79,11 @@ app-template:
             GOTRUE_API_PORT: 9999
             API_EXTERNAL_URL: https://readest.internal.grigri.cloud
             GOTRUE_DB_DRIVER: postgres
-            GOTRUE_DB_HOST: readest-postgres
-            GOTRUE_DB_PORT: 5432
-            GOTRUE_DB_USER: supabase_auth_admin
-            GOTRUE_DB_PASSWORD:
+            GOTRUE_DB_DATABASE_URL:
               valueFrom:
                 secretKeyRef:
-                  name: supabase-auth-admin.readest-postgres.credentials.postgresql.acid.zalan.do
-                  key: password
-            GOTRUE_DB_DATABASE_NAME: readest
-            GOTRUE_DB_SSL_MODE: require
+                  name: readest-db-urls
+                  key: auth_url
             GOTRUE_SITE_URL: https://readest.internal.grigri.cloud
             GOTRUE_URI_ALLOW_LIST: https://readest.internal.grigri.cloud/**
             GOTRUE_DISABLE_SIGNUP: "false"
@@ -153,7 +148,11 @@ app-template:
             repository: postgrest/postgrest
             tag: v14.3
           env:
-            PGRST_DB_URI: postgres://authenticator:$(AUTHENTICATOR_PASSWORD)@readest-postgres:5432/readest?sslmode=require
+            PGRST_DB_URI:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-db-urls
+                  key: rest_url
             PGRST_DB_SCHEMAS: public,graphql_public
             PGRST_DB_ANON_ROLE: anon
             PGRST_JWT_SECRET:
@@ -168,11 +167,6 @@ app-template:
                   name: readest-secrets
                   key: secret
             PGRST_APP_SETTINGS_JWT_EXP: "3600"
-            AUTHENTICATOR_PASSWORD:
-              valueFrom:
-                secretKeyRef:
-                  name: authenticator.readest-postgres.credentials.postgresql.acid.zalan.do
-                  key: password
           probes:
             liveness: &restProbes
               enabled: true
