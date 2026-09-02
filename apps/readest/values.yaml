@@ -1,0 +1,318 @@
+app-template:
+  controllers:
+    client:
+      labels:
+        backup/retain: weekly
+      containers:
+        client:
+          image:
+            # renovate: datasource=docker depName=ghcr.io/readest/readest
+            repository: ghcr.io/readest/readest
+            tag: 0.9.20
+          env:
+            SUPABASE_URL: http://readest-kong:8000
+            SUPABASE_PUBLIC_URL: https://readest.internal.grigri.cloud
+            SUPABASE_ANON_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: anon_key
+            SUPABASE_ADMIN_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: service_role_key
+            API_BASE_URL: https://readest.internal.grigri.cloud
+            S3_ENDPOINT: http://minio.minio.svc:9000
+            S3_PUBLIC_ENDPOINT: https://s3.internal.grigri.cloud
+            S3_REGION: us-east-1
+            S3_BUCKET_NAME: readest-files
+            S3_ACCESS_KEY_ID: readest
+            S3_SECRET_ACCESS_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: minio-users
+                  key: readestPassword
+            OBJECT_STORAGE_TYPE: s3
+            SELF_HOSTED: "true"
+            STORAGE_FIXED_QUOTA: "1073741824"
+            TRANSLATION_FIXED_QUOTA: "50000"
+            FONT_BASE_URL: ""
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /
+                  port: 3000
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /
+                  port: 3000
+                failureThreshold: 30
+                periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+
+    kong:
+      containers:
+        kong:
+          image:
+            # renovate: datasource=docker depName=kong
+            repository: kong
+            tag: 2.8.1
+          env:
+            KONG_DATABASE: "off"
+            KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
+            KONG_DNS_ORDER: LAST,A,CNAME
+            KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+            SUPABASE_ANON_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: anon_key
+            SUPABASE_SERVICE_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: service_role_key
+          probes:
+            liveness: &kongProbes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /status
+                  port: 8000
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *kongProbes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /status
+                  port: 8000
+                failureThreshold: 30
+                periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+
+    auth:
+      containers:
+        auth:
+          image:
+            # renovate: datasource=docker depName=supabase/gotrue
+            repository: supabase/gotrue
+            tag: v2.185.0
+          env:
+            GOTRUE_API_HOST: 0.0.0.0
+            GOTRUE_API_PORT: 9999
+            API_EXTERNAL_URL: https://readest.internal.grigri.cloud
+            GOTRUE_DB_DRIVER: postgres
+            GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:$(POSTGRES_PASSWORD)@readest-postgres:5432/readest
+            GOTRUE_SITE_URL: https://readest.internal.grigri.cloud
+            GOTRUE_URI_ALLOW_LIST: https://readest.internal.grigri.cloud/**
+            GOTRUE_DISABLE_SIGNUP: "false"
+            GOTRUE_JWT_ADMIN_ROLES: service_role
+            GOTRUE_JWT_AUD: authenticated
+            GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+            GOTRUE_JWT_EXP: 3600
+            GOTRUE_JWT_SECRET:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: secret
+            GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+            GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
+            GOTRUE_MAILER_AUTOCONFIRM: "true"
+            GOTRUE_EXTERNAL_OIDC_ENABLED: "true"
+            GOTRUE_EXTERNAL_OIDC_CLIENT_ID:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-kanidm-oauth2-credentials
+                  key: CLIENT_ID
+            GOTRUE_EXTERNAL_OIDC_SECRET:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-kanidm-oauth2-credentials
+                  key: CLIENT_SECRET
+            GOTRUE_EXTERNAL_OIDC_URL: https://idm.grigri.cloud/oauth2/openid/readest
+            POSTGRES_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: readest.readest-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+          probes:
+            liveness: &authProbes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 9999
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *authProbes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health
+                  port: 9999
+                failureThreshold: 30
+                periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+
+    rest:
+      containers:
+        rest:
+          image:
+            # renovate: datasource=docker depName=postgrest/postgrest
+            repository: postgrest/postgrest
+            tag: v14.3
+          env:
+            PGRST_DB_URI: postgres://authenticator:$(POSTGRES_PASSWORD)@readest-postgres:5432/readest
+            PGRST_DB_SCHEMAS: public,graphql_public
+            PGRST_DB_ANON_ROLE: anon
+            PGRST_JWT_SECRET:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: secret
+            PGRST_DB_USE_LEGACY_GUCS: "false"
+            PGRST_APP_SETTINGS_JWT_SECRET:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: secret
+            PGRST_APP_SETTINGS_JWT_EXP: "3600"
+            POSTGRES_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: readest.readest-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+          probes:
+            liveness: &restProbes
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /
+                  port: 3000
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 1
+                failureThreshold: 3
+            readiness: *restProbes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /
+                  port: 3000
+                failureThreshold: 30
+                periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+
+  service:
+    client:
+      controller: client
+      ports:
+        http:
+          port: 3000
+    kong:
+      controller: kong
+      ports:
+        http:
+          port: 8000
+    auth:
+      controller: auth
+      ports:
+        http:
+          port: 9999
+    rest:
+      controller: rest
+      ports:
+        http:
+          port: 3000
+
+  ingress:
+    readest:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      hosts:
+        - host: &host readest.internal.grigri.cloud
+          paths:
+            - path: /auth/v1
+              pathType: Prefix
+              service:
+                identifier: kong
+                port: http
+            - path: /rest/v1
+              pathType: Prefix
+              service:
+                identifier: kong
+                port: http
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: client
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: readest-tls-certificate
+
+  defaultPodOptions:
+    enableServiceLinks: false
+
+  persistence:
+    kong-config:
+      enabled: true
+      type: configMap
+      name: readest-kong-config
+      advancedMounts:
+        kong:
+          kong:
+            - path: /home/kong/kong.yml
+              subPath: kong.yml
+              readOnly: true

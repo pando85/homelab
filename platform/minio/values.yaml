@@ -76,6 +76,23 @@ minio:
             - "s3:GetBucketLocation"
             - "s3:ListBucket"
             - "s3:ListBucketMultipartUploads"
+    - name: readestPolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::readest-files/*'
+          actions:
+            - "s3:AbortMultipartUpload"
+            - "s3:GetObject"
+            - "s3:DeleteObject"
+            - "s3:PutObject"
+            - "s3:ListMultipartUploadParts"
+        - resources:
+            - 'arn:aws:s3:::readest-files'
+          actions:
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
+            - "s3:ListBucketMultipartUploads"
 
   users:
     - accessKey: velero
@@ -86,6 +103,10 @@ minio:
       existingSecret: minio-users
       existingSecretKey: kaniopPassword
       policy: kaniopBackupPolicy
+    - accessKey: readest
+      existingSecret: minio-users
+      existingSecretKey: readestPassword
+      policy: readestPolicy
     ## Username, password and policy to be assigned to the user
     ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
     ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
@@ -110,6 +131,11 @@ minio:
       versioning: false
       objectlocking: false
     - name: kaniop
+      policy: none
+      purge: false
+      versioning: false
+      objectlocking: false
+    - name: readest-files
       policy: none
       purge: false
       versioning: false

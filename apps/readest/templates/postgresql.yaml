@@ -1,0 +1,44 @@
+apiVersion: acid.zalan.do/v1
+kind: postgresql
+metadata:
+  name: readest-postgres
+  labels:
+    backup/retain: weekly
+spec:
+  teamId: readest
+  numberOfInstances: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  volume:
+    size: 5Gi
+  users:
+    readest:
+      - superuser
+      - createdb
+    supabase_auth_admin: []
+    authenticator: []
+    pgbouncer: []
+    supabase_storage_admin: []
+  databases:
+    readest: readest
+  preparedDatabases:
+    readest:
+      extensions:
+        pgcrypto: public
+  postgresql:
+    version: "17"
+    parameters:
+      archive_mode: "off"
+      max_connections: "25"
+      shared_buffers: 32MB
+      full_page_writes: "off"
+      log_checkpoints: "off"
+      log_connections: "off"
+      log_disconnections: "off"
+      log_lock_waits: "off"
+      log_min_duration_statement: "-1"
+      log_statement: none

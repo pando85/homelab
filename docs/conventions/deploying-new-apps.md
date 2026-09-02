@@ -232,11 +232,22 @@ Check the app's documentation for the exact callback URL format.
    - Reference: `<app>-kanidm-oauth2-credentials`
    - Keys: `CLIENT_ID`, `CLIENT_SECRET`
 
-**Vault path convention:** `/<app>/<secret-type>`
-- `/readest/jwt` (secret, anon_key, service_role_key)
-- `/immich/jwt` (secret)
-- `/nextcloud/admin` (username, password)
-- `/nextcloud/smtp` (username, password, host)
+**Vault path convention:**
+- **CLI access:** `secret/<app>/<secret-type>` (e.g., `secret/readest/jwt`, `secret/minio/users`)
+- **ExternalSecret reference:** `/<app>/<secret-type>` (without `secret/` prefix)
+- The ClusterSecretStore has `secret/` as the base path, so ExternalSecrets omit it
+
+**Examples:**
+- CLI: `vault kv get secret/minio/users` → ExternalSecret: `key: /minio/users`
+- CLI: `vault kv put secret/readest/jwt secret=...` → ExternalSecret: `key: /readest/jwt`
+- CLI: `vault kv patch secret/minio/users readestPassword=...` (add to existing secret)
+
+**Common paths:**
+- `secret/readest/jwt` (secret, anon_key, service_role_key)
+- `secret/immich/jwt` (secret)
+- `secret/minio/users` (rootUser, rootPassword, veleroPassword, kaniopPassword, readestPassword)
+- `secret/nextcloud/admin` (username, password)
+- `secret/nextcloud/smtp` (username, password, host)
 
 ### 2.6 Image Pinning
 

@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: readest-kong-config
+data:
+  kong.yml: |
+    _format_version: "2.1"
+    _transform: true
+
+    services:
+      - name: auth-service
+        url: http://readest-auth:9999
+        routes:
+          - name: auth-route
+            paths:
+              - /auth/v1/*
+            strip_path: false
+        plugins:
+          - name: cors
+            config:
+              origins:
+                - https://readest.internal.grigri.cloud
+              methods:
+                - GET
+                - POST
+                - PUT
+                - PATCH
+                - DELETE
+                - OPTIONS
+              headers:
+                - Accept
+                - Accept-Version
+                - Content-Length
+                - Content-MD5
+                - Content-Type
+                - Date
+                - X-Auth-Token
+                - apikey
+                - Authorization
+              exposed_headers:
+                - X-Kong-Upstream-Latency
+                - X-Kong-Proxy-Latency
+                - Server
+              credentials: true
+              max_age: 3600
+
+      - name: rest-service
+        url: http://readest-rest:3000
+        routes:
+          - name: rest-route
+            paths:
+              - /rest/v1/*
+            strip_path: false
+        plugins:
+          - name: cors
+            config:
+              origins:
+                - https://readest.internal.grigri.cloud
+              methods:
+                - GET
+                - POST
+                - PUT
+                - PATCH
+                - DELETE
+                - OPTIONS
+              headers:
+                - Accept
+                - Accept-Version
+                - Content-Length
+                - Content-MD5
+                - Content-Type
+                - Date
+                - X-Auth-Token
+                - apikey
+                - Authorization
+                - Prefer
+              exposed_headers:
+                - X-Kong-Upstream-Latency
+                - X-Kong-Proxy-Latency
+                - Server
+                - Content-Range
+                - Content-Location
+              credentials: true
+              max_age: 3600

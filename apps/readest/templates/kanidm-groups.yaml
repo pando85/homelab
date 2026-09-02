@@ -1,0 +1,8 @@
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: readest-users
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
