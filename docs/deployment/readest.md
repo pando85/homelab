@@ -41,13 +41,13 @@ No MinIO controller — uses shared `platform/minio/` instance.
 Readest's schema is tightly coupled to Supabase (uses `auth.users` FK, `auth.uid()` in RLS policies, Supabase roles). The solution:
 
 1. **Zalando CR** creates the database, base roles, and `pgcrypto` extension
-2. **Init container** runs Supabase bootstrap SQL on first start:
-   - `roles.sql` — creates `supabase_auth_admin`, `authenticator`, etc.
-   - `jwt.sql` — JWT functions
-   - `schema.sql` — base tables + RLS policies
-   - `apply-migrations.sh` — incremental migrations (001–022)
-3. Init container checks if `auth.users` table exists; skips if already bootstrapped
+2. **Manual schema setup** (required because Zalando doesn't auto-create Supabase schemas):
+   - Create `auth`, `storage`, `realtime`, `graphql_public` schemas
+   - Create enum types: `auth.factor_type`, `auth.code_challenge_method`, `auth.one_time_token_type`
+3. **GoTrue** runs migrations on first start to create tables in the `auth` schema
 4. SQL files mounted from ConfigMap (vendored from upstream Readest repo)
+
+**Note:** The manual schema setup is a one-time operation. If the database is recreated, these steps must be repeated.
 
 ### Zalando CR
 
@@ -252,7 +252,30 @@ The `anon_key` and `service_role_key` are HS256 JWTs signed with the JWT secret:
 7. `helm template --include-crds --namespace readest readest apps/readest/` to validate
 8. `helm lint apps/readest/`
 9. Commit and push — ArgoCD auto-syncs
-10. Verify pods, access `readest.grigri.cloud`
+10. **Manual database setup** (required for Supabase compatibility):
+    ```bash
+    # Create schemas
+    kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+      psql -U supabase_auth_admin -d readest -c \
+      "CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS storage; CREATE SCHEMA IF NOT EXISTS realtime; CREATE SCHEMA IF NOT EXISTS graphql_public;"
+    
+    # Create enum types required by GoTrue migrations
+    kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+      psql -U supabase_auth_admin -d readest -c \
+      "CREATE TYPE auth.factor_type AS ENUM ('totp', 'webauthn', 'phone');
+       CREATE TYPE auth.code_challenge_method AS ENUM ('s256', 'plain');
+       CREATE TYPE auth.one_time_token_type AS ENUM ('confirmation_token', 'reauthentication_token', 'recovery_token', 'email_change_token_new', 'email_change_token_current', 'email_change_verify');"
+    ```
+11. Store DB connection strings in Vault:
+    ```bash
+    export VAULT_ADDR=https://vault.internal.grigri.cloud
+    AUTH_PASSWORD=$(kubectl --context=grigri get secret -n readest supabase-auth-admin.readest-postgres.credentials.postgresql.acid.zalan.do -o jsonpath='{.data.password}' | base64 -d)
+    REST_PASSWORD=$(kubectl --context=grigri get secret -n readest authenticator.readest-postgres.credentials.postgresql.acid.zalan.do -o jsonpath='{.data.password}' | base64 -d)
+    AUTH_URL="postgres://supabase_auth_admin:${AUTH_PASSWORD}@readest-postgres:5432/readest?sslmode=require"
+    REST_URL="postgres://authenticator:${REST_PASSWORD}@readest-postgres:5432/readest?sslmode=require"
+    vault kv put secret/readest/db-urls auth_url="$AUTH_URL" rest_url="$REST_URL"
+    ```
+12. Verify pods, access `readest.internal.grigri.cloud`
 
 ## Key Configuration
 
