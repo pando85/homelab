@@ -20,7 +20,7 @@ helmCharts:
     version: 18.11.7
   - name: vector
     repo: https://helm.vector.dev
-    version: 0.57.0
+    version: 0.58.0
     releaseName: vector-agent
     namespace: loki
     includeCRDs: false
