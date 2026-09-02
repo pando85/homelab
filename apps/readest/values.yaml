@@ -79,7 +79,16 @@ app-template:
             GOTRUE_API_PORT: 9999
             API_EXTERNAL_URL: https://readest.internal.grigri.cloud
             GOTRUE_DB_DRIVER: postgres
-            GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:$(SUPABASE_AUTH_ADMIN_PASSWORD)@readest-postgres:5432/readest?sslmode=require
+            GOTRUE_DB_HOST: readest-postgres
+            GOTRUE_DB_PORT: 5432
+            GOTRUE_DB_USER: supabase_auth_admin
+            GOTRUE_DB_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: supabase-auth-admin.readest-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+            GOTRUE_DB_DATABASE_NAME: readest
+            GOTRUE_DB_SSL_MODE: require
             GOTRUE_SITE_URL: https://readest.internal.grigri.cloud
             GOTRUE_URI_ALLOW_LIST: https://readest.internal.grigri.cloud/**
             GOTRUE_DISABLE_SIGNUP: "false"
@@ -107,11 +116,6 @@ app-template:
                   name: readest-kanidm-oauth2-credentials
                   key: CLIENT_SECRET
             GOTRUE_EXTERNAL_OIDC_URL: https://idm.grigri.cloud/oauth2/openid/readest
-            SUPABASE_AUTH_ADMIN_PASSWORD:
-              valueFrom:
-                secretKeyRef:
-                  name: supabase-auth-admin.readest-postgres.credentials.postgresql.acid.zalan.do
-                  key: password
           probes:
             liveness: &authProbes
               enabled: true
