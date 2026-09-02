@@ -46,6 +46,17 @@ helm template --include-crds --namespace <namespace> <release-name> apps/<name>/
 helm lint apps/<name>/
 ```
 
+## Workflows
+
+**When deploying a new application or adding functionality to an existing app:**
+1. Read `docs/conventions/deploying-new-apps.md` — decision trees, patterns, and checklist
+2. Check existing deployments for reference patterns:
+   - Multi-controller apps: `apps/immich/`, `apps/readest/`
+   - OIDC integration: `apps/immich/templates/kanidm-oauth2-client.yaml`
+   - Zalando Postgres: `apps/immich/templates/postgresql.yaml`, `apps/dawarich/templates/postgresql.yaml`
+   - Shared MinIO: `platform/minio/values.yaml`
+3. Follow the validation commands above before committing
+
 ## Code Style
 
 - **YAML:** 2-space indent, `---` for multi-doc, yamllint via pre-commit (ignores `templates/`)
@@ -121,6 +132,10 @@ will be detected and reverted almost instantly. The git repository is the single
   every mount). `fsGroupChangePolicy: OnRootMismatch` doesn't help — kubelet resets setgid bit.
   If the app manages its own file ownership (runs as volume owner or has init chown), remove
   `fsGroup` entirely. See `docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md`
+- Apps with Supabase dependencies (auth schema, GoTrue, PostgREST) can use Zalando Postgres +
+  init container for bootstrap SQL. Don't deploy separate Supabase Postgres container unless
+  the app requires Supabase-specific extensions not in the Spilo image. See
+  `docs/deployment/readest.md` and `docs/conventions/deploying-new-apps.md`
 - High pod restart counts don't always mean problems — check `Last State.Reason` (exit 255 =
   node reboot, not app crash). See `docs/troubleshooting/cluster-hygiene.md`
 - Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
@@ -199,6 +214,8 @@ will be detected and reverted almost instantly. The git repository is the single
 ## Subsystem Docs
 
 - **Cilium networking:** See `docs/conventions/cilium.md` for BGP, TCX, bandwidth limiting details
+- **Deploying new apps:** See `docs/conventions/deploying-new-apps.md` for the decision-making
+  process, patterns, and checklist when adding a new application
 - **Documenting learnings:** See `docs/conventions/documenting-learnings.md` for when/how to write
   troubleshooting docs
 
