@@ -10,7 +10,7 @@ app-template:
             repository: ghcr.io/readest/readest
             tag: 0.12.6
           env:
-            SUPABASE_URL: http://readest-kong:8000
+            SUPABASE_URL: https://readest.internal.grigri.cloud
             SUPABASE_PUBLIC_URL: https://readest.internal.grigri.cloud
             SUPABASE_ANON_KEY:
               valueFrom:
@@ -66,57 +66,6 @@ app-template:
               memory: 256Mi
             limits:
               memory: 1Gi
-
-    kong:
-      containers:
-        kong:
-          image:
-            # renovate: datasource=docker depName=kong
-            repository: kong
-            tag: 2.8.1
-          env:
-            KONG_DATABASE: "off"
-            KONG_DECLARATIVE_CONFIG: /home/kong/kong.yml
-            KONG_DNS_ORDER: LAST,A,CNAME
-            KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
-            SUPABASE_ANON_KEY:
-              valueFrom:
-                secretKeyRef:
-                  name: readest-secrets
-                  key: anon_key
-            SUPABASE_SERVICE_KEY:
-              valueFrom:
-                secretKeyRef:
-                  name: readest-secrets
-                  key: service_role_key
-          probes:
-            liveness: &kongProbes
-              enabled: true
-              custom: true
-              spec:
-                httpGet:
-                  path: /status
-                  port: 8000
-                initialDelaySeconds: 0
-                periodSeconds: 10
-                timeoutSeconds: 1
-                failureThreshold: 3
-            readiness: *kongProbes
-            startup:
-              enabled: true
-              custom: true
-              spec:
-                httpGet:
-                  path: /status
-                  port: 8000
-                failureThreshold: 30
-                periodSeconds: 10
-          resources:
-            requests:
-              cpu: 10m
-              memory: 128Mi
-            limits:
-              memory: 256Mi
 
     auth:
       containers:
@@ -255,11 +204,6 @@ app-template:
       ports:
         http:
           port: 3000
-    kong:
-      controller: kong
-      ports:
-        http:
-          port: 8000
     auth:
       controller: auth
       ports:
@@ -285,12 +229,12 @@ app-template:
             - path: /auth/v1
               pathType: Prefix
               service:
-                identifier: kong
+                identifier: auth
                 port: http
             - path: /rest/v1
               pathType: Prefix
               service:
-                identifier: kong
+                identifier: rest
                 port: http
             - path: /
               pathType: Prefix
@@ -304,15 +248,3 @@ app-template:
 
   defaultPodOptions:
     enableServiceLinks: false
-
-  persistence:
-    kong-config:
-      enabled: true
-      type: configMap
-      name: readest-kong-config
-      advancedMounts:
-        kong:
-          kong:
-            - path: /home/kong/kong.yml
-              subPath: kong.yml
-              readOnly: true
