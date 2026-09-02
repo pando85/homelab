@@ -68,7 +68,7 @@ app-template:
               memory: 1Gi
 
     auth:
-      initContainers:
+      containers:
         init-db:
           image:
             repository: postgres
@@ -82,7 +82,7 @@ app-template:
             - name: postgres-auth-secret
               mountPath: /run/secrets/postgres-auth
               readOnly: true
-      containers:
+        auth:
         auth:
           image:
             # renovate: datasource=docker depName=supabase/gotrue
