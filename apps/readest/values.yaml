@@ -219,16 +219,17 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/rewrite-target: /$2
       hosts:
         - host: &host readest.internal.grigri.cloud
           paths:
-            - path: /auth/v1
-              pathType: Prefix
+            - path: /auth/v1(/|$)(.*)
+              pathType: ImplementationSpecific
               service:
                 identifier: auth
                 port: http
-            - path: /rest/v1
-              pathType: Prefix
+            - path: /rest/v1(/|$)(.*)
+              pathType: ImplementationSpecific
               service:
                 identifier: rest
                 port: http
