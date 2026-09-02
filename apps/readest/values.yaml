@@ -31,7 +31,7 @@ app-template:
             S3_SECRET_ACCESS_KEY:
               valueFrom:
                 secretKeyRef:
-                  name: minio-users
+                  name: readest-minio-secret
                   key: readestPassword
             OBJECT_STORAGE_TYPE: s3
             SELF_HOSTED: "true"
@@ -161,7 +161,7 @@ app-template:
             SUPABASE_AUTH_ADMIN_PASSWORD:
               valueFrom:
                 secretKeyRef:
-                  name: readest.readest-postgres.supabase_auth_admin.credentials.postgresql.acid.zalan.do
+                  name: supabase-auth-admin.readest-postgres.credentials.postgresql.acid.zalan.do
                   key: password
           probes:
             liveness: &authProbes
@@ -218,7 +218,7 @@ app-template:
             AUTHENTICATOR_PASSWORD:
               valueFrom:
                 secretKeyRef:
-                  name: readest.readest-postgres.authenticator.credentials.postgresql.acid.zalan.do
+                  name: authenticator.readest-postgres.credentials.postgresql.acid.zalan.do
                   key: password
           probes:
             liveness: &restProbes
