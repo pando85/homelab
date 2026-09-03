@@ -140,6 +140,24 @@ GOTRUE_EXTERNAL_OIDC_SECRET:
 GOTRUE_EXTERNAL_OIDC_URL: https://idm.grigri.cloud/oauth2/openid/readest
 ```
 
+### Kanidm Integration Challenges
+
+**Status: Not working with current architecture.**
+
+Several approaches were attempted to integrate Kanidm as an OAuth provider:
+
+1. **GoTrue Custom OAuth API**: GoTrue's custom OAuth provider feature (`/admin/custom-providers`) has SSRF protection that blocks private IPs (RFC 1918). Since `idm.grigri.cloud` resolves to `192.168.193.4` from within the cluster, registration fails with "URL cannot resolve to private network addresses".
+
+2. **Direct Database Insert**: Bypassing the API and inserting directly into `auth.custom_oauth_providers` works, but GoTrue requires custom providers to have the `custom:` prefix (e.g., `custom:discord`). The Readest UI hardcodes provider names (`google`, `apple`, `github`, `discord`) without this prefix, so GoTrue never finds the custom provider.
+
+3. **Environment-based OIDC**: GoTrue's `GOTRUE_EXTERNAL_OIDC_*` env vars also perform URL validation and reject private IPs.
+
+4. **Custom Image**: Modifying the Readest frontend to support custom OAuth providers would require maintaining a custom Docker image, which we want to avoid.
+
+**Root cause**: Readest's UI is hardcoded to use specific OAuth providers. GoTrue's custom OAuth feature requires a `custom:` prefix that the UI doesn't send. The SSRF protection prevents registering providers pointing to internal services.
+
+**Workaround**: Users must use email/password authentication or magic links. The Kanidm OIDC client and group are still created for future use if Readest adds custom OAuth support or if we decide to maintain a custom image.
+
 ## MinIO (Shared Instance)
 
 Readest uses the shared MinIO at `platform/minio/` for S3 storage.
