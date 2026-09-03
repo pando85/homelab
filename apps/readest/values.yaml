@@ -99,19 +99,23 @@ app-template:
             GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
             GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
             GOTRUE_MAILER_AUTOCONFIRM: "true"
-            GOTRUE_EXTERNAL_OIDC_ENABLED: "true"
-            GOTRUE_EXTERNAL_OIDC_NAME: Kanidm
-            GOTRUE_EXTERNAL_OIDC_CLIENT_ID:
+            GOTRUE_EXTERNAL_GOOGLE_ENABLED: "false"
+            GOTRUE_EXTERNAL_APPLE_ENABLED: "false"
+            GOTRUE_EXTERNAL_GITHUB_ENABLED: "false"
+            GOTRUE_EXTERNAL_DISCORD_ENABLED: "false"
+            GOTRUE_EXTERNAL_KEYCLOAK_ENABLED: "true"
+            GOTRUE_EXTERNAL_KEYCLOAK_NAME: Kanidm
+            GOTRUE_EXTERNAL_KEYCLOAK_CLIENT_ID:
               valueFrom:
                 secretKeyRef:
                   name: readest-kanidm-oauth2-credentials
                   key: CLIENT_ID
-            GOTRUE_EXTERNAL_OIDC_SECRET:
+            GOTRUE_EXTERNAL_KEYCLOAK_SECRET:
               valueFrom:
                 secretKeyRef:
                   name: readest-kanidm-oauth2-credentials
                   key: CLIENT_SECRET
-            GOTRUE_EXTERNAL_OIDC_URL: https://idm.grigri.cloud/oauth2/openid/readest
+            GOTRUE_EXTERNAL_KEYCLOAK_URL: https://idm.grigri.cloud/oauth2/openid/readest
           probes:
             liveness: &authProbes
               enabled: true
@@ -246,6 +250,12 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          sub_filter 'provider:"discord"' 'provider:"keycloak"';
+          sub_filter '"Sign in with {{provider}}",{provider:"Discord"}' '"Sign in with Kanidm"';
+          sub_filter_types application/javascript;
+          sub_filter_once off;
+          sub_filter_buffers 8 4k;
       hosts:
         - host: *host
           paths:
@@ -294,6 +304,12 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          sub_filter 'provider:"discord"' 'provider:"keycloak"';
+          sub_filter '"Sign in with {{provider}}",{provider:"Discord"}' '"Sign in with Kanidm"';
+          sub_filter_types application/javascript;
+          sub_filter_once off;
+          sub_filter_buffers 8 4k;
       hosts:
         - host: *externalHost
           paths:
