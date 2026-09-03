@@ -3,43 +3,6 @@ app-template:
     client:
       labels:
         backup/retain: weekly
-      initContainers:
-        patch-oauth:
-          image:
-            # renovate: datasource=docker depName=ghcr.io/readest/readest
-            repository: ghcr.io/readest/readest
-            tag: 0.12.6
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -e
-              STATIC_DIR="/app/apps/readest-app/.next/static"
-              PATCHED_DIR="/patched-static"
-              
-              echo "Copying static assets..."
-              cp -r "${STATIC_DIR}/." "${PATCHED_DIR}/"
-              
-              echo "Patching OAuth provider..."
-              PATCHED=0
-              for f in $(find "${PATCHED_DIR}" -name "*.js" -type f); do
-                if grep -q 'provider:"discord"' "$f" 2>/dev/null || grep -q '"Discord"' "$f" 2>/dev/null; then
-                  echo "Patching $f"
-                  sed -i 's/provider:"discord"/provider:"custom:kanidm"/g' "$f"
-                  sed -i 's/"Discord"/"Kanidm"/g' "$f"
-                  sed -i 's/(0,i\.jsx)(R,{provider:"google",handleSignIn:n,Icon:U,label:r("Sign in with {{provider}}",{provider:"Google"})}),//g' "$f"
-                  sed -i 's/(0,i\.jsx)(R,{provider:"apple",handleSignIn:n,Icon:O\.FaApple,label:r("Sign in with {{provider}}",{provider:"Apple"})}),//g' "$f"
-                  sed -i 's/(0,i\.jsx)(R,{provider:"github",handleSignIn:n,Icon:O\.FaGithub,label:r("Sign in with {{provider}}",{provider:"GitHub"})}),//g' "$f"
-                  PATCHED=$((PATCHED + 1))
-                fi
-              done
-              
-              if [ "$PATCHED" -eq 0 ]; then
-                echo "ERROR: Could not find OAuth provider to patch"
-                exit 1
-              fi
-              
-              echo "Patched $PATCHED file(s)"
       containers:
         client:
           image:
@@ -276,10 +239,6 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          more_set_headers "Cache-Control: no-cache, no-store, must-revalidate";
-          more_set_headers "Pragma: no-cache";
-          more_set_headers "Expires: 0";
       hosts:
         - host: *host
           paths:
@@ -328,10 +287,6 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          more_set_headers "Cache-Control: no-cache, no-store, must-revalidate";
-          more_set_headers "Pragma: no-cache";
-          more_set_headers "Expires: 0";
       hosts:
         - host: *externalHost
           paths:
@@ -347,14 +302,3 @@ app-template:
 
   defaultPodOptions:
     enableServiceLinks: false
-
-  persistence:
-    patched-static:
-      type: emptyDir
-      sizeLimit: 500Mi
-      advancedMounts:
-        client:
-          patch-oauth:
-            - path: /patched-static
-          client:
-            - path: /app/apps/readest-app/.next/static

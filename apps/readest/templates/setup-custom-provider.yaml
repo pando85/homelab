@@ -21,52 +21,50 @@ spec:
 
               AUTH_URL="http://readest-auth:9999"
               SERVICE_ROLE_KEY="$(cat /var/run/secrets/readest/service_role_key)"
+              CLIENT_ID="$(cat /var/run/secrets/readest/kanidm_client_id)"
+              CLIENT_SECRET="$(cat /var/run/secrets/readest/kanidm_client_secret)"
 
-              echo "Waiting for GoTrue to be ready..."
+              echo "Waiting for GoTrue..."
               until curl -sf --max-time 5 "${AUTH_URL}/health" > /dev/null 2>&1; do
-                echo "Waiting..."
                 sleep 2
               done
-              echo "GoTrue is ready!"
 
               echo "Checking if custom:kanidm provider exists..."
-              EXISTING=$(curl -v --max-time 10 -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
-                "${AUTH_URL}/admin/custom-providers/custom:kanidm" 2>&1 || echo "")
-              echo "Existing provider response: ${EXISTING}"
+              HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+                -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+                "${AUTH_URL}/admin/custom-providers/custom:kanidm")
 
-              if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ] && ! echo "$EXISTING" | grep -q "404"; then
-                echo "Provider custom:kanidm already exists, updating..."
-                RESPONSE=$(curl -v --max-time 30 -X PUT \
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "Provider exists, updating..."
+                curl -sf -X PUT \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
                     "provider_type": "oidc",
                     "name": "Kanidm",
-                    "client_id": "'"$(cat /var/run/secrets/readest/kanidm_client_id)"'",
-                    "client_secret": "'"$(cat /var/run/secrets/readest/kanidm_client_secret)"'",
+                    "client_id": "'"${CLIENT_ID}"'",
+                    "client_secret": "'"${CLIENT_SECRET}"'",
                     "issuer": "https://idm.grigri.cloud/oauth2/openid/readest",
                     "scopes": ["openid", "profile", "email"],
                     "enabled": true
                   }' \
-                  "${AUTH_URL}/admin/custom-providers/custom:kanidm" 2>&1)
-                echo "Update response: ${RESPONSE}"
+                  "${AUTH_URL}/admin/custom-providers/custom:kanidm"
               else
                 echo "Creating custom:kanidm provider..."
-                RESPONSE=$(curl -v --max-time 30 -X POST \
+                curl -sf -X POST \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
                     "provider_type": "oidc",
                     "identifier": "custom:kanidm",
                     "name": "Kanidm",
-                    "client_id": "'"$(cat /var/run/secrets/readest/kanidm_client_id)"'",
-                    "client_secret": "'"$(cat /var/run/secrets/readest/kanidm_client_secret)"'",
+                    "client_id": "'"${CLIENT_ID}"'",
+                    "client_secret": "'"${CLIENT_SECRET}"'",
                     "issuer": "https://idm.grigri.cloud/oauth2/openid/readest",
                     "scopes": ["openid", "profile", "email"],
                     "enabled": true
                   }' \
-                  "${AUTH_URL}/admin/custom-providers" 2>&1)
-                echo "Response: ${RESPONSE}"
+                  "${AUTH_URL}/admin/custom-providers"
               fi
 
               echo "Done!"
