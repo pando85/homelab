@@ -218,8 +218,8 @@ app-template:
         nginx.ingress.kubernetes.io/server-snippet: |
           location ~ ^/auth/v1/authorize {
             if ($args ~* "(^|&)provider=(google|apple|github|discord)(&|$)") {
-              set $args $args&provider=custom:kanidm;
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize$1? permanent;
+              set $args "${args}&provider=custom:kanidm";
+              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
             }
           }
       hosts:
@@ -272,8 +272,8 @@ app-template:
         nginx.ingress.kubernetes.io/server-snippet: |
           location ~ ^/auth/v1/authorize {
             if ($args ~* "(^|&)provider=(google|apple|github|discord)(&|$)") {
-              set $args $args&provider=custom:kanidm;
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize$1? permanent;
+              set $args "${args}&provider=custom:kanidm";
+              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
             }
           }
       hosts:
