@@ -7,9 +7,7 @@ spec:
     name: kanidm
     namespace: kanidm
   displayname: readest
-  origin:
-    - https://readest.grigri.cloud/
-    - https://readest.internal.grigri.cloud/
+  origin: https://readest.grigri.cloud/
   redirectUrl:
     - https://readest.grigri.cloud/callback
     - https://readest.internal.grigri.cloud/callback
