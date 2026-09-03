@@ -296,6 +296,21 @@ CREATE TYPE auth.one_time_token_type AS ENUM (
 
 **Impact:** Must be run after database creation. If the database is recreated, this must be re-run.
 
+### Premium Features and Quotas
+
+**Status: Working.**
+
+Readest is a freemium SaaS product with tiered quotas. For self-hosted deployments, quotas can be configured via environment variables:
+
+- `STORAGE_FIXED_QUOTA`: Cloud storage limit in bytes (default: 1GB for free tier)
+- `TRANSLATION_FIXED_QUOTA`: Daily translation character limit (default: 10K for free tier)
+
+**Current Configuration (Pro plan limits):**
+- Storage: 20GB (21474836480 bytes)
+- Translations: 500K characters/day (500000)
+
+**Note:** The "Upgrade to Readest Premium" button still appears in the UI because Readest checks subscription status through the REST API. However, the actual quotas are already at Pro plan limits, so all features work without restriction.
+
 ### Summary of Hacks
 
 | Hack | Why | Maintenance Burden |
@@ -306,6 +321,7 @@ CREATE TYPE auth.one_time_token_type AS ENUM (
 | Manual DB insert for custom provider | GoTrue SSRF protection | High - not GitOps-managed |
 | Manual schema setup | Zalando doesn't auto-create Supabase schemas | Low - one-time per DB |
 | Database search path | GoTrue can't find auth schema | Low - one-time per DB |
+| Environment variable quotas | Self-hosted deployment | Low - GitOps-managed |
 
 ### Future Improvements
 
