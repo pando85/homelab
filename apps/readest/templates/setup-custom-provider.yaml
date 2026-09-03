@@ -44,7 +44,7 @@ spec:
                     "name": "Kanidm",
                     "client_id": "'"$(cat /var/run/secrets/readest/kanidm_client_id)"'",
                     "client_secret": "'"$(cat /var/run/secrets/readest/kanidm_client_secret)"'",
-                    "issuer": "https://idm.grigri.cloud/oauth2/openid/readest",
+                    "issuer": "https://79.117.1.43/oauth2/openid/readest",
                     "scopes": ["openid", "profile", "email"],
                     "enabled": true
                   }' \
@@ -61,7 +61,7 @@ spec:
                     "name": "Kanidm",
                     "client_id": "'"$(cat /var/run/secrets/readest/kanidm_client_id)"'",
                     "client_secret": "'"$(cat /var/run/secrets/readest/kanidm_client_secret)"'",
-                    "issuer": "https://idm.grigri.cloud/oauth2/openid/readest",
+                    "issuer": "https://79.117.1.43/oauth2/openid/readest",
                     "scopes": ["openid", "profile", "email"],
                     "enabled": true
                   }' \
