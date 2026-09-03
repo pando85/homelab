@@ -28,12 +28,13 @@ spec:
               done
 
               echo "Checking if custom:kanidm provider exists..."
-              EXISTING=$(curl -sf -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
-                "${AUTH_URL}/admin/custom-providers/custom:kanidm" 2>/dev/null || echo "")
+              EXISTING=$(curl -v -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+                "${AUTH_URL}/admin/custom-providers/custom:kanidm" 2>&1 || echo "")
+              echo "Existing provider response: ${EXISTING}"
 
               if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
                 echo "Provider custom:kanidm already exists, updating..."
-                curl -sf -X PUT \
+                RESPONSE=$(curl -v -X PUT \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
@@ -45,10 +46,11 @@ spec:
                     "scopes": ["openid", "profile", "email"],
                     "enabled": true
                   }' \
-                  "${AUTH_URL}/admin/custom-providers/custom:kanidm"
+                  "${AUTH_URL}/admin/custom-providers/custom:kanidm" 2>&1)
+                echo "Update response: ${RESPONSE}"
               else
                 echo "Creating custom:kanidm provider..."
-                curl -sf -X POST \
+                RESPONSE=$(curl -v -X POST \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
@@ -61,7 +63,8 @@ spec:
                     "scopes": ["openid", "profile", "email"],
                     "enabled": true
                   }' \
-                  "${AUTH_URL}/admin/custom-providers"
+                  "${AUTH_URL}/admin/custom-providers" 2>&1)
+                echo "Response: ${RESPONSE}"
               fi
 
               echo "Done!"
