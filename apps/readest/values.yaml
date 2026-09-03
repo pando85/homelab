@@ -27,9 +27,9 @@ app-template:
                   echo "Patching $f"
                   sed -i 's/provider:"discord"/provider:"keycloak"/g' "$f"
                   sed -i 's/"Discord"/"Kanidm"/g' "$f"
-                  sed -i 's/(i\.jsx)(R,{provider:"google",handleSignIn:n,Icon:U,label:r("Sign in with {{provider}}",{provider:"Google"})}),//g' "$f"
-                  sed -i 's/(i\.jsx)(R,{provider:"apple",handleSignIn:n,Icon:O\.FaApple,label:r("Sign in with {{provider}}",{provider:"Apple"})}),//g' "$f"
-                  sed -i 's/(i\.jsx)(R,{provider:"github",handleSignIn:n,Icon:O\.FaGithub,label:r("Sign in with {{provider}}",{provider:"GitHub"})}),//g' "$f"
+                  sed -i 's/(0,i\.jsx)(R,{provider:"google",handleSignIn:n,Icon:U,label:r("Sign in with {{provider}}",{provider:"Google"})}),//g' "$f"
+                  sed -i 's/(0,i\.jsx)(R,{provider:"apple",handleSignIn:n,Icon:O\.FaApple,label:r("Sign in with {{provider}}",{provider:"Apple"})}),//g' "$f"
+                  sed -i 's/(0,i\.jsx)(R,{provider:"github",handleSignIn:n,Icon:O\.FaGithub,label:r("Sign in with {{provider}}",{provider:"GitHub"})}),//g' "$f"
                   PATCHED=$((PATCHED + 1))
                 fi
               done
