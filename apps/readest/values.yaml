@@ -21,7 +21,6 @@ app-template:
               cp -a "${STATIC_DIR}/." "${PATCHED_DIR}/"
               
               echo "Patching OAuth provider..."
-              # Find and patch the chunk containing the auth panel
               PATCHED=0
               for f in $(find "${PATCHED_DIR}" -name "*.js" -type f); do
                 if grep -q 'provider:"discord"' "$f" 2>/dev/null; then
@@ -38,9 +37,6 @@ app-template:
               fi
               
               echo "Patched $PATCHED file(s)"
-          volumeMounts:
-            - name: patched-static
-              mountPath: /patched-static
       containers:
         client:
           image:
@@ -104,13 +100,6 @@ app-template:
               memory: 256Mi
             limits:
               memory: 1Gi
-          volumeMounts:
-            - name: patched-static
-              mountPath: /app/apps/readest-app/.next/static
-      volumes:
-        patched-static:
-          emptyDir:
-            sizeLimit: 500Mi
 
     auth:
       containers:
@@ -358,3 +347,14 @@ app-template:
 
   defaultPodOptions:
     enableServiceLinks: false
+
+  persistence:
+    patched-static:
+      type: emptyDir
+      sizeLimit: 500Mi
+      advancedMounts:
+        client:
+          patch-oauth:
+            - path: /patched-static
+          client:
+            - path: /app/apps/readest-app/.next/static
