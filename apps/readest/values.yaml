@@ -98,6 +98,7 @@ app-template:
                   name: readest-secrets
                   key: secret
             GOTRUE_CUSTOM_OAUTH_ENABLED: "true"
+            GOTRUE_CUSTOM_OAUTH_PRIVATE_HOSTS: idm.grigri.cloud
             GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
             GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
             GOTRUE_MAILER_AUTOCONFIRM: "true"
