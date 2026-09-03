@@ -285,9 +285,9 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          add_header Cache-Control "no-cache, no-store, must-revalidate";
-          add_header Pragma "no-cache";
-          add_header Expires "0";
+          more_set_headers "Cache-Control: no-cache, no-store, must-revalidate";
+          more_set_headers "Pragma: no-cache";
+          more_set_headers "Expires: 0";
       hosts:
         - host: *host
           paths:
@@ -337,9 +337,9 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          add_header Cache-Control "no-cache, no-store, must-revalidate";
-          add_header Pragma "no-cache";
-          add_header Expires "0";
+          more_set_headers "Cache-Control: no-cache, no-store, must-revalidate";
+          more_set_headers "Pragma: no-cache";
+          more_set_headers "Expires: 0";
       hosts:
         - host: *externalHost
           paths:
