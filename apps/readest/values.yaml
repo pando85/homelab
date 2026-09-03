@@ -250,12 +250,6 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          sub_filter 'provider:"discord"' 'provider:"keycloak"';
-          sub_filter '"Sign in with {{provider}}",{provider:"Discord"}' '"Sign in with Kanidm"';
-          sub_filter_types application/javascript;
-          sub_filter_once off;
-          sub_filter_buffers 8 4k;
       hosts:
         - host: *host
           paths:
@@ -304,12 +298,6 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          sub_filter 'provider:"discord"' 'provider:"keycloak"';
-          sub_filter '"Sign in with {{provider}}",{provider:"Discord"}' '"Sign in with Kanidm"';
-          sub_filter_types application/javascript;
-          sub_filter_once off;
-          sub_filter_buffers 8 4k;
       hosts:
         - host: *externalHost
           paths:
