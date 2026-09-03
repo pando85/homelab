@@ -217,8 +217,8 @@ app-template:
         nginx.ingress.kubernetes.io/rewrite-target: /$2
         nginx.ingress.kubernetes.io/server-snippet: |
           location ~ ^/auth/v1/authorize {
-            if ($args ~* "(^|&)provider=(google|apple|github|discord)(.*)$") {
-              set $args "provider=custom:kanidm$3";
+            if ($args ~* "provider=(google|apple|github|discord)") {
+              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
               rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize? permanent;
             }
           }
@@ -272,9 +272,9 @@ app-template:
         nginx.ingress.kubernetes.io/rewrite-target: /$2
         nginx.ingress.kubernetes.io/server-snippet: |
           location ~ ^/auth/v1/authorize {
-            if ($args ~* "(^|&)provider=(google|apple|github|discord)(&|$)") {
-              set $args "${args}&provider=custom:kanidm";
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
+            if ($args ~* "provider=(google|apple|github|discord)") {
+              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
+              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize? permanent;
             }
           }
       hosts:
