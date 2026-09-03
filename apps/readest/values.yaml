@@ -289,7 +289,7 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/server-snippet: |
           location = /callback {
-            return 301 /auth/callback$is_args$args;
+            return 301 /auth/v1/callback$is_args$args;
           }
       hosts:
         - host: *host
@@ -350,7 +350,7 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/server-snippet: |
           location = /callback {
-            return 301 /auth/callback$is_args$args;
+            return 301 /auth/v1/callback$is_args$args;
           }
       hosts:
         - host: *externalHost
