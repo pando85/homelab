@@ -215,6 +215,13 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
+        nginx.ingress.kubernetes.io/server-snippet: |
+          location ~ ^/auth/v1/authorize {
+            if ($args ~* "(^|&)provider=(google|apple|github|discord)(&|$)") {
+              set $args $args&provider=custom:kanidm;
+              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize$1? permanent;
+            }
+          }
       hosts:
         - host: &host readest.internal.grigri.cloud
           paths:
@@ -262,6 +269,13 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
+        nginx.ingress.kubernetes.io/server-snippet: |
+          location ~ ^/auth/v1/authorize {
+            if ($args ~* "(^|&)provider=(google|apple|github|discord)(&|$)") {
+              set $args $args&provider=custom:kanidm;
+              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize$1? permanent;
+            }
+          }
       hosts:
         - host: &externalHost readest.grigri.cloud
           paths:
