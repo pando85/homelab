@@ -12,70 +12,74 @@ spec:
       restartPolicy: Never
       containers:
         - name: setup
-          image: curlimages/curl:8.5.0
+          image: postgres:16-alpine
           command:
             - /bin/sh
             - -c
             - |
               set -e
 
-              AUTH_URL="http://readest-auth:9999"
-              SERVICE_ROLE_KEY="$(cat /var/run/secrets/readest/service_role_key)"
               CLIENT_ID="$(cat /var/run/secrets/readest/kanidm_client_id)"
               CLIENT_SECRET="$(cat /var/run/secrets/readest/kanidm_client_secret)"
 
-              echo "Waiting for GoTrue..."
-              until curl -sf --max-time 5 "${AUTH_URL}/health" > /dev/null 2>&1; do
-                sleep 2
-              done
-
               echo "Checking if custom:kanidm provider exists..."
-              HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
-                -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
-                "${AUTH_URL}/admin/custom-providers/custom:kanidm")
-              echo "HTTP response code: ${HTTP_CODE}"
-              cat /tmp/response.json || true
+              EXISTING=$(psql -h readest-postgres -U postgres -d readest -tAc "SELECT identifier FROM auth.custom_oauth_providers WHERE identifier = 'custom:kanidm'")
 
-              if [ "$HTTP_CODE" = "200" ]; then
+              if [ "$EXISTING" = "custom:kanidm" ]; then
                 echo "Provider exists, updating..."
-                curl -v -X PUT \
-                  -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
-                  -H "Content-Type: application/json" \
-                  -d '{
-                    "provider_type": "oauth2",
-                    "name": "Kanidm",
-                    "client_id": "'"${CLIENT_ID}"'",
-                    "client_secret": "'"${CLIENT_SECRET}"'",
-                    "authorization_url": "https://idm.grigri.cloud/ui/oauth2",
-                    "token_url": "https://idm.grigri.cloud/oauth2/token",
-                    "userinfo_url": "https://idm.grigri.cloud/oauth2/openid/readest/userinfo",
-                    "scopes": ["openid", "profile", "email"],
-                    "pkce_enabled": true,
-                    "enabled": true
-                  }' \
-                  "${AUTH_URL}/admin/custom-providers/custom:kanidm"
+                psql -h readest-postgres -U postgres -d readest -c "
+                  UPDATE auth.custom_oauth_providers
+                  SET
+                    name = 'Kanidm',
+                    client_id = '${CLIENT_ID}',
+                    client_secret = '${CLIENT_SECRET}',
+                    authorization_url = 'https://idm.grigri.cloud/ui/oauth2',
+                    token_url = 'https://idm.grigri.cloud/oauth2/token',
+                    userinfo_url = 'https://idm.grigri.cloud/oauth2/openid/readest/userinfo',
+                    scopes = ARRAY['openid', 'profile', 'email'],
+                    pkce_enabled = true,
+                    enabled = true,
+                    updated_at = now()
+                  WHERE identifier = 'custom:kanidm'
+                "
               else
                 echo "Creating custom:kanidm provider..."
-                curl -v -X POST \
-                  -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
-                  -H "Content-Type: application/json" \
-                  -d '{
-                    "provider_type": "oauth2",
-                    "identifier": "custom:kanidm",
-                    "name": "Kanidm",
-                    "client_id": "'"${CLIENT_ID}"'",
-                    "client_secret": "'"${CLIENT_SECRET}"'",
-                    "authorization_url": "https://idm.grigri.cloud/ui/oauth2",
-                    "token_url": "https://idm.grigri.cloud/oauth2/token",
-                    "userinfo_url": "https://idm.grigri.cloud/oauth2/openid/readest/userinfo",
-                    "scopes": ["openid", "profile", "email"],
-                    "pkce_enabled": true,
-                    "enabled": true
-                  }' \
-                  "${AUTH_URL}/admin/custom-providers"
+                psql -h readest-postgres -U postgres -d readest -c "
+                  INSERT INTO auth.custom_oauth_providers (
+                    provider_type,
+                    identifier,
+                    name,
+                    client_id,
+                    client_secret,
+                    authorization_url,
+                    token_url,
+                    userinfo_url,
+                    scopes,
+                    pkce_enabled,
+                    enabled
+                  ) VALUES (
+                    'oauth2',
+                    'custom:kanidm',
+                    'Kanidm',
+                    '${CLIENT_ID}',
+                    '${CLIENT_SECRET}',
+                    'https://idm.grigri.cloud/ui/oauth2',
+                    'https://idm.grigri.cloud/oauth2/token',
+                    'https://idm.grigri.cloud/oauth2/openid/readest/userinfo',
+                    ARRAY['openid', 'profile', 'email'],
+                    true,
+                    true
+                  )
+                "
               fi
 
               echo "Done!"
+          env:
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: readest.postgresql.readest.credentials.postgresql.acid.zalan.do
+                  key: password
           volumeMounts:
             - name: readest-secrets
               mountPath: /var/run/secrets/readest
@@ -84,11 +88,6 @@ spec:
         - name: readest-secrets
           projected:
             sources:
-              - secret:
-                  name: readest-secrets
-                  items:
-                    - key: service_role_key
-                      path: service_role_key
               - secret:
                   name: readest-kanidm-oauth2-credentials
                   items:
