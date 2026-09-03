@@ -179,6 +179,145 @@ The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Di
 8. GoTrue completes the authentication and redirects back to Readest
 9. User is logged in and sees their library
 
+### Learnings and Workarounds
+
+This integration required several workarounds due to limitations in GoTrue and Readest:
+
+#### GoTrue SSRF Protection
+
+**Problem:** GoTrue's custom OAuth provider API (`/admin/custom-providers`) validates URLs and blocks private IPs (RFC 1918) to prevent SSRF attacks. Since `idm.grigri.cloud` resolves to `192.168.193.4` from within the cluster, registration fails with "URL cannot resolve to private network addresses".
+
+**Attempted Solutions:**
+- `GOTRUE_CUSTOM_OAUTH_PRIVATE_HOSTS` environment variable - doesn't exist in GoTrue v2.196.0
+- Using `oidc` provider type instead of `oauth2` - same validation
+- Using `oauth2` with explicit endpoints - same validation
+
+**Workaround:** Insert the custom provider directly into the `auth.custom_oauth_providers` table via SQL, bypassing the API validation:
+
+```sql
+INSERT INTO auth.custom_oauth_providers (
+  provider_type, identifier, name, client_id, client_secret,
+  authorization_url, token_url, userinfo_url, scopes, pkce_enabled, enabled
+) VALUES (
+  'oauth2', 'custom:kanidm', 'Kanidm',
+  '<client_id>', '<client_secret>',
+  'https://idm.grigri.cloud/ui/oauth2',
+  'https://idm.grigri.cloud/oauth2/token',
+  'https://idm.grigri.cloud/oauth2/openid/readest/userinfo',
+  ARRAY['openid', 'profile', 'email'], true, true
+);
+```
+
+**Impact:** The custom provider is not managed by GitOps and must be manually inserted if the database is recreated.
+
+#### Readest UI Hardcoded OAuth Providers
+
+**Problem:** Readest's frontend has hardcoded OAuth provider buttons (Google, Apple, GitHub, Discord) in `AuthPanel.tsx`. The `OAuthProvider` type is restricted to these specific values, and the UI doesn't support custom providers.
+
+**Attempted Solutions:**
+- Custom Docker image - rejected to avoid maintenance burden
+- Runtime configuration (`OAUTH_PROVIDERS` env var) - Readest doesn't support this
+- CSS/JavaScript injection via nginx - didn't work reliably with Next.js SPA
+
+**Workaround:** Init container patches the compiled JavaScript bundles at pod startup:
+- Searches for `provider:"discord"` and replaces with `provider:"custom:kanidm"`
+- Changes button label from "Discord" to "Kanidm"
+- Removes the other provider buttons using sed
+
+**Impact:** The patch must be updated if Readest changes its UI structure or JavaScript compilation output. The init container runs on every pod start, so changes are applied automatically.
+
+#### GoTrue Callback URL Construction
+
+**Problem:** GoTrue constructs the OAuth callback URL as `API_EXTERNAL_URL + "/callback"`, which gives `https://readest.grigri.cloud/callback`. However, Readest's frontend expects the callback at `/auth/callback`, and GoTrue's actual callback endpoint is at `/auth/v1/callback`.
+
+**Attempted Solutions:**
+- Change `API_EXTERNAL_URL` to include `/auth/v1` - breaks other URLs
+- Find GoTrue config to override callback path - doesn't exist
+- Update Kanidm client to accept `/callback` - works but doesn't solve routing
+
+**Workaround:** Nginx redirect from `/callback` to `/auth/v1/callback`:
+
+```yaml
+nginx.ingress.kubernetes.io/server-snippet: |
+  location = /callback {
+    return 301 /auth/v1/callback$is_args$args;
+  }
+```
+
+**Impact:** Adds a redirect hop to the OAuth flow. The Kanidm client must accept both `/callback` and `/auth/v1/callback` as valid redirect URLs.
+
+#### GoTrue Custom Provider Prefix Requirement
+
+**Problem:** GoTrue requires custom OAuth providers to have the `custom:` prefix (e.g., `custom:kanidm`). The Readest UI sends `provider=discord` without this prefix, so GoTrue never finds the custom provider.
+
+**Attempted Solutions:**
+- Register provider with identifier `discord` - GoTrue rejects because `discord` is a built-in provider
+- Use environment-based OIDC (`GOTRUE_EXTERNAL_OIDC_*`) - same SSRF protection
+
+**Workaround:** 
+1. Init container patches UI to send `provider:"custom:kanidm"` instead of `provider:"discord"`
+2. Nginx rewrite converts any remaining hardcoded provider params to `custom:kanidm`
+
+**Impact:** The init container must patch all occurrences of the provider string in the JavaScript bundles.
+
+#### Zalando Postgres Search Path
+
+**Problem:** GoTrue migrations failed because it couldn't find the `auth` schema. The database had the schema, but GoTrue's connection didn't include it in the search path.
+
+**Workaround:** Set the search path at the database level:
+
+```sql
+ALTER DATABASE readest SET search_path TO auth, public;
+```
+
+**Impact:** Must be run after database creation. If the database is recreated, this must be re-run.
+
+#### Manual Schema Setup for Supabase Compatibility
+
+**Problem:** Zalando Postgres operator doesn't auto-create Supabase-specific schemas and enum types. GoTrue migrations expect these to exist.
+
+**Workaround:** Manual schema setup (one-time operation):
+
+```sql
+-- Create schemas
+CREATE SCHEMA IF NOT EXISTS auth;
+CREATE SCHEMA IF NOT EXISTS storage;
+CREATE SCHEMA IF NOT EXISTS realtime;
+CREATE SCHEMA IF NOT EXISTS graphql_public;
+
+-- Create enum types required by GoTrue migrations
+CREATE TYPE auth.factor_type AS ENUM ('totp', 'webauthn', 'phone');
+CREATE TYPE auth.code_challenge_method AS ENUM ('s256', 'plain');
+CREATE TYPE auth.one_time_token_type AS ENUM (
+  'confirmation_token', 'reauthentication_token', 'recovery_token',
+  'email_change_token_new', 'email_change_token_current', 'email_change_verify'
+);
+```
+
+**Impact:** Must be run after database creation. If the database is recreated, this must be re-run.
+
+### Summary of Hacks
+
+| Hack | Why | Maintenance Burden |
+|------|-----|-------------------|
+| Init container patches JS bundles | Readest UI hardcoded | Medium - must update if UI changes |
+| Nginx rewrite for provider param | Belt and suspenders | Low |
+| Nginx redirect `/callback` → `/auth/v1/callback` | GoTrue callback URL construction | Low |
+| Manual DB insert for custom provider | GoTrue SSRF protection | High - not GitOps-managed |
+| Manual schema setup | Zalando doesn't auto-create Supabase schemas | Low - one-time per DB |
+| Database search path | GoTrue can't find auth schema | Low - one-time per DB |
+
+### Future Improvements
+
+If Readest adds support for custom OAuth providers via runtime configuration, we can:
+- Remove the init container
+- Remove the nginx rewrite
+- Use standard GoTrue custom OAuth provider registration (if SSRF protection is relaxed)
+
+If GoTrue adds support for private hosts in custom OAuth providers, we can:
+- Use the GoTrue API to register the provider instead of manual DB insert
+- Manage the provider configuration via GitOps
+
 ## MinIO (Shared Instance)
 
 Readest uses the shared MinIO at `platform/minio/` for S3 storage.
