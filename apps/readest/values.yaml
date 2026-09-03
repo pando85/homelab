@@ -72,8 +72,8 @@ app-template:
                   key: readestPassword
             OBJECT_STORAGE_TYPE: s3
             SELF_HOSTED: "true"
-            STORAGE_FIXED_QUOTA: "1073741824"
-            TRANSLATION_FIXED_QUOTA: "50000"
+            STORAGE_FIXED_QUOTA: "21474836480"
+            TRANSLATION_FIXED_QUOTA: "500000"
             FONT_BASE_URL: ""
           probes:
             liveness: &probes
