@@ -215,16 +215,14 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
-        nginx.ingress.kubernetes.io/server-snippet: |
-          location ~ ^/auth/v1/authorize {
-            if ($args ~* "provider=(google|apple|github|discord)") {
-              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
-            }
-            if ($args = "") {
-              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
-            }
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          if ($args ~* "provider=(google|apple|github|discord)") {
+            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
+            rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
+          }
+          if ($args = "") {
+            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
+            rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
           }
           }
       hosts:
@@ -274,16 +272,14 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
-        nginx.ingress.kubernetes.io/server-snippet: |
-          location ~ ^/auth/v1/authorize {
-            if ($args ~* "provider=(google|apple|github|discord)") {
-              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
-            }
-            if ($args = "") {
-              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
-            }
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          if ($args ~* "provider=(google|apple|github|discord)") {
+            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
+            rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
+          }
+          if ($args = "") {
+            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
+            rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
           }
       hosts:
         - host: &externalHost readest.grigri.cloud
