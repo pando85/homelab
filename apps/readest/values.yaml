@@ -3,6 +3,44 @@ app-template:
     client:
       labels:
         backup/retain: weekly
+      initContainers:
+        patch-oauth:
+          image:
+            # renovate: datasource=docker depName=ghcr.io/readest/readest
+            repository: ghcr.io/readest/readest
+            tag: 0.12.6
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              STATIC_DIR="/app/apps/readest-app/.next/static"
+              PATCHED_DIR="/patched-static"
+              
+              echo "Copying static assets..."
+              cp -a "${STATIC_DIR}/." "${PATCHED_DIR}/"
+              
+              echo "Patching OAuth provider..."
+              # Find and patch the chunk containing the auth panel
+              PATCHED=0
+              for f in $(find "${PATCHED_DIR}" -name "*.js" -type f); do
+                if grep -q 'provider:"discord"' "$f" 2>/dev/null; then
+                  echo "Patching $f"
+                  sed -i 's/provider:"discord"/provider:"keycloak"/g' "$f"
+                  sed -i 's/Discord/Kanidm/g' "$f"
+                  PATCHED=$((PATCHED + 1))
+                fi
+              done
+              
+              if [ "$PATCHED" -eq 0 ]; then
+                echo "ERROR: Could not find OAuth provider to patch"
+                exit 1
+              fi
+              
+              echo "Patched $PATCHED file(s)"
+          volumeMounts:
+            - name: patched-static
+              mountPath: /patched-static
       containers:
         client:
           image:
@@ -66,6 +104,13 @@ app-template:
               memory: 256Mi
             limits:
               memory: 1Gi
+          volumeMounts:
+            - name: patched-static
+              mountPath: /app/apps/readest-app/.next/static
+      volumes:
+        patched-static:
+          emptyDir:
+            sizeLimit: 500Mi
 
     auth:
       containers:
