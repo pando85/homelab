@@ -10,8 +10,8 @@ app-template:
             repository: ghcr.io/readest/readest
             tag: 0.12.6
           env:
-            SUPABASE_URL: https://readest.internal.grigri.cloud
-            SUPABASE_PUBLIC_URL: https://readest.internal.grigri.cloud
+            SUPABASE_URL: https://readest.grigri.cloud
+            SUPABASE_PUBLIC_URL: https://readest.grigri.cloud
             SUPABASE_ANON_KEY:
               valueFrom:
                 secretKeyRef:
@@ -22,7 +22,7 @@ app-template:
                 secretKeyRef:
                   name: readest-secrets
                   key: service_role_key
-            API_BASE_URL: https://readest.internal.grigri.cloud
+            API_BASE_URL: https://readest.grigri.cloud
             S3_ENDPOINT: http://minio.minio.svc:9000
             S3_PUBLIC_ENDPOINT: https://s3.internal.grigri.cloud
             S3_REGION: us-east-1
@@ -77,15 +77,15 @@ app-template:
           env:
             GOTRUE_API_HOST: 0.0.0.0
             GOTRUE_API_PORT: 9999
-            API_EXTERNAL_URL: https://readest.internal.grigri.cloud
+            API_EXTERNAL_URL: https://readest.grigri.cloud
             GOTRUE_DB_DRIVER: postgres
             GOTRUE_DB_DATABASE_URL:
               valueFrom:
                 secretKeyRef:
                   name: readest-db-urls
                   key: auth_url
-            GOTRUE_SITE_URL: https://readest.internal.grigri.cloud
-            GOTRUE_URI_ALLOW_LIST: https://readest.internal.grigri.cloud/**
+            GOTRUE_SITE_URL: https://readest.grigri.cloud
+            GOTRUE_URI_ALLOW_LIST: https://readest.grigri.cloud/**,https://readest.internal.grigri.cloud/**
             GOTRUE_DISABLE_SIGNUP: "false"
             GOTRUE_JWT_ADMIN_ROLES: service_role
             GOTRUE_JWT_AUD: authenticated
@@ -242,6 +242,38 @@ app-template:
         - hosts:
             - *host
           secretName: readest-tls-certificate
+
+    external:
+      enabled: true
+      className: nginx-external
+      annotations:
+        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/rewrite-target: /$2
+      hosts:
+        - host: &externalHost readest.grigri.cloud
+          paths:
+            - path: /auth/v1(/|$)(.*)
+              pathType: ImplementationSpecific
+              service:
+                identifier: auth
+                port: http
+            - path: /rest/v1(/|$)(.*)
+              pathType: ImplementationSpecific
+              service:
+                identifier: rest
+                port: http
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: client
+                port: http
+      tls:
+        - hosts:
+            - *externalHost
+          secretName: readest-external-tls-certificate
 
   defaultPodOptions:
     enableServiceLinks: false
