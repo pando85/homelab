@@ -27,6 +27,9 @@ app-template:
                   echo "Patching $f"
                   sed -i 's/provider:"discord"/provider:"keycloak"/g' "$f"
                   sed -i 's/"Discord"/"Kanidm"/g' "$f"
+                  sed -i 's/(i\.jsx)(R,{provider:"google",handleSignIn:n,Icon:U,label:r("Sign in with {{provider}}",{provider:"Google"})}),//g' "$f"
+                  sed -i 's/(i\.jsx)(R,{provider:"apple",handleSignIn:n,Icon:O\.FaApple,label:r("Sign in with {{provider}}",{provider:"Apple"})}),//g' "$f"
+                  sed -i 's/(i\.jsx)(R,{provider:"github",handleSignIn:n,Icon:O\.FaGithub,label:r("Sign in with {{provider}}",{provider:"GitHub"})}),//g' "$f"
                   PATCHED=$((PATCHED + 1))
                 fi
               done
@@ -150,6 +153,7 @@ app-template:
                   name: readest-kanidm-oauth2-credentials
                   key: CLIENT_SECRET
             GOTRUE_EXTERNAL_KEYCLOAK_URL: https://idm.grigri.cloud/oauth2/openid/readest
+            GOTRUE_EXTERNAL_KEYCLOAK_REDIRECT_URI: https://readest.grigri.cloud/auth/v1/callback
           probes:
             liveness: &authProbes
               enabled: true
