@@ -142,21 +142,33 @@ GOTRUE_EXTERNAL_OIDC_URL: https://idm.grigri.cloud/oauth2/openid/readest
 
 ### Kanidm Integration Challenges
 
-**Status: Not working with current architecture.**
+**Status: Working with nginx rewrite workaround.**
 
-Several approaches were attempted to integrate Kanidm as an OAuth provider:
+The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Discord). To use Kanidm as the OAuth provider, we implemented a workaround:
 
-1. **GoTrue Custom OAuth API**: GoTrue's custom OAuth provider feature (`/admin/custom-providers`) has SSRF protection that blocks private IPs (RFC 1918). Since `idm.grigri.cloud` resolves to `192.168.193.4` from within the cluster, registration fails with "URL cannot resolve to private network addresses".
+1. **Nginx Rewrite**: Added a `configuration-snippet` to the ingress that rewrites the `provider` parameter from `discord` (or other hardcoded providers) to `custom:kanidm`. This allows the Readest frontend to use the hardcoded "Sign in with Discord" button, but the backend uses our custom Kanidm provider.
 
-2. **Direct Database Insert**: Bypassing the API and inserting directly into `auth.custom_oauth_providers` works, but GoTrue requires custom providers to have the `custom:` prefix (e.g., `custom:discord`). The Readest UI hardcodes provider names (`google`, `apple`, `github`, `discord`) without this prefix, so GoTrue never finds the custom provider.
+2. **Custom OAuth Provider in GoTrue**: Manually inserted the custom OAuth provider into the `auth.custom_oauth_providers` table, bypassing GoTrue's SSRF protection that blocks private IPs. The provider is configured with:
+   - `identifier`: `custom:kanidm`
+   - `provider_type`: `oauth2`
+   - `authorization_url`: `https://idm.grigri.cloud/ui/oauth2`
+   - `token_url`: `https://idm.grigri.cloud/oauth2/token`
+   - `userinfo_url`: `https://idm.grigri.cloud/oauth2/openid/readest/userinfo`
 
-3. **Environment-based OIDC**: GoTrue's `GOTRUE_EXTERNAL_OIDC_*` env vars also perform URL validation and reject private IPs.
+3. **Kanidm OAuth2 Client**: Updated the redirect URLs to include both internal and external domains, and both `/callback` and `/auth/v1/callback` paths. This ensures GoTrue can redirect back to the correct URL after authentication.
 
-4. **Custom Image**: Modifying the Readest frontend to support custom OAuth providers would require maintaining a custom Docker image, which we want to avoid.
+**Known Issues:**
+- The UI still shows "Sign in with Discord" instead of "Sign in with Kanidm" (cosmetic issue)
+- The custom OAuth provider must be manually inserted into the database (not managed by GitOps)
+- GoTrue's SSRF protection prevents registering providers pointing to internal services via the API
 
-**Root cause**: Readest's UI is hardcoded to use specific OAuth providers. GoTrue's custom OAuth feature requires a `custom:` prefix that the UI doesn't send. The SSRF protection prevents registering providers pointing to internal services.
-
-**Workaround**: Users must use email/password authentication or magic links. The Kanidm OIDC client and group are still created for future use if Readest adds custom OAuth support or if we decide to maintain a custom image.
+**OAuth Flow:**
+1. User clicks "Sign in with Discord" in Readest
+2. Nginx rewrites the provider parameter to `custom:kanidm`
+3. GoTrue redirects to Kanidm's OAuth2 endpoint
+4. User authenticates with Kanidm
+5. Kanidm redirects back to GoTrue's callback URL
+6. GoTrue completes the authentication and redirects back to Readest
 
 ## MinIO (Shared Instance)
 
