@@ -110,7 +110,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=supabase/gotrue
             repository: supabase/gotrue
-            tag: v2.185.0
+            tag: v2.196.0
           env:
             GOTRUE_API_HOST: 0.0.0.0
             GOTRUE_API_PORT: 9999
