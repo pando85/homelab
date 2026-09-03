@@ -23,18 +23,20 @@ spec:
               SERVICE_ROLE_KEY="$(cat /var/run/secrets/readest/service_role_key)"
 
               echo "Waiting for GoTrue to be ready..."
-              until curl -sf "${AUTH_URL}/health" > /dev/null 2>&1; do
+              until curl -sf --max-time 5 "${AUTH_URL}/health" > /dev/null 2>&1; do
+                echo "Waiting..."
                 sleep 2
               done
+              echo "GoTrue is ready!"
 
               echo "Checking if custom:kanidm provider exists..."
-              EXISTING=$(curl -v -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+              EXISTING=$(curl -v --max-time 10 -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                 "${AUTH_URL}/admin/custom-providers/custom:kanidm" 2>&1 || echo "")
               echo "Existing provider response: ${EXISTING}"
 
               if [ -n "$EXISTING" ] && [ "$EXISTING" != "null" ]; then
                 echo "Provider custom:kanidm already exists, updating..."
-                RESPONSE=$(curl -v -X PUT \
+                RESPONSE=$(curl -v --max-time 10 -X PUT \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
@@ -50,7 +52,7 @@ spec:
                 echo "Update response: ${RESPONSE}"
               else
                 echo "Creating custom:kanidm provider..."
-                RESPONSE=$(curl -v -X POST \
+                RESPONSE=$(curl -v --max-time 10 -X POST \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
