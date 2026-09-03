@@ -284,6 +284,10 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          add_header Cache-Control "no-cache, no-store, must-revalidate";
+          add_header Pragma "no-cache";
+          add_header Expires "0";
       hosts:
         - host: *host
           paths:
@@ -332,6 +336,10 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          add_header Cache-Control "no-cache, no-store, must-revalidate";
+          add_header Pragma "no-cache";
+          add_header Expires "0";
       hosts:
         - host: *externalHost
           paths:
