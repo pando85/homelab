@@ -250,6 +250,10 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          sub_filter '</head>' '<style>button[aria-label*="Google"], button[aria-label*="Apple"], button[aria-label*="GitHub"] { display: none !important; }</style></head>';
+          sub_filter_once on;
+          sub_filter_types text/html;
       hosts:
         - host: *host
           paths:
@@ -307,6 +311,10 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/configuration-snippet: |
+          sub_filter '</head>' '<style>button[aria-label*="Google"], button[aria-label*="Apple"], button[aria-label*="GitHub"] { display: none !important; }</style></head>';
+          sub_filter_once on;
+          sub_filter_types text/html;
       hosts:
         - host: *externalHost
           paths:
