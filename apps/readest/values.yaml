@@ -116,6 +116,7 @@ app-template:
             GOTRUE_API_PORT: 9999
             API_EXTERNAL_URL: https://readest.grigri.cloud
             GOTRUE_DB_DRIVER: postgres
+            GOTRUE_DB_NAMESPACE: auth
             GOTRUE_DB_DATABASE_URL:
               valueFrom:
                 secretKeyRef:
