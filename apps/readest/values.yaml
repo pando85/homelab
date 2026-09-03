@@ -219,7 +219,7 @@ app-template:
           location ~ ^/auth/v1/authorize {
             if ($args ~* "provider=(google|apple|github|discord)") {
               set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize? permanent;
+              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
             }
           }
           }
@@ -274,7 +274,7 @@ app-template:
           location ~ ^/auth/v1/authorize {
             if ($args ~* "provider=(google|apple|github|discord)") {
               set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize? permanent;
+              rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
             }
           }
       hosts:
