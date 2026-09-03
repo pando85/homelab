@@ -25,7 +25,7 @@ app-template:
               for f in $(find "${PATCHED_DIR}" -name "*.js" -type f); do
                 if grep -q 'provider:"discord"' "$f" 2>/dev/null || grep -q '"Discord"' "$f" 2>/dev/null; then
                   echo "Patching $f"
-                  sed -i 's/provider:"discord"/provider:"keycloak"/g' "$f"
+                  sed -i 's/provider:"discord"/provider:"custom:kanidm"/g' "$f"
                   sed -i 's/"Discord"/"Kanidm"/g' "$f"
                   sed -i 's/(0,i\.jsx)(R,{provider:"google",handleSignIn:n,Icon:U,label:r("Sign in with {{provider}}",{provider:"Google"})}),//g' "$f"
                   sed -i 's/(0,i\.jsx)(R,{provider:"apple",handleSignIn:n,Icon:O\.FaApple,label:r("Sign in with {{provider}}",{provider:"Apple"})}),//g' "$f"
@@ -133,6 +133,7 @@ app-template:
                 secretKeyRef:
                   name: readest-secrets
                   key: secret
+            GOTRUE_CUSTOM_OAUTH_ENABLED: "true"
             GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
             GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
             GOTRUE_MAILER_AUTOCONFIRM: "true"
@@ -140,20 +141,7 @@ app-template:
             GOTRUE_EXTERNAL_APPLE_ENABLED: "false"
             GOTRUE_EXTERNAL_GITHUB_ENABLED: "false"
             GOTRUE_EXTERNAL_DISCORD_ENABLED: "false"
-            GOTRUE_EXTERNAL_KEYCLOAK_ENABLED: "true"
-            GOTRUE_EXTERNAL_KEYCLOAK_NAME: Kanidm
-            GOTRUE_EXTERNAL_KEYCLOAK_CLIENT_ID:
-              valueFrom:
-                secretKeyRef:
-                  name: readest-kanidm-oauth2-credentials
-                  key: CLIENT_ID
-            GOTRUE_EXTERNAL_KEYCLOAK_SECRET:
-              valueFrom:
-                secretKeyRef:
-                  name: readest-kanidm-oauth2-credentials
-                  key: CLIENT_SECRET
-            GOTRUE_EXTERNAL_KEYCLOAK_URL: https://idm.grigri.cloud/oauth2/openid/readest
-            GOTRUE_EXTERNAL_KEYCLOAK_REDIRECT_URI: https://readest.grigri.cloud/auth/v1/callback
+            GOTRUE_EXTERNAL_KEYCLOAK_ENABLED: "false"
           probes:
             liveness: &authProbes
               enabled: true
