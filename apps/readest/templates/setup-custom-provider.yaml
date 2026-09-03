@@ -33,10 +33,12 @@ spec:
               HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
                 -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                 "${AUTH_URL}/admin/custom-providers/custom:kanidm")
+              echo "HTTP response code: ${HTTP_CODE}"
+              cat /tmp/response.json || true
 
               if [ "$HTTP_CODE" = "200" ]; then
                 echo "Provider exists, updating..."
-                curl -sf -X PUT \
+                curl -v -X PUT \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
@@ -51,7 +53,7 @@ spec:
                   "${AUTH_URL}/admin/custom-providers/custom:kanidm"
               else
                 echo "Creating custom:kanidm provider..."
-                curl -sf -X POST \
+                curl -v -X POST \
                   -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
                   -H "Content-Type: application/json" \
                   -d '{
