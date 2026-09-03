@@ -287,6 +287,10 @@ app-template:
         external-dns.alpha.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/server-snippet: |
+          location = /callback {
+            return 301 /auth/callback$is_args$args;
+          }
       hosts:
         - host: *host
           paths:
@@ -344,6 +348,10 @@ app-template:
         external-dns.alpha.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
+        nginx.ingress.kubernetes.io/server-snippet: |
+          location = /callback {
+            return 301 /auth/callback$is_args$args;
+          }
       hosts:
         - host: *externalHost
           paths:
