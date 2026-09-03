@@ -23,10 +23,10 @@ app-template:
               echo "Patching OAuth provider..."
               PATCHED=0
               for f in $(find "${PATCHED_DIR}" -name "*.js" -type f); do
-                if grep -q 'provider:"discord"' "$f" 2>/dev/null; then
+                if grep -q 'provider:"discord"' "$f" 2>/dev/null || grep -q '"Discord"' "$f" 2>/dev/null; then
                   echo "Patching $f"
                   sed -i 's/provider:"discord"/provider:"keycloak"/g' "$f"
-                  sed -i 's/Discord/Kanidm/g' "$f"
+                  sed -i 's/"Discord"/"Kanidm"/g' "$f"
                   PATCHED=$((PATCHED + 1))
                 fi
               done
