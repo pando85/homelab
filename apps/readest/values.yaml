@@ -100,6 +100,7 @@ app-template:
             GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED: "false"
             GOTRUE_MAILER_AUTOCONFIRM: "true"
             GOTRUE_EXTERNAL_OIDC_ENABLED: "true"
+            GOTRUE_EXTERNAL_OIDC_NAME: Kanidm
             GOTRUE_EXTERNAL_OIDC_CLIENT_ID:
               valueFrom:
                 secretKeyRef:
