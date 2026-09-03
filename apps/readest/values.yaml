@@ -251,7 +251,7 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          sub_filter '</head>' '<style>button:has-text("Sign in with Google"), button:has-text("Sign in with Apple"), button:has-text("Sign in with GitHub") { display: none !important; }</style></head>';
+          sub_filter '</body>' '<script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("button").forEach(function(b){if(b.textContent.includes("Sign in with Google")||b.textContent.includes("Sign in with Apple")||b.textContent.includes("Sign in with GitHub"))b.style.display="none"})});</script></body>';
           sub_filter_once on;
           sub_filter_types text/html;
       hosts:
@@ -312,7 +312,7 @@ app-template:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/configuration-snippet: |
-          sub_filter '</head>' '<style>button:has-text("Sign in with Google"), button:has-text("Sign in with Apple"), button:has-text("Sign in with GitHub") { display: none !important; }</style></head>';
+          sub_filter '</body>' '<script>document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("button").forEach(function(b){if(b.textContent.includes("Sign in with Google")||b.textContent.includes("Sign in with Apple")||b.textContent.includes("Sign in with GitHub"))b.style.display="none"})});</script></body>';
           sub_filter_once on;
           sub_filter_types text/html;
       hosts:
