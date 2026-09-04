@@ -9,6 +9,14 @@ app-template:
             # renovate: datasource=docker depName=ghcr.io/readest/readest
             repository: ghcr.io/readest/readest
             tag: 0.12.6
+          env:
+            SUPABASE_PUBLIC_URL: https://readest.grigri.cloud
+            SUPABASE_ANON_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-secrets
+                  key: anon_key
+            API_BASE_URL: https://readest.grigri.cloud
           command:
             - /bin/sh
             - -c
