@@ -140,7 +140,7 @@ app-template:
                   name: readest-db-urls
                   key: auth_url
             GOTRUE_SITE_URL: https://readest.grigri.cloud
-            GOTRUE_URI_ALLOW_LIST: https://readest.grigri.cloud/**,https://readest.internal.grigri.cloud/**
+            GOTRUE_URI_ALLOW_LIST: https://readest.grigri.cloud/**,https://readest.internal.grigri.cloud/**,readest://auth-callback
             GOTRUE_DISABLE_SIGNUP: "false"
             GOTRUE_JWT_ADMIN_ROLES: service_role
             GOTRUE_JWT_AUD: authenticated
@@ -270,11 +270,14 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
         nginx.ingress.kubernetes.io/configuration-snippet: |
+          set $needs_redirect 0;
           if ($args ~* "provider=(google|apple|github|discord)") {
-            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-            rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
+            set $needs_redirect 1;
           }
           if ($args = "") {
+            set $needs_redirect 1;
+          }
+          if ($needs_redirect = 1) {
             set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
             rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
           }
@@ -330,11 +333,14 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
         nginx.ingress.kubernetes.io/configuration-snippet: |
+          set $needs_redirect 0;
           if ($args ~* "provider=(google|apple|github|discord)") {
-            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-            rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
+            set $needs_redirect 1;
           }
           if ($args = "") {
+            set $needs_redirect 1;
+          }
+          if ($needs_redirect = 1) {
             set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
             rewrite ^/auth/v1/authorize(.*)$ /auth/v1/authorize permanent;
           }
