@@ -166,7 +166,6 @@ Retrying in 10 minutes"""
         negative_msg = negative_price_notification(prices)
         if negative_msg:
             self.log(negative_msg, level="WARNING")
-            await self.notify(escape_markdownv2(negative_msg), name=self.args["notify"]["target"])
 
         historical_data = await retry_with_backoff(
             lambda: self.get_history(
@@ -233,10 +232,12 @@ Retrying in 10 minutes"""
                 if is_cheap
                 else ""
             )
+            negative_line = f"\n{negative_msg}" if negative_msg else ""
             escaped_text = escape_markdownv2(f"Programming the climate control for these hours: ")
             link = f"[​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
             escaped_cheap_msg = escape_markdownv2(cheap_msg)
-            msg = f"{escaped_text}{link}{escaped_cheap_msg}"
+            escaped_negative_line = escape_markdownv2(negative_line)
+            msg = f"{escaped_text}{link}{escaped_cheap_msg}{escaped_negative_line}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)

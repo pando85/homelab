@@ -35,16 +35,26 @@ def escape_markdownv2(text: str) -> str:
 
 def negative_price_notification(prices) -> str | None:
     """
-    Build a notification message listing the hours with negative prices.
+    Build a notification message listing the hours with negative prices,
+    merging consecutive hours into ranges (e.g. "12-16h").
 
     Returns None when there are no negative prices.
     """
-    negative = sorted((p for p in prices if p.value < 0), key=lambda p: p.datetime)
-    if not negative:
+    negative_hours = sorted({p.datetime.hour for p in prices if p.value < 0})
+    if not negative_hours:
         return None
-    hours = ", ".join(
-        f"{p.datetime.hour:02d}-{(p.datetime.hour + 1) % 24:02d}h ({p.value:.4f} €/kWh)" for p in negative
-    )
+
+    ranges = []
+    start = prev = negative_hours[0]
+    for hour in negative_hours[1:]:
+        if hour == prev + 1:
+            prev = hour
+            continue
+        ranges.append((start, prev))
+        start = prev = hour
+    ranges.append((start, prev))
+
+    hours = ", ".join(f"{start:02d}-{(end + 1) % 24:02d}h" for start, end in ranges)
     return f"Negative PVPC prices: {hours}"
 
 

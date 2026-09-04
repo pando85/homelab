@@ -92,8 +92,17 @@ class TestNegativePriceNotification:
             self.FakePrice(-0.0047, datetime(2023, 1, 1, 12)),
         ]
         msg = negative_price_notification(prices)
-        assert msg == "Negative PVPC prices: 12-13h (-0.0047 €/kWh), 13-14h (-0.0106 €/kWh)"
+        assert msg == "Negative PVPC prices: 12-14h"
+
+    def test_negative_prices_disjoint_ranges(self):
+        prices = [
+            self.FakePrice(-0.01, datetime(2023, 1, 1, 1)),
+            self.FakePrice(-0.01, datetime(2023, 1, 1, 2)),
+            self.FakePrice(-0.01, datetime(2023, 1, 1, 5)),
+        ]
+        msg = negative_price_notification(prices)
+        assert msg == "Negative PVPC prices: 01-03h, 05-06h"
 
     def test_negative_price_last_hour_wraps(self):
         prices = [self.FakePrice(-0.01, datetime(2023, 1, 1, 23))]
-        assert negative_price_notification(prices) == "Negative PVPC prices: 23-00h (-0.0100 €/kWh)"
+        assert negative_price_notification(prices) == "Negative PVPC prices: 23-00h"

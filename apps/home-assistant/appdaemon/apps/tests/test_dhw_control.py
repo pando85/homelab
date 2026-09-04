@@ -407,4 +407,4 @@ class TestNegativePriceNotification:
         await dhw_control._register_schedulers()
 
         messages = [c.args[0] for c in dhw_control.notify.call_args_list]
-        assert any("Negative PVPC prices" in m for m in messages)
+        assert any("Negative PVPC prices" in m and "Programming the DHW control" in m for m in messages)

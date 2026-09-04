@@ -40,8 +40,8 @@ kubectl --context=grigri -n home-assistant logs -l app=appdaemon --tail=50 | gre
 Fixed in `apps/home-assistant/appdaemon/apps/`:
 
 - `Price` accepts negative prices (they are legitimate market values, not sensor errors)
-- When today's curve contains negative hours, both apps send a notification listing them, e.g.
-  `Negative PVPC prices: 12-13h (-0.0047 €/kWh), 13-14h (-0.0100 €/kWh)`
+- When today's curve contains negative hours, the schedule notification (climate and DHW)
+  includes a line listing them as merged ranges, e.g. `Negative PVPC prices: 12-16h`
 - When fetching prices fails entirely (sensor missing/unavailable), both apps register a
   **fallback schedule** so the aerotherm keeps working, and keep retrying real data every
   10 minutes:

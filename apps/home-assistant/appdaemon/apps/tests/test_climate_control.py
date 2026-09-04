@@ -592,4 +592,4 @@ class TestNegativePriceNotification:
         await climate_control._register_schedulers()
 
         messages = [c.args[0] for c in climate_control.notify.call_args_list]
-        assert any("Negative PVPC prices" in m for m in messages)
+        assert any("Negative PVPC prices" in m and "Programming the climate control" in m for m in messages)

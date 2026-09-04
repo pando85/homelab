@@ -150,7 +150,6 @@ Retrying in 10 minutes"""
         negative_msg = negative_price_notification(prices)
         if negative_msg:
             self.log(negative_msg, level="WARNING")
-            await self.notify(escape_markdownv2(negative_msg), name=self.args["notify"]["target"])
 
         # Get interval_hours from config (default 24 = once per day)
         interval_hours = self.args.get("interval_hours", 24)
@@ -168,9 +167,10 @@ Retrying in 10 minutes"""
         if self.args["notify"]["enabled"]:
             vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
             hours_str = ", ".join(dt.strftime("%H:%M") for dt in datetimes_to_schedule)
+            negative_line = f"\n{negative_msg}" if negative_msg else ""
             escaped_text = escape_markdownv2(f"Programming the DHW control for these hours: {hours_str} ")
             link = f"[​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
-            msg = f"{escaped_text}{link}"
+            msg = f"{escaped_text}{link}{escape_markdownv2(negative_line)}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         await self._schedule_dhw(datetimes_to_schedule)
