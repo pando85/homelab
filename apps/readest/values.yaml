@@ -270,19 +270,24 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
         nginx.ingress.kubernetes.io/configuration-snippet: |
+          set $readest_redirect_to "https://readest.grigri.cloud/auth/callback";
+          if ($arg_redirect_to != "") {
+            set $readest_redirect_to $arg_redirect_to;
+          }
+          set $readest_authorize "no";
+          if ($uri ~* "^/auth/v1/authorize$") {
+            set $readest_authorize "yes";
+          }
+          set $readest_rewrite "no";
           if ($args ~* "provider=(google|apple|github|discord)") {
-            if ($arg_redirect_to != "") {
-              set $args "provider=custom:kanidm&redirect_to=$arg_redirect_to";
-              rewrite ^/authorize$ /authorize permanent;
-            }
-            if ($arg_redirect_to = "") {
-              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/authorize$ /authorize permanent;
-            }
+            set $readest_rewrite "yes";
           }
           if ($args = "") {
-            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-            rewrite ^/authorize$ /authorize permanent;
+            set $readest_rewrite "yes";
+          }
+          set $readest_gate "$readest_authorize:$readest_rewrite";
+          if ($readest_gate = "yes:yes") {
+            rewrite ^ $uri?provider=custom:kanidm&redirect_to=$readest_redirect_to last;
           }
       hosts:
         - host: &host readest.internal.grigri.cloud
@@ -336,19 +341,24 @@ app-template:
         nginx.ingress.kubernetes.io/proxy-body-size: "0"
         nginx.ingress.kubernetes.io/rewrite-target: /$2
         nginx.ingress.kubernetes.io/configuration-snippet: |
+          set $readest_redirect_to "https://readest.grigri.cloud/auth/callback";
+          if ($arg_redirect_to != "") {
+            set $readest_redirect_to $arg_redirect_to;
+          }
+          set $readest_authorize "no";
+          if ($uri ~* "^/auth/v1/authorize$") {
+            set $readest_authorize "yes";
+          }
+          set $readest_rewrite "no";
           if ($args ~* "provider=(google|apple|github|discord)") {
-            if ($arg_redirect_to != "") {
-              set $args "provider=custom:kanidm&redirect_to=$arg_redirect_to";
-              rewrite ^/authorize$ /authorize permanent;
-            }
-            if ($arg_redirect_to = "") {
-              set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-              rewrite ^/authorize$ /authorize permanent;
-            }
+            set $readest_rewrite "yes";
           }
           if ($args = "") {
-            set $args "provider=custom:kanidm&redirect_to=https://readest.grigri.cloud/auth/callback";
-            rewrite ^/authorize$ /authorize permanent;
+            set $readest_rewrite "yes";
+          }
+          set $readest_gate "$readest_authorize:$readest_rewrite";
+          if ($readest_gate = "yes:yes") {
+            rewrite ^ $uri?provider=custom:kanidm&redirect_to=$readest_redirect_to last;
           }
       hosts:
         - host: &externalHost readest.grigri.cloud
