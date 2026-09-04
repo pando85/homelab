@@ -1,8 +1,9 @@
 import asyncio
+from datetime import datetime
 from unittest.mock import MagicMock, AsyncMock
 
 import pytest
-from utils import retry_with_backoff
+from utils import negative_price_notification, retry_with_backoff
 
 
 class TestRetryWithBackoff:
@@ -69,3 +70,30 @@ class TestRetryWithBackoff:
             await retry_with_backoff(func, max_retries=5, initial_delay=0.01)
 
         assert func.call_count == 5
+
+
+class TestNegativePriceNotification:
+    class FakePrice:
+        def __init__(self, value, dt):
+            self.value = value
+            self.datetime = dt
+
+    def test_no_negative_prices(self):
+        prices = [self.FakePrice(0.1, datetime(2023, 1, 1, 10))]
+        assert negative_price_notification(prices) is None
+
+    def test_empty_prices(self):
+        assert negative_price_notification([]) is None
+
+    def test_negative_prices_listed_in_order(self):
+        prices = [
+            self.FakePrice(0.1, datetime(2023, 1, 1, 10)),
+            self.FakePrice(-0.0106, datetime(2023, 1, 1, 13)),
+            self.FakePrice(-0.0047, datetime(2023, 1, 1, 12)),
+        ]
+        msg = negative_price_notification(prices)
+        assert msg == "Negative PVPC prices: 12-13h (-0.0047 €/kWh), 13-14h (-0.0106 €/kWh)"
+
+    def test_negative_price_last_hour_wraps(self):
+        prices = [self.FakePrice(-0.01, datetime(2023, 1, 1, 23))]
+        assert negative_price_notification(prices) == "Negative PVPC prices: 23-00h (-0.0100 €/kWh)"

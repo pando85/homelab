@@ -9,7 +9,7 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from utils import escape_markdownv2, retry_with_backoff
+from utils import escape_markdownv2, negative_price_notification, retry_with_backoff
 
 
 @dataclass
@@ -146,6 +146,11 @@ Retrying in 10 minutes"""
             return await self._register_schedulers()
 
         self.log(f"{prices=}", level="DEBUG")
+
+        negative_msg = negative_price_notification(prices)
+        if negative_msg:
+            self.log(negative_msg, level="WARNING")
+            await self.notify(escape_markdownv2(negative_msg), name=self.args["notify"]["target"])
 
         # Get interval_hours from config (default 24 = once per day)
         interval_hours = self.args.get("interval_hours", 24)

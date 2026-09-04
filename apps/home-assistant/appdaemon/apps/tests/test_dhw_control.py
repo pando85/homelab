@@ -388,3 +388,23 @@ class TestFallbackSchedule:
             await dhw_control._register_schedulers()
 
         dhw_control._register_fallback_schedule.assert_called_once()
+
+
+class TestNegativePriceNotification:
+    @pytest.mark.asyncio
+    async def test_register_schedulers_notifies_negative_prices(self, dhw_control):
+        now = datetime.now()
+        base = datetime(now.year, now.month, now.day)
+        prices = [Price(value=0.1 * (i + 1), datetime=base + timedelta(hours=i)) for i in range(24)]
+        prices[12] = Price(value=-0.0047, datetime=base + timedelta(hours=12))
+        dhw_control._get_prices = AsyncMock(return_value=prices)
+        dhw_control._unregister_schedulers = AsyncMock()
+        dhw_control._force_dhw = AsyncMock()
+        dhw_control._force_dhw.__name__ = "_force_dhw"
+        dhw_control.run_at = AsyncMock(return_value="timer")
+        dhw_control.notify = AsyncMock()
+
+        await dhw_control._register_schedulers()
+
+        messages = [c.args[0] for c in dhw_control.notify.call_args_list]
+        assert any("Negative PVPC prices" in m for m in messages)

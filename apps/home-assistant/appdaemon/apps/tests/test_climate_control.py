@@ -569,3 +569,27 @@ class TestFallbackSchedule:
             await climate_control._register_schedulers()
 
         climate_control._register_fallback_schedule.assert_called_once()
+
+
+class TestNegativePriceNotification:
+    @pytest.mark.asyncio
+    async def test_register_schedulers_notifies_negative_prices(self, climate_control):
+        now = datetime.now()
+        base = datetime(now.year, now.month, now.day)
+        prices = [Price(value=0.1 * (i + 1), datetime=base + timedelta(hours=i)) for i in range(24)]
+        prices[12] = Price(value=-0.0047, datetime=base + timedelta(hours=12))
+        climate_control._get_prices = AsyncMock(return_value=prices)
+        climate_control._unregister_schedulers = AsyncMock()
+        climate_control.get_history = AsyncMock(return_value=None)
+        climate_control.get_state = AsyncMock(return_value="4")
+        climate_control.notify = AsyncMock()
+        climate_control._start_hvac = AsyncMock()
+        climate_control._start_hvac.__name__ = "_start_hvac"
+        climate_control._stop_hvac = AsyncMock()
+        climate_control._stop_hvac.__name__ = "_stop_hvac"
+        climate_control.run_at = AsyncMock(return_value="timer")
+
+        await climate_control._register_schedulers()
+
+        messages = [c.args[0] for c in climate_control.notify.call_args_list]
+        assert any("Negative PVPC prices" in m for m in messages)
