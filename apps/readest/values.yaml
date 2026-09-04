@@ -141,6 +141,10 @@ app-template:
                   key: auth_url
             GOTRUE_SITE_URL: https://readest.grigri.cloud
             GOTRUE_URI_ALLOW_LIST: https://readest.grigri.cloud/**,https://readest.internal.grigri.cloud/**,readest://auth-callback
+            # supabase-js sends the apikey header on every request; the native
+            # apps call the API cross-origin (tauri.localhost) so the CORS
+            # preflight must allow it, otherwise session establishment fails.
+            GOTRUE_CORS_ALLOWED_HEADERS: apikey
             GOTRUE_DISABLE_SIGNUP: "false"
             GOTRUE_JWT_ADMIN_ROLES: service_role
             GOTRUE_JWT_AUD: authenticated
