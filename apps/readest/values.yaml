@@ -40,6 +40,15 @@ app-template:
               fi
 
               echo "Patched $PATCHED file(s)"
+
+              echo "Generating client discovery configs..."
+              PUBLIC_DIR="/next-public"
+              mkdir -p "${PUBLIC_DIR}/.well-known" "${PUBLIC_DIR}/api/public"
+              printf '{"apiBaseUrl":"%s","supabaseUrl":"%s","supabaseAnonKey":"%s"}\n' \
+                "$API_BASE_URL" "$SUPABASE_PUBLIC_URL" "$SUPABASE_ANON_KEY" \
+                > "${PUBLIC_DIR}/.well-known/readest-client-config.json"
+              cp "${PUBLIC_DIR}/.well-known/readest-client-config.json" "${PUBLIC_DIR}/api/public/runtime-config"
+              echo "Done."
       containers:
         client:
           image:
@@ -377,3 +386,12 @@ app-template:
             - path: /patched-static
           client:
             - path: /app/apps/readest-app/.next/static
+    next-public:
+      type: emptyDir
+      sizeLimit: 1Mi
+      advancedMounts:
+        client:
+          patch-oauth:
+            - path: /next-public
+          client:
+            - path: /app/apps/readest-app/public
