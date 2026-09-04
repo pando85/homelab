@@ -160,6 +160,39 @@ Server side:
 - **Manual DB row:** the `custom:kanidm` provider lives in `auth.custom_oauth_providers`
   (inserted manually due to SSRF validation) — re-insert if the database is recreated.
 
+## When It Breaks Again (Regression Checklist)
+
+Mobile login only depends on server config + the APK's expectations, so regressions come from
+**gotrue upgrades**, **ingress config drift**, or **new APK versions**. Check in this order:
+
+1. **Replay the redirect chain** (each `location` must match):
+   ```bash
+   curl -sI "https://readest.grigri.cloud/auth/v1/authorize?provider=discord&redirect_to=readest://auth-callback"
+   # expect: /auth/v1/authorize?provider=custom:kanidm&redirect_to=readest://auth-callback
+   curl -s -D - -o /dev/null "https://readest.grigri.cloud/auth/v1/authorize?provider=custom:kanidm&redirect_to=readest://auth-callback"
+   # expect: idm.grigri.cloud/ui/oauth2?...&redirect_to=readest%3A%2F%2Fauth-callback&redirect_uri=...
+   curl -sI "https://readest.grigri.cloud/callback?code=x&state=y"
+   # expect: /auth/v1/callback?code=x&state=y
+   ```
+2. **CORS preflight** (deep link works but app says "go to login"):
+   ```bash
+   curl -s -D - -o /dev/null -X OPTIONS "https://readest.grigri.cloud/auth/v1/user" \
+     -H "Origin: https://tauri.localhost" -H "Access-Control-Request-Method: GET" \
+     -H "Access-Control-Request-Headers: apikey,authorization,x-client-info" | grep -i access-control
+   # allow-headers MUST include apikey; a bare 204 = preflight fails
+   ```
+3. **GoTrue env:** `GOTRUE_URI_ALLOW_LIST` includes `readest://auth-callback`,
+   `GOTRUE_CORS_ALLOWED_HEADERS` includes `apikey`.
+4. **Device-side:** `adb logcat -s NativeBridgePlugin` — compare `Launching OAuth URL:` and
+   `Received intent:` against the expected shapes above. Token in intent but no session ⇒ step 2/3.
+   No `Received intent` ⇒ intent filter/deep-link scheme changed in the APK.
+5. **Server-side:** device IP should hit `/authorize`, `/callback`, then `/user` (or `/token`).
+   Missing `/user` ⇒ client blocked (CORS); `/authorize` shows `provider=discord` ⇒ nginx rewrite
+   broken (see `docs/deployment/readest.md` failure runbook).
+
+For non-mobile failures (init-container patch, `/callback` 404, lost provider row after DB
+recreate), see the "Failure Modes and Recovery" runbook in `docs/deployment/readest.md`.
+
 ## References
 
 - `apps/readest/values.yaml` — nginx snippets, GoTrue env (`GOTRUE_URI_ALLOW_LIST`,

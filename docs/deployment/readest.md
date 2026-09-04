@@ -347,6 +347,96 @@ Readest is a freemium SaaS product with tiered quotas. For self-hosted deploymen
 
 Mobile login deep-dive (flow, root causes, diagnosis): `docs/troubleshooting/readest-android-oauth.md`.
 
+### Failure Modes and Recovery (Runbook)
+
+Most breakage happens after **Renovate bumps `ghcr.io/readest/readest` or `supabase/gotrue`**.
+After merging such PRs, always smoke-test: web login (Kanidm button) and mobile login.
+
+**Triage first:** web broken → provider row / init patch / nginx snippets. Mobile-only broken →
+CORS, `GOTRUE_URI_ALLOW_LIST`, provider rewrite. Quick check chain:
+
+```bash
+curl -sI  "https://readest.grigri.cloud/auth/v1/authorize?provider=discord&redirect_to=readest://auth-callback" | grep -i location   # nginx rewrite
+curl -sI  "https://readest.grigri.cloud/callback" | grep -i location                                                                 # callback redirect
+curl -s -D - -o /dev/null -X OPTIONS "https://readest.grigri.cloud/auth/v1/user" \
+  -H "Origin: https://tauri.localhost" -H "Access-Control-Request-Method: GET" \
+  -H "Access-Control-Request-Headers: apikey,authorization,x-client-info" | grep -i access-control-allow-headers                     # CORS
+```
+
+#### 1. Init container `patch-oauth` fails (Readest web upgrade)
+
+- **Symptoms:** `readest-client` pod stuck in `Init:Error`/`CrashLoopBackOff` (script exits 1
+  when it can't find `provider:"discord"` — loud by design). If pods start but the login screen
+  shows Google/Apple/GitHub buttons again, a button-removal `sed` pattern silently stopped
+  matching.
+- **Diagnose:**
+  ```bash
+  kubectl --context=grigri logs -n readest deploy/readest-client -c patch-oauth
+  ```
+- **Fix:** find the new minified patterns and update the init script in `apps/readest/values.yaml`:
+  ```bash
+  # inspect the new image's bundles
+  docker run --rm -it --entrypoint sh ghcr.io/readest/readest:<newtag>
+  grep -rl 'provider:"discord"' /  2>/dev/null   # locate the bundle(s)
+  grep -o 'provider:"discord"[^,]*' <bundle>
+  ```
+  Diff old vs new bundle to see what changed (minifier output shifts between releases), adapt the
+  `sed` expressions, `helm lint` + `helm template`, commit. Re-verify the login screen after sync.
+
+#### 2. Nginx provider rewrite no longer triggers (login lands on web UI / "unsupported provider")
+
+- **Symptoms:** mobile login completes but stays in browser; GoTrue logs show
+  `provider=discord` reaching `/authorize` (rewrite skipped) or provider errors.
+- **Diagnose:** first `curl` above — the `location` must contain
+  `provider=custom:kanidm&redirect_to=readest://auth-callback`. Check what the app actually sends:
+  `adb logcat -s NativeBridgePlugin` → `Launching OAuth URL:` (new APK versions may change the URL
+  shape, e.g. new provider ids, extra params, PKCE `code_challenge`).
+- **Fix:** update the `configuration-snippet` gate conditions in `apps/readest/values.yaml`
+  (both `readest-api` and `external-api` ingresses). Keep the nginx "if is evil" rules in
+  `docs/troubleshooting/readest-android-oauth.md` in mind: no nested `if`, no `map` in snippets,
+  `return 302` instead of `rewrite ... last`.
+
+#### 3. `/callback` returns 404 after Kanidm login
+
+- **Symptoms:** browser shows a Next.js 404 on `readest.grigri.cloud/callback?code=...`.
+- **Diagnose:** second `curl` above must return `301 → /auth/v1/callback`. Verify the
+  `server-snippet` exists on both client ingresses (`readest-client`, `external-client`).
+- **Fix:** restore the `location = /callback { return 301 /auth/v1/callback$is_args$args; }`
+  server-snippet.
+
+#### 4. Login fails for everyone after DB recreation/restore (custom provider row lost)
+
+- **Symptoms:** "unsupported provider" or provider-not-found in GoTrue logs; web and mobile both
+  broken. The `custom:kanidm` row is a manual insert, **not** GitOps-managed.
+- **Diagnose:**
+  ```bash
+  kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+    psql -U supabase_auth_admin -d readest -c \
+    "SELECT identifier, enabled FROM auth.custom_oauth_providers;"
+  ```
+- **Fix:** re-run the `INSERT` from the "GoTrue SSRF Protection" section above, and — if the DB
+  was recreated — repeat the one-time steps: Supabase schemas/enums, `ALTER DATABASE ... SET
+  search_path` (Deployment Steps 10).
+
+#### 5. Mobile "go to login" returns (CORS or URI allow-list regression)
+
+- **Symptoms:** deep link returns to the app but no session. After gotrue upgrades, CORS defaults
+  or env-var names may change.
+- **Diagnose:** third `curl` above — `access-control-allow-headers` must include `apikey` (a 204
+  with no CORS headers = preflight failure). Then check GoTrue logs for the device IP: only
+  `/authorize`+`/callback` and no `/user`/`/token` = client-side call blocked. Also verify
+  `GOTRUE_URI_ALLOW_LIST` still contains `readest://auth-callback`.
+- **Fix:** re-apply `GOTRUE_CORS_ALLOWED_HEADERS: apikey`; if the upgraded gotrue renamed the
+  setting, check `internal/conf/configuration.go` (`CORSConfiguration`) in the matching
+  supabase/auth tag. If the new APK changed the deep-link scheme, update the allow-list and the
+  rewrite's default `redirect_to` accordingly.
+
+#### 6. Users appear as "free" on mobile (known limitation)
+
+GoTrue puts `plan`/quotas in `user_metadata`; the app reads a top-level `plan` claim. UI-gating
+only — server quotas are unaffected. Long-term fix: GoTrue custom access-token hook promoting the
+claims. See `docs/troubleshooting/readest-android-oauth.md`.
+
 ### Future Improvements
 
 If Readest adds support for custom OAuth providers via runtime configuration, we can:
