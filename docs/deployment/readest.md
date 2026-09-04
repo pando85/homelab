@@ -179,6 +179,26 @@ The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Di
 8. GoTrue completes the authentication and redirects back to Readest
 9. User is logged in and sees their library
 
+### Native App Support (Android)
+
+The official Android APK works against this deployment, but it cannot be patched like the web
+image (its JS is bundled in the APK), so login depends entirely on the server side:
+
+1. **Nginx provider rewrite preserves `redirect_to`.** The APK always sends
+   `provider=discord&redirect_to=readest://auth-callback`. The API ingress
+   `configuration-snippet` rewrites the provider to `custom:kanidm` while keeping `redirect_to`
+   (default web callback URL when absent). Uses flag variables + `return 302` — see the
+   troubleshooting doc for the nginx pitfalls ("if is evil", rewrite loops).
+2. **`GOTRUE_URI_ALLOW_LIST` includes `readest://auth-callback`**, otherwise GoTrue silently
+   ignores the deep-link redirect target and sends the browser back to the web UI.
+3. **`GOTRUE_CORS_ALLOWED_HEADERS: apikey`.** The Tauri WebView is cross-origin with the API, so
+   supabase-js calls go through CORS preflight; GoTrue's defaults don't allow the `apikey` header
+   that supabase-js sends on every request, which silently breaks session establishment after the
+   deep link returns (app says "go to login"). Supabase Cloud hides this behind Kong.
+
+Full flow, root causes and diagnosis commands:
+`docs/troubleshooting/readest-android-oauth.md`.
+
 ### Learnings and Workarounds
 
 This integration required several workarounds due to limitations in GoTrue and Readest:
@@ -316,12 +336,16 @@ Readest is a freemium SaaS product with tiered quotas. For self-hosted deploymen
 | Hack | Why | Maintenance Burden |
 |------|-----|-------------------|
 | Init container patches JS bundles | Readest UI hardcoded | Medium - must update if UI changes |
-| Nginx rewrite for provider param | Belt and suspenders | Low |
+| Nginx rewrite for provider param (preserves `redirect_to`) | Web UI hardcoded + APK can't be patched | Medium - snippet must survive UI/URL changes |
 | Nginx redirect `/callback` → `/auth/v1/callback` | GoTrue callback URL construction | Low |
 | Manual DB insert for custom provider | GoTrue SSRF protection | High - not GitOps-managed |
 | Manual schema setup | Zalando doesn't auto-create Supabase schemas | Low - one-time per DB |
 | Database search path | GoTrue can't find auth schema | Low - one-time per DB |
 | Environment variable quotas | Self-hosted deployment | Low - GitOps-managed |
+| `GOTRUE_URI_ALLOW_LIST` deep-link scheme | Android app returns via `readest://` | Low - GitOps-managed |
+| `GOTRUE_CORS_ALLOWED_HEADERS: apikey` | GoTrue CORS omits `apikey`; Tauri WebView is cross-origin | Low - GitOps-managed |
+
+Mobile login deep-dive (flow, root causes, diagnosis): `docs/troubleshooting/readest-android-oauth.md`.
 
 ### Future Improvements
 
@@ -333,6 +357,11 @@ If Readest adds support for custom OAuth providers via runtime configuration, we
 If GoTrue adds support for private hosts in custom OAuth providers, we can:
 - Use the GoTrue API to register the provider instead of manual DB insert
 - Manage the provider configuration via GitOps
+
+Open mobile gap: GoTrue puts Kanidm claims (`plan`, quotas) in `user_metadata`, but the app reads
+a top-level `plan` JWT claim, so mobile users resolve as "free" (cosmetic/UI-gating; server-side
+quotas are unaffected). Fix would be a GoTrue custom access-token hook promoting those claims.
+See `docs/troubleshooting/readest-android-oauth.md#known-limitations--follow-ups`.
 
 ## MinIO (Shared Instance)
 

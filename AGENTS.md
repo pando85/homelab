@@ -213,6 +213,11 @@ will be detected and reverted almost instantly. The git repository is the single
 - Kanidm restore requires `KanidmRestore` CR with matching `targetRef.uid`, pinned `restoreImage`,
   and safety backup (or break-glass annotations). Restore job permission bug (#1005) causes failures.
   See `docs/troubleshooting/kanidm-restore-procedure.md`
+- GoTrue's CORS allow-list omits the `apikey` header that supabase-js sends on every request. Web
+  clients are same-origin (no preflight), but cross-origin Tauri/mobile WebViews fail silently at
+  preflight and session establishment dies ("go to login"). Fix: `GOTRUE_CORS_ALLOWED_HEADERS: apikey`.
+  Android login also needs `readest://auth-callback` in `GOTRUE_URI_ALLOW_LIST` and an nginx
+  provider rewrite that preserves `redirect_to`. See `docs/troubleshooting/readest-android-oauth.md`
 
 ## Subsystem Docs
 
