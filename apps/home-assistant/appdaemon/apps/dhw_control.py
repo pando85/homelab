@@ -9,7 +9,7 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from utils import escape_markdownv2, negative_price_notification, retry_with_backoff
+from utils import escape_markdownv2, retry_with_backoff
 
 
 @dataclass
@@ -147,10 +147,6 @@ Retrying in 10 minutes"""
 
         self.log(f"{prices=}", level="DEBUG")
 
-        negative_msg = negative_price_notification(prices)
-        if negative_msg:
-            self.log(negative_msg, level="WARNING")
-
         # Get interval_hours from config (default 24 = once per day)
         interval_hours = self.args.get("interval_hours", 24)
         if interval_hours not in (1, 2, 3, 4, 6, 8, 12, 24):
@@ -167,10 +163,9 @@ Retrying in 10 minutes"""
         if self.args["notify"]["enabled"]:
             vega_diagram = self._generate_vega_diagram(datetimes_to_schedule)
             hours_str = ", ".join(dt.strftime("%H:%M") for dt in datetimes_to_schedule)
-            negative_line = f"\n{negative_msg}" if negative_msg else ""
             escaped_text = escape_markdownv2(f"Programming the DHW control for these hours: {hours_str} ")
             link = f"[​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
-            msg = f"{escaped_text}{link}{escape_markdownv2(negative_line)}"
+            msg = f"{escaped_text}{link}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
         await self._schedule_dhw(datetimes_to_schedule)
