@@ -68,13 +68,13 @@ class TestPrice:
         price = Price(value=0.0, datetime=datetime(2023, 1, 1, 12))
         assert price.value == 0.0
 
-    def test_negative_price_raises(self):
-        with pytest.raises(ValueError):
-            Price(value=-0.1, datetime=datetime(2023, 1, 1, 12))
+    def test_negative_price_allowed(self):
+        price = Price(value=-0.1, datetime=datetime(2023, 1, 1, 12))
+        assert price.value == -0.1
 
     def test_negative_price_small_value(self):
-        with pytest.raises(ValueError):
-            Price(value=-0.0001, datetime=datetime(2023, 1, 1, 12))
+        price = Price(value=-0.0001, datetime=datetime(2023, 1, 1, 12))
+        assert price.value == -0.0001
 
 
 @pytest.mark.asyncio
@@ -196,8 +196,10 @@ async def test_get_prices_negative_values(climate_control):
     }
     climate_control.get_state = AsyncMock(return_value=pvpc_sensor_data)
 
-    with pytest.raises(ValueError):
-        await climate_control._get_prices()
+    prices = await climate_control._get_prices()
+    assert len(prices) == 24
+    values = [p.value for p in prices]
+    assert -0.2 in values
 
 
 @pytest.mark.parametrize(
@@ -528,3 +530,42 @@ class TestResilience:
         result = climate_control._group_for_scheduling(datetimes)
         assert len(result) == 1
         assert len(result[0]) == 24
+
+
+class TestFallbackSchedule:
+    @pytest.mark.asyncio
+    async def test_register_fallback_schedule_starts_hvac_now(self, climate_control):
+        climate_control.get_state = AsyncMock(return_value="4")
+        climate_control._start_hvac = AsyncMock()
+        climate_control._start_hvac.__name__ = "_start_hvac"
+        climate_control._stop_hvac = AsyncMock()
+        climate_control._stop_hvac.__name__ = "_stop_hvac"
+        climate_control.run_at = AsyncMock(return_value="timer")
+
+        await climate_control._register_fallback_schedule()
+
+        climate_control._start_hvac.assert_called_once()
+        climate_control.run_at.assert_called_once()
+        climate_control._stop_hvac.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_register_schedulers_falls_back_when_prices_unavailable(self, climate_control):
+        now = datetime.now()
+        base = datetime(now.year, now.month, now.day)
+        valid_prices = [Price(value=0.1 * (i + 1), datetime=base + timedelta(hours=i)) for i in range(24)]
+        climate_control._get_prices = AsyncMock(side_effect=[TypeError("'NoneType' object is not subscriptable"), valid_prices])
+        climate_control._register_fallback_schedule = AsyncMock()
+        climate_control._unregister_schedulers = AsyncMock()
+        climate_control.get_history = AsyncMock(return_value=None)
+        climate_control.get_state = AsyncMock(return_value="4")
+        climate_control.notify = AsyncMock()
+        climate_control._start_hvac = AsyncMock()
+        climate_control._start_hvac.__name__ = "_start_hvac"
+        climate_control._stop_hvac = AsyncMock()
+        climate_control._stop_hvac.__name__ = "_stop_hvac"
+        climate_control.run_at = AsyncMock(return_value="timer")
+
+        with patch('climate_control.asyncio.sleep', new_callable=AsyncMock):
+            await climate_control._register_schedulers()
+
+        climate_control._register_fallback_schedule.assert_called_once()

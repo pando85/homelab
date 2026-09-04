@@ -93,13 +93,13 @@ class TestPrice:
         price = Price(value=0.0, datetime=datetime(2023, 1, 1, 12))
         assert price.value == 0.0
 
-    def test_negative_price_raises(self):
-        with pytest.raises(ValueError):
-            Price(value=-0.1, datetime=datetime(2023, 1, 1, 12))
+    def test_negative_price_allowed(self):
+        price = Price(value=-0.1, datetime=datetime(2023, 1, 1, 12))
+        assert price.value == -0.1
 
     def test_negative_price_small_value(self):
-        with pytest.raises(ValueError):
-            Price(value=-0.0001, datetime=datetime(2023, 1, 1, 12))
+        price = Price(value=-0.0001, datetime=datetime(2023, 1, 1, 12))
+        assert price.value == -0.0001
 
 
 class TestGetPrices:
@@ -358,3 +358,33 @@ class TestResilience:
 
         with pytest.raises(Exception):
             await dhw_control._force_dhw()
+
+
+class TestFallbackSchedule:
+    @pytest.mark.asyncio
+    async def test_register_fallback_schedule(self, dhw_control):
+        dhw_control._force_dhw = AsyncMock()
+        dhw_control._force_dhw.__name__ = "_force_dhw"
+        dhw_control.run_at = AsyncMock(return_value="timer")
+
+        await dhw_control._register_fallback_schedule()
+
+        assert dhw_control._force_dhw.called or dhw_control.timers
+
+    @pytest.mark.asyncio
+    async def test_register_schedulers_falls_back_when_prices_unavailable(self, dhw_control):
+        now = datetime.now()
+        base = datetime(now.year, now.month, now.day)
+        valid_prices = [Price(value=0.1 * (i + 1), datetime=base + timedelta(hours=i)) for i in range(24)]
+        dhw_control._get_prices = AsyncMock(side_effect=[TypeError("'NoneType' object is not subscriptable"), valid_prices])
+        dhw_control._register_fallback_schedule = AsyncMock()
+        dhw_control._unregister_schedulers = AsyncMock()
+        dhw_control._force_dhw = AsyncMock()
+        dhw_control._force_dhw.__name__ = "_force_dhw"
+        dhw_control.run_at = AsyncMock(return_value="timer")
+        dhw_control.notify = AsyncMock()
+
+        with patch('dhw_control.asyncio.sleep', new_callable=AsyncMock):
+            await dhw_control._register_schedulers()
+
+        dhw_control._register_fallback_schedule.assert_called_once()

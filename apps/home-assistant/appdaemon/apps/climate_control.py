@@ -19,10 +19,6 @@ class Price:
     value: float
     datetime: datetime
 
-    def __post_init__(self):
-        if self.value < 0:
-            raise ValueError
-
 
 def is_float(value):
     try:
@@ -156,12 +152,12 @@ Retrying in 10 minutes"""
         try:
             prices = await self._get_prices()
         except Exception as e:
-            # Retry in 10 minutes
             self.log(f"Error getting prices: {e}", level="ERROR")
             await self.notify(
-                escape_markdownv2("Error getting prices: retrying in 10 minutes"),
+                escape_markdownv2("Error getting prices: using fallback schedule, retrying in 10 minutes"),
                 name=self.args["notify"]["target"],
             )
+            await self._register_fallback_schedule()
             await asyncio.sleep(600)
             return await self._register_schedulers()
 
@@ -239,6 +235,18 @@ Retrying in 10 minutes"""
             await self.notify(msg, name=self.args["notify"]["target"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
+        await self._schedule_hours(groups_to_schedule)
+
+    async def _register_fallback_schedule(self):
+        min_hours = int(float(await self.get_state(self.args["input_number"]["min_hours_per_day"])))
+        now = datetime.now(self.get_timezone())
+        base = datetime(now.year, now.month, now.day, now.hour)
+        datetimes_to_schedule = [base + timedelta(hours=i) for i in range(min_hours)]
+        self.log(f"Registering fallback schedule: {datetimes_to_schedule}", level="WARNING")
+        groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
+        await self._schedule_hours(groups_to_schedule)
+
+    async def _schedule_hours(self, groups_to_schedule):
         now = datetime.now(self.get_timezone())
         current_hour = datetime(now.year, now.month, now.day, now.hour)
 

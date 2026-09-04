@@ -17,10 +17,6 @@ class Price:
     value: float
     datetime: datetime
 
-    def __post_init__(self):
-        if self.value < 0:
-            raise ValueError
-
 
 def chunk_list(lst: List, chunk_size: int) -> List[List]:
     """Split a list into chunks of specified size."""
@@ -140,12 +136,12 @@ Retrying in 10 minutes"""
         try:
             prices = await self._get_prices()
         except Exception as e:
-            # Retry in 10 minutes
             self.log(f"Error getting prices: {e}", level="ERROR")
             await self.notify(
-                escape_markdownv2("Error getting prices: retrying in 10 minutes"),
+                escape_markdownv2("Error getting prices: using fallback schedule, retrying in 10 minutes"),
                 name=self.args["notify"]["target"],
             )
+            await self._register_fallback_schedule()
             await asyncio.sleep(600)
             return await self._register_schedulers()
 
@@ -172,6 +168,22 @@ Retrying in 10 minutes"""
             msg = f"{escaped_text}{link}"
             await self.notify(msg, name=self.args["notify"]["target"])
 
+        await self._schedule_dhw(datetimes_to_schedule)
+
+    async def _register_fallback_schedule(self):
+        interval_hours = self.args.get("interval_hours", 24)
+        if interval_hours not in (1, 2, 3, 4, 6, 8, 12, 24):
+            interval_hours = 24
+        now = datetime.now(self.get_timezone())
+        current_hour = datetime(now.year, now.month, now.day, now.hour)
+        datetimes_to_schedule = [datetime(now.year, now.month, now.day, h) for h in range(0, 24, interval_hours)]
+        # if all window starts are already past, force DHW now instead of skipping the day
+        if all(slot <= current_hour for slot in datetimes_to_schedule):
+            datetimes_to_schedule.insert(0, current_hour)
+        self.log(f"Registering fallback schedule: {datetimes_to_schedule}", level="WARNING")
+        await self._schedule_dhw(datetimes_to_schedule)
+
+    async def _schedule_dhw(self, datetimes_to_schedule):
         now = datetime.now(self.get_timezone())
         current_hour = datetime(now.year, now.month, now.day, now.hour)
 

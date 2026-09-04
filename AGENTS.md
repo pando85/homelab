@@ -197,8 +197,12 @@ will be detected and reverted almost instantly. The git repository is the single
   `decode_text` parameter, breaking WebSocket API. Fix: install `aiohttp==3.14.0` in venv.
   See `docs/troubleshooting/home-assistant-aiohttp-incompatibility.md`
 - ESIOS API (`api.esios.ree.es`) returns ZIP archives with `Content-Type: text/html` instead of
-  JSON for `/archives/70/download_json`, breaking `pvpc_updated` integration. Workaround: patch
+  JSON for `/archives/70/download_json`, breaking the `pvpc_updated` integration. Workaround: patch
   `pvpc_data.py` to handle ZIP format. See `docs/troubleshooting/pvpc-updated-esios-api-zip-response.md`
+- Negative PVPC prices are normal with high solar generation. AppDaemon climate/DHW control used to
+  reject them with a bare `ValueError` (empty `Error getting prices:` log), halting aerotherm
+  scheduling. Apps now accept negative prices and use a fallback schedule when price fetching fails.
+  See `docs/troubleshooting/appdaemon-pvpc-negative-prices.md`
 - qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
   in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)
   and increase startup probe timeout. See `docs/troubleshooting/qbittorrent-hdd-io-saturation.md`
