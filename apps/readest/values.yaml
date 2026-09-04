@@ -287,7 +287,7 @@ app-template:
           }
           set $readest_gate "$readest_authorize:$readest_rewrite";
           if ($readest_gate = "yes:yes") {
-            rewrite ^ $uri?provider=custom:kanidm&redirect_to=$readest_redirect_to last;
+            return 302 $uri?provider=custom:kanidm&redirect_to=$readest_redirect_to;
           }
       hosts:
         - host: &host readest.internal.grigri.cloud
@@ -358,7 +358,7 @@ app-template:
           }
           set $readest_gate "$readest_authorize:$readest_rewrite";
           if ($readest_gate = "yes:yes") {
-            rewrite ^ $uri?provider=custom:kanidm&redirect_to=$readest_redirect_to last;
+            return 302 $uri?provider=custom:kanidm&redirect_to=$readest_redirect_to;
           }
       hosts:
         - host: &externalHost readest.grigri.cloud
