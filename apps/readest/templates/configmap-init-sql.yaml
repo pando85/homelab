@@ -79,6 +79,8 @@ data:
     done
 
     echo "Granting permissions..."
+    psql -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA auth TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon, authenticated;"
     psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;"
     psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;"
     psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;"
