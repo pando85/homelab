@@ -29,14 +29,15 @@ Single domain `readest.grigri.cloud` with nginx path-based routing. No separate 
 
 | Controller | Image | Port | Purpose |
 |---|---|---|---|
-| `client` | `ghcr.io/readest/readest:0.9.20` | 3000 | Next.js web app |
-| `db-init` | init container (same as client) | — | Runs Supabase bootstrap SQL on first start |
-| `auth` | `supabase/gotrue:v2.185.0` | 9999 | Auth service (OIDC client) |
+| `client` | `ghcr.io/readest/readest:0.12.6` | 3000 | Next.js web app |
+| `db-migrate` | init container (`postgres:17-alpine`) | — | Downloads and applies Readest DB schema at startup |
+| `patch-oauth` | init container (same as client) | — | Patches JS bundles for Kanidm OAuth |
+| `auth` | `supabase/gotrue:v2.196.0` | 9999 | Auth service (OIDC client) |
 | `rest` | `postgrest/postgrest:v14.3` | 3000 | REST API (auto-generated from Postgres schema) |
 
 No MinIO controller — uses shared `platform/minio/` instance.
 
-## Database: Zalando Postgres + Supabase Bootstrap
+## Database: Zalando Postgres + Automated Migrations
 
 Readest's schema is tightly coupled to Supabase (uses `auth.users` FK, `auth.uid()` in RLS policies, Supabase roles). The solution:
 
@@ -45,9 +46,18 @@ Readest's schema is tightly coupled to Supabase (uses `auth.users` FK, `auth.uid
    - Create `auth`, `storage`, `realtime`, `graphql_public` schemas
    - Create enum types: `auth.factor_type`, `auth.code_challenge_method`, `auth.one_time_token_type`
 3. **GoTrue** runs migrations on first start to create tables in the `auth` schema
-4. SQL files mounted from ConfigMap (vendored from upstream Readest repo)
+4. **`db-migrate` init container** automatically downloads and applies the Readest app schema:
+   - Downloads `schema.sql` and all migrations from GitHub at `DB_SCHEMA_VERSION` (matches container image tag)
+   - Creates required roles (`anon`, `authenticated`, `service_role`) and `extensions` schema
+   - Applies base schema + incremental migrations with idempotent ledger tracking (`readest_meta.migrations`)
+   - Uses advisory lock for safe concurrent pod starts
+   - Sends `NOTIFY pgrst, 'reload schema'` so PostgREST picks up new tables without restart
 
-**Note:** The manual schema setup is a one-time operation. If the database is recreated, these steps must be repeated.
+**Note:** The manual schema setup (step 2) is a one-time operation. If the database is recreated, these steps must be repeated. The `db-migrate` init container handles the Readest app tables automatically on every pod start.
+
+### Schema Version Tracking
+
+The `DB_SCHEMA_VERSION` env var in the `db-migrate` init container must match the Readest container image tag. When Renovate bumps the image tag, also update `DB_SCHEMA_VERSION` to ensure the correct migrations are downloaded.
 
 ### Zalando CR
 
@@ -274,7 +284,7 @@ nginx.ingress.kubernetes.io/server-snippet: |
 - Register provider with identifier `discord` - GoTrue rejects because `discord` is a built-in provider
 - Use environment-based OIDC (`GOTRUE_EXTERNAL_OIDC_*`) - same SSRF protection
 
-**Workaround:** 
+**Workaround:**
 1. Init container patches UI to send `provider:"custom:kanidm"` instead of `provider:"discord"`
 2. Nginx rewrite converts any remaining hardcoded provider params to `custom:kanidm`
 
@@ -565,13 +575,13 @@ The `anon_key` and `service_role_key` are HS256 JWTs signed with the JWT secret:
 7. `helm template --include-crds --namespace readest readest apps/readest/` to validate
 8. `helm lint apps/readest/`
 9. Commit and push — ArgoCD auto-syncs
-10. **Manual database setup** (required for Supabase compatibility):
+10. **Manual database setup** (required for Supabase/GoTrue compatibility — one-time):
     ```bash
-    # Create schemas
+    # Create schemas required by GoTrue
     kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
       psql -U supabase_auth_admin -d readest -c \
       "CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS storage; CREATE SCHEMA IF NOT EXISTS realtime; CREATE SCHEMA IF NOT EXISTS graphql_public;"
-    
+
     # Create enum types required by GoTrue migrations
     kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
       psql -U supabase_auth_admin -d readest -c \
@@ -579,6 +589,7 @@ The `anon_key` and `service_role_key` are HS256 JWTs signed with the JWT secret:
        CREATE TYPE auth.code_challenge_method AS ENUM ('s256', 'plain');
        CREATE TYPE auth.one_time_token_type AS ENUM ('confirmation_token', 'reauthentication_token', 'recovery_token', 'email_change_token_new', 'email_change_token_current', 'email_change_verify');"
     ```
+    **Note:** The Readest app tables (`books`, `replicas`, etc.) are created automatically by the `db-migrate` init container on first pod start.
 11. Store DB connection strings in Vault:
     ```bash
     export VAULT_ADDR=https://vault.internal.grigri.cloud

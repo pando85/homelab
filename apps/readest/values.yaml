@@ -4,6 +4,21 @@ app-template:
       labels:
         backup/retain: weekly
       initContainers:
+        db-migrate:
+          image:
+            # renovate: datasource=docker depName=postgres
+            repository: postgres
+            tag: 17-alpine
+          env:
+            DB_SCHEMA_VERSION: "0.12.6" # renovate: datasource=docker depName=ghcr.io/readest/readest
+            DB_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: readest.readest-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+          command:
+            - sh
+            - /db-init/migrate.sh
         patch-oauth:
           image:
             # renovate: datasource=docker depName=ghcr.io/readest/readest
@@ -411,6 +426,14 @@ app-template:
     enableServiceLinks: false
 
   persistence:
+    init-sql:
+      type: configMap
+      name: readest-init-sql
+      defaultMode: 0755
+      advancedMounts:
+        client:
+          db-migrate:
+            - path: /db-init
     patched-static:
       type: emptyDir
       sizeLimit: 500Mi

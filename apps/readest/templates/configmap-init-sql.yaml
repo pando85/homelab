@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: readest-init-sql
+data:
+  migrate.sh: |
+    #!/bin/sh
+    set -eu
+
+    export PGPASSWORD="$DB_PASSWORD"
+    export PGHOST=readest-postgres
+    export PGPORT=5432
+    export PGDATABASE=readest
+    export PGUSER=readest
+
+    READEST_VERSION="${DB_SCHEMA_VERSION}"
+    BASE_URL="https://raw.githubusercontent.com/readest/readest/v${READEST_VERSION}/docker/volumes/db"
+    SQL_DIR="/tmp/readest-sql"
+
+    mkdir -p "$SQL_DIR/init" "$SQL_DIR/migrations"
+
+    echo "Waiting for PostgreSQL..."
+    until pg_isready -q -t 5; do
+      sleep 2
+    done
+
+    echo "Downloading SQL files for Readest v${READEST_VERSION}..."
+    wget -q -O "$SQL_DIR/init/schema.sql" "${BASE_URL}/init/schema.sql"
+
+    echo "Fetching migration list from GitHub API..."
+    wget -q -O "$SQL_DIR/migrations/api.json" "https://api.github.com/repos/readest/readest/contents/docker/volumes/db/migrations?ref=v${READEST_VERSION}"
+    for name in $(sed -n 's/.*"name": *"\([0-9][0-9]*_[^"]*\.sql\)".*/\1/p' "$SQL_DIR/migrations/api.json" | sort); do
+      echo "  Downloading $name..."
+      wget -q -O "$SQL_DIR/migrations/$name" "${BASE_URL}/migrations/$name"
+    done
+    rm -f "$SQL_DIR/migrations/api.json"
+
+    echo "Ensuring required roles exist..."
+    psql -v ON_ERROR_STOP=1 -c "SET search_path TO public, auth;" \
+      -c "CREATE SCHEMA IF NOT EXISTS extensions;" \
+      -c "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;" \
+      -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF; IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF; IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role NOLOGIN; END IF; END \$\$;" \
+      -c "GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;" \
+      -c "GRANT USAGE ON SCHEMA extensions TO anon, authenticated, service_role;" \
+      -c "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA extensions TO authenticated;" \
+      -c "GRANT anon, authenticated, service_role TO authenticator;"
+
+    echo "Creating migration ledger..."
+    psql -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS readest_meta;" \
+      -c "CREATE TABLE IF NOT EXISTS readest_meta.migrations (name text PRIMARY KEY, applied_at timestamptz DEFAULT now());"
+
+    echo "Acquiring advisory lock..."
+    psql -v ON_ERROR_STOP=1 -c "SELECT pg_advisory_lock(hashtext('readest-migrations')::bigint);"
+
+    cleanup() {
+      psql -v ON_ERROR_STOP=1 -c "SELECT pg_advisory_unlock(hashtext('readest-migrations')::bigint);" 2>/dev/null || true
+    }
+    trap cleanup EXIT
+
+    if ! psql -tAc "SELECT 1 FROM readest_meta.migrations WHERE name = 'schema.sql'" | grep -q 1; then
+      echo "Applying base schema..."
+      psql -v ON_ERROR_STOP=1 -f "$SQL_DIR/init/schema.sql"
+      psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('schema.sql')"
+      echo "Base schema applied."
+    else
+      echo "Base schema already applied."
+    fi
+
+    for sql in $(ls "$SQL_DIR/migrations/"*.sql 2>/dev/null | sort); do
+      name=$(basename "$sql")
+      if ! psql -tAc "SELECT 1 FROM readest_meta.migrations WHERE name = '$name'" | grep -q 1; then
+        echo "Applying migration $name..."
+        psql -v ON_ERROR_STOP=1 -f "$sql"
+        psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('$name')"
+        echo "Migration $name applied."
+      else
+        echo "Migration $name already applied."
+      fi
+    done
+
+    echo "Granting permissions..."
+    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;"
+
+    echo "Notifying PostgREST to reload schema cache..."
+    psql -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
+
+    echo "Database migration complete."
