@@ -1,0 +1,117 @@
+minio:
+  image:
+    repository: pgsty/minio
+    tag: RELEASE.2026-02-14T12-00-00Z
+
+  mode: standalone
+
+  drivesPerNode: 1
+  # Number of MinIO containers running
+  replicas: 1
+
+  existingSecret: s3-public-users
+
+  persistence:
+    enabled: true
+    existingClaim: s3-public
+
+  # Pin to prusik (where ingress-nginx-external and cross-backups MinIO also run)
+  nodeSelector:
+    kubernetes.io/hostname: prusik
+
+  ingress:
+    enabled: true
+    ingressClassName: nginx-external
+    annotations:
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      nginx.ingress.kubernetes.io/proxy-send-timeout: "3601"
+      nginx.ingress.kubernetes.io/proxy-read-timeout: "3601"
+      # fix timeouts uploading big files disabling proxy buffering
+      nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+      # https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html
+      nginx.ingress.kubernetes.io/server-snippet: |
+        ignore_invalid_headers off;
+      nginx.ingress.kubernetes.io/configuration-snippet: |
+        chunked_transfer_encoding off;
+    hosts:
+      - &host s3.grigri.cloud
+    tls:
+      - hosts:
+          - *host
+        secretName: s3-public-tls-certificate
+
+  consoleIngress:
+    enabled: true
+    ingressClassName: nginx-external
+    annotations:
+      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      nginx.ingress.kubernetes.io/configuration-snippet: |
+        chunked_transfer_encoding off;
+    hosts:
+      - &hostMC mc-s3.grigri.cloud
+    tls:
+      - hosts:
+          - *hostMC
+        secretName: mc-s3-public-tls-certificate
+
+  resources:
+    requests:
+      memory: 1Gi
+
+  environment:
+    MINIO_IDENTITY_OPENID_ROLE_POLICY: consoleAdmin
+
+  ## OpenID Identity Management for the MinIO console
+  oidc:
+    enabled: true
+    configUrl: https://idm.grigri.cloud/oauth2/openid/s3-public/.well-known/openid-configuration
+    existingClientSecretName: s3-public-kanidm-oauth2-credentials
+    existingClientIdKey: CLIENT_ID
+    existingClientSecretKey: CLIENT_SECRET
+    scopes: openid,profile,email
+    redirectUri: https://mc-s3.grigri.cloud/oauth_callback
+    displayName: idm.grigri.cloud
+
+  policies:
+    - name: readestPolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::readest-files/*'
+          actions:
+            - "s3:AbortMultipartUpload"
+            - "s3:GetObject"
+            - "s3:DeleteObject"
+            - "s3:PutObject"
+            - "s3:ListMultipartUploadParts"
+        - resources:
+            - 'arn:aws:s3:::readest-files'
+          actions:
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
+            - "s3:ListBucketMultipartUploads"
+
+  users:
+    - accessKey: readest
+      existingSecret: s3-public-users
+      existingSecretKey: readestPassword
+      policy: readestPolicy
+
+  buckets:
+    - name: readest-files
+      policy: none
+      purge: false
+      versioning: false
+      objectlocking: false
+
+  metrics:
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: monitoring

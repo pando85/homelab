@@ -3,7 +3,7 @@
 Readest is an open-source ebook reader with a self-hosted stack. This deployment uses:
 - **bjw-s `app-template`** with multiple controllers
 - **Zalando Postgres operator** for the database
-- **Shared MinIO** (`platform/minio/`) for S3 storage
+- **Public MinIO** (`apps/s3-public/`) for S3 storage (externally reachable for book downloads)
 - **kaniop** for OIDC integration with Kanidm
 - **nginx ingress** for path-based routing (no Kong)
 
@@ -15,9 +15,10 @@ Browser
         ├── / ──────────────► client:3000 (Next.js)
         ├── /auth/v1/* ─────► auth:9999 (GoTrue)
         └── /rest/v1/* ─────► rest:3000 (PostgREST)
+  └── s3.grigri.cloud (presigned URLs) ──► s3-public MinIO :9000
 
 Internal:
-  client ──► minio.minio.svc:9000 (S3, bucket: readest-files)
+  client ──► s3-public-minio.s3-public.svc:9000 (S3, bucket: readest-files)
   auth   ──► readest-postgres (Zalando)
   rest   ──► readest-postgres (Zalando)
   auth   ──► idm.grigri.cloud (Kanidm OIDC via kaniop)
@@ -35,7 +36,7 @@ Single domain `readest.grigri.cloud` with nginx path-based routing. No separate 
 | `auth` | `supabase/gotrue:v2.196.0` | 9999 | Auth service (OIDC client) |
 | `rest` | `postgrest/postgrest:v14.3` | 3000 | REST API (auto-generated from Postgres schema) |
 
-No MinIO controller — uses shared `platform/minio/` instance.
+No MinIO controller — uses the dedicated public MinIO at `apps/s3-public/`.
 
 ## Database: Zalando Postgres + Automated Migrations
 
@@ -492,62 +493,38 @@ a top-level `plan` JWT claim, so mobile users resolve as "free" (cosmetic/UI-gat
 quotas are unaffected). Fix would be a GoTrue custom access-token hook promoting those claims.
 See `docs/troubleshooting/readest-android-oauth.md#known-limitations--follow-ups`.
 
-## MinIO (Shared Instance)
+## Object Storage (Public MinIO)
 
-Readest uses the shared MinIO at `platform/minio/` for S3 storage.
+Readest stores book files in the dedicated **public** MinIO at `apps/s3-public/` (host
+`s3.grigri.cloud`), *not* the internal backup MinIO. Book downloads use **presigned URLs** that the
+browser fetches directly, so the S3 host must be reachable from the internet — the internal
+`s3.internal.grigri.cloud` is cluster-only and breaks external downloads.
 
-### Additions to `platform/minio/`
+See `docs/deployment/s3-public.md` for the full public MinIO design.
 
-**Bucket:**
-```yaml
-- name: readest-files
-  policy: none
-  versioning: false
-  objectlocking: false
-```
+### Bucket / user (in `apps/s3-public/`)
 
-**Policy:**
-```yaml
-- name: readestPolicy
-  statements:
-    - resources:
-        - 'arn:aws:s3:::readest-files/*'
-      actions:
-        - "s3:AbortMultipartUpload"
-        - "s3:GetObject"
-        - "s3:DeleteObject"
-        - "s3:PutObject"
-        - "s3:ListMultipartUploadParts"
-    - resources:
-        - 'arn:aws:s3:::readest-files'
-      actions:
-        - "s3:GetBucketLocation"
-        - "s3:ListBucket"
-        - "s3:ListMultipartUploads"
-```
-
-**User:**
-```yaml
-- accessKey: readest
-  existingSecret: minio-users
-  existingSecretKey: readestPassword
-  policy: readestPolicy
-```
+- Bucket: `readest-files`
+- User (access key): `readest`, scoped by `readestPolicy` (rw on `readest-files/*`)
+- Password: Vault `/s3-public/users:readestPassword`
 
 ### Readest S3 Config
 
 ```yaml
-S3_ENDPOINT: http://minio.minio.svc:9000
-S3_PUBLIC_ENDPOINT: https://s3.internal.grigri.cloud
+S3_ENDPOINT: http://s3-public-minio.s3-public.svc:9000   # in-cluster (server-side I/O)
+S3_PUBLIC_ENDPOINT: https://s3.grigri.cloud              # external (presigned URLs)
 S3_REGION: us-east-1
 S3_BUCKET_NAME: readest-files
 S3_ACCESS_KEY_ID: readest
 S3_SECRET_ACCESS_KEY:
   valueFrom:
     secretKeyRef:
-      name: minio-users
+      name: readest-minio-secret   # ExternalSecret → /s3-public/users:readestPassword
       key: readestPassword
 ```
+
+`S3_ENDPOINT` is the in-cluster service for server-side reads/writes; `S3_PUBLIC_ENDPOINT` is the
+external host embedded in presigned URLs the browser fetches.
 
 ## Ingress (nginx)
 
@@ -587,7 +564,7 @@ Both internal (`readest.internal.grigri.cloud`) and external (`readest.grigri.cl
 | Vault Path | Keys |
 |---|---|
 | `/readest/jwt` | `secret`, `anon_key`, `service_role_key` |
-| `/minio/users` | `readestPassword` (added to existing path) |
+| `/s3-public/users` | `readestPassword` (S3 secret key for the public MinIO) |
 
 The `anon_key` and `service_role_key` are HS256 JWTs signed with the JWT secret:
 - `anon_key`: payload `{"role": "anon"}`
@@ -597,8 +574,8 @@ The `anon_key` and `service_role_key` are HS256 JWTs signed with the JWT secret:
 
 1. User logs in to Vault (`vault login`)
 2. Create `/readest/jwt` secret (generate JWT keys)
-3. Add `readestPassword` to `/minio/users` in Vault
-4. Update `platform/minio/` (values.yaml + external-secrets)
+3. Create `/s3-public/users` secret with `readestPassword` (see `docs/deployment/s3-public.md`)
+4. Deploy `apps/s3-public/` (public MinIO) — see `docs/deployment/s3-public.md`
 5. Create all files under `apps/readest/`
 6. `helm dependency build apps/readest/`
 7. `helm template --include-crds --namespace readest readest apps/readest/` to validate
@@ -686,6 +663,7 @@ apps/readest/
     └── configmap-init-sql.yaml      # Supabase bootstrap SQL (roles, schema, migrations)
 ```
 
-Updates to `platform/minio/`:
-- `values.yaml` — add `readest-files` bucket + `readest` user + scoped policy
-- `templates/external-secrets-users.yaml` — add `readestPassword` from Vault
+Object storage lives in the dedicated public MinIO `apps/s3-public/` (see
+`docs/deployment/s3-public.md`):
+- `values.yaml` — `readest-files` bucket + `readest` user + scoped `readestPolicy`
+- `templates/external-secrets-users.yaml` — `readestPassword` from Vault `/s3-public/users`

@@ -74,21 +74,31 @@ Does the app need Supabase auth/storage/realtime schemas?
 - Needs `auth.users` FK, `auth.uid()` in RLS, Supabase roles
 - Decision: Zalando for the database + init container for Supabase bootstrap SQL
 
-### 2.2 Object Storage: Shared vs Dedicated MinIO
+### 2.2 Object Storage: Which MinIO?
 
-**Use shared MinIO (platform/minio/) when:**
-- The app just needs S3-compatible storage
-- You want centralized backup and management
-- The app doesn't need MinIO-specific features (bucket policies, versioning, etc.)
+There are **three** MinIO instances, pick by who fetches the objects:
 
-**Use dedicated MinIO when:**
-- The app needs isolated storage with specific retention policies
-- The app is a backup target itself (like cross-backups)
-- You need separate ingress domains for the MinIO console
+| Instance | Path | Host | Reachable from internet? | Use for |
+|---|---|---|---|---|
+| Internal shared | `platform/minio/` | `s3.internal.grigri.cloud` | No | In-cluster/backup storage (Velero, Kaniop). Server-side I/O only. |
+| **Public** | `apps/s3-public/` | `s3.grigri.cloud` | **Yes** | Apps that hand the **browser** presigned URLs (e.g. Readest book downloads). |
+| Cross-backups | `apps/cross-backups/` | `cross-backups.grigri.cloud` | Yes | *Receiving* backups pushed from other machines. |
 
-**Pattern for adding to shared MinIO:**
+**Decision tree:**
+```
+Does the client/browser fetch objects directly (presigned URLs, public links)?
+├── YES → apps/s3-public/ (public MinIO, s3.grigri.cloud)
+└── NO (server-side I/O only)
+    ├── Is it a backup target receiving external pushes? → apps/cross-backups/
+    └── Otherwise → platform/minio/ (internal shared)
+```
+
+> **Gotcha:** The internal MinIO host `s3.internal.grigri.cloud` is `nginx-internal` only. If an
+> app generates presigned URLs against it, external clients fail to download. Use `apps/s3-public/`
+> and set the app's public endpoint to `https://s3.grigri.cloud`. See `docs/deployment/s3-public.md`.
+
+**Pattern for adding a bucket/user to the public MinIO (`apps/s3-public/values.yaml`):**
 ```yaml
-# In platform/minio/values.yaml
 buckets:
   - name: <app>-files
     policy: none
@@ -100,20 +110,29 @@ policies:
     statements:
       - resources:
           - 'arn:aws:s3:::<app>-files/*'
-          - 'arn:aws:s3:::<app>-files'
         actions:
           - "s3:GetObject"
           - "s3:PutObject"
           - "s3:DeleteObject"
+          - "s3:AbortMultipartUpload"
+          - "s3:ListMultipartUploadParts"
+      - resources:
+          - 'arn:aws:s3:::<app>-files'
+        actions:
+          - "s3:GetBucketLocation"
           - "s3:ListBucket"
-          # ... add more as needed
+          - "s3:ListBucketMultipartUploads"
 
 users:
   - accessKey: <app>
-    existingSecret: minio-users
+    existingSecret: s3-public-users
     existingSecretKey: <app>Password
     policy: <app>Policy
 ```
+
+Then add `<app>Password` to Vault `/s3-public/users` and to
+`apps/s3-public/templates/external-secrets-users.yaml`. The same pattern applies to
+`platform/minio/` (secret `minio-users`, Vault `/minio/users`) for internal buckets.
 
 ### 2.3 API Gateway: Kong vs nginx Ingress
 
@@ -544,10 +563,16 @@ helm lint apps/<app>/
 
 ### 5.4 MinIO Issues
 
-**Presigned URLs don't work**
-- Check `S3_PUBLIC_ENDPOINT` matches the ingress URL
-- Internal endpoint: `http://minio.minio.svc:9000`
-- External endpoint: `https://s3.internal.grigri.cloud`
+**Presigned URLs don't work / external downloads fail**
+- The browser fetches presigned URLs directly, so `S3_PUBLIC_ENDPOINT` must be an
+  **internet-reachable** host. The internal MinIO host (`s3.internal.grigri.cloud`) is
+  `nginx-internal` only — external clients can't reach it.
+- For browser-facing storage use the public MinIO (`apps/s3-public/`):
+  - In-cluster endpoint (`S3_ENDPOINT`): `http://s3-public-minio.s3-public.svc:9000`
+  - External endpoint (`S3_PUBLIC_ENDPOINT`): `https://s3.grigri.cloud`
+- For server-side-only storage the internal MinIO is fine:
+  - In-cluster: `http://minio.minio.svc:9000`, external: `https://s3.internal.grigri.cloud`
+- See `docs/deployment/s3-public.md` and section 2.2.
 
 **Bucket creation fails**
 - MinIO Helm chart creates buckets on startup
