@@ -17,23 +17,10 @@ data:
     BASE_URL="https://raw.githubusercontent.com/readest/readest/v${READEST_VERSION}/docker/volumes/db"
     SQL_DIR="/tmp/readest-sql"
 
-    mkdir -p "$SQL_DIR/init" "$SQL_DIR/migrations"
-
     echo "Waiting for PostgreSQL..."
     until pg_isready -q -t 5; do
       sleep 2
     done
-
-    echo "Downloading SQL files for Readest v${READEST_VERSION}..."
-    wget -q -O "$SQL_DIR/init/schema.sql" "${BASE_URL}/init/schema.sql"
-
-    echo "Fetching migration list from GitHub API..."
-    wget -q -O "$SQL_DIR/migrations/api.json" "https://api.github.com/repos/readest/readest/contents/docker/volumes/db/migrations?ref=v${READEST_VERSION}"
-    for name in $(sed -n 's/.*"name": *"\([0-9][0-9]*_[^"]*\.sql\)".*/\1/p' "$SQL_DIR/migrations/api.json" | sort); do
-      echo "  Downloading $name..."
-      wget -q -O "$SQL_DIR/migrations/$name" "${BASE_URL}/migrations/$name"
-    done
-    rm -f "$SQL_DIR/migrations/api.json"
 
     echo "Ensuring required roles exist..."
     psql -v ON_ERROR_STOP=1 -c "SET search_path TO public, auth;" \
@@ -57,26 +44,55 @@ data:
     }
     trap cleanup EXIT
 
-    if ! psql -tAc "SELECT 1 FROM readest_meta.migrations WHERE name = 'schema.sql'" | grep -q 1; then
-      echo "Applying base schema..."
+    APPLIED=$(psql -tAc "SELECT string_agg(name, ' ') FROM readest_meta.migrations;")
+    APPLIED_COUNT=$(psql -tAc "SELECT count(*) FROM readest_meta.migrations;")
+    echo "Ledger has $APPLIED_COUNT applied entries."
+
+    is_applied() {
+      case " $APPLIED " in *" $1 "*) return 0;; *) return 1;; esac
+    }
+
+    if is_applied "schema.sql"; then
+      echo "Skipping schema.sql — already applied."
+    else
+      echo "Downloading and applying schema.sql..."
+      mkdir -p "$SQL_DIR/init"
+      wget -q -O "$SQL_DIR/init/schema.sql" "${BASE_URL}/init/schema.sql"
       psql -v ON_ERROR_STOP=1 -f "$SQL_DIR/init/schema.sql"
       psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('schema.sql')"
+      APPLIED="$APPLIED schema.sql"
       echo "Base schema applied."
-    else
-      echo "Base schema already applied."
     fi
 
-    for sql in $(ls "$SQL_DIR/migrations/"*.sql 2>/dev/null | sort); do
-      name=$(basename "$sql")
-      if ! psql -tAc "SELECT 1 FROM readest_meta.migrations WHERE name = '$name'" | grep -q 1; then
-        echo "Applying migration $name..."
-        psql -v ON_ERROR_STOP=1 -f "$sql"
-        psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('$name')"
-        echo "Migration $name applied."
-      else
-        echo "Migration $name already applied."
+    echo "Fetching migration list from GitHub API..."
+    mkdir -p "$SQL_DIR/migrations"
+    wget -q -O "$SQL_DIR/migrations/api.json" "https://api.github.com/repos/readest/readest/contents/docker/volumes/db/migrations?ref=v${READEST_VERSION}"
+    REMOTE_MIGRATIONS=$(sed -n 's/.*"name": *"\([0-9][0-9]*_[^"]*\.sql\)".*/\1/p' "$SQL_DIR/migrations/api.json" | sort)
+    rm -f "$SQL_DIR/migrations/api.json"
+
+    PENDING=0
+    PENDING_LIST=""
+    for name in $REMOTE_MIGRATIONS; do
+      if ! is_applied "$name"; then
+        PENDING=$((PENDING + 1))
+        PENDING_LIST="$PENDING_LIST $name"
       fi
     done
+
+    if [ "$PENDING" -eq 0 ]; then
+      echo "All migrations already applied — skipping downloads."
+    else
+      echo "$PENDING migration(s) pending — downloading and applying..."
+      for name in $PENDING_LIST; do
+        echo "  Downloading $name..."
+        wget -q -O "$SQL_DIR/migrations/$name" "${BASE_URL}/migrations/$name"
+        echo "  Applying $name..."
+        psql -v ON_ERROR_STOP=1 -f "$SQL_DIR/migrations/$name"
+        psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('$name')"
+        APPLIED="$APPLIED $name"
+        echo "  Migration $name applied."
+      done
+    fi
 
     echo "Granting permissions..."
     psql -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA auth TO anon, authenticated;"
