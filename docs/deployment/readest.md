@@ -49,7 +49,11 @@ Readest's schema is tightly coupled to Supabase (uses `auth.users` FK, `auth.uid
 4. **`db-migrate` init container** automatically downloads and applies the Readest app schema:
    - Downloads `schema.sql` and all migrations from GitHub at `DB_SCHEMA_VERSION` (matches container image tag)
    - Creates required roles (`anon`, `authenticated`, `service_role`) and `extensions` schema
+   - Grants `service_role` BYPASSRLS attribute (required for storage upload API to bypass RLS policies)
+   - Grants permissions to `anon`, `authenticated`, and `service_role` on public tables and `auth` schema
+   - Sets default privileges for future tables
    - Applies base schema + incremental migrations with idempotent ledger tracking (`readest_meta.migrations`)
+   - Skips downloads if all migrations already applied (optimization)
    - Uses advisory lock for safe concurrent pod starts
    - Sends `NOTIFY pgrst, 'reload schema'` so PostgREST picks up new tables without restart
 
@@ -447,6 +451,31 @@ GoTrue puts `plan`/quotas in `user_metadata`; the app reads a top-level `plan` c
 only — server quotas are unaffected. Long-term fix: GoTrue custom access-token hook promoting the
 claims. See `docs/troubleshooting/readest-android-oauth.md`.
 
+#### 7. "permission denied for table files" or RLS violation on upload
+
+- **Symptoms:** `{"error":"permission denied for table files"}` or
+  `{"error":"new row violates row-level security policy for table \"files\""}` when uploading
+  books via `/api/storage/upload`.
+- **Root cause:** The storage upload API uses `service_role` (via `SUPABASE_ADMIN_KEY`). If
+  `service_role` lacks table grants or the `BYPASSRLS` attribute, uploads fail.
+- **Diagnose:**
+  ```bash
+  kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+    psql -U readest -d readest -c "
+    SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname = 'service_role';
+    SELECT grantee, privilege_type FROM information_schema.role_table_grants
+    WHERE table_schema = 'public' AND table_name = 'files' AND grantee = 'service_role';
+  "
+  ```
+- **Fix:** The `db-migrate` init container now handles this automatically. If manually fixing:
+  ```sql
+  ALTER ROLE service_role BYPASSRLS;
+  GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+  GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+  GRANT USAGE ON SCHEMA auth TO service_role;
+  GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO service_role;
+  ```
+
 ### Future Improvements
 
 If Readest adds support for custom OAuth providers via runtime configuration, we can:
@@ -610,6 +639,37 @@ ENABLE_EMAIL_AUTOCONFIRM: "true"       # no SMTP needed
 STORAGE_FIXED_QUOTA: "1073741824"      # 1GB storage per user
 TRANSLATION_FIXED_QUOTA: "50000"       # 50k translation characters
 OBJECT_STORAGE_TYPE: "s3"              # use MinIO for book storage
+```
+
+## Deleting Books
+
+Readest supports soft-delete for books. To delete a book:
+
+1. **Web UI**: Right-click on the book cover in the library → "Delete Book"
+2. **Desktop App**: Right-click on the book → "Delete Book"
+
+Deleted books are marked with `deleted_at` timestamp in the database and hidden from the library view. The actual files remain in MinIO storage until manually cleaned up.
+
+To permanently remove a book (including files):
+
+```bash
+# Get the book ID and file key
+kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+  psql -U readest -d readest -c "
+  SELECT id, book_hash, file_key FROM public.files
+  WHERE user_id = '<user-id>' AND deleted_at IS NOT NULL;
+"
+
+# Delete from MinIO
+kubectl --context=grigri exec -n platform-minio-0 -c minio -- \
+  mc rm --recursive --force myminio/readest-files/<user-id>/Readest/Books/<book_hash>/
+
+# Hard delete from database
+kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+  psql -U readest -d readest -c "
+  DELETE FROM public.files WHERE user_id = '<user-id>' AND book_hash = '<book_hash>';
+  DELETE FROM public.books WHERE id = '<book-id>';
+"
 ```
 
 ## Files Created
