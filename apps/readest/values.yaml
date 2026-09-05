@@ -426,6 +426,9 @@ app-template:
 
   defaultPodOptions:
     enableServiceLinks: false
+    # Pin all controllers (client, auth, rest) to prusik, like immich/nextcloud.
+    nodeSelector:
+      kubernetes.io/hostname: prusik
 
   persistence:
     init-sql:
