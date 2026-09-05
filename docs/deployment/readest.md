@@ -43,22 +43,19 @@ No MinIO controller — uses the dedicated public MinIO at `apps/s3-public/`.
 Readest's schema is tightly coupled to Supabase (uses `auth.users` FK, `auth.uid()` in RLS policies, Supabase roles). The solution:
 
 1. **Zalando CR** creates the database, base roles, and `pgcrypto` extension
-2. **Manual schema setup** (required because Zalando doesn't auto-create Supabase schemas):
-   - Create `auth`, `storage`, `realtime`, `graphql_public` schemas
-   - Create enum types: `auth.factor_type`, `auth.code_challenge_method`, `auth.one_time_token_type`
-3. **GoTrue** runs migrations on first start to create tables in the `auth` schema
-4. **`db-migrate` init container** automatically downloads and applies the Readest app schema:
+2. **`db-migrate` init container** automatically bootstraps the full schema on every pod start:
+   - Creates required schemas: `auth`, `extensions`, `graphql_public`
+   - Creates required roles (`anon`, `authenticated`, `service_role`) with `service_role BYPASSRLS`
    - Downloads `schema.sql` and all migrations from GitHub at `DB_SCHEMA_VERSION` (matches container image tag)
-   - Creates required roles (`anon`, `authenticated`, `service_role`) and `extensions` schema
-   - Grants `service_role` BYPASSRLS attribute (required for storage upload API to bypass RLS policies)
    - Grants permissions to `anon`, `authenticated`, and `service_role` on public tables and `auth` schema
    - Sets default privileges for future tables
    - Applies base schema + incremental migrations with idempotent ledger tracking (`readest_meta.migrations`)
    - Skips downloads if all migrations already applied (optimization)
    - Uses advisory lock for safe concurrent pod starts
    - Sends `NOTIFY pgrst, 'reload schema'` so PostgREST picks up new tables without restart
+3. **GoTrue** runs migrations on first start to create tables in the `auth` schema
 
-**Note:** The manual schema setup (step 2) is a one-time operation. If the database is recreated, these steps must be repeated. The `db-migrate` init container handles the Readest app tables automatically on every pod start.
+**Note:** All schema setup is fully automated. The `db-migrate` init container creates all required schemas (`auth`, `extensions`, `graphql_public`) and roles before applying migrations. No manual steps needed on fresh clusters.
 
 ### Schema Version Tracking
 
@@ -309,27 +306,17 @@ ALTER DATABASE readest SET search_path TO auth, public;
 
 #### Manual Schema Setup for Supabase Compatibility
 
-**Problem:** Zalando Postgres operator doesn't auto-create Supabase-specific schemas and enum types. GoTrue migrations expect these to exist.
+**Status: Automated.** The `db-migrate` init container now creates all required schemas (`auth`, `extensions`, `graphql_public`) and enum types automatically. No manual steps needed.
 
-**Workaround:** Manual schema setup (one-time operation):
+If you need to verify the schemas exist:
 
-```sql
--- Create schemas
-CREATE SCHEMA IF NOT EXISTS auth;
-CREATE SCHEMA IF NOT EXISTS storage;
-CREATE SCHEMA IF NOT EXISTS realtime;
-CREATE SCHEMA IF NOT EXISTS graphql_public;
-
--- Create enum types required by GoTrue migrations
-CREATE TYPE auth.factor_type AS ENUM ('totp', 'webauthn', 'phone');
-CREATE TYPE auth.code_challenge_method AS ENUM ('s256', 'plain');
-CREATE TYPE auth.one_time_token_type AS ENUM (
-  'confirmation_token', 'reauthentication_token', 'recovery_token',
-  'email_change_token_new', 'email_change_token_current', 'email_change_verify'
-);
+```bash
+kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+  psql -U postgres -d readest -c \
+  "SELECT nspname FROM pg_namespace WHERE nspname IN ('auth','extensions','graphql_public') ORDER BY nspname;"
 ```
 
-**Impact:** Must be run after database creation. If the database is recreated, this must be re-run.
+**Historical note:** Previously this was a manual one-time operation. The automation was added after a postgres recreate incident revealed the need for idempotent schema setup.
 
 ### Premium Features and Quotas
 
@@ -354,8 +341,8 @@ Readest is a freemium SaaS product with tiered quotas. For self-hosted deploymen
 | Nginx rewrite for provider param (preserves `redirect_to`) | Web UI hardcoded + APK can't be patched | Medium - snippet must survive UI/URL changes |
 | Nginx redirect `/callback` → `/auth/v1/callback` | GoTrue callback URL construction | Low |
 | Manual DB insert for custom provider | GoTrue SSRF protection | High - not GitOps-managed |
-| Manual schema setup | Zalando doesn't auto-create Supabase schemas | Low - one-time per DB |
-| Database search path | GoTrue can't find auth schema | Low - one-time per DB |
+| `db-migrate` init container | Automates schema setup (auth, extensions, graphql_public, roles, migrations) | Low - fully automated |
+| Database search_path | GoTrue can't find auth schema | Low - one-time per DB |
 | Environment variable quotas | Self-hosted deployment | Low - GitOps-managed |
 | `GOTRUE_URI_ALLOW_LIST` deep-link scheme | Android app returns via `readest://` | Low - GitOps-managed |
 | `GOTRUE_CORS_ALLOWED_HEADERS: apikey` | GoTrue CORS omits `apikey`; Tauri WebView is cross-origin | Low - GitOps-managed |
@@ -581,21 +568,16 @@ The `anon_key` and `service_role_key` are HS256 JWTs signed with the JWT secret:
 7. `helm template --include-crds --namespace readest readest apps/readest/` to validate
 8. `helm lint apps/readest/`
 9. Commit and push — ArgoCD auto-syncs
-10. **Manual database setup** (required for Supabase/GoTrue compatibility — one-time):
+10. **Verify schema setup** (should be automatic via `db-migrate` init container):
     ```bash
-    # Create schemas required by GoTrue
+    # Check that all required schemas exist
     kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
-      psql -U supabase_auth_admin -d readest -c \
-      "CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS storage; CREATE SCHEMA IF NOT EXISTS realtime; CREATE SCHEMA IF NOT EXISTS graphql_public;"
+      psql -U postgres -d readest -c \
+      "SELECT nspname FROM pg_namespace WHERE nspname IN ('auth','extensions','graphql_public') ORDER BY nspname;"
 
-    # Create enum types required by GoTrue migrations
-    kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
-      psql -U supabase_auth_admin -d readest -c \
-      "CREATE TYPE auth.factor_type AS ENUM ('totp', 'webauthn', 'phone');
-       CREATE TYPE auth.code_challenge_method AS ENUM ('s256', 'plain');
-       CREATE TYPE auth.one_time_token_type AS ENUM ('confirmation_token', 'reauthentication_token', 'recovery_token', 'email_change_token_new', 'email_change_token_current', 'email_change_verify');"
+    # Check that db-migrate completed successfully
+    kubectl --context=grigri logs -n readest deploy/readest-client -c db-migrate | tail -20
     ```
-    **Note:** The Readest app tables (`books`, `replicas`, etc.) are created automatically by the `db-migrate` init container on first pod start.
 11. Store DB connection strings in Vault:
     ```bash
     export VAULT_ADDR=https://vault.internal.grigri.cloud
@@ -606,6 +588,118 @@ The `anon_key` and `service_role_key` are HS256 JWTs signed with the JWT secret:
     vault kv put secret/readest/db-urls auth_url="$AUTH_URL" rest_url="$REST_URL"
     ```
 12. Verify pods, access `readest.internal.grigri.cloud`
+
+## Recreating the Postgres Database
+
+If you need to recreate the postgres database (e.g., PVC corruption, node migration), follow this procedure:
+
+### Before Recreate: Backup Non-GitOps Data
+
+The following are **not** managed by GitOps and must be backed up manually:
+
+```bash
+BACKUP_DIR="/home/agil/backups/readest-pre-recreate-$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
+
+# 1. Database-level settings (search_path)
+kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+  psql -U postgres -d readest -c \
+  "SELECT 'ALTER DATABASE '||d.datname||' SET search_path TO '||array_to_string(setconfig, ', ')||';'
+   FROM pg_db_role_setting s JOIN pg_database d ON d.oid=s.setdatabase
+   WHERE d.datname='readest';" > "$BACKUP_DIR/db-settings.sql"
+
+# 2. Custom OAuth provider (Kanidm integration)
+kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+  psql -U postgres -d readest -c \
+  "COPY (SELECT * FROM auth.custom_oauth_providers WHERE identifier='custom:kanidm') TO STDOUT WITH CSV HEADER;" \
+  > "$BACKUP_DIR/kanidm-custom-oauth-provider.csv"
+
+# 3. User data (optional, if you want to preserve accounts)
+kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+  pg_dump -U postgres -d readest --table=auth.users --table=public.books --data-only \
+  > "$BACKUP_DIR/user-data.sql"
+
+# 4. Full dump (safety net)
+kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+  pg_dump -U postgres -d readest > "$BACKUP_DIR/readest-full.sql"
+
+echo "Backup saved to $BACKUP_DIR"
+```
+
+### Recreate Procedure
+
+1. **Delete the PVC and pod** (this triggers a fresh volume):
+   ```bash
+   kubectl --context=grigri delete pod readest-postgres-0 -n readest
+   kubectl --context=grigri delete pvc pgdata-readest-postgres-0 -n readest
+   ```
+
+2. **Delete stale Patroni DCS ConfigMaps** (critical — see troubleshooting doc):
+   ```bash
+   kubectl --context=grigri delete configmap readest-postgres-config readest-postgres-leader -n readest
+   ```
+
+3. **Wait for the pod to recreate** and Patroni to bootstrap:
+   ```bash
+   kubectl --context=grigri get pods -n readest -w
+   # Wait for readest-postgres-0 to show 2/2 Running
+   kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- patronictl list
+   # Should show: Role=Leader, State=running
+   ```
+
+4. **Force Zalando operator sync** (if database/roles aren't created automatically):
+   ```bash
+   kubectl --context=grigri annotate postgresql readest-postgres -n readest \
+     zalando.org/sync-at="$(date +%s)" --overwrite
+   ```
+
+5. **Restart app pods** to trigger `db-migrate` and GoTrue migrations:
+   ```bash
+   kubectl --context=grigri rollout restart deployment/readest-client deployment/readest-auth -n readest
+   ```
+
+6. **Wait for schema setup** (db-migrate + GoTrue):
+   ```bash
+   # Check db-migrate logs
+   kubectl --context=grigri logs -n readest deploy/readest-client -c db-migrate | tail -30
+
+   # Verify schemas exist
+   kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
+     psql -U postgres -d readest -c \
+     "SELECT nspname FROM pg_namespace WHERE nspname IN ('auth','extensions','graphql_public');"
+   ```
+
+7. **Restore non-GitOps data**:
+   ```bash
+   # Restore search_path
+   kubectl --context=grigri exec -i -n readest readest-postgres-0 -c postgres -- \
+     psql -U postgres -d readest < "$BACKUP_DIR/db-settings.sql"
+
+   # Restore custom OAuth provider (convert CSV to INSERT)
+   # Note: You'll need to manually convert the CSV to an INSERT statement
+   # or re-insert from the deployment doc template
+
+   # Restore user data (if backed up)
+   kubectl --context=grigri exec -i -n readest readest-postgres-0 -c postgres -- \
+     psql -U postgres -d readest < "$BACKUP_DIR/user-data.sql"
+   ```
+
+8. **Restart PostgREST** to reload schema cache:
+   ```bash
+   kubectl --context=grigri rollout restart deployment/readest-rest -n readest
+   ```
+
+9. **Verify**:
+   - Login via Kanidm OIDC
+   - Upload/download books
+   - Check PostgREST API responses
+
+### Common Issues After Recreate
+
+- **Patroni "waiting for leader to bootstrap"**: Stale DCS ConfigMaps not deleted. See `docs/troubleshooting/zalando-patroni-stale-dcs-deadlock.md`.
+- **"schema auth does not exist"**: db-migrate didn't run or failed. Check init container logs.
+- **"permission denied for table files"**: `service_role` missing BYPASSRLS or grants. db-migrate should handle this automatically.
+- **PostgREST 503 "Could not query schema cache"**: Missing `graphql_public` schema or PostgREST needs restart.
 
 ## Key Configuration
 

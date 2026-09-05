@@ -136,9 +136,14 @@ will be detected and reverted almost instantly. The git repository is the single
   init container for bootstrap SQL. Don't deploy separate Supabase Postgres container unless
   the app requires Supabase-specific extensions not in the Spilo image. See
   `docs/deployment/readest.md` and `docs/conventions/deploying-new-apps.md`
-- Supabase apps on Zalando Postgres require manual schema setup: create `auth`, `storage`,
-  `realtime`, `graphql_public` schemas and enum types (`auth.factor_type`, etc.) before GoTrue
-  migrations run. This is a one-time operation per database. See `docs/deployment/readest.md`
+- Supabase apps on Zalando Postgres: the `db-migrate` init container now automates schema setup
+  (`auth`, `extensions`, `graphql_public` schemas + enum types + roles). No manual steps needed.
+  See `docs/deployment/readest.md`
+- Zalando Postgres PVC recreate causes Patroni stale-DCS deadlock: Patroni DCS ConfigMaps
+  (`<cluster>-config`, `<cluster>-leader`) survive PVC deletion and carry the old cluster's
+  `initialize` marker, so Patroni waits forever for a leader on a fresh empty data dir. Fix:
+  delete the stale DCS ConfigMaps before restarting the pod.
+  See `docs/troubleshooting/zalando-patroni-stale-dcs-deadlock.md`
 - High pod restart counts don't always mean problems — check `Last State.Reason` (exit 255 =
   node reboot, not app crash). See `docs/troubleshooting/cluster-hygiene.md`
 - Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
