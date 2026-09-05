@@ -179,6 +179,7 @@ app-template:
             GOTRUE_EXTERNAL_APPLE_ENABLED: "false"
             GOTRUE_EXTERNAL_GITHUB_ENABLED: "false"
             GOTRUE_EXTERNAL_DISCORD_ENABLED: "false"
+            GOTRUE_LOG_LEVEL: debug
           probes:
             liveness: &authProbes
               enabled: true
@@ -235,6 +236,7 @@ app-template:
                   name: readest-secrets
                   key: secret
             PGRST_APP_SETTINGS_JWT_EXP: "3600"
+            PGRST_LOG_LEVEL: debug
           probes:
             liveness: &restProbes
               enabled: true
