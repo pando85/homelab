@@ -76,22 +76,21 @@ Does the app need Supabase auth/storage/realtime schemas?
 
 ### 2.2 Object Storage: Which MinIO?
 
+**See `docs/deployment/minio-architecture.md`** for the complete architecture, decision tree, and
+integration patterns.
+
 There are **three** MinIO instances, pick by who fetches the objects:
 
 | Instance | Path | Host | Reachable from internet? | Use for |
 |---|---|---|---|---|
-| Internal shared | `platform/minio/` | `s3.internal.grigri.cloud` | No | In-cluster/backup storage (Velero, Kaniop). Server-side I/O only. |
+| **Internal shared** | `platform/minio/` | `s3.internal.grigri.cloud` | No | In-cluster/backup storage (Velero, Kaniop). Server-side I/O only. |
 | **Public** | `apps/s3-public/` | `s3.grigri.cloud` | **Yes** | Apps that hand the **browser** presigned URLs (e.g. Readest book downloads). |
-| Cross-backups | `apps/cross-backups/` | `cross-backups.grigri.cloud` | Yes | *Receiving* backups pushed from other machines. |
+| **Cross-backups** | `apps/cross-backups/` | `cross-backups.grigri.cloud` | Yes | *Receiving* backups pushed from other machines (restic, borg, mc mirror). |
 
-**Decision tree:**
-```
-Does the client/browser fetch objects directly (presigned URLs, public links)?
-├── YES → apps/s3-public/ (public MinIO, s3.grigri.cloud)
-└── NO (server-side I/O only)
-    ├── Is it a backup target receiving external pushes? → apps/cross-backups/
-    └── Otherwise → platform/minio/ (internal shared)
-```
+**Quick decision:**
+- Browser/external client fetches objects? → **Public MinIO** (`apps/s3-public/`)
+- Server-side I/O only? → **Internal MinIO** (`platform/minio/`)
+- Receiving backups from external machines? → **Cross-backups** (`apps/cross-backups/`)
 
 > **Gotcha:** The internal MinIO host `s3.internal.grigri.cloud` is `nginx-internal` only. If an
 > app generates presigned URLs against it, external clients fail to download. Use `apps/s3-public/`

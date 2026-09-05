@@ -3,7 +3,10 @@
 A dedicated, **externally-exposed** MinIO instance for apps that need to serve object storage
 content to clients outside the cluster (e.g. Readest book downloads via presigned URLs).
 
-This is separate from:
+**See `docs/deployment/minio-architecture.md`** for the complete three-tier MinIO architecture
+(internal, public, cross-backups) and decision tree for choosing the right instance.
+
+This instance is separate from:
 - **`platform/minio/`** — internal-only MinIO for cluster backups (Velero, Kaniop). Host
   `s3.internal.grigri.cloud`, `nginx-internal` ingress. **Not** reachable from the internet.
 - **`apps/cross-backups/`** — external MinIO that *receives* backups from other machines. Host
