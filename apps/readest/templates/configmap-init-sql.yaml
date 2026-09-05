@@ -26,7 +26,7 @@ data:
     psql -v ON_ERROR_STOP=1 -c "SET search_path TO public, auth;" \
       -c "CREATE SCHEMA IF NOT EXISTS extensions;" \
       -c "CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;" \
-      -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF; IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF; IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role NOLOGIN; END IF; END \$\$;" \
+      -c "DO \$\$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF; IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF; IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role NOLOGIN BYPASSRLS; ELSE ALTER ROLE service_role BYPASSRLS; END IF; END \$\$;" \
       -c "GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;" \
       -c "GRANT USAGE ON SCHEMA extensions TO anon, authenticated, service_role;" \
       -c "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA extensions TO authenticated;" \
@@ -95,17 +95,17 @@ data:
     fi
 
     echo "Granting permissions..."
-    psql -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA auth TO anon, authenticated;"
-    psql -v ON_ERROR_STOP=1 -c "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon, authenticated;"
-    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated;"
-    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;"
-    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon, authenticated, service_role;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;"
+    psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role;"
 
     echo "Setting default privileges for future tables..."
-    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;"
-    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;"
-    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated;"
-    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;"
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;"
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;"
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;"
 
     echo "Notifying PostgREST to reload schema cache..."
     psql -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
