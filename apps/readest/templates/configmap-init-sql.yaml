@@ -85,6 +85,12 @@ data:
     psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;"
     psql -v ON_ERROR_STOP=1 -c "GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated;"
 
+    echo "Setting default privileges for future tables..."
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated;"
+    psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT EXECUTE ON FUNCTIONS TO anon, authenticated;"
+
     echo "Notifying PostgREST to reload schema cache..."
     psql -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
 
