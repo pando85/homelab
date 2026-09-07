@@ -1,0 +1,3048 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Deploying New Applications - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#deploying-new-applications" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Deploying New Applications
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-analyze-the-application" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 1: Analyze the Application
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 1: Analyze the Application">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-identify-the-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.1 Identify the Stack
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-identify-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.2 Identify Dependencies
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-check-for-existing-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.3 Check for Existing Infrastructure
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-make-architectural-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 2: Make Architectural Decisions
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 2: Make Architectural Decisions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-database-zalando-vs-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.1 Database: Zalando vs Container
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-object-storage-which-minio" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.2 Object Storage: Which MinIO?
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-api-gateway-kong-vs-nginx-ingress" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.3 API Gateway: Kong vs nginx Ingress
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-oidc-integration-kaniop-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.4 OIDC Integration: kaniop Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-secret-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.5 Secret Management
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-image-pinning" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.6 Image Pinning
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 3: File Structure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 3: File Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-standard-directory-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Standard Directory Layout
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-chartyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.2 Chart.yaml
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-valuesyaml-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.3 values.yaml Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-pvc-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.4 PVC Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-snapshot-schedule-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.5 Snapshot Schedule Pattern
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-validation-and-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 4: Validation and Deployment
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 4: Validation and Deployment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-pre-deployment-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.1 Pre-deployment Checklist
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-validation-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.2 Validation Commands
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-deployment-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      4.3 Deployment Steps
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-common-pitfalls" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 5: Common Pitfalls
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 5: Common Pitfalls">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-database-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.1 Database Issues
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-oidc-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.2 OIDC Issues
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-ingress-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.3 Ingress Issues
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-minio-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.4 MinIO Issues
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-image-tag-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      5.5 Image Tag Issues
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Phase 6: Documentation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="deploying-new-applications">Deploying New Applications</h1>
+<p>This guide captures the decision-making process and patterns for deploying new applications to the homelab. Use this as a checklist when planning a new app deployment.</p>
+<h2 id="phase-1-analyze-the-application">Phase 1: Analyze the Application</h2>
+<h3 id="11-identify-the-stack">1.1 Identify the Stack</h3>
+<p>Start by understanding what the app needs. For Docker Compose deployments, map each service:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Example: analyze Readest&#39;s compose.yaml</span>
+curl<span class="w"> </span>-s<span class="w"> </span>https://raw.githubusercontent.com/readest/readest/main/docker/compose.yaml
+</code></pre></div>
+<p>Create a table:</p>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Image</th>
+<th>Port</th>
+<th>Purpose</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>client</td>
+<td>ghcr.io/readest/readest</td>
+<td>3000</td>
+<td>Next.js web app</td>
+<td>Stateless</td>
+</tr>
+<tr>
+<td>db</td>
+<td>supabase/postgres</td>
+<td>5432</td>
+<td>PostgreSQL</td>
+<td>Stateful</td>
+</tr>
+<tr>
+<td>auth</td>
+<td>supabase/gotrue</td>
+<td>9999</td>
+<td>Auth service</td>
+<td>Stateless</td>
+</tr>
+<tr>
+<td>rest</td>
+<td>postgrest/postgrest</td>
+<td>3000</td>
+<td>REST API</td>
+<td>Stateless</td>
+</tr>
+<tr>
+<td>minio</td>
+<td>minio/minio</td>
+<td>9000</td>
+<td>S3 storage</td>
+<td>Stateful</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-identify-dependencies">1.2 Identify Dependencies</h3>
+<ul>
+<li><strong>Database</strong>: Does it need PostgreSQL, MySQL, Redis, etc.?</li>
+<li><strong>Object Storage</strong>: Does it need S3/MinIO?</li>
+<li><strong>Auth</strong>: Does it support OIDC/OAuth? What provider?</li>
+<li><strong>API Gateway</strong>: Does it need Kong, Traefik, or can nginx handle it?</li>
+<li><strong>Secrets</strong>: What credentials does it need? (API keys, JWT secrets, etc.)</li>
+</ul>
+<h3 id="13-check-for-existing-infrastructure">1.3 Check for Existing Infrastructure</h3>
+<p>Before deploying new instances, check what already exists:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Find existing MinIO deployments</span>
+grep<span class="w"> </span>-r<span class="w"> </span><span class="s2">&quot;minio&quot;</span><span class="w"> </span>apps/<span class="w"> </span>platform/<span class="w"> </span>--include<span class="o">=</span><span class="s2">&quot;*.yaml&quot;</span>
+
+<span class="c1"># Find existing Postgres deployments</span>
+grep<span class="w"> </span>-r<span class="w"> </span><span class="s2">&quot;postgresql&quot;</span><span class="w"> </span>apps/<span class="w"> </span>--include<span class="o">=</span><span class="s2">&quot;*.yaml&quot;</span>
+
+<span class="c1"># Find existing OIDC integrations</span>
+grep<span class="w"> </span>-r<span class="w"> </span><span class="s2">&quot;KanidmOAuth2Client&quot;</span><span class="w"> </span>apps/<span class="w"> </span>--include<span class="o">=</span><span class="s2">&quot;*.yaml&quot;</span>
+</code></pre></div>
+<h2 id="phase-2-make-architectural-decisions">Phase 2: Make Architectural Decisions</h2>
+<h3 id="21-database-zalando-vs-container">2.1 Database: Zalando vs Container</h3>
+<p><strong>Use Zalando Postgres operator when:</strong>
+- The app uses standard PostgreSQL features
+- You want automated backups, snapshots, and operator-managed lifecycle
+- The app doesn't require custom Postgres extensions not in the Spilo image
+- The app doesn't need Supabase-specific schemas (auth, storage, realtime)</p>
+<p><strong>Use container Postgres when:</strong>
+- The app requires Supabase extensions (auth schema, GoTrue, PostgREST)
+- The app needs custom init scripts that conflict with Zalando's role management
+- The app uses a specific Postgres distribution (e.g., TimescaleDB, Citus)</p>
+<p><strong>Decision tree:</strong>
+<div class="highlight"><pre><span></span><code>Does the app need Supabase auth/storage/realtime schemas?
+├── YES → Use container Postgres with init scripts
+└── NO → Does it need custom extensions not in Spilo?
+    ├── YES → Use custom Spilo image (see immich) or container Postgres
+    └── NO → Use Zalando operator
+</code></pre></div></p>
+<p><strong>Example: Readest</strong>
+- Needs <code>auth.users</code> FK, <code>auth.uid()</code> in RLS, Supabase roles
+- Decision: Zalando for the database + init container for Supabase bootstrap SQL</p>
+<h3 id="22-object-storage-which-minio">2.2 Object Storage: Which MinIO?</h3>
+<p><strong>See <code>docs/deployment/minio-architecture.md</code></strong> for the complete architecture, decision tree, and
+integration patterns.</p>
+<p>There are <strong>three</strong> MinIO instances, pick by who fetches the objects:</p>
+<table>
+<thead>
+<tr>
+<th>Instance</th>
+<th>Path</th>
+<th>Host</th>
+<th>Reachable from internet?</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Internal shared</strong></td>
+<td><code>platform/minio/</code></td>
+<td><code>s3.internal.grigri.cloud</code></td>
+<td>No</td>
+<td>In-cluster/backup storage (Velero, Kaniop). Server-side I/O only.</td>
+</tr>
+<tr>
+<td><strong>Public</strong></td>
+<td><code>apps/s3-public/</code></td>
+<td><code>s3.grigri.cloud</code></td>
+<td><strong>Yes</strong></td>
+<td>Apps that hand the <strong>browser</strong> presigned URLs (e.g. Readest book downloads).</td>
+</tr>
+<tr>
+<td><strong>Cross-backups</strong></td>
+<td><code>apps/cross-backups/</code></td>
+<td><code>cross-backups.grigri.cloud</code></td>
+<td>Yes</td>
+<td><em>Receiving</em> backups pushed from other machines (restic, borg, mc mirror).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Quick decision:</strong>
+- Browser/external client fetches objects? → <strong>Public MinIO</strong> (<code>apps/s3-public/</code>)
+- Server-side I/O only? → <strong>Internal MinIO</strong> (<code>platform/minio/</code>)
+- Receiving backups from external machines? → <strong>Cross-backups</strong> (<code>apps/cross-backups/</code>)</p>
+<blockquote>
+<p><strong>Gotcha:</strong> The internal MinIO host <code>s3.internal.grigri.cloud</code> is <code>nginx-internal</code> only. If an
+app generates presigned URLs against it, external clients fail to download. Use <code>apps/s3-public/</code>
+and set the app's public endpoint to <code>https://s3.grigri.cloud</code>. See <code>docs/deployment/s3-public.md</code>.</p>
+</blockquote>
+<p><strong>Pattern for adding a bucket/user to the public MinIO (<code>apps/s3-public/values.yaml</code>):</strong>
+<div class="highlight"><pre><span></span><code><span class="nt">buckets</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-files</span>
+<span class="w">    </span><span class="nt">policy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">none</span>
+<span class="w">    </span><span class="nt">versioning</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">objectlocking</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+
+<span class="nt">policies</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;Policy</span>
+<span class="w">    </span><span class="nt">statements</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&#39;arn:aws:s3:::&lt;app&gt;-files/*&#39;</span>
+<span class="w">        </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:GetObject&quot;</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:PutObject&quot;</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:DeleteObject&quot;</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:AbortMultipartUpload&quot;</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:ListMultipartUploadParts&quot;</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&#39;arn:aws:s3:::&lt;app&gt;-files&#39;</span>
+<span class="w">        </span><span class="nt">actions</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:GetBucketLocation&quot;</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:ListBucket&quot;</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">&quot;s3:ListBucketMultipartUploads&quot;</span>
+
+<span class="nt">users</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">accessKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="w">    </span><span class="nt">existingSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">s3-public-users</span>
+<span class="w">    </span><span class="nt">existingSecretKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;Password</span>
+<span class="w">    </span><span class="nt">policy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;Policy</span>
+</code></pre></div></p>
+<p>Then add <code>&lt;app&gt;Password</code> to Vault <code>/s3-public/users</code> and to
+<code>apps/s3-public/templates/external-secrets-users.yaml</code>. The same pattern applies to
+<code>platform/minio/</code> (secret <code>minio-users</code>, Vault <code>/minio/users</code>) for internal buckets.</p>
+<h3 id="23-api-gateway-kong-vs-nginx-ingress">2.3 API Gateway: Kong vs nginx Ingress</h3>
+<p><strong>Use nginx ingress when:</strong>
+- The app just needs path-based routing (<code>/api/*</code> → backend)
+- You don't need API-specific features (rate limiting, JWT validation, etc.)
+- The app's backend services can be reached directly via Kubernetes services</p>
+<p><strong>Use Kong when:</strong>
+- The app requires API gateway features (rate limiting, JWT validation, request transformation)
+- The app's Docker Compose already includes Kong with custom plugins
+- You need to expose multiple APIs with different auth mechanisms</p>
+<p><strong>Decision tree:</strong>
+<div class="highlight"><pre><span></span><code>Does the app&#39;s compose.yaml include Kong/Traefik?
+├── YES → Can nginx replace it with path-based routing?
+│   ├── YES → Use nginx ingress (simpler, no extra controller)
+│   └── NO → Use Kong (app requires API gateway features)
+└── NO → Use nginx ingress
+</code></pre></div></p>
+<p><strong>Example: Readest</strong>
+- Compose includes Kong for routing <code>/auth/v1/*</code> and <code>/rest/v1/*</code>
+- nginx can handle this with path-based routing → no Kong needed</p>
+<h3 id="24-oidc-integration-kaniop-pattern">2.4 OIDC Integration: kaniop Pattern</h3>
+<p><strong>When to use OIDC:</strong>
+- The app supports OAuth2/OIDC login
+- You want centralized authentication via Kanidm
+- You want group-based access control</p>
+<p><strong>Pattern:</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># 1. Create KanidmGroup (access control)</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kaniop.rs/v1beta1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KanidmGroup</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-users</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">kanidmRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">kanidm</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">kanidm</span><span class="w"> </span><span class="p p-Indicator">}</span>
+
+<span class="c1"># 2. Create KanidmOAuth2Client (OAuth2 registration)</span>
+<span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kaniop.rs/v1beta1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KanidmOAuth2Client</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">kanidmRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">kanidm</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">kanidm</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">displayname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://&lt;app&gt;.grigri.cloud/</span>
+<span class="w">  </span><span class="nt">redirectUrl</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://&lt;app&gt;.grigri.cloud/&lt;callback-path&gt;</span>
+<span class="w">  </span><span class="nt">scopeMap</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-users</span>
+<span class="w">      </span><span class="nt">scopes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">openid</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">profile</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">email</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">preferShortUsername</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">strictRedirectUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+
+<span class="c1"># 3. Reference credentials in app env vars</span>
+<span class="nt">env</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">OAUTH_CLIENT_ID</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">valueFrom</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">secretKeyRef</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-kanidm-oauth2-credentials</span>
+<span class="w">        </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CLIENT_ID</span>
+<span class="w">  </span><span class="nt">OAUTH_CLIENT_SECRET</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">valueFrom</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">secretKeyRef</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-kanidm-oauth2-credentials</span>
+<span class="w">        </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CLIENT_SECRET</span>
+<span class="w">  </span><span class="nt">OIDC_URL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://idm.grigri.cloud/oauth2/openid/&lt;app&gt;</span>
+</code></pre></div></p>
+<p><strong>Common callback paths:</strong>
+- Generic: <code>/oauth/callback</code>, <code>/auth/callback</code>
+- Immich: <code>/auth/login</code>
+- FreshRSS: <code>/i/</code>
+- Open WebUI: <code>/oauth/oidc/callback</code></p>
+<p>Check the app's documentation for the exact callback URL format.</p>
+<h3 id="25-secret-management">2.5 Secret Management</h3>
+<p><strong>Three-tier pattern:</strong></p>
+<ol>
+<li><strong>Zalando auto-generated secrets</strong> (database credentials)</li>
+<li>No ExternalSecret needed</li>
+<li>Reference directly: <code>&lt;teamId&gt;.&lt;cluster-name&gt;.credentials.postgresql.acid.zalan.do</code></li>
+<li>
+<p>Keys: <code>username</code>, <code>password</code></p>
+</li>
+<li>
+<p><strong>ExternalSecrets from Vault</strong> (app-specific secrets)</p>
+</li>
+<li>API keys, JWT secrets, OAuth credentials, SMTP passwords</li>
+<li>
+<p>Pattern:
+   <div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">external-secrets.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExternalSecret</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-secrets</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">secretStoreRef</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClusterSecretStore</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vault</span>
+<span class="w">  </span><span class="nt">target</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-secrets</span>
+<span class="w">  </span><span class="nt">data</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">secretKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">JWT_SECRET</span>
+<span class="w">      </span><span class="nt">remoteRef</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">key</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/&lt;app&gt;/jwt</span>
+<span class="w">        </span><span class="nt">property</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">secret</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>kaniop auto-generated secrets</strong> (OIDC client credentials)</p>
+</li>
+<li>No ExternalSecret needed</li>
+<li>Reference: <code>&lt;app&gt;-kanidm-oauth2-credentials</code></li>
+<li>Keys: <code>CLIENT_ID</code>, <code>CLIENT_SECRET</code></li>
+</ol>
+<p><strong>Vault path convention:</strong>
+- <strong>CLI access:</strong> <code>secret/&lt;app&gt;/&lt;secret-type&gt;</code> (e.g., <code>secret/readest/jwt</code>, <code>secret/minio/users</code>)
+- <strong>ExternalSecret reference:</strong> <code>/&lt;app&gt;/&lt;secret-type&gt;</code> (without <code>secret/</code> prefix)
+- The ClusterSecretStore has <code>secret/</code> as the base path, so ExternalSecrets omit it</p>
+<p><strong>Examples:</strong>
+- CLI: <code>vault kv get secret/minio/users</code> → ExternalSecret: <code>key: /minio/users</code>
+- CLI: <code>vault kv put secret/readest/jwt secret=...</code> → ExternalSecret: <code>key: /readest/jwt</code>
+- CLI: <code>vault kv patch secret/minio/users readestPassword=...</code> (add to existing secret)</p>
+<p><strong>Common paths:</strong>
+- <code>secret/readest/jwt</code> (secret, anon_key, service_role_key)
+- <code>secret/immich/jwt</code> (secret)
+- <code>secret/minio/users</code> (rootUser, rootPassword, veleroPassword, kaniopPassword, readestPassword)
+- <code>secret/nextcloud/admin</code> (username, password)
+- <code>secret/nextcloud/smtp</code> (username, password, host)</p>
+<h3 id="26-image-pinning">2.6 Image Pinning</h3>
+<p><strong>Always pin image tags.</strong> Never use <code>latest</code>.</p>
+<p><strong>Pattern:</strong>
+<div class="highlight"><pre><span></span><code><span class="nt">image</span><span class="p">:</span>
+<span class="w">  </span><span class="c1"># renovate: datasource=docker depName=ghcr.io/readest/readest</span>
+<span class="w">  </span><span class="nt">repository</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ghcr.io/readest/readest</span>
+<span class="w">  </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.9.20</span>
+</code></pre></div></p>
+<p><strong>Finding the right tag:</strong>
+- Check GitHub releases: <code>https://github.com/&lt;org&gt;/&lt;repo&gt;/releases</code>
+- Check container registry: <code>ghcr.io/&lt;org&gt;/&lt;repo&gt;/tags</code> or Docker Hub
+- Use the latest stable release, not pre-release/RC versions</p>
+<p><strong>Renovate hints:</strong>
+- Add <code># renovate: datasource=docker depName=&lt;image&gt;</code> above the <code>repository:</code> line
+- This enables automatic PR updates when new versions are released
+- For non-standard registries, add <code>registryUrl=https://ghcr.io</code></p>
+<h2 id="phase-3-file-structure">Phase 3: File Structure</h2>
+<h3 id="31-standard-directory-layout">3.1 Standard Directory Layout</h3>
+<div class="highlight"><pre><span></span><code>apps/&lt;app-name&gt;/
+├── Chart.yaml                          # Helm chart metadata + dependencies
+├── values.yaml                         # App configuration (controllers, services, ingress, persistence)
+└── templates/
+    ├── postgresql.yaml                 # Zalando CR (if using Zalando)
+    ├── external-secrets.yaml           # Vault secrets (if needed)
+    ├── kanidm-oauth2-client.yaml       # OIDC client (if using OIDC)
+    ├── kanidm-group.yaml               # OIDC group (if using OIDC)
+    ├── pvc.yaml                        # PersistentVolumeClaims (if needed)
+    ├── snapshots.yaml                  # ZFS snapshot schedule (if needed)
+    └── configmap-*.yaml                # ConfigMaps (if needed)
+</code></pre></div>
+<h3 id="32-chartyaml">3.2 Chart.yaml</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v2</span>
+<span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app-name&gt;</span>
+<span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.0.0</span>
+<span class="nt">dependencies</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">app-template</span>
+<span class="w">    </span><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5.1.0</span>
+<span class="w">    </span><span class="nt">repository</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://bjw-s-labs.github.io/helm-charts/</span>
+</code></pre></div>
+<h3 id="33-valuesyaml-structure">3.3 values.yaml Structure</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">app-template</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">controllers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">&lt;app-name&gt;</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">backup/retain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">weekly</span><span class="w">           </span><span class="c1"># Backup retention policy</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">statefulset</span><span class="w">                 </span><span class="c1"># or Deployment</span>
+<span class="w">      </span><span class="nt">containers</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">&lt;app-name&gt;</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">image</span><span class="p">:</span>
+<span class="w">            </span><span class="c1"># renovate: datasource=docker depName=&lt;image&gt;</span>
+<span class="w">            </span><span class="nt">repository</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;image&gt;</span>
+<span class="w">            </span><span class="nt">tag</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;version&gt;</span>
+<span class="w">          </span><span class="nt">env</span><span class="p">:</span>
+<span class="w">            </span><span class="c1"># App-specific environment variables</span>
+<span class="w">          </span><span class="nt">probes</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">liveness</span><span class="p">:</span><span class="w"> </span><span class="nl">&amp;probes</span>
+<span class="w">              </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">              </span><span class="nt">custom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">              </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">httpGet</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/healthz</span>
+<span class="w">                  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;port&gt;</span>
+<span class="w">                </span><span class="nt">initialDelaySeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">                </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">                </span><span class="nt">timeoutSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="w">                </span><span class="nt">failureThreshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3</span>
+<span class="w">            </span><span class="nt">readiness</span><span class="p">:</span><span class="w"> </span><span class="nv">*probes</span>
+<span class="w">            </span><span class="nt">startup</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">              </span><span class="nt">custom</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">              </span><span class="nt">spec</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">httpGet</span><span class="p">:</span>
+<span class="w">                  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/healthz</span>
+<span class="w">                  </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;port&gt;</span>
+<span class="w">                </span><span class="nt">failureThreshold</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">30</span>
+<span class="w">                </span><span class="nt">periodSeconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span>
+<span class="w">          </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">requests</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">cpu</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span>
+<span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128Mi</span>
+<span class="w">            </span><span class="nt">limits</span><span class="p">:</span>
+<span class="w">              </span><span class="nt">memory</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">512Mi</span>
+
+<span class="w">  </span><span class="nt">service</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">&lt;app-name&gt;</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">controller</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app-name&gt;</span>
+<span class="w">      </span><span class="nt">ports</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">http</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;port&gt;</span>
+
+<span class="w">  </span><span class="nt">ingress</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">&lt;app-name&gt;</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">className</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">nginx-internal</span><span class="w">        </span><span class="c1"># or nginx-external</span>
+<span class="w">      </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">external-dns.alpha.kubernetes.io/enabled</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;true&quot;</span>
+<span class="w">        </span><span class="nt">cert-manager.io/cluster-issuer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">letsencrypt-prod-dns</span>
+<span class="w">      </span><span class="nt">hosts</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="nl">&amp;host</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;.grigri.cloud</span>
+<span class="w">          </span><span class="nt">paths</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/</span>
+<span class="w">              </span><span class="nt">pathType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Prefix</span>
+<span class="w">              </span><span class="nt">service</span><span class="p">:</span>
+<span class="w">                </span><span class="nt">identifier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app-name&gt;</span>
+<span class="w">                </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">http</span>
+<span class="w">      </span><span class="nt">tls</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">hosts</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nv">*host</span>
+<span class="w">          </span><span class="nt">secretName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-tls-certificate</span>
+
+<span class="w">  </span><span class="nt">defaultPodOptions</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">securityContext</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">runAsUser</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;uid&gt;</span>
+<span class="w">      </span><span class="nt">runAsGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gid&gt;</span>
+<span class="w">      </span><span class="nt">fsGroup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;gid&gt;</span>
+<span class="w">      </span><span class="nt">fsGroupChangePolicy</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;OnRootMismatch&quot;</span>
+<span class="w">    </span><span class="nt">enableServiceLinks</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="c1"># nodeSelector:</span>
+<span class="w">    </span><span class="c1">#   kubernetes.io/hostname: &lt;node&gt;</span>
+
+<span class="w">  </span><span class="nt">persistence</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">config</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">      </span><span class="nt">globalMounts</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/config</span>
+<span class="w">      </span><span class="nt">existingClaim</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">config-&lt;app&gt;</span>
+</code></pre></div>
+<h3 id="34-pvc-pattern">3.4 PVC Pattern</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">PersistentVolumeClaim</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">labels</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/instance</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="w">    </span><span class="nt">app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="w">    </span><span class="nt">backup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-zfs</span><span class="w">                   </span><span class="c1"># For snapshot schedule selector</span>
+<span class="w">    </span><span class="nt">backup/retain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">weekly</span>
+<span class="w">  </span><span class="nt">annotations</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">argocd.argoproj.io/sync-options</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Prune=false</span><span class="w">   </span><span class="c1"># NEVER auto-delete PVCs</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">config-&lt;app&gt;</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">accessModes</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ReadWriteOnce</span>
+<span class="w">  </span><span class="nt">resources</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">requests</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">storage</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5Gi</span>
+</code></pre></div>
+<h3 id="35-snapshot-schedule-pattern">3.5 Snapshot Schedule Pattern</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">snapscheduler.backube/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SnapshotSchedule</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-backups</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">retention</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">maxCount</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">20</span>
+<span class="w">  </span><span class="nt">schedule</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;0</span><span class="nv"> </span><span class="s">1</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*</span><span class="nv"> </span><span class="s">*&quot;</span><span class="w">               </span><span class="c1"># Daily at 01:00 UTC</span>
+<span class="w">  </span><span class="nt">claimSelector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">backup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-zfs</span><span class="w">                </span><span class="c1"># Matches PVC label</span>
+</code></pre></div>
+<h2 id="phase-4-validation-and-deployment">Phase 4: Validation and Deployment</h2>
+<h3 id="41-pre-deployment-checklist">4.1 Pre-deployment Checklist</h3>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled/> All image tags are pinned (no <code>latest</code>)</li>
+<li class="task-list-item"><input type="checkbox" disabled/> Renovate hints added above image repositories</li>
+<li class="task-list-item"><input type="checkbox" disabled/> PVCs have <code>Prune=false</code> annotation</li>
+<li class="task-list-item"><input type="checkbox" disabled/> PVCs have <code>backup:</code> and <code>backup/retain:</code> labels</li>
+<li class="task-list-item"><input type="checkbox" disabled/> Ingress annotations include <code>cert-manager.io/cluster-issuer</code></li>
+<li class="task-list-item"><input type="checkbox" disabled/> ExternalSecrets reference correct Vault paths</li>
+<li class="task-list-item"><input type="checkbox" disabled/> OIDC redirect URLs match the app's callback path</li>
+<li class="task-list-item"><input type="checkbox" disabled/> Resource requests and limits are defined</li>
+<li class="task-list-item"><input type="checkbox" disabled/> Probes are configured (liveness, readiness, startup)</li>
+</ul>
+<h3 id="42-validation-commands">4.2 Validation Commands</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Build chart dependencies</span>
+helm<span class="w"> </span>dependency<span class="w"> </span>build<span class="w"> </span>apps/&lt;app&gt;/
+
+<span class="c1"># Template the chart (validate YAML syntax)</span>
+helm<span class="w"> </span>template<span class="w"> </span>--include-crds<span class="w"> </span>--namespace<span class="w"> </span>&lt;app&gt;<span class="w"> </span>&lt;release-name&gt;<span class="w"> </span>apps/&lt;app&gt;/
+
+<span class="c1"># Lint the chart (validate Helm best practices)</span>
+helm<span class="w"> </span>lint<span class="w"> </span>apps/&lt;app&gt;/
+
+<span class="c1"># Check for common issues</span>
+<span class="c1"># - Missing image tags</span>
+<span class="c1"># - Incorrect service references in ingress</span>
+<span class="c1"># - Missing probe configurations</span>
+</code></pre></div>
+<h3 id="43-deployment-steps">4.3 Deployment Steps</h3>
+<ol>
+<li>
+<p><strong>Create Vault secrets</strong> (if needed)
+   <div class="highlight"><pre><span></span><code>vault<span class="w"> </span>login
+vault<span class="w"> </span>kv<span class="w"> </span>put<span class="w"> </span>secret/&lt;app&gt;/jwt<span class="w"> </span><span class="nv">secret</span><span class="o">=</span>&lt;value&gt;<span class="w"> </span><span class="nv">anon_key</span><span class="o">=</span>&lt;value&gt;
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Update shared infrastructure</strong> (if needed)</p>
+</li>
+<li>Add bucket/user to MinIO</li>
+<li>
+<p>Add ExternalSecret entry for new credentials</p>
+</li>
+<li>
+<p><strong>Create app files</strong></p>
+</li>
+<li><code>Chart.yaml</code></li>
+<li><code>values.yaml</code></li>
+<li>
+<p><code>templates/</code> (postgresql, external-secrets, kanidm, pvc, snapshots)</p>
+</li>
+<li>
+<p><strong>Validate</strong>
+   <div class="highlight"><pre><span></span><code>helm<span class="w"> </span>dependency<span class="w"> </span>build<span class="w"> </span>apps/&lt;app&gt;/
+helm<span class="w"> </span>template<span class="w"> </span>--include-crds<span class="w"> </span>--namespace<span class="w"> </span>&lt;app&gt;<span class="w"> </span>&lt;app&gt;<span class="w"> </span>apps/&lt;app&gt;/
+helm<span class="w"> </span>lint<span class="w"> </span>apps/&lt;app&gt;/
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Commit and push</strong>
+   <div class="highlight"><pre><span></span><code>git<span class="w"> </span>add<span class="w"> </span>apps/&lt;app&gt;/
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;&lt;app&gt;: Add &lt;app&gt; deployment&quot;</span>
+git<span class="w"> </span>push
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Verify ArgoCD sync</strong>
+   <div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>get<span class="w"> </span>application<span class="w"> </span>&lt;app&gt;<span class="w"> </span>-n<span class="w"> </span>argocd
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-n<span class="w"> </span>&lt;app&gt;
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Test the application</strong></p>
+</li>
+<li>Access the ingress URL</li>
+<li>Verify OIDC login works</li>
+<li>Check logs for errors</li>
+</ol>
+<h2 id="phase-5-common-pitfalls">Phase 5: Common Pitfalls</h2>
+<h3 id="51-database-issues">5.1 Database Issues</h3>
+<p><strong>Zalando rejects hyphenated database names</strong>
+- Workaround: Create databases manually via <code>kubectl exec psql</code>
+- See: <code>docs/troubleshooting/radarr-sqlite-to-postgres.md</code></p>
+<p><strong>Supabase apps need auth schema</strong>
+- Use Zalando for the database + init container for Supabase bootstrap
+- See: <code>docs/deployment/readest.md</code></p>
+<p><strong>Custom Postgres extensions not in Spilo image</strong>
+- Use custom Spilo image (see immich) or container Postgres
+- See: <code>apps/immich/templates/postgresql.yaml</code></p>
+<h3 id="52-oidc-issues">5.2 OIDC Issues</h3>
+<p><strong>Redirect URL mismatch</strong>
+- Check the app's documentation for the exact callback path
+- Common patterns: <code>/oauth/callback</code>, <code>/auth/callback</code>, <code>/auth/login</code>
+- kaniop <code>strictRedirectUrl: true</code> rejects mismatched URLs</p>
+<p><strong>OIDC client credentials not generated</strong>
+- kaniop creates <code>&lt;app&gt;-kanidm-oauth2-credentials</code> secret automatically
+- Wait for the secret to appear: <code>kubectl get secret -n &lt;app&gt; &lt;app&gt;-kanidm-oauth2-credentials</code></p>
+<h3 id="53-ingress-issues">5.3 Ingress Issues</h3>
+<p><strong>Path-based routing conflicts</strong>
+- nginx ingress evaluates paths in order (longest match wins)
+- Put more specific paths first (<code>/auth/v1</code> before <code>/</code>)
+- See: <code>docs/deployment/readest.md</code> for multi-path example</p>
+<p><strong>Large file uploads fail</strong>
+- Add <code>nginx.ingress.kubernetes.io/proxy-body-size: "0"</code> annotation
+- Default is 1MB</p>
+<h3 id="54-minio-issues">5.4 MinIO Issues</h3>
+<p><strong>Presigned URLs don't work / external downloads fail</strong>
+- The browser fetches presigned URLs directly, so <code>S3_PUBLIC_ENDPOINT</code> must be an
+  <strong>internet-reachable</strong> host. The internal MinIO host (<code>s3.internal.grigri.cloud</code>) is
+  <code>nginx-internal</code> only — external clients can't reach it.
+- For browser-facing storage use the public MinIO (<code>apps/s3-public/</code>):
+  - In-cluster endpoint (<code>S3_ENDPOINT</code>): <code>http://s3-public-minio.s3-public.svc:9000</code>
+  - External endpoint (<code>S3_PUBLIC_ENDPOINT</code>): <code>https://s3.grigri.cloud</code>
+- For server-side-only storage the internal MinIO is fine:
+  - In-cluster: <code>http://minio.minio.svc:9000</code>, external: <code>https://s3.internal.grigri.cloud</code>
+- See <code>docs/deployment/s3-public.md</code> and section 2.2.</p>
+<p><strong>Bucket creation fails</strong>
+- MinIO Helm chart creates buckets on startup
+- Check bucket name is lowercase, no special characters
+- Verify policy syntax (ARN format: <code>arn:aws:s3:::&lt;bucket&gt;/*</code>)</p>
+<h3 id="55-image-tag-issues">5.5 Image Tag Issues</h3>
+<p><strong>Using <code>latest</code> tag</strong>
+- Always pin to a specific version
+- Add Renovate hint for automatic updates
+- Check GitHub releases for latest stable version</p>
+<p><strong>Renovate doesn't detect updates</strong>
+- Add <code># renovate: datasource=docker depName=&lt;image&gt;</code> above <code>repository:</code>
+- For non-Docker Hub registries, add <code>registryUrl=https://ghcr.io</code></p>
+<h2 id="phase-6-documentation">Phase 6: Documentation</h2>
+<p>After deployment, document:</p>
+<ol>
+<li><strong>Deployment guide</strong> in <code>docs/deployment/&lt;app&gt;.md</code></li>
+<li>Architecture diagram</li>
+<li>Controllers and their purposes</li>
+<li>Database/storage configuration</li>
+<li>OIDC integration details</li>
+<li>Ingress routing</li>
+<li>Secrets required</li>
+<li>
+<p>Deployment steps</p>
+</li>
+<li>
+<p><strong>Troubleshooting</strong> in <code>docs/troubleshooting/&lt;app&gt;-&lt;issue&gt;.md</code> (if issues arise)</p>
+</li>
+<li>Problem description</li>
+<li>Root cause</li>
+<li>Diagnosis commands</li>
+<li>
+<p>Fix/workaround</p>
+</li>
+<li>
+<p><strong>AGENTS.md</strong> — Add one-line pitfall if non-obvious behavior discovered</p>
+</li>
+<li>Link to troubleshooting doc</li>
+<li>Example: "Readest needs Supabase auth schema — use Zalando + init container"</li>
+</ol>
+<h2 id="references">References</h2>
+<ul>
+<li><strong>Helm conventions</strong>: <code>docs/conventions/helm.md</code></li>
+<li><strong>Cilium networking</strong>: <code>docs/conventions/cilium.md</code></li>
+<li><strong>Documenting learnings</strong>: <code>docs/conventions/documenting-learnings.md</code></li>
+<li><strong>Example deployments</strong>: <code>docs/deployment/hermes-agent.md</code>, <code>docs/deployment/unifi.md</code></li>
+<li><strong>Zalando Postgres patterns</strong>: <code>apps/immich/templates/postgresql.yaml</code>, <code>apps/dawarich/templates/postgresql.yaml</code></li>
+<li><strong>MinIO patterns</strong>: <code>platform/minio/values.yaml</code></li>
+<li><strong>OIDC patterns</strong>: <code>apps/immich/templates/kanidm-oauth2-client.yaml</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
