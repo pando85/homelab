@@ -215,7 +215,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=postgrest/postgrest
             repository: postgrest/postgrest
-            tag: v14.17
+            tag: v16.3
           env:
             PGRST_DB_URI:
               valueFrom:
