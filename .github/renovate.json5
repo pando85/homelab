@@ -269,5 +269,22 @@
       ],
       commitMessagePrefix: 'immich: ',
     },
+    {
+      description: 'Group Silo (MinIO fork) updates in one PR',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'pgsty/silo',
+      ],
+      groupName: 'silo',
+      groupSlug: 'silo',
+      additionalBranchPrefix: 'silo-',
+      addLabels: [
+        'renovate/silo',
+      ],
+      commitMessagePrefix: 'silo: ',
+      versioning: 'regex:^RELEASE\\.(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})T(?<build>\\d{2})-(?<revision>\\d{2})-(?<patch2>\\d{2})Z$',
+    },
   ],
 }
