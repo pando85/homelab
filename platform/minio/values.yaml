@@ -1,7 +1,7 @@
 minio:
   image:
-    repository: pgsty/minio
-    tag: RELEASE.2026-02-14T12-00-00Z
+    repository: pgsty/silo
+    tag: RELEASE.2026-09-03T13-18-01Z
 
   mode: standalone
 
