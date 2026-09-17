@@ -110,9 +110,12 @@ data:
     psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;"
 
     echo "Ensuring custom OAuth provider (Kanidm) exists..."
-    psql -v ON_ERROR_STOP=1 -v kanidm_client_id="$KANIDM_CLIENT_ID" \
-      -v kanidm_client_secret="$KANIDM_CLIENT_SECRET" \
-      -c "INSERT INTO auth.custom_oauth_providers (provider_type, identifier, name, client_id, client_secret, authorization_url, token_url, userinfo_url, scopes, pkce_enabled, enabled) VALUES ('oauth2', 'custom:kanidm', 'Kanidm', :'kanidm_client_id', :'kanidm_client_secret', 'https://idm.grigri.cloud/ui/oauth2', 'https://idm.grigri.cloud/oauth2/token', 'https://idm.grigri.cloud/oauth2/openid/readest/userinfo', ARRAY['openid','profile','email'], true, true) ON CONFLICT (identifier) DO UPDATE SET client_id = :'kanidm_client_id', client_secret = :'kanidm_client_secret', enabled = true;"
+    escape_sql() {
+      printf '%s' "$1" | sed "s/'/''/g"
+    }
+    KANIDM_ID_ESCAPED=$(escape_sql "$KANIDM_CLIENT_ID")
+    KANIDM_SECRET_ESCAPED=$(escape_sql "$KANIDM_CLIENT_SECRET")
+    psql -v ON_ERROR_STOP=1 -c "INSERT INTO auth.custom_oauth_providers (provider_type, identifier, name, client_id, client_secret, authorization_url, token_url, userinfo_url, scopes, pkce_enabled, enabled) VALUES ('oauth2', 'custom:kanidm', 'Kanidm', '${KANIDM_ID_ESCAPED}', '${KANIDM_SECRET_ESCAPED}', 'https://idm.grigri.cloud/ui/oauth2', 'https://idm.grigri.cloud/oauth2/token', 'https://idm.grigri.cloud/oauth2/openid/readest/userinfo', ARRAY['openid','profile','email'], true, true) ON CONFLICT (identifier) DO UPDATE SET client_id = '${KANIDM_ID_ESCAPED}', client_secret = '${KANIDM_SECRET_ESCAPED}', enabled = true;"
 
     echo "Running post-migration health check..."
     HEALTH_ERRORS=0
