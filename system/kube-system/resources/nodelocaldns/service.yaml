@@ -7,13 +7,13 @@ metadata:
     k8s-app: node-local-dns
 spec:
   ports:
-  - name: dns
-    port: 53
-    protocol: UDP
-    targetPort: 53
-  - name: dns-tcp
-    port: 53
-    protocol: TCP
-    targetPort: 53
+    - name: dns
+      port: 53
+      protocol: UDP
+      targetPort: 53
+    - name: dns-tcp
+      port: 53
+      protocol: TCP
+      targetPort: 53
   selector:
     k8s-app: node-local-dns

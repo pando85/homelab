@@ -39,17 +39,17 @@ data:
         engine: google
         shortcut: g
         disabled: false
-        
+
       - name: duckduckgo
         engine: duckduckgo
         shortcut: ddg
         disabled: false
-        
+
       - name: bing
         engine: bing
         shortcut: b
         disabled: false
-        
+
       - name: wikipedia
         engine: wikipedia
         shortcut: wp

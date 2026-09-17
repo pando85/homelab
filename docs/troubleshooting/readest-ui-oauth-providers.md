@@ -67,10 +67,10 @@ initContainers:
         set -e
         STATIC_DIR="/app/apps/readest-app/.next/static"
         PATCHED_DIR="/patched-static"
-        
+
         echo "Copying static assets..."
         cp -r "${STATIC_DIR}/." "${PATCHED_DIR}/"
-        
+
         echo "Patching OAuth provider..."
         PATCHED=0
         for f in $(find "${PATCHED_DIR}" -name "*.js" -type f); do
@@ -84,12 +84,12 @@ initContainers:
             PATCHED=$((PATCHED + 1))
           fi
         done
-        
+
         if [ "$PATCHED" -eq 0 ]; then
           echo "ERROR: Could not find OAuth provider to patch"
           exit 1
         fi
-        
+
         echo "Patched $PATCHED file(s)"
     volumeMounts:
       - name: patched-static

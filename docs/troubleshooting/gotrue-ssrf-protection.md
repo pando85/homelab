@@ -77,7 +77,7 @@ INSERT INTO auth.custom_oauth_providers (
 Verify the provider was inserted correctly:
 
 ```sql
-SELECT identifier, name, provider_type, enabled 
+SELECT identifier, name, provider_type, enabled
 FROM auth.custom_oauth_providers;
 ```
 
