@@ -139,6 +139,9 @@ will be detected and reverted almost instantly. The git repository is the single
 - Supabase apps on Zalando Postgres: the `db-migrate` init container now automates schema setup
   (`auth`, `extensions`, `graphql_public` schemas + enum types + roles). No manual steps needed.
   See `docs/deployment/readest.md`
+- Apps with init-container workarounds (JS patching, schema health checks) should log version
+  info and fail loudly (`exit 1`) on mismatch so Renovate bumps surface breakage immediately.
+  Check init container logs after any version bump. See each app's deployment doc for specifics.
 - Zalando Postgres PVC recreate causes Patroni stale-DCS deadlock: Patroni DCS ConfigMaps
   (`<cluster>-config`, `<cluster>-leader`) survive PVC deletion and carry the old cluster's
   `initialize` marker, so Patroni waits forever for a leader on a fresh empty data dir. Fix:

@@ -35,40 +35,47 @@ Tried using the public IP address instead of internal DNS - the public IP may no
 
 ## Workaround
 
-Insert the custom provider directly into the `auth.custom_oauth_providers` table via SQL, bypassing the API validation:
+The custom provider is inserted automatically by the `db-migrate` init container on every pod start, using an idempotent `INSERT ... ON CONFLICT DO UPDATE`. The Kanidm OAuth client credentials come from the `readest-kanidm-oauth2-credentials` secret (created by the kaniop `KanidmOAuth2Client` CR), so the entire flow is GitOps-managed.
+
+The init container runs (in `apps/readest/templates/configmap-init-sql.yaml`):
 
 ```sql
 INSERT INTO auth.custom_oauth_providers (
-  provider_type,
-  identifier,
-  name,
-  client_id,
-  client_secret,
-  authorization_url,
-  token_url,
-  userinfo_url,
-  scopes,
-  pkce_enabled,
-  enabled
+  provider_type, identifier, name, client_id, client_secret,
+  authorization_url, token_url, userinfo_url, scopes, pkce_enabled, enabled
 ) VALUES (
-  'oauth2',
-  'custom:kanidm',
-  'Kanidm',
-  '<client_id>',
-  '<client_secret>',
+  'oauth2', 'custom:kanidm', 'Kanidm',
+  :'kanidm_client_id', :'kanidm_client_secret',
   'https://idm.grigri.cloud/ui/oauth2',
   'https://idm.grigri.cloud/oauth2/token',
   'https://idm.grigri.cloud/oauth2/openid/readest/userinfo',
-  ARRAY['openid', 'profile', 'email'],
-  true,
-  true
+  ARRAY['openid','profile','email'], true, true
+) ON CONFLICT (identifier) DO UPDATE
+  SET client_id = :'kanidm_client_id',
+      client_secret = :'kanidm_client_secret',
+      enabled = true;
+```
+
+If the automatic insertion fails (e.g. the `auth.custom_oauth_providers` table doesn't exist yet because the schema migration hasn't run), you can insert it manually:
+
+```sql
+INSERT INTO auth.custom_oauth_providers (
+  provider_type, identifier, name, client_id, client_secret,
+  authorization_url, token_url, userinfo_url, scopes, pkce_enabled, enabled
+) VALUES (
+  'oauth2', 'custom:kanidm', 'Kanidm',
+  '<client_id>', '<client_secret>',
+  'https://idm.grigri.cloud/ui/oauth2',
+  'https://idm.grigri.cloud/oauth2/token',
+  'https://idm.grigri.cloud/oauth2/openid/readest/userinfo',
+  ARRAY['openid', 'profile', 'email'], true, true
 );
 ```
 
 ## Impact
 
-- The custom provider is **not managed by GitOps**
-- Must be manually inserted if the database is recreated
+- The custom provider **is now managed by GitOps** (auto-inserted on every pod start)
+- Credentials sourced from kaniop-managed secret — rotates automatically
 - Cannot use GoTrue's admin API to update or delete the provider
 - No validation of the URLs (could point to invalid endpoints)
 

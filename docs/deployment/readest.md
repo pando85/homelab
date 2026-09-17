@@ -167,7 +167,7 @@ The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Di
 
 3. **Nginx Redirect**: Added `server-snippet` to the client ingress that redirects `/callback` to `/auth/v1/callback`. This routes Kanidm's OAuth callback to GoTrue's callback endpoint.
 
-4. **Custom OAuth Provider in GoTrue**: Manually inserted the custom OAuth provider into the `auth.custom_oauth_providers` table, bypassing GoTrue's SSRF protection that blocks private IPs. The provider is configured with:
+4. **Custom OAuth Provider in GoTrue**: The `db-migrate` init container auto-inserts the custom OAuth provider into the `auth.custom_oauth_providers` table (idempotent `INSERT ... ON CONFLICT DO UPDATE`), bypassing GoTrue's SSRF protection that blocks private IPs. Credentials come from the kaniop-managed `readest-kanidm-oauth2-credentials` secret. The provider is configured with:
    - `identifier`: `custom:kanidm`
    - `provider_type`: `oauth2`
    - `authorization_url`: `https://idm.grigri.cloud/ui/oauth2`
@@ -177,8 +177,7 @@ The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Di
 5. **Kanidm OAuth2 Client**: Updated the redirect URLs to include both internal and external domains, and both `/callback` and `/auth/v1/callback` paths. This ensures GoTrue can redirect back to the correct URL after authentication.
 
 **Known Issues:**
-- The custom OAuth provider must be manually inserted into the database (not managed by GitOps)
-- GoTrue's SSRF protection prevents registering providers pointing to internal services via the API
+- GoTrue's SSRF protection prevents registering providers pointing to internal services via the API (automated via init container SQL insert)
 
 **OAuth Flow:**
 1. User clicks "Sign in with Kanidm" in Readest
@@ -224,23 +223,9 @@ This integration required several workarounds due to limitations in GoTrue and R
 - Using `oidc` provider type instead of `oauth2` - same validation
 - Using `oauth2` with explicit endpoints - same validation
 
-**Workaround:** Insert the custom provider directly into the `auth.custom_oauth_providers` table via SQL, bypassing the API validation:
+**Workaround:** The `db-migrate` init container auto-inserts the custom provider into `auth.custom_oauth_providers` on every pod start using an idempotent `INSERT ... ON CONFLICT DO UPDATE`. Credentials are sourced from the kaniop-managed `readest-kanidm-oauth2-credentials` secret. See `docs/troubleshooting/gotrue-ssrf-protection.md` for details.
 
-```sql
-INSERT INTO auth.custom_oauth_providers (
-  provider_type, identifier, name, client_id, client_secret,
-  authorization_url, token_url, userinfo_url, scopes, pkce_enabled, enabled
-) VALUES (
-  'oauth2', 'custom:kanidm', 'Kanidm',
-  '<client_id>', '<client_secret>',
-  'https://idm.grigri.cloud/ui/oauth2',
-  'https://idm.grigri.cloud/oauth2/token',
-  'https://idm.grigri.cloud/oauth2/openid/readest/userinfo',
-  ARRAY['openid', 'profile', 'email'], true, true
-);
-```
-
-**Impact:** The custom provider is not managed by GitOps and must be manually inserted if the database is recreated.
+**Impact:** Fully GitOps-managed — survives DB recreates and credential rotations automatically.
 
 #### Readest UI Hardcoded OAuth Providers
 
@@ -409,16 +394,18 @@ curl -s -D - -o /dev/null -X OPTIONS "https://readest.grigri.cloud/auth/v1/user"
 #### 4. Login fails for everyone after DB recreation/restore (custom provider row lost)
 
 - **Symptoms:** "unsupported provider" or provider-not-found in GoTrue logs; web and mobile both
-  broken. The `custom:kanidm` row is a manual insert, **not** GitOps-managed.
+  broken. The `custom:kanidm` row is auto-inserted by the `db-migrate` init container.
 - **Diagnose:**
   ```bash
   kubectl --context=grigri exec -n readest readest-postgres-0 -c postgres -- \
     psql -U supabase_auth_admin -d readest -c \
     "SELECT identifier, enabled FROM auth.custom_oauth_providers;"
   ```
-- **Fix:** re-run the `INSERT` from the "GoTrue SSRF Protection" section above, and — if the DB
-  was recreated — repeat the one-time steps: Supabase schemas/enums, `ALTER DATABASE ... SET
-  search_path` (Deployment Steps 10).
+  Also check the init container logs: `kubectl logs -n readest deploy/readest-client -c db-migrate`
+  — look for "Ensuring custom OAuth provider" and any errors.
+- **Fix:** If the init container failed, check that `readest-kanidm-oauth2-credentials` secret
+  exists and has `CLIENT_ID`/`CLIENT_SECRET` keys. Restart the pod to re-run the init container.
+  If the DB was recreated, the `db-migrate` script handles schema + provider in one pass.
 
 #### 5. Mobile "go to login" returns (CORS or URI allow-list regression)
 
@@ -472,8 +459,8 @@ If Readest adds support for custom OAuth providers via runtime configuration, we
 - Use standard GoTrue custom OAuth provider registration (if SSRF protection is relaxed)
 
 If GoTrue adds support for private hosts in custom OAuth providers, we can:
-- Use the GoTrue API to register the provider instead of manual DB insert
-- Manage the provider configuration via GitOps
+- Use the GoTrue API to register the provider instead of the init container SQL insert
+- Remove the custom provider insertion from `db-migrate`
 
 Open mobile gap: GoTrue puts Kanidm claims (`plan`, quotas) in `user_metadata`, but the app reads
 a top-level `plan` JWT claim, so mobile users resolve as "free" (cosmetic/UI-gating; server-side
@@ -670,19 +657,18 @@ echo "Backup saved to $BACKUP_DIR"
    ```
 
 7. **Restore non-GitOps data**:
-   ```bash
-   # Restore search_path
-   kubectl --context=grigri exec -i -n readest readest-postgres-0 -c postgres -- \
-     psql -U postgres -d readest < "$BACKUP_DIR/db-settings.sql"
+    ```bash
+    # Restore search_path
+    kubectl --context=grigri exec -i -n readest readest-postgres-0 -c postgres -- \
+      psql -U postgres -d readest < "$BACKUP_DIR/db-settings.sql"
 
-   # Restore custom OAuth provider (convert CSV to INSERT)
-   # Note: You'll need to manually convert the CSV to an INSERT statement
-   # or re-insert from the deployment doc template
+    # Custom OAuth provider is auto-inserted by db-migrate on pod restart (step 5).
+    # No manual re-insert needed.
 
-   # Restore user data (if backed up)
-   kubectl --context=grigri exec -i -n readest readest-postgres-0 -c postgres -- \
-     psql -U postgres -d readest < "$BACKUP_DIR/user-data.sql"
-   ```
+    # Restore user data (if backed up)
+    kubectl --context=grigri exec -i -n readest readest-postgres-0 -c postgres -- \
+      psql -U postgres -d readest < "$BACKUP_DIR/user-data.sql"
+    ```
 
 8. **Restart PostgREST** to reload schema cache:
    ```bash

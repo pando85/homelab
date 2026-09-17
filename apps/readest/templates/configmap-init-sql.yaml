@@ -109,6 +109,60 @@ data:
     psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;"
     psql -v ON_ERROR_STOP=1 -c "ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;"
 
+    echo "Ensuring custom OAuth provider (Kanidm) exists..."
+    psql -v ON_ERROR_STOP=1 -v kanidm_client_id="$KANIDM_CLIENT_ID" \
+      -v kanidm_client_secret="$KANIDM_CLIENT_SECRET" \
+      -c "INSERT INTO auth.custom_oauth_providers (provider_type, identifier, name, client_id, client_secret, authorization_url, token_url, userinfo_url, scopes, pkce_enabled, enabled) VALUES ('oauth2', 'custom:kanidm', 'Kanidm', :'kanidm_client_id', :'kanidm_client_secret', 'https://idm.grigri.cloud/ui/oauth2', 'https://idm.grigri.cloud/oauth2/token', 'https://idm.grigri.cloud/oauth2/openid/readest/userinfo', ARRAY['openid','profile','email'], true, true) ON CONFLICT (identifier) DO UPDATE SET client_id = :'kanidm_client_id', client_secret = :'kanidm_client_secret', enabled = true;"
+
+    echo "Running post-migration health check..."
+    HEALTH_ERRORS=0
+
+    SCHEMAS=$(psql -tAc "SELECT count(*) FROM pg_namespace WHERE nspname IN ('auth','extensions','graphql_public');")
+    if [ "$SCHEMAS" -lt 3 ]; then
+      echo "FAIL: Expected 3 schemas (auth, extensions, graphql_public), found $SCHEMAS"
+      HEALTH_ERRORS=$((HEALTH_ERRORS + 1))
+    else
+      echo "OK: All 3 required schemas present"
+    fi
+
+    OAUTH_ENABLED=$(psql -tAc "SELECT enabled FROM auth.custom_oauth_providers WHERE identifier='custom:kanidm';")
+    if [ "$OAUTH_ENABLED" != "t" ]; then
+      echo "FAIL: custom:kanidm OAuth provider missing or disabled"
+      HEALTH_ERRORS=$((HEALTH_ERRORS + 1))
+    else
+      echo "OK: custom:kanidm OAuth provider enabled"
+    fi
+
+    for ROLE in anon authenticated service_role; do
+      EXISTS=$(psql -tAc "SELECT count(*) FROM pg_roles WHERE rolname='$ROLE';")
+      if [ "$EXISTS" -eq 0 ]; then
+        echo "FAIL: Role $ROLE missing"
+        HEALTH_ERRORS=$((HEALTH_ERRORS + 1))
+      fi
+    done
+    echo "OK: All required roles exist"
+
+    BYPASSRLS=$(psql -tAc "SELECT rolbypassrls FROM pg_roles WHERE rolname='service_role';")
+    if [ "$BYPASSRLS" != "t" ]; then
+      echo "FAIL: service_role missing BYPASSRLS"
+      HEALTH_ERRORS=$((HEALTH_ERRORS + 1))
+    else
+      echo "OK: service_role has BYPASSRLS"
+    fi
+
+    CRITICAL_TABLES=$(psql -tAc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('books','files','reading_sessions');")
+    if [ "$CRITICAL_TABLES" -lt 2 ]; then
+      echo "WARN: Expected critical tables (books, files, reading_sessions), found $CRITICAL_TABLES — may be fresh DB"
+    else
+      echo "OK: $CRITICAL_TABLES critical tables present"
+    fi
+
+    if [ "$HEALTH_ERRORS" -gt 0 ]; then
+      echo "HEALTH CHECK FAILED: $HEALTH_ERRORS error(s) detected"
+      exit 1
+    fi
+    echo "Health check passed."
+
     echo "Notifying PostgREST to reload schema cache..."
     psql -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
 

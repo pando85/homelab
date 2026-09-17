@@ -16,6 +16,16 @@ app-template:
                 secretKeyRef:
                   name: readest.readest-postgres.credentials.postgresql.acid.zalan.do
                   key: password
+            KANIDM_CLIENT_ID:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-kanidm-oauth2-credentials
+                  key: CLIENT_ID
+            KANIDM_CLIENT_SECRET:
+              valueFrom:
+                secretKeyRef:
+                  name: readest-kanidm-oauth2-credentials
+                  key: CLIENT_SECRET
           command:
             - sh
             - /db-init/migrate.sh
@@ -40,8 +50,16 @@ app-template:
               STATIC_DIR="/app/apps/readest-app/.next/static"
               PATCHED_DIR="/patched-static"
 
+              if [ -f /app/apps/readest-app/package.json ]; then
+                APP_VERSION=$(grep -o '"version":"[^"]*"' /app/apps/readest-app/package.json | head -1 | cut -d'"' -f4)
+                echo "Readest app version: ${APP_VERSION:-unknown}"
+              fi
+
               echo "Copying static assets..."
               cp -r "${STATIC_DIR}/." "${PATCHED_DIR}/"
+
+              TOTAL_JS=$(find "${PATCHED_DIR}" -name "*.js" -type f | wc -l)
+              echo "Found $TOTAL_JS JS files in static directory"
 
               echo "Patching OAuth provider..."
               PATCHED=0
@@ -59,10 +77,26 @@ app-template:
 
               if [ "$PATCHED" -eq 0 ]; then
                 echo "ERROR: Could not find OAuth provider to patch"
+                echo "This likely means Readest changed its JS bundle structure."
+                echo "Check docs/troubleshooting/readest-ui-oauth-providers.md"
+                REMAINING=$(grep -rl 'provider:"discord"\|provider:"google"\|provider:"apple"\|provider:"github"' "${PATCHED_DIR}" 2>/dev/null | wc -l)
+                if [ "$REMAINING" -gt 0 ]; then
+                  echo "Found $REMAINING files with OAuth provider references — patterns need updating"
+                  grep -rn 'provider:"discord"\|provider:"google"\|provider:"apple"\|provider:"github"' "${PATCHED_DIR}" 2>/dev/null | head -5
+                fi
                 exit 1
               fi
 
               echo "Patched $PATCHED file(s)"
+
+              echo "Verifying patch..."
+              KANIDM_COUNT=$(grep -rl 'provider:"custom:kanidm"' "${PATCHED_DIR}" 2>/dev/null | wc -l)
+              echo "Found $KANIDM_COUNT file(s) with patched custom:kanidm provider"
+
+              UNPATCHED=$(grep -rl 'provider:"discord"' "${PATCHED_DIR}" 2>/dev/null | wc -l)
+              if [ "$UNPATCHED" -gt 0 ]; then
+                echo "WARN: $UNPATCHED file(s) still contain unpatched discord provider"
+              fi
 
               echo "Generating client discovery configs..."
               PUBLIC_DIR="/next-public"

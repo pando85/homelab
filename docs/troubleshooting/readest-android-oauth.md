@@ -157,8 +157,8 @@ Server side:
   hook (or upstream change) would fix it.
 - **`provider_refresh_token` leakage:** GoTrue passes Kanidm's refresh token through the URL
   fragment to the app. Harmless here (self-hosted, HTTPS, single user) but worth knowing.
-- **Manual DB row:** the `custom:kanidm` provider lives in `auth.custom_oauth_providers`
-  (inserted manually due to SSRF validation) — re-insert if the database is recreated.
+- **Custom OAuth provider row:** the `custom:kanidm` provider in `auth.custom_oauth_providers`
+  is auto-inserted by the `db-migrate` init container (was manual; now GitOps-managed).
 
 ## When It Breaks Again (Regression Checklist)
 
