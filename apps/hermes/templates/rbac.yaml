@@ -87,3 +87,50 @@ roleRef:
   kind: Role
   name: hermes-agent-navidrome
   apiGroup: rbac.authorization.k8s.io
+---
+# Cluster-wide read-only access for hermes-agent
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hermes-agent-readonly
+rules:
+  - apiGroups: [""]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps", "batch", "extensions"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["velero.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["argoproj.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hermes-agent-readonly
+subjects:
+  - kind: ServiceAccount
+    name: hermes-agent
+    namespace: hermes
+roleRef:
+  kind: ClusterRole
+  name: hermes-agent-readonly
+  apiGroup: rbac.authorization.k8s.io
