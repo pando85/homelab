@@ -79,8 +79,8 @@ app-template:
               memory: 4Gi
         grafana-mcp:
           image:
-            repository: ghcr.io/grafana/mcp-grafana
-            tag: v0.11.6
+            repository: docker.io/grafana/mcp-grafana
+            tag: v1.5.1
           command: ["/bin/sh", "-c"]
           args:
             - |
