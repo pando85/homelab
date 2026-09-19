@@ -42,6 +42,7 @@ app-template:
                 -d "scope=openid email profile")
               JWT=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
               echo -n "$JWT" > /shared/grafana-jwt
+              chmod 666 /shared/grafana-jwt
       containers:
         hermes:
           image:
