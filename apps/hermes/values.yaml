@@ -33,13 +33,14 @@ app-template:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              JWT=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
+              RESPONSE=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
                 -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
                 -d "client_id=grafana" \
                 -d "subject_token=${KANIDM_TOKEN}" \
                 -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
                 -d "audience=grafana" \
-                -d "scope=openid email profile" | jq -r '.access_token')
+                -d "scope=openid email profile")
+              JWT=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
               echo -n "$JWT" > /shared/grafana-jwt
       containers:
         hermes:
@@ -117,13 +118,14 @@ app-template:
             - |
               while true; do
                 sleep 3000
-                JWT=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
+                RESPONSE=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
                   -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
                   -d "client_id=grafana" \
                   -d "subject_token=${KANIDM_TOKEN}" \
                   -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
                   -d "audience=grafana" \
-                  -d "scope=openid email profile" | jq -r '.access_token')
+                  -d "scope=openid email profile")
+                JWT=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
                 echo -n "$JWT" > /shared/grafana-jwt
               done
           resources:
@@ -181,6 +183,8 @@ app-template:
       advancedMounts:
         hermes:
           fix-sa-token:
+            - path: /shared
+          grafana-mcp-token-init:
             - path: /shared
           grafana-mcp:
             - path: /shared
