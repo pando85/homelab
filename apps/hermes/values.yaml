@@ -80,7 +80,7 @@ app-template:
         grafana-mcp:
           image:
             repository: docker.io/grafana/mcp-grafana
-            tag: v1.5.1
+            tag: "1.5.1"
           command: ["/bin/sh", "-c"]
           args:
             - |
