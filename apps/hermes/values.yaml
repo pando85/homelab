@@ -85,7 +85,7 @@ app-template:
           args:
             - |
               export GRAFANA_API_TOKEN=$(cat /shared/grafana-jwt)
-              exec mcp-grafana \
+              exec /app/mcp-grafana \
                 -enabled-tools=datasource,prometheus,loki,alerting,dashboard \
                 -transport=sse \
                 -port=8080
