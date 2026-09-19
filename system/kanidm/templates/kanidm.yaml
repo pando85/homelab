@@ -43,6 +43,7 @@ spec:
   oauth2ClientNamespaceSelector: {}
   groupNamespaceSelector: {}
   personNamespaceSelector: {}
+  serviceAccountNamespaceSelector: {}
   storage:
     volumeClaimTemplate:
       metadata:
