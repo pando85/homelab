@@ -8,3 +8,5 @@ spec:
     name: kanidm
     namespace: kanidm
   displayname: Grafana MCP Service Accounts
+  members:
+    - idm_admin
