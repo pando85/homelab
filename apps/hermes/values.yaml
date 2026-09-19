@@ -20,6 +20,27 @@ app-template:
             - -c
           args:
             - mkdir -p /shared/serviceaccount && cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /shared/serviceaccount/ && find /shared/serviceaccount -type d -exec chmod 0755 {} \; && find /shared/serviceaccount -type f -exec chmod 0644 {} \;
+        grafana-mcp-token-init:
+          image:
+            repository: curlimages/curl
+            tag: 8.11.0
+          env:
+            KANIDM_TOKEN:
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-mcp-token
+                  key: token
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              JWT=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
+                -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+                -d "client_id=grafana" \
+                -d "subject_token=${KANIDM_TOKEN}" \
+                -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
+                -d "audience=grafana" \
+                -d "scope=openid email profile" | jq -r '.access_token')
+              echo -n "$JWT" > /shared/grafana-jwt
       containers:
         hermes:
           image:
@@ -55,6 +76,68 @@ app-template:
             limits:
               cpu: "8"
               memory: 4Gi
+        grafana-mcp:
+          image:
+            repository: ghcr.io/grafana/mcp-grafana
+            tag: v0.11.6
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              export GRAFANA_API_TOKEN=$(cat /shared/grafana-jwt)
+              exec mcp-grafana \
+                -enabled-tools=datasource,prometheus,loki,alerting,dashboard \
+                -transport=sse \
+                -port=8080
+          env:
+            GRAFANA_URL: "https://grafana.monitoring.svc.cluster.local"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+        grafana-mcp-refresher:
+          image:
+            repository: curlimages/curl
+            tag: 8.11.0
+          env:
+            KANIDM_TOKEN:
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-mcp-token
+                  key: token
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              while true; do
+                sleep 3000
+                JWT=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
+                  -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+                  -d "client_id=grafana" \
+                  -d "subject_token=${KANIDM_TOKEN}" \
+                  -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
+                  -d "audience=grafana" \
+                  -d "scope=openid email profile" | jq -r '.access_token')
+                echo -n "$JWT" > /shared/grafana-jwt
+              done
+          resources:
+            requests:
+              cpu: 5m
+              memory: 32Mi
+            limits:
+              cpu: 50m
+              memory: 64Mi
+          securityContext:
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
   defaultPodOptions:
     securityContext: {}
     nodeSelector:
@@ -92,6 +175,18 @@ app-template:
       globalMounts:
         - path: /opt/data
       existingClaim: hermes-data
+    grafana-mcp-shared:
+      type: emptyDir
+      sizeLimit: 1Mi
+      advancedMounts:
+        hermes:
+          fix-sa-token:
+            - path: /shared
+          grafana-mcp:
+            - path: /shared
+              readOnly: true
+          grafana-mcp-refresher:
+            - path: /shared
     sa-token-source:
       type: custom
       volumeSpec:

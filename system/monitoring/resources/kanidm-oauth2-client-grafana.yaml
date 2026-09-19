@@ -17,10 +17,18 @@ spec:
         - openid
         - profile
         - email
+    - group: grafana-mcp-users
+      scopes:
+        - openid
+        - profile
+        - email
   supScopeMap:
     - group: grafana-admins
       scopes:
         - admin
+    - group: grafana-mcp-users
+      scopes:
+        - editor
 
   preferShortUsername: true
   strictRedirectUrl: true

@@ -136,6 +136,20 @@ grafana:
       name_attribute_path: preferred_username
       role_attribute_path: contains(scopes[*], 'admin') && 'Admin' || 'Viewer'
 
+    auth:
+      oauth_allow_insecure_email_lookup: true
+    auth.jwt:
+      enabled: true
+      header_name: Authorization
+      email_claim: email
+      username_claim: preferred_username
+      cache_ttl: 60m
+      auto_sign_up: true
+      audience: grafana
+      skip_org_role_sync: true
+      jwk_set_url: https://idm.grigri.cloud/oauth2/openid/grafana/.well-known/jwks.json
+      role_attribute_path: "contains(scopes[*], 'editor') && 'Editor' || 'Viewer'"
+
   revisionHistoryLimit: 2
 
   serviceMonitor:

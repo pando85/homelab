@@ -1,0 +1,10 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: grafana-mcp-users
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+  displayname: Grafana MCP Service Accounts
