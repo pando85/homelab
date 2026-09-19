@@ -10,3 +10,4 @@ spec:
   displayname: Grafana MCP Service Accounts
   members:
     - idm_admin
+    - grafana-mcp
