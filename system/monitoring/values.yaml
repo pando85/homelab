@@ -147,7 +147,7 @@ grafana:
       auto_sign_up: true
       audience: grafana
       skip_org_role_sync: true
-      jwk_set_url: https://idm.grigri.cloud/oauth2/openid/grafana/.well-known/jwks.json
+      jwk_set_url: https://idm.grigri.cloud/oauth2/openid/grafana/public_key.jwk
       role_attribute_path: "contains(scopes[*], 'editor') && 'Editor' || 'Viewer'"
 
   revisionHistoryLimit: 2
