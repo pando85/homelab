@@ -40,7 +40,7 @@ app-template:
                 -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
                 -d "audience=grafana" \
                 -d "scope=openid email profile")
-              JWT=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+              JWT=$(echo "$RESPONSE" | grep -o '"id_token":"[^"]*"' | cut -d'"' -f4)
               echo -n "$JWT" > /shared/grafana-jwt
               chmod 666 /shared/grafana-jwt
       containers:
@@ -123,7 +123,7 @@ app-template:
                   -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
                   -d "audience=grafana" \
                   -d "scope=openid email profile")
-                JWT=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+                JWT=$(echo "$RESPONSE" | grep -o '"id_token":"[^"]*"' | cut -d'"' -f4)
                 echo -n "$JWT" > /shared/grafana-jwt
               done
           resources:
