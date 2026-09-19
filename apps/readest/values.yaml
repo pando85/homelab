@@ -8,7 +8,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=postgres
             repository: postgres
-            tag: 17-alpine
+            tag: 18-alpine
           env:
             DB_SCHEMA_VERSION: "0.12.6" # renovate: datasource=docker depName=ghcr.io/readest/readest
             DB_PASSWORD:
