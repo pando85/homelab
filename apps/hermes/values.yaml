@@ -86,7 +86,7 @@ app-template:
             - -transport=sse
             - -address=0.0.0.0:8080
           env:
-            GRAFANA_URL: "https://grafana.monitoring.svc.cluster.local"
+            GRAFANA_URL: "http://monitoring-grafana.monitoring.svc.cluster.local"
             GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE: "/shared/grafana-jwt"
           resources:
             requests:
