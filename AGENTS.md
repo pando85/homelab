@@ -121,6 +121,11 @@ will be detected and reverted almost instantly. The git repository is the single
 - Grafana 13.1.1 strips the `url` field from Loki `derivedFields` during provisioning, even with
   `$$` escaping. Workaround: manually set the URL in the Grafana UI. See
   `docs/troubleshooting/grafana-13-derivedfields-url-stripped.md`
+- Grafana MCP server deployment has multiple gotchas: Kaniop `KanidmServiceAccount` requires
+  `idm_admin` in the `entryManagedBy` group and `serviceAccountNamespaceSelector` on the Kanidm CR;
+  `mcp-grafana` image tags lack `v` prefix, binary is at `/app/mcp-grafana`, uses `-address` flag
+  (not `-port`); StatefulSets need manual pod deletion after template changes. See
+  `docs/troubleshooting/grafana-mcp-hermes.md`
 - Introducing CRDs without `--include-crds` in helm template
 - Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources
 - Forgetting `Prune=false` on PVCs causes data loss on sync
