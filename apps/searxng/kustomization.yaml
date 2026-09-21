@@ -13,4 +13,4 @@ helmCharts:
     releaseName: searxng
     repo: https://bjw-s-labs.github.io/helm-charts/
     valuesFile: searxng.yaml
-    version: 5.1.0
+    version: 5.2.1
