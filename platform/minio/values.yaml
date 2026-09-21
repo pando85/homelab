@@ -2,7 +2,7 @@ minio:
   image:
     # renovate: datasource=docker depName=pgsty/silo versioning=regex:^RELEASE\.(?<major>\d{4})-(?<minor>\d{2})-(?<patch>\d{2})T(?<build>\d{2})-(?<revision>\d{2})-(?<patch2>\d{2})Z$
     repository: pgsty/silo
-    tag: RELEASE.2026-09-03T13-18-01Z
+    tag: RELEASE.2026-09-16T00-00-00Z
 
   mode: standalone
 
