@@ -134,3 +134,29 @@ roleRef:
   kind: ClusterRole
   name: hermes-agent-readonly
   apiGroup: rbac.authorization.k8s.io
+---
+# Cluster-wide job/pod cleanup for hermes-agent (stuck jobs after CNI restarts, etc.)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: hermes-agent-job-cleanup
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: hermes-agent-job-cleanup
+subjects:
+  - kind: ServiceAccount
+    name: hermes-agent
+    namespace: hermes
+roleRef:
+  kind: ClusterRole
+  name: hermes-agent-job-cleanup
+  apiGroup: rbac.authorization.k8s.io
