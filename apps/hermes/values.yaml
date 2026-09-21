@@ -23,7 +23,7 @@ app-template:
         grafana-mcp-token-init:
           image:
             repository: curlimages/curl
-            tag: 8.11.0
+            tag: 8.22.0
           env:
             KANIDM_TOKEN:
               valueFrom:
@@ -104,7 +104,7 @@ app-template:
         grafana-mcp-refresher:
           image:
             repository: curlimages/curl
-            tag: 8.11.0
+            tag: 8.22.0
           env:
             KANIDM_TOKEN:
               valueFrom:
