@@ -96,7 +96,7 @@ spec:
             severity: warning
           annotations:
             summary: "High Reallocated Sectors Count on {{ $labels.device }}"
-            description: "Device {{ $labels.device }} (instance {{ $labels.instance }}) has {{ $value }} reallocated sectors, indicating significant disk degradation.\n  LABELS = {{ $labels }}"
+            description: "Device {{ $labels.device }} (instance {{ $labels.instance }}) has {{ $value }} reallocated sectors, indicating significant disk degradation."
 
         - alert: DiskCriticalReallocatedSectors
           expr: smartctl_device_attribute{attribute_id="5", attribute_value_type="raw"} > 1000
@@ -105,7 +105,7 @@ spec:
             severity: critical
           annotations:
             summary: "Critical Reallocated Sectors Count on {{ $labels.device }}"
-            description: "Device {{ $labels.device }} (instance {{ $labels.instance }}) has {{ $value }} reallocated sectors. Disk replacement is urgently recommended.\n  LABELS = {{ $labels }}"
+            description: "Device {{ $labels.device }} (instance {{ $labels.instance }}) has {{ $value }} reallocated sectors. Disk replacement is urgently recommended."
 
         - alert: DiskReportedUncorrectableErrors
           expr: smartctl_device_attribute{attribute_id="187", attribute_value_type="raw"} > 0
@@ -114,4 +114,4 @@ spec:
             severity: warning
           annotations:
             summary: "Reported Uncorrectable Errors on {{ $labels.device }}"
-            description: "Device {{ $labels.device }} (instance {{ $labels.instance }}) has {{ $value }} reported uncorrectable errors, indicating media degradation.\n  LABELS = {{ $labels }}"
+            description: "Device {{ $labels.device }} (instance {{ $labels.instance }}) has {{ $value }} reported uncorrectable errors, indicating media degradation."
