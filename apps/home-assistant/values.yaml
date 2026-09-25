@@ -277,8 +277,8 @@ app-template:
       enabled: true
       className: nginx-external
       annotations:
-        external-dns.alpha.kubernetes.io/enabled: "true"
-        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        external-dns.kubernetes.io/enabled: "true"
+        external-dns.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       hosts:
         - host: &host hass.grigri.cloud
@@ -296,8 +296,8 @@ app-template:
       enabled: true
       className: nginx-external
       annotations:
-        external-dns.alpha.kubernetes.io/enabled: "true"
-        external-dns.alpha.kubernetes.io/target: grigri.cloud
+        external-dns.kubernetes.io/enabled: "true"
+        external-dns.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth?allowed_groups=appdaemon-users@idm.grigri.cloud
         nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
@@ -319,7 +319,7 @@ app-template:
       className: nginx-internal
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.kubernetes.io/enabled: "true"
       hosts:
         - host: &host valetudopng.internal.grigri.cloud
           paths:

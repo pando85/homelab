@@ -111,7 +111,7 @@ There are also another ingress controller for internal use.
 ```yaml
 annotations:
   cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-  external-dns.alpha.kubernetes.io/enabled: "true"
+  external-dns.kubernetes.io/enabled: "true"
 ```
 
 ### External DNS
@@ -121,8 +121,8 @@ annotations:
 ```yaml
 annotations:
   cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-  external-dns.alpha.kubernetes.io/enabled: "true"
-  external-dns.alpha.kubernetes.io/target: grigri.cloud
+  external-dns.kubernetes.io/enabled: "true"
+  external-dns.kubernetes.io/target: grigri.cloud
 ```
 
 ## 🤝 Thanks

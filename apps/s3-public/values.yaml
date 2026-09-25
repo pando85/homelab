@@ -24,8 +24,8 @@ minio:
     enabled: true
     ingressClassName: nginx-external
     annotations:
-      external-dns.alpha.kubernetes.io/enabled: "true"
-      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      external-dns.kubernetes.io/enabled: "true"
+      external-dns.kubernetes.io/target: grigri.cloud
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3601"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3601"
@@ -49,8 +49,8 @@ minio:
     enabled: true
     ingressClassName: nginx-external
     annotations:
-      external-dns.alpha.kubernetes.io/enabled: "true"
-      external-dns.alpha.kubernetes.io/target: grigri.cloud
+      external-dns.kubernetes.io/enabled: "true"
+      external-dns.kubernetes.io/target: grigri.cloud
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       nginx.ingress.kubernetes.io/configuration-snippet: |
         chunked_transfer_encoding off;

@@ -21,7 +21,7 @@ minio:
     ingressClassName: nginx-internal
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.kubernetes.io/enabled: "true"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3601"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3601"
       # fix timeouts uploading big files disabling proxy buffering
@@ -45,7 +45,7 @@ minio:
     ingressClassName: nginx-internal
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.kubernetes.io/enabled: "true"
       nginx.ingress.kubernetes.io/configuration-snippet: |
         chunked_transfer_encoding off;
     hosts:

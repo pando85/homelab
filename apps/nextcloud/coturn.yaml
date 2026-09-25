@@ -43,9 +43,9 @@ service:
     externalTrafficPolicy: Local
     annotations:
       lbipam.cilium.io/ips: "192.168.193.5"
-      external-dns.alpha.kubernetes.io/enabled: "true"
-      external-dns.alpha.kubernetes.io/target: grigri.cloud
-      external-dns.alpha.kubernetes.io/hostname: turn.grigri.cloud
+      external-dns.kubernetes.io/enabled: "true"
+      external-dns.kubernetes.io/target: grigri.cloud
+      external-dns.kubernetes.io/hostname: turn.grigri.cloud
     ports:
       turn-udp:
         port: 3478

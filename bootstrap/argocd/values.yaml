@@ -109,7 +109,7 @@ server:
     ingressClassName: nginx-internal
     annotations:
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.kubernetes.io/enabled: "true"
     hostname: argocd.internal.grigri.cloud
     tls: true
   metrics: &metrics

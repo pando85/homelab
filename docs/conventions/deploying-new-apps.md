@@ -377,7 +377,7 @@ app-template:
       enabled: true
       className: nginx-internal        # or nginx-external
       annotations:
-        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.kubernetes.io/enabled: "true"
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
       hosts:
         - host: &host <app>.grigri.cloud

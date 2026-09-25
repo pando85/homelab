@@ -4,8 +4,8 @@ metadata:
   name: mintpsicologia-external
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-    external-dns.alpha.kubernetes.io/enabled: "true"
-    external-dns.alpha.kubernetes.io/target: mintpsicologia.es
+    external-dns.kubernetes.io/enabled: "true"
+    external-dns.kubernetes.io/target: mintpsicologia.es
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
     nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
 spec:
@@ -32,8 +32,8 @@ metadata:
   name: mintpsicologia-www-redirect
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-    external-dns.alpha.kubernetes.io/enabled: "true"
-    external-dns.alpha.kubernetes.io/target: mintpsicologia.es
+    external-dns.kubernetes.io/enabled: "true"
+    external-dns.kubernetes.io/target: mintpsicologia.es
     nginx.ingress.kubernetes.io/permanent-redirect: https://mintpsicologia.es$request_uri
     nginx.ingress.kubernetes.io/permanent-redirect-code: "301"
 spec:

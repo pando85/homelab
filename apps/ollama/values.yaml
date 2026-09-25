@@ -19,7 +19,7 @@ ollama:
     enabled: true
     className: nginx-internal
     annotations:
-      external-dns.alpha.kubernetes.io/enabled: "true"
+      external-dns.kubernetes.io/enabled: "true"
       cert-manager.io/cluster-issuer: letsencrypt-prod-dns
     hosts:
       - host: &host ollama.internal.grigri.cloud

@@ -43,7 +43,7 @@ Internal:
 
 ```yaml
 annotations:
-  external-dns.alpha.kubernetes.io/enabled: "true"
+  external-dns.kubernetes.io/enabled: "true"
   cert-manager.io/cluster-issuer: letsencrypt-prod-dns
 ```
 
@@ -51,8 +51,8 @@ External:
 
 ```yaml
 annotations:
-  external-dns.alpha.kubernetes.io/enabled: "true"
-  external-dns.alpha.kubernetes.io/target: grigri.cloud
+  external-dns.kubernetes.io/enabled: "true"
+  external-dns.kubernetes.io/target: grigri.cloud
   cert-manager.io/cluster-issuer: letsencrypt-prod-dns
 ```
 

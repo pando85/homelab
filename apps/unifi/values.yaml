@@ -91,7 +91,7 @@ app-template:
       className: nginx-internal
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        external-dns.alpha.kubernetes.io/enabled: "true"
+        external-dns.kubernetes.io/enabled: "true"
         nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
       hosts:
         - host: &host unifi.internal.grigri.cloud
