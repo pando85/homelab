@@ -24,6 +24,8 @@ ZFSBackup CRs stuck in `Init` state with stale `backupDest` addresses. Orphaned 
 
 4. **Backup-sync controller loop**: When backup data exists in the bucket but the Backup CR is deleted, the sync controller recreates it every 2 minutes, creating a loop of stuck ZFSBackup CRs.
 
+5. **Memory pressure crashes k3s during backup**: Heavy workloads (e.g., CI builds) can drive MemAvailable low enough to saturate NVMe with reclaim I/O, causing embedded etcd to time out on ReadIndex/transactions. k3s loses leader election and exits (code 1). systemd restarts it, but active Velero/OpenEBS operations are left mid-flight — Backup CR stuck `InProgress`, ZFSBackup CRs stuck `Init`. Pod restart is the safest first recovery boundary, but residual CR/S3/ZFS state must be verified. See `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md` for the full incident timeline and recovery procedure.
+
 ## How to Diagnose
 
 **Check for failed backups:**
@@ -52,6 +54,24 @@ journalctl -u k3s --since "1 hour ago" | grep -i "stopped\|started"
 journalctl -u unattended-upgrades --since "1 hour ago" | grep -i "systemd"
 ```
 
+**Check if k3s crashed from memory pressure / etcd timeout:**
+```bash
+journalctl -u k3s --since "1 hour ago" | grep -iE "leader election|lost leader|exit code"
+```
+
+**Memory pressure metrics (read-only):**
+```promql
+# Node memory available ratio (should be > 10%; < 5% is critical)
+node_memory_MemAvailable_bytes{instance="prusik"} / node_memory_MemTotal_bytes{instance="prusik"}
+
+# Memory PSI — stalled/waiting (seconds of stall per wall-clock second)
+rate(node_pressure_memory_stalled_seconds_total{instance="prusik"}[5m])
+rate(node_pressure_memory_waiting_seconds_total{instance="prusik"}[5m])
+```
+
+The embedded etcd disk and leader-change metrics are not currently scraped. Confirm ReadIndex
+timeouts and leader-election loss in the k3s journal instead.
+
 ## Fix / Workaround
 
 ### Prevention: Maintenance Window
@@ -75,28 +95,30 @@ This runs upgrades Monday + Wednesday–Sunday, 08:00–18:00, avoiding:
 
 ### Cleanup: Stuck Backups
 
-1. **Delete failed Velero backup:**
+1. **Restart Velero pod to clear sync controller state:**
+   ```bash
+   kubectl --context=grigri delete pod -n velero -l app.kubernetes.io/name=velero
+   ```
+
+2. **Delete failed Velero backup:**
    ```bash
    kubectl --context=grigri delete backup <backup-name> -n velero
    ```
 
-2. **Delete stuck ZFSBackup CRs:**
+3. **Delete stuck ZFSBackup CRs:**
    ```bash
    kubectl --context=grigri delete zb -n zfs-localpv \
      <pvc-uuid>.<backup-name> \
      <pvc-uuid>.<backup-name>
    ```
 
-3. **Remove backup data from bucket (if sync controller loops):**
-   ```bash
-   AWS_ACCESS_KEY_ID=velero AWS_SECRET_ACCESS_KEY=<secret> \
-     aws --endpoint-url=https://s3.internal.grigri.cloud \
-     s3 rm --recursive s3://velero/backups/<backup-name>/
-   ```
+4. **Remove backup data from bucket (if sync controller loops):**
+   Retrieve credentials from `pass` or Vault without exposing them on the command line:
 
-4. **Restart velero pod to clear sync controller state:**
    ```bash
-   kubectl --context=grigri delete pod -n velero -l app.kubernetes.io/name=velero
+   aws --endpoint-url=https://s3.internal.grigri.cloud \
+     --profile velero \
+     s3 rm --recursive s3://velero/backups/<backup-name>/
    ```
 
 ### Cleanup: Stuck ZFS Snapshots
@@ -127,3 +149,4 @@ The DaemonSet will recreate the pod with a fresh watch.
 - Unattended-upgrades config: `metal/roles/prepare/files/50unattended-upgrades`
 - Timer override: `metal/roles/prepare/files/apt-daily-upgrade-override.conf`
 - Ansible role: `metal/roles/prepare/tasks/unattended-upgrades.yml`
+- 2026-09-25 memory-pressure incident: `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`

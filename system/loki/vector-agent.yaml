@@ -113,7 +113,7 @@ customConfig:
         - journal
       source: |-
         .systemd_unit = string(._SYSTEMD_UNIT) ?? ""
-        .node_name = string(._HOSTNAME) ?? ""
+        .node_name = string(.host) ?? string(._HOSTNAME) ?? ""
         .syslog_identifier = string(.SYSLOG_IDENTIFIER) ?? ""
 
   sinks:
@@ -153,3 +153,44 @@ customConfig:
         systemd_unit: "{{`{{ systemd_unit }}`}}"
         node_name: "{{`{{ node_name }}`}}"
         syslog_identifier: "{{`{{ syslog_identifier }}`}}"
+
+  tests:
+    - name: journal_node_name_prefers_host
+      inputs:
+        - insert_at: journal_labels
+          type: log
+          log_fields:
+            host: grigri-node-1
+            _HOSTNAME: fallback-host
+            _SYSTEMD_UNIT: ssh.service
+            SYSLOG_IDENTIFIER: sshd
+      outputs:
+        - extract_from: journal_labels
+          conditions:
+            - type: vrl
+              source: '.node_name == "grigri-node-1"'
+    - name: journal_node_name_fallback_to__HOSTNAME
+      inputs:
+        - insert_at: journal_labels
+          type: log
+          log_fields:
+            _HOSTNAME: fallback-host
+            _SYSTEMD_UNIT: ssh.service
+            SYSLOG_IDENTIFIER: sshd
+      outputs:
+        - extract_from: journal_labels
+          conditions:
+            - type: vrl
+              source: '.node_name == "fallback-host"'
+    - name: journal_node_name_empty_when_both_missing
+      inputs:
+        - insert_at: journal_labels
+          type: log
+          log_fields:
+            _SYSTEMD_UNIT: ssh.service
+            SYSLOG_IDENTIFIER: sshd
+      outputs:
+        - extract_from: journal_labels
+          conditions:
+            - type: vrl
+              source: '.node_name == ""'

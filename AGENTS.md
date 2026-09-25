@@ -183,6 +183,9 @@ will be detected and reverted almost instantly. The git repository is the single
 - Unattended-upgrades can restart k3s during backup windows, causing `PartiallyFailed` Velero backups.
   Use a broad maintenance window (Mon + Wed–Sun 08:00–18:00) instead of blacklisting systemd packages.
   See `docs/troubleshooting/velero-backup-failures.md`
+- Memory pressure (e.g., CI builds) can crash k3s via etcd timeout, leaving Velero backups stuck
+  `InProgress` with orphaned ZFSBackup CRs. Pod restart is the safe first boundary, but residual
+  CR/S3/ZFS state must be verified. See `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
 - Hermes instance config overwrite: when deploying a new Hermes instance, never copy `config.yaml`,
