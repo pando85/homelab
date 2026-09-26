@@ -35,17 +35,28 @@ All times are UTC on 2026-09-26.
 | Before 08:17 | Four orphaned `Done` resources from failed quarterly backup `retain-quaterly-20260908023057` were deleted. Quarterly backups from 2026-09-01, 2026-09-08, and 2026-09-21 were submitted for deletion. |
 | 08:17–08:19 | Catch-up backup `retain-quaterly-20260926081711` reached the Gitea data volume. The receiver closed its object at 08:19:42 without completing the backup operation. |
 | 09:06 | Restarting the ZFS node agent retried the existing snapshot; the new send also became stuck. |
+| 22:39 | ArgoCD rolled ZFS LocalPV back from 2.11.1 to 2.10.1. The fresh node agent automatically retried the Hermes full send and showed sustained transfer progress. |
 
 ## Root Cause
 
-The immediate cause was inconsistent controller state left after the 2026-09-25 control-plane
-outage. Velero retained an `InProgress` backup, which blocked the global backup queue, while the
-OpenEBS ZFS node agent retained `Init` resources whose `backupDest` fields pointed at ephemeral
-Velero pod IPs on port 9011. Once that receiver disappears, those operations cannot resume.
+Two separate failures compounded each other:
 
-Old `Init` resources also cause repeated reconciliation and make it harder to distinguish current
-work from abandoned work. Restarting only one controller was insufficient; the stale resources had
-to be removed before restarting the ZFS node agent with a clean queue.
+1. **Queue and controller-state blockage:** the 2026-09-25 control-plane outage left Velero with an
+   `InProgress` backup that blocked its global queue, while the OpenEBS ZFS node agent retained
+   `Init` resources whose `backupDest` fields pointed at ephemeral Velero pod IPs on port 9011.
+   Once a receiver disappears, those operations cannot resume. Old `Init` resources also cause
+   repeated reconciliation and obscure current work; restarting only one controller was
+   insufficient.
+2. **Stream-process deadlock:** after the queue was cleared, large full sends exposed the v2.11.x
+   `runPipe` behavior. When `nc` exited early, `zfs send` remained blocked and the current
+   `ZFSBackup` stayed `Init`. The exact reason for the original receiver or `nc` exit remains
+   unconfirmed and could be outside ZFS LocalPV.
+
+These observations do not mean every failed September backup was caused by v2.11.x. The last
+successful quarterly backup ran under v2.11.0 on August 25, but it was incremental. The confirmed
+pipeline deadlock occurred under v2.11.1 on September 26 and involved full sends for volumes without
+usable predecessor metadata. The cluster was subsequently pinned to v2.10.1 as containment because
+its older shell pipeline does not have the same indefinite wait behavior.
 
 ## Recovery
 
@@ -93,7 +104,13 @@ The installed ZFS driver waits for the sender before the `nc` process that consu
 The driver ignores sender errors when returning pipeline status; terminating the sender by itself
 could falsely mark the truncated stream `Done`. The plugin polls the CR without its own timeout,
 so the configured 32-hour Velero item-operation timeout is not a reliable cleanup boundary.
-The exact reason `nc` exited early remains unconfirmed.
+The exact reason `nc` exited early remains unconfirmed. The rollback result shows that 2.10.1
+avoids the observed indefinite-wait failure mode, but does not prove whether the initiating event
+was in the receiver, S3 path, network, control plane, or driver.
+
+Historical Prometheus queries returned no samples for the relevant August–September range. The
+version and failure timeline was reconstructed from retained Velero resources, ArgoCD and Git
+history, ZFS process state, logs, and S3 object inspection.
 
 **Correction to the earlier recovery hypothesis:** do not destroy the snapshot first or kill its
 `zfs send` first. To abandon an active volume snapshot, remove its `ZFSBackup` CR so Velero records

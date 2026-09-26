@@ -13,14 +13,15 @@ client disconnects, even if the expected ZFS stream has not arrived. A finished 
 `Client{...} operation completed` log line do not mean that the `ZFSBackup` reached `Done` or that
 the volume can be restored.
 
-## Root Cause
+## Root Cause and Confidence
 
-The installed OpenEBS ZFS driver **v2.11.1** runs `zfs send ... | nc -w 3 <velero-pod-ip> 9011`.
-Its `runPipe` implementation waits for `zfs send` **before** waiting for `nc`. If `nc` exits while
-the send is still producing data, the copy into `nc` stops consuming the send's stdout. The pipe
-fills, `zfs send` blocks, and the backup controller never updates `ZFSBackup.status` from `Init`.
-The implementation also returns only `nc`'s exit error, ignoring the `zfs send` error: killing the
-sender alone risks a false `Done` status for a truncated stream.
+The confirmed failure mechanism is in the OpenEBS ZFS driver **v2.11.x** process handling. The
+node agent runs `zfs send ... | nc -w 3 <velero-pod-ip> 9011`. Its `runPipe` implementation waits
+for `zfs send` **before** waiting for `nc`. If `nc` exits while the send is still producing data,
+the copy into `nc` stops consuming the send's stdout. The pipe fills, `zfs send` blocks, and the
+backup controller never updates `ZFSBackup.status` from `Init`. The implementation also returns
+only `nc`'s exit error, ignoring the `zfs send` error: killing the sender alone risks a false `Done`
+status for a truncated stream.
 
 The installed OpenEBS Velero plugin **v3.6.0** polls `ZFSBackup.status` without a timeout in its
 `checkBackupStatus` loop. The backup remains blocked even with a 32-hour Velero
@@ -28,10 +29,41 @@ The installed OpenEBS Velero plugin **v3.6.0** polls `ZFSBackup.status` without 
 restart, `snapshot already there` is informational: `CreateSnapshot` returns success and the agent
 **tries to send again**. Restarting it alone can reproduce the deadlock.
 
-What caused `nc` to exit early on a given run still requires investigation. Possibilities include
-receiver termination, an idle timeout under object-store backpressure, or transport failure. Do
-not infer an S3 or network outage solely from a zombie `nc` process. Control-plane outages are a
-separate, observed source of `PartiallyFailed` backups.
+The investigation does **not** establish why `nc` or the receiver stopped on the original sends.
+Possible triggers include receiver termination, an idle timeout under object-store backpressure,
+transport failure, or the preceding control-plane outage. A zombie `nc` proves the process exited;
+it does not by itself prove an S3 or network outage. Therefore distinguish these conclusions:
+
+- **Confirmed:** v2.11.x can turn an early `nc` exit into an indefinitely blocked `zfs send` and
+  `ZFSBackup` in `Init`.
+- **Strong operational evidence:** rollback to v2.10.1 prevented that indefinite state on the next
+  retry and allowed the previously stuck Hermes full stream to transfer.
+- **Not yet proven:** the event that made the original `nc` processes exit, and whether it was
+  caused by the driver, receiver, object store, network, or control-plane disruption.
+
+## Version and Failure Timeline
+
+| Time (UTC) | Event | ZFS LocalPV |
+|------------|-------|-------------|
+| 2026-08-24 03:23 | ArgoCD deployed the 2.11.0 chart. | 2.11.0 |
+| 2026-08-25 02:30–02:41 | Quarterly incremental backup completed successfully. | 2.11.0 |
+| 2026-09-01 | Quarterly backup was created but did not start because the queue was blocked. | 2.11.0 |
+| 2026-09-07 06:07 | ArgoCD deployed the 2.11.1 chart. | 2.11.1 |
+| 2026-09-21–23 | First retained `PartiallyFailed` backup completed with 54 errors after starting late. | 2.11.1 |
+| 2026-09-25 02:20 | Memory pressure caused the k3s/etcd outage and stale controller state. | 2.11.1 |
+| 2026-09-26 08:17–08:19 | First confirmed stream-pipeline deadlock, on the Gitea full send. | 2.11.1 |
+| 2026-09-26 22:39 | ArgoCD rolled ZFS LocalPV back. | 2.10.1 |
+| After rollback | The node agent retried the Hermes full send and actively transferred the stream. | 2.10.1 |
+
+This timeline is correlation, not proof that every September backup failure had the same cause.
+The August 25 success under 2.11.0 was incremental, while the confirmed deadlocks involved large
+full sends after some volumes lacked usable predecessor metadata. Queue blockage from the September
+25 outage and the v2.11.x process-handling defect are separate issues that compounded each other.
+
+Historical Prometheus queries returned no samples for the relevant August–September range. The
+timeline therefore comes from retained Velero resources, ArgoCD history, Git history, ZFS process
+inspection, node-agent logs, and S3 object inspection. Prometheus currently exposes Velero backup
+and Kubernetes container-image metrics, but it cannot retroactively prove the sequence above.
 
 ## How to Diagnose
 
@@ -63,6 +95,42 @@ receiver logged a client completion at 08:19:42 UTC without logging overall uplo
 After an agent restart, a new `zfs send` remained blocked for over seven hours with a defunct
 `nc` process. The matching `ZFSBackup` remained `Init` and Velero stayed at 21/234 items. The
 partial object must **not** be treated as a usable Gitea backup.
+
+## Why the Cluster Is Pinned to 2.10.1
+
+`system/zfs-localpv/Chart.yaml` is intentionally pinned to **2.10.1** as a containment measure, not
+as proof that 2.10.1 fixes the original receiver or transport failure. Version 2.10.1 uses the older
+shell pipeline, so when `nc` exits the pipe closes and `zfs send` can receive `SIGPIPE` instead of
+being held indefinitely by the v2.11.x `runPipe` implementation. After rollback, the automatically
+retried Hermes full stream established a receiver connection and made sustained progress, whereas
+the v2.11.1 attempts had remained blocked.
+
+Keep the pin until one of these exit criteria is met:
+
+1. An upstream release fixes process cancellation, wait ordering and propagation of both child exit
+   statuses, and it passes a disposable large-volume backup test.
+2. A locally patched v2.11.x image passes the same test, including deliberate receiver termination.
+3. The OpenEBS streaming plugin is replaced with a backup path that does not use this pipeline.
+
+Before upgrading, test both a normal large full send and a forced receiver disconnect. The operation
+must either finish with a restorable object or fail promptly without leaving `zfs send`, `nc`, an
+`Init` `ZFSBackup`, or a truncated object presented as successful. Keep the `multiPartChunkSize` at
+100 MiB; this avoids the separate 10,000-part limit but does not address the process deadlock.
+
+## Further Investigation
+
+For the next natural or controlled failure, collect evidence before restarting either component:
+
+- Velero and OpenEBS plugin logs covering receiver creation, S3 multipart writes and disconnect.
+- Node-agent logs plus `ps -eo pid,ppid,stat,etime,args` and repeated `ss -tinp` samples for port 9011.
+- MinIO request latency, errors and resource pressure during the transfer.
+- Pod restarts, events, node pressure and API availability over the same window.
+- A packet capture scoped to port 9011 where operationally acceptable.
+- `zfs send -nP` estimate, final object size, `ZFSBackup.status`, and a scratch `zfs recv` restore.
+
+A controlled A/B reproducer should use a disposable large PVC under 2.10.1 and the candidate upgrade,
+then terminate the receiver mid-stream. The upgrade is acceptable only if both versions fail safely
+and the candidate never leaves the v2.11.x blocked-process signature.
 
 ## Fix / Workaround
 
