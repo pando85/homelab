@@ -15,7 +15,10 @@ ZFSBackup CRs stuck in `Init` state with stale `backupDest` addresses. Orphaned 
 
 1. **Unattended-upgrades restarting k3s**: systemd package upgrades trigger daemon-reexec, causing k3s to restart during backup windows. This breaks the API server connection mid-backup.
 
-2. **OpenEBS ZFS backup controller wedged**: The ZFS node agent's watch can become stale, leaving ZFSBackup CRs stuck in `Init` state. The ephemeral backup receiver (port 9011) on the Velero pod is temporary and disappears when backups fail, making stuck CRs unrecoverable.
+2. **OpenEBS ZFS stream pipeline deadlock**: The node agent runs `zfs send | nc` to an ephemeral
+   Velero receiver on port 9011. If `nc` exits early, `zfs send` can block on its pipe indefinitely,
+   leaving `ZFSBackup` in `Init` and blocking Velero. A restarted agent can retry an already-created
+   snapshot and hang again. See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`.
 
 3. **Stale zfs send processes**: Failed backups can leave `zfs send` processes running, holding snapshots open and preventing cleanup. These processes appear as:
    ```
@@ -28,9 +31,9 @@ ZFSBackup CRs stuck in `Init` state with stale `backupDest` addresses. Orphaned 
 
 ## How to Diagnose
 
-**Check for failed backups:**
+**Check for failed or queue-blocking backups:**
 ```bash
-kubectl --context=grigri get backups -n velero | grep -E "InProgress|PartiallyFailed|Failed"
+kubectl --context=grigri get backups -n velero | grep -E "InProgress|Queued|New|PartiallyFailed|Failed"
 ```
 
 **Check for stuck ZFSBackup CRs:**
@@ -40,13 +43,24 @@ kubectl --context=grigri get zb -n zfs-localpv | grep -v Done
 
 **Check for stale zfs send processes:**
 ```bash
-ssh <node> 'ps aux | grep "zfs send" | grep -v grep'
+ssh <node> 'ps -eo pid,ppid,stat,etime,args' | grep -E 'zfs send|\[nc\]|zfs-driver'
 ```
+
+If `nc` is defunct while the matching `zfs send` is still alive, inspect the `ZFSBackup`,
+receiver connection (`ss -tn state established` on the owner node) and Velero logs. An object
+already present in S3 may be **truncated**; compare its size with `zfs send -nP` and verify the
+resource reached `Done`. Do not treat an S3 object or a receiver `Client ... operation completed`
+line as proof of a complete stream.
 
 **Check for orphaned ZFS snapshots:**
 ```bash
-ssh <node> 'zfs list -H -t snapshot -o name,used | grep -E "retain-weekly|retain-quaterly" | grep -v "$(kubectl get zb -n zfs-localpv -o jsonpath="{.items[*].spec.snapName}" | tr " " "\n" | sort -u)"'
+ssh <node> 'zfs list -H -t snapshot -o name,used' | grep -E 'retain-weekly|retain-quaterly'
+kubectl --context=grigri -n zfs-localpv get zb \
+  -o custom-columns='NAME:.metadata.name,VOLUME:.spec.volumeName,SNAPSHOT:.spec.snapName,PREV:.spec.prevSnapName,STATUS:.status'
 ```
+
+Compare volume **and** snapshot names before declaring a snapshot orphaned; an incremental may
+still reference an older snapshot via `prevSnapName`.
 
 **Check if unattended-upgrades caused k3s restart:**
 ```bash
@@ -95,53 +109,42 @@ This runs upgrades Monday + Wednesday–Sunday, 08:00–18:00, avoiding:
 
 ### Cleanup: Stuck Backups
 
-1. **Restart Velero pod to clear sync controller state:**
-   ```bash
-   kubectl --context=grigri delete pod -n velero -l app.kubernetes.io/name=velero
-   ```
-
-2. **Delete failed Velero backup:**
-   ```bash
-   kubectl --context=grigri delete backup <backup-name> -n velero
-   ```
-
-3. **Delete stuck ZFSBackup CRs:**
-   ```bash
-   kubectl --context=grigri delete zb -n zfs-localpv \
-     <pvc-uuid>.<backup-name> \
-     <pvc-uuid>.<backup-name>
-   ```
-
-4. **Remove backup data from bucket (if sync controller loops):**
-   Retrieve credentials from `pass` or Vault without exposing them on the command line:
-
-   ```bash
-   aws --endpoint-url=https://s3.internal.grigri.cloud \
-     --profile velero \
-     s3 rm --recursive s3://velero/backups/<backup-name>/
-   ```
+1. **Classify the blockage first.** If a `ZFSBackup` is `Init`, check the owner node for a live
+   `zfs send` and whether its `nc` peer is still connected. For a deadlocked active send, follow
+   `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`: delete the **specific** stuck CR,
+   verify Velero records the volume failure, then stop its sender. Do not restart the node agent
+   or Velero as a first step while a stream is active. Old `Init` CRs may point at a gone pod IP.
+2. **For backups intentionally abandoned**, remove failed backup resources only after checking
+   retained full/incremental dependencies. Velero may leave deletion requests `Processed` with
+   errors if the OpenEBS plugin tries to delete an already-gone `ZFSBackup`; see
+   `docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md` for the S3-prefix cleanup order.
+   Retrieve credentials from `pass` or Vault without exposing them on the command line. A
+   remaining bucket prefix can cause backup-sync to recreate a deleted Backup CR.
+3. **If the queue is still blocked after cleaning up the failed operation**, restart the Velero
+   pod only after checking for other active sends. Verify that the next backup advances and its
+   volume snapshots all reach `Done`.
 
 ### Cleanup: Stuck ZFS Snapshots
 
-1. **Kill stale zfs send processes:**
-   ```bash
-   ssh <node> 'sudo pkill -9 -f "zfs send.*<backup-name>"'
-   ```
-
-2. **Destroy orphaned snapshots:**
-   ```bash
-   ssh <node> 'sudo zfs destroy datasets/openebs/<pvc>@<backup-name>'
-   ```
+First ensure Velero has stopped waiting for the affected `ZFSBackup` and cannot report the
+incomplete send as successful. Then confirm the exact sender PID and command line and stop that
+process with `TERM`; avoid a broad `pkill` or `-9`. Check `zfs holds` and `zfs get clones,userrefs`
+before destroying **only** the orphaned snapshot on the owner node. Follow
+`docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md` for the full sequence.
 
 ### Recovery: Wedged ZFS Node Agent
 
-If ZFSBackup CRs are stuck in `Init` and the node agent isn't processing them:
+Only if the node agent is **not processing** backup CRs and no active send is in progress, restart
+the specific node pod after identifying its owner node:
 
 ```bash
-kubectl --context=grigri delete pod -n zfs-localpv -l app=openebs-zfs-node
+kubectl --context=grigri -n zfs-localpv get pods -o wide
+# Operator action, using the pod name on the affected node:
+kubectl --context=grigri -n zfs-localpv delete pod <node-agent-pod-name>
 ```
 
-The DaemonSet will recreate the pod with a fresh watch.
+The DaemonSet will recreate the pod. Restarting it while a stream is hung can immediately retry
+the same snapshot and reproduce the deadlock.
 
 ## References
 
@@ -150,3 +153,5 @@ The DaemonSet will recreate the pod with a fresh watch.
 - Timer override: `metal/roles/prepare/files/apt-daily-upgrade-override.conf`
 - Ansible role: `metal/roles/prepare/tasks/unattended-upgrades.yml`
 - 2026-09-25 memory-pressure incident: `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`
+- 2026-09-26 stuck-queue recovery and incremental-chain audit: `docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md`
+- OpenEBS ZFS sender/receiver deadlock and incomplete-stream risk: `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`

@@ -186,6 +186,8 @@ will be detected and reverted almost instantly. The git repository is the single
 - Memory pressure (e.g., CI builds) can crash k3s via etcd timeout, leaving Velero backups stuck
   `InProgress` with orphaned ZFSBackup CRs. Pod restart is the safe first boundary, but residual
   CR/S3/ZFS state must be verified. See `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`
+- OpenEBS ZFS `zfs send | nc` can deadlock if `nc` exits early; killing `zfs send` first risks marking
+  a truncated volume backup `Done`. See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
 - Hermes instance config overwrite: when deploying a new Hermes instance, never copy `config.yaml`,
