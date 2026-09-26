@@ -67,14 +67,6 @@ BGP route table and route all network to that load balancer IPs. We use
       inbound_router_map_filter: allow-all
       outbound_router_map_filter: allow-all
     allow_as_inbound: enabled
-  - name: 192.168.192.23
-    descr: k8s-odroid-hc4-3
-    remote_as: 64513
-    next_hop_self: true
-    route_map_filters:
-      inbound_router_map_filter: allow-all
-      outbound_router_map_filter: allow-all
-    allow_as_inbound: enabled
   ```
 
 **Important:** to access Cilium IP pools network from kubernetes subnet you need to add your host to bgp

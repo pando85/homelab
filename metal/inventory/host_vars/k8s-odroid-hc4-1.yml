@@ -1,3 +1,0 @@
-prepare_additional_disks:
-  - dev_id: /dev/disk/by-id/ata-WDC_WD30EZRX-00DC0B0_WD-WMC1T2457392
-  - dev_id: /dev/disk/by-id/ata-SanDisk_SDSSDHII240G_170234400122

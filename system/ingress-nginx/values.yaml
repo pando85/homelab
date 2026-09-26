@@ -70,13 +70,6 @@ ingress-nginx:
                   operator: In
                   values:
                     - amd64
-          - weight: 25
-            preference:
-              matchExpressions:
-                - key: kubernetes.io/hostname
-                  operator: In
-                  values:
-                    - k8s-odroid-hc4-3
 
     autoscaling:
       enabled: true

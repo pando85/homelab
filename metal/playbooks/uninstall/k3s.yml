@@ -1,6 +1,16 @@
 - name: Remove k3s
   hosts: all
   tasks:
+    - name: Refuse to run against the whole cluster without an explicit --limit
+      assert:
+        that:
+          - ansible_limit is defined
+        fail_msg: >-
+          This playbook is destructive. Run it with --limit <host> (e.g.
+          ANSIBLE_EXTRA_ARGS="--limit k8s-odroid-hc4-3" make uninstall-k3s)
+          so it cannot accidentally wipe k3s from every node.
+      run_once: true
+
     - name: Disable k3s
       systemd:
         name: k3s
@@ -25,3 +35,5 @@
         - /usr/local/bin/k3s
         - /var/lib/rancher/k3s
         - /etc/rancher/k3s
+        # cluster join token — leaving it behind lets a re-imaged host rejoin silently
+        - /etc/rancher/node

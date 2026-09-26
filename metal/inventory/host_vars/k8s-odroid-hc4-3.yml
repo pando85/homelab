@@ -1,3 +1,0 @@
-prepare_additional_disks:
-  - dev_id: /dev/disk/by-id/ata-TOSHIBA_HDWQ140_Y8I5K0D2FAYG
-  - dev_id: /dev/disk/by-id/ata-SanDisk_SD6SB1M-128G-1006_141924401021
