@@ -349,14 +349,6 @@ app-template:
         hass:
           hass:
             - path: /config/gitops
-    secret:
-      enabled: true
-      type: secret
-      name: hass-secrets
-      advancedMounts:
-        hass:
-          hass:
-            - path: /config/gitops/secrets
     configmap-integrations:
       enabled: true
       type: configMap
