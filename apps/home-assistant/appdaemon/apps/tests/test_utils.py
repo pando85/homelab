@@ -3,7 +3,7 @@ from datetime import datetime
 from unittest.mock import MagicMock, AsyncMock
 
 import pytest
-from utils import negative_price_notification, retry_with_backoff
+from utils import negative_price_notification, retry_with_backoff, send_notification
 
 
 class TestRetryWithBackoff:
@@ -106,3 +106,16 @@ class TestNegativePriceNotification:
     def test_negative_price_last_hour_wraps(self):
         prices = [self.FakePrice(-0.01, datetime(2023, 1, 1, 23))]
         assert negative_price_notification(prices) == "Negative PVPC prices: 23-00h"
+
+
+class TestSendNotification:
+    @pytest.mark.asyncio
+    async def test_calls_notify_send_message_with_entity_and_message(self):
+        app = MagicMock()
+        app.call_service = AsyncMock()
+
+        await send_notification(app, "hello world", "notify.agil")
+
+        app.call_service.assert_awaited_once_with(
+            "notify/send_message", entity_id="notify.agil", message="hello world"
+        )

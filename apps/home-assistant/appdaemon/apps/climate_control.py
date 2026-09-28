@@ -11,7 +11,7 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from utils import escape_markdownv2, negative_price_notification, retry_with_backoff
+from utils import escape_markdownv2, negative_price_notification, retry_with_backoff, send_notification
 
 
 @dataclass
@@ -55,13 +55,14 @@ class ClimateControl(hass.Hass):
             except Exception as e:
                 self.log(f"Error during daily scheduler registration: {e}", level="ERROR")
                 try:
-                    await self.notify(
+                    await send_notification(
+                        self,
                         escape_markdownv2(
                             f"""Error during daily scheduler registration: {e}
 
 Retrying in 10 minutes"""
                         ),
-                        name=self.args["notify"]["target"],
+                        self.args["notify"]["entity_id"],
                     )
                 except Exception as notify_error:
                     self.log(f"Error sending notification: {notify_error}", level="ERROR")
@@ -94,7 +95,7 @@ Retrying in 10 minutes"""
         msg = f"Set HVAC mode to `{mode}`{dry_run_msg}"
         self.log(msg)
         if self.args["notify"]["enabled"]:
-            await self.notify(escape_markdownv2(msg), name=self.args["notify"]["target"])
+            await send_notification(self, escape_markdownv2(msg), self.args["notify"]["entity_id"])
         if self.args["climate"]["enabled"]:
             await self.set_state(self.args["climate"]["entity"], state=mode)
             while await self.get_state(self.args["climate"]["entity"]) != mode:
@@ -153,9 +154,10 @@ Retrying in 10 minutes"""
             prices = await self._get_prices()
         except Exception as e:
             self.log(f"Error getting prices: {e}", level="ERROR")
-            await self.notify(
+            await send_notification(
+                self,
                 escape_markdownv2("Error getting prices: using fallback schedule, retrying in 10 minutes"),
-                name=self.args["notify"]["target"],
+                self.args["notify"]["entity_id"],
             )
             await self._register_fallback_schedule()
             await asyncio.sleep(600)
@@ -195,9 +197,10 @@ Retrying in 10 minutes"""
             cheap_price_limit = price_10dma * 2 / 3
         else:
             cheap_price_limit = self.args["fallback_cheap_electricity_price"]
-            await self.notify(
+            await send_notification(
+                self,
                 escape_markdownv2(f"Error getting historical prices: fallback price to {cheap_price_limit} €"),
-                name=self.args["notify"]["target"],
+                self.args["notify"]["entity_id"],
             )
 
         cheapest_prices = list(filter(lambda x: x.value < cheap_price_limit, prices))
@@ -209,9 +212,10 @@ Retrying in 10 minutes"""
 
 Retrying in 10 minutes"""
             self.log(msg.replace("\n", ""), level="WARNING")
-            await self.notify(
+            await send_notification(
+                self,
                 escape_markdownv2(f"WARNING: {msg}"),
-                name=self.args["notify"]["target"],
+                self.args["notify"]["entity_id"],
             )
             await self._start_hvac()
             await asyncio.sleep(600)
@@ -236,9 +240,9 @@ Retrying in 10 minutes"""
             link = f"[​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
             escaped_cheap_msg = escape_markdownv2(cheap_msg)
             msg = f"{escaped_text}{link}{escaped_cheap_msg}"
-            await self.notify(msg, name=self.args["notify"]["target"])
+            await send_notification(self, msg, self.args["notify"]["entity_id"])
             if negative_msg:
-                await self.notify(escape_markdownv2(negative_msg), name=self.args["notify"]["target"])
+                await send_notification(self, escape_markdownv2(negative_msg), self.args["notify"]["entity_id"])
 
         groups_to_schedule = self._group_for_scheduling(datetimes_to_schedule)
         await self._schedule_hours(groups_to_schedule)

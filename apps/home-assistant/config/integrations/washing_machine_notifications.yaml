@@ -30,8 +30,9 @@ automation:
             - condition: trigger
               id: finished
           sequence:
-            - service: notify.all
+            - action: notify.send_message
               data:
+                entity_id: notify.all
                 title: "Washing machine — Finished"
                 message: >
                   The washing machine finished its cycle successfully\.
@@ -46,8 +47,9 @@ automation:
                   {{ error_messages.get(error_code, 'Unknown error \\(' ~ error_code ~ '\\) occurred\\.') }}
             - condition: template
               value_template: "{{ error_code is not none }}"
-            - service: notify.all
+            - action: notify.send_message
               data:
+                entity_id: notify.all
                 title: "Washing machine — Error"
                 message: >
                   Washing machine reported an error:

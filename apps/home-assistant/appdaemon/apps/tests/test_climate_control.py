@@ -24,7 +24,7 @@ def climate_control():
             "input_boolean": {"enable": "input_boolean.appdaemon_climate_enable"},
             "input_number": {"min_hours_per_day": "input_number.appdaemon_climate_min_hours_per_day"},
             "input_select_heat_mode": "input_select.appdaemon_climate_heat_mode",
-            "notify": {"enabled": True, "target": "test"},
+            "notify": {"enabled": True, "entity_id": "notify.test"},
             "climate": {
                 "enabled": True,
                 "entity": "input_select.heishamon_heatmode",
@@ -329,7 +329,7 @@ class TestChangeHvacMode:
         climate_control.get_state = AsyncMock(return_value="Heat")
         climate_control.set_state = AsyncMock()
         climate_control.sleep = AsyncMock()
-        climate_control.notify = AsyncMock()
+        climate_control.call_service = AsyncMock()
 
         await climate_control._change_hvac_mode("Heat")
 
@@ -338,11 +338,11 @@ class TestChangeHvacMode:
     @pytest.mark.asyncio
     async def test_change_hvac_mode_dry_run(self, climate_control):
         climate_control.args["climate"]["enabled"] = False
-        climate_control.notify = AsyncMock()
+        climate_control.call_service = AsyncMock()
 
         await climate_control._change_hvac_mode("Heat")
 
-        climate_control.notify.assert_called()
+        climate_control.call_service.assert_called()
 
     @pytest.mark.asyncio
     async def test_change_hvac_mode_notify_disabled(self, climate_control):
@@ -401,7 +401,7 @@ class TestDailyRegisterSchedulers:
     async def test_daily_register_schedulers_exception_retry(self, climate_control):
         climate_control.get_state = AsyncMock(return_value="on")
         climate_control._register_schedulers = AsyncMock(side_effect=[Exception("Test error"), None])
-        climate_control.notify = AsyncMock()
+        climate_control.call_service = AsyncMock()
 
         with patch('climate_control.asyncio.sleep', new_callable=AsyncMock):
             await climate_control._daily_register_schedulers()
@@ -497,7 +497,7 @@ class TestResilience:
         climate_control.get_state = AsyncMock(side_effect=["DHW", "DHW", "Heat"])
         climate_control.set_state = AsyncMock()
         climate_control.sleep = AsyncMock()
-        climate_control.notify = AsyncMock()
+        climate_control.call_service = AsyncMock()
 
         await climate_control._change_hvac_mode("Heat")
 
@@ -508,7 +508,7 @@ class TestResilience:
     async def test_notify_exception_does_not_break_daily_scheduler(self, climate_control):
         climate_control.get_state = AsyncMock(return_value="on")
         climate_control._register_schedulers = AsyncMock()
-        climate_control.notify = AsyncMock(side_effect=Exception("Notify failed"))
+        climate_control.call_service = AsyncMock(side_effect=Exception("Notify failed"))
 
         await climate_control._daily_register_schedulers()
 
@@ -558,7 +558,7 @@ class TestFallbackSchedule:
         climate_control._unregister_schedulers = AsyncMock()
         climate_control.get_history = AsyncMock(return_value=None)
         climate_control.get_state = AsyncMock(return_value="4")
-        climate_control.notify = AsyncMock()
+        climate_control.call_service = AsyncMock()
         climate_control._start_hvac = AsyncMock()
         climate_control._start_hvac.__name__ = "_start_hvac"
         climate_control._stop_hvac = AsyncMock()
@@ -582,7 +582,7 @@ class TestNegativePriceNotification:
         climate_control._unregister_schedulers = AsyncMock()
         climate_control.get_history = AsyncMock(return_value=None)
         climate_control.get_state = AsyncMock(return_value="4")
-        climate_control.notify = AsyncMock()
+        climate_control.call_service = AsyncMock()
         climate_control._start_hvac = AsyncMock()
         climate_control._start_hvac.__name__ = "_start_hvac"
         climate_control._stop_hvac = AsyncMock()
@@ -591,6 +591,7 @@ class TestNegativePriceNotification:
 
         await climate_control._register_schedulers()
 
-        messages = [c.args[0] for c in climate_control.notify.call_args_list]
+        calls = climate_control.call_service.call_args_list
+        messages = [c.kwargs.get("message", c.args[1] if len(c.args) > 1 else "") for c in calls]
         assert any("Programming the climate control" in m and "Negative PVPC prices" not in m for m in messages)
         assert any(m.startswith("Negative PVPC prices") for m in messages)

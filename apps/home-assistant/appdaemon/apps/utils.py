@@ -58,6 +58,10 @@ def negative_price_notification(prices) -> str | None:
     return f"Negative PVPC prices: {hours}"
 
 
+async def send_notification(app, message: str, entity_id: str):
+    await app.call_service("notify/send_message", entity_id=entity_id, message=message)
+
+
 async def retry_with_backoff(
     func,
     max_retries: int = 3,

@@ -32,8 +32,9 @@ set_heat_mode:
       data:
         option: "{{ heatmode }}"
     - alias: Notify
-      service: notify.agil
+      action: notify.send_message
       data:
+        entity_id: notify.agil
         message: |
           Set heat mode to `{{ heatmode | replace('+', '\\+') | replace('(', '\\(') | replace(')', '\\)') }}`\.
           Heat mode is `{{ states('input_select.heishamon_heatmode') | replace('+', '\\+') | replace('(', '\\(') | replace(')', '\\)') }}`\.

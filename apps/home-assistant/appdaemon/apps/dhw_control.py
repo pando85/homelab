@@ -9,7 +9,7 @@ from typing import List
 
 import appdaemon.plugins.hass.hassapi as hass
 
-from utils import escape_markdownv2, retry_with_backoff
+from utils import escape_markdownv2, retry_with_backoff, send_notification
 
 
 @dataclass
@@ -58,13 +58,14 @@ class DHWControl(hass.Hass):
             except Exception as e:
                 self.log(f"Error during daily scheduler registration: {e}", level="ERROR")
                 try:
-                    await self.notify(
+                    await send_notification(
+                        self,
                         escape_markdownv2(
                             f"""Error during daily scheduler registration: {e}
 
 Retrying in 10 minutes"""
                         ),
-                        name=self.args["notify"]["target"],
+                        self.args["notify"]["entity_id"],
                     )
                 except Exception as notify_error:
                     self.log(f"Error sending notification: {notify_error}", level="ERROR")
@@ -97,7 +98,7 @@ Retrying in 10 minutes"""
         msg = f"Force DHW{dry_run_msg}"
         self.log(msg)
         if self.args["notify"]["enabled"]:
-            await self.notify(escape_markdownv2(msg), name=self.args["notify"]["target"])
+            await send_notification(self, escape_markdownv2(msg), self.args["notify"]["entity_id"])
         if self.args["dhw"]["enabled"]:
             force_dhw_entity = self.get_entity(self.args["dhw"]["entity"])
             await force_dhw_entity.turn_on()
@@ -137,9 +138,10 @@ Retrying in 10 minutes"""
             prices = await self._get_prices()
         except Exception as e:
             self.log(f"Error getting prices: {e}", level="ERROR")
-            await self.notify(
+            await send_notification(
+                self,
                 escape_markdownv2("Error getting prices: using fallback schedule, retrying in 10 minutes"),
-                name=self.args["notify"]["target"],
+                self.args["notify"]["entity_id"],
             )
             await self._register_fallback_schedule()
             await asyncio.sleep(600)
@@ -166,7 +168,7 @@ Retrying in 10 minutes"""
             escaped_text = escape_markdownv2(f"Programming the DHW control for these hours: {hours_str} ")
             link = f"[​​​​​​​​​​​](https://kroki.grigri.cloud/vegalite/png/{vega_diagram})"
             msg = f"{escaped_text}{link}"
-            await self.notify(msg, name=self.args["notify"]["target"])
+            await send_notification(self, msg, self.args["notify"]["entity_id"])
 
         await self._schedule_dhw(datetimes_to_schedule)
 

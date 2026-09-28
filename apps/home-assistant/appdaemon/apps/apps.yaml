@@ -10,7 +10,7 @@ climate_control:
     pvpc_price: sensor.esios_pvpc
   notify:
     enabled: true
-    target: agil
+    entity_id: notify.agil
   climate:
     enabled: true
     entity: input_select.heishamon_heatmode
@@ -28,7 +28,7 @@ dhw_control:
     pvpc_price: sensor.esios_pvpc
   notify:
     enabled: true
-    target: agil
+    entity_id: notify.agil
   dhw:
     enabled: true
     entity: switch.aquarea_force_dhw_mode
