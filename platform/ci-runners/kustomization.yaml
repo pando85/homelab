@@ -11,5 +11,4 @@ resources:
   - resources/pvc-runner-cache.yaml
   - resources/pvc-runner-docker.yaml
   - resources/statefulset.yaml
-  - resources/workspace-gc-script.yaml
   - resources/trigger-authentication.yaml
