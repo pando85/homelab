@@ -266,23 +266,29 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "100m"
-        - name: workspace-gc
-          image: busybox:1.38.0
-          command:
-            - sh
-            - /scripts/cleanup.sh
-          volumeMounts:
-            - name: runner-data
-              mountPath: /workspace
-            - name: workspace-gc-script
-              mountPath: /scripts
-          resources:
-            requests:
-              memory: "16Mi"
-              cpu: "10m"
-            limits:
-              memory: "64Mi"
-              cpu: "50m"
+        # workspace-gc sidecar disabled: it raced with the runner's own
+        # post-job cleanup (artifact upload / worktree removal) and deleted
+        # active job workspaces (multivara/calypso#2221). The runner already
+        # removes job workspaces on completion; re-enable only with a
+        # lifecycle-aware script. The workspace-gc-script ConfigMap and volume
+        # are kept for rollback.
+        #   - name: workspace-gc
+        #     image: busybox:1.38.0
+        #     command:
+        #       - sh
+        #       - /scripts/cleanup.sh
+        #     volumeMounts:
+        #       - name: runner-data
+        #         mountPath: /workspace
+        #       - name: workspace-gc-script
+        #         mountPath: /scripts
+        #     resources:
+        #       requests:
+        #         memory: "16Mi"
+        #         cpu: "10m"
+        #       limits:
+        #         memory: "64Mi"
+        #         cpu: "50m"
 
       securityContext:
         fsGroupChangePolicy: "OnRootMismatch"
