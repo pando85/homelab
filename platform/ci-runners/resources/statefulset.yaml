@@ -275,7 +275,8 @@ spec:
       volumes:
         - name: runner-data
           emptyDir:
-            sizeLimit: 30Gi
+            medium: Memory
+            sizeLimit: 8Gi
         - name: runner-config
           secret:
             secretName: runner-config
