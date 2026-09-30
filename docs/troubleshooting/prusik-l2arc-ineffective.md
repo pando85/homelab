@@ -118,6 +118,26 @@ is ~12MB/s against ~400-500MB/s of RAIDZ1 sequential throughput, and transcodes 
 
 Verify by watching `l2_prefetch_asize` fall toward zero while `l2_hits` holds steady or rises.
 
+**Baseline captured 2026-09-30 (prusik, 7d), for comparison:**
+
+| Metric | Before | Target after |
+|---|---|---|
+| `l2_prefetch_asize` / `l2_asize` | 462GB / 1.13TB = **41%** | **< 5%** |
+| `l2_mru_asize` + `l2_mfu_asize` | 444 + 243 = **687GB** | **≥ 900GB** |
+| `l2_hits` per day | ~10.2M | **≥ baseline** (must not fall) |
+| Avg L2ARC hit size | 17-28KB | ~unchanged |
+| `l2_abort_lowmem` | ~0.6-1.0/sec | unchanged — needs ARC growth, not this |
+
+L2ARC is a circular log: the 462GB already resident is **overwritten gradually, not evicted
+immediately**. At `l2arc_write_max=300MB/s` a full 1.05TB cycle is ~1h in theory, but real write rate
+tracks actual miss volume. **Allow 24-48h before judging, and compare 7d windows.**
+
+The change also affects **grigri**, which has its own L2ARC (`l2arc_write_max_mb: 120`) and an 8GB ARC
+cap on 32GB RAM. Roll out to prusik first, measure, then extend.
+
+Revert per host with `l2arc_noprefetch: 0` in `metal/inventory/host_vars/<host>.yml` and re-running
+the `zfs-config` tag — no template edit needed.
+
 **Step 2 — grow the ARC** (the real fix). Requires freeing RAM on prusik first; moving the CI runner
 off the node reclaims ~19GB and supports `zfs_arc_max` of 20-24GB. This largely stops
 `l2_abort_lowmem`, shrinks the header tax to ~9%, and puts the whole 12-14GB hot set in RAM.
