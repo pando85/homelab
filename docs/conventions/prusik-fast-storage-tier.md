@@ -33,7 +33,7 @@ The node is overcommitted, so the ARC is pinned at 5GB. Consequences cascade:
 - The hot working set is **12-14GB** — Postgres 6.8GB, Forgejo git ~2GB, Jellyfin metadata 3-5GB.
   A 5GB ARC cannot hold it, producing **154M misses per week**.
 - The L2ARC is starved by the same pressure: `l2_abort_lowmem` fires ~1/sec, and its buffer headers
-  consume **1.80GB of the 5GB cap (36%)**. See `docs/troubleshooting/prusik-l2arc-ineffective.md`.
+  consume **1.68 GiB of the 5 GiB cap (~34%)**. See `docs/troubleshooting/prusik-l2arc-ineffective.md`.
 - **This already caused an outage.** CI builds drove MemAvailable to 3.9GB, triggering NVMe reclaim
   I/O that saturated the disk and crashed etcd —
   `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`.

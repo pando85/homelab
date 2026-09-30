@@ -14,7 +14,7 @@ Symptoms that looked like L2ARC failure:
 
 - Hit ratio only **34-39%**
 - `l2_abort_lowmem` firing **~0.6-1.0/sec** (365K-589K events per 7d)
-- `l2_hdr_size` **1.80GB** against a 5.0GB ARC cap — 36% of the ARC spent on L2ARC metadata
+- `l2_hdr_size` **1.68 GiB** against a 5 GiB ARC cap — **~34%** of the ARC spent on L2ARC metadata
 - HDD read latency still 14-17ms average, 54ms peak, with Forgejo `git-upload-pack` at 200-310ms
 
 ## Root Cause
@@ -77,10 +77,30 @@ Prefetch hit ratio is **20.7%** (11.3M hits / 54.4M), consistent with read-once 
 
 ### 4. The upstream cause: the ARC is too small
 
-`l2_abort_lowmem` at ~1/sec and the 1.80GB header tax are both symptoms of a 5GB ARC cap on a node
-whose container limits sum to ~85GB against 64GB of RAM. ZFS drops L2ARC writes under ARC memory
-pressure, so the device cannot retain what it caches. The header overhead is also *proportional* —
-at a 20GB ARC the same 1.80GB is 9% instead of 36%.
+Every block cached on the L2ARC device needs an index header (`l2arc_buf_hdr_t`, ~175 bytes) that
+lives in **ARC RAM**, not on the NVMe. That is what `node_zfs_arc_l2_hdr_size` measures — the RAM
+cost of *describing* the cache, as opposed to `node_zfs_arc_l2_size`, which is the data on the device.
+On prusik the ratio is ~0.14%: 1.68 GiB of headers indexing 1227 GiB of cached data.
+
+That sounds negligible until you compare it against the right denominator. The headers are charged
+to a **5 GiB ARC cap**, so they consume **~34%** of it. `l2_abort_lowmem` at ~1/sec is the same
+pressure showing up differently: ZFS drops L2ARC writes when the ARC cannot afford them, so the
+device cannot retain what it caches. Both are symptoms of an ARC capped at 5 GiB on a node whose
+container limits sum to ~85GB against 64GB of RAM.
+
+The header tax is *proportional to the ARC cap*, not to the L2ARC — at a 20 GiB ARC the same 1.68 GiB
+is 8% instead of 34%. This is the main reason growing the ARC also fixes the L2ARC.
+
+**Grafana caveat:** the `L2 ARC size` panel (id 365) in `system/zfs-exporter/dashboards/zfs.json`
+plots `actual` (`l2_size`) and `hdr` (`l2_hdr_size`) as two series on the **same bytes axis**. At
+1227 GiB versus 1.68 GiB that is a 730:1 ratio, so `hdr` renders as a flat line at zero and the
+problem is invisible on the dashboard. The two series also measure different resources with very
+different scarcity — device space (60% of 2TB, harmless) versus ARC RAM (34% of 5 GiB, severe).
+Always evaluate headers as a fraction of `arc_c_max`, never against `l2_size`:
+
+```promql
+node_zfs_arc_l2_hdr_size / node_zfs_arc_c_max * 100   # prusik ~34%, grigri ~4%
+```
 
 **Fixing the ARC is what makes the L2ARC work.** See `docs/conventions/prusik-fast-storage-tier.md`.
 
@@ -140,7 +160,7 @@ the `zfs-config` tag — no template edit needed.
 
 **Step 2 — grow the ARC** (the real fix). Requires freeing RAM on prusik first; moving the CI runner
 off the node reclaims ~19GB and supports `zfs_arc_max` of 20-24GB. This largely stops
-`l2_abort_lowmem`, shrinks the header tax to ~9%, and puts the whole 12-14GB hot set in RAM.
+`l2_abort_lowmem`, shrinks the header tax to ~8%, and puts the whole 12-14GB hot set in RAM.
 
 **Do not remove the cache vdev.** Without it every poster, thumbnail, and SQLite page read falls to
 14-54ms HDD latency.
