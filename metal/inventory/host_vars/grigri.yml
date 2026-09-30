@@ -8,3 +8,6 @@ zfs_arc_max_gb: 8
 
 l2arc_write_max_mb: 120
 l2arc_write_boost_mb: 160
+# Pinned: grigri's L2ARC holds ~0% prefetch (1.5MB of 459GiB) since it serves no
+# media streaming, so the prusik-motivated default of 1 has nothing to reclaim here.
+l2arc_noprefetch: 0
