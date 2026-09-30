@@ -137,6 +137,11 @@ matters there.
   same data key (e.g., `datasource.yaml`), they collide (last-writer-wins) and cause continuous
   reload churn. Use unique keys per ConfigMap (e.g., `loki-datasource.yaml`,
   `tempo-datasource.yaml`). See `docs/troubleshooting/grafana-datasource-sidecar-collision.md`
+- Grafana panels querying node-exporter metrics must collapse the DaemonSet's `pod` label with
+  `max by (instance, ...)` — otherwise every pod restart adds another phantom line over long time
+  ranges, and `sum(rate(...))` panels silently inflate. Use `max`, not `sum`/`avg`. Also verify each
+  metric name actually exists: empty panels look identical to nonexistent metrics. See
+  `docs/troubleshooting/grafana-node-exporter-pod-churn-duplicates.md`
 - Grafana 13.1.1 strips the `url` field from Loki `derivedFields` during provisioning, even with
   `$$` escaping. Workaround: manually set the URL in the Grafana UI. See
   `docs/troubleshooting/grafana-13-derivedfields-url-stripped.md`
