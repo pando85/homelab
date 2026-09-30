@@ -137,6 +137,17 @@ will be detected and reverted almost instantly. The git repository is the single
   every mount). `fsGroupChangePolicy: OnRootMismatch` doesn't help — kubelet resets setgid bit.
   If the app manages its own file ownership (runs as volume owner or has init chown), remove
   `fsGroup` entirely. See `docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md`
+- prusik's L2ARC looks broken (34-39% hit ratio, serves 1.4% of reads) but is load-bearing — avg hit
+  size is 17-28KB, i.e. Jellyfin metadata/thumbnails/SQLite, not video. Hit ratio is misleading
+  because it only covers ARC misses. The real defect is `l2arc_noprefetch=0` wasting 41% of the device
+  on one-shot media prefetch. Fix that; do NOT remove the cache vdev. See
+  `docs/troubleshooting/prusik-l2arc-ineffective.md`
+- prusik storage is latency-bound, not throughput-bound, and **the root cause is RAM, not disks**:
+  container limits sum to ~85GB on 64GB, forcing `zfs_arc_max=5GB` against a 12-14GB hot set. Free
+  RAM (move CI off-node) and raise ARC before buying SSDs — RAM beats SSD by ~1000x. A SLOG/ZIL will
+  NOT help (Postgres runs `synchronous_commit=off`). Forgejo web latency is `git-upload-pack` reading
+  git objects, not Postgres. Backup is label-driven (`backup/retain`, `backup`), so a PVC recreated
+  without labels is silently never backed up. See `docs/conventions/prusik-fast-storage-tier.md`
 - Apps with Supabase dependencies (auth schema, GoTrue, PostgREST) can use Zalando Postgres +
   init container for bootstrap SQL. Don't deploy separate Supabase Postgres container unless
   the app requires Supabase-specific extensions not in the Spilo image. See
@@ -249,6 +260,8 @@ will be detected and reverted almost instantly. The git repository is the single
   process, patterns, and checklist when adding a new application
 - **Documenting learnings:** See `docs/conventions/documenting-learnings.md` for when/how to write
   troubleshooting docs
+- **prusik storage tiering:** See `docs/conventions/prusik-fast-storage-tier.md` for ZFS pool sizing,
+  SSD selection, and PVC migration gotchas. Hardware reference: `docs/hardware/prusik.md`
 
 ## Licensing
 
