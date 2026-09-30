@@ -11,7 +11,11 @@ options zfs zfs_vdev_sync_write_min_active=20
 
 options zfs l2arc_write_max={{ l2arc_write_max_mb | int * 1024 * 1024 }}
 options zfs l2arc_write_boost={{ l2arc_write_boost_mb | int * 1024 * 1024 }}
-options zfs l2arc_noprefetch=0
+# Only cache demand reads in L2ARC. Prefetch is dominated by one-shot sequential
+# media streaming that is never re-read, and it displaced ~41% of the device on
+# prusik. Override with l2arc_noprefetch: 0 per host to revert.
+# See docs/troubleshooting/prusik-l2arc-ineffective.md
+options zfs l2arc_noprefetch={{ l2arc_noprefetch | default(1) }}
 options zfs l2arc_headroom=4
 options zfs l2arc_headroom_boost=200
 options zfs l2arc_norw=0
