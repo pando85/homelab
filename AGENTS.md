@@ -79,20 +79,39 @@ vault: Change to svg logo
 monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 ```
 
-## Deployment Restrictions
+## Deployment Rules
 
-**CRITICAL: NEVER automatically execute deployment commands.**
+**Commit first, then apply.** Git must contain the change before it is applied anywhere, so every
+action is reviewable, reproducible, and revertible. Never apply an uncommitted or partially edited
+tree.
 
-- **NEVER run:** `make bootstrap`, `make metal`, `make dev`, `kubectl apply`,
-  `helm install/upgrade`, `ansible-playbook`
-- **NEVER run:** `kubectl delete`, `kubectl edit`, `kubectl patch` on cluster resources
-- **ALWAYS:** Only suggest commands for user to run manually
-- **ALL cluster changes MUST go through GitOps:** commit/push to repo, let ArgoCD sync
-- **Metal node provisioning:** `cd metal && ANSIBLE_EXTRA_ARGS="-t k3s" make cluster`
-  (user must run manually)
+### Agents may run
 
-**Why:** ArgoCD has `selfHeal: true` with real-time cluster watches. Any direct `kubectl` mutations
-will be detected and reverted almost instantly. The git repository is the single source of truth.
+- Read-only inspection: `kubectl get/describe/logs/top`, Prometheus/Grafana/Loki queries,
+  `helm template`, `helm lint`, `helm dependency build`, `pre-commit run`
+- **Narrowly scoped `metal/` Ansible** for config that is already committed, using explicit
+  `--tags` and `--limit`. Example: `cd metal && ANSIBLE_EXTRA_ARGS="-t zfs-config --limit prusik" make prepare`
+- ArgoCD sync of an already-committed and pushed change
+
+Report the command run and its outcome. Prefer the narrowest tag and limit that does the job.
+
+### Never run
+
+- **`kubectl apply/delete/edit/patch`** on cluster resources — ArgoCD `selfHeal: true` with real-time
+  watches reverts these almost instantly, so they are futile, not merely risky
+- **Node lifecycle / high blast radius:** `make cluster`, `make bootstrap`, `make dev`,
+  `make uninstall-k3s`, anything with `-t k3s`. These can take down the sole control-plane node
+- **Anything data-destroying:** PVC/PV deletion, `zpool destroy`, `zfs destroy`, pool re-creation,
+  disk formatting (`prepare_additional_disks_force_format`)
+- Untagged or unlimited `make prepare` / `ansible-playbook` runs — always scope them
+- `helm install/upgrade` — let ArgoCD do it
+
+When in doubt, or when a change needs a hard prohibition above, stop and hand the user the exact
+command.
+
+**Why:** ArgoCD is the source of truth for cluster state, so direct mutations get reverted. `metal/`
+is host-level config outside ArgoCD, which is why it needs an explicit apply step — and why scoping
+matters there.
 
 ## Skill Usage
 
