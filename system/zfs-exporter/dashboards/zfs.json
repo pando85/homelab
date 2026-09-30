@@ -1872,6 +1872,30 @@
               {
                 "id": "custom.fillOpacity",
                 "value": 0
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.axisLabel",
+                "value": "hdr (ARC RAM)"
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.axisLabel",
+                "value": "device"
               }
             ]
           }
@@ -1933,7 +1957,8 @@
         }
       ],
       "title": "L2 ARC size",
-      "type": "timeseries"
+      "type": "timeseries",
+      "description": "`actual` is data stored on the L2ARC device; `hdr` is the index metadata (`l2arc_buf_hdr_t`) that lives in **ARC RAM**, not on the device.\n\nThey are on separate axes because the ratio is ~700:1 - on a shared axis `hdr` flattens to zero and hides the real cost. Judge `hdr` against the ARC cap, not against `actual`: see the *L2 ARC header cost* panel below."
     },
     {
       "datasource": {
@@ -2037,6 +2062,230 @@
         }
       ],
       "title": "L2 ARC - hit %",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Share of the ARC cap consumed by L2ARC index headers. This memory describes cached blocks instead of caching data, so it directly shrinks the effective ARC.\n\nScales with the ARC cap, not the device: the same L2ARC costs 34% of a 5GiB ARC but only 8% of a 20GiB ARC. Sustained values above ~25% mean the L2ARC is too large for the memory budget and is starving the ARC - usually alongside a rising `l2_abort_lowmem`.\n\nprusik baseline 2026-09-30: ~34%. grigri: ~4%.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 25
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 77
+      },
+      "id": 559,
+      "links": [],
+      "options": {
+        "legend": {
+          "calcs": [
+            "min",
+            "max",
+            "mean",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "8.1.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "node_zfs_arc_l2_hdr_size{instance=\"$instance\"}\n/ node_zfs_arc_c_max{instance=\"$instance\"} * 100",
+          "hide": false,
+          "interval": "",
+          "intervalFactor": 2,
+          "legendFormat": "hdr / ARC cap",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "L2 ARC header cost",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "description": "Share of the L2ARC device occupied by sequential read-ahead rather than demand reads. Prefetch is dominated by one-shot media streaming that is never re-read, so it displaces the small random blocks (metadata, thumbnails, SQLite, git objects) the cache exists for.\n\nGoverned by the `l2arc_noprefetch` ZFS module parameter - set in `metal/roles/setup/templates/zfs.conf.j2`. With `noprefetch=1` this should sit near 0%; a high value means the parameter is 0 or has not yet cycled through the device.\n\nL2ARC is a circular log, so after changing the parameter expect this to decay over 24-48h, not immediately. prusik baseline 2026-09-30: 41%. grigri: ~0%.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": true,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            }
+          },
+          "mappings": [],
+          "max": 100,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 10
+              },
+              {
+                "color": "red",
+                "value": 30
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 77
+      },
+      "id": 560,
+      "links": [],
+      "options": {
+        "legend": {
+          "calcs": [
+            "min",
+            "max",
+            "mean",
+            "lastNotNull"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "8.1.3",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": true,
+          "expr": "node_zfs_arc_l2_prefetch_asize{instance=\"$instance\"}\n/ node_zfs_arc_l2_asize{instance=\"$instance\"} * 100",
+          "hide": false,
+          "interval": "",
+          "intervalFactor": 2,
+          "legendFormat": "prefetch / L2ARC",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "L2 ARC prefetch share",
       "type": "timeseries"
     }
   ],
