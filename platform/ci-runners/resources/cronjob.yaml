@@ -17,10 +17,11 @@ spec:
               image: busybox:1.38.0
               command: ["sh", "-c", "find /cache -type f -mtime +7 -print -delete"]
               volumeMounts:
-                - name: ci-runner-cache
+                - name: ci-runner-data
                   mountPath: /cache
+                  subPath: cache
           volumes:
-            - name: ci-runner-cache
+            - name: ci-runner-data
               persistentVolumeClaim:
-                claimName: ci-runner-cache
+                claimName: ci-runner-data
           restartPolicy: OnFailure
