@@ -9,7 +9,8 @@
 | **RAM** | 64GB DDR5 |
 | **OS Disk** | 512GB NVMe (SanDisk Extreme 500GB) |
 | **Cache** | 2TB NVMe (FIKWOT FN960) |
-| **Data Disks** | 4× 12TB SATA (ST12000NM0127) in RAIDZ |
+| **Data Disks** | 4× 12TB SATA in RAIDZ (3× ST12000NM0127 + 1× MG07ACA12TEY) |
+| **Fast Pool** | 2× 240GB SATA SSD (SanDisk SDSSDHII240G) in mirror |
 | **GPU** | NVIDIA GeForce GTX 1060 3GB |
 | **OS** | Ubuntu 24.04 |
 | **Role** | K3s agent node |
@@ -47,6 +48,7 @@ The following do **not** disable any SATA ports:
 | M.2_1 | 2TB NVMe (CPU lanes) | None |
 | M.2_2 | 465GB NVMe (CPU lanes) | None |
 | M.2_3 | Empty | None |
+| SATA6G_1-6 | All 6 ports occupied | N/A |
 
 ## Current Storage Configuration
 
@@ -54,10 +56,12 @@ The following do **not** disable any SATA ports:
 
 | Device | Model | Serial | Size | Controller | by-path |
 |--------|-------|--------|------|------------|---------|
-| sda | ST12000NM0127 | ZJV59K2D | 10.9T | 0d:00.0 | pci-0000:0d:00.0-ata-3 |
-| sdb | ST12000NM0127 | ZJV5Y9G5 | 10.9T | 0f:00.0 | pci-0000:0f:00.0-ata-1 |
-| sdc | ST12000NM0127 | ZJV5WPAZ | 10.9T | 0f:00.0 | pci-0000:0f:00.0-ata-2 |
-| sdd | ST12000NM0127 | ZJV5SKEF | 10.9T | 0f:00.0 | pci-0000:0f:00.0-ata-4 |
+| sda | MG07ACA12TEY | 91K0A0C0F9BG | 10.9T | 2:0:0.0 | pci-0000:0d:00.0-ata-3 |
+| sdb | SDSSDHII240G | 170234400122 | 240G | 3:0:0.0 | pci-0000:0f:00.0-ata-1 |
+| sdc | ST12000NM0127 | ZJV5Y9G5 | 10.9T | 6:0:0.0 | pci-0000:0f:00.0-ata-2 |
+| sdd | ST12000NM0127 | ZJV5WPAZ | 10.9T | 7:0:0.0 | pci-0000:0f:00.0-ata-3 |
+| sde | SDSSDHII240G | 170235401310 | 240G | 8:0:0.0 | pci-0000:0f:00.0-ata-4 |
+| sdf | ST12000NM0127 | ZJV5SKEF | 10.9T | 9:0:0.0 | pci-0000:0f:00.0-ata-5 |
 
 ### NVMe Drives
 
@@ -68,11 +72,11 @@ The following do **not** disable any SATA ports:
 
 ### Available Expansion
 
-- **2 SATA ports free** (SATA6G_5 and SATA6G_6)
-- **PCIEX1 empty** — can be used without disabling SATA ports (but see note below)
+- **0 SATA ports free** (all 6 ports occupied)
+- **PCIEX1 empty** — can be used but will disable SATA6G_3 and SATA6G_4 (see note below)
 - **M.2_3 empty** — PCIe 4.0 x4 available
 
-**Note:** If you install a device in PCIEX1, you will lose SATA6G_3 and SATA6G_4. Since 4 of 6 SATA ports are already in use, populating PCIEX1 would reduce available SATA ports to 0.
+**Note:** If you install a device in PCIEX1, you will lose SATA6G_3 and SATA6G_4. Since all 6 SATA ports are already in use, populating PCIEX1 would disable 2 drives.
 
 ## Verification Commands
 
@@ -121,6 +125,6 @@ sudo journalctl -k -b | grep -Ei 'ata|sata|ahci'
 
 1. **PCIEX1 is the only slot that affects SATA ports** — it disables SATA6G_3/4 when populated
 2. **M.2 slots do not disable any SATA ports** — all three M.2 slots can be used simultaneously with all 6 SATA ports
-3. **Current system has 2 SATA ports available** — can add 2 more SATA drives
-4. **Avoid populating PCIEX1** unless you're willing to lose 2 SATA ports (which would leave 0 available)
+3. **All 6 SATA ports are occupied** — no expansion without PCIEX1 (which would disable 2 ports)
+4. **Avoid populating PCIEX1** unless you're willing to lose 2 SATA ports (which would disable 2 drives)
 5. **Resource sharing is hardware-based** — no BIOS setting can override it

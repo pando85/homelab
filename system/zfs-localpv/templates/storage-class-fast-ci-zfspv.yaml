@@ -1,0 +1,17 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-ci-zfspv
+allowVolumeExpansion: true
+parameters:
+  fstype: "zfs"
+  shared: "yes"
+  poolname: "fast/ci"
+provisioner: zfs.csi.openebs.io
+allowedTopologies:
+  - matchLabelExpressions:
+      - key: kubernetes.io/hostname
+        values:
+          - prusik
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete

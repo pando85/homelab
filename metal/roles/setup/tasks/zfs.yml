@@ -21,10 +21,11 @@
     update_cache: true
 
 # To check creation command: `zpool history <pool_name>`
-- name: zfs | ZFS import datasets
-  command: zpool import datasets
+- name: zfs | Import ZFS pools
+  command: "zpool import {{ item }}"
+  loop: "{{ zfs_pools | default(['datasets']) }}"
   args:
-    creates: /datasets
+    creates: "/{{ item }}"
   notify: mount zfs datasets
 
 - name: zfs | Configure ZFS module
