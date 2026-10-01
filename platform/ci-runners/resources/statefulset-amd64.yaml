@@ -54,7 +54,7 @@ spec:
               # will pressure. Accepted trade-off: more runner headroom at the
               # cost of losing the strict OOM boundary.
               memory: "12Gi"
-              cpu: "6"
+              cpu: "10"
           securityContext:
             privileged: true
             runAsUser: 1001
