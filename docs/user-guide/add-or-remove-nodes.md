@@ -173,17 +173,32 @@ kubectl get pods -A --field-selector=status.phase=Pending
 #### BGP peer must show `established`
 
 `cilium bgp peers` prints Session `active` when the TCP session is still trying — this is **not**
-established. A healthy peer shows `established`, a non-zero uptime, and at least one advertised
-route. Meanwhile Cilium itself looks completely healthy (`Cilium: Ok`, `NetworkUnavailable=False`,
-`KubeProxyReplacement: True`), so the missing BGP session is easy to miss.
+established. A healthy peer shows `established` with a non-zero uptime. Meanwhile Cilium itself looks
+completely healthy (`Cilium: Ok`, `NetworkUnavailable=False`, `KubeProxyReplacement: True`), so a
+missing BGP session is easy to miss.
 
-If the session stays `active`, the pfSense FRR neighbour entry for the node's IP is missing or
-wrong (see [Prerequisites](#prerequisites-pfsense-bgp-neighbour)). Until fixed, the node's podCIDR
-is not advertised — traffic from outside the cluster to pods on this node will not route, and no
-LoadBalancer IP is announced from it. Intra-cluster pod-to-pod traffic across nodes is unaffected
-(same L2 segment). `cilium bgp routes advertised ipv4 unicast` is empty until the session is
-`established`. Note: `cilium bgp peers` prints a deprecation notice suggesting `cilium shell
-bgp/peers`; both work.
+If the session stays `active`, the pfSense FRR neighbour entry for the node's IP is missing or wrong
+(see [Prerequisites](#prerequisites-pfsense-bgp-neighbour)).
+
+Do **not** judge the session by the advertised-route count. `CiliumBGPAdvertisement`
+(`default-advertisement`) advertises only `Service` / `LoadBalancerIP` — podCIDRs are never advertised
+on any node. A freshly joined node therefore correctly shows `Advertised 0`, and only starts
+announcing a `/32` when a LoadBalancer service places a backend on it (`externalTrafficPolicy:
+Local`). grigri advertises two (`192.168.193.3/32` transcoder-rabbit, `192.168.193.8/32`
+kanidm-ldaps) because it hosts those backends. So the consequence of a down session is narrow but
+real: any LoadBalancer VIP that lands on the node would be unreachable from the network.
+
+Two things that look like failures and are not:
+
+- Pinging a pod IP from the LAN fails on **every** node — pod IPs are not advertised by design. Use
+  `cilium bgp peers`, not a pod ping, as the test.
+- `Received` can differ between nodes (0 on a new peer vs 9 on grigri). Neither node installs the
+  received prefixes into its kernel routing table — both have 7 routes and reach the router via DHCP —
+  so the difference is cosmetic. To make it match, give the new pfSense neighbour the same peer-group
+  and address-family settings as the existing ones.
+
+Note: `cilium bgp peers` prints a deprecation notice suggesting `cilium shell bgp/peers`; both work.
+`cilium bgp routes` accepts only `available` / `advertised` — there is no `received` subcommand.
 
 #### The node is briefly `Ready,SchedulingDisabled` — this is normal
 

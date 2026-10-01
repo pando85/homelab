@@ -131,16 +131,22 @@ undisturbed — identical k3s `ActiveEnterTimestamp` (prusik `Thu 2026-10-01 05:
       though the node has no pool and `zpool` is not installed. It only fails when it is actually
       asked to provision or mount a volume. That is *worse* than the predicted CrashLoop because
       there is no visible symptom, and it makes TODO-6.1/6.2 more urgent, not less.
-- [ ] **TODO-5.5** **BLOCKED — needs a pfSense change.** Cilium reports the session as `active`
-      (= not established), uptime `0s`, **0 advertised**; grigri's is `established`, uptime 244h,
-      2 advertised. Cilium itself is healthy (`Cilium: Ok 1.20.2`, `NetworkUnavailable=False`
-      `CiliumIsUp`, KubeProxyReplacement on enp2s0, health daemon Ok, IPAM 7/254 from 10.0.0.0/24).
-      `bgp-cluster-config.yaml` selects `kubernetes.io/os: linux` with `localASN: 64513` →
-      `192.168.192.1` `peerASN: 64512`, so the cluster side is automatic and correct; **FRR on
-      pfSense has no neighbour for 192.168.192.11**. Add it (remote-as 64513), same as grigri/prusik.
-      Impact until then: the node's podCIDR `10.42.0.0/24` is not advertised, so traffic from outside
-      the cluster to pods on this node will not route and no LB IP is announced from it. Intra-cluster
-      pod↔pod traffic is unaffected (same L2, Cilium has the routes).
+- [x] **TODO-5.5** **Resolved** — BGP is `established` (uptime 2m3s) after the pfSense FRR neighbour
+      for 192.168.192.11 was added. Cilium was healthy throughout (`Cilium: Ok 1.20.2`,
+      `NetworkUnavailable=False` `CiliumIsUp`, KubeProxyReplacement on enp2s0, health daemon Ok, IPAM
+      7/254 from 10.0.0.0/24). `bgp-cluster-config.yaml` selects `kubernetes.io/os: linux` with
+      `localASN: 64513` → `192.168.192.1` `peerASN: 64512`, so the cluster side was always correct.
+      **Correction to the impact statement I wrote here:** podCIDRs are *never* advertised in this
+      cluster — `CiliumBGPAdvertisement/default-advertisement` advertises only `Service` /
+      `LoadBalancerIP`. So `Advertised 0` on this node is correct (it hosts no LB backend), not a
+      fault, and pinging a pod IP from the LAN fails on every node by design. The real impact of the
+      down session was narrower: no LoadBalancer VIP could have been announced from this node. grigri
+      advertises exactly two — `192.168.193.3/32` (transcoder-rabbit) and `192.168.193.8/32`
+      (kanidm-ldaps) — because it hosts those backends.
+      Residual cosmetic gap: `Received 0` here vs `9` on grigri. Neither node installs the received
+      prefixes into its kernel table (both have exactly 7 routes, default via DHCP), so there is no
+      functional impact. Matching it would mean giving the new pfSense neighbour the same peer-group /
+      address-family config as the existing ones.
 - [ ] **TODO-5.6** **Partly done — needs one restart.** `/etc/chrony/chrony.conf` is correct
       (`server pfsense.grigri iburst`, no stray `/etc/ntp.conf`), so the host_vars precedence worked.
       But chrony is still running the distro config and syncing to `canonical.com`, because the
