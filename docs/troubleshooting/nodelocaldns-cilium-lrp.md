@@ -49,12 +49,12 @@ Corefile generation has two phases:
 
 ```
 corefile-init
-  └─ discover Ready kube-dns-upstream EndpointSlice addresses
+  └─ list Ready kube-dns-upstream EndpointSlice addresses via the in-cluster API
      └─ atomically write /etc/coredns/Corefile.base
         └─ node-cache starts and generates /etc/coredns/Corefile
 
 corefile-watcher
-  └─ watch EndpointSlice changes
+  └─ poll EndpointSlices every 5s via the in-cluster API
      └─ atomically replace Corefile.base only with a valid non-empty endpoint set
         └─ node-cache config sync regenerates Corefile and CoreDNS reloads it
 ```
@@ -62,11 +62,15 @@ corefile-watcher
 `Corefile.base` is deliberate. `node-cache` treats `<-conf>.base` as its source template and owns
 the generated `Corefile`; the watcher must not write `Corefile` directly.
 
-The init container and watcher use a pinned kubectl image. They do not install packages or download
-kubectl at runtime, so DNS startup does not depend on `dl.k8s.io` or Alpine package repositories.
-If the API cannot be queried or there are no Ready CoreDNS endpoints, the init container waits and
-`node-cache` does not start with an empty/stale configuration. After startup, watcher failures leave
-the last valid `Corefile.base` untouched.
+The init container and watcher use a pinned official Python Alpine image and only Python's standard
+library. They authenticate directly to the Kubernetes API with the mounted ServiceAccount token and
+CA certificate. There is no runtime package installation, external binary download, `kubectl`, or
+`jq` dependency. EndpointSlice RBAC is reduced to `list` only.
+
+If the API cannot be queried or there are no usable CoreDNS endpoints, the init container waits and
+`node-cache` does not start with an empty/stale configuration. After startup, polling failures leave
+the last valid `Corefile.base` untouched. Endpoint addresses that are explicitly unready or
+terminating are ignored.
 
 Key files:
 - `system/kube-system/resources/nodelocaldns/` — all nodelocaldns resources
@@ -155,14 +159,13 @@ The new setup uses `serviceMatcher` with kube-dns service:
 
 **Symptom:** nodelocaldns pods show 2400+ restarts, but DNS is healthy (SERVFAIL rate = 0).
 
-**Root Cause:** The `corefile-watcher` sidecar runs `kubectl --watch` to monitor endpoint
-changes. The Kubernetes API server closes watch connections every ~30-50 minutes (normal
-behavior). When the pipe closes, the `while` loop exits, the script completes, and kubelet
-restarts the container. The actual `node-cache` container has only 4 restarts from node
-reboots.
+**Root Cause:** The old `corefile-watcher` sidecar ran `kubectl --watch` to monitor endpoint
+changes. The Kubernetes API server closes watch connections periodically. Before the reconnect loop
+was added, each normal watch closure caused the script to exit and kubelet to restart the container.
 
-**Fix:** Wrap the watch loop in an infinite reconnect loop. The current watcher reconnects after
-both normal watch closure and command failure and keeps the last valid Corefile while disconnected.
+**Current design:** issue #4553 removes the Kubernetes watch entirely. The watcher performs a small
+EndpointSlice list request every 5 seconds through the in-cluster API. This is simpler, avoids watch
+lifecycle/reconnect behavior, and is sufficient because CoreDNS endpoint changes are infrequent.
 
 ## DNS Bootstrap Failure After Reboot (2026-10-01)
 
@@ -185,16 +188,18 @@ affected.
 
 **Fix (issue #4553):**
 
-- Use a pinned image with kubectl and required tools preinstalled; no runtime package installation
-  or binary download.
-- Add `corefile-init`, which waits for at least one Ready CoreDNS EndpointSlice address and writes
+- Replace the runtime package/binary bootstrap with a small stdlib-only Python helper using the
+  in-cluster Kubernetes API directly.
+- Add `corefile-init`, which waits for at least one usable CoreDNS EndpointSlice address and writes
   a validated `Corefile.base` before any regular container starts.
 - Make the watcher update `Corefile.base`, leaving `node-cache` responsible for the effective
   `Corefile` and reload lifecycle.
-- Filter out explicitly unready EndpointSlice entries, de-duplicate addresses, reject empty or
-  incompletely rendered configurations, and write via temporary-file + atomic rename.
+- Filter out explicitly unready and terminating EndpointSlice entries, de-duplicate and validate IP
+  addresses, reject empty or incompletely rendered configurations, and write via a hidden temporary
+  file plus atomic rename.
 - On watcher/API failure after startup, preserve the last valid base configuration rather than
   replacing it with an empty or stale partial render.
+- Reduce the ServiceAccount EndpointSlice permission to `list` only.
 
 This hardens the existing direct-pod-IP workaround; it does **not** claim that the historical Cilium
 LRP redirect-loop bug still exists in the current release. Re-evaluate the native
