@@ -1,0 +1,6 @@
+---
+- name: Include geerlingguy.ntp with an inventory-selectable daemon
+  ansible.builtin.include_role:
+    name: geerlingguy.ntp
+  vars:
+    ntp_daemon: "{{ ntp_daemon_select }}"

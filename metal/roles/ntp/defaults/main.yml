@@ -1,0 +1,15 @@
+---
+# Service unit the geerlingguy.ntp role manages.
+#
+# Upstream selects this from its own vars/<os_family>.yml via include_vars, whose
+# precedence (18) beats inventory host_vars/group_vars (9) and even static `roles:`
+# params. Only include_role params (20) and extra vars (22) win, which is why this
+# wrapper exists. Verified empirically - see
+# docs/troubleshooting/ansible-ubuntu-2604-compat.md
+#
+# `ntp` is the Debian/Ubuntu default and is what grigri (22.04) and prusik (24.04)
+# effectively use today; on 24.04 it is an alias unit for ntpsec.service.
+# Override per host in inventory/host_vars/<host>.yml:
+#   24.04 -> ntp_daemon_select: ntpsec   (real unit behind the alias)
+#   26.04 -> ntp_daemon_select: chrony   (the `ntp` package no longer exists)
+ntp_daemon_select: ntp

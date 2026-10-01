@@ -4,14 +4,14 @@
   vars:
     ansible_path: "{{ playbook_dir }}/../.."
   roles:
-    - name: geerlingguy.ntp
+    - role: ntp
       tags:
         - ntp
-    - name: gvisor
+    - role: gvisor
       when: ansible_architecture != "aarch64"
       tags:
         - gvisor
-    - name: k3s
+    - role: k3s
       tags:
         - k3s
 

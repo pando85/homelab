@@ -1,8 +1,8 @@
-ansible~=12.2
-ansible-core~=2.17
+ansible~=13.0
+ansible-core~=2.20
 netaddr~=1.2
 pbr~=6.0
 jmespath~=1.0
 ruamel.yaml~=0.18
 openshift~=0.13
-ansible-lint~=24.2
+ansible-lint~=26.9

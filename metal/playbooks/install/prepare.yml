@@ -22,7 +22,7 @@
 - name: Setup NVIDA drivers
   hosts: nvidia
   roles:
-    - name: nvidia-container-runtime
+    - role: nvidia-container-runtime
       tags:
         - nvidia-container-runtime
 

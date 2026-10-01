@@ -155,6 +155,11 @@ matters there.
 - Forgetting `Prune=false` on PVCs causes data loss on sync
 - Kata-deploy 3.31.0+ requires containerd drop-in directory (`config-v3.toml.d`) — see
   `docs/troubleshooting/kata-containerd-dropin.md`
+- Galaxy roles under `metal/roles/` are gitignored — never patch them, wrap them in a repo role and
+  override via `include_role` params (static `roles:` params lose to the inner role's `include_vars`).
+  Ubuntu 26.04 nodes also need `ansible-core>=2.20`, `ansible_become_exe: /usr/bin/sudo.ws` (sudo-rs
+  rejects `-H`) and chrony, since the `ntp` package is gone. See
+  `docs/troubleshooting/ansible-ubuntu-2604-compat.md`
 - `openebs-zfspv` storage class uses `reclaimPolicy: Retain` — deleted PVCs leave released PVs
   that leak ZFS space. Audit periodically: see `docs/troubleshooting/cluster-hygiene.md`
 - `openebs-zfspv` with `fstype: zfs` + `fsGroup` causes slow pod startup (recursive chown on

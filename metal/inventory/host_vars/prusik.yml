@@ -1,8 +1,9 @@
-# ntp is changed by ntpsec in Ubuntu 24.04 and Debian 12
+# NTP daemon selection lives in roles/ntp (see its defaults/main.yml). The
+# ntp_daemon key that used to be here never took effect: geerlingguy.ntp sets it
+# via include_vars, which outranks inventory host_vars.
 ntp_config_file: /etc/ntpsec/ntp.conf
 ntp_package: ntpsec
 ntp_driftfile: /var/lib/ntpsec/ntp.drift
-ntp_daemon: ntpsec
 
 k3s_kubelet_extra_args:
   - kube-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi

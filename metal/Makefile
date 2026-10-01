@@ -26,11 +26,15 @@ requirements: venv
 	@echo Install requirements
 	@${PYTHON_BIN_DIR}/pip install -r requirements.txt > /dev/null
 
+# --ignore-errors: roles/geerlingguy.ntp is gitignored and galaxy-installed. When the
+# directory already exists without .galaxy_install_info, galaxy refuses to replace it
+# and exits 1, which would break every target that depends on requirements-ansible.
+# Never pass --force here.
 .PHONY: requirements-ansible
 requirements-ansible:
 requirements-ansible: requirements
 	@echo Install ansible-galaxy requirements
-	@${PYTHON_BIN_DIR}/ansible-galaxy install -r requirements.yml > /dev/null
+	@${PYTHON_BIN_DIR}/ansible-galaxy install -r requirements.yml --ignore-errors > /dev/null
 	@${PYTHON_BIN_DIR}/ansible-galaxy collection install -r requirements.yml > /dev/null
 
 .PHONY: first-boot
