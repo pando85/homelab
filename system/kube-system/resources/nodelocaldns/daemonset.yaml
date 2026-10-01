@@ -22,44 +22,41 @@ spec:
         prometheus.io/scrape: "true"
     spec:
       serviceAccountName: node-local-dns
-      containers:
-        - name: corefile-watcher
+      initContainers:
+        - name: corefile-init
           # renovate: datasource=docker
-          image: alpine:3.22
+          image: bitnami/kubectl:1.34.3
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - /etc/coredns-template/corefile-watcher.sh
+            - --init
           resources:
             requests:
               cpu: 5m
               memory: 16Mi
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: template-volume
+              mountPath: /etc/coredns-template
+              readOnly: true
+            - name: corefile
+              mountPath: /etc/coredns
+      containers:
+        - name: corefile-watcher
+          # renovate: datasource=docker
+          image: bitnami/kubectl:1.34.3
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+          securityContext:
+            runAsUser: 0
           command:
-            - sh
-            - -c
-            - |
-              apk add --no-cache curl > /dev/null 2>&1
-              ARCH=$(case "$(uname -m)" in x86_64) echo amd64;; aarch64) echo arm64;; armv7l) echo arm;; esac)
-              curl -sfL "https://dl.k8s.io/release/$(curl -sfL https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl" \
-                -o /usr/local/bin/kubectl && chmod +x /usr/local/bin/kubectl
-              CURRENT=""
-              update_corefile() {
-                IPS=$(kubectl get endpointslices -n kube-system \
-                  -l kubernetes.io/service-name=kube-dns-upstream \
-                  -o jsonpath='{.items[*].endpoints[*].addresses[0]}' 2>/dev/null \
-                  | tr ' ' '\n' | sort | tr '\n' ' ')
-                if [ -n "${IPS}" ] && [ "${IPS}" != "${CURRENT}" ]; then
-                  echo "$(date): upstream endpoints changed to: ${IPS}"
-                  sed "s|UPSTREAM_DNS_SERVERS|${IPS}|g" /etc/coredns-template/Corefile.template > /etc/coredns/Corefile
-                  CURRENT="${IPS}"
-                elif [ -z "${IPS}" ] && [ -z "${CURRENT}" ]; then
-                  echo "$(date): waiting for upstream endpoints..."
-                fi
-              }
-              update_corefile
-              while true; do
-                kubectl get endpointslices -n kube-system \
-                  -l kubernetes.io/service-name=kube-dns-upstream --watch -o name \
-                  | while read -r _; do update_corefile; done
-                echo "$(date): watch connection closed, reconnecting..."
-                sleep 1
-              done
+            - /bin/bash
+            - /etc/coredns-template/corefile-watcher.sh
           volumeMounts:
             - name: template-volume
               mountPath: /etc/coredns-template
@@ -132,6 +129,8 @@ spec:
             items:
               - key: Corefile.template
                 path: Corefile.template
+              - key: corefile-watcher.sh
+                path: corefile-watcher.sh
             name: nodelocaldns
         - name: corefile
           emptyDir: {}
