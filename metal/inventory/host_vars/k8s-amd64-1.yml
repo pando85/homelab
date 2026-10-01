@@ -25,6 +25,9 @@ k3s_kubelet_extra_args:
   - system-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi
   - eviction-hard=memory.available<500Mi,nodefs.available<10%
 
+# 8 GiB swap for memory pressure relief (default 16G is too much for 16G RAM node)
+swap_file_size_mb: 8192
+
 # Node-local storage for the ci-runner-amd64 pod (platform/ci-runners). hostPath
 # rather than PVCs: this node has no ZFS pool and there is deliberately no local
 # StorageClass (planning/k8s-amd64-1-node-addition.md, TODO-6.3).
