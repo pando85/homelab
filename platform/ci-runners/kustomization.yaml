@@ -11,8 +11,7 @@ resources:
   - resources/external-secret-runner-amd64.yaml
   # Ephemeral workers need caches for forgejo runner and docker, so I will keep a simpler config
   # - resources/scale-job.yaml
-  - resources/pvc-runner-cache.yaml
-  - resources/pvc-runner-docker.yaml
+  - resources/pvc-runner-data.yaml
   - resources/statefulset.yaml
   - resources/statefulset-amd64.yaml
   - resources/workspace-gc-script.yaml

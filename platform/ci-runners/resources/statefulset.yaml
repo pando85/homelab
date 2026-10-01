@@ -51,14 +51,16 @@ spec:
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
           volumeMounts:
-            - name: runner-data
+            - name: ci-runner-data
               mountPath: /workspace
+              subPath: workspace
             - name: runner-registration
               mountPath: /registration
             - name: runner-config
               mountPath: /config
-            - name: ci-runner-cache
+            - name: ci-runner-data
               mountPath: /cache
+              subPath: cache
             - name: docker-run
               mountPath: /sock
         - name: daemon
@@ -115,12 +117,15 @@ spec:
           volumeMounts:
             - name: docker-certs
               mountPath: /certs
-            - name: ci-runner-docker
+            - name: ci-runner-data
               mountPath: /var/lib/docker
-            - name: runner-data
+              subPath: docker
+            - name: ci-runner-data
               mountPath: /workspace
-            - name: ci-runner-cache
+              subPath: workspace
+            - name: ci-runner-data
               mountPath: /cache
+              subPath: cache
             - name: docker-run
               mountPath: /sock
           resources:
@@ -256,8 +261,9 @@ spec:
           volumeMounts:
             - name: docker-run
               mountPath: /sock
-            - name: ci-runner-docker
+            - name: ci-runner-data
               mountPath: /var/lib/docker
+              subPath: docker
               readOnly: true
           resources:
             requests:
@@ -272,8 +278,9 @@ spec:
             - sh
             - /scripts/cleanup.sh
           volumeMounts:
-            - name: runner-data
+            - name: ci-runner-data
               mountPath: /workspace
+              subPath: workspace
             - name: workspace-gc-script
               mountPath: /scripts
           resources:
@@ -291,10 +298,9 @@ spec:
         runAsGroup: 1001
         runAsUser: 1001
       volumes:
-        - name: runner-data
-          emptyDir:
-            medium: Memory
-            sizeLimit: 8Gi
+        - name: ci-runner-data
+          persistentVolumeClaim:
+            claimName: ci-runner-data
         - name: runner-config
           secret:
             secretName: runner-config
@@ -305,12 +311,6 @@ spec:
           emptyDir: {}
         - name: docker-run
           emptyDir: {}
-        - name: ci-runner-cache
-          persistentVolumeClaim:
-            claimName: ci-runner-cache
-        - name: ci-runner-docker
-          persistentVolumeClaim:
-            claimName: ci-runner-docker
         - name: workspace-gc-script
           configMap:
             name: workspace-gc-script

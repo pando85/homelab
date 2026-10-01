@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: ci-runner-docker
+  name: ci-runner-data
   labels:
     app.kubernetes.io/name: ci-runner
   annotations:
@@ -9,6 +9,7 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  storageClassName: fast-ci-zfspv
   resources:
     requests:
-      storage: 50Gi
+      storage: 64Gi
