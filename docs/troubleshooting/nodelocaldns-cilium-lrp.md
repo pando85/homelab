@@ -28,18 +28,45 @@ Multiple interacting bugs in Cilium v1.18+/v1.19's CiliumLocalRedirectPolicy (LR
 3. **TCX attachment mode** (v1.19 default on kernel 6.6+): Cilium 1.19 switched from tc to tcx
    BPF attachment. PR #45740 fixed silent packet drops in tcx hooks. Compounds LRP issues.
 
+The direct-CoreDNS workaround is intentionally retained until the native upstream-service path is
+revalidated against the current Cilium version. Do not replace it just because the upstream Cilium
+example uses `kube-dns-upstream` as a normal ClusterIP Service; that path previously looped in this
+cluster.
+
 ## Architecture
 
-The current solution uses `serviceMatcher` LRP with a sidecar for dynamic upstream discovery:
+The current solution uses `serviceMatcher` LRP and forwards cache misses directly to the Ready
+CoreDNS pod IPs, bypassing the LRP-matched `kube-dns` ClusterIP:
 
 ```
 Pod → kube-dns (10.43.0.10) → Cilium LRP serviceMatcher → nodelocaldns
                                                             ↓ cache miss
-                                                    forward to CoreDNS pod IPs
-                                                    (discovered dynamically by
-                                                    corefile-watcher sidecar via
-                                                    kube-dns-upstream headless service)
+                                                    CoreDNS pod IPs
+                                                    (from EndpointSlices)
 ```
+
+Corefile generation has two phases:
+
+```
+corefile-init
+  └─ discover Ready kube-dns-upstream EndpointSlice addresses
+     └─ atomically write /etc/coredns/Corefile.base
+        └─ node-cache starts and generates /etc/coredns/Corefile
+
+corefile-watcher
+  └─ watch EndpointSlice changes
+     └─ atomically replace Corefile.base only with a valid non-empty endpoint set
+        └─ node-cache config sync regenerates Corefile and CoreDNS reloads it
+```
+
+`Corefile.base` is deliberate. `node-cache` treats `<-conf>.base` as its source template and owns
+the generated `Corefile`; the watcher must not write `Corefile` directly.
+
+The init container and watcher use a pinned kubectl image. They do not install packages or download
+kubectl at runtime, so DNS startup does not depend on `dl.k8s.io` or Alpine package repositories.
+If the API cannot be queried or there are no Ready CoreDNS endpoints, the init container waits and
+`node-cache` does not start with an empty/stale configuration. After startup, watcher failures leave
+the last valid `Corefile.base` untouched.
 
 Key files:
 - `system/kube-system/resources/nodelocaldns/` — all nodelocaldns resources
@@ -52,40 +79,48 @@ Key files:
 # 1. Check nodelocaldns and cilium pods on affected node
 kubectl --context=grigri get pods -n kube-system -l k8s-app=node-local-dns -o wide
 
+# If the pod is stuck in init, inspect initial endpoint discovery
+kubectl --context=grigri logs -n kube-system <nodelocaldns-pod> -c corefile-init --tail=20
+
 # 2. Check if LRP is redirecting correctly
 kubectl --context=grigri exec -n kube-system cilium-<node-pod> -- \
   cilium-dbg service list | grep -E 'kube-dns|LocalRedirect'
 
 # Should show LocalRedirect for kube-dns (10.43.0.10:53) pointing to nodelocaldns pod IP
 
-# 3. Check sidecar discovered CoreDNS IPs
-kubectl --context=grigri logs -n kube-system <nodelocaldns-pod> -c corefile-watcher --tail=5
+# 3. Check watcher endpoint discovery
+kubectl --context=grigri logs -n kube-system <nodelocaldns-pod> -c corefile-watcher --tail=20
 
-# 4. Check generated Corefile has pod IPs (not 10.43.0.10)
+# 4. Check the base and generated Corefiles contain CoreDNS pod IPs, not 10.43.0.10
+kubectl --context=grigri exec -n kube-system <nodelocaldns-pod> -c node-cache -- \
+  cat /etc/coredns/Corefile.base
 kubectl --context=grigri exec -n kube-system <nodelocaldns-pod> -c node-cache -- \
   cat /etc/coredns/Corefile
 
-# 5. Test DNS from a pod
+# 5. Compare with current Ready CoreDNS EndpointSlices
+kubectl --context=grigri get endpointslices -n kube-system \
+  -l kubernetes.io/service-name=kube-dns-upstream -o wide
+
+# 6. Test DNS from a pod
 kubectl --context=grigri exec -n <ns> <pod> -- nslookup kubernetes.default.svc.cluster.local
 ```
 
 ## Fix / Workaround
 
-If DNS breaks after a node reboot:
+If DNS breaks after a node reboot and the generated upstream addresses are correct:
 
 ```bash
 # Restart cilium pod on the affected node
 kubectl --context=grigri delete pod cilium-<node-pod> -n kube-system
 ```
 
-If sidecar hasn't discovered endpoints:
+If endpoint discovery is failing, inspect the init/watcher logs and the headless Service endpoints.
+A recreated nodelocaldns pod will not start `node-cache` until it can generate a valid initial
+`Corefile.base`.
 
 ```bash
-# Check kube-dns-upstream endpoints exist
-kubectl --context=grigri get endpoints kube-dns-upstream -n kube-system
-
-# Restart nodelocaldns to force sidecar rediscovery
-kubectl --context=grigri rollout restart daemonset/nodelocaldns -n kube-system
+kubectl --context=grigri get endpointslices -n kube-system \
+  -l kubernetes.io/service-name=kube-dns-upstream -o wide
 ```
 
 ## Observed Incident: grigri Node Reboot (2026-06-05)
@@ -126,25 +161,42 @@ behavior). When the pipe closes, the `while` loop exits, the script completes, a
 restarts the container. The actual `node-cache` container has only 4 restarts from node
 reboots.
 
-**Fix:** Wrap the watch loop in an infinite reconnect loop:
+**Fix:** Wrap the watch loop in an infinite reconnect loop. The current watcher reconnects after
+both normal watch closure and command failure and keeps the last valid Corefile while disconnected.
 
-```sh
-update_corefile
-while true; do
-  kubectl get endpointslices -n kube-system \
-    -l kubernetes.io/service-name=kube-dns-upstream --watch -o name \
-    | while read -r _; do update_corefile; done
-  echo "$(date): watch connection closed, reconnecting..."
-  sleep 1
-done
-```
+## DNS Bootstrap Failure After Reboot (2026-10-01)
 
-**Diagnosis:**
-```bash
-# Check which container is restarting
-kubectl --context=grigri get pod -n kube-system <nodelocaldns-pod> -o json | \
-  jq '.status.containerStatuses[] | {name, restartCount}'
+**Symptom:** After `prusik` rebooted, cluster DNS failed for roughly 15 minutes. Blackbox probes
+reported lookup timeouts for internal and external targets; Vault and Redis workloads were also
+affected.
 
-# Check sidecar logs — should show "watch connection closed, reconnecting..."
-kubectl --context=grigri logs -n kube-system <nodelocaldns-pod> -c corefile-watcher --tail=5
-```
+**Contributing failures:**
+
+1. The watcher ran from `alpine` and installed `curl`, then downloaded the latest `kubectl` from
+   `dl.k8s.io` every time the container started. A failure anywhere in that external bootstrap path
+   left the watcher without kubectl.
+2. `corefile-watcher` and `node-cache` were ordinary sibling containers, so Kubernetes could start
+   `node-cache` before the watcher had generated a Corefile.
+3. The watcher wrote `/etc/coredns/Corefile` directly even though `node-cache` expects
+   `/etc/coredns/Corefile.base` as its source configuration. This produced the misleading
+   `Failed to read ... Corefile.base` error and bypassed node-cache's normal config-sync ownership.
+4. The writable configuration lived in an `emptyDir`, so a newly created pod had no safe initial
+   configuration until dynamic discovery succeeded.
+
+**Fix (issue #4553):**
+
+- Use a pinned image with kubectl and required tools preinstalled; no runtime package installation
+  or binary download.
+- Add `corefile-init`, which waits for at least one Ready CoreDNS EndpointSlice address and writes
+  a validated `Corefile.base` before any regular container starts.
+- Make the watcher update `Corefile.base`, leaving `node-cache` responsible for the effective
+  `Corefile` and reload lifecycle.
+- Filter out explicitly unready EndpointSlice entries, de-duplicate addresses, reject empty or
+  incompletely rendered configurations, and write via temporary-file + atomic rename.
+- On watcher/API failure after startup, preserve the last valid base configuration rather than
+  replacing it with an empty or stale partial render.
+
+This hardens the existing direct-pod-IP workaround; it does **not** claim that the historical Cilium
+LRP redirect-loop bug still exists in the current release. Re-evaluate the native
+`kube-dns-upstream` ClusterIP path separately with reboot/restart testing before removing the
+workaround.
