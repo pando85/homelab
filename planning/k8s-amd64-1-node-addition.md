@@ -187,7 +187,7 @@ clears in under a minute.
 
 ### TODO-6 — make the node usable (separate commits, strictly ordered)
 
-- [ ] **TODO-6.1** Label the ZFS nodes. Add to `metal/inventory/host_vars/prusik.yml` and
+- [x] **TODO-6.1** Label the ZFS nodes — **done**, `958c42fa`, applied and verified. Add to `metal/inventory/host_vars/prusik.yml` and
       `grigri.yml`:
       ```yaml
       node_labels:
@@ -195,11 +195,26 @@ clears in under a minute.
       ```
       then `cd metal && ANSIBLE_EXTRA_ARGS="--limit grigri,prusik -t node-labels" make cluster`
       (human-only, same `make cluster` restriction). Requires `metal/kubeconfig.yaml` from TODO-4.1.
-- [ ] **TODO-6.2** **Only after 6.1 is verified**, change `system/zfs-localpv/values.yaml:10-11`
+- [x] **TODO-6.2** **Only after 6.1 is verified** — **done**, `675643fe`. Change `system/zfs-localpv/values.yaml:10-11`
       `zfsNode.nodeSelector` from `kubernetes.io/arch: amd64` to `storage.zfspv: "true"`.
       **Ordering is critical**: flipping the selector first leaves `zfsNode` with no eligible node and
       breaks PVC mounts cluster-wide. The upstream chart renders only `nodeSelector`/`tolerations`
       (`zfs-node.yaml:164-167,172-175`) — there is no affinity key, so a label is the only mechanism.
+      **Result:** applied in the required order and verified clean. The scoped
+      `-t node-labels --limit grigri,prusik` run was inert apart from the label itself — with that tag
+      the ntp/gvisor/k3s roles are fully filtered, so play 1 only gathered facts and the recap was
+      `ok=4 changed=0 failed=0` per host. `storage.zfspv=true` landed on grigri and prusik and is
+      absent on k8s-amd64-1. `helm template` confirmed the DaemonSet renders `storage.zfspv: "true"`
+      (quoted, so YAML does not coerce it to a boolean) and that `zfsController` has no nodeSelector
+      and is unchanged. ArgoCD auto-synced (`automated: {prune, selfHeal}`) to `Synced`/`Healthy`; the
+      DaemonSet reports `desired=2 ready=2` with pods only on prusik and grigri. **No volume
+      breakage**: 85 Bound PVCs and 0 non-Bound, unchanged from baseline, and no pod restarted in the
+      5 minutes after the rollout. Three warnings appeared and all are unrelated —
+      `FailedPreStopHook` on the three terminating node pods (normal for a rollout, mounts verified
+      fine afterwards), and two new TODO-8 items: `vector-agent-wqd44` on grigri at **19 restarts over
+      5d16h** (chronic; the other vector-agent has 1 restart in 5d), and `SnapshotDestroyFailed` on
+      two zfssnapshot CRs that are **180 and 189 days old** and cannot be reaped because they have
+      dependent clones.
 - [ ] **TODO-6.3** Add a bindable StorageClass for the node. Nothing exists today: k3s' bundled
       local-storage is disabled server-side (`metal/roles/k3s/defaults/main.yml:8-12`) and cannot be
       re-enabled per node. Create `system/local-path/` copying the kustomization + `helmCharts:`
@@ -263,6 +278,14 @@ clears in under a minute.
       problem as `ntp_daemon` had). Fixing it rewrites prusik's live `ntp.conf` and restarts NTP.
 - [ ] Consider committing the variable-precedence test harness (see Reference Information) so future
       ansible-core bumps can be validated without a live fleet.
+- [ ] `vector-agent-wqd44` on grigri has restarted **19 times in 5d16h** (liveness probe timing out on
+      `:8686/health`, readiness 503), while the other two vector-agents have 0 and 1 restart. Grigri
+      is at 55% memory requests, so this may be pressure-induced. It means grigri's log shipping to
+      Loki has intermittent gaps. Found during the TODO-6.2 rollout; not caused by it.
+- [ ] Two `zfssnapshot` CRs **180 and 189 days old** (`snapshot-01bea748…`, `snapshot-3d947adf…`, both
+      on `datasets/openebs/config-qbittorrent`) fail retention with `SnapshotDestroyFailed: snapshot
+      has dependent clones`. Snapscheduler retries forever and can never reap them. Needs the clones
+      identified and either promoted or destroyed first.
 
 ### TODO-9 — hardware actions on k8s-amd64-1 (all physical, none automatable)
 
