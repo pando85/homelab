@@ -140,7 +140,7 @@ spec:
               # they land in THIS container's cgroup - this limit bounds them, not
               # the runner's. Under-sizing it would silently cap docker jobs below
               # the runner's own budget.
-              memory: "5Gi"
+              memory: "4608Mi"
               cpu: "3"
           startupProbe:
             exec:
@@ -380,9 +380,10 @@ spec:
           configMap:
             name: workspace-gc-script
       # No pod-level `resources` block. Limits are per-container and sum to
-      # ~10.2Gi against this node's 12.53Gi allocatable, which is what keeps the
-      # pod - rather than the node - as the OOM boundary. The legacy StatefulSet
-      # notes pod-level resources do not work under the kata runtime.
+      # ~9.4Gi, which with the ~2.7Gi of limits already on this node keeps the
+      # total under its 12.53Gi allocatable plus the 500Mi eviction reserve -
+      # that is what makes the pod, rather than the node, the OOM boundary. The
+      # legacy StatefulSet notes pod-level resources do not work under kata.
       restartPolicy: Always
       shareProcessNamespace: true
       terminationGracePeriodSeconds: 30
