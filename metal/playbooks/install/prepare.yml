@@ -15,7 +15,9 @@
     - setup
 
 - name: Setup swap
-  hosts: prusik
+  hosts:
+    - prusik
+    - k8s-amd64-1
   roles:
     - swap
 
