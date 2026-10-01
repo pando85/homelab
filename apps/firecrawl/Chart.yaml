@@ -1,0 +1,8 @@
+apiVersion: v2
+name: firecrawl
+version: 0.0.0
+description: Firecrawl self-hosted web scraping API for Hermes Agent
+dependencies:
+  - name: app-template
+    version: 5.2.1
+    repository: https://bjw-s-labs.github.io/helm-charts/

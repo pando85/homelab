@@ -1,0 +1,12 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: firecrawl-postgres-backups
+  namespace: firecrawl
+spec:
+  retention:
+    maxCount: 20
+  schedule: "0 1 * * *"
+  claimSelector:
+    matchLabels:
+      backup: firecrawl-postgres-zfs
