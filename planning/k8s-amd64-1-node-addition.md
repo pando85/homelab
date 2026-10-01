@@ -6,8 +6,8 @@ Add a third K3s node — ASUS Mini PC PN51-E1 (Ryzen 5 5500U, 16 GiB RAM, 119 Gi
 pool**) running **Ubuntu Server 26.04.1** — as an untainted amd64 worker, then rebalance stateless
 workloads onto it to relieve prusik's memory pressure.
 
-**Status: Phases 0-5 complete. The node is joined, `Ready` and schedulable. Two items need a human:
-the pfSense BGP neighbour (TODO-5.5) and one chrony restart (TODO-5.6).**
+**Status: Phases 0-5 complete — all nine TODO-5 checks pass. The node is joined, `Ready`,
+schedulable, BGP `established` to pfSense, and synced to `pfsense.grigri`. Next: TODO-6.**
 
 Committed so far:
 
@@ -18,6 +18,8 @@ Committed so far:
 | `628000b6` | `docs: Record k8s-amd64-1 node addition learnings and hardware findings` |
 | `1c3f5a48` | `metal: Render k3s config without the control plane's gathered facts` |
 | `baa2eb43` | `metal: Flush time daemon handlers inside the ntp wrapper` |
+| `6692d4e3` | `docs: Record phase 4/5 results for k8s-amd64-1 and the scoped-run traps` |
+| `da510eac` | `docs: Correct the BGP impact claim after verifying the established session` |
 
 Why this node exists: prusik is RAM-starved, not disk-starved. Measured 7d — **210 GiB of container
 limits / 44.7 GiB of requests on 62 GiB physical**, `node_memory_MemAvailable_bytes` 7d minimum
@@ -147,13 +149,21 @@ undisturbed — identical k3s `ActiveEnterTimestamp` (prusik `Thu 2026-10-01 05:
       prefixes into its kernel table (both have exactly 7 routes, default via DHCP), so there is no
       functional impact. Matching it would mean giving the new pfSense neighbour the same peer-group /
       address-family config as the existing ones.
-- [ ] **TODO-5.6** **Partly done — needs one restart.** `/etc/chrony/chrony.conf` is correct
-      (`server pfsense.grigri iburst`, no stray `/etc/ntp.conf`), so the host_vars precedence worked.
-      But chrony is still running the distro config and syncing to `canonical.com`, because the
-      restart handler was queued when the first run failed and was discarded. Fixed for the future by
-      `baa2eb43`; the current node needs the one-off restart in
-      `docs/troubleshooting/ansible-limit-cross-host-facts.md#apply`. For reference prusik and grigri
-      both run ntpsec against `192.168.192.1`, and `pfsense.grigri` resolves from the new node.
+- [x] **TODO-5.6** **Resolved.** `/etc/chrony/chrony.conf` was correct from the start (`server
+      pfsense.grigri iburst`, no stray `/etc/ntp.conf`), so the host_vars precedence worked — but the
+      daemon was still running the distro config against `canonical.com`, because the restart handler
+      was queued when the first run failed and then discarded. A scoped Ansible `systemd
+      state=restarted` fixed it: `chronyc sources` now shows only `^* pfsense.grigri`, tracking
+      `Reference ID C0A8C001 (pfsense.grigri)`, stratum 3, RMS offset 11.7 us. prusik and grigri run
+      ntpsec against the same `192.168.192.1`, so the fleet is consistent.
+      Note this needed a one-off command rather than a re-run, and why: in run 2 every
+      `geerlingguy.ntp` task reported `ok` — the template found the file already correct so it
+      notified nothing, the service task is `state: started` so an active daemon is a no-op, and
+      `flush_handlers` therefore had an empty queue (the only handler that ran was `k3s : Restart
+      k3s`). Ansible converges file *content*, never "is the running process holding that content".
+      `baa2eb43` prevents recurrence when the failure is in a *later* role; it does not cover a
+      failure inside `geerlingguy.ntp` itself, which is what the open `force_handlers` discussion is
+      about. See `docs/troubleshooting/ansible-limit-cross-host-facts.md`.
 - [x] **TODO-5.7** gVisor works: `runsc release-20260928.0` installed on resolute, and containerd
       lists `runsc` alongside `runc`. **Correction to the assumption behind this item:** k3s writes
       the generated config to `config.toml` (not `config-v3.toml`) even though it is `version = 3`,
@@ -283,8 +293,7 @@ clears in under a minute.
 - [x] `make requirements-ansible` exits 0
 - [x] Phase 2 prepare + all 10 gates
 - [x] Phase 4 join — `ok=40 changed=11 failed=0`, prusik/grigri provably untouched
-- [x] Phase 5 verification (TODO-5.1 … 5.9) — 7 of 9 pass; TODO-5.5 (pfSense BGP neighbour) and
-      TODO-5.6 (one chrony restart) are handed to a human
+- [x] Phase 5 verification (TODO-5.1 … 5.9) — **9 of 9 pass**
 - [ ] Phase 6 (TODO-6.1 … 6.6)
 
 ## Troubleshooting
@@ -370,5 +379,18 @@ TODO-8.* (hygiene) independent
    migrating.
 4. **local-path StorageClass naming and reclaim policy.**
 5. **ingress-nginx**: keep the weight-100 prusik preference. `externalTrafficPolicy: Local` with a
-   BGP LB IP (`system/ingress-nginx/values.yaml:94-96`) means a replica on a weak-CPU 2.5 GbE node
-   would add a hop and a bandwidth ceiling to Jellyfin streams.
+   BGP LB IP (`system/ingress-nginx/values.yaml:94-96`) means a replica on this node would add a hop
+   and a bandwidth ceiling to Jellyfin streams — and the ceiling is lower than first assumed, since
+   `enp2s0` negotiates **1000 Mb/s**, not 2.5 GbE (TODO-9.4).
+6. **`force_handlers` in `metal/ansible.cfg` — undecided, under discussion.** It would have prevented
+   the stale chrony config (TODO-5.6), but it is global and the k3s role fans several independent
+   files (`config.yaml`, `k3s.service`, the containerd template, the `certs.d` entries) into one
+   shared `Restart k3s` handler. Our own failed run produced exactly that partial write — the loop
+   reported `failed` for `config.yaml.j2` and `changed` for `k3s.service.j2` — so on prusik the same
+   pattern could restart the sole control plane into a half-written config. `force_handlers` cannot
+   tell the benign case (handler owned by an earlier, unrelated role) from that one. Preferred
+   alternatives, both scoped to the ntp wrapper and idempotent: compare the config file's mtime
+   against the service's `ActiveEnterTimestamp` and restart when the file is newer, or assert that
+   `chronyc sources` actually lists `ntp_servers`. Independently of this decision, making the k3s
+   role's config writes atomic would remove the partial-write hazard, and `force_handlers` should not
+   be enabled before that lands.
