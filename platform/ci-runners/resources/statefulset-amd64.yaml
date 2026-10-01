@@ -45,14 +45,15 @@ spec:
               memory: "1Gi"
               cpu: "200m"
             limits:
-              # Sized so this pod's limits plus the ~2.7Gi of limits already on
-              # this node stay under its 12.53Gi allocatable, with room for the
-              # 500Mi eviction reserve: a runaway job must OOM-kill this pod, not
-              # the node. `:host`-label jobs execute inside THIS container, so
-              # this limit is what bounds them. capacity: 5 can demand ~17GiB
-              # (ci-runner-0 peaks at 17.4GiB), so OOM kills are expected and
-              # accepted - the limit only decides what dies.
-              memory: "4608Mi"
+              # 12Gi gives the runner headroom for moderate concurrent loads. At
+              # capacity 5, jobs can still demand ~17.4GiB (measured on prusik),
+              # so OOM kills remain possible at full concurrency. The pod's total
+              # limits (12Gi + 4.5Gi + 192Mi = 16.7Gi) now exceed the node's
+              # 12.53Gi allocatable, so the "pod dies before node" property is
+              # gone - if every container peaks simultaneously, the node itself
+              # will pressure. Accepted trade-off: more runner headroom at the
+              # cost of losing the strict OOM boundary.
+              memory: "12Gi"
               cpu: "6"
           securityContext:
             privileged: true
@@ -382,10 +383,10 @@ spec:
           configMap:
             name: workspace-gc-script
       # No pod-level `resources` block. Limits are per-container and sum to
-      # ~9.4Gi, which with the ~2.7Gi of limits already on this node keeps the
-      # total under its 12.53Gi allocatable plus the 500Mi eviction reserve -
-      # that is what makes the pod, rather than the node, the OOM boundary. The
-      # legacy StatefulSet notes pod-level resources do not work under kata.
+      # ~16.7Gi, which exceeds this node's 12.53Gi allocatable. The runner's
+      # 12Gi limit prioritizes headroom for concurrent jobs over the strict
+      # "pod dies before node" property. The legacy StatefulSet notes
+      # pod-level resources do not work under kata.
       restartPolicy: Always
       shareProcessNamespace: true
       terminationGracePeriodSeconds: 30
