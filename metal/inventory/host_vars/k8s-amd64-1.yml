@@ -24,3 +24,25 @@ k3s_kubelet_extra_args:
   - kube-reserved=cpu=0.5,memory=512Mi,ephemeral-storage=1Gi
   - system-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi
   - eviction-hard=memory.available<500Mi,nodefs.available<10%
+
+# Node-local storage for the ci-runner-amd64 pod (platform/ci-runners). hostPath
+# rather than PVCs: this node has no ZFS pool and there is deliberately no local
+# StorageClass (planning/k8s-amd64-1-node-addition.md, TODO-6.3).
+# Ownership is declared here because kubelet applies NO fsGroup management to
+# hostPath volumes, so the pod's supplementalGroups cannot fix it - the runner is
+# uid 1001 while dockerd runs as root. Paths must pre-exist: the pod mounts them
+# with `type: Directory`, which fails loudly instead of creating a root-owned dir.
+# Applied by playbooks/install/k8s-ci-runner-dirs.yml (-t ci-runner-dirs).
+ci_runner_dirs:
+  - path: /srv/ci-runner/docker
+    owner: root
+    group: root
+    mode: "0711"
+  - path: /srv/ci-runner/cache
+    owner: "1001"
+    group: "1001"
+    mode: "0775"
+  - path: /srv/ci-runner/workspace
+    owner: "1001"
+    group: "1001"
+    mode: "0775"

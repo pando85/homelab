@@ -1,0 +1,31 @@
+---
+# Creates the hostPath directories that the ci-runner-amd64 pod mounts.
+#
+# hostPath is used instead of PVCs because k8s-amd64-1 has no ZFS pool and there
+# is deliberately no local StorageClass (planning/k8s-amd64-1-node-addition.md,
+# TODO-6.3). kubelet applies no fsGroup management to hostPath volumes, so the
+# owner/group/mode the pod needs cannot come from its securityContext - it has to
+# be declared here. The pod mounts these paths with `type: Directory`, so they
+# must exist before it can be scheduled.
+#
+# Hosts opt in by defining `ci_runner_dirs`; it is a no-op elsewhere.
+#
+# Scoped run:
+#   cd metal && ANSIBLE_EXTRA_ARGS="-t ci-runner-dirs --limit k8s-amd64-1" make cluster
+- name: Create CI runner host directories
+  hosts: k3s_cluster
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Create CI runner hostPath directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.group }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ ci_runner_dirs | d([]) }}"
+      loop_control:
+        label: "{{ item.path }} {{ item.owner }}:{{ item.group }} {{ item.mode }}"
+      tags:
+        - ci-runner-dirs
