@@ -1,6 +1,6 @@
 -- Source: https://raw.githubusercontent.com/firecrawl/firecrawl/v2.10.19/apps/nuq-postgres/nuq.sql
 -- Git ref: v2.10.19
--- Adapted: 2026-10-02 for idempotent re-runs via init container
+-- Adapted: for idempotent re-runs via init container
 -- Changes: removed ALTER SYSTEM statements (set via Zalando CR instead),
 --          removed SELECT pg_reload_conf(), kept pg_cron jobs (pg_cron available),
 --          CREATE TYPE already guarded upstream with DO $$ / EXCEPTION blocks.

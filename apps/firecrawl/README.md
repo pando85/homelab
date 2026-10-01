@@ -90,8 +90,9 @@ web:
   publica `latest`, así que esa imagen no se puede fijar por versión.
 - **Schema nuq**: el esquema `nuq` no lo crea la app — upstream lo provisiona con una imagen
   Postgres custom. En Zalando/Spilo nadie lo ejecuta, así que se usa un init container
-  `nuq-schema-init` que aplica `files/nuq.sql` (extraído del tag upstream correspondiente). En un
-  bump de versión, re-extraer `nuq.sql` del tag matching.
+  `nuq-schema-init` que aplica `files/nuq.sql`. En un bump de versión, Renovate ejecuta
+  `apps/firecrawl/hack/update-nuq-sql.sh` automáticamente; guards de pre-commit y deploy-time
+  verifican la sincronización.
 - **`cron.database_name`**: los 36 jobs de `pg_cron` en `nuq.sql` requieren
   `cron.database_name=firecrawl` en el CR de Zalando. Es un GUC que requiere restart — borrar el
   pod de postgres una vez después de aplicar el cambio.

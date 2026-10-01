@@ -24,7 +24,14 @@ app-template:
             - sh
             - -c
             - |
-              echo "Bootstrapping nuq schema for firecrawl 2.10.19..."
+              actual=$(sed -n 's/^-- Git ref: v//p' /schema/nuq.sql)
+              expected=$(cat /schema/expected-version)
+              if [ "$actual" != "$expected" ]; then
+                echo "ERROR: nuq.sql is for v$actual but firecrawl image is v$expected." >&2
+                echo "Run apps/firecrawl/hack/update-nuq-sql.sh $expected and commit." >&2
+                exit 1
+              fi
+              echo "Bootstrapping nuq schema for firecrawl v$expected..."
               until pg_isready -q -t 5 -h firecrawl-postgres -U "$DATABASE_USERNAME"; do
                 sleep 2
               done
@@ -135,7 +142,14 @@ app-template:
             - sh
             - -c
             - |
-              echo "Bootstrapping nuq schema for firecrawl 2.10.19..."
+              actual=$(sed -n 's/^-- Git ref: v//p' /schema/nuq.sql)
+              expected=$(cat /schema/expected-version)
+              if [ "$actual" != "$expected" ]; then
+                echo "ERROR: nuq.sql is for v$actual but firecrawl image is v$expected." >&2
+                echo "Run apps/firecrawl/hack/update-nuq-sql.sh $expected and commit." >&2
+                exit 1
+              fi
+              echo "Bootstrapping nuq schema for firecrawl v$expected..."
               until pg_isready -q -t 5 -h firecrawl-postgres -U "$DATABASE_USERNAME"; do
                 sleep 2
               done
@@ -220,7 +234,14 @@ app-template:
             - sh
             - -c
             - |
-              echo "Bootstrapping nuq schema for firecrawl 2.10.19..."
+              actual=$(sed -n 's/^-- Git ref: v//p' /schema/nuq.sql)
+              expected=$(cat /schema/expected-version)
+              if [ "$actual" != "$expected" ]; then
+                echo "ERROR: nuq.sql is for v$actual but firecrawl image is v$expected." >&2
+                echo "Run apps/firecrawl/hack/update-nuq-sql.sh $expected and commit." >&2
+                exit 1
+              fi
+              echo "Bootstrapping nuq schema for firecrawl v$expected..."
               until pg_isready -q -t 5 -h firecrawl-postgres -U "$DATABASE_USERNAME"; do
                 sleep 2
               done

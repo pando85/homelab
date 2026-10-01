@@ -5,3 +5,4 @@ metadata:
 data:
   nuq.sql: |
 {{ .Files.Get "files/nuq.sql" | indent 4 }}
+  expected-version: {{ index .Values "app-template" "controllers" "api" "containers" "app" "image" "tag" | quote }}

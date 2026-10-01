@@ -308,8 +308,9 @@ matters there.
   provider rewrite that preserves `redirect_to`. See `docs/troubleshooting/readest-android-oauth.md`
 - Firecrawl's `nuq` queue schema is NOT created by the app — upstream provisions it via a custom
   Postgres image (`docker-entrypoint-initdb.d`). On Zalando/Spilo nobody runs it, so an idempotent
-  `nuq-schema-init` init container applies `files/nuq.sql`. On version bump, re-extract from the
-  matching upstream tag. `cron.database_name` is a restart-required GUC — delete the postgres pod
+  `nuq-schema-init` init container applies `files/nuq.sql`. On version bump, Renovate runs
+  `apps/firecrawl/hack/update-nuq-sql.sh` automatically; pre-commit and deploy-time guards verify
+  sync. `cron.database_name` is a restart-required GUC — delete the postgres pod
   once after setting it. See `docs/troubleshooting/firecrawl-selfhost-deployment.md`
 
 ## Subsystem Docs

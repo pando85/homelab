@@ -31,3 +31,11 @@ repos:
       - id: commitlint
         stages: [commit-msg]
         additional_dependencies: ['@commitlint/config-conventional']
+  - repo: local
+    hooks:
+      - id: check-nuq-version
+        name: Check firecrawl nuq.sql version matches image tag
+        entry: apps/firecrawl/hack/check-nuq-version.sh
+        language: script
+        files: apps/firecrawl/(values\.yaml|files/nuq\.sql)
+        pass_filenames: false

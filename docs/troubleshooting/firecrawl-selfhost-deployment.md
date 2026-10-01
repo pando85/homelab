@@ -90,14 +90,28 @@ directory is available to the Redis process.
 
 ### 3. nuq schema init container
 
-`apps/firecrawl/files/nuq.sql` (extracted from upstream tag `v2.10.19`, `ALTER SYSTEM` stripped,
-advisory-lock wrapped, type creation guarded) is rendered into a ConfigMap
-`firecrawl-nuq-schema` and applied by an idempotent `nuq-schema-init` psql init container on
-api/worker/nuq-worker deployments.
+`apps/firecrawl/files/nuq.sql` is auto-generated from the upstream firecrawl tag by
+`apps/firecrawl/hack/update-nuq-sql.sh` (removes `ALTER SYSTEM` statements, wraps in advisory
+locks). The SQL is rendered into ConfigMap `firecrawl-nuq-schema` and applied by an idempotent
+`nuq-schema-init` psql init container on api/worker/nuq-worker deployments.
 
-**On version bump:** re-extract `nuq.sql` from the matching upstream tag
-(`apps/nuq-postgres/nuq.sql` in the firecrawl repo) and update the ConfigMap. The init container
-is idempotent (uses `IF NOT EXISTS` guards and advisory locks), so it is safe to re-run.
+**Version sync automation:**
+- **Generator script**: `apps/firecrawl/hack/update-nuq-sql.sh [VERSION]` downloads upstream SQL
+  and applies transforms. Defaults to the firecrawl image tag from `values.yaml`.
+- **Pre-commit guard**: `apps/firecrawl/hack/check-nuq-version.sh` verifies the Git ref in
+  `files/nuq.sql` matches the image tag in `values.yaml`. Runs automatically via pre-commit hook.
+- **Deploy-time guard**: Init containers compare the SQL's Git ref against the ConfigMap's
+  `expected-version` (rendered from `values.yaml`) and fail fast on mismatch.
+- **Renovate post-upgrade task**: `.github/renovate-config.json` has a `packageRule` for
+  `ghcr.io/firecrawl/firecrawl` that runs `update-nuq-sql.sh` after version bumps, so the SQL is
+  regenerated automatically.
+
+**Manual regeneration** (if automation fails):
+```bash
+apps/firecrawl/hack/update-nuq-sql.sh <NEW_VERSION>
+git add apps/firecrawl/files/nuq.sql
+git commit -m "firecrawl: Regenerate nuq.sql for v<NEW_VERSION>"
+```
 
 ### 4. `cron.database_name`
 
