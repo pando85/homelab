@@ -45,12 +45,14 @@ spec:
               memory: "1Gi"
               cpu: "200m"
             limits:
-              # Sized so the pod's total limits (~10.2Gi) stay under this node's
-              # 12.53Gi allocatable: a runaway job must OOM-kill this pod, not the
-              # node. `:host`-label jobs execute inside THIS container, so this
-              # limit is what bounds them. capacity: 5 can demand ~17GiB
-              # (ci-runner-0 peaks at 17.4GiB), so OOM kills are expected.
-              memory: "5Gi"
+              # Sized so this pod's limits plus the ~2.7Gi of limits already on
+              # this node stay under its 12.53Gi allocatable, with room for the
+              # 500Mi eviction reserve: a runaway job must OOM-kill this pod, not
+              # the node. `:host`-label jobs execute inside THIS container, so
+              # this limit is what bounds them. capacity: 5 can demand ~17GiB
+              # (ci-runner-0 peaks at 17.4GiB), so OOM kills are expected and
+              # accepted - the limit only decides what dies.
+              memory: "4608Mi"
               cpu: "6"
           securityContext:
             privileged: true
