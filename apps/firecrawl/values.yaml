@@ -35,7 +35,7 @@ app-template:
             DATABASE_HOST: firecrawl-postgres
             DATABASE_PORT: "5432"
             DATABASE_NAME: firecrawl
-            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)"
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=disable"
             # SearXNG integration
             SEARXNG_ENDPOINT: "http://searxng.searxng.svc.cluster.local:8080"
             SEARXNG_ENGINES: "google,bing,duckduckgo"
@@ -100,7 +100,20 @@ app-template:
             REDIS_URL: "redis://firecrawl-redis:6379"
             REDIS_RATE_LIMIT_URL: "redis://firecrawl-redis:6379"
             PLAYWRIGHT_MICROSERVICE_URL: "http://firecrawl-playwright:3000"
-            NUQ_DATABASE_URL: "postgresql://postgres:postgres@firecrawl-postgres:5432/postgres"
+            DATABASE_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+            DATABASE_HOST: firecrawl-postgres
+            DATABASE_PORT: "5432"
+            DATABASE_NAME: firecrawl
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=disable"
             USE_DB_AUTHENTICATION: "false"
             ENV: "production"
             LOGGING_LEVEL: "INFO"
@@ -155,7 +168,7 @@ app-template:
             DATABASE_HOST: firecrawl-postgres
             DATABASE_PORT: "5432"
             DATABASE_NAME: firecrawl
-            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)"
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=disable"
             USE_DB_AUTHENTICATION: "false"
             ENV: "production"
             LOGGING_LEVEL: "INFO"
