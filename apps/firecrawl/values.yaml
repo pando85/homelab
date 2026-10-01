@@ -35,7 +35,7 @@ app-template:
             DATABASE_HOST: firecrawl-postgres
             DATABASE_PORT: "5432"
             DATABASE_NAME: firecrawl
-            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=disable"
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):***@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=no-verify"
             # SearXNG integration
             SEARXNG_ENDPOINT: "http://searxng.searxng.svc.cluster.local:8080"
             SEARXNG_ENGINES: "google,bing,duckduckgo"
@@ -113,7 +113,7 @@ app-template:
             DATABASE_HOST: firecrawl-postgres
             DATABASE_PORT: "5432"
             DATABASE_NAME: firecrawl
-            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=disable"
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):***@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=no-verify"
             USE_DB_AUTHENTICATION: "false"
             ENV: "production"
             LOGGING_LEVEL: "INFO"
@@ -168,7 +168,7 @@ app-template:
             DATABASE_HOST: firecrawl-postgres
             DATABASE_PORT: "5432"
             DATABASE_NAME: firecrawl
-            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=disable"
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):***@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)?sslmode=no-verify"
             USE_DB_AUTHENTICATION: "false"
             ENV: "production"
             LOGGING_LEVEL: "INFO"
