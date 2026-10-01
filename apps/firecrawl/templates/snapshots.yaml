@@ -9,4 +9,4 @@ spec:
   schedule: "0 1 * * *"
   claimSelector:
     matchLabels:
-      backup: firecrawl-postgres-zfs
+      cluster-name: firecrawl-postgres

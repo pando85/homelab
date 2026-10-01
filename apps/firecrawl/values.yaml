@@ -3,13 +3,12 @@ app-template:
   controllers:
     # API Service
     api:
-      labels:
-        backup/retain: weekly
       containers:
         app:
           image:
+            # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: latest
+            tag: 2.10.19
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/index.js"]
           env:
@@ -89,8 +88,9 @@ app-template:
       containers:
         app:
           image:
+            # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: latest
+            tag: 2.10.19
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/services/queue-worker.js"]
           env:
@@ -144,8 +144,9 @@ app-template:
       containers:
         app:
           image:
+            # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: latest
+            tag: 2.10.19
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/services/worker/nuq-worker.js"]
           env:
@@ -249,7 +250,7 @@ app-template:
             repository: docker.io/library/redis
             tag: 7.4-alpine
           command: ["redis-server"]
-          args: ["--bind", "0.0.0.0"]
+          args: ["--bind", "0.0.0.0", "--dir", "/data"]
           probes:
             liveness:
               enabled: true
@@ -268,6 +269,16 @@ app-template:
             limits:
               cpu: 200m
               memory: 256Mi
+
+  persistence:
+    redis-data:
+      enabled: true
+      type: emptyDir
+      sizeLimit: 512Mi
+      advancedMounts:
+        redis:
+          app:
+            - path: /data
 
   # Services
   service:
