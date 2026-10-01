@@ -1,0 +1,43 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: monitoring-prometheus-storage.rules
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: storage.rules
+      rules:
+        # There is deliberately no local StorageClass. k8s-amd64-1 has no ZFS pool and
+        # its only intended local consumer (the CI runner) uses hostPath, so a general
+        # purpose provisioner would advertise a capability we do not want: unbacked-up,
+        # unquota'd storage on a weak node.
+        #
+        # The cost of that decision is this footgun: openebs-zfspv is the cluster
+        # default and its allowedTopologies cover only grigri and prusik, so a PVC that
+        # omits storageClassName and whose pod lands on k8s-amd64-1 hangs Pending
+        # forever instead of failing loudly. This alert is the guard that replaces it.
+        - alert: PersistentVolumeClaimPending
+          annotations:
+            summary: PVC stuck in Pending
+            description: |
+              PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has been
+              Pending for more than 10 minutes. Check its storageClassName, and whether
+              any node in that class's allowedTopologies can host the pod claiming it.
+          expr: kube_persistentvolumeclaim_status_phase{phase="Pending"} == 1
+          for: 10m
+          labels:
+            severity: warning
+        # A Lost PVC means the backing PersistentVolume is gone, so the data is
+        # unreachable and the workload cannot start. Distinct from Pending: this is
+        # data loss rather than a scheduling or topology problem.
+        - alert: PersistentVolumeClaimLost
+          annotations:
+            summary: PVC lost its backing volume
+            description: |
+              PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is in phase
+              Lost: its PersistentVolume no longer exists, so the data is unreachable.
+          expr: kube_persistentvolumeclaim_status_phase{phase="Lost"} == 1
+          for: 5m
+          labels:
+            severity: critical

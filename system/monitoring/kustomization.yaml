@@ -45,6 +45,7 @@ resources:
   - resources/pfsense-node-exporter-dashboard-configmap.yaml
   - resources/pfsense-node-exporter-scrape-config.yaml
   - resources/smartctl-exporter-prometheus-rules.yaml
+  - resources/storage-prometheus-rules.yaml
   - resources/temperature-dashboard-configmap.yaml
   - resources/temperature-prometheus-rules.yaml
   - resources/z800-gpu-scrape-config.yaml
