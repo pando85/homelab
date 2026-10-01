@@ -52,89 +52,170 @@ data:
         forward . /etc/resolv.conf
         prometheus :9253
     }
-  corefile-watcher.sh: |
-    #!/usr/bin/env bash
-    set -uo pipefail
+  corefile-watcher.py: |
+    #!/usr/bin/env python3
+    import argparse
+    import ipaddress
+    import json
+    import os
+    from pathlib import Path
+    import ssl
+    import tempfile
+    import time
+    from datetime import datetime, timezone
+    import urllib.parse
+    import urllib.request
 
-    readonly NAMESPACE="kube-system"
-    readonly ENDPOINT_SLICE_LABEL="kubernetes.io/service-name=kube-dns-upstream"
-    readonly CORE_FILE_TEMPLATE="/etc/coredns-template/Corefile.template"
-    readonly CORE_FILE_BASE="/etc/coredns/Corefile.base"
+    NAMESPACE = "kube-system"
+    SERVICE_NAME = "kube-dns-upstream"
+    ENDPOINT_SLICE_LABEL = f"kubernetes.io/service-name={SERVICE_NAME}"
+    CORE_FILE_TEMPLATE = Path("/etc/coredns-template/Corefile.template")
+    CORE_FILE_BASE = Path("/etc/coredns/Corefile.base")
+    SERVICE_ACCOUNT_DIR = Path("/var/run/secrets/kubernetes.io/serviceaccount")
+    TOKEN_FILE = SERVICE_ACCOUNT_DIR / "token"
+    CA_FILE = SERVICE_ACCOUNT_DIR / "ca.crt"
+    PLACEHOLDER = "UPSTREAM_DNS_SERVERS"
+    INIT_RETRY_SECONDS = 2
+    POLL_SECONDS = 5
 
-    log() {
-      echo "$(date --utc '+%Y-%m-%dT%H:%M:%SZ'): $*"
-    }
 
-    discover_upstreams() {
-      kubectl --request-timeout=10s get endpointslices \
-        --namespace "${NAMESPACE}" \
-        --selector "${ENDPOINT_SLICE_LABEL}" \
-        --output json \
-        | jq --exit-status --raw-output '
-            [.items[].endpoints[]
-              | select(.conditions.ready != false)
-              | .addresses[]]
-            | unique
-            | if length == 0
-              then error("no ready CoreDNS endpoints")
-              else join(" ")
-              end
-          '
-    }
+    def log(message: str) -> None:
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        print(f"{now}: {message}", flush=True)
 
-    update_corefile() {
-      local upstreams tmp_file
 
-      if ! upstreams="$(discover_upstreams)"; then
-        log "failed to discover ready CoreDNS endpoints; keeping existing Corefile.base"
-        return 1
-      fi
+    def endpoint_slice_url() -> str:
+        host = os.environ["KUBERNETES_SERVICE_HOST"]
+        port = os.environ.get(
+            "KUBERNETES_SERVICE_PORT_HTTPS",
+            os.environ.get("KUBERNETES_SERVICE_PORT", "443"),
+        )
+        if ":" in host and not host.startswith("["):
+            host = f"[{host}]"
+        query = urllib.parse.urlencode({"labelSelector": ENDPOINT_SLICE_LABEL})
+        return (
+            f"https://{host}:{port}/apis/discovery.k8s.io/v1/"
+            f"namespaces/{NAMESPACE}/endpointslices?{query}"
+        )
 
-      tmp_file="$(mktemp "/etc/coredns/.Corefile.base.tmp.XXXXXX")"
-      if ! sed "s|UPSTREAM_DNS_SERVERS|${upstreams}|g" \
-        "${CORE_FILE_TEMPLATE}" > "${tmp_file}"; then
-        rm -f "${tmp_file}"
-        log "failed to render Corefile.base; keeping existing configuration"
-        return 1
-      fi
 
-      if [[ ! -s "${tmp_file}" ]] || grep -q 'UPSTREAM_DNS_SERVERS' "${tmp_file}"; then
-        rm -f "${tmp_file}"
-        log "refusing to install an empty or incomplete Corefile.base"
-        return 1
-      fi
+    def discover_upstreams() -> list[str]:
+        token = TOKEN_FILE.read_text(encoding="utf-8").strip()
+        request = urllib.request.Request(
+            endpoint_slice_url(),
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+                "User-Agent": "nodelocaldns-corefile-watcher/1",
+            },
+            method="GET",
+        )
+        context = ssl.create_default_context(cafile=str(CA_FILE))
+        with urllib.request.urlopen(request, context=context, timeout=10) as response:
+            document = json.load(response)
 
-      if [[ -f "${CORE_FILE_BASE}" ]] && cmp --silent "${tmp_file}" "${CORE_FILE_BASE}"; then
-        rm -f "${tmp_file}"
-        return 0
-      fi
+        addresses = set()
+        for endpoint_slice in document.get("items", []):
+            for endpoint in endpoint_slice.get("endpoints", []):
+                conditions = endpoint.get("conditions", {})
+                if conditions.get("ready") is False:
+                    continue
+                if conditions.get("terminating") is True:
+                    continue
+                for raw_address in endpoint.get("addresses", []):
+                    addresses.add(ipaddress.ip_address(raw_address))
 
-      chmod 0644 "${tmp_file}"
-      mv --force "${tmp_file}" "${CORE_FILE_BASE}"
-      log "upstream endpoints changed to: ${upstreams}"
-    }
+        if not addresses:
+            raise RuntimeError("no usable CoreDNS endpoints")
 
-    if [[ "${1:-}" == "--init" ]]; then
-      until update_corefile; do
-        log "waiting for a valid initial CoreDNS endpoint set"
-        sleep 2
-      done
-      exit 0
-    fi
+        return [
+            str(address)
+            for address in sorted(
+                addresses,
+                key=lambda address: (address.version, int(address)),
+            )
+        ]
 
-    update_corefile || true
-    while true; do
-      if kubectl get endpointslices \
-        --namespace "${NAMESPACE}" \
-        --selector "${ENDPOINT_SLICE_LABEL}" \
-        --watch \
-        --output name \
-        | while read -r _; do
-            update_corefile || true
-          done; then
-        log "watch connection closed; reconnecting"
-      else
-        log "watch connection failed; reconnecting"
-      fi
-      sleep 1
-    done
+
+    def render_corefile(upstreams: list[str]) -> bytes:
+        template = CORE_FILE_TEMPLATE.read_text(encoding="utf-8")
+        if PLACEHOLDER not in template:
+            raise RuntimeError(
+                f"{CORE_FILE_TEMPLATE} does not contain {PLACEHOLDER}"
+            )
+
+        rendered = template.replace(PLACEHOLDER, " ".join(upstreams))
+        if PLACEHOLDER in rendered or not rendered.strip():
+            raise RuntimeError("rendered Corefile.base is empty or incomplete")
+
+        return rendered.encode("utf-8")
+
+
+    def install_corefile(payload: bytes) -> bool:
+        try:
+            if CORE_FILE_BASE.read_bytes() == payload:
+                return False
+        except FileNotFoundError:
+            pass
+
+        fd, temporary_name = tempfile.mkstemp(
+            prefix=".Corefile.base.tmp.",
+            dir=CORE_FILE_BASE.parent,
+        )
+        temporary_path = Path(temporary_name)
+        try:
+            with os.fdopen(fd, "wb") as temporary_file:
+                temporary_file.write(payload)
+                temporary_file.flush()
+                os.fsync(temporary_file.fileno())
+            os.chmod(temporary_path, 0o644)
+            os.replace(temporary_path, CORE_FILE_BASE)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+
+        return True
+
+
+    def update_corefile() -> bool:
+        upstreams = discover_upstreams()
+        changed = install_corefile(render_corefile(upstreams))
+        if changed:
+            log(f"upstream endpoints changed to: {' '.join(upstreams)}")
+        return changed
+
+
+    def run_init() -> None:
+        while True:
+            try:
+                update_corefile()
+                return
+            except Exception as error:
+                log(f"initial CoreDNS endpoint discovery failed: {error}; retrying")
+                time.sleep(INIT_RETRY_SECONDS)
+
+
+    def run_watcher() -> None:
+        while True:
+            try:
+                update_corefile()
+            except Exception as error:
+                log(
+                    f"CoreDNS endpoint discovery failed: {error}; "
+                    "keeping existing Corefile.base"
+                )
+            time.sleep(POLL_SECONDS)
+
+
+    def main() -> None:
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--init", action="store_true")
+        arguments = parser.parse_args()
+
+        if arguments.init:
+            run_init()
+        else:
+            run_watcher()
+
+
+    if __name__ == "__main__":
+        main()
