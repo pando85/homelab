@@ -23,7 +23,20 @@ app-template:
             # Playwright service
             PLAYWRIGHT_MICROSERVICE_URL: "http://firecrawl-playwright:3000"
             # Database (PostgreSQL)
-            NUQ_DATABASE_URL: "postgresql://postgres:postgres@firecrawl-postgres:5432/postgres"
+            DATABASE_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+            DATABASE_HOST: firecrawl-postgres
+            DATABASE_PORT: "5432"
+            DATABASE_NAME: firecrawl
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)"
             # SearXNG integration
             SEARXNG_ENDPOINT: "http://searxng.searxng.svc.cluster.local:8080"
             SEARXNG_ENGINES: "google,bing,duckduckgo"
@@ -132,7 +145,20 @@ app-template:
             REDIS_URL: "redis://firecrawl-redis:6379"
             REDIS_RATE_LIMIT_URL: "redis://firecrawl-redis:6379"
             PLAYWRIGHT_MICROSERVICE_URL: "http://firecrawl-playwright:3000"
-            NUQ_DATABASE_URL: "postgresql://postgres:postgres@firecrawl-postgres:5432/postgres"
+            DATABASE_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+            DATABASE_HOST: firecrawl-postgres
+            DATABASE_PORT: "5432"
+            DATABASE_NAME: firecrawl
+            NUQ_DATABASE_URL: "postgresql://$(DATABASE_USERNAME):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)"
             USE_DB_AUTHENTICATION: "false"
             ENV: "production"
             LOGGING_LEVEL: "INFO"
@@ -204,48 +230,6 @@ app-template:
               drop:
                 - ALL
 
-    # PostgreSQL (NuQ backend)
-    postgres:
-      type: statefulset
-      containers:
-        app:
-          image:
-            # renovate: datasource=docker depName=ghcr.io/firecrawl/nuq-postgres
-            repository: ghcr.io/firecrawl/nuq-postgres
-            tag: v2.11.448
-          env:
-            POSTGRES_USER: "postgres"
-            POSTGRES_PASSWORD: "postgres"
-            POSTGRES_DB: "postgres"
-          probes:
-            liveness:
-              enabled: true
-              custom: true
-              spec:
-                exec:
-                  command: ["pg_isready", "-U", "postgres"]
-                initialDelaySeconds: 30
-                periodSeconds: 10
-                timeoutSeconds: 5
-                failureThreshold: 3
-            readiness:
-              enabled: true
-              custom: true
-              spec:
-                exec:
-                  command: ["pg_isready", "-U", "postgres"]
-                initialDelaySeconds: 5
-                periodSeconds: 5
-                timeoutSeconds: 3
-                failureThreshold: 3
-          resources:
-            requests:
-              cpu: 200m
-              memory: 256Mi
-            limits:
-              cpu: 400m
-              memory: 512Mi
-
     # Redis (rate limiting and cache)
     redis:
       type: deployment
@@ -298,11 +282,6 @@ app-template:
       ports:
         http:
           port: 3000
-    postgres:
-      controller: postgres
-      ports:
-        http:
-          port: 5432
     redis:
       controller: redis
       ports:

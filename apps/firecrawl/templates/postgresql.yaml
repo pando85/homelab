@@ -1,0 +1,40 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: firecrawl-postgres
+  labels:
+    backup/retain: weekly
+spec:
+  teamId: firecrawl
+  numberOfInstances: 1
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+  volume:
+    size: 5Gi
+
+  users:
+    firecrawl:
+      - superuser
+      - createdb
+  databases:
+    firecrawl: firecrawl
+
+  postgresql:
+    version: "15"
+    parameters:
+      archive_mode: "off"
+      max_connections: "100"
+      shared_buffers: 64MB
+      log_checkpoints: "off"
+      log_connections: "off"
+      log_disconnections: "off"
+      log_lock_waits: "off"
+      log_min_duration_statement: "-1"
+      log_statement: none
+      full_page_writes: "off"
