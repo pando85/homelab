@@ -315,14 +315,18 @@ spec:
             # ahead of kubelet's nodefs.available<10% eviction trigger instead of
             # at it. The workspace also lost emptyDir's sizeLimit by moving to
             # hostPath, which makes this loop its only size guard.
+            - name: THRESHOLD_MIN
+              value: "30"
             - name: THRESHOLD_LOW
-              value: "55"
+              value: "50"
             - name: THRESHOLD_MED
-              value: "65"
+              value: "70"
             - name: THRESHOLD_HIGH
-              value: "75"
+              value: "80"
             - name: THRESHOLD_CRITICAL
-              value: "82"
+              value: "90"
+            - name: THRESHOLD_EMERGENCY
+              value: "95"
           resources:
             requests:
               memory: "16Mi"
