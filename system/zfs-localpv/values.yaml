@@ -7,8 +7,12 @@ zfs-localpv:
     # requests:
     #   cpu: 10m
     #   memory: 32Mi
+    # Selects the nodes that actually have a ZFS pool, labelled from
+    # metal/inventory/host_vars. Not arch: k8s-amd64-1 is amd64 but has no pool,
+    # and its node plugin reports 2/2 Running regardless. Those labels must exist
+    # before this is applied, or zfsNode has no eligible node.
     nodeSelector:
-      kubernetes.io/arch: amd64
+      storage.zfspv: "true"
   zfsController:
     resources: {}
     # limits:
