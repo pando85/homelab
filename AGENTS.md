@@ -306,6 +306,11 @@ matters there.
   preflight and session establishment dies ("go to login"). Fix: `GOTRUE_CORS_ALLOWED_HEADERS: apikey`.
   Android login also needs `readest://auth-callback` in `GOTRUE_URI_ALLOW_LIST` and an nginx
   provider rewrite that preserves `redirect_to`. See `docs/troubleshooting/readest-android-oauth.md`
+- Firecrawl's `nuq` queue schema is NOT created by the app — upstream provisions it via a custom
+  Postgres image (`docker-entrypoint-initdb.d`). On Zalando/Spilo nobody runs it, so an idempotent
+  `nuq-schema-init` init container applies `files/nuq.sql`. On version bump, re-extract from the
+  matching upstream tag. `cron.database_name` is a restart-required GUC — delete the postgres pod
+  once after setting it. See `docs/troubleshooting/firecrawl-selfhost-deployment.md`
 
 ## Subsystem Docs
 

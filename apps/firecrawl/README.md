@@ -69,14 +69,32 @@ git push
 ### Archivo: `~/.hermes/.env`
 ```bash
 FIRECRAWL_API_URL=https://firecrawl.internal.grigri.cloud
+SEARXNG_URL=http://searxng.searxng.svc.cluster.local:8080
 ```
 
 ### Archivo: `~/.hermes/config.yaml`
 ```yaml
 web:
-  extract_backend: firecrawl
+  backend: firecrawl
   search_backend: firecrawl
+  extract_backend: firecrawl
+  use_gateway: true
 ```
+
+`FIRECRAWL_API_URL` es suficiente sin API key cuando la autenticación upstream está deshabilitada
+(`USE_DB_AUTHENTICATION=false`). `is_available()` acepta la URL sola.
+
+## Notas de despliegue
+
+- **Imágenes fijadas** a `2.10.19` con hints de Renovate. `firecrawl/playwright-service` solo
+  publica `latest`, así que esa imagen no se puede fijar por versión.
+- **Schema nuq**: el esquema `nuq` no lo crea la app — upstream lo provisiona con una imagen
+  Postgres custom. En Zalando/Spilo nadie lo ejecuta, así que se usa un init container
+  `nuq-schema-init` que aplica `files/nuq.sql` (extraído del tag upstream correspondiente). En un
+  bump de versión, re-extraer `nuq.sql` del tag matching.
+- **`cron.database_name`**: los 36 jobs de `pg_cron` en `nuq.sql` requieren
+  `cron.database_name=firecrawl` en el CR de Zalando. Es un GUC que requiere restart — borrar el
+  pod de postgres una vez después de aplicar el cambio.
 
 ## Verificación
 
