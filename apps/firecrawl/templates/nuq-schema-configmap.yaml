@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: firecrawl-nuq-schema
+data:
+  nuq.sql: |
+{{ .Files.Get "files/nuq.sql" | indent 4 }}

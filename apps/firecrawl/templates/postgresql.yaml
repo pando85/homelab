@@ -38,3 +38,5 @@ spec:
       log_min_duration_statement: "-1"
       log_statement: none
       full_page_writes: "off"
+      # pg_cron jobs run in the firecrawl database (requires one restart)
+      cron.database_name: "firecrawl"

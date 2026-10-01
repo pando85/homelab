@@ -3,6 +3,35 @@ app-template:
   controllers:
     # API Service
     api:
+      initContainers:
+        nuq-schema-init:
+          image:
+            # renovate: datasource=docker depName=postgres
+            repository: docker.io/library/postgres
+            tag: 15-alpine
+          env:
+            DATABASE_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              echo "Bootstrapping nuq schema for firecrawl 2.10.19..."
+              until pg_isready -q -t 5 -h firecrawl-postgres -U "$DATABASE_USERNAME"; do
+                sleep 2
+              done
+              PGPASSWORD="$DATABASE_PASSWORD" psql -v ON_ERROR_STOP=1 \
+                -h firecrawl-postgres -U "$DATABASE_USERNAME" -d firecrawl \
+                -f /schema/nuq.sql
+              echo "nuq schema bootstrap complete."
       containers:
         app:
           image:
@@ -85,6 +114,35 @@ app-template:
 
     # Queue Worker
     worker:
+      initContainers:
+        nuq-schema-init:
+          image:
+            # renovate: datasource=docker depName=postgres
+            repository: docker.io/library/postgres
+            tag: 15-alpine
+          env:
+            DATABASE_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              echo "Bootstrapping nuq schema for firecrawl 2.10.19..."
+              until pg_isready -q -t 5 -h firecrawl-postgres -U "$DATABASE_USERNAME"; do
+                sleep 2
+              done
+              PGPASSWORD="$DATABASE_PASSWORD" psql -v ON_ERROR_STOP=1 \
+                -h firecrawl-postgres -U "$DATABASE_USERNAME" -d firecrawl \
+                -f /schema/nuq.sql
+              echo "nuq schema bootstrap complete."
       containers:
         app:
           image:
@@ -141,6 +199,35 @@ app-template:
     # NuQ Workers (specialized for NuQ backend)
     nuq-worker:
       replicas: 2
+      initContainers:
+        nuq-schema-init:
+          image:
+            # renovate: datasource=docker depName=postgres
+            repository: docker.io/library/postgres
+            tag: 15-alpine
+          env:
+            DATABASE_USERNAME:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: username
+            DATABASE_PASSWORD:
+              valueFrom:
+                secretKeyRef:
+                  name: firecrawl.firecrawl-postgres.credentials.postgresql.acid.zalan.do
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              echo "Bootstrapping nuq schema for firecrawl 2.10.19..."
+              until pg_isready -q -t 5 -h firecrawl-postgres -U "$DATABASE_USERNAME"; do
+                sleep 2
+              done
+              PGPASSWORD="$DATABASE_PASSWORD" psql -v ON_ERROR_STOP=1 \
+                -h firecrawl-postgres -U "$DATABASE_USERNAME" -d firecrawl \
+                -f /schema/nuq.sql
+              echo "nuq schema bootstrap complete."
       containers:
         app:
           image:
@@ -271,6 +358,22 @@ app-template:
               memory: 256Mi
 
   persistence:
+    nuq-schema:
+      type: configMap
+      name: firecrawl-nuq-schema
+      advancedMounts:
+        api:
+          nuq-schema-init:
+            - path: /schema
+              readOnly: true
+        worker:
+          nuq-schema-init:
+            - path: /schema
+              readOnly: true
+        nuq-worker:
+          nuq-schema-init:
+            - path: /schema
+              readOnly: true
     redis-data:
       enabled: true
       type: emptyDir
