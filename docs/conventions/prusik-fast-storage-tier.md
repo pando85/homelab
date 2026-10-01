@@ -1,6 +1,6 @@
 # prusik Storage and Memory Architecture
 
-Status: **planned, not implemented.** Analysis date 2026-09-30. Re-verify measurements before acting.
+Status: **partially implemented.** Analysis date 2026-09-30, updated 2026-10-01 after k8s-amd64-1 joined. Re-verify measurements before acting.
 
 ## Problem
 
@@ -22,10 +22,14 @@ The workload is **latency-bound, not throughput-bound**. `gitea-postgres` does o
 This is the most important finding and it changes the order of work.
 
 ```
-Sum of container limits on prusik:  ~85 GB
-Physical RAM:                        64 GB
-zfs_arc_max:                          5 GB   (metal/inventory/host_vars/prusik.yml:12-13)
-MemAvailable minimum (24h):       2.15-3.5 GB
+Sum of container limits on prusik:  210 GiB   (measured 7d, 44.7 GiB of requests)
+Physical RAM:                        62 GiB
+zfs_arc_max:                          5.00 GiB (pinned, metal/inventory/host_vars/prusik.yml:12-13)
+MemAvailable minimum (7d):         1.97 GiB
+arc_meta_used:                     3.05 GiB   (60% of the ARC is metadata)
+16 GiB swap configured but unused
+6 OOM kills in 7 days: ci-runner-0 x3, calypso-postgres-0, calypso-control-plane, git-forgejo
+Container CPU 7d burst peak:       10.0 cores (ci-runner-0 alone: 7.68)
 ```
 
 The node is overcommitted, so the ARC is pinned at 5GB. Consequences cascade:
@@ -52,20 +56,21 @@ The CI runner is the largest single consumer:
 | `daemon` (docker:dind) | 8Gi | ~1GB |
 | `/workspace` tmpfs | 8Gi | 1.8GB used (counts against node RAM) |
 
-Moving CI off prusik reclaims **~19GB**, supporting:
+Moving CI off prusik reclaims **~19GB**, but CI cannot move to a 16 GiB node (see below). The
+realistic path is spreading stateless pods first:
 
 ```
-64GB total
-- 22GB  non-CI container actual peak
--  8GB  remaining tmpfs/shared
--  3GB  OS / kubelet / containerd
--  4GB  safety margin (keep MemAvailable > 4GB)
-= 27GB → set zfs_arc_max to 20-24GB
+62 GiB total (measured)
+- 210 GiB container limits (44.7 GiB requests) — massive overcommit
+- 10.5 GiB p95 stateless pod spread to k8s-amd64-1
+- ~19 GiB CI peak remains on prusik until node has 32 GiB RAM
+= zfs_arc_max can rise from 5 GiB to ~8-10 GiB, still short of 12-14 GiB hot set
 ```
 
-At 20GB the **entire 12-14GB hot set becomes RAM-resident**. `arc_evict_not_enough` is currently only
-0.018/sec, so the ARC is constrained rather than thrashing — a 4x increase should convert nearly all
-154M weekly misses into hits.
+At 8-10 GiB the ARC holds more of the hot set but not all of it. `arc_evict_not_enough` is currently
+only 0.018/sec, so the ARC is constrained rather than thrashing — even a partial increase helps, but
+the full fix requires either moving CI (needs 32 GiB in k8s-amd64-1) or right-sizing the 210 GiB of
+limits.
 
 **This likely eliminates the database-latency problem without any new disks.**
 
@@ -175,59 +180,63 @@ Forgejo breakdown: `packages/` ~32G (257 content-addressable SHA256 blob dirs), 
 ZFS compression on this data is ~1.06x — OCI blobs and Postgres pages do not compress. Size pools on
 physical bytes.
 
-## Adding the PN51-E1 Node
+## Adding the PN51-E1 Node (k8s-amd64-1)
 
-ASUS PN51-E1, Ryzen 5 5500U (6C/12T Zen2, 15-25W, Vega 7 iGPU), amd64 — **matches the existing
-cluster arch**, so no cross-arch image problems. 2x SODIMM, up to 64GB DDR4-3200. Storage:
-**1x M.2 NVMe (PCIe 3.0 x4) plus one shared M.2-SATA *or* 2.5" SATA bay** — confirm the installed
-configuration, but assume **a single usable data disk and no ZFS redundancy**.
+ASUS PN51-E1, Ryzen 5 5500U (6C/12T, ~15 W), **16 GiB RAM** (14.52 GiB visible), 119 GiB SSD with
+the root LV already fully expanded (102 G free), Ubuntu 26.04.1, kernel 7.0.0-34, IP
+192.168.192.11. Joined as an **untainted** amd64 worker. See
+`planning/k8s-amd64-1-node-addition.md` for the full plan and
+`docs/troubleshooting/ansible-ubuntu-2604-compat.md` for the 26.04 Ansible work.
 
-### The right role: an explicitly ephemeral compute node
+### Decision: untainted, not taint-restricted
 
-The single-disk limitation is not a drawback if the node is reserved for workloads whose state is
-reproducible from git or re-runnable. CI is the ideal tenant.
+The original plan prescribed `ephemeral=true:NoSchedule`. We deliberately did **not** taint it, so
+the 44 stateless workloads can spread freely. Consequence: `allowedTopologies` in
+`system/zfs-localpv/templates/storage-class-openebs-zfspv.yaml:13-18` (grigri + prusik only) is now
+the *sole* protection against durable PVCs binding there. With `WaitForFirstConsumer` a PVC-backed
+pod goes `Pending` rather than landing on the node, which is a safe failure mode — but a PVC with
+no `storageClassName` silently inherits the default class and hangs forever instead of failing
+loudly.
 
-**Guardrails — these are what make a no-backup node safe:**
+### The CI runner cannot move to 16 GiB
+
+`ci-runner-0` measures 0.84 GiB avg / 1.95 GiB p95 but **peaks at 17.4 GiB RSS and 7.68 cores**,
+and was OOM-killed 3 times in 7 days on prusik. Its two 50 GiB PVCs
+(`platform/ci-runners/resources/pvc-runner-cache.yaml:12`, `pvc-runner-docker.yaml:14`) omit
+`storageClassName` so they are node-bound to ZFS. Moving CI needs **2x16 GiB SODIMM (32 GiB) in
+the node**, plus converting those PVCs to a local class. Measured CI disk usage is ~32.4 G dind +
+~11 G cache, which does fit in 102 G.
+
+### No local StorageClass exists
+
+There is no local-path-provisioner, longhorn, or openebs localpv-hostpath anywhere in the repo.
+k3s' bundled local-storage is disabled server-side (`metal/roles/k3s/defaults/main.yml:8-12`) so it
+cannot be re-enabled per node. A new `system/local-path/` chart is required; the ApplicationSet at
+`bootstrap/root/templates/stack.yaml:15-22` auto-discovers any immediate child directory of
+`system/` (namespace == dirname), and it must **not** carry `is-default-class` because
+`storage-class-openebs-zfspv.yaml:6` owns that.
+
+### `zfsNode` exclusion mechanism
+
+`system/zfs-localpv/values.yaml:10-11` selects the node DaemonSet on `kubernetes.io/arch: amd64`, so
+it schedules onto a pool-less host and CrashLoops. The upstream chart renders only `nodeSelector`
+and `tolerations` (`zfs-node.yaml:164-167,172-175`) — there is no affinity key — so exclusion
+requires a new label such as `storage.zfspv=true` applied to grigri and prusik via `node_labels` in
+their host_vars and the `node-labels` play. **Ordering matters:** the labels must exist before the
+selector is flipped, or `zfsNode` loses every eligible node and PVC mounts break cluster-wide.
+
+### DNS search-domain blocker
+
+The new node did not receive the `grigri` DHCP search domain that prusik and grigri get.
+`roles/k3s/templates/config.yaml.j2` builds `server: https://prusik:6443` from `ansible_hostname`,
+so short-name resolution is a join prerequisite. Handled by `prepare_dns_search_domains`.
+
+### Guardrails still in force
 
 - **Do not add the node to `openebs-zfspv` `allowedTopologies`.** This is the strongest control
-  available: without it, no durable PVC can be provisioned there, so stateful pods simply cannot
-  schedule onto it. `system/zfs-localpv/templates/storage-class-openebs-zfspv.yaml` currently lists
-  `grigri` and `prusik`; leave it that way.
-- **Taint it** (e.g. `ephemeral=true:NoSchedule`) so workloads opt in deliberately rather than
-  drifting there because the scheduler sees free CPU.
-- Give CI a **local NVMe** path via hostPath or a node-local StorageClass, never the shared class.
+  available: without it, no durable PVC can be provisioned there.
 - Treat node loss as a non-event: anything running there must restart cleanly elsewhere.
-
-### Good candidates
-
-1. **CI runners** — `forgejo-runner` + `docker:dind`. Memory-hungry, I/O-hungry, disposable. Solves
-   both the prusik RAM problem and the 8Gi `/workspace` ceiling at once.
-2. **Pull-through registry cache** — absorbs CI image pulls locally so they stop reading Forgejo's
-   32GB `packages/` over the network and evicting prusik's ARC. Directly protects the hot set.
-3. **Renovate and scheduled CronJobs** — disposable, already containerised.
-4. **Restore/backup verification** — spin up copies of production data to test restores without
-   touching prod. Genuinely valuable and safe, given how many restore procedures this repo documents.
-5. **Staging / `test/` k3d workloads.**
-
-### Poor candidates
-
-- **All durable state**: the 13 Postgres clusters, Vault, Kanidm, MinIO, Forgejo, Immich, Home
-  Assistant, Grafana, Prometheus/Loki/Tempo.
-- **qBittorrent** — its 186 IOPS come from HostPath mounts into `datasets/{series,peliculas}` on
-  prusik. Moving it would require network storage and would relocate the contention, not remove it.
-- **Small stateless infrastructure** (external-dns, cert-manager, ingress) — negligible footprint, so
-  little RAM is recovered, while blast radius grows if the node is less reliable than prusik.
-
-### Versus just using grigri
-
-grigri (8C, 32GB, ~11.8GB used, ~30 pods) has roughly 20GB free, so it looks tempting and requires no
-new hardware. **It is tighter than it appears**: a CI peak of 11.2GB plus the 8GB workspace tmpfs is
-~19GB, leaving ~1GB before grigri's own ZFS ARC. It also needs the `ci-runner-docker` and
-`ci-runner-cache` PVCs migrated to grigri's local pool, since openebs-zfspv is node-local.
-
-The PN51-E1 *adds* 6 cores and up to 64GB of new capacity instead of reshuffling existing pressure,
-and it draws 15-25W. Prefer it if the hardware is to hand; grigri is the lower-effort fallback but
-leave real headroom.
+- A `reclaimPolicy: Delete` local class is the right fit for this node's ephemeral disk.
 
 ## Implementation Gotchas
 
@@ -268,27 +277,53 @@ A 238GB pool has far less slack than the 7.2TB `datasets` pool. See
 `docs/troubleshooting/zfs-snapshot-filling-pvc.md`. Tighten retention on `fast/db`; disable snapshots
 on CI scratch.
 
+## Realistic Payoff of Stateless-Only Moves
+
+With CI stuck on prusik (needs 32 GiB in the new node), the realistic path is spreading the 44
+stateless pods to k8s-amd64-1. Measured: **9.5 GiB avg / 10.5 GiB p95 across 62 pods, 0.24 cores
+of CPU combined** — enough to lift `zfs_arc_max` from 5 GiB to roughly 8-10 GiB, still short of the
+12-14 GiB hot set.
+
+Ranked by measured RAM at ~0 CPU: gitlab-webservice 3.28→3.60 GiB, gitlab-sidekiq 1.67→1.70 GiB,
+keycloak-1 x2 (0.71 + 0.66), keycloak-operator 0.37, rsshub 0.23, argocd repo-server/server/appset/
+notifications/redis ~0.20 total, readest-client 0.17, kroki 0.13, searxng 0.11, calypso stateless
+pair ~0.6. Also `apps/esphome` uses 0.11 GiB while carrying an **8 GiB memory + 10 CPU limit**, and
+the two gitlab pods mount **41 unbounded `emptyDir: Memory` volumes** — a live OOM amplifier.
+
+Rebalancing must be done by adding `topologySpreadConstraints` and letting ArgoCD roll pods out;
+`kubectl delete pod` and `rollout restart` are both forbidden and futile under `selfHeal: true`.
+
+### Per-pod disk IO is not measurable
+
+`container_fs_reads_bytes_total` and `container_fs_writes_bytes_total` exist but report 0 for every
+pod cluster-wide, so IO affinity has to be inferred from PVC and hostPath topology. Any future
+analysis in this doc that claims per-pod IO should be treated as suspect. See
+`docs/troubleshooting/cluster-hygiene.md`.
+
+### Disk IO confirmation (7d)
+
+`sda`-`sdd` at 28-30% io_time with ~0 GiB/h throughput, confirming latency-bound small IO.
+
 ## Recommended Order of Work
 
 1. **`l2arc_noprefetch=1`** — one line in `metal/roles/setup/templates/zfs.conf.j2`, reversible.
    Re-measure over 7d: `l2_prefetch_asize` should fall toward zero while `l2_hits` holds or rises.
-2. **Move CI to the PN51-E1** (or grigri). This reclaims ~19GB on prusik and removes the memory
-   spikes that caused the September etcd outage.
-3. **Raise `zfs_arc_max` to 20-24GB.** Re-measure Forgejo `git-upload-pack` latency and Postgres.
-   **Expect this alone to resolve most of the reported latency.**
+2. **Spread stateless pods to k8s-amd64-1** via `topologySpreadConstraints`. Reclaims ~10 GiB p95,
+   enough to raise `zfs_arc_max` to 8-10 GiB.
+3. **Raise `zfs_arc_max` to 8-10 GiB** (not 20-24 as originally hoped). Re-measure Forgejo
+   `git-upload-pack` latency and Postgres. Partial relief, not a full fix.
 4. **`primarycache=metadata` on the backup dataset**, and split Forgejo `packages/` to its own
    dataset, to stop bulk traffic evicting the enlarged hot set.
 5. **Re-measure, then decide on SSDs.** Install and SMART-check the Ultra IIs; use them only for what
    still cannot live in ARC.
-6. **Right-size container limits** — 85GB of limits on 64GB is what forced the 5GB ARC cap in the
-   first place and will re-constrain it if left alone.
+6. **Right-size container limits** — 210 GiB of limits on 62 GiB is what forced the 5GB ARC cap in
+   the first place and will re-constrain it if left alone.
+7. **CI move requires 32 GiB in k8s-amd64-1** (2x16 GiB SODIMM) plus converting its PVCs to a local
+   StorageClass. Only then does the full ~19 GiB reclaim become available.
 
 ## Open Questions
 
 - SMART wear state of both Ultra IIs — gates any use of them for durable data.
-- PN51-E1 actual installed RAM and disk configuration.
 - Whether `/workspace` should stay partly in RAM once CI has fast local NVMe.
 - Retention policy for Forgejo Actions logs/artifacts (~2GB, unpruned, growing).
-- Adding the node to `metal/`: `hosts.ini` `[amd64_node]`, a new `host_vars/<name>.yml` with
-  `kube-reserved` / `system-reserved` / `eviction-hard` and its own `zfs_arc_max_gb`. It inherits
-  `group_vars/amd64.yml`.
+- Why `container_fs_reads_bytes_total` / `container_fs_writes_bytes_total` report 0 for every pod.

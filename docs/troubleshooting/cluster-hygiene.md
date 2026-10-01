@@ -70,3 +70,74 @@ kubectl --context=grigri describe pod <pod> -n <namespace> | grep -A5 "Last Stat
 - **DaemonSets** (kured, zfs-localpv-node, nfd-worker, smartctl-exporter) restart on every node
   reboot by design.
 - Restart counts reset when pods are recreated (deployment rollout, manual delete).
+
+---
+
+## Released Orphan PVs (Current Audit)
+
+6 `Released` orphan PVs (~13.5 GiB of leaked ZFS space) from calypso/readest/isidoro-redis, aged
+26-86 days. A consequence of `reclaimPolicy: Retain` on `openebs-zfspv`. See the cleanup procedure
+above.
+
+---
+
+## CrashLoopBackOff Sentinels
+
+`calypso-redis-sentinel-0` and `oauth2-proxy-redis-sentinel-2` in CrashLoopBackOff, both on prusik.
+Check logs with `kubectl --context=grigri logs -n <namespace> <pod> --previous`.
+
+---
+
+## Canonical-Milli CPU Oddity
+
+`apps/jellyfin` requests CPU as `2469606195200m` — a canonical-milli oddity (~2.3 GiB memory).
+Harmless but it makes resource accounting hard to read.
+
+---
+
+## Per-Pod Disk IO Is a Blind Spot
+
+`container_fs_reads_bytes_total` and `container_fs_writes_bytes_total` report 0 for every pod
+cluster-wide, so per-pod IO is unmeasurable. IO affinity has to be inferred from PVC and hostPath
+topology. Worth its own investigation; it silently weakens any IO-based analysis.
+
+---
+
+## Dead Makefile Targets
+
+`metal/Makefile:76` `uninstall-longhorn` invokes `playbooks/uninstall/longhorn.yml`, which does not
+exist.
+
+`metal/Makefile:44` still passes `--limit 'arm'` although the `[arm]` inventory group was deleted in
+commit `bdd75674`.
+
+---
+
+## Ansible Deprecation Warnings Hidden
+
+`metal/ansible.cfg` sets `deprecation_warnings = False`, which hides ansible-core upgrade signals.
+Consider enabling it during toolchain bumps.
+
+---
+
+## ansible-lint Was Unrunnable
+
+`ansible-lint` was unrunnable on the Python 3.14 control node until ansible-core was bumped to 2.20
+(`RuntimeError: Python 3.14 requires ansible-core version >= 2.20.0`), so lint debt was invisible.
+37 findings are now surfaced. It is not wired into pre-commit and there is no Makefile lint target.
+
+---
+
+## Sudoers Edit Without Validation
+
+`roles/prepare/tasks/user.yml:26-30` edits `/etc/sudoers` with `lineinfile` and no `validate=`. A
+malformed line could break sudo for both sudo providers.
+
+---
+
+## Dead ntp_driftfile Key
+
+`host_vars/prusik.yml` still carries a dead `ntp_driftfile` key: the galaxy role sets it via
+`include_vars`, which outranks inventory host_vars, so prusik's rendered `/etc/ntp.conf` still says
+`driftfile /var/lib/ntp/drift`. See
+`docs/troubleshooting/ansible-ubuntu-2604-compat.md`.

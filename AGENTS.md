@@ -160,6 +160,15 @@ matters there.
   Ubuntu 26.04 nodes also need `ansible-core>=2.20`, `ansible_become_exe: /usr/bin/sudo.ws` (sudo-rs
   rejects `-H`) and chrony, since the `ntp` package is gone. See
   `docs/troubleshooting/ansible-ubuntu-2604-compat.md`
+- Adding a node: never edit the hardcoded `hosts:` lists in `metal/playbooks/install/prepare.yml`
+  (11-13, 18, 23, 30) or `cluster.yml` (28-31) — they are exactly the ZFS/GPU/backup paths a new node
+  must skip, so a new node gets no `setup` role. `make first-boot` is unusable (forces root +
+  `--ask-pass`) and unscopeable (it appends its own `--limit` last). The node must resolve short names
+  or the k3s agent cannot reach `server: https://prusik:6443` — set `prepare_dns_search_domains` if
+  DHCP does not push the `grigri` search domain. There is no local StorageClass (k3s' bundled one is
+  disabled), so on a no-ZFS node any PVC without `storageClassName` inherits the default
+  `openebs-zfspv` and hangs `Pending` forever instead of failing. See
+  `docs/user-guide/add-or-remove-nodes.md` and `planning/k8s-amd64-1-node-addition.md`
 - `openebs-zfspv` storage class uses `reclaimPolicy: Retain` — deleted PVCs leave released PVs
   that leak ZFS space. Audit periodically: see `docs/troubleshooting/cluster-hygiene.md`
 - `openebs-zfspv` with `fstype: zfs` + `fsGroup` causes slow pod startup (recursive chown on
@@ -172,11 +181,14 @@ matters there.
   on one-shot media prefetch. Fix that; do NOT remove the cache vdev. See
   `docs/troubleshooting/prusik-l2arc-ineffective.md`
 - prusik storage is latency-bound, not throughput-bound, and **the root cause is RAM, not disks**:
-  container limits sum to ~85GB on 64GB, forcing `zfs_arc_max=5GB` against a 12-14GB hot set. Free
-  RAM (move CI off-node) and raise ARC before buying SSDs — RAM beats SSD by ~1000x. A SLOG/ZIL will
-  NOT help (Postgres runs `synchronous_commit=off`). Forgejo web latency is `git-upload-pack` reading
-  git objects, not Postgres. Backup is label-driven (`backup/retain`, `backup`), so a PVC recreated
-  without labels is silently never backed up. See `docs/conventions/prusik-fast-storage-tier.md`
+  container limits sum to **210 GiB** (requests 44.7 GiB) on 62 GiB, forcing `zfs_arc_max=5GB` against
+  a 12-14GB hot set; `MemAvailable` bottoms out at 1.97 GiB and 60% of the ARC is metadata. Free
+  RAM (move CI off-node) and raise ARC before buying SSDs — RAM beats SSD by ~1000x. Note
+  `k8s-amd64-1` has only 16 GiB, and `ci-runner-0` peaks at 17.4 GiB / 7.68 cores, so **CI cannot move
+  there until it gets 32 GiB**. A SLOG/ZIL will NOT help (Postgres runs `synchronous_commit=off`).
+  Forgejo web latency is `git-upload-pack` reading git objects, not Postgres. Backup is label-driven
+  (`backup/retain`, `backup`), so a PVC recreated without labels is silently never backed up. See
+  `docs/conventions/prusik-fast-storage-tier.md`
 - Apps with Supabase dependencies (auth schema, GoTrue, PostgREST) can use Zalando Postgres +
   init container for bootstrap SQL. Don't deploy separate Supabase Postgres container unless
   the app requires Supabase-specific extensions not in the Spilo image. See
@@ -290,7 +302,10 @@ matters there.
 - **Documenting learnings:** See `docs/conventions/documenting-learnings.md` for when/how to write
   troubleshooting docs
 - **prusik storage tiering:** See `docs/conventions/prusik-fast-storage-tier.md` for ZFS pool sizing,
-  SSD selection, and PVC migration gotchas. Hardware reference: `docs/hardware/prusik.md`
+  SSD selection, and PVC migration gotchas. Hardware references: `docs/hardware/prusik.md`,
+  `docs/hardware/k8s-amd64-1.md`
+- **Adding a node:** `docs/user-guide/add-or-remove-nodes.md` for the runbook,
+  `planning/k8s-amd64-1-node-addition.md` for a worked example with measured numbers
 
 ## Licensing
 
