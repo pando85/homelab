@@ -6,7 +6,8 @@ Add a third K3s node — ASUS Mini PC PN51-E1 (Ryzen 5 5500U, 16 GiB RAM, 119 Gi
 pool**) running **Ubuntu Server 26.04.1** — as an untainted amd64 worker, then rebalance stateless
 workloads onto it to relieve prusik's memory pressure.
 
-**Status: Phases 0-3 complete. Phase 4 (cluster join) is pending and must be run by a human.**
+**Status: Phases 0-5 complete. The node is joined, `Ready` and schedulable. Two items need a human:
+the pfSense BGP neighbour (TODO-5.5) and one chrony restart (TODO-5.6).**
 
 Committed so far:
 
@@ -14,6 +15,9 @@ Committed so far:
 |---|---|
 | `a356d474` | `metal: Support Ubuntu 26.04 nodes in Ansible provisioning` |
 | `04da60d2` | `metal: Add k8s-amd64-1 node` |
+| `628000b6` | `docs: Record k8s-amd64-1 node addition learnings and hardware findings` |
+| `1c3f5a48` | `metal: Render k3s config without the control plane's gathered facts` |
+| `baa2eb43` | `metal: Flush time daemon handlers inside the ntp wrapper` |
 
 Why this node exists: prusik is RAM-starved, not disk-starved. Measured 7d — **210 GiB of container
 limits / 44.7 GiB of requests on 62 GiB physical**, `node_memory_MemAvailable_bytes` 7d minimum
@@ -81,7 +85,17 @@ IP unchanged across the reboot; `apparmor=0` on the cmdline and the service `dis
 
 ### TODO-4 — join the cluster (HUMAN ONLY)
 
-- [ ] **TODO-4.1** `cd metal && ANSIBLE_EXTRA_ARGS="--limit k8s-amd64-1" make cluster`
+- [x] **TODO-4.1** `cd metal && ANSIBLE_EXTRA_ARGS="--limit k8s-amd64-1" make cluster` — run by an
+      agent under explicit user approval, after auditing that the scoped form cannot mutate prusik or
+      grigri: the only cross-host effects are two read-only `slurp` delegations to prusik
+      (`roles/k3s/tasks/main.yml:65,158`) and one `delegate_to: localhost` kubeconfig write (`:169`),
+      and the `Restart k3s` handler has no `delegate_to`, so it fires only on the new node. Result
+      `ok=40 changed=11 unreachable=0 failed=0 skipped=13`, with `backups`, `democratic-csi-user` and
+      `zfs-exporter` all reporting `skipping: no hosts matched`, and node-labels a true no-op
+      (`inventory_node_labels: []`, since `node_labels` is defined nowhere in the inventory).
+      The **first attempt failed** on a latent cross-host gathered-fact bug — see
+      `docs/troubleshooting/ansible-limit-cross-host-facts.md`, fixed by `1c3f5a48` + `baa2eb43`.
+      `metal/kubeconfig.yaml` now exists, unblocking TODO-6.1.
 
   `make cluster` is on the AGENTS.md never-run list, so an agent must hand this over even when
   scoped. With `--limit` it is safe: the k3s role's `run_once` + `delegate_to: prusik` tasks are
@@ -89,32 +103,71 @@ IP unchanged across the reboot; `apparmor=0` on the cmdline and the service `dis
   and the `Restart k3s` handler fires only on the new node.
 
   Runs, in order: **ntp** (chrony → `pfsense.grigri`, TZ Europe/Madrid — first live use of the
-  `roles/ntp` wrapper), **gvisor** (installs `runsc`; *main remaining unknown* — never installed on
-  resolute here), **k3s** (agent join against `server: https://prusik:6443`, writes
+  `roles/ntp` wrapper), **gvisor** (installs `runsc` — *resolved*: the gvisor.dev apt repo is a flat
+  `release main` distro, so it works unmodified on resolute; `runsc release-20260928.0` installed and
+  containerd lists the runtime), **k3s** (agent join against `server: https://prusik:6443`, writes
   `metal/kubeconfig.yaml`), then the node-labels play (no-op for this host, but exercises the
   `KUBECONFIG` path fix). The `backups`, `democratic-csi-user` and `zfs-exporter` plays target
   prusik/grigri explicitly and are excluded by the limit.
 
 ### TODO-5 — post-join verification (read-only, agent may run)
 
-- [ ] **TODO-5.1** `kubectl --context=grigri get nodes -o wide` → node `Ready`
-- [ ] **TODO-5.2** `kubectl describe node k8s-amd64-1` → allocatable ≈ 13 Gi memory (14.52 GiB minus
-      kube-reserved 512Mi, system-reserved 1Gi, eviction-hard 500Mi); confirm the three
-      `k3s_kubelet_extra_args` actually took effect. **Note:** grigri's allocatable is 20.0 of 21 GiB
-      despite `system-reserved=memory=10Gi` in its host_vars, which suggests those args may not be
-      applied there — worth checking whether prusik/grigri need a k3s restart to pick them up.
-- [ ] **TODO-5.3** No taints (untainted general worker by decision), labels as expected
-- [ ] **TODO-5.4** DaemonSets scheduled: cilium, cilium-envoy, node-exporter, smartctl-exporter,
-      vector-agent, nodelocaldns. **`zfs-localpv-node` will CrashLoop — expected**, no pool; fixed by
-      TODO-6.1/6.2.
-- [ ] **TODO-5.5** Cilium BGP peer to 192.168.192.1 established (`bgp-cluster-config.yaml:6-9` peers
-      on `kubernetes.io/os: linux`, so it is automatic — but the router must accept the new peer)
-- [ ] **TODO-5.6** chrony synced to `pfsense.grigri`; timezone Europe/Madrid
-- [ ] **TODO-5.7** containerd reports the runsc/kata runtime classes; `runsc --version` works
-- [ ] **TODO-5.8** Vector shipping logs for the new node to Loki
-- [ ] **TODO-5.9** Nothing new stuck `Pending` cluster-wide (a PVC without `storageClassName`
-      inherits the default `openebs-zfspv`, whose `allowedTopologies` exclude this node, so it would
-      hang forever rather than fail loudly)
+**Done 2026-10-01.** Result: 7 of 9 pass, 2 need a human. prusik and grigri were verified
+undisturbed — identical k3s `ActiveEnterTimestamp` (prusik `Thu 2026-10-01 05:14:58 CEST`, grigri
+`Thu 2026-09-10 05:14:50 CEST`) and `NRestarts=0` before and after, both still `Ready`.
+
+- [x] **TODO-5.1** `Ready`. Joined as agent, `v1.35.8+k3s1`, `containerd://2.2.7-k3s1`,
+      Ubuntu 26.04.1, kernel 7.0.0-34-generic, 192.168.192.11.
+- [x] **TODO-5.2** Allocatable **13138600Ki (12.53 Gi) memory / 11 cpu / 250 pods** — matches the
+      predicted ≈13 Gi from kube-reserved 512Mi + system-reserved 1Gi + eviction-hard 500Mi. All
+      three args confirmed in `/etc/systemd/system/k3s.service` `ExecStart`.
+      The grigri question is still open (its allocatable is 20.0 of 21 GiB despite
+      `system-reserved=memory=10Gi`), so prusik/grigri may need a k3s restart to pick theirs up.
+- [x] **TODO-5.3** No custom taints. It briefly showed `Ready,SchedulingDisabled` — see the cordon
+      note below; that cleared by itself within ~1 minute.
+- [x] **TODO-5.4** All DaemonSets `Running`: cilium, cilium-envoy, nodelocaldns, vector-agent,
+      node-exporter, smartctl-exporter, kured, gpu-operator NFD worker, zfs-localpv-node.
+      **Correction: `zfs-localpv-node` does NOT CrashLoop.** It is `2/2 Running` with 0 restarts even
+      though the node has no pool and `zpool` is not installed. It only fails when it is actually
+      asked to provision or mount a volume. That is *worse* than the predicted CrashLoop because
+      there is no visible symptom, and it makes TODO-6.1/6.2 more urgent, not less.
+- [ ] **TODO-5.5** **BLOCKED — needs a pfSense change.** Cilium reports the session as `active`
+      (= not established), uptime `0s`, **0 advertised**; grigri's is `established`, uptime 244h,
+      2 advertised. Cilium itself is healthy (`Cilium: Ok 1.20.2`, `NetworkUnavailable=False`
+      `CiliumIsUp`, KubeProxyReplacement on enp2s0, health daemon Ok, IPAM 7/254 from 10.0.0.0/24).
+      `bgp-cluster-config.yaml` selects `kubernetes.io/os: linux` with `localASN: 64513` →
+      `192.168.192.1` `peerASN: 64512`, so the cluster side is automatic and correct; **FRR on
+      pfSense has no neighbour for 192.168.192.11**. Add it (remote-as 64513), same as grigri/prusik.
+      Impact until then: the node's podCIDR `10.42.0.0/24` is not advertised, so traffic from outside
+      the cluster to pods on this node will not route and no LB IP is announced from it. Intra-cluster
+      pod↔pod traffic is unaffected (same L2, Cilium has the routes).
+- [ ] **TODO-5.6** **Partly done — needs one restart.** `/etc/chrony/chrony.conf` is correct
+      (`server pfsense.grigri iburst`, no stray `/etc/ntp.conf`), so the host_vars precedence worked.
+      But chrony is still running the distro config and syncing to `canonical.com`, because the
+      restart handler was queued when the first run failed and was discarded. Fixed for the future by
+      `baa2eb43`; the current node needs the one-off restart in
+      `docs/troubleshooting/ansible-limit-cross-host-facts.md#apply`. For reference prusik and grigri
+      both run ntpsec against `192.168.192.1`, and `pfsense.grigri` resolves from the new node.
+- [x] **TODO-5.7** gVisor works: `runsc release-20260928.0` installed on resolute, and containerd
+      lists `runsc` alongside `runc`. **Correction to the assumption behind this item:** k3s writes
+      the generated config to `config.toml` (not `config-v3.toml`) even though it is `version = 3`,
+      and it *does* honour `config-v3.toml.tmpl` — the node's layout and 1419-byte `config.toml` are
+      identical to grigri's. Kata is **prusik-only by design** (`kata-deploy` has
+      `nodeSelector: {kubernetes.io/hostname: prusik}`), so the empty `config-v3.toml.d/` and the
+      absent kata runtime here are correct, not a gap.
+- [x] **TODO-5.8** Vector healthy (Loki sink healthcheck passed, 0 errors, 0 restarts) and
+      **3,436 log lines** from `node_name="k8s-amd64-1"` in 15m across gpu-operator, kanidm,
+      kube-system, kured, monitoring, system-upgrade, zfs-localpv.
+- [x] **TODO-5.9** Nothing new `Pending`. Two pods are in `Unknown` but are pre-existing and
+      unrelated: `home-assistant-whisper` (28d) and `ollama` (3d4h).
+
+**Expected post-join cordon.** The `k3s-agent` system-upgrade `Plan` has `cordon: true` and selects
+every non-control-plane node, so a new node is immediately cordoned, an `apply-k3s-agent-on-<node>`
+job runs, and the controller uncordons it. On this node the job was a verified no-op — it compared
+sha256 of `/opt/k3s` against `/usr/local/bin/k3s`, logged `Binary already been replaced` and exited 0
+— and the Ansible-managed `config.yaml` and `k3s.service` were untouched. The node ends up labelled
+`plan.upgrade.cattle.io/k3s-agent`, so it is not re-upgraded. Do not "fix" the cordon by hand; it
+clears in under a minute.
 
 ### TODO-6 — make the node usable (separate commits, strictly ordered)
 
@@ -223,8 +276,9 @@ IP unchanged across the reboot; `apparmor=0` on the cmdline and the service `dis
 - [x] Facts gather on Python 3.14.4
 - [x] `make requirements-ansible` exits 0
 - [x] Phase 2 prepare + all 10 gates
-- [ ] Phase 4 join
-- [ ] Phase 5 verification (TODO-5.1 … 5.9)
+- [x] Phase 4 join — `ok=40 changed=11 failed=0`, prusik/grigri provably untouched
+- [x] Phase 5 verification (TODO-5.1 … 5.9) — 7 of 9 pass; TODO-5.5 (pfSense BGP neighbour) and
+      TODO-5.6 (one chrony restart) are handed to a human
 - [ ] Phase 6 (TODO-6.1 … 6.6)
 
 ## Troubleshooting

@@ -169,6 +169,16 @@ matters there.
   disabled), so on a no-ZFS node any PVC without `storageClassName` inherits the default
   `openebs-zfspv` and hangs `Pending` forever instead of failing. See
   `docs/user-guide/add-or-remove-nodes.md` and `planning/k8s-amd64-1-node-addition.md`
+- Scoped `metal/` runs (`--limit`) break on templates that read another host's **gathered** facts —
+  the control plane is in no play and `delegate_to` does not gather delegate facts, so
+  `hostvars[x].ansible_hostname` dies with `object of type 'HostVarsVars' has no attribute ...`. Use
+  the inventory name instead. The second symptom is silent: a play that fails discards its pending
+  handlers, and the next run sees an unchanged config file so the daemon never reloads. See
+  `docs/troubleshooting/ansible-limit-cross-host-facts.md`
+- A freshly joined node shows `Ready,SchedulingDisabled` for about a minute: the `k3s-agent`
+  system-upgrade Plan has `cordon: true` and selects every non-control-plane node. When the binary
+  already matches, the job compares sha256, logs `Binary already been replaced`, exits 0, and the
+  controller uncordons. Don't uncordon by hand
 - `openebs-zfspv` storage class uses `reclaimPolicy: Retain` — deleted PVCs leave released PVs
   that leak ZFS space. Audit periodically: see `docs/troubleshooting/cluster-hygiene.md`
 - `openebs-zfspv` with `fstype: zfs` + `fsGroup` causes slow pod startup (recursive chown on

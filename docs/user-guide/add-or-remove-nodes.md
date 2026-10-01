@@ -95,6 +95,14 @@ on them and hard-fails. Also never set `prepare_additional_disks` (the disk-form
 [`docs/troubleshooting/ansible-ubuntu-2604-compat.md`](../troubleshooting/ansible-ubuntu-2604-compat.md)
 for full details.
 
+### Prerequisites: pfSense BGP neighbour
+
+`system/kube-system/resources/cilium/bgp-cluster-config.yaml` selects `kubernetes.io/os: linux`
+with `localASN: 64513` peering to `peerAddress: 192.168.192.1` at `peerASN: 64512`. The cluster
+side is automatic for any new node, but **FRR on pfSense must have a neighbour entry for the
+node's IP with remote-as 64513**, matching grigri and prusik. Without it, BGP never establishes
+and no pod CIDR or LoadBalancer IP is announced from the node.
+
 ### Pre-flight: bootstrap the new node
 
 `make first-boot` is **not usable** for a modern Ubuntu node: it forces
@@ -151,18 +159,65 @@ kubectl get ds -A
 
 # Cilium BGP peer to 192.168.192.1 established (bgp-cluster-config.yaml peers on
 # kubernetes.io/os: linux, so it is automatic — but the router must accept the new peer)
+kubectl --context=grigri get pods -n kube-system -l k8s-app=cilium -o wide
+kubectl --context=grigri exec -n kube-system <cilium-pod-on-that-node> -c cilium-agent -- cilium bgp peers
 
-# chrony synced to pfsense.grigri
+# chrony synced to pfsense.grigri (192.168.192.1)
 chronyc -n sources
+# On 22.04/24.04 (ntpsec): ntpq -pn
 
 # Nothing new stuck Pending
 kubectl get pods -A --field-selector=status.phase=Pending
 ```
 
+#### BGP peer must show `established`
+
+`cilium bgp peers` prints Session `active` when the TCP session is still trying — this is **not**
+established. A healthy peer shows `established`, a non-zero uptime, and at least one advertised
+route. Meanwhile Cilium itself looks completely healthy (`Cilium: Ok`, `NetworkUnavailable=False`,
+`KubeProxyReplacement: True`), so the missing BGP session is easy to miss.
+
+If the session stays `active`, the pfSense FRR neighbour entry for the node's IP is missing or
+wrong (see [Prerequisites](#prerequisites-pfsense-bgp-neighbour)). Until fixed, the node's podCIDR
+is not advertised — traffic from outside the cluster to pods on this node will not route, and no
+LoadBalancer IP is announced from it. Intra-cluster pod-to-pod traffic across nodes is unaffected
+(same L2 segment). `cilium bgp routes advertised ipv4 unicast` is empty until the session is
+`established`. Note: `cilium bgp peers` prints a deprecation notice suggesting `cilium shell
+bgp/peers`; both work.
+
+#### The node is briefly `Ready,SchedulingDisabled` — this is normal
+
+The `k3s-agent` system-upgrade `Plan` (namespace `system-upgrade`) has `cordon: true` and selects
+every worker (`node-role.kubernetes.io/control-plane DoesNotExist`). Immediately after joining, the
+node shows `Ready,SchedulingDisabled` with taint `node.kubernetes.io/unschedulable:NoSchedule`. An
+`apply-k3s-agent-on-<node>-...` job runs; because the node already has the target k3s version, the
+job compares sha256 of `/opt/k3s` against `/host/usr/local/bin/k3s`, logs
+`[INFO] Binary already been replaced`, exits 0, and the controller uncordons. This clears in under
+a minute. The node ends up labelled `plan.upgrade.cattle.io/k3s-agent`, so it is not re-upgraded.
+
+**Do NOT uncordon by hand.** The Ansible-managed `/etc/rancher/k3s/config.yaml` and
+`/etc/systemd/system/k3s.service` are untouched during this process.
+
+#### Time sync must point at pfsense.grigri
+
+Verify with `chronyc sources` (26.04/chrony) or `ntpq -pn` (22.04/24.04 ntpsec) — the output
+should show `192.168.192.1`, matching prusik and grigri.
+
+If `make cluster` fails partway through the play, handlers run at the end are discarded, so the
+chrony/ntp daemon keeps its distro config **in memory** even though the config file on disk is
+correct. This is sticky: a re-run sees the file unchanged, notifies no handler, and never reloads.
+Recovery: force a handler run or restart the daemon manually. See
+[`docs/troubleshooting/ansible-limit-cross-host-facts.md`](../troubleshooting/ansible-limit-cross-host-facts.md)
+for the full explanation of the handler-discard mechanism.
+
 !!! warning
 
-    On a no-ZFS node `zfs-localpv-node` will CrashLoop until its `nodeSelector` is changed to a
-    `storage.zfspv` label.
+    On a no-ZFS node, `zfs-localpv-node` is `2/2 Running` with zero restarts even though the node
+    has no pool and the `zpool` binary is not installed — it only fails when actually asked to
+    provision or mount a volume. A green DaemonSet is **not** evidence the node can serve PVCs.
+    The `allowedTopologies` exclusion in
+    `system/zfs-localpv/templates/storage-class-openebs-zfspv.yaml` is the only thing preventing
+    durable PVCs from binding to a no-ZFS node.
 
 !!! warning
 
@@ -170,6 +225,15 @@ kubectl get pods -A --field-selector=status.phase=Pending
     `allowedTopologies` list only grigri and prusik — on a no-ZFS node such a PVC stays `Pending`
     forever instead of failing loudly. There is currently no local-path StorageClass and k3s'
     bundled local-storage is disabled (`metal/roles/k3s/defaults/main.yml:8-12`).
+
+#### Scoped Ansible runs and cross-host facts
+
+All `make prepare` / `make cluster` runs must be scoped with `--limit`. Scoped runs break on
+templates that read another host's *gathered* facts (`hostvars[x].ansible_hostname`), because
+`--limit` removes the control plane from every play and `delegate_to` does not gather delegate
+facts. This was fixed in commit `1c3f5a48`. See
+[`docs/troubleshooting/ansible-limit-cross-host-facts.md`](../troubleshooting/ansible-limit-cross-host-facts.md)
+for the full explanation and the second symptom (handler discard on a discarded play).
 
 ## Remove a node
 
