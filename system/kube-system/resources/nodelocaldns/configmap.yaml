@@ -90,7 +90,7 @@ data:
         return 1
       fi
 
-      tmp_file="$(mktemp "${CORE_FILE_BASE}.tmp.XXXXXX")"
+      tmp_file="$(mktemp "/etc/coredns/.Corefile.base.tmp.XXXXXX")"
       if ! sed "s|UPSTREAM_DNS_SERVERS|${upstreams}|g" \
         "${CORE_FILE_TEMPLATE}" > "${tmp_file}"; then
         rm -f "${tmp_file}"
