@@ -52,3 +52,89 @@ data:
         forward . /etc/resolv.conf
         prometheus :9253
     }
+  corefile-watcher.sh: |
+    #!/usr/bin/env bash
+    set -uo pipefail
+
+    readonly NAMESPACE="kube-system"
+    readonly ENDPOINT_SLICE_LABEL="kubernetes.io/service-name=kube-dns-upstream"
+    readonly CORE_FILE_TEMPLATE="/etc/coredns-template/Corefile.template"
+    readonly CORE_FILE_BASE="/etc/coredns/Corefile.base"
+
+    log() {
+      echo "$(date --utc '+%Y-%m-%dT%H:%M:%SZ'): $*"
+    }
+
+    discover_upstreams() {
+      kubectl --request-timeout=10s get endpointslices \
+        --namespace "${NAMESPACE}" \
+        --selector "${ENDPOINT_SLICE_LABEL}" \
+        --output json \
+        | jq --exit-status --raw-output '
+            [.items[].endpoints[]
+              | select(.conditions.ready != false)
+              | .addresses[]]
+            | unique
+            | if length == 0
+              then error("no ready CoreDNS endpoints")
+              else join(" ")
+              end
+          '
+    }
+
+    update_corefile() {
+      local upstreams tmp_file
+
+      if ! upstreams="$(discover_upstreams)"; then
+        log "failed to discover ready CoreDNS endpoints; keeping existing Corefile.base"
+        return 1
+      fi
+
+      tmp_file="$(mktemp "${CORE_FILE_BASE}.tmp.XXXXXX")"
+      if ! sed "s|UPSTREAM_DNS_SERVERS|${upstreams}|g" \
+        "${CORE_FILE_TEMPLATE}" > "${tmp_file}"; then
+        rm -f "${tmp_file}"
+        log "failed to render Corefile.base; keeping existing configuration"
+        return 1
+      fi
+
+      if [[ ! -s "${tmp_file}" ]] || grep -q 'UPSTREAM_DNS_SERVERS' "${tmp_file}"; then
+        rm -f "${tmp_file}"
+        log "refusing to install an empty or incomplete Corefile.base"
+        return 1
+      fi
+
+      if [[ -f "${CORE_FILE_BASE}" ]] && cmp --silent "${tmp_file}" "${CORE_FILE_BASE}"; then
+        rm -f "${tmp_file}"
+        return 0
+      fi
+
+      chmod 0644 "${tmp_file}"
+      mv --force "${tmp_file}" "${CORE_FILE_BASE}"
+      log "upstream endpoints changed to: ${upstreams}"
+    }
+
+    if [[ "${1:-}" == "--init" ]]; then
+      until update_corefile; do
+        log "waiting for a valid initial CoreDNS endpoint set"
+        sleep 2
+      done
+      exit 0
+    fi
+
+    update_corefile || true
+    while true; do
+      if kubectl get endpointslices \
+        --namespace "${NAMESPACE}" \
+        --selector "${ENDPOINT_SLICE_LABEL}" \
+        --watch \
+        --output name \
+        | while read -r _; do
+            update_corefile || true
+          done; then
+        log "watch connection closed; reconnecting"
+      else
+        log "watch connection failed; reconnecting"
+      fi
+      sleep 1
+    done
