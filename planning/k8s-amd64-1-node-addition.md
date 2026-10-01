@@ -215,13 +215,30 @@ clears in under a minute.
       5d16h** (chronic; the other vector-agent has 1 restart in 5d), and `SnapshotDestroyFailed` on
       two zfssnapshot CRs that are **180 and 189 days old** and cannot be reaped because they have
       dependent clones.
-- [ ] **TODO-6.3** Add a bindable StorageClass for the node. Nothing exists today: k3s' bundled
-      local-storage is disabled server-side (`metal/roles/k3s/defaults/main.yml:8-12`) and cannot be
-      re-enabled per node. Create `system/local-path/` copying the kustomization + `helmCharts:`
-      pattern of `system/snapscheduler/kustomization.yaml:1-16`. It is auto-registered by the
-      ApplicationSet at `bootstrap/root/templates/stack.yaml:15-22` (namespace == dirname). Must
-      **not** carry `is-default-class` (owned by `storage-class-openebs-zfspv.yaml:6`). Suggested
-      `reclaimPolicy: Delete` — the disk is ephemeral.
+- [x] **TODO-6.3** ~~Add a bindable StorageClass for the node~~ — **DROPPED by decision.**
+      A `system/local-path/` chart deploying `local-path-provisioner` was planned and is not wanted.
+      The only intended consumer of local storage on this node is the CI runner, which is an
+      exception, and a StorageClass is an *advertisement*: anyone could set `storageClassName:
+      local-path` and silently get storage that is not backed up (Velero's zfs plugin is enabled but
+      node-agent is not) and has no quota enforcement (`requests.storage` is advisory for
+      local-path-provisioner) — a general capability on a weak node with a 1 Gb/s link. It would add
+      a Deployment, RBAC, a ServiceAccount and a chart to track, in exchange for per-replica isolation
+      and cross-node portability that a single-replica StatefulSet pinned to one node does not need.
+      hostPath is also already the house pattern (jellyfin, qbittorrent, sonarr, radarr, lidarr,
+      bazarr, navidrome, transcoder, unpackerr, nextcloud), and no namespace enforces Pod Security
+      Admission, so it is unrestricted.
+      **Replacement guard:** `system/monitoring/resources/storage-prometheus-rules.yaml` alerts
+      `PersistentVolumeClaimPending` (Pending 10m, warning) and `PersistentVolumeClaimLost` (Lost 5m,
+      critical), wired into `system/monitoring/kustomization.yaml`. The Prometheus CR's `ruleSelector`
+      is `{"matchLabels":{"release":"monitoring"}}`, which the new rule carries. Baseline when added:
+      85 Bound PVCs, 0 Pending, 0 Lost, 6 Released PVs.
+      **For the eventual CI move** (gated on TODO-9.2, not on this): use `hostPath` with
+      `type: Directory`, *not* `DirectoryOrCreate` — the latter silently creates a root-owned
+      directory and the runner is non-root, yielding a permission error that looks like an app bug.
+      Create the paths from an Ansible role in `metal/` so path, owner and mode are in git. And note
+      that deleting the two 50 GiB CI PVCs orphans ~100 GiB of ZFS on prusik, because
+      `openebs-zfspv` is `reclaimPolicy: Retain` — the same mechanism behind the 6 leaked PVs in
+      TODO-8, so the PVs need deliberate cleanup, not just a PVC delete.
 - [ ] **TODO-6.4** Rebalance workloads. **The CI runner cannot move here**: `ci-runner-0` measures
       0.84 GiB avg / 1.95 GiB p95 but **peaks at 17.4 GiB and 7.68 cores**, which exceeds a 16 GiB
       node. Move the stateless set instead, by adding `topologySpreadConstraints` and letting ArgoCD
@@ -295,8 +312,9 @@ clears in under a minute.
 - [ ] **TODO-9.2** Replace both 8 GB DDR4-**2400** SODIMMs with 2x16 GB DDR4-3200. Both slots are
       populated and DMI caps the board at 32 GB, so this is a replace-both job. It fixes the 2400 MT/s
       cap *and* unlocks TODO-6.4's CI runner move, which needs more than 16 GiB.
-- [ ] **TODO-9.3** Populate the **empty M.2 slot** with an NVMe device and point the local-path
-      StorageClass (TODO-6.3) at it. The current root disk is a SATA SanDisk SD6SB1M-, ~550 MB/s.
+- [ ] **TODO-9.3** Populate the **empty M.2 slot** with an NVMe device and point the CI runner's
+      `hostPath` volumes at it (TODO-6.3 was dropped, so there is no local-path StorageClass to
+      repoint). The current root disk is a SATA SanDisk SD6SB1M-, ~550 MB/s.
 - [ ] **TODO-9.4** Find out why `enp2s0` negotiates **1000Mb/s** rather than 2.5 GbE — switch port,
       cable, or `r8169` link modes. Re-check before moving anything throughput-sensitive.
 
@@ -317,7 +335,8 @@ clears in under a minute.
 - [x] Phase 2 prepare + all 10 gates
 - [x] Phase 4 join — `ok=40 changed=11 failed=0`, prusik/grigri provably untouched
 - [x] Phase 5 verification (TODO-5.1 … 5.9) — **9 of 9 pass**
-- [ ] Phase 6 (TODO-6.1 … 6.6)
+- [ ] Phase 6 — 6.1 and 6.2 **done and verified**; 6.3 **dropped by decision**; 6.4-6.6 remain
+      (the CI half of 6.4 is gated on TODO-9.2)
 
 ## Troubleshooting
 
@@ -327,8 +346,8 @@ clears in under a minute.
 | `become` fails on a 26.04 node with a sudo-rs error about `-H` | `ansible_become_exe: /usr/bin/sudo.ws` must be set in that host's `host_vars`. Do **not** `apt remove sudo-rs` — it takes `ubuntu-minimal` with it. |
 | k3s agent cannot reach the API server | Short-name resolution. `config.yaml.j2` uses `ansible_hostname` (`prusik`), which needs the `grigri` search domain. Set `prepare_dns_search_domains: [grigri]`. |
 | `make requirements-ansible` exits 1 | galaxy refuses to replace `roles/geerlingguy.ntp` when it exists without `.galaxy_install_info`. Fixed by `--ignore-errors`; never `--force`. |
-| `zfs-localpv-node` CrashLoops on the new node | Expected until TODO-6.1/6.2. The DaemonSet selects on `kubernetes.io/arch: amd64`. |
-| A new PVC stays `Pending` forever | It inherited the default `openebs-zfspv`, whose `allowedTopologies` exclude this node. Give it the local StorageClass from TODO-6.3. |
+| `zfs-localpv-node` runs on a node with no pool | Resolved by TODO-6.1/6.2 — the DaemonSet now selects `storage.zfspv: "true"`. Note it never CrashLooped: it reported `2/2 Running` with 0 restarts despite no pool and no `zpool` binary, so there was no symptom to notice. |
+| A new PVC stays `Pending` forever | It inherited the default `openebs-zfspv`, whose `allowedTopologies` exclude this node. Deliberate: there is no local StorageClass (TODO-6.3). Use `hostPath` for node-local exceptions, and rely on the `PersistentVolumeClaimPending` alert to surface it. |
 | `make first-boot` fails | It forces `-e ansible_user=root --ask-pass`, and Ubuntu images are `PermitRootLogin prohibit-password`. It is also not scopeable: it appends its own `--limit` *after* `ANSIBLE_EXTRA_ARGS`, and the last `--limit` wins. |
 | Interactive `ssh k8s-amd64-1` reports a changed host key | Expected after a reinstall: `ssh-keygen -R k8s-amd64-1`. Ansible is unaffected (`ansible.cfg` sets `host_key_checking = False` and `UserKnownHostsFile=/dev/null`). |
 
@@ -363,29 +382,32 @@ clears in under a minute.
 
 | file | change | TODO |
 |---|---|---|
-| `metal/inventory/host_vars/prusik.yml`, `grigri.yml` | add `node_labels: {storage.zfspv: "true"}` | 6.1 |
-| `system/zfs-localpv/values.yaml` | `zfsNode.nodeSelector` → `storage.zfspv: "true"` | 6.2 |
-| `system/local-path/` (new) | kustomization + `helmCharts:`, no `is-default-class`, `reclaimPolicy: Delete` | 6.3 |
+| ~~`metal/inventory/host_vars/prusik.yml`, `grigri.yml`~~ | **done** — `node_labels: {storage.zfspv: "true"}` (`958c42fa`) | 6.1 ✅ |
+| ~~`system/zfs-localpv/values.yaml`~~ | **done** — `zfsNode.nodeSelector` → `storage.zfspv: "true"` (`675643fe`) | 6.2 ✅ |
+| ~~`system/local-path/`~~ | **dropped by decision**; replaced by `system/monitoring/resources/storage-prometheus-rules.yaml` + `system/monitoring/kustomization.yaml` | 6.3 ❌ |
 | `apps/*`, `platform/*` values | `topologySpreadConstraints`; drop `hostname: prusik` nodeSelectors on storage-free workloads | 6.4 |
+| `platform/ci-runners/resources/{pvc-runner-cache,pvc-runner-docker}.yaml`, `statefulset.yaml` | convert the two 50 GiB PVCs to `hostPath` (`type: Directory`) + an Ansible role in `metal/` for the paths — **only after TODO-9.2** | 6.4 |
 | `metal/inventory/host_vars/prusik.yml` | raise `zfs_arc_max_gb` from 5 | 6.6 |
-| `docs/user-guide/add-or-remove-nodes.md` | scoped commands, host_vars template, DNS + 26.04 specifics | 7.1 |
-| `docs/deployment/manual-setup.md` | 26.04 install choices, sudo-rs bootstrap, LV expansion | 7.2 |
-| `docs/hardware/k8s-amd64-1.md` (new) | hardware reference, follow `prusik.md` | 7.3 |
-| `docs/conventions/prusik-fast-storage-tier.md` | update §Adding the PN51-E1 Node (lines 178-230) | 7.4 |
-| `docs/troubleshooting/cluster-hygiene.md` | orphan PVs, sentinels, `container_fs_*` = 0 | 7.5 |
+| ~~`docs/user-guide/add-or-remove-nodes.md`~~ | **done** | 7.1 ✅ |
+| ~~`docs/deployment/manual-setup.md`~~ | **done** | 7.2 ✅ |
+| ~~`docs/hardware/k8s-amd64-1.md`~~ | **done** | 7.3 ✅ |
+| ~~`docs/conventions/prusik-fast-storage-tier.md`~~ | **done** | 7.4 ✅ |
+| ~~`docs/troubleshooting/cluster-hygiene.md`~~ | **done** | 7.5 ✅ |
 
 ## Execution Order
 
 ```
-TODO-4.1 (human: make cluster --limit k8s-amd64-1)
-   └─> TODO-5.1..5.9 (agent: read-only verification)
-          └─> TODO-6.1 (human: node-labels on grigri,prusik)   ── needs metal/kubeconfig.yaml from 4.1
-                 └─> TODO-6.2 (zfs-localpv selector)           ── MUST follow 6.1 or PVC mounts break
-                        └─> TODO-6.3 (local-path StorageClass)
-                               └─> TODO-6.4 (workload rebalance)
-                                      └─> TODO-6.5, TODO-6.6
-TODO-7.* (docs) can proceed in parallel with everything above
+TODO-4.1 ✅ (make cluster --limit k8s-amd64-1)
+   └─> TODO-5.1..5.9 ✅ (read-only verification, 9 of 9)
+          └─> TODO-6.1 ✅ (node-labels on grigri,prusik)       ── needed metal/kubeconfig.yaml from 4.1
+                 └─> TODO-6.2 ✅ (zfs-localpv selector)        ── had to follow 6.1 or PVC mounts break
+                        └─> TODO-6.3 ❌ DROPPED (no local StorageClass;
+                        │      PersistentVolumeClaimPending alert ships instead)
+                        └─> TODO-6.4 (workload rebalance)       ── CI move gated on TODO-9.2 (32 GiB RAM)
+                               └─> TODO-6.5, TODO-6.6
+TODO-7.* ✅ (docs) done
 TODO-8.* (hygiene) independent
+TODO-9.* (hardware) physical, gates the CI half of TODO-6.4
 ```
 
 ## Open Decisions
@@ -400,7 +422,9 @@ TODO-8.* (hygiene) independent
    (1.67→1.70 GiB) are the largest stateless consumers and mount **41 unbounded `emptyDir: Memory`
    volumes** — a live OOM amplifier on prusik. Forgejo already covers git, so decommissioning may beat
    migrating.
-4. **local-path StorageClass naming and reclaim policy.**
+4. ~~**local-path StorageClass naming and reclaim policy.**~~ **Resolved — there will be no local
+   StorageClass.** Rationale and the hostPath rules that replace it are in TODO-6.3; the residual
+   `Pending` risk is covered by the `PersistentVolumeClaimPending` alert.
 5. **ingress-nginx**: keep the weight-100 prusik preference. `externalTrafficPolicy: Local` with a
    BGP LB IP (`system/ingress-nginx/values.yaml:94-96`) means a replica on this node would add a hop
    and a bandwidth ceiling to Jellyfin streams — and the ceiling is lower than first assumed, since

@@ -165,9 +165,12 @@ matters there.
   must skip, so a new node gets no `setup` role. `make first-boot` is unusable (forces root +
   `--ask-pass`) and unscopeable (it appends its own `--limit` last). The node must resolve short names
   or the k3s agent cannot reach `server: https://prusik:6443` — set `prepare_dns_search_domains` if
-  DHCP does not push the `grigri` search domain. There is no local StorageClass (k3s' bundled one is
-  disabled), so on a no-ZFS node any PVC without `storageClassName` inherits the default
-  `openebs-zfspv` and hangs `Pending` forever instead of failing. See
+  DHCP does not push the `grigri` search domain. There is no local StorageClass by deliberate
+  decision (a `system/local-path/` chart was considered and dropped — a StorageClass advertises
+  unbacked, unquota'd storage on a weak node). On a no-ZFS node any PVC without `storageClassName`
+  inherits the default `openebs-zfspv` and hangs `Pending` forever instead of failing; guarded by
+  `PersistentVolumeClaimPending` / `PersistentVolumeClaimLost` PrometheusRules. Node-local
+  exceptions use `hostPath` with `type: Directory` (Ansible-created paths in `metal/`). See
   `docs/user-guide/add-or-remove-nodes.md` and `planning/k8s-amd64-1-node-addition.md`
 - Scoped `metal/` runs (`--limit`) break on templates that read another host's **gathered** facts —
   the control plane is in no play and `delegate_to` does not gather delegate facts, so

@@ -238,8 +238,15 @@ for the full explanation of the handler-discard mechanism.
 
     A PVC with no `storageClassName` silently inherits the cluster default `openebs-zfspv`, whose
     `allowedTopologies` list only grigri and prusik — on a no-ZFS node such a PVC stays `Pending`
-    forever instead of failing loudly. There is currently no local-path StorageClass and k3s'
-    bundled local-storage is disabled (`metal/roles/k3s/defaults/main.yml:8-12`).
+    forever instead of failing loudly. This is deliberate: no local StorageClass exists by decision
+    (a `system/local-path/` chart was considered and dropped — a StorageClass is an advertisement
+    for unbacked, unquoted storage on a weak node). The silent `Pending` footgun is guarded by a
+    `PersistentVolumeClaimPending` PrometheusRule at
+    `system/monitoring/resources/storage-prometheus-rules.yaml` (warning after 10m) and
+    `PersistentVolumeClaimLost` (critical after 5m). Node-local storage exceptions should use
+    `hostPath` with `type: Directory` and directories created from `metal/` via Ansible, not a
+    StorageClass. k3s' bundled local-storage is disabled
+    (`metal/roles/k3s/defaults/main.yml:8-12`).
 
 #### Scoped Ansible runs and cross-host facts
 

@@ -201,11 +201,16 @@ loudly.
 ### The CI runner cannot move to 16 GiB
 
 `ci-runner-0` measures 0.84 GiB avg / 1.95 GiB p95 but **peaks at 17.4 GiB RSS and 7.68 cores**,
-and was OOM-killed 3 times in 7 days on prusik. Its two 50 GiB PVCs
+and was OOM-killed 3 times in 7 days on prusik. Moving it to a node with 12.53 GiB allocatable
+would relocate the OOM kills, not fix them. The DMI caps the board at **32 GB** and **both SODIMM
+slots are already populated with 8 GB DDR4-2400**, so it is a replace-both-sticks job (2x16 GiB
+DDR4-3200 also lifts the 2400 MT/s cap the slower Crucial part imposes). Its two 50 GiB PVCs
 (`platform/ci-runners/resources/pvc-runner-cache.yaml:12`, `pvc-runner-docker.yaml:14`) omit
-`storageClassName` so they are node-bound to ZFS. Moving CI needs **2x16 GiB SODIMM (32 GiB) in
-the node**, plus converting those PVCs to a local class. Measured CI disk usage is ~32.4 G dind +
-~11 G cache, which does fit in 102 G.
+`storageClassName` so they are node-bound to ZFS. Deleting them would orphan ~100 GiB of ZFS on
+prusik (`openebs-zfspv` uses `reclaimPolicy: Retain` — the same mechanism that already leaked 6
+`Released` PVs, ~13.5 GiB). The PVs need deliberate cleanup, not just a PVC delete. When the move
+happens, use `hostPath` with `type: Directory` (directories created from `metal/` via Ansible), not
+a StorageClass. Measured CI disk usage is ~32.4 G dind + ~11 G cache, which does fit in 102 G.
 
 ### No local StorageClass exists
 
@@ -318,8 +323,10 @@ analysis in this doc that claims per-pod IO should be treated as suspect. See
    still cannot live in ARC.
 6. **Right-size container limits** — 210 GiB of limits on 62 GiB is what forced the 5GB ARC cap in
    the first place and will re-constrain it if left alone.
-7. **CI move requires 32 GiB in k8s-amd64-1** (2x16 GiB SODIMM) plus converting its PVCs to a local
-   StorageClass. Only then does the full ~19 GiB reclaim become available.
+7. **CI move requires 32 GiB in k8s-amd64-1** (2x16 GiB SODIMM, both slots currently populated with
+   8 GB DDR4-2400). Convert PVCs to `hostPath` with `type: Directory` (Ansible-created paths in
+   `metal/`), not a StorageClass. Clean up the orphaned `Released` PVs from the old PVCs
+   (`reclaimPolicy: Retain`). Only then does the full ~19 GiB reclaim become available.
 
 ## Open Questions
 
