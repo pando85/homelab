@@ -17,3 +17,9 @@ l2arc_write_max_mb: 300
 l2arc_write_boost_mb: 500
 
 swap_file_size_mb: 16384
+
+# Opt-in for the zfs-localpv node DaemonSet, which selects on this label instead of
+# kubernetes.io/arch because k8s-amd64-1 is amd64 but has no ZFS pool. This label
+# must exist before system/zfs-localpv/values.yaml is switched to it.
+node_labels:
+  storage.zfspv: "true"

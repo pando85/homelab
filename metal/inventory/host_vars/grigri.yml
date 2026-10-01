@@ -11,3 +11,9 @@ l2arc_write_boost_mb: 160
 # Pinned: grigri's L2ARC holds ~0% prefetch (1.5MB of 459GiB) since it serves no
 # media streaming, so the prusik-motivated default of 1 has nothing to reclaim here.
 l2arc_noprefetch: 0
+
+# Opt-in for the zfs-localpv node DaemonSet, which selects on this label instead of
+# kubernetes.io/arch because k8s-amd64-1 is amd64 but has no ZFS pool. This label
+# must exist before system/zfs-localpv/values.yaml is switched to it.
+node_labels:
+  storage.zfspv: "true"
