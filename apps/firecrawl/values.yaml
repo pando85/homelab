@@ -8,9 +8,8 @@ app-template:
       containers:
         app:
           image:
-            # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: v2.11.448
+            tag: latest
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/index.js"]
           env:
@@ -90,9 +89,8 @@ app-template:
       containers:
         app:
           image:
-            # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: v2.11.448
+            tag: latest
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/services/queue-worker.js"]
           env:
@@ -133,9 +131,8 @@ app-template:
       containers:
         app:
           image:
-            # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: v2.11.448
+            tag: latest
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/services/worker/nuq-worker.js"]
           env:
@@ -199,9 +196,8 @@ app-template:
       containers:
         app:
           image:
-            # renovate: datasource=docker depName=ghcr.io/firecrawl/playwright-service
             repository: ghcr.io/firecrawl/playwright-service
-            tag: v2.11.448
+            tag: latest
           env:
             PORT: "3000"
             ALLOW_LOCAL_WEBHOOKS: "false"
