@@ -4,3 +4,9 @@
     name: geerlingguy.ntp
   vars:
     ntp_daemon: "{{ ntp_daemon_select }}"
+
+# Handlers normally run at the end of the play, so if a later role fails the time daemon keeps its
+# old config in memory. Worse, the next run sees an unchanged config file, notifies nothing, and the
+# daemon never reloads. Flush here so committed time config is applied before k3s starts.
+- name: Apply the time daemon configuration before continuing
+  ansible.builtin.meta: flush_handlers
