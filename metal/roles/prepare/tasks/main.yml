@@ -116,16 +116,16 @@
   tags:
     - disable-armbian-services
 
-- name: Disable swap in fstab
+- name: Disable Ubuntu default swap in fstab
   lineinfile:
     path: /etc/fstab
-    regexp: '^.*swap.*$'
+    regexp: '^/swap\.img'
     state: absent
-  notify: disable swap
+  notify: disable ubuntu default swap
 
 - meta: flush_handlers
 
-- name: Remove swap file
+- name: Remove Ubuntu default swap file
   file:
     path: /swap.img
     state: absent
