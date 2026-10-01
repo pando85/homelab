@@ -31,6 +31,12 @@
 - name: apply network interface  # noqa: name[casing]
   command: netplan apply
 
+- name: restart systemd-resolved  # noqa: name[casing]
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    daemon_reload: true
+    state: restarted
+
 - name: unattended-upgrades | restart systemd service  # noqa: name[casing]
   ansible.builtin.service:
     name: unattended-upgrades.service

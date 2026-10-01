@@ -1,0 +1,16 @@
+---
+- name: resolved | Ensure drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+
+- name: resolved | Configure DNS search domains
+  ansible.builtin.copy:
+    content: |
+      # Managed by ansible: metal/roles/prepare/tasks/resolved.yml
+      [Resolve]
+      Domains={{ prepare_dns_search_domains | join(' ') }}
+    dest: /etc/systemd/resolved.conf.d/10-ansible-search-domains.conf
+    mode: "0644"
+  notify: restart systemd-resolved

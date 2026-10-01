@@ -1,7 +1,10 @@
 - name: Create some basic config
   hosts: k3s_cluster
   environment:
-    KUBECONFIG: ../../kubeconfig.yaml
+    # The k3s role writes this to metal/kubeconfig.yaml (ansible_path in
+    # cluster.yml). A bare relative path resolves against make's working
+    # directory instead of the playbook, so anchor it to playbook_dir.
+    KUBECONFIG: "{{ playbook_dir }}/../../kubeconfig.yaml"
   tasks:
     - name: Initialize inventory node labels
       set_fact:

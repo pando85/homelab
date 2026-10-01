@@ -180,6 +180,13 @@
   tags:
     - hostname
 
+- name: Configure DNS search domains
+  import_tasks: resolved.yml
+  when: prepare_dns_search_domains | length > 0
+  tags:
+    - resolved
+    - hostname
+
 - name: Configure journal log
   copy:
     src: journald.conf

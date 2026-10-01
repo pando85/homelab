@@ -50,3 +50,8 @@ prepare_additional_disks: []
 prepare_additional_disks_force_format: false
 
 prepare_domain: localdomain
+
+# DNS search domains written to /etc/systemd/resolved.conf.d/. Empty by default:
+# existing nodes receive `search grigri` from DHCP. Set per host only when DHCP
+# does not provide it, otherwise short names such as `prusik` do not resolve.
+prepare_dns_search_domains: []

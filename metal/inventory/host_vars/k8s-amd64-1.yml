@@ -1,0 +1,26 @@
+---
+# Ubuntu 26.04: sudo-rs is the default provider and rejects the -H flag that
+# Ansible's sudo become plugin passes. Classic sudo is still installed here.
+# See docs/troubleshooting/ansible-ubuntu-2604-compat.md
+ansible_become_exe: /usr/bin/sudo.ws
+
+# Ubuntu 26.04 has no `ntp` package; chrony is the default time daemon.
+ntp_daemon_select: chrony
+ntp_package: chrony
+ntp_config_file: /etc/chrony/chrony.conf
+
+# This node does not receive the `grigri` DHCP search domain that prusik and
+# grigri get, so short names fail to resolve. The k3s agent config uses
+# `server: https://prusik:6443` (roles/k3s/templates/config.yaml.j2), which would
+# make the join fail without this.
+prepare_dns_search_domains:
+  - grigri
+
+# 16 GiB RAM, 12 threads, 119 GiB SSD, no ZFS pool. Hosts only ephemeral,
+# stateless workloads, so eviction is tighter than the kube_node defaults.
+# No zfs_*/l2arc_* keys: the setup role is not run for this host and its
+# zfs.yml asserts would fail.
+k3s_kubelet_extra_args:
+  - kube-reserved=cpu=0.5,memory=512Mi,ephemeral-storage=1Gi
+  - system-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi
+  - eviction-hard=memory.available<500Mi,nodefs.available<10%
