@@ -4,11 +4,11 @@ metadata:
   name: workspace-gc-script
 data:
   cleanup.sh: |
-    CHECK_INTERVAL=15
-    THRESHOLD_LOW=70
-    THRESHOLD_MED=80
-    THRESHOLD_HIGH=90
-    THRESHOLD_CRITICAL=95
+    CHECK_INTERVAL="${CHECK_INTERVAL:-15}"
+    THRESHOLD_LOW="${THRESHOLD_LOW:-70}"
+    THRESHOLD_MED="${THRESHOLD_MED:-80}"
+    THRESHOLD_HIGH="${THRESHOLD_HIGH:-90}"
+    THRESHOLD_CRITICAL="${THRESHOLD_CRITICAL:-95}"
     PRESERVE_DIRS=".pnpm-store tool_cache"
     runner_started=false
 

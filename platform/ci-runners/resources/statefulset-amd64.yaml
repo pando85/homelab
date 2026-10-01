@@ -1,19 +1,21 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: ci-runner
+  name: ci-runner-amd64
   annotations:
     reloader.stakater.com/auto: "true"
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/name: ci-runner
-  serviceName: ci-runner
+      # Distinct from `ci-runner` on purpose: two StatefulSets in one namespace
+      # must not have overlapping selectors.
+      app.kubernetes.io/name: ci-runner-amd64
+  serviceName: ci-runner-amd64
   replicas: 1
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: ci-runner
+        app.kubernetes.io/name: ci-runner-amd64
     spec:
       containers:
         - name: runner
@@ -35,15 +37,21 @@ spec:
                 fi
               done
 
-              cp /config/.runner .
+              # Identity comes from `server.connections` in registration.yaml
+              # (uuid + token_url), so there is no `.runner` file to copy in.
               exec forgejo-runner -c /registration/registration.yaml daemon
           resources:
             requests:
-              memory: "4Gi"
-              cpu: "100m"
+              memory: "1Gi"
+              cpu: "200m"
             limits:
-              memory: "18Gi"
-              cpu: "14"
+              # Sized so the pod's total limits (~10.2Gi) stay under this node's
+              # 12.53Gi allocatable: a runaway job must OOM-kill this pod, not the
+              # node. `:host`-label jobs execute inside THIS container, so this
+              # limit is what bounds them. capacity: 5 can demand ~17GiB
+              # (ci-runner-0 peaks at 17.4GiB), so OOM kills are expected.
+              memory: "5Gi"
+              cpu: "6"
           securityContext:
             privileged: true
             runAsUser: 1001
@@ -125,11 +133,15 @@ spec:
               mountPath: /sock
           resources:
             requests:
-              memory: "256Mi"
+              memory: "512Mi"
               cpu: "250m"
             limits:
-              memory: "8Gi"
-              cpu: "4"
+              # `docker`-label jobs are sibling containers created by dockerd, so
+              # they land in THIS container's cgroup - this limit bounds them, not
+              # the runner's. Under-sizing it would silently cap docker jobs below
+              # the runner's own budget.
+              memory: "5Gi"
+              cpu: "3"
           startupProbe:
             exec:
               command:
@@ -174,6 +186,24 @@ spec:
               value: /tmp
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
+            # `df -P /var/lib/docker` now measures the node's 113.8 GiB root
+            # filesystem rather than a dedicated 50 GiB volume, so the inherited
+            # thresholds land in the wrong place: HIGH=90 coincides exactly with
+            # kubelet's nodefs.available<10% eviction trigger (11.4 GiB free) and
+            # CRITICAL=95 fires at 5.7 GiB, after the node is already evicting.
+            # These keep the most aggressive tier at ~17 GiB free, and the shorter
+            # interval matters because a shared disk fills faster than a dedicated
+            # one - 30 minutes of a heavy build is a lot of unobserved growth.
+            - name: CHECK_INTERVAL
+              value: "600"
+            - name: THRESHOLD_LOW
+              value: "60"
+            - name: THRESHOLD_MED
+              value: "70"
+            - name: THRESHOLD_HIGH
+              value: "78"
+            - name: THRESHOLD_CRITICAL
+              value: "85"
           command:
             - sh
             - -c
@@ -276,6 +306,20 @@ spec:
               mountPath: /workspace
             - name: workspace-gc-script
               mountPath: /scripts
+          env:
+            # Same reasoning as docker-gc: `df -P /workspace` now reports the
+            # node's 113.8 GiB root LV rather than a dedicated volume, so prune
+            # ahead of kubelet's nodefs.available<10% eviction trigger instead of
+            # at it. The workspace also lost emptyDir's sizeLimit by moving to
+            # hostPath, which makes this loop its only size guard.
+            - name: THRESHOLD_LOW
+              value: "55"
+            - name: THRESHOLD_MED
+              value: "65"
+            - name: THRESHOLD_HIGH
+              value: "75"
+            - name: THRESHOLD_CRITICAL
+              value: "82"
           resources:
             requests:
               memory: "16Mi"
@@ -290,38 +334,55 @@ spec:
           - 1001
         runAsGroup: 1001
         runAsUser: 1001
+      # hostPath volumes are node-local, so this pod must be pinned explicitly -
+      # unlike ci-runner, which lands on prusik implicitly through its ZFS volume
+      # topology and has no nodeSelector at all.
+      nodeSelector:
+        kubernetes.io/hostname: k8s-amd64-1
       volumes:
+        # hostPath rather than PVCs: this node has no ZFS pool and there is
+        # deliberately no local StorageClass (planning/k8s-amd64-1-node-addition.md,
+        # TODO-6.3). `type: Directory`, never `DirectoryOrCreate` - the latter
+        # silently creates a root-owned directory and the runner is uid 1001,
+        # producing a permission error that reads like an app bug. Paths, owners
+        # and modes live in metal/inventory/host_vars/k8s-amd64-1.yml because
+        # kubelet applies no fsGroup management to hostPath volumes.
+        #
+        # The workspace moves off `emptyDir: {medium: Memory, sizeLimit: 8Gi}`:
+        # an 8 GiB tmpfs would reserve 64% of this node's 12.53 Gi allocatable.
+        # hostPath trades tmpfs speed for that RAM and survives pod restarts
+        # (warm checkouts, persistent .pnpm-store) at the cost of stale data,
+        # which workspace-gc prunes. It also loses `sizeLimit`, so the retuned
+        # workspace-gc thresholds are its only size guard.
         - name: runner-data
-          emptyDir:
-            medium: Memory
-            sizeLimit: 8Gi
+          hostPath:
+            path: /srv/ci-runner/workspace
+            type: Directory
         - name: runner-config
           secret:
-            secretName: runner-config
+            secretName: runner-config-amd64
         - name: runner-registration
           configMap:
-            name: runner-registration
+            name: runner-registration-amd64
         - name: docker-certs
           emptyDir: {}
         - name: docker-run
           emptyDir: {}
         - name: ci-runner-cache
-          persistentVolumeClaim:
-            claimName: ci-runner-cache
+          hostPath:
+            path: /srv/ci-runner/cache
+            type: Directory
         - name: ci-runner-docker
-          persistentVolumeClaim:
-            claimName: ci-runner-docker
+          hostPath:
+            path: /srv/ci-runner/docker
+            type: Directory
         - name: workspace-gc-script
           configMap:
             name: workspace-gc-script
-      # not working with kata runtime
-      # resources:
-      #   requests:
-      #     memory: "100Mi"
-      #     cpu: "100m"
-      #   limits:
-      #     memory: "15Gi"
-      #     cpu: "8"
+      # No pod-level `resources` block. Limits are per-container and sum to
+      # ~10.2Gi against this node's 12.53Gi allocatable, which is what keeps the
+      # pod - rather than the node - as the OOM boundary. The legacy StatefulSet
+      # notes pod-level resources do not work under the kata runtime.
       restartPolicy: Always
       shareProcessNamespace: true
       terminationGracePeriodSeconds: 30
