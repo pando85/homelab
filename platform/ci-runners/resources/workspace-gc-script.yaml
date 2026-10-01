@@ -5,10 +5,12 @@ metadata:
 data:
   cleanup.sh: |
     CHECK_INTERVAL="${CHECK_INTERVAL:-15}"
-    THRESHOLD_LOW="${THRESHOLD_LOW:-70}"
-    THRESHOLD_MED="${THRESHOLD_MED:-80}"
-    THRESHOLD_HIGH="${THRESHOLD_HIGH:-90}"
-    THRESHOLD_CRITICAL="${THRESHOLD_CRITICAL:-95}"
+    THRESHOLD_MIN="${THRESHOLD_MIN:-30}"
+    THRESHOLD_LOW="${THRESHOLD_LOW:-50}"
+    THRESHOLD_MED="${THRESHOLD_MED:-70}"
+    THRESHOLD_HIGH="${THRESHOLD_HIGH:-80}"
+    THRESHOLD_CRITICAL="${THRESHOLD_CRITICAL:-90}"
+    THRESHOLD_EMERGENCY="${THRESHOLD_EMERGENCY:-95}"
     PRESERVE_DIRS=".pnpm-store tool_cache"
     runner_started=false
 
@@ -32,15 +34,19 @@ data:
       usage=$(get_workspace_usage)
       echo "workspace disk usage: ${usage}%"
 
-      if [ "$usage" -ge "$THRESHOLD_LOW" ]; then
-        if [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then
+      if [ "$usage" -ge "$THRESHOLD_MIN" ]; then
+        if [ "$usage" -ge "$THRESHOLD_EMERGENCY" ]; then
           retention_minutes=5
-        elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
+        elif [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then
           retention_minutes=10
-        elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
+        elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
           retention_minutes=30
-        else
+        elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
           retention_minutes=60
+        elif [ "$usage" -ge "$THRESHOLD_LOW" ]; then
+          retention_minutes=1440  # 1 day
+        else
+          retention_minutes=10080  # 1 week
         fi
 
         echo "cleanup starting (${usage}%), retention: ${retention_minutes}m"
