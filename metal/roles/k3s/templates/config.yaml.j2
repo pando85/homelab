@@ -1,7 +1,10 @@
 {% if inventory_hostname == groups['kube_control_plane'][0] %}
 cluster-init: true
 {% else %}
-server: https://{{ hostvars[groups['kube_control_plane'][0]].ansible_hostname }}:6443
+{# Use the inventory name, not hostvars[].ansible_hostname: under --limit the control plane's facts
+   are never gathered, and delegate_to does not gather them either, so that reference dies with
+   "object of type 'HostVarsVars' has no attribute 'ansible_hostname'". #}
+server: https://{{ groups['kube_control_plane'][0] }}:6443
 {% endif %}
 token-file: {{ k3s_token_file }}
 {% if 'kube_control_plane' in group_names %}

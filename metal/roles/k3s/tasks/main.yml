@@ -163,7 +163,7 @@
 - name: Write Kubernetes config file with the correct cluster address
   copy:
     content: "{{ kubeconfig_base64.content | b64decode | replace('127.0.0.1',
-      hostvars[groups['kube_control_plane'][0]].ansible_hostname) }}"
+      groups['kube_control_plane'][0]) }}"
     dest: "{{ ansible_path }}/kubeconfig.yaml"
     mode: "0600"
   delegate_to: localhost
