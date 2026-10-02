@@ -41,6 +41,16 @@ wordpress:
   persistence:
     enabled: true
     size: 1Gi
+    # ArgoCD runs prune: true + selfHeal: true, so without this a chart change
+    # that drops the PVC deletes the claim outright. openebs-zfspv is
+    # reclaimPolicy: Retain so the dataset survives, but the PV goes Released
+    # with no automated path back. This is the only ArgoCD-tracked PVC in the
+    # cluster holding non-transient data without the annotation - the mariadb
+    # claim is StatefulSet-generated and therefore untracked. Same annotation
+    # the hand-written apps/*/templates/pvc.yaml files carry; set here because
+    # the Bitnami subchart owns this PVC's manifest.
+    annotations:
+      argocd.argoproj.io/sync-options: Prune=false
   volumePermissions:
     enabled: false
   ingress:
