@@ -53,7 +53,7 @@ app-template:
             requests:
               cpu: 10m
             limits:
-              memory: 256Mi
+              memory: 64Mi
       pod:
         affinity:
           podAffinity:
