@@ -19,21 +19,21 @@ resources:
       memory: 1000Mi
     requests:
       cpu: 100m
-      memory: 100Mi
+      memory: 40Mi
   metricServer:
     limits:
       cpu: 1
       memory: 1000Mi
     requests:
       cpu: 100m
-      memory: 100Mi
+      memory: 48Mi
   webhooks:
     limits:
       cpu: 1
       memory: 1000Mi
     requests:
       cpu: 100m
-      memory: 100Mi
+      memory: 32Mi
 
 prometheus:
   metricServer:
