@@ -187,6 +187,12 @@
     - resolved
     - hostname
 
+- name: Configure systemd-networkd
+  import_tasks: networkd.yml
+  when: ansible_host != "prusik-ipmi"
+  tags:
+    - networkd
+
 - name: Configure journal log
   copy:
     src: journald.conf

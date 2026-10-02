@@ -19,6 +19,24 @@
     - unattended-upgrades | restart systemd service
     - unattended-upgrades | ignore armbian changes
 
+- name: unattended-upgrades | Create needrestart config snippet directory
+  ansible.builtin.file:
+    path: /etc/needrestart/conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# needrestart runs after every dpkg invocation of unattended-upgrades and
+# reads conf.d/*.conf on each run, so no handler is needed.
+- name: unattended-upgrades | Defer needrestart restarts of node-critical services
+  ansible.builtin.copy:
+    src: needrestart-k8s-node.conf
+    dest: /etc/needrestart/conf.d/50-k8s-node.conf
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: unattended-upgrades | Create apt daily upgrade timer override directory
   ansible.builtin.file:
     path: /etc/systemd/system/apt-daily-upgrade.timer.d

@@ -160,6 +160,10 @@ matters there.
   Ubuntu 26.04 nodes also need `ansible-core>=2.20`, `ansible_become_exe: /usr/bin/sudo.ws` (sudo-rs
   rejects `-H`) and chrony, since the `ntp` package is gone. See
   `docs/troubleshooting/ansible-ubuntu-2604-compat.md`
+- Never let needrestart restart `k3s.service` or `systemd-networkd` on nodes: needrestart < 3.9
+  re-flags k3s after every package (restart storm), and a networkd restart flushes Cilium's
+  native-routing routes. Both are deferred via `metal/` (`unattended-upgrades`/`networkd` tags).
+  See `docs/troubleshooting/needrestart-k3s-restart-storm.md`
 - Adding a node: never edit the hardcoded `hosts:` lists in `metal/playbooks/install/prepare.yml`
   (11-13, 18, 23, 30) or `cluster.yml` (28-31) — they are exactly the ZFS/GPU/backup paths a new node
   must skip, so a new node gets no `setup` role. `make first-boot` is unusable (forces root +

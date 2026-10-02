@@ -1,0 +1,19 @@
+---
+- name: networkd | Ensure drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/networkd.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# No restart handler on purpose: restarting systemd-networkd before this
+# setting is active is exactly what flushes the Cilium routes. It takes
+# effect at the next reboot (kured).
+- name: networkd | Keep routes and rules managed by Cilium
+  ansible.builtin.copy:
+    src: networkd-cilium.conf
+    dest: /etc/systemd/networkd.conf.d/50-cilium.conf
+    owner: root
+    group: root
+    mode: "0644"
