@@ -14,7 +14,7 @@ spec:
   resources:
     vault:
       requests:
-        memory: 500Mi
+        memory: 128Mi
         cpu: 20m
       limits:
         memory: 2Gi

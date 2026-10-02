@@ -63,7 +63,7 @@ minio:
 
   resources:
     requests:
-      memory: 1Gi
+      memory: 128Mi
 
   environment:
     MINIO_IDENTITY_OPENID_ROLE_POLICY: consoleAdmin

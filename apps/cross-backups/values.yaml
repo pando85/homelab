@@ -64,7 +64,7 @@ minio:
 
   resources:
     requests:
-      memory: 2Gi
+      memory: 768Mi
 
   policies:
     - name: millaReadWritePolicy

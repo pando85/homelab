@@ -57,7 +57,7 @@ minio:
 
   resources:
     requests:
-      memory: 2Gi
+      memory: 320Mi
 
   policies:
     - name: kaniopBackupPolicy
