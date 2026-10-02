@@ -190,6 +190,42 @@ prometheusOperator:
       cpu: 10m
       memory: 100Mi
 
+kube-state-metrics:
+  # OpenEBS ZFS LocalPV tracks each provisioned dataset with a ZFSVolume CR named
+  # exactly like its PersistentVolume (`pvc-<uuid>`, or the PV name for static
+  # provisioning). Exposing that CR as a metric lets us alert on a CR that has
+  # outlived its PV - the leak signature of `reclaimPolicy: Retain`, where
+  # deleting a PV never calls DeleteVolume, so the dataset is never destroyed.
+  # 89 such volumes (139.6 GiB) accumulated unnoticed over 9 months before the
+  # first manual audit. See docs/troubleshooting/cluster-hygiene.md.
+  customResourceState:
+    enabled: true
+    config:
+      spec:
+        resources:
+          - groupVersionKind:
+              group: zfs.openebs.io
+              version: v1
+              kind: ZFSVolume
+            metricNamePrefix: zfs_localpv
+            metrics:
+              - name: volume_info
+                help: "OpenEBS ZFS LocalPV volume as tracked by its ZFSVolume CR."
+                each:
+                  type: Info
+                  info:
+                    labelsFromPath:
+                      name: [metadata, name]
+                      pool: [spec, poolName]
+                      node: [spec, ownerNodeID]
+  rbac:
+    # list/watch on the CR itself; rbac.customResourceState.createClusterRoleRules
+    # (default true) already covers customresourcedefinitions.
+    extraRules:
+      - apiGroups: ["zfs.openebs.io"]
+        resources: ["zfsvolumes"]
+        verbs: ["list", "watch"]
+
 prometheus-node-exporter:
   prometheus:
     monitor:

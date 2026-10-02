@@ -41,3 +41,42 @@ spec:
           for: 5m
           labels:
             severity: critical
+        # openebs-zfspv and fast-zfspv use `reclaimPolicy: Retain`, so deleting a PV
+        # never triggers a CSI DeleteVolume call and the backing ZFS dataset is never
+        # destroyed. The ZFSVolume CR is left behind too - it has no ownerReference
+        # (0/178 in the 2026-10 audit), so nothing garbage-collects it. That makes a
+        # ZFSVolume CR with no matching PV the exact signature of a leak, and it is
+        # detectable entirely in-cluster: the CR is named identically to its PV
+        # (`pvc-<uuid>` for dynamic, the PV name for static provisioning).
+        #
+        # Retain is deliberate - it is the only backstop against an ArgoCD prune
+        # destroying a database, since only 35/88 PVCs carry `Prune=false`. So the
+        # fix is detection, not flipping the policy to Delete. 89 volumes / 139.6 GiB
+        # accumulated over 9 months before the first manual audit.
+        #
+        # Aggregated into one alert on purpose: per-volume alerts would fire 89 times
+        # simultaneously on first deploy. Run scripts/zfs-orphan-audit for the list.
+        - alert: ZFSVolumeOrphaned
+          annotations:
+            summary: Orphaned ZFS LocalPV volumes are leaking pool space
+            description: |
+              {{ $value }} ZFSVolume CRs have no matching PersistentVolume, so their
+              datasets are unreachable from Kubernetes and will never be reclaimed
+              automatically under `reclaimPolicy: Retain`.
+
+              List them read-only with:
+                scripts/zfs-orphan-audit --dry-run
+              which cross-references CRs against PVs, PVCs, ZFSBackup/Snapshot/Restore
+              CRs, and the on-disk dataset state (mounted, snapshots, bytes) before
+              proposing anything. Re-run with --apply to reclaim.
+
+              See docs/troubleshooting/cluster-hygiene.md.
+          expr: |
+            count(
+              zfs_localpv_volume_info
+              unless on(name)
+              label_replace(kube_persistentvolume_info, "name", "$1", "persistentvolume", "(.+)")
+            ) > 0
+          for: 1h
+          labels:
+            severity: warning
