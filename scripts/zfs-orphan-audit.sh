@@ -70,7 +70,7 @@ RS=$(kubectl --context="$CTX" get zfsrestores.zfs.openebs.io -A \
 
 # ZFSVolume CRs: name, namespace, pool, owner node. One line per CR.
 CRS=$(kubectl --context="$CTX" get zfsvolumes.zfs.openebs.io -A \
-  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.namespace}{"\t"}{.spec.poolName}{"\t"}{.spec.ownerNodeID}{"\n"}{end}' 2>/dev/null)
+  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.namespace}{"\t"}{.spec.poolName}{"\t"}{.spec.ownerNodeID}{"\t"}{.metadata.deletionTimestamp}{"\n"}{end}' 2>/dev/null)
 [ -z "$CRS" ] && { echo "no ZFSVolume CRs found - is the openebs zfs-localpv operator installed?" >&2; exit 1; }
 
 has() { [ -n "${2:-}" ] && printf '%s\n' "$1" | grep -qxF -- "$2"; }
@@ -108,8 +108,10 @@ gib() { awk -v b="${1:-0}" 'BEGIN{printf "%.2f", b/1073741824}'; }
 TOTAL_BYTES=0; N_DEL=0; N_DEL_R=0; N_CRONLY=0; N_SKIP=0; N_UNREACH=0
 PLAN=(); PLAN_ACT=(); PLAN_NODE=(); PLAN_DS=(); PLAN_R=(); PLAN_NS=()
 
-while IFS=$'\t' read -r vol ns pool node; do
+while IFS=$'\t' read -r vol ns pool node term; do
   [ -z "$vol" ] && continue
+  # already mid-deletion from an earlier run: surface it, don't re-plan silently
+  [ -n "${term:-}" ] && TERM_NOTE="ALREADY-TERMINATING(since ${term}) " || TERM_NOTE=""
   [ -z "$node" ] && node="<unset>"
   [ -z "$pool" ] && pool="<unset>"
   # not an orphan if a PV of the same name exists
@@ -144,8 +146,8 @@ while IFS=$'\t' read -r vol ns pool node; do
     N_DEL=$((N_DEL+1)); TOTAL_BYTES=$((TOTAL_BYTES+bytes))
   fi
 
-  printf -v line '  %-22s %-12s %9s GiB  %-46s %-22s %s' \
-    "$act" "$node" "$(gib "${bytes:-0}")" "$vol" "$ds" "$why"
+  printf -v line '  %-22s %-12s %9s GiB  %-46s %-22s %s%s' \
+    "$act" "$node" "$(gib "${bytes:-0}")" "$vol" "$ds" "$TERM_NOTE" "$why"
   PLAN+=("$line"); PLAN_ACT+=("$act"); PLAN_NODE+=("$node"); PLAN_DS+=("$ds")
   PLAN_R+=("$([ "${act}" = DELETE-R ] && echo 1 || echo 0)"); PLAN_NS+=("${ns:-zfs-localpv}")
 done <<< "$CRS"
@@ -178,35 +180,74 @@ fi
 echo
 echo "APPLYING."
 FAIL=0
+STUCK=()
+
+ds_exists() { ssh -n -o BatchMode=yes "$1" "$ZP; zfs list -H -o name '$2' >/dev/null 2>&1"; }
+cr_exists() { kubectl --context="$CTX" -n "$1" get zfsvolume "$2" >/dev/null 2>&1; }
+
 for i in "${!PLAN_ACT[@]}"; do
   act=${PLAN_ACT[$i]}; node=${PLAN_NODE[$i]}; ds=${PLAN_DS[$i]}; ns=${PLAN_NS[$i]}
   vol=${ds##*/}
   rflag=""; [ "${PLAN_R[$i]}" = 1 ] && rflag="-r "
+  case "$act" in DELETE|DELETE-R|CR-ONLY*) ;; *) continue ;; esac
+
+  # CR-only: nothing on disk, so just drop the CR.
   case "$act" in
-    DELETE|DELETE-R|CR-ONLY*)
-      kubectl --context="$CTX" -n "$ns" delete zfsvolume "$vol" --ignore-not-found >/dev/null 2>&1
-      ;;
-    *) continue ;;
+    CR-ONLY-no-dataset)
+      kubectl --context="$CTX" -n "$ns" delete zfsvolume "$vol" --ignore-not-found --wait=false >/dev/null 2>&1
+      echo "  ok(CR)    $vol"; continue ;;
+    CR-ONLY-no-zfs-on-node)
+      # No agent runs on this node, so nothing will ever clear the finalizer.
+      # Delete async and report rather than block the whole run on it.
+      kubectl --context="$CTX" -n "$ns" delete zfsvolume "$vol" --ignore-not-found --wait=false >/dev/null 2>&1
+      sleep 2
+      if cr_exists "$ns" "$vol"; then
+        echo "  STUCK     $vol: no agent on $node, finalizer will not clear"
+        STUCK+=("$ns/$vol"); FAIL=$((FAIL+1))
+      else
+        echo "  ok(CR)    $vol (node $node has no ZFS)"
+      fi
+      continue ;;
   esac
-  case "$act" in
-    CR-ONLY*) echo "  ok(CR)    $vol"; continue ;;
-  esac
+
   if [ "${HOST_OK[$node]:-no}" != yes ]; then
     echo "  SKIP      $vol: node $node has no ZFS, dataset cannot be verified"; FAIL=$((FAIL+1)); continue
   fi
-  # did the node agent already reclaim the dataset?
-  if ! ssh -n -o BatchMode=yes "$node" "$ZP; zfs list -H -o name '$ds' >/dev/null 2>&1"; then
-    echo "  ok        $vol (CR deleted; dataset already gone)"; continue
+
+  # Destroy the dataset BEFORE deleting the CR. The reverse order hangs: the
+  # node agent's delete handler runs a bare `zfs destroy`, which fails on a
+  # dataset that has snapshots, so it never removes `zfs.openebs.io/finalizer`
+  # and `kubectl delete` blocks forever. Destroying first leaves the agent
+  # nothing to do but drop the finalizer.
+  if ds_exists "$node" "$ds"; then
+    m=$(ssh -n -o BatchMode=yes "$node" "$ZP; zfs get -H -o value mounted '$ds' 2>/dev/null")
+    if [ "$m" = yes ]; then echo "  SKIP      $vol became MOUNTED mid-run"; FAIL=$((FAIL+1)); continue; fi
+    if ssh -n -o BatchMode=yes "$node" "$ZP; zfs destroy $rflag'$ds'"; then
+      echo "  destroyed $vol"
+    else
+      echo "  FAIL      $vol: zfs destroy $rflag failed"; FAIL=$((FAIL+1)); continue
+    fi
   fi
-  # re-check the soft/hard guards immediately before destroying
-  m=$(ssh -n -o BatchMode=yes "$node" "$ZP; zfs get -H -o value mounted '$ds' 2>/dev/null")
-  if [ "$m" = yes ]; then echo "  SKIP      $vol became MOUNTED mid-run"; FAIL=$((FAIL+1)); continue; fi
-  if ssh -n -o BatchMode=yes "$node" "$ZP; zfs destroy $rflag'$ds'"; then
-    echo "  destroyed $vol"
+
+  kubectl --context="$CTX" -n "$ns" delete zfsvolume "$vol" --ignore-not-found --wait=false >/dev/null 2>&1
+  for _ in $(seq 1 15); do cr_exists "$ns" "$vol" || break; sleep 2; done
+  if cr_exists "$ns" "$vol"; then
+    echo "  STUCK     $vol: CR still Terminating after 30s (finalizer not cleared)"
+    STUCK+=("$ns/$vol"); FAIL=$((FAIL+1))
   else
-    echo "  FAIL      $vol"; FAIL=$((FAIL+1))
+    echo "  ok        $vol (dataset + CR removed)"
   fi
 done
+
+if [ ${#STUCK[@]} -gt 0 ]; then
+  echo
+  echo "These CRs are stuck Terminating because nothing cleared"
+  echo "zfs.openebs.io/finalizer. Their datasets are already gone, so removing the"
+  echo "finalizer is safe - but it is a mutation, so run it yourself:"
+  for s in "${STUCK[@]}"; do
+    echo "  kubectl --context=$CTX -n ${s%%/*} patch zfsvolume ${s##*/} --type=merge -p '{\"metadata\":{\"finalizers\":null}}'"
+  done
+fi
 
 echo
 echo "=============================== POST STATE ================================"
