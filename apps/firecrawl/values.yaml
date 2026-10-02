@@ -114,7 +114,7 @@ app-template:
           resources:
             requests:
               cpu: 500m
-              memory: 1Gi
+              memory: 400Mi
             limits:
               cpu: 1000m
               memory: 2Gi
@@ -205,7 +205,7 @@ app-template:
           resources:
             requests:
               cpu: 500m
-              memory: 1Gi
+              memory: 400Mi
             limits:
               cpu: 1000m
               memory: 2Gi
@@ -308,7 +308,7 @@ app-template:
           resources:
             requests:
               cpu: 500m
-              memory: 1Gi
+              memory: 400Mi
             limits:
               cpu: 1000m
               memory: 2Gi
@@ -338,7 +338,7 @@ app-template:
           resources:
             requests:
               cpu: 250m
-              memory: 512Mi
+              memory: 400Mi
             limits:
               cpu: 500m
               memory: 1Gi
