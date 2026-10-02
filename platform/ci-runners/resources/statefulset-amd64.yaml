@@ -349,6 +349,10 @@ spec:
       # topology and has no nodeSelector at all.
       nodeSelector:
         kubernetes.io/hostname: k8s-amd64-1
+      tolerations:
+        - key: node.kubernetes.io/memory-pressure
+          operator: Exists
+          effect: NoSchedule
       volumes:
         # hostPath rather than PVCs: this node has no ZFS pool and there is
         # deliberately no local StorageClass (planning/k8s-amd64-1-node-addition.md,

@@ -14,6 +14,10 @@ spec:
           # Must land on the same node: /cache is a hostPath there, not a PVC.
           nodeSelector:
             kubernetes.io/hostname: k8s-amd64-1
+          tolerations:
+            - key: node.kubernetes.io/memory-pressure
+              operator: Exists
+              effect: NoSchedule
           containers:
             - name: cleanup
               # renovate: datasource=docker
