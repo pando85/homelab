@@ -15,6 +15,44 @@ spec:
       labels:
         app.kubernetes.io/name: ci-runner
     spec:
+      # /workspace and /cache are subPath mounts of the ci-runner-data PVC. A
+      # freshly provisioned ZFS dataset mounts root:root 0755, and kubelet
+      # creates missing subPath dirs root-owned too - it applies no fsGroup
+      # ownership to them. fsGroup was deliberately dropped from this pod (see
+      # docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md: the
+      # recursive chown made startup take minutes), so nothing else would give
+      # the uid-1001 runner write access and every host-mode job died with
+      # `mkdir /workspace/<hash>: permission denied`. Create and chown the two
+      # subPaths once, from the volume root, before the main containers mount
+      # them. `docker` is left root-owned on purpose: only the daemon container
+      # (runAsUser: 0) uses it.
+      initContainers:
+        - name: fix-volume-ownership
+          # renovate: datasource=docker
+          image: busybox:1.38.0
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              for d in workspace cache; do
+                mkdir -p "/data/$d"
+                chown 1001:1001 "/data/$d"
+                chmod 0775 "/data/$d"
+              done
+              ls -land /data /data/workspace /data/cache
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: ci-runner-data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
       containers:
         - name: runner
           # renovate: sha256: datasource=docker
@@ -273,6 +311,7 @@ spec:
               memory: "128Mi"
               cpu: "100m"
         - name: workspace-gc
+          # renovate: datasource=docker
           image: busybox:1.38.0
           command:
             - sh
@@ -292,7 +331,13 @@ spec:
               cpu: "50m"
 
       securityContext:
-        fsGroupChangePolicy: "OnRootMismatch"
+        # No fsGroup: on openebs-zfspv it triggers a recursive chown of the whole
+        # volume at every mount and made startup take minutes
+        # (docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md). Ownership
+        # of the subPaths is handled by the fix-volume-ownership initContainer
+        # instead. fsGroupChangePolicy is meaningless without fsGroup, so it is
+        # not set. supplementalGroups only adds gid 1001 to the process; it
+        # changes no file ownership.
         supplementalGroups:
           - 1001
         runAsGroup: 1001
