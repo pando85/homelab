@@ -182,12 +182,24 @@ matters there.
   system-upgrade Plan has `cordon: true` and selects every non-control-plane node. When the binary
   already matches, the job compares sha256, logs `Binary already been replaced`, exits 0, and the
   controller uncordons. Don't uncordon by hand
-- `openebs-zfspv` storage class uses `reclaimPolicy: Retain` — deleted PVCs leave released PVs
-  that leak ZFS space. Audit periodically: see `docs/troubleshooting/cluster-hygiene.md`
+- `openebs-zfspv`/`fast-zfspv` use `reclaimPolicy: Retain` — deleting a PV issues no CSI
+  DeleteVolume, so the ZFS dataset **and** its `ZFSVolume` CR both survive with no ownerReference to
+  GC them. Auditing `Released` PVs therefore reports a clean cluster while the space still leaks;
+  the real signal is a `ZFSVolume` CR with no matching PV. 89 volumes / 139.6 GiB accumulated over
+  ~9 months this way. Use `scripts/zfs-orphan-audit.sh` (dry-run by default) and the
+  `ZFSVolumeOrphaned` alert. Do **not** flip the policy to `Delete` — Retain is the only backstop
+  against an ArgoCD prune destroying a database. See `docs/troubleshooting/cluster-hygiene.md`
 - `openebs-zfspv` with `fstype: zfs` + `fsGroup` causes slow pod startup (recursive chown on
   every mount). `fsGroupChangePolicy: OnRootMismatch` doesn't help — kubelet resets setgid bit.
   If the app manages its own file ownership (runs as volume owner or has init chown), remove
   `fsGroup` entirely. See `docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md`
+- Removing `fsGroup` leaves a non-root container with **no** write access to a freshly provisioned
+  PVC: a new ZFS dataset mounts `root:root 0755`, kubelet creates missing `subPath` dirs root-owned,
+  and `supplementalGroups` changes no ownership. Symptom is `mkdir <path>: permission denied` with a
+  healthy, polling pod and nothing in the container log. Migrating off `emptyDir` (which kubelet
+  creates 0777) is not a like-for-like swap — it needs an explicit ownership plan. Fix with a root
+  init container on the volume **root**, not a subPath. See
+  `docs/troubleshooting/ci-runner-workspace-permission-denied.md`
 - prusik's L2ARC looks broken (34-39% hit ratio, serves 1.4% of reads) but is load-bearing — avg hit
   size is 17-28KB, i.e. Jellyfin metadata/thumbnails/SQLite, not video. Hit ratio is misleading
   because it only covers ARC misses. The real defect is `l2arc_noprefetch=0` wasting 41% of the device

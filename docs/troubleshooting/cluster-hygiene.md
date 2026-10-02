@@ -4,39 +4,81 @@
 
 ### Problem
 
-The `openebs-zfspv` storage class uses `reclaimPolicy: Retain`. When PVCs are deleted (app removed,
-migration, test cleanup), the PV transitions to `Released` phase but the underlying ZFS dataset is
-never destroyed. Over time this silently consumes pool space.
+The `openebs-zfspv` and `fast-zfspv` storage classes use `reclaimPolicy: Retain`. When a PVC is
+deleted (app removed, migration, test cleanup), the PV transitions to `Released` but the underlying
+ZFS dataset is never destroyed. Over time this silently consumes pool space.
+
+A 2026-10 audit found **89 orphaned volumes totalling 139.6 GiB**, the oldest created 2024-04-29 —
+roughly nine months of accumulation before anyone looked.
+
+### Root Cause
+
+The leak is two-stage, and the second stage is invisible to a Released-PV audit:
+
+1. PVC deleted → PV goes `Released`. Still findable by phase.
+2. PV deleted → **nothing is cleaned up.** `Retain` means Kubernetes never issues the CSI
+   `DeleteVolume` call, so the ZFS driver is never asked to `zfs destroy` anything. Both the ZFS
+   dataset *and* its `ZFSVolume` CR survive. The CR carries no `ownerReference` (0 of 178 in the
+   audit), so no garbage collection cascades from the PV either.
+
+Stage 2 is why this went unnoticed: once the PV object is gone, `select(.status.phase == "Released")`
+matches nothing, and the space is charged to a dataset named only `pvc-<uuid>`. **Auditing Released
+PVs alone will report a clean cluster while 139 GiB leaks.**
 
 ### How to Audit
 
-```bash
-# List all released PVs with app info
-kubectl --context=grigri get pv -o json | \
-  jq -r '.items[] | select(.status.phase == "Released") |
-    "\(.metadata.name) \(.spec.capacity.storage) \(.spec.claimRef.namespace)/\(.spec.claimRef.name)"'
+The reliable signal is a `ZFSVolume` CR with no matching PV — detectable entirely in-cluster, because
+the CR is named identically to its PV (`pvc-<uuid>` for dynamic provisioning, the PV name for static).
 
-# Count total leaked space
-kubectl --context=grigri get pv -o json | \
-  jq '[.items[] | select(.status.phase == "Released") |
-    .spec.capacity.storage | rtrimstr("Gi") | tonumber] | add'
+```bash
+# Full audit: plans only, changes nothing. Cross-references CRs against PVs, PVCs,
+# ZFSBackup/Snapshot/Restore CRs, and on-disk state (mounted, snapshots, bytes).
+scripts/zfs-orphan-audit.sh
+
+# Include volumes whose only blocker is stale on-disk snapshots
+scripts/zfs-orphan-audit.sh --include-snapshotted
+```
+
+The same condition is alerted on continuously by `ZFSVolumeOrphaned` in
+`system/monitoring/resources/storage-prometheus-rules.yaml`, backed by the
+`zfs_localpv_volume_info` metric exposed from `system/monitoring/values.yaml`.
+
+Quick one-liner if you only need a count:
+
+```bash
+comm -23 \
+  <(kubectl --context=grigri -n zfs-localpv get zfsvolume -o name | sed 's|.*/||' | sort) \
+  <(kubectl --context=grigri get pv -o name | sed 's|.*/||' | sort) | wc -l
 ```
 
 ### How to Clean Up
 
 ```bash
-# Delete all released PVs
-kubectl --context=grigri get pv -o json | \
-  jq -r '.items[] | select(.status.phase == "Released") | .metadata.name' | \
-  xargs -I{} kubectl --context=grigri delete pv {}
+scripts/zfs-orphan-audit.sh --apply                     # execute the plan it just showed
+scripts/zfs-orphan-audit.sh --apply --include-snapshotted
 ```
 
-Verify underlying ZFS datasets were destroyed by the ZFS-localPV controller after PV deletion.
+Dry run is the default. Every candidate is re-verified live and downgraded to `SKIP` if it has
+acquired a PV, a PVC referencing it, a ZFSBackup/Snapshot/Restore CR, an active mount, or on-disk
+snapshots. Stale snapshots are a *soft* blocker requiring `--include-snapshotted`; everything else
+is *hard* and is never overridden even under `--apply`. Mount status is re-checked immediately
+before each `zfs destroy`.
+
+Note that a `Released` PV whose dataset you want gone needs the PV deleted first — while the PV
+exists the CR matches it and the script correctly reports no orphan.
 
 ### Prevention
 
-Consider changing the storage class `reclaimPolicy` to `Delete` for non-critical workloads, or
-creating a periodic CronJob that cleans up released PVs older than N days.
+**Do not flip `reclaimPolicy` to `Delete`.** Retain is currently the only backstop against an ArgoCD
+prune destroying a database: only ~40% of PVCs carry `Prune=false`, and the app runs with
+`prune: true` + `selfHeal: true`. Delete would convert every accidental PVC deletion into immediate,
+irreversible loss — and this repo has already had one (see
+`zalando-patroni-stale-dcs-deadlock.md`, where a deleted PVC's data survived only because of
+Retain). The leak is a *detection* gap, not a policy error; `fast-ci-zfspv` already uses `Delete`
+for genuinely ephemeral CI scratch, which is the right granularity.
+
+Prefer, in order: the `ZFSVolumeOrphaned` alert (catches leaks at volume #1 instead of #75),
+`Prune=false` on every ArgoCD-tracked PVC, and periodic `scripts/zfs-orphan-audit.sh` runs.
 
 ---
 
