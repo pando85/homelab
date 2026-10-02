@@ -42,7 +42,7 @@ spec:
               exec forgejo-runner -c /registration/registration.yaml daemon
           resources:
             requests:
-              memory: "1Gi"
+              memory: "4Gi"
               cpu: "200m"
             limits:
               # 12Gi gives the runner headroom for moderate concurrent loads. At
@@ -136,7 +136,7 @@ spec:
               mountPath: /sock
           resources:
             requests:
-              memory: "512Mi"
+              memory: "1Gi"
               cpu: "250m"
             limits:
               # `docker`-label jobs are sibling containers created by dockerd, so
@@ -341,6 +341,9 @@ spec:
           - 1001
         runAsGroup: 1001
         runAsUser: 1001
+      # Higher priority than default workloads so the runner is not the first
+      # pod evicted under memory pressure.
+      priorityClassName: high-priority
       # hostPath volumes are node-local, so this pod must be pinned explicitly -
       # unlike ci-runner, which lands on prusik implicitly through its ZFS volume
       # topology and has no nodeSelector at all.
