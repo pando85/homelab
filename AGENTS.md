@@ -332,6 +332,17 @@ matters there.
   `apps/firecrawl/hack/update-nuq-sql.sh` automatically; pre-commit and deploy-time guards verify
   sync. `cron.database_name` is a restart-required GUC — delete the postgres pod
   once after setting it. See `docs/troubleshooting/firecrawl-selfhost-deployment.md`
+- app-template ≥ 5.2 runs `tpl` over string values (incl. initContainer `command`), so a literal
+  `{{ ... }}` in `values.yaml` (e.g. a `sed` pattern matching a JS i18n `{{provider}}` token) fails
+  rendering with `function "provider" not defined` → ArgoCD `ComparisonError` blocks ALL syncs for
+  that app. Local `helm template` can miss it if `Chart.lock`/`charts/` (gitignored) are stale at an
+  older app-template than `Chart.yaml`. Escape as `{{ "{{x}}" }}` or match around it. This silently
+  broke readest for ~18 days. See `docs/troubleshooting/app-template-values-tpl-evaluation.md`
+- Changing `spec.resources` on a single-instance (`numberOfInstances: 1`) Zalando `postgresql` CR
+  forces a master-pod recreate; the StatefulSet reuses the same pod name, the operator's deletion
+  wait times out, and it latches `status: UpdateFailed` / ArgoCD `Degraded` even though the pod is
+  healthy and the change applied. Fix: `kubectl -n postgres-operator rollout restart
+  deploy/postgres-operator`. See `docs/troubleshooting/zalando-single-instance-updatefailed.md`
 
 ## Subsystem Docs
 

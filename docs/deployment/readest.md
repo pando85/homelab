@@ -274,9 +274,20 @@ This integration required several workarounds due to limitations in GoTrue and R
 **Workaround:** Init container patches the compiled JavaScript bundles at pod startup:
 - Searches for `provider:"discord"` and replaces with `provider:"custom:kanidm"`
 - Changes button label from "Discord" to "Kanidm"
-- Removes the other provider buttons using sed
+- Removes the other provider buttons using identifier-agnostic `sed -E` patterns (they match the
+  JSX shape, not exact minified variable names, so they survive most bundle churn)
+- Verifies no Google/Apple/GitHub button JSX remains and **exits non-zero** if any do, so a future
+  bundle change fails loudly instead of silently shipping the wrong login UI
 
-**Impact:** The patch must be updated if Readest changes its UI structure or JavaScript compilation output. The init container runs on every pod start, so changes are applied automatically.
+**Impact:** The patch must be updated if Readest changes its UI structure or JavaScript compilation
+output; the verification guard turns that into a hard init failure rather than a silent regression.
+The init container runs on every pod start, so changes are applied automatically.
+
+> **Rendering landmine:** these `sed` patterns live in `values.yaml`, which app-template ≥ 5.2
+> evaluates with `tpl`. Do **not** embed a literal `{{ ... }}` (e.g. matching the JS i18n token
+> `{{provider}}`) — it breaks the Helm render and blocks all ArgoCD syncs for readest. Match around
+> it (`"[^"]*"`) or escape as `{{ "{{provider}}" }}`. See
+> `docs/troubleshooting/app-template-values-tpl-evaluation.md`.
 
 #### GoTrue Callback URL Construction
 

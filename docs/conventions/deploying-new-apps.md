@@ -88,6 +88,10 @@ Does the app need Supabase auth/storage/realtime schemas?
 - Couple generated SQL to image updates with a Renovate post-upgrade task, disable automerge for
   review, check provenance in CI, and fail fast on version mismatch before touching the database.
   A matching version is not proof that a migration is safe or complete.
+- The post-upgrade task runs inside the Renovate container **without `GITHUB_TOKEN`**. Fetch
+  upstream SQL over the git protocol (a shallow sparse `git clone`) or `raw.githubusercontent.com`;
+  avoid `api.github.com`, whose unauthenticated 60 req/h limit on shared Actions runner IPs makes
+  regeneration flaky. See `apps/readest/hack/vendor-sql-migrations.py`.
 
 ### 2.2 Object Storage: Which MinIO?
 
