@@ -1,5 +1,5 @@
--- Source: https://raw.githubusercontent.com/firecrawl/firecrawl/v2.10.19/apps/nuq-postgres/nuq.sql
--- Git ref: v2.10.19
+-- Source: https://raw.githubusercontent.com/firecrawl/firecrawl/v2.11.454/apps/nuq-postgres/nuq.sql
+-- Git ref: v2.11.454
 -- Adapted: for idempotent re-runs via init container
 -- Changes: removed ALTER SYSTEM statements (set via Zalando CR instead),
 --          removed SELECT pg_reload_conf(), kept pg_cron jobs (pg_cron available),
@@ -58,6 +58,7 @@ CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_id_idx ON nuq.queue_scrape (gr
 CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_owner_mode_idx ON nuq.queue_scrape (group_id, owner_id) WHERE ((data->>'mode') = 'single_urls');
 CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_mode_status_idx ON nuq.queue_scrape (group_id, status) WHERE ((data->>'mode') = 'single_urls');
 CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_completed_listing_idx ON nuq.queue_scrape (group_id, finished_at ASC, created_at ASC) WHERE (status = 'completed'::nuq.job_status AND (data->>'mode') = 'single_urls');
+CREATE INDEX IF NOT EXISTS nuq_queue_scrape_group_failed_listing_idx ON nuq.queue_scrape (group_id, id ASC) WHERE (status = 'failed'::nuq.job_status AND (data->>'mode') = 'single_urls');
 CREATE INDEX IF NOT EXISTS idx_queue_scrape_group_status ON nuq.queue_scrape (group_id, status) WHERE status IN ('active', 'queued');
 
 CREATE TABLE IF NOT EXISTS nuq.queue_scrape_backlog (
@@ -114,6 +115,7 @@ SELECT cron.schedule('nuq_reindex_queue_scrape_backlog_times_out_at',   '20 6 * 
 SELECT cron.schedule('nuq_reindex_queue_scrape_completed_standalone',   '40 6 * * *', $$REINDEX INDEX CONCURRENTLY nuq.nuq_queue_scrape_completed_standalone_created_at_idx;$$);
 SELECT cron.schedule('nuq_reindex_queue_scrape_failed_standalone',      '40 8 * * *', $$REINDEX INDEX CONCURRENTLY nuq.nuq_queue_scrape_failed_standalone_created_at_idx;$$);
 SELECT cron.schedule('nuq_reindex_queue_scrape_group_id',               '40 9 * * *', $$REINDEX INDEX CONCURRENTLY nuq.nuq_queue_scrape_group_id_idx;$$);
+SELECT cron.schedule('nuq_reindex_queue_scrape_group_failed_listing',   '40 10 * * *', $$REINDEX INDEX CONCURRENTLY nuq.nuq_queue_scrape_group_failed_listing_idx;$$);
 
 SELECT cron.schedule('nuq_maintenance_watchdog', '* * * * *', $$
   SELECT pg_cancel_backend(pid)
