@@ -149,6 +149,17 @@
         'docker',
       ],
       matchPackageNames: [
+        'ghcr.io/firecrawl/firecrawl',
+      ],
+      automerge: false,
+      ignoreTests: false,
+      platformAutomerge: false,
+    },
+    {
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
         '/forgejo-runner/',
       ],
       pinDigests: true,

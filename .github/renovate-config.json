@@ -3,7 +3,9 @@
     "repositories": [
         "pando85/homelab"
     ],
-    "allowPostUpgradeCommandMatching": true,
+    "allowedCommands": [
+        "^bash apps/firecrawl/hack/update-nuq-sql\\.sh [0-9]+\\.[0-9]+\\.[0-9]+$"
+    ],
     "packageRules": [
         {
             "matchDatasources": [

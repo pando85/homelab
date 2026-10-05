@@ -1,0 +1,22 @@
+---
+name: Firecrawl Version Check
+
+# yamllint disable-line rule:truthy
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'apps/firecrawl/values.yaml'
+      - 'apps/firecrawl/files/nuq.sql'
+
+jobs:
+  check-version:
+    name: Check nuq.sql version matches image tag
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check version
+        run: bash apps/firecrawl/hack/check-nuq-version.sh
