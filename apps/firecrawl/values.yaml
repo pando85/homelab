@@ -44,7 +44,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: 2.10.19
+            tag: 2.11.454
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/index.js"]
           env:
@@ -162,7 +162,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: 2.10.19
+            tag: 2.11.454
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/services/queue-worker.js"]
           env:
@@ -254,7 +254,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl
             repository: ghcr.io/firecrawl/firecrawl
-            tag: 2.10.19
+            tag: 2.11.454
           command: ["node"]
           args: ["--max-old-space-size=2048", "dist/src/services/worker/nuq-worker.js"]
           env:
