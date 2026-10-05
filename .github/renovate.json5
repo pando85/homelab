@@ -154,6 +154,7 @@
       automerge: false,
       ignoreTests: false,
       platformAutomerge: false,
+      schedule: ['at any time'],
     },
     {
       matchDatasources: [
