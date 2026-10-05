@@ -44,8 +44,6 @@ jobs:
           python-version: '3.x'
 
       - name: Verify checksum against upstream
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           SQL_DIR="apps/readest/files/sql"
