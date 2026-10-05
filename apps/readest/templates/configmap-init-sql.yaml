@@ -3,19 +3,52 @@ kind: ConfigMap
 metadata:
   name: readest-init-sql
 data:
+  expected-version: {{ index .Values "app-template" "controllers" "client" "initContainers" "patch-oauth" "image" "tag" | quote }}
+  expected-app-version: {{ index .Values "app-template" "controllers" "client" "containers" "client" "image" "tag" | quote }}
+  vendored-version: {{ .Files.Get "files/sql/VERSION" | trim | quote }}
+  schema.sql: |
+{{ .Files.Get "files/sql/schema.sql" | indent 4 }}
+{{- range $path, $_ := .Files.Glob "files/sql/[0-9]*_*.sql" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
   migrate.sh: |
     #!/bin/sh
     set -eu
+
+    EXPECTED_VERSION=$(cat /db-init/expected-version)
+    EXPECTED_APP_VERSION=$(cat /db-init/expected-app-version)
+    VENDORED_VERSION=$(cat /db-init/vendored-version)
+
+    if [ -z "$EXPECTED_VERSION" ]; then
+      echo "ERROR: expected-version is empty in ConfigMap"
+      exit 1
+    fi
+    if [ -z "$EXPECTED_APP_VERSION" ]; then
+      echo "ERROR: expected-app-version is empty in ConfigMap"
+      exit 1
+    fi
+    if [ -z "$VENDORED_VERSION" ]; then
+      echo "ERROR: vendored-version is empty in ConfigMap"
+      exit 1
+    fi
+    if [ "$EXPECTED_VERSION" != "$VENDORED_VERSION" ]; then
+      echo "ERROR: patch-oauth image tag ($EXPECTED_VERSION) does not match vendored SQL ($VENDORED_VERSION)"
+      echo "Run: apps/readest/hack/vendor-sql-migrations.py $EXPECTED_VERSION"
+      exit 1
+    fi
+    if [ "$EXPECTED_APP_VERSION" != "$VENDORED_VERSION" ]; then
+      echo "ERROR: client image tag ($EXPECTED_APP_VERSION) does not match vendored SQL ($VENDORED_VERSION)"
+      echo "Run: apps/readest/hack/vendor-sql-migrations.py $EXPECTED_APP_VERSION"
+      exit 1
+    fi
+    echo "Version check passed: Readest v${VENDORED_VERSION} (patch-oauth=$EXPECTED_VERSION, client=$EXPECTED_APP_VERSION)"
 
     export PGPASSWORD="$DB_PASSWORD"
     export PGHOST=readest-postgres
     export PGPORT=5432
     export PGDATABASE=readest
     export PGUSER=readest
-
-    READEST_VERSION="${DB_SCHEMA_VERSION}"
-    BASE_URL="https://raw.githubusercontent.com/readest/readest/v${READEST_VERSION}/docker/volumes/db"
-    SQL_DIR="/tmp/readest-sql"
 
     echo "Waiting for PostgreSQL..."
     until pg_isready -q -t 5; do
@@ -38,14 +71,6 @@ data:
     psql -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS readest_meta;" \
       -c "CREATE TABLE IF NOT EXISTS readest_meta.migrations (name text PRIMARY KEY, applied_at timestamptz DEFAULT now());"
 
-    echo "Acquiring advisory lock..."
-    psql -v ON_ERROR_STOP=1 -c "SELECT pg_advisory_lock(hashtext('readest-migrations')::bigint);"
-
-    cleanup() {
-      psql -v ON_ERROR_STOP=1 -c "SELECT pg_advisory_unlock(hashtext('readest-migrations')::bigint);" 2>/dev/null || true
-    }
-    trap cleanup EXIT
-
     APPLIED=$(psql -tAc "SELECT string_agg(name, ' ') FROM readest_meta.migrations;")
     APPLIED_COUNT=$(psql -tAc "SELECT count(*) FROM readest_meta.migrations;")
     echo "Ledger has $APPLIED_COUNT applied entries."
@@ -57,40 +82,40 @@ data:
     if is_applied "schema.sql"; then
       echo "Skipping schema.sql — already applied."
     else
-      echo "Downloading and applying schema.sql..."
-      mkdir -p "$SQL_DIR/init"
-      wget -q -O "$SQL_DIR/init/schema.sql" "${BASE_URL}/init/schema.sql"
-      psql -v ON_ERROR_STOP=1 -f "$SQL_DIR/init/schema.sql"
-      psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('schema.sql')"
+      echo "Applying schema.sql..."
+      psql -v ON_ERROR_STOP=1 -f /db-init/schema.sql
+      psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('schema.sql') ON CONFLICT (name) DO NOTHING;"
       APPLIED="$APPLIED schema.sql"
       echo "Base schema applied."
     fi
 
-    echo "Fetching migration list from GitHub API..."
-    mkdir -p "$SQL_DIR/migrations"
-    wget -q -O "$SQL_DIR/migrations/api.json" "https://api.github.com/repos/readest/readest/contents/docker/volumes/db/migrations?ref=v${READEST_VERSION}"
-    REMOTE_MIGRATIONS=$(sed -n 's/.*"name": *"\([0-9][0-9]*_[^"]*\.sql\)".*/\1/p' "$SQL_DIR/migrations/api.json" | sort)
-    rm -f "$SQL_DIR/migrations/api.json"
-
+    MIGRATION_COUNT=0
     PENDING=0
     PENDING_LIST=""
-    for name in $REMOTE_MIGRATIONS; do
+    for f in /db-init/[0-9]*_*.sql; do
+      [ -f "$f" ] || continue
+      name=$(basename "$f")
+      MIGRATION_COUNT=$((MIGRATION_COUNT + 1))
       if ! is_applied "$name"; then
         PENDING=$((PENDING + 1))
         PENDING_LIST="$PENDING_LIST $name"
       fi
     done
 
+    if [ "$MIGRATION_COUNT" -eq 0 ]; then
+      echo "ERROR: no migration files found in /db-init/"
+      exit 1
+    fi
+    echo "Found $MIGRATION_COUNT migration file(s), $PENDING pending."
+
     if [ "$PENDING" -eq 0 ]; then
-      echo "All migrations already applied — skipping downloads."
+      echo "All migrations already applied — skipping."
     else
-      echo "$PENDING migration(s) pending — downloading and applying..."
+      echo "$PENDING migration(s) pending — applying..."
       for name in $PENDING_LIST; do
-        echo "  Downloading $name..."
-        wget -q -O "$SQL_DIR/migrations/$name" "${BASE_URL}/migrations/$name"
         echo "  Applying $name..."
-        psql -v ON_ERROR_STOP=1 -f "$SQL_DIR/migrations/$name"
-        psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('$name')"
+        psql -v ON_ERROR_STOP=1 -f "/db-init/$name"
+        psql -v ON_ERROR_STOP=1 -c "INSERT INTO readest_meta.migrations(name) VALUES ('$name') ON CONFLICT (name) DO NOTHING;"
         APPLIED="$APPLIED $name"
         echo "  Migration $name applied."
       done
@@ -169,4 +194,4 @@ data:
     echo "Notifying PostgREST to reload schema cache..."
     psql -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema';"
 
-    echo "Database migration complete."
+    echo "Database migration complete for Readest v${EXPECTED_VERSION}."

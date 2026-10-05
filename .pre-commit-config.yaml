@@ -8,8 +8,10 @@ repos:
       - id: check-shebang-scripts-are-executable
       - id: detect-private-key
       - id: end-of-file-fixer
+        exclude: ^apps/readest/files/sql/
       - id: mixed-line-ending
       - id: trailing-whitespace
+        exclude: ^apps/readest/files/sql/
   - repo: https://github.com/adrienverge/yamllint
     rev: v1.38.0
     hooks:
@@ -38,4 +40,10 @@ repos:
         entry: apps/firecrawl/hack/check-nuq-version.sh
         language: script
         files: apps/firecrawl/(values\.yaml|files/nuq\.sql)
+        pass_filenames: false
+      - id: check-readest-sql-version
+        name: Check readest vendored SQL version matches image tag
+        entry: apps/readest/hack/check-sql-version.sh
+        language: script
+        files: apps/readest/(values\.yaml|files/sql/)
         pass_filenames: false

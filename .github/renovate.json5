@@ -160,6 +160,17 @@
         'docker',
       ],
       matchPackageNames: [
+        'ghcr.io/readest/readest',
+      ],
+      automerge: false,
+      ignoreTests: false,
+      platformAutomerge: false,
+    },
+    {
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
         '/forgejo-runner/',
       ],
       pinDigests: true,

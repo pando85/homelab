@@ -43,23 +43,58 @@ No MinIO controller — uses the dedicated public MinIO at `apps/s3-public/`.
 Readest's schema is tightly coupled to Supabase (uses `auth.users` FK, `auth.uid()` in RLS policies, Supabase roles). The solution:
 
 1. **Zalando CR** creates the database, base roles, and `pgcrypto` extension
-2. **`db-migrate` init container** automatically bootstraps the full schema on every pod start:
+2. **`db-migrate` init container** bootstraps the schema on every client pod start without
+   contacting GitHub:
    - Creates required schemas: `auth`, `extensions`, `graphql_public`
    - Creates required roles (`anon`, `authenticated`, `service_role`) with `service_role BYPASSRLS`
-   - Downloads `schema.sql` and all migrations from GitHub at `DB_SCHEMA_VERSION` (matches container image tag)
+   - Applies the vendored `schema.sql` and numbered SQL migrations from the `readest-init-sql`
+     ConfigMap, skipping filenames already recorded in `readest_meta.migrations`
    - Grants permissions to `anon`, `authenticated`, and `service_role` on public tables and `auth` schema
    - Sets default privileges for future tables
-   - Applies base schema + incremental migrations with idempotent ledger tracking (`readest_meta.migrations`)
-   - Skips downloads if all migrations already applied (optimization)
-   - Uses advisory lock for safe concurrent pod starts
    - Sends `NOTIFY pgrst, 'reload schema'` so PostgREST picks up new tables without restart
 3. **GoTrue** runs migrations on first start to create tables in the `auth` schema
 
-**Note:** All schema setup is fully automated. The `db-migrate` init container creates all required schemas (`auth`, `extensions`, `graphql_public`) and roles before applying migrations. No manual steps needed on fresh clusters.
+**Note:** The `db-migrate` init container creates the supporting schemas and roles. On a fresh
+database, GoTrue must also provide the `auth` tables/functions that the upstream `schema.sql`
+references; check both init logs if startup fails.
 
-### Schema Version Tracking
+### Pinned SQL and version tracking
 
-The `DB_SCHEMA_VERSION` env var in the `db-migrate` init container must match the Readest container image tag. When Renovate bumps the image tag, also update `DB_SCHEMA_VERSION` to ensure the correct migrations are downloaded.
+`apps/readest/files/sql/` contains the exact upstream `docker/volumes/db/init/schema.sql` and
+numbered migrations at the tag recorded in `VERSION`. The generator
+`apps/readest/hack/vendor-sql-migrations.py [VERSION]` discovers and downloads them at update
+time; no SQL is downloaded during pod startup. The ConfigMap embeds the files plus the vendored
+version and both Readest image tags. The init container compares all three versions **before**
+connecting to Postgres. It preserves the existing filename-based migration ledger, so upgrading
+from `0.12.6` to `0.12.12` skips `schema.sql` and migrations `001`–`022`, then applies the four
+new files `023`–`025` in filename order (there are two distinct `025_` files).
+
+Renovate's self-hosted `postUpgradeTasks` runs the generator for every Readest image update and
+includes the resulting SQL in the same PR. Readest image updates do not automerge. The local
+pre-commit hook and `.github/workflows/readest-version-check.yaml` reject missing or mismatched
+SQL; CI also compares the vendored bytes and file list with the pinned upstream tag. Review the
+SQL diff and the `patch-oauth` bundle changes before merging: a matching version proves neither
+migration safety nor JS patch compatibility. For manual regeneration:
+
+```bash
+python3 apps/readest/hack/vendor-sql-migrations.py <NEW_VERSION>
+apps/readest/hack/check-sql-version.sh
+python3 apps/readest/hack/vendor-sql-migrations.py --check <NEW_VERSION>
+```
+
+A failed SQL migration is not marked in the ledger and will be retried on the next pod start;
+upstream files are not necessarily transactional or safe to retry after partial execution.
+Inspect the failed statement and database state, restore from backup if necessary, and only
+retry after fixing the cause. The `schema.sql` ledger entry is not replayed on upgrades, so
+upstream changes to that base file require a corresponding migration or a deliberate manual
+migration; do not delete the ledger to force a replay.
+
+The client deployment uses the `Recreate` strategy and carries `reloader.stakater.com/auto`, so a
+regenerated ConfigMap rolls exactly one client pod and SQL changes take effect without an image
+bump. The previous advisory-lock statements were removed: each `psql -c` ran in its own session,
+so the lock never spanned the migration sequence — serialization comes from `Recreate` plus the
+ledger (`ON CONFLICT DO NOTHING`). Tags that are not plain `X.Y.Z` (prereleases) fail the
+generator, which blocks the Renovate PR; vendor those versions manually with the commands above.
 
 ### Zalando CR
 
@@ -291,7 +326,11 @@ ALTER DATABASE readest SET search_path TO auth, public;
 
 #### Manual Schema Setup for Supabase Compatibility
 
-**Status: Automated.** The `db-migrate` init container now creates all required schemas (`auth`, `extensions`, `graphql_public`) and enum types automatically. No manual steps needed.
+**Status: Automated, with one ordering dependency.** The `db-migrate` init container creates the
+supporting schemas (`auth`, `extensions`, `graphql_public`), roles, and permissions; the `auth`
+tables/functions (`auth.users`, `auth.uid()`) that upstream `schema.sql` references come from
+GoTrue's own migrations, and enum types come from the numbered migrations. On a fresh database,
+GoTrue must run before the client's first successful `db-migrate`.
 
 If you need to verify the schemas exist:
 

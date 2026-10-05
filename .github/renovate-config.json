@@ -4,7 +4,8 @@
         "pando85/homelab"
     ],
     "allowedCommands": [
-        "^bash apps/firecrawl/hack/update-nuq-sql\\.sh [0-9]+\\.[0-9]+\\.[0-9]+$"
+        "^bash apps/firecrawl/hack/update-nuq-sql\\.sh [0-9]+\\.[0-9]+\\.[0-9]+$",
+        "^python3 apps/readest/hack/vendor-sql-migrations\\.py [0-9]+\\.[0-9]+\\.[0-9]+$"
     ],
     "packageRules": [
         {
@@ -20,6 +21,23 @@
                 ],
                 "fileFilters": [
                     "apps/firecrawl/files/nuq.sql"
+                ],
+                "executionMode": "update"
+            }
+        },
+        {
+            "matchDatasources": [
+                "docker"
+            ],
+            "matchPackageNames": [
+                "ghcr.io/readest/readest"
+            ],
+            "postUpgradeTasks": {
+                "commands": [
+                    "python3 apps/readest/hack/vendor-sql-migrations.py {{{newVersion}}}"
+                ],
+                "fileFilters": [
+                    "apps/readest/files/sql/**"
                 ],
                 "executionMode": "update"
             }

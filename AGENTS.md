@@ -222,9 +222,13 @@ matters there.
   init container for bootstrap SQL. Don't deploy separate Supabase Postgres container unless
   the app requires Supabase-specific extensions not in the Spilo image. See
   `docs/deployment/readest.md` and `docs/conventions/deploying-new-apps.md`
-- Supabase apps on Zalando Postgres: the `db-migrate` init container now automates schema setup
-  (`auth`, `extensions`, `graphql_public` schemas + enum types + roles). No manual steps needed.
-  See `docs/deployment/readest.md`
+- Supabase apps on Zalando Postgres: the `db-migrate` init container automates supporting
+  schema/role setup, but upstream `schema.sql` needs GoTrue's `auth` schema (`auth.users`,
+  `auth.uid()`) — on a fresh database start GoTrue before the client. See `docs/deployment/readest.md`
+- Apps with upstream SQL installed through `docker-entrypoint-initdb.d` need a Zalando-compatible
+  init-container bootstrap. For versioned SQL, vendor at the app image tag, regenerate via Renovate,
+  review before merge, and guard image/SQL version in CI and at startup. Readest uses a migration
+  ledger; Firecrawl replays an idempotent snapshot. See `docs/conventions/deploying-new-apps.md`.
 - Apps with init-container workarounds (JS patching, schema health checks) should log version
   info and fail loudly (`exit 1`) on mismatch so Renovate bumps surface breakage immediately.
   Check init container logs after any version bump. See each app's deployment doc for specifics.

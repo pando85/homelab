@@ -1,6 +1,8 @@
 app-template:
   controllers:
     client:
+      annotations:
+        reloader.stakater.com/auto: "true"
       labels:
         backup/retain: weekly
       initContainers:
@@ -10,7 +12,6 @@ app-template:
             repository: postgres
             tag: 17-alpine
           env:
-            DB_SCHEMA_VERSION: "0.12.6" # renovate: datasource=docker depName=ghcr.io/readest/readest
             DB_PASSWORD:
               valueFrom:
                 secretKeyRef:
@@ -68,9 +69,9 @@ app-template:
                   echo "Patching $f"
                   sed -i 's/provider:"discord"/provider:"custom:kanidm"/g' "$f"
                   sed -i 's/"Discord"/"Kanidm"/g' "$f"
-                  sed -i 's/(0,i\.jsx)(R,{provider:"google",handleSignIn:n,Icon:U,label:r("Sign in with {{provider}}",{provider:"Google"})}),//g' "$f"
-                  sed -i 's/(0,i\.jsx)(R,{provider:"apple",handleSignIn:n,Icon:O\.FaApple,label:r("Sign in with {{provider}}",{provider:"Apple"})}),//g' "$f"
-                  sed -i 's/(0,i\.jsx)(R,{provider:"github",handleSignIn:n,Icon:O\.FaGithub,label:r("Sign in with {{provider}}",{provider:"GitHub"})}),//g' "$f"
+                  sed -E -i 's/\(0,[A-Za-z0-9_$]+\.jsx\)\([A-Za-z0-9_$]+,\{provider:"google",handleSignIn:[A-Za-z0-9_$]+,Icon:[A-Za-z0-9_$.]+,label:[A-Za-z0-9_$]+\("[^"]*",\{provider:"Google"\}\)\}\),//g' "$f"
+                  sed -E -i 's/\(0,[A-Za-z0-9_$]+\.jsx\)\([A-Za-z0-9_$]+,\{provider:"apple",handleSignIn:[A-Za-z0-9_$]+,Icon:[A-Za-z0-9_$.]+,label:[A-Za-z0-9_$]+\("[^"]*",\{provider:"Apple"\}\)\}\),//g' "$f"
+                  sed -E -i 's/\(0,[A-Za-z0-9_$]+\.jsx\)\([A-Za-z0-9_$]+,\{provider:"github",handleSignIn:[A-Za-z0-9_$]+,Icon:[A-Za-z0-9_$.]+,label:[A-Za-z0-9_$]+\("[^"]*",\{provider:"GitHub"\}\)\}\),//g' "$f"
                   PATCHED=$((PATCHED + 1))
                 fi
               done
@@ -93,10 +94,22 @@ app-template:
               KANIDM_COUNT=$(grep -rl 'provider:"custom:kanidm"' "${PATCHED_DIR}" 2>/dev/null | wc -l)
               echo "Found $KANIDM_COUNT file(s) with patched custom:kanidm provider"
 
-              UNPATCHED=$(grep -rl 'provider:"discord"' "${PATCHED_DIR}" 2>/dev/null | wc -l)
-              if [ "$UNPATCHED" -gt 0 ]; then
-                echo "WARN: $UNPATCHED file(s) still contain unpatched discord provider"
-              fi
+               UNPATCHED=$(grep -rl 'provider:"discord"' "${PATCHED_DIR}" 2>/dev/null | wc -l)
+               if [ "$UNPATCHED" -gt 0 ]; then
+                 echo "WARN: $UNPATCHED file(s) still contain unpatched discord provider"
+               fi
+
+               echo "Verifying OAuth buttons removed..."
+               BUTTON_RE='\(0,[A-Za-z0-9_$]+\.jsx\)\([A-Za-z0-9_$]+,\{provider:"(google|apple|github)",handleSignIn'
+               LEFTOVER=$(grep -rlE "$BUTTON_RE" "${PATCHED_DIR}" 2>/dev/null | wc -l)
+               if [ "$LEFTOVER" -gt 0 ]; then
+                 echo "ERROR: $LEFTOVER file(s) still contain Google/Apple/GitHub sign-in buttons."
+                 echo "The Readest JS bundle minifier output changed; update the removal patterns."
+                 echo "Check docs/troubleshooting/readest-ui-oauth-providers.md"
+                 grep -rnE "$BUTTON_RE" "${PATCHED_DIR}" 2>/dev/null | head -5
+                 exit 1
+               fi
+               echo "OAuth buttons removed successfully."
 
               echo "Generating client discovery configs..."
               PUBLIC_DIR="/next-public"

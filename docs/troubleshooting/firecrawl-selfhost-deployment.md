@@ -165,5 +165,7 @@ curl -X POST https://firecrawl.internal.grigri.cloud/v1/search \
 ## Related
 
 - Deployment: `apps/firecrawl/`
-- Upstream nuq schema: `apps/nuq-postgres/nuq.sql` in firecrawl repo at tag `v2.10.19`
+- Readest uses the same version-pinned SQL/CI pattern for upstream incremental migrations;
+  Firecrawl instead re-applies an idempotent snapshot. See `docs/deployment/readest.md`.
+- Upstream nuq schema: `apps/nuq-postgres/nuq.sql` at the tag in `apps/firecrawl/values.yaml`
 - [Zalando Patroni Stale DCS Deadlock](zalando-patroni-stale-dcs-deadlock.md)

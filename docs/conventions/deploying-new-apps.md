@@ -74,6 +74,21 @@ Does the app need Supabase auth/storage/realtime schemas?
 - Needs `auth.users` FK, `auth.uid()` in RLS, Supabase roles
 - Decision: Zalando for the database + init container for Supabase bootstrap SQL
 
+**Version-pinned upstream SQL on Zalando:**
+- If upstream relies on `docker-entrypoint-initdb.d`, its scripts do not run on Spilo. Vendor SQL
+  at the application image tag, review the changes, and render it into an init-container ConfigMap
+  rather than downloading SQL at pod startup.
+- For incremental migrations, keep upstream filenames and order, record each applied filename in
+  a database ledger, and do not replay the base schema. Readest is the reference:
+  `apps/readest/hack/vendor-sql-migrations.py` and `docs/deployment/readest.md`.
+- For a single re-runnable schema snapshot, verify its DDL is safe on an existing database and
+  adapt incompatible statements before committing. Firecrawl is the reference:
+  `apps/firecrawl/hack/update-nuq-sql.sh` and
+  `docs/troubleshooting/firecrawl-selfhost-deployment.md`.
+- Couple generated SQL to image updates with a Renovate post-upgrade task, disable automerge for
+  review, check provenance in CI, and fail fast on version mismatch before touching the database.
+  A matching version is not proof that a migration is safe or complete.
+
 ### 2.2 Object Storage: Which MinIO?
 
 **See `docs/deployment/minio-architecture.md`** for the complete architecture, decision tree, and
