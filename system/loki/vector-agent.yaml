@@ -59,10 +59,10 @@ readinessProbe:
 resources:
   limits:
     cpu: 500m
-    memory: 200Mi
+    memory: 512Mi # in-memory buffers + working set need headroom beyond 200Mi
   requests:
     cpu: 10m
-    memory: 85Mi
+    memory: 128Mi
 
 customConfig:
   data_dir: /vector-data-dir
@@ -75,6 +75,11 @@ customConfig:
     kubernetes_logs:
       type: kubernetes_logs
       max_line_bytes: 262144 # 256KB — matches Loki's default max_line_size
+      read_from: "beginning" # read entire log files on first run, not just tail
+      glob_minimum_cooldown_ms: 5000 # discover new/rotated files every 5s (default 60s loses short-lived pod logs)
+      oldest_first: false # fair scheduling — new pods aren't queued behind backlog on busy nodes
+      rotate_wait_secs: 60 # release rotated file handles after 60s (default is forever, starving new files)
+      max_read_bytes: 16384 # drain 16KB/cycle from each file (default 2048 is too slow under backlog)
       pod_annotation_fields:
         pod_annotations: ""
         pod_ip: ""
@@ -130,6 +135,10 @@ customConfig:
       endpoint: "http://loki:3100"
       encoding:
         codec: text
+      buffer:
+        type: memory
+        max_events: 1000
+        when_full: block # never drop — apply backpressure upstream instead
       labels:
         namespace: "{{`{{ kubernetes.pod_namespace }}`}}"
         pod: "{{`{{ kubernetes.pod_name }}`}}"
@@ -148,6 +157,10 @@ customConfig:
       endpoint: "http://loki:3100"
       encoding:
         codec: text
+      buffer:
+        type: memory
+        max_events: 200
+        when_full: block # never drop — apply backpressure upstream instead
       labels:
         job: systemd-journal
         systemd_unit: "{{`{{ systemd_unit }}`}}"

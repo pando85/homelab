@@ -160,6 +160,12 @@ matters there.
   Ubuntu 26.04 nodes also need `ansible-core>=2.20`, `ansible_become_exe: /usr/bin/sudo.ws` (sudo-rs
   rejects `-H`) and chrony, since the `ntp` package is gone. See
   `docs/troubleshooting/ansible-ubuntu-2604-compat.md`
+- Vector `kubernetes_logs` defaults cause silent log loss: `glob_minimum_cooldown_ms: 60000`
+  misses short-lived pods (<60s), `oldest_first: true` starves new pods behind backlog,
+  `rotate_wait_secs: i64::MAX` exhausts file handles on deleted pods, and `max_read_bytes: 2048`
+  is too slow to clear backlog. Loki sinks also need explicit `buffer.when_full: block` or events
+  are silently dropped under backpressure. Tuned values: 5000 / false / 60 / 16384 / block. See
+  `docs/troubleshooting/vector-log-loss-and-starvation.md`
 - Never let needrestart restart `k3s.service` or `systemd-networkd` on nodes: needrestart < 3.9
   re-flags k3s after every package (restart storm), and a networkd restart flushes Cilium's
   native-routing routes. Both are deferred via `metal/` (`unattended-upgrades`/`networkd` tags).
