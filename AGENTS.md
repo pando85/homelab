@@ -272,7 +272,9 @@ matters there.
   `InProgress` with orphaned ZFSBackup CRs. Pod restart is the safe first boundary, but residual
   CR/S3/ZFS state must be verified. See `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`
 - OpenEBS ZFS 2.11.x `zfs send | nc` can deadlock if `nc` exits early; killing `zfs send` first risks
-  marking a truncated volume backup `Done`. Keep the chart pinned to 2.10.1 pending an A/B-tested fix.
+  marking a truncated volume backup `Done`. Chart is on 2.11.1 with `zfsPlugin.image` pinned to
+  `ghcr.io/linkvt/zfs-driver:runpipe-773` (PR #777 fix) pending verification. If the fix fails,
+  revert chart to 2.10.1 and remove the image override.
   See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`

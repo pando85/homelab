@@ -96,26 +96,29 @@ After an agent restart, a new `zfs send` remained blocked for over seven hours w
 `nc` process. The matching `ZFSBackup` remained `Init` and Velero stayed at 21/234 items. The
 partial object must **not** be treated as a usable Gitea backup.
 
-## Why the Cluster Is Pinned to 2.10.1
+## Current Status: Verifying PR #777 Fix Image
 
-`system/zfs-localpv/Chart.yaml` is intentionally pinned to **2.10.1** as a containment measure, not
-as proof that 2.10.1 fixes the original receiver or transport failure. Version 2.10.1 uses the older
-shell pipeline, so when `nc` exits the pipe closes and `zfs send` can receive `SIGPIPE` instead of
-being held indefinitely by the v2.11.x `runPipe` implementation. After rollback, the automatically
-retried Hermes full stream established a receiver connection and made sustained progress, whereas
-the v2.11.1 attempts had remained blocked.
+The chart was upgraded to **2.11.1** with the `zfsPlugin.image` pinned to
+`ghcr.io/linkvt/zfs-driver:runpipe-773`, a pre-merge build of
+[PR #777](https://github.com/openebs/zfs-localpv/pull/777) that fixes the `runPipe` deadlock.
+The fix uses `os.Pipe` instead of `src.StdoutPipe()`, waits for both children concurrently, cancels
+the peer when either side fails, and joins both exit errors so a source failure can no longer be
+silently dropped. The PR has been reviewed and approved by two upstream maintainers but is not yet
+merged into a release.
 
-Keep the pin until one of these exit criteria is met:
+**Exit criteria for removing the image pin:**
 
-1. An upstream release fixes process cancellation, wait ordering and propagation of both child exit
-   statuses, and it passes a disposable large-volume backup test.
-2. A locally patched v2.11.x image passes the same test, including deliberate receiver termination.
-3. The OpenEBS streaming plugin is replaced with a backup path that does not use this pipeline.
+1. Upstream merges PR #777 and ships it in a release, and the release image passes a disposable
+   large-volume backup test (full send + forced receiver disconnect).
+2. The verification period below confirms the fix works in this cluster.
 
-Before upgrading, test both a normal large full send and a forced receiver disconnect. The operation
-must either finish with a restorable object or fail promptly without leaving `zfs send`, `nc`, an
-`Init` `ZFSBackup`, or a truncated object presented as successful. Keep the `multiPartChunkSize` at
-100 MiB; this avoids the separate 10,000-part limit but does not address the process deadlock.
+**Verification plan:** after deploying, run a normal large full backup and confirm all `ZFSBackup`
+CRs reach `Done`. Then trigger a forced receiver disconnect (e.g. kill the Velero node-agent pod
+mid-transfer) and confirm the `ZFSBackup` moves to `Failed` within seconds — not stuck in `Init` —
+with no orphan `zfs send` or `nc` processes. Keep the `multiPartChunkSize` at 100 MiB.
+
+If the fix image fails verification, revert by setting `Chart.yaml` back to `2.10.1` and removing
+the `zfsPlugin.image` override from `values.yaml`.
 
 ## Further Investigation
 
