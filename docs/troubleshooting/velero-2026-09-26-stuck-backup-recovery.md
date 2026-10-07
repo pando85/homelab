@@ -97,7 +97,10 @@ owner node, the new send remained alive for over seven hours with a defunct `nc`
 `zfs destroy` returned `dataset is busy`. ZFS reported no user holds or dependent clones. Velero
 logged `Client{15} operation completed` at 08:19:42 UTC, but never logged overall upload
 completion. The S3 object was about **1.1 GiB**, while `zfs send -nP` estimated a full stream of
-**31,893,359,112 bytes**. The object is incomplete, not a usable backup of Gitea data.
+**31,893,359,112 bytes**. The object is incomplete, not a usable backup of Gitea data. Final bucket
+state (verified 2026-10-07): a 405 MB truncated stream plus a 1,850-byte `.zfsvol` stub. The first
+usable Gitea quarterly backup is the fresh full `retain-quaterly-20260928135503` (~32.2 GB object,
+CR `prevSnapName` empty), followed by incrementals 0929 and 1006.
 
 The installed ZFS driver waits for the sender before the `nc` process that consumes its output. If
 `nc` exits early, the send's pipe can fill and block forever, leaving the `ZFSBackup` in `Init`.
@@ -166,6 +169,18 @@ The `prefix: zfs` VSL setting does not create a top-level prefix. Bucket version
 prefixes. Here the oldest retained quarterly resource, `20260630023034`, had an empty `prevSnapName`
 (a full send at 786 GiB), so nothing retained depended on the pruned prefixes.
 
+**Rule: deleting a chain head orphans its children.** A `Completed` backup whose data is an
+incremental of a pruned parent becomes unrecoverable even though its object remains in the bucket.
+Before pruning prefixes, list every retained backup whose volume `prevSnapName` chain reaches the
+pruned head, and prune those children in the same pass.
+
+**Recurrence (2026-10-07):** the trap fired again on `20260630023034` (the 844 GB full) and
+`20260707023042` — both `Deleting` with `Processed` delete requests carrying the same
+`zfsbackups ... not found` errors, bucket data untouched. They were cleaned with the exact
+sequence above. Their incremental children `20260714023014` and `20260721023023` (still
+`Completed`, CRs already GC'd) were pruned in the same pass, because the retained live chains
+all re-baselined on fulls from 0728 onward and depend on none of the four.
+
 ## Unrelated Agent Noise
 
 The `prusik` agent also retries forever on:
@@ -203,6 +218,23 @@ manual full backup.
 
 A clean CR graph does not prove end-to-end restorability. Restore-critical data should still be
 periodically tested with an actual Velero restore.
+
+### 2026-10-07 chain audit
+
+Cross-check three layers per retained quarterly backup: CR graph (`prevSnapName` → existing Backup
+object), bucket (`aws s3 ls s3://velero/backups/<name>/`: count `zfs-*` stream objects and total
+bytes; a retained backup with zero streams has no volume data), and per-volume stream sizes
+(e.g. Gitea: 32.2 GB full at 0928, 0.42 GB / 5.2 GB incrementals at 0929 / 1006). Findings:
+
+- Sub-1 KB stream objects are **legitimate** near-empty volumes (a stable 624 B across backups),
+  not truncation. A 1,850-byte `.zfsvol` stub always accompanies each stream; its presence is not
+  evidence of a complete stream.
+- Every retained CR referenced an existing parent with data in the bucket; no orphans.
+
+**Incremental chains must be replayed in order.** Restoring a volume's latest state means restoring
+its chain-head full first, then each newer incremental sequentially onto the same volume (Gitea
+current state: 0928 → 0929 → 1006). A standalone `velero restore` of an incremental-only backup
+fails at `zfs recv` because the parent snapshot is absent on a fresh dataset.
 
 ## Verification
 

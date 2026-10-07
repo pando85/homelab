@@ -120,6 +120,14 @@ with no orphan `zfs send` or `nc` processes. Keep the `multiPartChunkSize` at 10
 If the fix image fails verification, revert by setting `Chart.yaml` back to `2.10.1` and removing
 the `zfsPlugin.image` override from `values.yaml`.
 
+**Verification status (2026-10-07 audit):** the "clean" 2026-10-06 quarterly and weekly backups did
+**not** exercise the fix image. They ran 02:30–03:05 UTC under **2.10.1** — confirmed with an
+instant `kube_pod_container_info{namespace="zfs-localpv"}` query at the backup start timestamp
+(`docker.io/openebs/zfs-driver:2.10.1`) — while the `runpipe-773` pods were created at 09:14 UTC,
+hours after the backups finished. The first scheduled runs on the fix image are 2026-10-13. To
+attribute any historical backup to a driver version, query `kube_pod_container_info` at the backup's
+start time; never infer from the currently deployed image.
+
 ## Further Investigation
 
 For the next natural or controlled failure, collect evidence before restarting either component:

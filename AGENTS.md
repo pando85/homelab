@@ -282,6 +282,12 @@ matters there.
   `ghcr.io/linkvt/zfs-driver:runpipe-773` (PR #777 fix) pending verification. If the fix fails,
   revert chart to 2.10.1 and remove the image override.
   See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`
+- Quarterly backups are `zfspv-incr` chains (one full + incrementals): restorability requires the
+  whole chain — replay full-then-incrementals in order; an incremental alone fails at `zfs recv`.
+  Deleting a chain head orphans its retained children, so prune parents and children together, and
+  audit bucket objects, not just the CR graph. The "clean" 10-06 backups still ran 2.10.1 — check
+  `kube_pod_container_info` at the backup start time, not the current image, when attributing
+  versions. See `docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md`
 - Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
   them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
 - Hermes instance config overwrite: when deploying a new Hermes instance, never copy `config.yaml`,
