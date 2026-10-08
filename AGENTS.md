@@ -357,6 +357,11 @@ matters there.
   wait times out, and it latches `status: UpdateFailed` / ArgoCD `Degraded` even though the pod is
   healthy and the change applied. Fix: `kubectl -n postgres-operator rollout restart
   deploy/postgres-operator`. See `docs/troubleshooting/zalando-single-instance-updatefailed.md`
+- `topologySpreadConstraints` without `matchLabelKeys: [pod-template-hash]` causes rolling updates
+  to stall on multi-replica Deployments: the scheduler counts old+new ReplicaSet pods together, so
+  `maxSkew: 1` + `DoNotSchedule` blocks new pod placement. Always add `matchLabelKeys` for
+  Deployments with `replicas > 1` or HPA. Skip for single-replica, StatefulSets (no `pod-template-hash`),
+  and CRD-managed workloads. See `docs/conventions/topology-spread-constraints.md`
 
 ## Subsystem Docs
 
@@ -370,6 +375,8 @@ matters there.
   `docs/hardware/k8s-amd64-1.md`
 - **Adding a node:** `docs/user-guide/add-or-remove-nodes.md` for the runbook,
   `planning/k8s-amd64-1-node-addition.md` for a worked example with measured numbers
+- **Topology spread constraints:** See `docs/conventions/topology-spread-constraints.md` for
+  `matchLabelKeys` usage and when to apply it
 
 ## Licensing
 
