@@ -141,7 +141,7 @@ alternateConfig:
 
   exporters:
     otlp/pyroscope:
-      endpoint: pyroscope.pyroscope.svc.cluster.local:4040
+      endpoint: pyroscope.pyroscope.svc.cluster.local:9095
       tls:
         insecure: true
       retry_on_failure:
