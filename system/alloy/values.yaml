@@ -46,12 +46,27 @@ alloy:
         }
       }
 
-      // Relabel: extract service_name from container name, filter to target services
+      // Relabel: build service_name as ebpf/<namespace>/<container> and keep only
+      // the 3 runc Rust services. NOTE: container names are control-plane,
+      // git-proxy, auth-proxy — NOT the Deployment names (which have a
+      // calypso- prefix). Filtering on the wrong value drops every target.
       discovery.relabel "pods" {
         targets = discovery.kubernetes.pods.targets
 
+        // Drop pods that are not in a running phase (avoid stale targets).
         rule {
-          source_labels = ["__meta_kubernetes_pod_container_name"]
+          action        = "drop"
+          source_labels = ["__meta_kubernetes_pod_phase"]
+          regex         = "Succeeded|Failed"
+        }
+
+        // service_name = ebpf/<namespace>/<container_name>
+        rule {
+          action        = "replace"
+          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
+          separator     = "@"
+          regex         = "(.*)@(.*)"
+          replacement   = "ebpf/${1}/${2}"
           target_label  = "service_name"
         }
 
@@ -61,15 +76,20 @@ alloy:
         }
 
         rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+
+        rule {
           source_labels = ["__meta_kubernetes_pod_node_name"]
           target_label  = "node"
         }
 
-        // Filter to only the 3 runc Rust services
+        // Keep only the 3 runc Rust services (container names, not Deployment names).
         rule {
-          source_labels = ["service_name"]
-          regex         = "calypso-control-plane|calypso-git-proxy|calypso-auth-proxy"
           action        = "keep"
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          regex         = "control-plane|git-proxy|auth-proxy"
         }
       }
 
