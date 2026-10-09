@@ -26,15 +26,15 @@ pyroscope:
 
   extraArgs:
     log.level: info
-    # Retention period — post-deploy verification required to confirm cleanup
-    # is actually enforced (not just configured).
-    pyroscope.retention-period: 168h
-    # Reduce block duration for lower memory usage at trial scale
-    pyroscopedb.max-block-duration: 30m
 
   # Pyroscope v2 structured configuration
   # Storage backend: filesystem (single-node only, not for production HA)
   structuredConfig:
+    # Retention period — post-deploy verification required to confirm cleanup
+    # is actually enforced (not just configured).
+    # CLI flag: -retention-period (top-level, not under pyroscope.* or pyroscopedb.*)
+    limits:
+      retention_period: 168h
     storage:
       backend: filesystem
       filesystem:

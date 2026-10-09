@@ -97,30 +97,26 @@ ports:
   zipkin:
     enabled: false
 
-# Collector configuration
-config:
+# Use alternateConfig to completely replace the chart's default config.
+# The chart's default config includes zipkin/jaeger/otlp receivers that are NOT
+# compiled into the otelcol-ebpf-profiler distribution. alternateConfig has NO
+# defaults and is NOT merged with config — it completely replaces it.
+# This config uses ONLY components available in the distribution (from manifest.yaml):
+# - Receivers: [nop, profiling]
+# - Processors: [batch, memory_limiter, k8sattributes, resourcedetection, resource, transform]
+# - Exporters: [debug, nop, otlp, otlphttp, file]
+alternateConfig:
   receivers:
-    # The profiling receiver is configured by the chart's presets.profiling
-    # block. Additional tuning via the receiver config:
     profiling:
-      # Leave samples_per_second at default (97) for trial
-      # DO NOT set include_env_vars — secret-leak surface
       error_mode: propagate
-      # Nested PID namespace translation for runc containers.
-      # Requires kernel BTF. If BTF is not available, set to "none" and
-      # verify profiling still works for the target containers.
       pid_namespace_translation_mode: auto
 
   processors:
-    # memory_limiter is the only alpha-stability processor in this chain.
-    # It is included to prevent OOM under load spikes.
     memory_limiter:
       check_interval: 1s
       limit_mib: 256
       spike_limit_mib: 64
 
-    # k8sattributes: enriches profiles with pod/node metadata.
-    # Development maturity for profiles. Needs RBAC (see resources/rbac.yaml).
     k8sattributes:
       auth_type: serviceAccount
       passthrough: false
@@ -130,19 +126,14 @@ config:
           - k8s.pod.name
           - k8s.node.name
           - k8s.pod.uid
-      # Filter to only the calypso namespace (3 runc Rust services)
       filter:
         namespace: calypso
 
-    # transform: set service.name from process.executable.name.
-    # The profiler sets process.executable.name but NOT service.name.
-    # Development maturity for profiles.
     transform/set_service_name:
       error_mode: ignore
       profile_statements:
         - set(resource.attributes["service.name"], resource.attributes["process.executable.name"]) where resource.attributes["service.name"] == ""
 
-    # resource: add cluster identifier
     resource:
       attributes:
         - key: deployment.environment
@@ -150,31 +141,29 @@ config:
           action: upsert
 
   exporters:
-    # OTLP gRPC export to Pyroscope v2 OTLP profiles ingest.
-    # The exporter type is `otlp_grpc` (the `otlp` name is deprecated).
-    # Alpha maturity for profiles.
-    otlp_grpc/pyroscope:
+    otlp/pyroscope:
       endpoint: pyroscope.pyroscope.svc.cluster.local:4040
       tls:
         insecure: true
-      # No sending_queue config needed for profiles (no batch)
       retry_on_failure:
         enabled: true
         initial_interval: 5s
         max_interval: 30s
 
-    # Debug exporter for initial validation — remove after Phase 6c gate passes
     debug:
       verbosity: basic
 
+  extensions:
+    health_check:
+      endpoint: ${env:MY_POD_IP}:13133
+
   service:
+    extensions: [health_check]
     telemetry:
       logs:
         level: info
     pipelines:
-      # Profiles pipeline — NO `batch` processor (batch has no profiles support).
-      # Pipeline: profiling → memory_limiter → k8sattributes → transform → resource → otlp_grpc/pyroscope
       profiles:
         receivers: [profiling]
         processors: [memory_limiter, k8sattributes, transform/set_service_name, resource]
-        exporters: [otlp_grpc/pyroscope, debug]
+        exporters: [otlp/pyroscope, debug]
