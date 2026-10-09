@@ -35,7 +35,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Request rate (calls/sec) from Tempo spanmetrics. Exemplar dots (if present) link to the trace.",
+      "description": "Request rate (calls/sec) from Tempo spanmetrics. Exemplar dots (if present) link to the trace. Exemplars are emitted by the metrics-generator for histogram bucket series (traces_spanmetrics_latency_bucket), NOT for counter series (traces_spanmetrics_calls_total).",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -112,7 +112,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Latency histogram (p50, p90, p99) from spanmetrics. Exemplar dots link to traces when available.",
+      "description": "Latency histogram (p50, p90, p99) from spanmetrics. Exemplar dots link to traces when available — the metrics-generator emits exemplars for histogram bucket series (traces_spanmetrics_latency_bucket) but NOT for counter series.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -262,12 +262,12 @@
     },
     {
       "datasource": { "type": "tempo", "uid": "tempo" },
-      "description": "TraceQL search by service. Click a trace to open the trace viewer below.",
+      "description": "TraceQL search by service. Uses resource.service.name (the OTel resource attribute). Click a trace to open the trace viewer.",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 19 },
       "id": 6,
       "options": {
         "search": {
-          "query": "{ service.name =~ \"$service\" }",
+          "query": "{ resource.service.name =~ \"$service\" }",
           "serviceMapInclude": false
         },
         "showTraceIds": true
@@ -276,7 +276,7 @@
         {
           "datasource": { "type": "tempo", "uid": "tempo" },
           "queryType": "search",
-          "query": "{ service.name =~ \"$service\" }",
+          "query": "{ resource.service.name =~ \"$service\" }",
           "refId": "A"
         }
       ],
@@ -292,7 +292,7 @@
     },
     {
       "datasource": { "type": "loki", "uid": "loki" },
-      "description": "Logs filtered by namespace and service_name. When trace_id variable is set, only logs matching that trace are shown (pivot from trace).",
+      "description": "Logs filtered by namespace and container. Loki label mapping (measured 2026-10-10): OTel service.name 'calypso-control-plane' → container='control-plane', OTel 'calypso-auth-proxy' → container='auth-proxy', OTel 'calypso-git-proxy' → container='git-proxy', OTel 'calypso-runner' → container='runner'. The Loki service_name label does NOT match OTel service.name (it uses short names like 'calypso', 'git-proxy').",
       "gridPos": { "h": 12, "w": 24, "x": 0, "y": 30 },
       "id": 7,
       "options": {
@@ -308,17 +308,17 @@
       "targets": [
         {
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{namespace=\"$namespace\", service_name=~\"$service\"}",
+          "expr": "{namespace=\"$namespace\", container=~\"$container\"}",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Logs (namespace=$namespace, service=$service)",
+      "title": "Logs (namespace=$namespace, container=$container)",
       "type": "logs"
     },
     {
       "datasource": { "type": "loki", "uid": "loki" },
-      "description": "Pivot panel: shows logs for a specific trace_id. Set the trace_id variable above to filter.",
+      "description": "Pivot panel: shows logs for a specific trace_id. Set the trace_id variable above to filter. Only control-plane emits trace_id in JSON logs; auth-proxy and git-proxy use text format without trace context.",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 42 },
       "id": 8,
       "options": {
@@ -351,7 +351,7 @@
     },
     {
       "datasource": { "type": "grafana-pyroscope-datasource", "uid": "pyroscope" },
-      "description": "CPU flame graph for the selected service. The service_name label maps from span service.name via tracesToProfiles config. NOTE: Until Alloy label alignment is complete, Pyroscope service_name values are 'ebpf/calypso/<service>' and will NOT match the OTel service.name. Select the matching ebpf/ value manually from the serviceName variable.",
+      "description": "CPU flame graph for the selected service. The service_name label maps from span service.name via tracesToProfiles config. After Alloy alignment (cb41d99a), Pyroscope service_name values are calypso-control-plane, calypso-auth-proxy, calypso-git-proxy — matching OTel service.name exactly. NOTE: Pyroscope v2 query API returns empty results as of 2026-10-10 despite active ingest. This is a Pyroscope v2 data/query issue, not a dashboard config issue.",
       "fieldConfig": {
         "defaults": {},
         "overrides": []
@@ -402,7 +402,7 @@
         "current": { "selected": false, "text": "calypso-control-plane", "value": "calypso-control-plane" },
         "datasource": { "type": "prometheus", "uid": "prometheus" },
         "definition": "",
-        "description": "Service name (from spanmetrics 'service' label). Includes both Calypso and infrastructure services with traces.",
+        "description": "Service name (from spanmetrics 'service' label). Includes both Calypso and infrastructure services with traces. This is the OTel service.name value (e.g. calypso-control-plane, calypso-auth-proxy).",
         "hide": 0,
         "includeAll": true,
         "label": "Service",
@@ -410,6 +410,23 @@
         "name": "service",
         "options": [],
         "query": "label_values(traces_spanmetrics_calls_total, service)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": { "selected": false, "text": "control-plane", "value": "control-plane" },
+        "datasource": { "type": "loki", "uid": "loki" },
+        "definition": "",
+        "description": "Loki container label. Maps to OTel service.name: control-plane → calypso-control-plane, auth-proxy → calypso-auth-proxy, git-proxy → calypso-git-proxy, runner → calypso-runner. Decoupled from the spanmetrics $service variable.",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Container",
+        "multi": true,
+        "name": "container",
+        "options": [],
+        "query": "label_values({namespace=\"$namespace\"}, container)",
         "refresh": 2,
         "regex": "",
         "sort": 1,
@@ -426,10 +443,10 @@
         "type": "textbox"
       },
       {
-        "current": { "selected": false, "text": "ebpf/calypso/control-plane", "value": "ebpf/calypso/control-plane" },
+        "current": { "selected": false, "text": "calypso-control-plane", "value": "calypso-control-plane" },
         "datasource": { "type": "grafana-pyroscope-datasource", "uid": "pyroscope" },
         "definition": "service_name",
-        "description": "Pyroscope service_name label. Currently Alloy emits 'ebpf/<namespace>/<container>'. After alignment, this will match OTel service.name directly.",
+        "description": "Pyroscope service_name label. After Alloy alignment (cb41d99a), values match OTel service.name: calypso-control-plane, calypso-auth-proxy, calypso-git-proxy.",
         "hide": 0,
         "includeAll": false,
         "label": "Profile Service",

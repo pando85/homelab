@@ -21,7 +21,7 @@
     "type": "grafana-pyroscope-datasource",
     "uid": "pyroscope"
    },
-   "description": "CPU flame graph for Calypso services. Verified service_name values (Alloy eBPF): ebpf/calypso/control-plane, ebpf/calypso/auth-proxy, ebpf/calypso/git-proxy. Symbols may be mangled because staging runs the old release built with strip=symbols; named frames will improve once 0.44.0 ships (strip=debuginfo). Rust demangling is tracked upstream as grafana/alloy#5740.",
+   "description": "CPU flame graph for Calypso services. After Alloy alignment (cb41d99a), service_name values are calypso-control-plane, calypso-auth-proxy, calypso-git-proxy — matching OTel service.name exactly. Symbols may be mangled because staging runs the old release built with strip=symbols; named frames will improve once 0.44.0 ships (strip=debuginfo). Rust demangling is tracked upstream as grafana/alloy#5740.",
    "fieldConfig": {
     "defaults": {},
     "overrides": []
@@ -55,8 +55,8 @@
    {
     "current": {
      "selected": false,
-     "text": "ebpf/calypso/control-plane",
-     "value": "ebpf/calypso/control-plane"
+     "text": "calypso-control-plane",
+     "value": "calypso-control-plane"
     },
     "datasource": {
      "type": "grafana-pyroscope-datasource",
@@ -69,7 +69,7 @@
     "refresh": 1,
     "regex": "",
     "type": "query",
-    "description": "Pyroscope service_name label. Alloy emits ebpf/<namespace>/<container>."
+    "description": "Pyroscope service_name label. After Alloy alignment (cb41d99a), values match OTel service.name: calypso-control-plane, calypso-auth-proxy, calypso-git-proxy."
    }
   ]
  },
