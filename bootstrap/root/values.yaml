@@ -6,7 +6,11 @@ stacks:
     namespace: argocd
   - name: system
     excludes:
-      - alloy  # Fallback profiler — not deployed by default (see system/alloy/SWAP-PROCEDURE)
+      # OTel eBPF profiler: blocked by upstream OTLP profiles empty-label
+      # incompatibility (Pyroscope rejects all profiles with HTTP 400).
+      # Revisit when otelcol-ebpf-profiler or Pyroscope OTLP ingest is fixed.
+      # Verdict: research_notes/.../empty-label-verdict.md
+      - otel-ebpf-profiler
     ignoreDifferences:
       - group: '*'
         kind: CustomResourceDefinition

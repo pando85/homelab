@@ -1,3 +1,21 @@
+# OTel eBPF profiler DaemonSet — INACTIVE (excluded via ApplicationSet in
+# bootstrap/root/values.yaml since 2026-10-09).
+#
+# BLOCKER: upstream OTLP profiles incompatibility. The profiler attaches a
+# resource attribute with an EMPTY key derived from process context (value is a
+# host PID). Pyroscope's OTLP ingest (/v1development/profiles) converts resource
+# attributes into Prometheus-style labels without sanitization and rejects the
+# entire profile with HTTP 400 `invalid label name ''`. Transport works; the data
+# is invalid. Not fixable via collector config, version bump, or Pyroscope limits
+# (no relabeling on the OTLP profiles path).
+#
+# ACTIVE PATH: system/alloy (pyroscope.ebpf → pyroscope.write native /ingest).
+# ROOT CAUSE + CITATIONS:
+#   research_notes/Calypso OTel profiling feasibility/empty-label-verdict.md
+#
+# REVISIT WHEN: otelcol-ebpf-profiler suppresses/normalizes the empty-key attribute,
+# or Pyroscope sanitizes label names instead of dropping profiles. Manifests are
+# kept in git (not deleted) to allow a clean re-enable.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: otel-ebpf-profiler

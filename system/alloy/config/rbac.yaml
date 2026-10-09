@@ -1,18 +1,17 @@
-# RBAC for the Alloy fallback profiler.
-# Reuses the same ServiceAccount name as the OTel profiler since they occupy
-# the same namespace slot (swap-in, not parallel).
-#
-# This file is only active when the Alloy fallback is swapped in.
+# RBAC for the Alloy eBPF profiler (discovery.kubernetes needs pod listing
+# across namespaces; chart-managed RBAC covers same-namespace only).
+# ClusterRole is required because Alloy runs in `alloy` namespace but discovers
+# pods in `calypso` namespace.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: otel-ebpf-profiler
-  namespace: otel-ebpf-profiler
+  name: alloy
+  namespace: alloy
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: otel-ebpf-profiler
+  name: alloy-ebpf-profiler
 rules:
   - apiGroups: [""]
     resources: ["pods"]
@@ -20,16 +19,19 @@ rules:
   - apiGroups: [""]
     resources: ["nodes"]
     verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["services", "endpoints"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: otel-ebpf-profiler
+  name: alloy-ebpf-profiler
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: otel-ebpf-profiler
+  name: alloy-ebpf-profiler
 subjects:
   - kind: ServiceAccount
-    name: otel-ebpf-profiler
-    namespace: otel-ebpf-profiler
+    name: alloy
+    namespace: alloy

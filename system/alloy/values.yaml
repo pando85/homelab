@@ -1,24 +1,41 @@
-# Alloy fallback profiler values — Phase 6b swap-in.
+# Alloy eBPF profiler — staging profiling collector (Phase 6c validated path).
 #
-# This DaemonSet uses pyroscope.ebpf → pyroscope.write (Pyroscope-native /ingest).
-# NOT active — see kustomization.yaml for swap procedure.
+# Uses pyroscope.ebpf → pyroscope.write (Pyroscope-native /ingest), avoiding the
+# OTLP profiles /v1development path where the empty-label-name rejection occurs
+# in Pyroscope 2.3.2. See kustomization.yaml header and:
+#   research_notes/Calypso OTel profiling feasibility/empty-label-verdict.md
 #
 # CHART PIN: grafana/alloy 1.13.1 / app v1.20.1
+#   App >=1.15.0 required for pyroscope.ebpf comm/pid labels + metric exposure.
 
 controller:
   type: daemonset
   nodeSelector:
     kubernetes.io/os: linux
+  # eBPF profiler needs host PID namespace for process discovery
+  hostPID: true
+  # /sys for BTF (/sys/kernel/btf/vmlinux), /proc for process maps/symbolization
+  volumes:
+    extra:
+      - name: host-sys
+        hostPath:
+          path: /sys
+      - name: host-proc
+        hostPath:
+          path: /proc
 
 alloy:
   configMap:
     create: true
     content: |-
-      // Discovery: find pods in the calypso namespace
+      // Discovery: find pods in the calypso namespace (3 runc Rust services).
+      // Runner pods live in calypso-runners and are excluded by this filter —
+      // the negative control for gVisor: even if a runner pod were scheduled,
+      // it would not appear as a target.
       discovery.kubernetes "pods" {
         role = "pod"
         selectors {
-          role = "pod"
+          role  = "pod"
           field = "metadata.namespace=calypso"
         }
       }
@@ -50,40 +67,57 @@ alloy:
         }
       }
 
-      // eBPF profiling: CPU profiling via the embedded profiler engine
+      // eBPF profiling: whole-system CPU profiling via the embedded OTel eBPF
+      // engine, reporting only profiles matching the discovered targets.
       pyroscope.ebpf "profiles" {
         targets    = discovery.relabel.pods.targets
         forward_to = [pyroscope.write.default.receiver]
-
-        // Leave OBI process context at default (not used with our Rust OTel SDK traces)
       }
 
-      // Write profiles to Pyroscope via native /ingest endpoint
+      // Write profiles to Pyroscope via native /ingest (pprof-based, not OTLP)
       pyroscope.write "default" {
         endpoint {
           url = "http://pyroscope.pyroscope.svc.cluster.local:4040"
         }
       }
 
-  # Stability level for the alloy config
+  # pyroscope.ebpf needs privileged access to load eBPF programs, read
+  # /sys/kernel/btf/vmlinux, and symbolize process memory maps.
+  securityContext:
+    privileged: true
+    runAsUser: 0
+
+  mounts:
+    extra:
+      - name: host-sys
+        mountPath: /sys
+        readOnly: true
+      - name: host-proc
+        mountPath: /host/proc
+        readOnly: true
+
+  # pyroscope.ebpf is exposed at public-preview in this app version
   stabilityLevel: "public-preview"
 
-# Resource budget (trial starting point)
-resources:
-  requests:
-    cpu: 50m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 300Mi
+  # Resource budget (trial starting point) — chart path is alloy.resources
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 300Mi
 
-# Use the same ServiceAccount as the OTel profiler (shared RBAC)
+# Disable the chart's built-in RBAC/SA — we provide explicit ClusterRole
+# via config/rbac.yaml (chart's default Role is namespaced and insufficient
+# for cross-namespace pod discovery).
+rbac:
+  create: false
+
 serviceAccount:
-  name: otel-ebpf-profiler
+  create: false
+  name: alloy
 
-# Host PID namespace access for eBPF profiling
-hostPID: true
-
-# Security context for eBPF profiling
-securityContext:
-  privileged: true
+# Disable the chart's default Service/Ingress — profiler only pushes out.
+service:
+  enabled: false
