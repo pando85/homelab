@@ -186,8 +186,10 @@ serviceMonitor:
     # get namespace/pod/service/job/instance/endpoint/container only). Alloy is a
     # DaemonSet, so carrying the pod's node lets rules/dashboards attribute
     # coverage per node.
+    # CRD field is camelCase `sourceLabels` — writing the Prometheus-native
+    # `source_labels` is an unknown field that the API server silently prunes.
     - action: replace
-      source_labels:
+      sourceLabels:
         - __meta_kubernetes_pod_node_name
       targetLabel: node
 
