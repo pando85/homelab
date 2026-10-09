@@ -5,6 +5,8 @@ stacks:
   - name: bootstrap
     namespace: argocd
   - name: system
+    excludes:
+      - alloy  # Fallback profiler — not deployed by default (see system/alloy/SWAP-PROCEDURE)
     ignoreDifferences:
       - group: '*'
         kind: CustomResourceDefinition
