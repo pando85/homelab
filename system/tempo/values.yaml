@@ -37,6 +37,16 @@ tempo:
       path: "/var/tempo/metrics"
     traces_storage:
       path: "/var/tempo/traces"
+    # Spans with end times older than this are excluded from metrics generation.
+    # The OTel Collector's tail_sampling (decision_wait=10s default) + batch
+    # (timeout=5s) adds up to 15s pipeline delay before spans reach Tempo.
+    # Applications may also buffer spans before exporting. The default 30s slack
+    # is insufficient when spans are buffered or traces are long-running, causing
+    # ~92% cumulative discard as outside_metrics_ingestion_slack. Increasing to
+    # 60s accommodates application buffering + pipeline delay while keeping the
+    # window tight enough to avoid stale-span memory growth.
+    # Ref: https://grafana.com/docs/tempo/latest/configuration/#metrics-generator
+    metrics_ingestion_time_range_slack: 60s
   # -- Configuration options for the ingester.
   # Refers to: https://grafana.com/docs/tempo/latest/configuration/#ingester
   ingester:

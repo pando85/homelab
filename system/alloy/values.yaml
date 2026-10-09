@@ -46,10 +46,15 @@ alloy:
         }
       }
 
-      // Relabel: build service_name as ebpf/<namespace>/<container> and keep only
-      // the 3 runc Rust services. NOTE: container names are control-plane,
-      // git-proxy, auth-proxy — NOT the Deployment names (which have a
-      // calypso- prefix). Filtering on the wrong value drops every target.
+      // Relabel: build service_name to match the OTel service.name set by each
+      // Calypso binary (crates/calypso-*/src/main.rs: TelemetryConfig.service_name).
+      // This enables Tempo tracesToProfiles and Grafana profile panels to resolve
+      // profiles by the same service_name used in traces and metrics.
+      //
+      // Mapping: container "control-plane" → "calypso-control-plane", etc.
+      // NOTE: container names are control-plane, git-proxy, auth-proxy — NOT the
+      // Deployment names (which have a calypso- prefix). Filtering on the wrong
+      // value drops every target.
       //
       // CARDINALITY/PRIVACY: only bounded, non-identifying labels are carried.
       // Deliberately NOT carried:
@@ -67,13 +72,13 @@ alloy:
           regex         = "Succeeded|Failed"
         }
 
-        // service_name = ebpf/<namespace>/<container_name>
+        // service_name = calypso-<container_name> to match OTel service.name
+        // (e.g., container "control-plane" → "calypso-control-plane")
         rule {
           action        = "replace"
-          source_labels = ["__meta_kubernetes_namespace", "__meta_kubernetes_pod_container_name"]
-          separator     = "@"
-          regex         = "(.*)@(.*)"
-          replacement   = "ebpf/${1}/${2}"
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          regex         = "(.*)"
+          replacement   = "calypso-${1}"
           target_label  = "service_name"
         }
 
