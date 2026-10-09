@@ -104,3 +104,18 @@ ports:
     enabled: false
   zipkin:
     enabled: false
+  # Expose the collector's own Prometheus telemetry endpoint so servicemonitor.yaml
+  # can scrape it. The collector already binds its internal metrics exporter to
+  # ${env:MY_POD_IP}:8888 (chart default config.service.telemetry.metrics), but the
+  # chart ships `ports.metrics.enabled: false`, so the port was never published on
+  # the Service and the ServiceMonitor matched nothing (job=otel-collector had no
+  # `up` series at all). Chart docs: "you need to enable the port in order to use
+  # the ServiceMonitor".
+  #
+  # Name must stay `metrics`: servicemonitor.yaml selects endpoints by port NAME.
+  # ClusterIP only — no hostPort, no ingress, not reachable outside the cluster.
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP

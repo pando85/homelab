@@ -1,6 +1,13 @@
 # ServiceMonitor for Tempo self-metrics.
 # Monitoring coverage only — NOT a prerequisite for exemplar flow (proven by
 # data already arriving via remote_write without scrape config).
+#
+# Port name must match the tempo Service's REAL port name. The Service exposes
+# its Prometheus endpoint as `tempo-prom-metrics` (port 3200) — not
+# `http-metrics`. A ServiceMonitor endpoint whose port name matches no Service
+# port yields ZERO targets silently: no error, no scrape, no `up` series at all.
+# Verified on cluster: svc/tempo port names include tempo-prom-metrics=3200 and
+# GET http://tempo:3200/metrics returns 200 with tempo_*/cortex_* series.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
@@ -12,7 +19,7 @@ spec:
   endpoints:
     - interval: 30s
       path: /metrics
-      port: http-metrics
+      port: tempo-prom-metrics
       scheme: http
       scrapeTimeout: 10s
       relabelings:
