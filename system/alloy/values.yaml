@@ -70,7 +70,7 @@ alloy:
       // eBPF profiling: whole-system CPU profiling via the embedded OTel eBPF
       // engine, reporting only profiles matching the discovered targets.
       pyroscope.ebpf "profiles" {
-        targets    = discovery.relabel.pods.targets
+        targets    = discovery.relabel.pods.output
         forward_to = [pyroscope.write.default.receiver]
       }
 
