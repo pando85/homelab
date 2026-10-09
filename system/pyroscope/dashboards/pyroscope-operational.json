@@ -1,0 +1,158 @@
+{
+  "annotations": { "list": [] },
+  "description": "Operational dashboard for Pyroscope backend and OTel eBPF profiler DaemonSet. ALL metric names are CANDIDATES — verify against /metrics post-deploy.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Pyroscope pod CPU usage. VERIFY-AT-DEPLOY: metric name is a candidate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "rate(container_cpu_usage_seconds_total{namespace=\"pyroscope\", container=\"pyroscope\"}[5m])",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "title": "Pyroscope CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Pyroscope pod RSS memory. VERIFY-AT-DEPLOY: metric name is a candidate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "container_memory_working_set_bytes{namespace=\"pyroscope\", container=\"pyroscope\"}",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "title": "Pyroscope Memory (RSS)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Profiler DaemonSet CPU usage per node. VERIFY-AT-DEPLOY: metric name is a candidate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "rate(container_cpu_usage_seconds_total{namespace=\"otel-ebpf-profiler\"}[5m])",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "title": "Profiler DaemonSet CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Profiler DaemonSet RSS memory per node. VERIFY-AT-DEPLOY: metric name is a candidate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "container_memory_working_set_bytes{namespace=\"otel-ebpf-profiler\"}",
+          "legendFormat": "{{pod}}"
+        }
+      ],
+      "title": "Profiler DaemonSet Memory (RSS)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Pyroscope PVC usage. VERIFY-AT-DEPLOY: metric name is a candidate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "kubelet_volume_stats_used_bytes{namespace=\"pyroscope\"}",
+          "legendFormat": "used"
+        },
+        {
+          "expr": "kubelet_volume_stats_capacity_bytes{namespace=\"pyroscope\"}",
+          "legendFormat": "capacity"
+        }
+      ],
+      "title": "Pyroscope PVC Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "OTLP export failures from profiler. VERIFY-AT-DEPLOY: metric name is a candidate.",
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "drawStyle": "line", "fillOpacity": 10 },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "options": { "legend": { "displayMode": "list" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "expr": "rate(otelcol_exporter_send_failed_profiles_total{namespace=\"otel-ebpf-profiler\"}[5m])",
+          "legendFormat": "{{exporter}}"
+        }
+      ],
+      "title": "Profiler Export Failures (profiles)",
+      "type": "timeseries"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["profiling", "pyroscope", "operational"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Pyroscope — Operational",
+  "uid": "pyroscope-operational"
+}

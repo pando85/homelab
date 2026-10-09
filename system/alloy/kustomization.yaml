@@ -1,0 +1,49 @@
+# Alloy fallback profiler — Phase 6b swap-in if the OTel OTLP-ingest/flamegraph
+# gate (Phase 6c) fails.
+#
+# THIS DIRECTORY IS NOT REGISTERED AS AN ACTIVE ARGO APP.
+# It is prepared but not wired into the kustomization or ArgoCD application set.
+# To activate: see SWAP PROCEDURE below.
+#
+# SWAP PROCEDURE (OTel primary → Alloy fallback):
+# 1. Disable the OTel profiler:
+#    - In system/otel-ebpf-profiler/kustomization.yaml, comment out the helmCharts entry
+#    - OR: remove the ArgoCD application for otel-ebpf-profiler
+# 2. Enable the Alloy profiler:
+#    - Copy this directory's contents to the active path
+#    - Add system/alloy/ to the ArgoCD application set (or create the app manually)
+#    - The Alloy DaemonSet occupies the SAME namespace slot, RBAC scope, and
+#      NetworkPolicy as the OTel profiler
+# 3. Verify:
+#    - Alloy pod starts and stays Ready
+#    - pyroscope.ebpf component is active
+#    - Profiles arrive at Pyroscope via /ingest (Pyroscope-native protocol)
+#    - Flame graphs show named frames (mangled acceptable)
+# 4. The Pyroscope backend (system/pyroscope/) is SHARED — no change needed there.
+#
+# WHY ALLOY AS FALLBACK:
+# - Same eBPF engine (grafana/opentelemetry-ebpf-profiler, branch pyroscope_alloy)
+# - Pyroscope-native transport (/ingest) — no alpha OTLP profiles signal
+# - Proven wire compatibility (no version-lock risk on the transport layer)
+# - Trade-off: two collector families (Vector + Alloy), no OTel label model
+#
+# CHART PIN: grafana/alloy chart 1.13.1 (app v1.20.1)
+#   - Verified via Artifact Hub (2026-10-08)
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: otel-ebpf-profiler
+# NOTE: uses the SAME namespace as the OTel profiler (swap-in, not parallel)
+
+# NOT included in any parent kustomization — activate manually via swap procedure
+
+helmCharts:
+  - name: alloy
+    repo: https://grafana.github.io/helm-charts
+    version: 1.13.1
+    releaseName: alloy-profiler
+    namespace: otel-ebpf-profiler
+    valuesFile: values.yaml
+
+resources:
+  - config/rbac.yaml

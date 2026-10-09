@@ -1,0 +1,46 @@
+{
+  "annotations": { "list": [] },
+  "description": "Profile exploration dashboard — uses Pyroscope datasource (uid: pyroscope). CANDIDATE layout subject to post-deploy verification.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "grafana-pyroscope-datasource", "uid": "pyroscope" },
+      "description": "CPU flame graph for Calypso services. VERIFY-AT-DEPLOY: service names and label selectors are candidates.",
+      "fieldConfig": { "defaults": {}, "overrides": [] },
+      "gridPos": { "h": 20, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "exemplarTraceIdDestinations": [],
+        "flameGraph": {
+          "maxNodes": 16384,
+          "minWidth": 0
+        }
+      },
+      "title": "CPU Profile — Calypso Services",
+      "type": "flamegraph"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["profiling", "pyroscope", "calypso"],
+  "templating": {
+    "list": [
+      {
+        "current": { "selected": false, "text": "calypso-control-plane", "value": "calypso-control-plane" },
+        "datasource": { "type": "grafana-pyroscope-datasource", "uid": "pyroscope" },
+        "definition": "",
+        "name": "serviceName",
+        "options": [],
+        "query": { "labelName": "service_name" },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Pyroscope — Profile Exploration",
+  "uid": "pyroscope-profile-exploration"
+}

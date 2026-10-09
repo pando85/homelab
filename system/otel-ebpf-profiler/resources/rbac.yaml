@@ -1,0 +1,34 @@
+# RBAC for the OTel eBPF profiler DaemonSet.
+# k8sattributes processor needs read access to pod and node metadata.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-ebpf-profiler
+  namespace: otel-ebpf-profiler
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-ebpf-profiler
+rules:
+  # k8sattributes processor: read pod metadata for enrichment
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # k8sattributes processor: read node metadata for node.name enrichment
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-ebpf-profiler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-ebpf-profiler
+subjects:
+  - kind: ServiceAccount
+    name: otel-ebpf-profiler
+    namespace: otel-ebpf-profiler

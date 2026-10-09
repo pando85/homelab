@@ -1,0 +1,24 @@
+# ServiceMonitor for the OTel Collector self-metrics.
+# Monitoring coverage only — NOT a prerequisite for trace flow.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector
+  namespace: otel-collector
+  labels:
+    release: monitoring
+spec:
+  endpoints:
+    - interval: 30s
+      path: /metrics
+      port: metrics
+      scheme: http
+      scrapeTimeout: 10s
+      relabelings:
+        - action: replace
+          replacement: otel-collector
+          targetLabel: cluster
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: otel-collector
+      app.kubernetes.io/name: opentelemetry-collector

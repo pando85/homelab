@@ -1,0 +1,89 @@
+# Alloy fallback profiler values — Phase 6b swap-in.
+#
+# This DaemonSet uses pyroscope.ebpf → pyroscope.write (Pyroscope-native /ingest).
+# NOT active — see kustomization.yaml for swap procedure.
+#
+# CHART PIN: grafana/alloy 1.13.1 / app v1.20.1
+
+controller:
+  type: daemonset
+  nodeSelector:
+    kubernetes.io/os: linux
+
+alloy:
+  configMap:
+    create: true
+    content: |-
+      // Discovery: find pods in the calypso namespace
+      discovery.kubernetes "pods" {
+        role = "pod"
+        selectors {
+          role = "pod"
+          field = "metadata.namespace=calypso"
+        }
+      }
+
+      // Relabel: extract service_name from container name, filter to target services
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "service_name"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+
+        // Filter to only the 3 runc Rust services
+        rule {
+          source_labels = ["service_name"]
+          regex         = "calypso-control-plane|calypso-git-proxy|calypso-auth-proxy"
+          action        = "keep"
+        }
+      }
+
+      // eBPF profiling: CPU profiling via the embedded profiler engine
+      pyroscope.ebpf "profiles" {
+        targets    = discovery.relabel.pods.targets
+        forward_to = [pyroscope.write.default.receiver]
+
+        // Leave OBI process context at default (not used with our Rust OTel SDK traces)
+      }
+
+      // Write profiles to Pyroscope via native /ingest endpoint
+      pyroscope.write "default" {
+        endpoint {
+          url = "http://pyroscope.pyroscope.svc.cluster.local:4040"
+        }
+      }
+
+  # Stability level for the alloy config
+  stabilityLevel: "public-preview"
+
+# Resource budget (trial starting point)
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 300Mi
+
+# Use the same ServiceAccount as the OTel profiler (shared RBAC)
+serviceAccount:
+  name: otel-ebpf-profiler
+
+# Host PID namespace access for eBPF profiling
+hostPID: true
+
+# Security context for eBPF profiling
+securityContext:
+  privileged: true
