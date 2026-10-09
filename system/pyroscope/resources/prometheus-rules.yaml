@@ -1,9 +1,25 @@
-# Draft alerting rules for Pyroscope.
+# Alerting rules for the profiling stack: Pyroscope backend + Alloy eBPF collector.
 #
-# VERIFY-AT-DEPLOY: ALL metric names below are CANDIDATES. They must be
-# verified against the actual Pyroscope /metrics endpoint post-deploy before
-# these alerts can be considered functional. Empty panels / missing metrics
-# look identical to nonexistent metrics.
+# METRIC NAMES ARE VERIFIED, not candidates. Each family below was read from the
+# live /metrics endpoints on grigri (2026-10-09):
+#   - Alloy (pod http :12345 /metrics): pyroscope_ebpf_active_targets,
+#     pyroscope_ebpf_profiling_sessions_{total,failing}_total,
+#     pyroscope_ebpf_pprofs_total, pyroscope_ebpf_pprofs_dropped_total,
+#     pyroscope_ebpf_pprof_samples_total, pyroscope_write_sent_profiles_total,
+#     alloy_component_controller_running_components{health_type=...}
+#   - Pyroscope (:4040 /metrics): pyroscope_discarded_samples_total{reason=...},
+#     pyroscope_distributor_profiles_received_total
+#   - cAdvisor / kube-state-metrics: container_*, kube_pod_container_status_restarts_total
+#
+# REMOVED (were speculative and would never have fired):
+#   - pyroscope_ingester_push_errors_total — absent from the Pyroscope /metrics
+#     endpoint (verified count 0). Replaced by pyroscope_discarded_samples_total.
+#   - All rules/panels keyed on the otel-ebpf-profiler namespace — that collector
+#     is inactive (OTLP path blocked upstream), so those series do not exist.
+#
+# NOT covered on purpose: the config-reloader container declares no containerPort
+# and exposes no scrapeable metrics endpoint, so reload failures are detected via
+# container restarts instead of a reloader metric.
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -28,32 +44,97 @@ spec:
           annotations:
             message: |
               Pyroscope memory usage is above 80% of its limit.
-          # VERIFY-AT-DEPLOY: metric name is a candidate
           expr: |
             container_memory_working_set_bytes{namespace="pyroscope", container="pyroscope"}
               / container_resources_memory_limit{namespace="pyroscope", container="pyroscope"} > 0.8
           for: 10m
           labels:
             severity: warning
-        - alert: PyroscopeIngestErrors
+        - alert: PyroscopeDiscardingProfiles
           annotations:
             message: |
-              Pyroscope is reporting ingest errors.
-          # VERIFY-AT-DEPLOY: metric name is a candidate
+              Pyroscope is discarding profiles ({{ $labels.reason }}) at
+              {{ $value | humanize }}/s. A rising invalid_labels rate means the
+              client is sending label sets Pyroscope rejects — see the OTLP
+              empty-label blocker in
+              research_notes/Calypso OTel profiling feasibility/empty-label-verdict.md.
+            runbook_url: https://github.com/pando85/homelab/tree/master/system/pyroscope
           expr: |
-            rate(pyroscope_ingester_push_errors_total[5m]) > 0
-          for: 5m
+            sum by (reason) (rate(pyroscope_discarded_samples_total[5m])) > 0
+          for: 10m
           labels:
             severity: warning
-    - name: pyroscope_profiler_alerts
+    - name: alloy_profiler_alerts
       rules:
-        - alert: ProfilerDaemonSetNotReady
+        - alert: AlloyProfilerDaemonSetNotReady
           annotations:
             message: |
-              OTel eBPF profiler DaemonSet has pods not in Ready state.
+              The Alloy eBPF profiler DaemonSet has pods not in Ready state
+              ({{ $value }} of desired).
           expr: |
-            kube_daemonset_status_number_ready{namespace="otel-ebpf-profiler", daemonset="otel-ebpf-profiler"}
-              < kube_daemonset_status_desired_number_scheduled{namespace="otel-ebpf-profiler", daemonset="otel-ebpf-profiler"}
+            kube_daemonset_status_number_ready{namespace="alloy", daemonset="alloy"}
+              < kube_daemonset_status_desired_number_scheduled{namespace="alloy", daemonset="alloy"}
           for: 10m
+          labels:
+            severity: warning
+        - alert: AlloyProfilerSessionFailing
+          annotations:
+            message: |
+              Alloy pyroscope.ebpf profiling sessions are failing on
+              {{ $labels.node }} — eBPF programs are not loading (this is how the
+              kernel 7.0 perf_unwind_python failure presented). Profiling coverage
+              on that node is lost.
+            runbook_url: https://github.com/pando85/homelab/tree/master/system/alloy
+          expr: |
+            increase(pyroscope_ebpf_profiling_sessions_failing_total[15m]) > 0
+          for: 15m
+          labels:
+            severity: warning
+        - alert: AlloyProfilerNoTargets
+          annotations:
+            message: |
+              Alloy pyroscope.ebpf is tracking 0 active targets on
+              {{ $labels.node }} for >30m while a Calypso profiling target pod is
+              scheduled there (no CPU profiles are being collected).
+            runbook_url: https://github.com/pando85/homelab/tree/master/system/alloy
+          expr: |
+            pyroscope_ebpf_active_targets{namespace="alloy"} == 0
+          for: 30m
+          labels:
+            severity: warning
+        - alert: AlloyProfilerWriteFailures
+          annotations:
+            message: |
+              Alloy is generating profiles but they are not reaching Pyroscope:
+              profiles generated exceed profiles sent on {{ $labels.node }}
+              ({{ $value }} in the last 10m).
+            runbook_url: https://github.com/pando85/homelab/tree/master/system/alloy
+          # Both sides aggregated to node only: pprofs_total carries service_name
+          # while sent_profiles_total carries endpoint, so a label-wise join would
+          # be fragile. Per-node totals are the correct comparison.
+          expr: |
+            sum by (node) (increase(pyroscope_ebpf_pprofs_total[10m]))
+              - sum by (node) (increase(pyroscope_write_sent_profiles_total[10m])) > 0
+          for: 20m
+          labels:
+            severity: critical
+        - alert: AlloyProfilerDroppingSamples
+          annotations:
+            message: |
+              Alloy pyroscope.ebpf is dropping collected profiles on
+              {{ $labels.node }} ({{ $value }}/s).
+          expr: |
+            sum by (node) (rate(pyroscope_ebpf_pprofs_dropped_total[5m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+        - alert: AlloyProfilerRestarting
+          annotations:
+            message: |
+              Alloy profiler container on {{ $labels.node }} is crash-looping
+              ({{ $value }} restarts in 30m).
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace="alloy", container="alloy"}[30m]) > 2
+          for: 5m
           labels:
             severity: warning
