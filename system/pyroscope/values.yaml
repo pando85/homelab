@@ -39,6 +39,9 @@ pyroscope:
       backend: filesystem
       filesystem:
         dir: /data/pyroscope
+    # Compaction worker temp directory — must be writable (root filesystem is read-only)
+    compaction_worker:
+      temp_dir: /data/pyroscope/tmp
 
   resources:
     requests:
