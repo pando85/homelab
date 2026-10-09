@@ -1,0 +1,26 @@
+# ServiceMonitor for the OTel eBPF profiler DaemonSet self-metrics.
+#
+# VERIFY-AT-DEPLOY: metric names are CANDIDATES — verify against the actual
+# /metrics endpoint post-deploy.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-ebpf-profiler
+  namespace: otel-ebpf-profiler
+  labels:
+    release: monitoring
+spec:
+  endpoints:
+    - interval: 30s
+      path: /metrics
+      port: metrics
+      scheme: http
+      scrapeTimeout: 10s
+      relabelings:
+        - action: replace
+          replacement: otel-ebpf-profiler
+          targetLabel: cluster
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: otel-ebpf-profiler
+      app.kubernetes.io/name: opentelemetry-collector

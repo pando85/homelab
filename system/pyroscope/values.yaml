@@ -1,0 +1,111 @@
+# Pyroscope v2 single-binary mode with filesystem storage.
+# Trial deployment for staging continuous profiling (Phase 6a).
+#
+# VERIFY-AT-DEPLOY:
+# - Chart 2.3.2 / app 2.3.2 — confirmed via Artifact Hub (2026-10-08)
+# - OTLP ingest availability in single-binary mode is UNVERIFIED — this is
+#   the Phase 6c gate. If OTLP ingest requires a config flag or is not
+#   enabled by default, profiles will not arrive and the Alloy fallback
+#   (system/alloy/) must be swapped in.
+# - Retention cleanup enforcement is NOT guaranteed by configuration alone.
+#   Post-deploy verification required: wait 7+ days and confirm data older
+#   than retention_period is actually removed.
+# - Resource budgets are TRIAL STARTING POINTS, not guarantees.
+
+pyroscope:
+  replicaCount: 1
+
+  # Disable self-profiling to reduce noise during trial
+  disableSelfProfile: true
+
+  image:
+    registry: ''
+    repository: grafana/pyroscope
+    pullPolicy: IfNotPresent
+    # tag defaults to appVersion (2.3.2)
+
+  extraArgs:
+    log.level: info
+    # Retention period — post-deploy verification required to confirm cleanup
+    # is actually enforced (not just configured).
+    pyroscope.retention-period: 168h
+    # Reduce block duration for lower memory usage at trial scale
+    pyroscopedb.max-block-duration: 30m
+
+  # Pyroscope v2 structured configuration
+  # Storage backend: filesystem (single-node only, not for production HA)
+  structuredConfig:
+    storage:
+      backend: filesystem
+      filesystem:
+        path: /data/pyroscope
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 10001
+
+  service:
+    type: ClusterIP
+    port: 4040
+    # Internal-only — no ingress, no public ingest
+    annotations: {}
+
+  # Pod annotations for self-profiling scrape (disabled via disableSelfProfile)
+  podAnnotations: {}
+
+  # Persistence: PVC on openebs-zfspv (trial 20Gi)
+  # This key must be under pyroscope: (the chart merges it into $values)
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+    # StorageClass: openebs-zfspv is the cluster default, no need to specify
+    annotations:
+      # Prevent PVC deletion on ArgoCD sync
+      argocd.argoproj.io/sync-options: Prune=false
+
+# Architecture: single-binary (microservices disabled) with v2 storage
+architecture:
+  storage:
+    v1: false
+    v2: true
+  microservices:
+    enabled: false
+
+# Disable the bundled Alloy sidecar — we manage our own profiler DaemonSet
+alloy:
+  enabled: false
+
+# Disable the bundled grafana-agent (legacy)
+agent:
+  enabled: false
+
+# Disable MinIO — using filesystem storage
+minio:
+  enabled: false
+
+# Disable ingress — internal-only service
+ingress:
+  enabled: false
+
+# ServiceMonitor — use the chart's built-in support
+serviceMonitor:
+  enabled: true
+  labels:
+    release: monitoring
+  interval: 30s
+  scrapeTimeout: 10s

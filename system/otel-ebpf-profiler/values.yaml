@@ -1,0 +1,180 @@
+# OTel eBPF Profiler DaemonSet — primary profiling collector (Phase 6b).
+#
+# Uses the official otelcol-ebpf-profiler distribution image, which includes
+# the `profiling` receiver. The chart's `presets.profiling` block generates
+# hostPID, security context, and volumes automatically.
+#
+# IMAGE PIN: otel/opentelemetry-collector-ebpf-profiler:0.162.0
+#   - Published 2026-09-29, amd64 + arm64
+#   - Uses profiles bindings v0.4.0 (proto v1.11.x) — compatible with
+#     Pyroscope 2.3.2 (bindings v0.3.0, proto v1.10.0, field-identical)
+#   - VERIFY-AT-DEPLOY: wire compatibility is derived from proto field-number
+#     equality, not an upstream support matrix. The Phase 6c gate must prove
+#     end-to-end OTLP profiles delivery with semantic fidelity.
+#
+# VERSION-LOCK RULE: profiler image, any collector hop, and Pyroscope image
+#   must stay in the same OTLP profiles bindings row. Never bump past a
+#   bindings revision without a Pyroscope ingest test.
+#
+# SECURITY NOTES:
+# - hostPID: true (required by eBPF profiler for process discovery)
+# - Capabilities: BPF, PERFMON, SYS_PTRACE, CHECKPOINT_RESTORE, SYS_RESOURCE,
+#   DAC_READ_SEARCH, SYSLOG — each required for specific eBPF operations:
+#   - BPF: loading eBPF programs
+#   - PERFMON: perf_event_open for CPU profiling
+#   - SYS_PTRACE: reading process memory maps for symbolization
+#   - CHECKPOINT_RESTORE: reading /proc/<pid>/map_files (kernel >=5.9)
+#   - SYS_RESOURCE: raising RLIMIT_MEMLOCK for eBPF maps
+#   - DAC_READ_SEARCH: bypassing file read permission checks for profiling
+#   - SYSLOG: reading kernel symbol table (/proc/kallsyms)
+# - NO SYS_ADMIN: not added silently. If capabilities are insufficient,
+#   revise the set or block deployment.
+# - include_env_vars: UNSET (secret-leak surface — process env vars would be
+#   published into telemetry)
+# - error_mode: propagate (config/ingest failures are not silent)
+#
+# SCOPE: targets the 3 runc Rust services in namespace `calypso`:
+#   - calypso-control-plane
+#   - calypso-git-proxy
+#   - calypso-auth-proxy
+# gVisor runner pods are EXCLUDED — the host sees runsc-sentry, not the guest
+# workload. This is verified by the Phase 6c negative control.
+#
+# PRE-DEPLOY CHECKS:
+# - Node kernel >= 5.10 (profiler engine floor; 5.4 support ended)
+# - BTF present if pid_namespace_translation_mode: auto/recursive
+# - PodSecurity admission allows privileged DaemonSet in this namespace
+
+# Use the dedicated ebpf-profiler distribution (NOT the contrib image)
+image:
+  repository: otel/opentelemetry-collector-ebpf-profiler
+  tag: 0.162.0
+  pullPolicy: IfNotPresent
+
+mode: daemonset
+
+# Enable the profiling preset — generates hostPID, security context, volumes
+presets:
+  profiling:
+    enabled: true
+
+# Feature gate for profiles pipeline support
+command:
+  extraArgs:
+    - "--feature-gates=service.profilesSupport"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    # Trial budget — upstream targets ~250MB upper limit
+    memory: 300Mi
+
+# Use the ServiceAccount from RBAC (created separately)
+serviceAccount:
+  create: false
+  name: otel-ebpf-profiler
+
+# Node scheduling: Linux only (eBPF requirement)
+nodeSelector:
+  kubernetes.io/os: linux
+
+# Disable hostPort for OTLP/Jaeger/Zipkin to avoid collision with the
+# existing trace collector (otel-collector in otel-collector namespace)
+ports:
+  otlp:
+    enabled: false
+  otlp-http:
+    enabled: false
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+
+# Collector configuration
+config:
+  receivers:
+    # The profiling receiver is configured by the chart's presets.profiling
+    # block. Additional tuning via the receiver config:
+    profiling:
+      # Leave samples_per_second at default (97) for trial
+      # DO NOT set include_env_vars — secret-leak surface
+      error_mode: propagate
+      # Nested PID namespace translation for runc containers.
+      # Requires kernel BTF. If BTF is not available, set to "none" and
+      # verify profiling still works for the target containers.
+      pid_namespace_translation_mode: auto
+
+  processors:
+    # memory_limiter is the only alpha-stability processor in this chain.
+    # It is included to prevent OOM under load spikes.
+    memory_limiter:
+      check_interval: 1s
+      limit_mib: 256
+      spike_limit_mib: 64
+
+    # k8sattributes: enriches profiles with pod/node metadata.
+    # Development maturity for profiles. Needs RBAC (see resources/rbac.yaml).
+    k8sattributes:
+      auth_type: serviceAccount
+      passthrough: false
+      extract:
+        metadata:
+          - k8s.namespace.name
+          - k8s.pod.name
+          - k8s.node.name
+          - k8s.pod.uid
+      # Filter to only the calypso namespace (3 runc Rust services)
+      filter:
+        namespace: calypso
+
+    # transform: set service.name from process.executable.name.
+    # The profiler sets process.executable.name but NOT service.name.
+    # Development maturity for profiles.
+    transform/set_service_name:
+      error_mode: ignore
+      profile_statements:
+        - set(resource.attributes["service.name"], resource.attributes["process.executable.name"]) where resource.attributes["service.name"] == ""
+
+    # resource: add cluster identifier
+    resource:
+      attributes:
+        - key: deployment.environment
+          value: staging
+          action: upsert
+
+  exporters:
+    # OTLP gRPC export to Pyroscope v2 OTLP profiles ingest.
+    # The exporter type is `otlp_grpc` (the `otlp` name is deprecated).
+    # Alpha maturity for profiles.
+    otlp_grpc/pyroscope:
+      endpoint: pyroscope.pyroscope.svc.cluster.local:4040
+      tls:
+        insecure: true
+      # No sending_queue config needed for profiles (no batch)
+      retry_on_failure:
+        enabled: true
+        initial_interval: 5s
+        max_interval: 30s
+
+    # Debug exporter for initial validation — remove after Phase 6c gate passes
+    debug:
+      verbosity: basic
+
+  service:
+    telemetry:
+      logs:
+        level: info
+    pipelines:
+      # Profiles pipeline — NO `batch` processor (batch has no profiles support).
+      # Pipeline: profiling → memory_limiter → k8sattributes → transform → resource → otlp_grpc/pyroscope
+      profiles:
+        receivers: [profiling]
+        processors: [memory_limiter, k8sattributes, transform/set_service_name, resource]
+        exporters: [otlp_grpc/pyroscope, debug]

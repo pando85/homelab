@@ -1,14 +1,15 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-namespace: otel-collector
+namespace: otel-ebpf-profiler
 
 resources:
-  - servicemonitor.yaml
+  - resources/rbac.yaml
+  - resources/servicemonitor.yaml
 
 helmCharts:
   - name: opentelemetry-collector
     repo: https://open-telemetry.github.io/opentelemetry-helm-charts
     version: 0.175.1
-    releaseName: otel-collector
-    namespace: otel-collector
+    releaseName: otel-ebpf-profiler
+    namespace: otel-ebpf-profiler
     valuesFile: values.yaml

@@ -1,0 +1,25 @@
+# ServiceMonitor for Tempo self-metrics.
+# Monitoring coverage only — NOT a prerequisite for exemplar flow (proven by
+# data already arriving via remote_write without scrape config).
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tempo
+  namespace: tempo
+  labels:
+    release: monitoring
+spec:
+  endpoints:
+    - interval: 30s
+      path: /metrics
+      port: http-metrics
+      scheme: http
+      scrapeTimeout: 10s
+      relabelings:
+        - action: replace
+          replacement: tempo
+          targetLabel: cluster
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: tempo
+      app.kubernetes.io/name: tempo

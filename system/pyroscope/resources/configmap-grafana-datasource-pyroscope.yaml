@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pyroscope-datasource-config
+  namespace: pyroscope
+  labels:
+    grafana_datasource: "1"
+data:
+  # Unique data key to avoid sidecar collision with other datasource ConfigMaps
+  # (see docs/troubleshooting/grafana-datasource-sidecar-collision.md)
+  pyroscope-datasource.yaml: |-
+    apiVersion: 1
+    datasources:
+    - name: Pyroscope
+      type: grafana-pyroscope-datasource
+      uid: pyroscope
+      access: proxy
+      url: http://pyroscope.pyroscope.svc.cluster.local:4040
+      isDefault: false
+      version: 1

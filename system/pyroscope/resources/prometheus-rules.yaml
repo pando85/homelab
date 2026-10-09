@@ -1,0 +1,59 @@
+# Draft alerting rules for Pyroscope.
+#
+# VERIFY-AT-DEPLOY: ALL metric names below are CANDIDATES. They must be
+# verified against the actual Pyroscope /metrics endpoint post-deploy before
+# these alerts can be considered functional. Empty panels / missing metrics
+# look identical to nonexistent metrics.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prometheus-pyroscope-rules
+  namespace: pyroscope
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: pyroscope_alerts
+      rules:
+        - alert: PyroscopeDown
+          annotations:
+            message: |
+              Pyroscope has been down for more than 5 minutes.
+          expr: |
+            absent(up{job="pyroscope"} == 1)
+          for: 5m
+          labels:
+            severity: critical
+        - alert: PyroscopeHighMemory
+          annotations:
+            message: |
+              Pyroscope memory usage is above 80% of its limit.
+          # VERIFY-AT-DEPLOY: metric name is a candidate
+          expr: |
+            container_memory_working_set_bytes{namespace="pyroscope", container="pyroscope"}
+              / container_resources_memory_limit{namespace="pyroscope", container="pyroscope"} > 0.8
+          for: 10m
+          labels:
+            severity: warning
+        - alert: PyroscopeIngestErrors
+          annotations:
+            message: |
+              Pyroscope is reporting ingest errors.
+          # VERIFY-AT-DEPLOY: metric name is a candidate
+          expr: |
+            rate(pyroscope_ingester_push_errors_total[5m]) > 0
+          for: 5m
+          labels:
+            severity: warning
+    - name: pyroscope_profiler_alerts
+      rules:
+        - alert: ProfilerDaemonSetNotReady
+          annotations:
+            message: |
+              OTel eBPF profiler DaemonSet has pods not in Ready state.
+          expr: |
+            kube_daemonset_status_number_ready{namespace="otel-ebpf-profiler", daemonset="otel-ebpf-profiler"}
+              < kube_daemonset_status_desired_number_scheduled{namespace="otel-ebpf-profiler", daemonset="otel-ebpf-profiler"}
+          for: 10m
+          labels:
+            severity: warning
