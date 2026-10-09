@@ -38,7 +38,7 @@ pyroscope:
     storage:
       backend: filesystem
       filesystem:
-        path: /data/pyroscope
+        dir: /data/pyroscope
 
   resources:
     requests:

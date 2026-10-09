@@ -109,7 +109,6 @@ alternateConfig:
   receivers:
     profiling:
       error_mode: propagate
-      pid_namespace_translation_mode: auto
 
   processors:
     memory_limiter:
