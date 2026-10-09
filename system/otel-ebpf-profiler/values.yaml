@@ -140,8 +140,8 @@ alternateConfig:
           action: upsert
 
   exporters:
-    otlp/pyroscope:
-      endpoint: pyroscope.pyroscope.svc.cluster.local:9095
+    otlphttp/pyroscope:
+      endpoint: http://pyroscope.pyroscope.svc.cluster.local:4040
       tls:
         insecure: true
       retry_on_failure:
@@ -165,4 +165,4 @@ alternateConfig:
       profiles:
         receivers: [profiling]
         processors: [memory_limiter, k8sattributes, transform/set_service_name, resource]
-        exporters: [otlp/pyroscope, debug]
+        exporters: [otlphttp/pyroscope, debug]
