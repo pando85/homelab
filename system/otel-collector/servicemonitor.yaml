@@ -1,5 +1,17 @@
 # ServiceMonitor for the OTel Collector self-metrics.
 # Monitoring coverage only — NOT a prerequisite for trace flow.
+#
+# NOTE on the resulting `job` label: kube-prometheus-operator derives it from the
+# matched Service's NAME, so this produces job="otel-collector-opentelemetry-collector"
+# (the Service), NOT job="otel-collector" (the ServiceMonitor name). Querying the
+# shorter name returns no series even though the target is up — verified live:
+#   up{job="otel-collector-opentelemetry-collector"} == 1  (instance 10.0.0.136:8888)
+# Metric families are also unversioned, e.g. otelcol_receiver_accepted_spans (no
+# _total suffix).
+#
+# The endpoint port is `metrics`, which only exists because system/otel-collector/
+# values.yaml sets ports.metrics.enabled=true; the chart defaults it to false and
+# the ServiceMonitor would then silently match zero targets.
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:

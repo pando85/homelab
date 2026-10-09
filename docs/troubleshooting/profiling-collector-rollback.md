@@ -163,6 +163,46 @@ Targets are restricted to containers named `control-plane|git-proxy|auth-proxy` 
 `calypso-runners`, which the exact namespace match excludes, and their container names would not
 pass the keep rule either — they are not profiled.
 
+## Profiling scope: where git-proxy actually runs
+
+Determined from cluster state (read-only), not from assumptions:
+
+- git-proxy is a **standalone single-container pod** in namespace `calypso`, created by
+  `calypso-control-plane` per runner session as a `gp-<name>-<id>` Deployment plus a matching
+  `gp-<name>` Service (port 8443/https). `kube_pod_container_info{namespace="calypso",
+  pod=~"gp-.*"}` shows `container="git-proxy"` for 12+ distinct pods over 24h, and its own
+  scrape job is `calypso/calypso-git-proxy` with `container="git-proxy"`.
+- The gVisor runner pod is a **separate** object in namespace `calypso-runners`.
+- Therefore git-proxy runs under the default (runc) runtime and **is** host-profileable, so the
+  Alloy keep rule (`namespace=calypso` + container `git-proxy`) matches it correctly. **No config
+  change is needed or warranted.**
+- `ebpf/calypso/git-proxy` was absent from the profile stream purely because `gp-*` pods are
+  ephemeral: every inspection window happened to have zero of them running (they are created with
+  a runner and deleted with it), and git-proxy is a low-CPU MITM proxy, so even while alive it
+  can sit below the sampler's per-interval sample threshold.
+
+Net effect on the claim "profiles the 3 Calypso services": scope is correct as configured, but
+**observed** coverage so far is `control-plane` and `auth-proxy`; `git-proxy` is matched-by-config,
+not yet matched-by-observation. To close it, catch a window where a runner session is live.
+
+## Scraped self-metrics job names
+
+kube-prometheus-operator derives the `job` label from the matched **Service** name, not the
+ServiceMonitor name. So the profiles-adjacent scrape jobs are:
+
+| ServiceMonitor | actual `job` label |
+|---|---|
+| `alloy/alloy` | `alloy` |
+| `pyroscope/pyroscope` | `pyroscope` |
+| `tempo/tempo` | `tempo` |
+| `otel-collector/otel-collector` | `otel-collector-opentelemetry-collector` |
+
+Querying `up{job="otel-collector"}` returns nothing even when the target is up — use the Service
+name. Tempo's and the collector's endpoints were inert until `b2cc15fb` (wrong ServiceMonitor port
+name, and `ports.metrics` left disabled); a ServiceMonitor whose endpoint port matches no Service
+port yields **zero targets silently** — no error, no `up` series at all.
+
+
 ## Alerts
 
 `system/pyroscope/resources/prometheus-rules.yaml` (labels `release: monitoring`, required by the
