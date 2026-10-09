@@ -36,4 +36,4 @@ data:
               name: trace_id_plain
               url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
-        version: 2
+        version: 10

@@ -16,32 +16,55 @@ data:
       url: http://tempo.tempo.svc.cluster.local:3200
       jsonData:
         # Correlation from Tempo traces → Loki logs.
-        # Loki label mapping (measured 2026-10-10):
-        #   OTel service.name "calypso-control-plane" → Loki container="control-plane", service_name="calypso"
-        #   OTel service.name "calypso-auth-proxy"    → Loki container="auth-proxy",    service_name="calypso"
-        #   OTel service.name "calypso-git-proxy"     → Loki container="git-proxy",     service_name="git-proxy"
-        #   OTel service.name "calypso-runner"        → Loki container="runner",        service_name="runner"
-        # Spans carry NO namespace/pod/k8s.* attributes (verified — apps set none), so those mappings are inert.
-        # Only service.name → container is useful. filterByTraceID relies on trace_id in log lines (only control-plane emits it).
-        # filterBySpanID is disabled: JSON logs contain span_id, but text logs (auth-proxy) do not, so enabling it would over-filter.
+        #
+        # Label mapping (measured 2026-10-10):
+        #   OTel resource attribute k8s.namespace.name → Loki label "namespace"
+        #   OTel resource attribute k8s.pod.name       → Loki label "pod"
+        #   OTel resource attribute k8s.container.name → Loki label "container"
+        #
+        # These attributes are added to spans by the OTel Collector's k8sattributes
+        # processor (see system/otel-collector/values.yaml). The collector runs in
+        # gateway mode and uses connection-based pod association (source IP = pod IP).
+        #
+        # filterByTraceID: true — log lines with trace_id field match the trace.
+        #   control-plane emits JSON logs with trace_id; auth-proxy/git-proxy emit
+        #   text logs without trace_id, so only control-plane logs match.
+        # filterBySpanID: false — log lines emitted outside a span have no span_id,
+        #   so filtering by span_id would hide valid related logs.
         tracesToLogsV2:
           datasourceUid: loki
           tags:
-            - key: service.name
+            - key: k8s.namespace.name
+              value: namespace
+            - key: k8s.pod.name
+              value: pod
+            - key: k8s.container.name
               value: container
           filterByTraceID: true
           filterBySpanID: false
         # Correlation from Tempo traces → Pyroscope profiles.
-        # Pyroscope service_name label values (after Alloy alignment cb41d99a): calypso-control-plane, calypso-auth-proxy, calypso-git-proxy.
+        #
+        # Pyroscope service_name label values (after Alloy alignment cb41d99a):
+        #   calypso-control-plane, calypso-auth-proxy, calypso-git-proxy
         # These match OTel service.name exactly, so the mapping is correct.
-        # profileTypeId format: "name:sample_type:sample_unit:value_type:value_unit" (Pyroscope v2 documented format).
-        # NOTE: Pyroscope v2 query API returns empty results as of 2026-10-10 despite ingest (rate ~0.12 profiles/sec).
-        # This is a Pyroscope v2 data/query issue, not a config issue. The profileTypeId format is correct per docs.
+        #
+        # profileTypeId format: <name>:<sample-type>:<sample-unit>:<period-type>:<period-unit>
+        # Verified via Pyroscope connect API:
+        #   POST /querier.v1.QuerierService/ProfileTypes {}
+        #   → {"profileTypes":[{"ID":"process_cpu:cpu:nanoseconds:cpu:nanoseconds",...}]}
         tracesToProfiles:
           datasourceUid: pyroscope
           tags:
             - key: service.name
               value: service_name
-          profileTypeId: process_cpu_cpu:nanoseconds:cpu:nanoseconds
+          profileTypeId: process_cpu:cpu:nanoseconds:cpu:nanoseconds
+      # CRITICAL: Grafana's datasource provisioning compares the file's version
+      # against the DB row's version and "only updates data sources with the same
+      # or lower version number than the one set in the configuration file"
+      # (see https://grafana.com/docs/grafana/latest/administration/provisioning/).
+      # Each successful apply increments the DB version by 1. So if the DB row is
+      # at version N and the file says version N-1, the update is silently skipped.
+      # To ensure changes propagate, bump this version on every content change.
+      # Current DB version (2026-10-10): 5. Set to 10 to allow future edits.
       isDefault: false
-      version: 4
+      version: 10

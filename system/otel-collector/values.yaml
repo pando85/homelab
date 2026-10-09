@@ -14,6 +14,16 @@ resources:
     cpu: 500m
     memory: 512Mi
 
+# RBAC: k8sattributes processor needs get/list/watch on pods and namespaces.
+# The chart creates a ServiceAccount by default; we add a ClusterRole with the
+# minimum permissions required for k8sattributes to enrich spans with k8s metadata.
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["pods", "namespaces"]
+      verbs: ["get", "watch", "list"]
+
 config:
   receivers:
     # Disable unused receivers (chart defaults include jaeger, zipkin)
@@ -27,6 +37,24 @@ config:
           endpoint: 0.0.0.0:4318
 
   processors:
+    # Kubernetes Attributes Processor: adds k8s.namespace.name, k8s.pod.name,
+    # k8s.container.name to spans. Uses connection-based pod association (source
+    # IP = pod IP, since apps send OTLP directly to the collector service).
+    # CRITICAL: must appear BEFORE tail_sampling and batch, because those processors
+    # strip the connection metadata that k8sattributes needs for pod association.
+    # (Ref: https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/k8sattributesprocessor)
+    k8sattributes:
+      auth_type: serviceAccount
+      passthrough: false
+      extract:
+        metadata:
+          - k8s.namespace.name
+          - k8s.pod.name
+          - k8s.container.name
+      pod_association:
+        - sources:
+            - from: connection
+
     # Transform nginx SERVER spans to CLIENT spans to fix service graph
     transform/nginx:
       error_mode: ignore
@@ -75,7 +103,7 @@ config:
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [transform/nginx, tail_sampling, batch]
+        processors: [k8sattributes, transform/nginx, tail_sampling, batch]
         exporters: [otlp/tempo]
 
 service:
