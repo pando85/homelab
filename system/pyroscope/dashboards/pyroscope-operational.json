@@ -433,7 +433,7 @@
     "type": "prometheus",
     "uid": "prometheus"
    },
-   "description": "End-to-end latency from pyroscope.write to the Pyroscope endpoint.",
+   "description": "pyroscope.write push_downstream latency. Aggregated with sum by (le, node) over a 10m window: the collector only pushes when a target has samples in the interval, so a narrow window yields NaN for an idle node (e.g. a proxy at zero CPU).",
    "fieldConfig": {
     "defaults": {
      "unit": "s",
@@ -472,7 +472,7 @@
       "uid": "prometheus"
      },
      "editorMode": "code",
-     "expr": "histogram_quantile(0.5, rate(pyroscope_write_latency_bucket{namespace=\"alloy\", type=\"push_downstream\"}[5m]))",
+     "expr": "histogram_quantile(0.5, sum by (le, node) (rate(pyroscope_write_latency_bucket{namespace=\"alloy\", type=\"push_downstream\"}[10m])))",
      "legendFormat": "p50 {{node}}",
      "range": true,
      "refId": "A"
@@ -483,13 +483,13 @@
       "uid": "prometheus"
      },
      "editorMode": "code",
-     "expr": "histogram_quantile(0.95, rate(pyroscope_write_latency_bucket{namespace=\"alloy\", type=\"push_downstream\"}[5m]))",
+     "expr": "histogram_quantile(0.95, sum by (le, node) (rate(pyroscope_write_latency_bucket{namespace=\"alloy\", type=\"push_downstream\"}[10m])))",
      "legendFormat": "p95 {{node}}",
      "range": true,
      "refId": "B"
     }
    ],
-   "title": "Alloy: write latency to Pyroscope (per node, p50)",
+   "title": "Alloy: write latency to Pyroscope (p50 / p95)",
    "type": "timeseries"
   },
   {
