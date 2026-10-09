@@ -12,6 +12,8 @@
 #   The OTLP attribute→label conversion path that triggers the empty-name bug is never
 #   exercised. Structurally immune to this class of issue.
 # - Verdict: research_notes/Calypso OTel profiling feasibility/empty-label-verdict.md
+# - Rollback / stop-collection procedure: docs/troubleshooting/profiling-collector-rollback.md
+#   (rollback = exclude BOTH collectors; do NOT re-enable the OTel path)
 #
 # REVISIT OTel-first path when upstream fixes:
 # - otelcol-ebpf-profiler: suppress/normalize empty-key resource attributes, OR
