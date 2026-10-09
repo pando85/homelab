@@ -149,6 +149,25 @@ alloy:
   # pyroscope.ebpf is exposed at public-preview in this app version
   stabilityLevel: "public-preview"
 
+# The config-reloader sidecar must stay DISABLED so the chart emits the
+# `checksum/config` pod-template annotation.
+#
+# Why it matters: templates/controllers/_pod.yaml gates the checksum on
+# `and (not .Values.configReloader.enabled) ...`, i.e. with the reloader on,
+# a ConfigMap-only change produces NO pod-template diff, so the DaemonSet never
+# rolls. Several pyroscope.ebpf settings (python_enabled, pid_label, comm,
+# sample_rate, demangle) are read once when the component is built — a /-/reload
+# does NOT re-apply them. That gap forced a manual `kubectl delete pods` to
+# land the python_enabled fix, which is exactly what GitOps is supposed to avoid.
+#
+# With the reloader off, editing alloy.configMap.content changes the checksum,
+# rolls the pods, and the new flags take effect with no cluster-side action.
+# Hot-reload of purely dynamic settings (targets, relabel rules) is lost, which
+# is an acceptable trade: a rollout is ~seconds and keeps one mechanism for all
+# config changes.
+configReloader:
+  enabled: false
+
   # Resource budget (trial starting point) — chart path is alloy.resources
   resources:
     requests:
