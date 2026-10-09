@@ -28,12 +28,18 @@ alloy:
   configMap:
     create: true
     content: |-
-      // Discovery: find pods in the calypso namespace (3 runc Rust services).
-      // Runner pods live in calypso-runners and are excluded by this filter —
+      // Discovery: find pods on THIS node in the calypso namespace (3 runc Rust services).
+      // The eBPF profiler can only profile processes on the local node, so we filter
+      // by spec.nodeName to discover only pods scheduled on this Alloy instance's node.
+      // Runner pods live in calypso-runners and are excluded by the namespace filter —
       // the negative control for gVisor: even if a runner pod were scheduled,
       // it would not appear as a target.
       discovery.kubernetes "pods" {
         role = "pod"
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + sys.env("HOSTNAME")
+        }
         selectors {
           role  = "pod"
           field = "metadata.namespace=calypso"
