@@ -101,6 +101,10 @@ grafana:
       enabled: true
       label: grafana_datasource
       searchNamespace: ALL
+      exemplarTraceIdDestinations:
+        datasourceUid: tempo
+        traceIdLabelName: traceID
+        urlDisplayLabel: "View trace"
     dashboards:
       enabled: true
       label: grafana_dashboard
@@ -249,6 +253,8 @@ prometheus:
     retention: 240d
     additionalArgs:
       - name: web.enable-remote-write-receiver
+    enableFeatures:
+      - exemplar-storage
     resources:
       requests:
         cpu: 1
