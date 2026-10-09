@@ -24,10 +24,16 @@ data:
               name: traceId
               url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
-            # isidoro / nginx log formats that use snake_case trace_id
+            # Calypso / any OTel service JSON logs: "trace_id":"<32-hex>"
             - datasourceUid: tempo
-              matcherRegex: 'trace_id=([a-f0-9]{32})'
+              matcherRegex: '"trace_id":"([a-f0-9]+)"'
               name: trace_id
               url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
-        version: 1
+            # isidoro / nginx log formats that use snake_case trace_id (non-JSON)
+            - datasourceUid: tempo
+              matcherRegex: 'trace_id=([a-f0-9]{32})'
+              name: trace_id_plain
+              url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
+              urlDisplayLabel: 'View Trace'
+        version: 2

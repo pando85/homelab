@@ -6,7 +6,15 @@
  "editable": true,
  "fiscalYearStartMonth": 0,
  "graphTooltip": 1,
- "links": [],
+ "links": [
+  {
+   "title": "Calypso Observability",
+   "type": "link",
+   "url": "/d/calypso-observability",
+   "icon": "external link",
+   "tooltip": "Open the Calypso four-signals observability dashboard"
+  }
+ ],
  "panels": [
   {
    "datasource": {

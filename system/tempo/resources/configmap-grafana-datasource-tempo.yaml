@@ -17,11 +17,18 @@ data:
       jsonData:
         tracesToLogsV2:
           datasourceUid: loki
-          spanId: spanId
-          traceId: traceId
           tags:
-            - traceId
+            - key: service.name
+              value: service_name
+            - key: namespace
+            - key: pod
           filterByTraceID: true
-          filterBySpanID: false
+          filterBySpanID: true
+        tracesToProfiles:
+          datasourceUid: pyroscope
+          tags:
+            - key: service.name
+              value: service_name
+          profileTypeId: process_cpu_cpu:nanoseconds:cpu:nanoseconds
       isDefault: false
-      version: 2
+      version: 4
