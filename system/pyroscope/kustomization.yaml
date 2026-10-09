@@ -20,7 +20,6 @@ configMapGenerator:
     namespace: pyroscope
     files:
       - dashboards/pyroscope-operational.json
-      - dashboards/profile-exploration.json
 generatorOptions:
   annotations:
     grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/pyroscope
