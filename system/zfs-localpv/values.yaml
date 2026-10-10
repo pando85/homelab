@@ -1,11 +1,4 @@
 zfs-localpv:
-  # Pin to PR #777 fix image for runPipe deadlock (openebs/zfs-localpv#773).
-  # Remove this override and revert tag to chart default once upstream ships the fix.
-  zfsPlugin:
-    image:
-      registry: ghcr.io/
-      repository: linkvt/zfs-driver
-      tag: runpipe-773
   zfsNode:
     resources: {}
     # limits:
