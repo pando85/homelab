@@ -158,10 +158,46 @@ Deliberately **not** emitted, and pinned so a chart/app bump cannot quietly star
 `service_name` is `ebpf/<namespace>/<container_name>`, e.g. `ebpf/calypso/control-plane`,
 `ebpf/calypso/auth-proxy`, `ebpf/calypso/git-proxy`.
 
-Targets are restricted to containers named `control-plane|git-proxy|auth-proxy` inside namespace
-`calypso` (exact match) on the node the DaemonSet pod runs on. gVisor runner pods live in
-`calypso-runners`, which the exact namespace match excludes, and their container names would not
-pass the keep rule either — they are not profiled.
+Targets are restricted by container name (`control-plane|git-proxy|auth-proxy|runner`) across two
+discovery components, one per namespace: `calypso` and `calypso-runners` (combined with
+`array.concat()` since `97cf7191`). The three first-party services run under runc and are profiled;
+the `runner` entry matches a target that can never produce samples — see below.
+
+## Runners are not eBPF-profiled, by decision (gVisor)
+
+**Decision: Calypso runners are not continuously profiled.** They execute arbitrary, untrusted,
+agent-generated code, so putting profiling instrumentation inside that boundary is not wanted.
+gVisor keeping `pyroscope.ebpf` from seeing them is the sandbox working as intended — an accepted
+consequence of that choice, not a defect and not something to fix.
+
+Mechanism, measured on grigri 2026-10-10:
+
+- Runner pods use `runtimeClassName: gvisor` (`runsc` shows in `/system.slice/k3s.service`).
+- `pyroscope.ebpf` attributes a process to a target by the **container ID read from
+  `/proc/*/cgroup`**. Under the runsc sandbox the host sees only the pause/sandbox ID: the runner's
+  app container ID `aa34a944…` appears in **0** cgroup paths while all 67 host-visible runner
+  processes sit under sandbox ID `54833b7b…`. Control (runc, same node): control-plane's container
+  ID `52d1c305…` matches 1 path and profiles normally.
+- So discovery succeeds and profiling stays empty. `pyroscope_ebpf_active_targets` went 6 → 10 on
+  `prusik` when the runner started, yet `calypso-runner` is absent from `pyroscope_ebpf_pprofs_total`,
+  `_samples_total`, `_pprof_bytes_total` and from `label_values(...service_name)`.
+  A `SelectMergeProfile` for `calypso-runner` returns HTTP 200 with a 2-byte `{}`; the control-plane
+  query in the same command returns 291,741 bytes. This held during a run that consumed 1.963 cores,
+  so it is structural, not idleness.
+
+Consequences for whoever reads this next:
+
+- **Do not treat an `active_targets` rise at runner start with no `calypso-runner` series as a bug.**
+  It is the expected signature of a matched-but-never-sampled target, and it is why the inert `runner`
+  entry is kept in the keep rule (discovery symmetry, no samples, no cost).
+- **Moving runners to runc/crun to enable eBPF profiling is rejected.** It would trade away the
+  sandbox that exists precisely because the code is untrusted, in exchange for flamegraphs of
+  untrusted code.
+- eBPF profiling remains correct and useful for the first-party long-lived services
+  (`calypso-control-plane`, `calypso-git-proxy`, `calypso-auth-proxy`), which run under runc.
+- **Separate, still-open gap for those services:** their Rust symbol names arrive mangled — `::`
+  occurs 0 times while 5,399 `_R…` names appear over 24h — and nothing in the current chain
+  demangles them. Tracked separately and under research; no solution is proposed here.
 
 ## Profiling scope: where git-proxy actually runs
 

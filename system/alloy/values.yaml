@@ -34,7 +34,16 @@ alloy:
       //
       // We discover pods from TWO namespaces:
       // - calypso: control-plane, git-proxy, auth-proxy (3 runc Rust services)
-      // - calypso-runners: runner pods (runc, not gVisor) for end-to-end observability
+      // - calypso-runners: runner pods. These run under gVisor (runsc), NOT runc:
+      //   pyroscope.ebpf matches a process to a target by the container ID it reads from
+      //   /proc/*/cgroup, and inside the runsc sandbox the host only ever sees the
+      //   pause/sandbox ID, so a runner's app container ID matches zero processes.
+      //   Discovery still succeeds — the target is kept and pyroscope_ebpf_active_targets
+      //   rises when a runner starts — but no samples are ever produced, so calypso-runner
+      //   never appears in pyroscope_ebpf_pprofs_total. Runners are deliberately not
+      //   profiled: they execute untrusted, agent-generated code, and the sandbox keeping
+      //   the host profiler out is that choice working, not a defect. See
+      //   docs/troubleshooting/profiling-collector-rollback.md.
       //
       // IMPORTANT: We use TWO separate discovery components (one per namespace) and
       // combine them with concat() below. This maintains explicit namespace scoping
@@ -113,11 +122,14 @@ alloy:
           target_label  = "node"
         }
 
-        // Keep only the 4 runc Rust services (container names, not Deployment names).
+        // Keep only the Calypso Rust services (container names, not Deployment names).
+        // control-plane / git-proxy / auth-proxy run under runc and are profiled.
         // "runner" is the container name in calypso-runners pods (deployment.rs:26:
-        // CONTAINER_NAME = "runner"). It derives service_name "calypso-runner" which
-        // matches the runner's OTel service.name (main.rs:71). Without this, the
-        // eBPF profiler never discovers runner targets.
+        // CONTAINER_NAME = "runner"). It derives service_name "calypso-runner", matching
+        // the runner's OTel service.name (main.rs:71). This entry is deliberately kept and
+        // known-inert: under gVisor (see the discovery note above) it matches a target that
+        // can never produce samples, so active_targets rising when a runner starts while
+        // calypso-runner stays absent from pyroscope_ebpf_pprofs_total is expected, not a bug.
         rule {
           action        = "keep"
           source_labels = ["__meta_kubernetes_pod_container_name"]
@@ -132,7 +144,7 @@ alloy:
       // - python_enabled = false: the `perf_unwind_python` perf eBPF program
       //   fails to load on the k8s-amd64-1 node (kernel 7.0.0-34-generic), which
       //   made the whole component exit and lose ALL profiling on that node.
-      //   Our targets (calypso control-plane / auth-proxy / git-proxy / runner) are Rust
+      //   Our profiled targets (calypso control-plane / auth-proxy / git-proxy) are Rust
       //   static binaries profiled by the *native* unwinder, so dropping the
       //   Python unwinder costs nothing for this workload and restores coverage.
       //   This is the documented per-interpreter flag (not a global syscall

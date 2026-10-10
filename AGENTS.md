@@ -370,6 +370,12 @@ matters there.
   `maxSkew: 1` + `DoNotSchedule` blocks new pod placement. Always add `matchLabelKeys` for
   Deployments with `replicas > 1` or HPA. Skip for single-replica, StatefulSets (no `pod-template-hash`),
   and CRD-managed workloads. See `docs/conventions/topology-spread-constraints.md`
+- `pyroscope.ebpf` cannot profile Calypso runners and never will: they run under gVisor, so the
+  container ID it matches on (read from `/proc/*/cgroup`) never corresponds to a host process.
+  Discovery still keeps the target, so `pyroscope_ebpf_active_targets` rising at runner start while
+  `calypso-runner` stays absent from `pyroscope_ebpf_pprofs_total` is expected, not a bug. Runners
+  are deliberately unprofiled — they execute untrusted, agent-generated code. Do not "fix" this by
+  moving runners to runc. See `docs/troubleshooting/profiling-collector-rollback.md`
 
 ## Subsystem Docs
 
