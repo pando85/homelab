@@ -54,9 +54,8 @@ per DP step): 4000 K reads back as 3960 K.
 ## Audit Findings (2026-10-10)
 
 A read-only audit of the deployed entities found five more code bugs, all reproduced in a venv
-with the live config. Fixes are in [PR #10](https://github.com/pando85/localtuya/pull/10) (one
-commit per bug), **not merged or deployed yet**, pending a live
-thermostat test by the user (do not test thermostat writes without them):
+with the live config. Fixed in [PR #10](https://github.com/pando85/localtuya/pull/10) (one commit
+per bug, `927ac80`..`e239364`), deployed and verified live on 2026-10-10:
 
 1. **Thermostat heat/cool switch fails while in `auto`** (`climate.py` `set_hvac_mode`): the write
    of `manual` to DP 2 lacks `await` (log: `RuntimeWarning: coroutine 'TuyaDevice.set_dp' was never
@@ -87,14 +86,21 @@ from history; the PR keeps that mapping):
 - A missing DP 104 displays `heat` instead of `cool`; cool mode with an open valve shows `cooling`.
 - Configs without a cooling DP behave exactly as before.
 
-### Live test plan (with the user)
+### Live verification (2026-10-10, `e239364`)
 
-On one thermostat, record state, then: `auto` → `heat`, `heat` → `cool` (only when cooling is
-expected), back to the original mode. After each step check DP 2 is `manual`, DP 104 matches, the
-entity's `hvac_mode` / `hvac_action` are right, and no `never awaited` warning is logged. Also try
-`auto` from `manual`. Fan: call `fan.set_percentage` with 17 and 67 via the API (not the UI, which
-never sends integers) and confirm speeds 1 and 4. Backlight: set an integer value and confirm DP 105
-follows.
+All 22 entities came back unchanged and each entity is now registered on its own device. Tests,
+each restored afterwards:
+
+| Test | Result |
+|---|---|
+| `fan.set_percentage` 17 / 67 / 50 | 16% (speed 1) / 66% (speed 4) / 50% (speed 3) |
+| Office T backlight 64 → 65 | `raw_state` 65 (integer) |
+| Office T `auto` → `heat` (previously broken path) | `auto` applied the device schedule (target 19 °C); `heat` restored manual 22.5 °C; no `never awaited` |
+| Light 4000 K | `color_temp`, 3960 K |
+
+Not tested live: `cool` mode (and the new `cooling` action), and whether the fan+light device
+stopped requesting DPs `-1`/`2` (needs DEBUG logging to observe). Test cool only with the user,
+when cooling is wanted.
 
 ## Pending Options-UI Cleanup
 

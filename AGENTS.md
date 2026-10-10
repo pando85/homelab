@@ -319,7 +319,7 @@ matters there.
   never turn on. localtuya is HACS-installed from `pando85/localtuya` master: deploy via HACS
   websocket + restart, never by copying into the pod. Agents use the HA API with a login-flow token
   (`pass web/hass.grigri.cloud`), no browser needed. Never change thermostat/fan settings for a
-  live test without the user — they verify heating behaviour themselves. See
+  live test without the user asking for it — they verify heating behaviour themselves. See
   `docs/troubleshooting/home-assistant-localtuya.md` and
   `docs/troubleshooting/home-assistant-api-hacs-deploy.md`
 - ESIOS API (`api.esios.ree.es`) returns ZIP archives with `Content-Type: text/html` instead of
