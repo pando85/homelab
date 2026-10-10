@@ -103,6 +103,13 @@ config:
         - name: latency-policy
           type: latency
           latency: {threshold_ms: 5000}
+        # Nginx edge: 100% sampling to verify OTel propagation end-to-end
+        - name: nginx-external-full-sampling
+          type: string_attribute
+          string_attribute:
+            key: service.name
+            values: ["nginx-external"]
+            enabled_regex_matching: false
         # Default: 10% probabilistic for non-Calypso services
         - name: default-policy
           type: probabilistic
