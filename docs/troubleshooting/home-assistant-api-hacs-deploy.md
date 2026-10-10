@@ -59,3 +59,18 @@ download, `.storage/hacs.repositories` keeps `last_commit` but may drop `version
 
 Do not copy files into the pod with `kubectl exec`/`cp` — HACS would not know about them and would
 overwrite them on the next update.
+
+## Driving the UI with Playwright
+
+The Playwright MCP is configured for opencode, not Claude Code. For UI checks (e.g. what payload a
+frontend control actually sends) use Python Playwright with the system browser, so no browser
+download is needed:
+
+```bash
+python -m venv "$SCRATCH/pw-venv" && "$SCRATCH/pw-venv/bin/pip" install playwright
+# chromium.launch(executable_path="/usr/bin/chromium", headless=True)
+```
+
+Pass the password through an environment variable, never screenshot the login form, and capture
+`page.on("websocket")` → `framesent` to see the exact `call_service` payloads. Open a dialog
+directly with `https://hass.grigri.cloud/?more-info-entity-id=<entity_id>`.
