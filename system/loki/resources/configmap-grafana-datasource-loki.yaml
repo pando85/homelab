@@ -15,25 +15,32 @@ data:
         url: http://loki.loki:3100
         access: proxy
         isDefault: false
+        # VERSION GATING RULE: Grafana only applies a provisioned datasource if the
+        # file's `version` field is >= the version stored in its DB. Each successful
+        # apply increments the DB version. If you change this file but forget to bump
+        # the version, ArgoCD will sync it, the sidecar will reload (HTTP 200), and
+        # Grafana will SILENTLY SKIP the change. Always bump version after edits.
+        # Current live DB version: 11 (as of 2026-10-10). This file is version 12.
         jsonData:
           maxLines: 1000
           derivedFields:
             # Keycloak JSON logs embed the OpenTelemetry trace id as "traceId"
+            # The `url` field was removed: it pointed to a cluster-internal address
+            # (http://tempo.tempo:3200) that browsers cannot resolve. With only
+            # `datasourceUid: tempo` set, Grafana opens the trace in its built-in
+            # trace viewer via the Tempo datasource URL configured in Grafana.
             - datasourceUid: tempo
               matcherRegex: '"traceId":"([a-f0-9]+)"'
               name: traceId
-              url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
             # Calypso / any OTel service JSON logs: "trace_id":"<32-hex>"
             - datasourceUid: tempo
               matcherRegex: '"trace_id":"([a-f0-9]+)"'
               name: trace_id
-              url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
             # isidoro / nginx log formats that use snake_case trace_id (non-JSON)
             - datasourceUid: tempo
               matcherRegex: 'trace_id=([a-f0-9]{32})'
               name: trace_id_plain
-              url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
-        version: 10
+        version: 12

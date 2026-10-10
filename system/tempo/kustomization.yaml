@@ -5,6 +5,7 @@ namespace: tempo
 resources:
   - resources/configmap-grafana-datasource-tempo.yaml
   - resources/prometheus-rules.yaml
+  - resources/prometheus-rules-telemetry-alerts.yaml
   - resources/servicemonitor.yaml
 
 helmCharts:
