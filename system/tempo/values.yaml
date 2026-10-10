@@ -37,16 +37,9 @@ tempo:
       path: "/var/tempo/metrics"
     traces_storage:
       path: "/var/tempo/traces"
-    # Spans with end times older than this are excluded from metrics generation.
-    # The OTel Collector's tail_sampling (decision_wait=10s default) + batch
-    # (timeout=5s) adds up to 15s pipeline delay before spans reach Tempo.
-    # Applications may also buffer spans before exporting. The default 30s slack
-    # is insufficient when spans are buffered or traces are long-running, causing
-    # ~92% cumulative discard as outside_metrics_ingestion_slack. Increasing to
-    # 60s accommodates application buffering + pipeline delay while keeping the
-    # window tight enough to avoid stale-span memory growth.
-    # Ref: https://grafana.com/docs/tempo/latest/configuration/#metrics-generator
-    metrics_ingestion_time_range_slack: 60s
+    # NOTE: metrics_ingestion_time_range_slack is NOT rendered by the Helm chart
+    # template (tempo-1.24.4). It must be set via the `config` override below.
+    # See the `config` section at the end of this file.
   # -- Configuration options for the ingester.
   # Refers to: https://grafana.com/docs/tempo/latest/configuration/#ingester
   ingester:
@@ -108,3 +101,63 @@ persistence:
   accessModes:
     - ReadWriteOnce
   size: 30Gi
+
+# Override the chart's default config template to add metrics_ingestion_time_range_slack.
+# The tempo-1.24.4 chart template does not render this field (it only renders processor,
+# registry, storage, and traces_storage under metrics_generator). This is a copy of the
+# chart's default config template with the missing field added.
+# MAINTENANCE: If the chart is upgraded, this template must be manually merged with the
+# new chart default. The chart is deprecated (as of 1.24.4), so upgrades are unlikely.
+config: |
+    memberlist:
+      cluster_label: "{{ .Release.Name }}.{{ .Release.Namespace }}"
+    multitenancy_enabled: {{ .Values.tempo.multitenancyEnabled }}
+    usage_report:
+      reporting_enabled: {{ .Values.tempo.reportingEnabled }}
+    compactor:
+      compaction:
+        block_retention: {{ .Values.tempo.retention }}
+    distributor:
+      receivers:
+        {{- toYaml .Values.tempo.receivers | nindent 8 }}
+    ingester:
+      {{- toYaml .Values.tempo.ingester | nindent 6 }}
+    server:
+      {{- toYaml .Values.tempo.server | nindent 6 }}
+    storage:
+      {{- toYaml .Values.tempo.storage | nindent 6 }}
+    querier:
+      {{- toYaml .Values.tempo.querier | nindent 6 }}
+    query_frontend:
+      {{- toYaml .Values.tempo.queryFrontend | nindent 6 }}
+    overrides:
+      {{- toYaml .Values.tempo.overrides | nindent 6 }}
+      {{- if .Values.tempo.metricsGenerator.enabled }}
+    metrics_generator:
+      {{- if .Values.tempo.metricsGenerator.processor }}
+      processor:
+        {{- toYaml .Values.tempo.metricsGenerator.processor | nindent 8 }}
+      {{- end }}
+      {{- if .Values.tempo.metricsGenerator.registry }}
+      registry:
+        {{- toYaml .Values.tempo.metricsGenerator.registry | nindent 8 }}
+      {{- end }}
+      storage:
+        path: {{ .Values.tempo.metricsGenerator.storage.path | quote }}
+        {{- if .Values.tempo.metricsGenerator.storage.remote_write }}
+        remote_write:
+          {{- toYaml .Values.tempo.metricsGenerator.storage.remote_write | nindent 10 }}
+        {{- else }}
+        remote_write:
+          - url: {{ .Values.tempo.metricsGenerator.remoteWriteUrl }}
+        {{- end }}
+      traces_storage:
+        path: {{ .Values.tempo.metricsGenerator.traces_storage.path | quote }}
+      # Spans with end times older than this are excluded from metrics generation.
+      # Pipeline delay: tail_sampling decision_wait (30s default) + batch timeout (5s) +
+      # export latency (~5-10s) = ~40-45s. The 60s slack provides ~15-20s margin for
+      # application buffering and network jitter while keeping the window tight enough
+      # to avoid stale-span memory growth.
+      # Ref: https://grafana.com/docs/tempo/latest/configuration/#metrics-generator
+      metrics_ingestion_time_range_slack: 60s
+      {{- end }}
