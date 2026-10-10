@@ -123,10 +123,38 @@ alloy:
       // - comm = "none"      → do not attach the process command name
       pyroscope.ebpf "profiles" {
         targets        = discovery.relabel.pods.output
-        forward_to     = [pyroscope.write.default.receiver]
+        forward_to     = [pyroscope.relabel.clean.receiver]
         python_enabled = false
         pid_label      = false
         comm           = "none"
+      }
+
+      // CRITICAL FIX: Drop unwanted labels before writing to Pyroscope.
+      // pyroscope.ebpf auto-injects labels like __container_id__ (which churns on every
+      // pod restart, causing cardinality explosion) and otel.scope.name/version (which
+      // may have invalid characters). Pyroscope rejects profiles with invalid label names
+      // (characters outside [a-zA-Z0-9_.]) with reason "invalid_labels".
+      //
+      // This relabel component keeps only the labels we need:
+      // - service_name: for traces→profiles correlation (must match OTel service.name)
+      // - namespace: for filtering by Kubernetes namespace
+      // - node: for filtering by node name
+      // - __name__: Pyroscope profile type (e.g., process_cpu)
+      //
+      // All other labels (including __container_id__, otel.scope.*, and any labels from
+      // processes that don't match our targets) are dropped. This eliminates cardinality
+      // churn and invalid_labels discards while preserving profile data for our services.
+      //
+      // DO NOT REMOVE: without this, pyroscope.ebpf sends labels that cause:
+      // - 25k+ series in 21h (limit: 5,000)
+      // - 16k+ samples discarded with reason invalid_labels
+      pyroscope.relabel "clean" {
+        forward_to = [pyroscope.write.default.receiver]
+
+        rule {
+          action       = "labelkeep"
+          regex        = "service_name|namespace|node|__name__"
+        }
       }
 
       // Write profiles to Pyroscope via native /ingest (pprof-based, not OTLP)
