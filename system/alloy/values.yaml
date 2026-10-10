@@ -28,13 +28,21 @@ alloy:
   configMap:
     create: true
     content: |-
-      // Discovery: find pods on THIS node in the calypso namespace (3 runc Rust services).
+      // Discovery: find pods on THIS node in specific namespaces.
       // The eBPF profiler can only profile processes on the local node, so we filter
       // by spec.nodeName to discover only pods scheduled on this Alloy instance's node.
-      // Runner pods live in calypso-runners and are excluded by the namespace filter —
-      // the negative control for gVisor: even if a runner pod were scheduled,
-      // it would not appear as a target.
-      discovery.kubernetes "pods" {
+      //
+      // We discover pods from TWO namespaces:
+      // - calypso: control-plane, git-proxy, auth-proxy (3 runc Rust services)
+      // - calypso-runners: runner pods (runc, not gVisor) for end-to-end observability
+      //
+      // IMPORTANT: We use TWO separate discovery components (one per namespace) and
+      // combine them with concat() below. This maintains explicit namespace scoping
+      // (safer than discovering all namespaces) while allowing runner discovery.
+      // Previous attempt (de29c748) removed the namespace selector entirely, which
+      // appeared to break profiling and was reverted. The root cause was never isolated,
+      // so we maintain namespace scoping here.
+      discovery.kubernetes "calypso" {
         role = "pod"
         selectors {
           role  = "pod"
@@ -46,14 +54,27 @@ alloy:
         }
       }
 
+      discovery.kubernetes "runners" {
+        role = "pod"
+        selectors {
+          role  = "pod"
+          field = "spec.nodeName=" + sys.env("HOSTNAME")
+        }
+        selectors {
+          role  = "pod"
+          field = "metadata.namespace=calypso-runners"
+        }
+      }
+
       // Relabel: build service_name to match the OTel service.name set by each
       // Calypso binary (crates/calypso-*/src/main.rs: TelemetryConfig.service_name).
       // This enables Tempo tracesToProfiles and Grafana profile panels to resolve
       // profiles by the same service_name used in traces and metrics.
       //
-      // Mapping: container "control-plane" → "calypso-control-plane", etc.
-      // NOTE: container names are control-plane, git-proxy, auth-proxy — NOT the
-      // Deployment names (which have a calypso- prefix). Filtering on the wrong
+      // Mapping: container "control-plane" → "calypso-control-plane",
+      //          container "runner" → "calypso-runner", etc.
+      // NOTE: container names are control-plane, git-proxy, auth-proxy, runner — NOT
+      // the Deployment names (which have a calypso- prefix). Filtering on the wrong
       // value drops every target.
       //
       // CARDINALITY/PRIVACY: only bounded, non-identifying labels are carried.
@@ -63,7 +84,7 @@ alloy:
       // - pid / comm (pinned off in pyroscope.ebpf below)
       // Target matching does not need them: the engine matches by container ID.
       discovery.relabel "pods" {
-        targets = discovery.kubernetes.pods.targets
+        targets = array.concat(discovery.kubernetes.calypso.targets, discovery.kubernetes.runners.targets)
 
         // Drop pods that are not in a running phase (avoid stale targets).
         rule {
@@ -92,11 +113,15 @@ alloy:
           target_label  = "node"
         }
 
-        // Keep only the 3 runc Rust services (container names, not Deployment names).
+        // Keep only the 4 runc Rust services (container names, not Deployment names).
+        // "runner" is the container name in calypso-runners pods (deployment.rs:26:
+        // CONTAINER_NAME = "runner"). It derives service_name "calypso-runner" which
+        // matches the runner's OTel service.name (main.rs:71). Without this, the
+        // eBPF profiler never discovers runner targets.
         rule {
           action        = "keep"
           source_labels = ["__meta_kubernetes_pod_container_name"]
-          regex         = "control-plane|git-proxy|auth-proxy"
+          regex         = "control-plane|git-proxy|auth-proxy|runner"
         }
       }
 
@@ -107,7 +132,7 @@ alloy:
       // - python_enabled = false: the `perf_unwind_python` perf eBPF program
       //   fails to load on the k8s-amd64-1 node (kernel 7.0.0-34-generic), which
       //   made the whole component exit and lose ALL profiling on that node.
-      //   Our targets (calypso control-plane / auth-proxy / git-proxy) are Rust
+      //   Our targets (calypso control-plane / auth-proxy / git-proxy / runner) are Rust
       //   static binaries profiled by the *native* unwinder, so dropping the
       //   Python unwinder costs nothing for this workload and restores coverage.
       //   This is the documented per-interpreter flag (not a global syscall
