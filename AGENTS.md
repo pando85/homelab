@@ -362,6 +362,9 @@ matters there.
   `maxSkew: 1` + `DoNotSchedule` blocks new pod placement. Always add `matchLabelKeys` for
   Deployments with `replicas > 1` or HPA. Skip for single-replica, StatefulSets (no `pod-template-hash`),
   and CRD-managed workloads. See `docs/conventions/topology-spread-constraints.md`
+- k8s-amd64-1 temperature alerts: AMD Ryzen 5 5500U TjMax is 105°C, CI spikes reach 98°C briefly
+  (P95: 63°C). Thresholds are CPU warning 92°C / critical 97°C, other chips 70/75°C. The `for: 5m`
+  filters transient spikes. See `docs/troubleshooting/temperature-alert-thresholds.md`
 
 ## Subsystem Docs
 
