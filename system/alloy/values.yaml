@@ -164,6 +164,13 @@ alloy:
         python_enabled = false
         pid_label      = false
         comm           = "none"
+        // RUST DEMMANGLING: The upstream docs label this "C++ demangle mode", which obscured
+        // that the implementation (ianlancetaylor/demangle.Filter) explicitly handles Rust v0
+        // symbols (RFC 2603) alongside Itanium C++. Without this attribute, the default "none"
+        // leaves all Rust frames mangled as `_RNvNtCs..._21calypso_control_plane11http_client...`.
+        // "templates" produces readable names like `calypso_control_plane::http_client::build_http_client`.
+        // Alternatives: "simplified" (strips some template params), "full" (maximum detail).
+        demangle       = "templates"
       }
 
       // CRITICAL FIX: Drop unwanted labels before writing to Pyroscope.
