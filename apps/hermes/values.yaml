@@ -81,7 +81,7 @@ app-template:
         grafana-mcp:
           image:
             repository: docker.io/grafana/mcp-grafana
-            tag: "1.6.3"
+            tag: "2.0.2"
           args:
             - -enabled-tools=datasource,prometheus,loki,alerting,dashboard
             - -transport=sse
