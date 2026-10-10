@@ -62,6 +62,14 @@ alloy:
       // - __meta_kubernetes_pod_label_* via labelmap (arbitrary user labels)
       // - pid / comm (pinned off in pyroscope.ebpf below)
       // Target matching does not need them: the engine matches by container ID.
+      //
+      // CRITICAL: pyroscope.ebpf auto-injects `__container_id__` label into profiles
+      // if not defined on the target (see Alloy docs: "if you haven't defined them").
+      // The container ID churns on every pod restart/rollout, creating new series and
+      // causing cardinality explosion (25k+ series in 21h) and invalid_labels discards.
+      // Fix: explicitly set `__container_id__` to service_name (stable, bounded value)
+      // so it's not auto-injected with the container ID. Target matching still works
+      // because it uses `__meta_kubernetes_pod_container_id` from discovery.kubernetes.
       discovery.relabel "pods" {
         targets = discovery.kubernetes.pods.targets
 
@@ -80,6 +88,18 @@ alloy:
           regex         = "(.*)"
           replacement   = "calypso-${1}"
           target_label  = "service_name"
+        }
+
+        // CRITICAL FIX: Set __container_id__ to service_name to prevent auto-injection
+        // of the actual container ID by pyroscope.ebpf. This eliminates cardinality churn
+        // (container IDs change on every restart) and invalid_labels discards.
+        // The label name still starts with __ but the value is now stable and bounded.
+        // DO NOT REMOVE: without this, pyroscope.ebpf injects the real container ID
+        // which creates a new series on every pod restart/rollout.
+        rule {
+          action        = "replace"
+          source_labels = ["service_name"]
+          target_label  = "__container_id__"
         }
 
         rule {
