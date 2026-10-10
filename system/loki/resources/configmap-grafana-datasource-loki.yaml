@@ -18,22 +18,37 @@ data:
         jsonData:
           maxLines: 1000
           derivedFields:
-            # Keycloak JSON logs embed the OpenTelemetry trace id as "traceId"
+            # Field names verified against REAL Loki log lines (2026-10-10):
+            #   calypso-control-plane JSON: "trace_id":"3f08...95cf6","span_id":"668756d87cf308ce" (snake_case)
+            #   nginx-external plain text:  trace_id=2581af41cbf9f7fddff2c2e12b1f414d span_id=9dff7f2e76e4af75
+            #   keycloak: no trace_id/traceId observed in 24h of logs — camelCase kept defensively for
+            #     other OTel/Java instrumentation that may emit it in future.
+            # Each regex is anchored to exactly 32 hex chars (W3C/OTel trace id) with ONE capture group.
+            #
+            # The `url` field is REMOVED on all three. It previously pointed at
+            # http://tempo.tempo:3200 (a cluster-internal DNS name the browser cannot resolve), which
+            # made the "View Trace" link fail. With only `datasourceUid: tempo`, Grafana opens the trace
+            # in its built-in trace viewer using the Tempo datasource URL.
             - datasourceUid: tempo
-              matcherRegex: '"traceId":"([a-f0-9]+)"'
-              name: traceId
-              url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
-              urlDisplayLabel: 'View Trace'
-            # Calypso / any OTel service JSON logs: "trace_id":"<32-hex>"
-            - datasourceUid: tempo
-              matcherRegex: '"trace_id":"([a-f0-9]+)"'
+              matcherRegex: '"trace_id":"([a-f0-9]{32})"'
               name: trace_id
-              url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
-            # isidoro / nginx log formats that use snake_case trace_id (non-JSON)
+            - datasourceUid: tempo
+              matcherRegex: '"traceId":"([a-f0-9]{32})"'
+              name: traceId
+              urlDisplayLabel: 'View Trace'
             - datasourceUid: tempo
               matcherRegex: 'trace_id=([a-f0-9]{32})'
               name: trace_id_plain
-              url: 'http://tempo.tempo:3200/trace/$${__value.raw}'
               urlDisplayLabel: 'View Trace'
-        version: 10
+        # VERSION GATING (see commit 006c47a4 for the incident that documented this):
+        #   Grafana file provisioning compares the file's `version` against the DB row's
+        #   version and only applies the file when file_version >= db_version. Each
+        #   successful apply bumps the DB version by 1. If the file's version is below
+        #   the DB version, Grafana SILENTLY SKIPS the change — ArgoCD will report Synced,
+        #   the sidecar gets HTTP 200 from the reload, but the live datasource never updates.
+        #   ALWAYS bump this number above the live DB version whenever you edit the file.
+        #   Check the live DB version with:
+        #     curl -u <admin>:<pw> https://grafana.grigri.cloud/api/datasources/uid/loki | jq .version
+        #   Observed live DB version at time of edit: 11. Bumped file version to 15 to leave room.
+        version: 15

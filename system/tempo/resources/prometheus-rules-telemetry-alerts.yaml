@@ -1,0 +1,166 @@
+# Alerting rules for the observability pipeline itself (spanmetrics generation, Tempo
+# span discards, Pyroscope ingestion health, otel-collector acceptance).
+#
+# These alerts would have caught the incidents observed on 2026-10-10:
+#   - Calypso spanmetrics went completely dark for ~3 hours (nothing fired).
+#   - Pyroscope discarded 16,368 samples / 62MB in ~21h due to invalid_labels churn
+#     from __container_id__ (nothing fired).
+#
+# PLACEMENT — VERIFIED against live Prometheus `/api/v1/rules`:
+#   This CR is deployed by the tempo kustomization into namespace=tempo with the
+#   `release: monitoring` label. The Prometheus operator's Prometheus CR (see
+#   system/monitoring/values.yaml, no explicit ruleSelector/ruleNamespaceSelector)
+#   defaults to selecting PrometheusRules with label `app.kubernetes.io/name` OR
+#   `release` matching the Helm release. Existing PrometheusRules from many
+#   different namespaces — including tempo, pyroscope, loki, cert-manager,
+#   postgres-operator, qbittorrent, mosquitto, velero, zfs-exporter — ARE loaded
+#   (confirmed: `curl https://prometheus.internal.grigri.cloud/api/v1/rules`
+#   returned 73 groups across those namespaces with label `release: monitoring`).
+#   So placing this file in the `tempo` namespace with `release: monitoring` means
+#   it is selected by the operator and loaded by Prometheus.
+#
+# METRIC NAMES — VERIFIED against live Prometheus (2026-10-10, 20:20Z window):
+#   - traces_spanmetrics_calls_total{service="calypso-control-plane"}: 12 series present.
+#     - Label is `service`, NOT `service_name` (verified via `count by (service)` returning
+#       calypso-control-plane, calypso-auth-proxy, keycloak, kiais-gateway, nginx-external).
+#   - tempo_metrics_generator_spans_discarded_total{reason=...} present with reasons
+#     invalid_utf8, outside_metrics_ingestion_slack (56 cumulative, structural — long-lived
+#     k8s watch spans exceed the 60s slack), span_metrics_filtered, trace_too_large.
+#   - pyroscope_discarded_samples_total{reason="invalid_labels"} present (16,368 today).
+#   - pyroscope_segment_writer_tsdb_head_series_created_total present (25,069 cumulative
+#     in 21h; current scrape rate ~0.067/s).
+#   - otelcol_receiver_refused_spans present (0 currently).
+#
+# NOTE on Pyroscope series-vs-limit: max_global_series_per_tenant=5000 (verified via
+# pyroscope_limits_defaults{limit_name="max_global_series_per_tenant"}), but Pyroscope
+# 2.3.2 exposes NO gauge of current ACTIVE series in the head block. The metrics
+# `pyroscope_distributor_push_batch_series_count` and
+# `pyroscope_segment_writer_head_flushed_block_series_count` are histogram observation
+# counts (not active series), and `pyroscope_segment_writer_tsdb_head_series_created_total`
+# is a cumulative counter. There is therefore no direct ratio gauge for the tenant
+# limit. The SeriesCreationRate alert below uses the rate of the cumulative counter as
+# a proxy leading indicator: rapid series churn is what causes head-block series to
+# approach the cap and start being discarded.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: prometheus-telemetry-pipeline-rules
+  namespace: tempo
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: telemetry_pipeline_alerts
+      rules:
+        # Would have caught the 3-hour Calypso spanmetrics blackout on 2026-10-10.
+        #
+        # Formulation uses a regex selector over the whole calypso-* service family,
+        # NOT per-service absent()s. A per-service absent() would flap whenever a
+        # single Calypso service (e.g. calypso-auth-proxy, which only sees traffic on
+        # login flows) legitimately has no spans long enough for its spanmetrics series
+        # to expire from Tempo's metrics-generator window. Requiring the ENTIRE Calypso
+        # family to be dark means the alert only fires when the pipeline itself is
+        # broken (metrics-generator down, OTLP export dropped, tail sampler rejecting
+        # everything) — which is exactly what happened today.
+        - alert: CalypsoSpanmetricsAbsent
+          annotations:
+            message: |
+              No spanmetrics series exist for any calypso-* service in the last scrape
+              window. The Tempo metrics-generator may have stopped, span ingest from
+              otel-collector may have dropped, or tail sampling may be rejecting every
+              Calypso trace. Check: tempo_metrics_generator_active_processors,
+              otelcol_receiver_accepted_spans{service_name=~"calypso.*"}, and Tempo
+              pod logs. This is the same class of failure as the 2026-10-10 3h
+              spanmetrics blackout.
+          expr: |
+            absent(traces_spanmetrics_calls_total{service=~"calypso-.*"})
+          for: 15m
+          labels:
+            severity: critical
+        # Tempo metrics-generator span discards.
+        #
+        # Excludes reason="outside_metrics_ingestion_slack" (56 cumulative observations
+        # today) because it is structural: long-lived k8s `watch` spans exceed the
+        # default 60s metrics ingestion slack, so their spanmetrics are dropped by
+        # design. Alerting on that reason produces pure noise. Every OTHER reason
+        # (trace_too_large, invalid_utf8, span_metrics_filtered) indicates real data
+        # loss and warrants investigation.
+        - alert: TempoSpanDiscardsRising
+          annotations:
+            message: |
+              Tempo metrics-generator is discarding spans for reason={{ $labels.reason }}
+              at {{ printf "%.2f" $value }}/s. Any reason other than
+              outside_metrics_ingestion_slack indicates real span data loss in
+              spanmetrics/service-graphs output. Inspect the offending traces via
+              Tempo debug UI and adjust metric_strict_temporality / slack_window or
+              max_bytes_per_trace overrides.
+          expr: |
+            sum by (reason) (rate(tempo_metrics_generator_spans_discarded_total{reason!="outside_metrics_ingestion_slack"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+        # Pyroscope sample discards due to invalid_labels.
+        #
+        # Verified today: 16,368 samples / 62MB discarded by reason=invalid_labels,
+        # driven by __container_id__ label churn on containers that are still being
+        # profiled. Threshold of 0.1 samples/s (≈360/hour) is deliberately well above
+        # the noise floor so the alert only fires when the problem is persistent, not
+        # on a single transient rejection.
+        - alert: PyroscopeInvalidLabelDiscards
+          annotations:
+            message: |
+              Pyroscope has been discarding samples with reason=invalid_labels at
+              {{ printf "%.3f" $value }}/s for >10m (roughly {{ printf "%.0f" $value }}*600
+              samples in the last 10m). Typically caused by container-ID label churn
+              from Alloy's pyroscope_write processor. Inspect the Alloy pipeline
+              (system/alloy) relabeling rules and confirm __container_id__ is being
+              dropped before send. See 2026-10-10 incident: 16,368 samples / 62MB lost.
+            runbook_url: https://github.com/pando85/homelab/tree/master/system/pyroscope
+          expr: |
+            sum(rate(pyroscope_discarded_samples_total{reason="invalid_labels"}[5m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+        # Pyroscope series churn pressure indicator.
+        #
+        # No direct active-series gauge exists in Pyroscope 2.3.2 (see header
+        # comment). Rate of new TSDB head series creation is the best available
+        # leading indicator. Baseline: 25,069 series created over 21h = ~0.33/s
+        # steady state; current scrape rate 0.067/s. Threshold of 1/s sustained for
+        # 15m means a >3x burst of new series — the pattern that precedes hitting the
+        # 5,000 max_global_series_per_tenant cap and triggering distributor rejections.
+        - alert: PyroscopeSeriesCreationRateHigh
+          annotations:
+            message: |
+              Pyroscope is creating new head-block series at {{ printf "%.2f" $value }}/s
+              sustained for 15m (baseline ~0.3/s). Rapid series churn approaches the
+              max_global_series_per_tenant limit of 5,000 and will start producing
+              invalid_labels discards if left unchecked. Inspect Alloy relabeling
+              rules in system/alloy to drop volatile labels such as __container_id__
+              before send to Pyroscope.
+            runbook_url: https://github.com/pando85/homelab/tree/master/system/alloy
+          expr: |
+            sum(rate(pyroscope_segment_writer_tsdb_head_series_created_total[15m])) > 1
+          for: 15m
+          labels:
+            severity: warning
+        # Otel-collector refusing spans.
+        #
+        # Any non-zero refused_spans rate means the OTLP receiver is actively
+        # rejecting (not just dropping silently) spans. Root causes: capacity,
+        # misconfigured limits, or Tempo pushing back. This is the front door of
+        # the whole tracing pipeline — if it's refusing, no downstream alert will
+        # see the missing data because the data never made it in.
+        - alert: OtelCollectorRefusingSpans
+          annotations:
+            message: |
+              otel-collector is refusing spans at {{ printf "%.2f" $value }}/s for
+              receiver={{ $labels.receiver }} transport={{ $labels.transport }}.
+              The OTLP front door is rejecting input. Check otel-collector logs
+              and Tempo/Pyroscope health — exporters may be pushing back.
+            runbook_url: https://github.com/pando85/homelab/tree/master/system/otel-collector
+          expr: |
+            sum by (receiver, transport) (rate(otelcol_receiver_refused_spans[5m])) > 0
+          for: 5m
+          labels:
+            severity: critical
