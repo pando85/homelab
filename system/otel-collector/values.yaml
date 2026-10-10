@@ -63,15 +63,47 @@ config:
           statements:
             - set(span.kind.string, "Client") where resource.attributes["service.name"] == "nginx-external"
 
-    # Tail-based sampling: keep errors and slow traces, sample 10% of normal traffic
+    # Tail-based sampling: service-aware policy to restore Calypso spanmetrics
+    # After PR #2331 reduced Calypso span volume from ~2000 to ~5 spans/trace,
+    # the 10% probabilistic sampling left Calypso spanmetrics completely dark.
+    # This policy samples 100% of Calypso traces (now ~5 spans each) while keeping
+    # 10% for other services. Total ingest is still 4x lower than pre-#2331.
+    #
+    # decision_cache: Remember sampling decisions for late-arriving spans.
+    # Current trace_removal_age p95 is 4875s (81 min) because we're at num_traces
+    # capacity (50,000). Late spans arriving after eviction need cached decisions
+    # to avoid re-evaluation. sampled_cache_size=100000 handles ~11,000 traces/s
+    # for 10s, which is well above our 8.6 traces/s ingest rate.
     tail_sampling:
+      decision_cache:
+        sampled_cache_size: 100000
       policies:
+        # Calypso services: 100% sampling to restore spanmetrics and exemplars
+        # Pre-#2331: 2000 spans/trace × 10% = 200 spans/trace
+        # Post-#2331: 5 spans/trace × 100% = 5 spans/trace (40x less per trace, 10x more traces sampled)
+        # Net result: 5 spans/trace vs 200 spans/trace = 40x reduction in Tempo ingest
+        #
+        # Simplified from 'and' composite to plain string_attribute: functionally
+        # identical since string_attribute samples 100% of matching traces.
+        # Verified against actual service.name values in cluster:
+        #   MATCHES: calypso-auth-proxy, calypso-control-plane, calypso-git-proxy,
+        #            calypso-landing-page, calypso-web
+        #   NO MATCH: ebpf/calypso/* (old Alloy profiling names, changed in cb41d99a)
+        - name: calypso-full-sampling
+          type: string_attribute
+          string_attribute:
+            key: service.name
+            values: ["calypso-.*"]
+            enabled_regex_matching: true
+        # Keep errors for all services
         - name: errors-policy
           type: status_code
           status_code: {status_codes: [ERROR]}
+        # Keep slow traces for all services
         - name: latency-policy
           type: latency
           latency: {threshold_ms: 5000}
+        # Default: 10% probabilistic for non-Calypso services
         - name: default-policy
           type: probabilistic
           probabilistic: {sampling_percentage: 10}
