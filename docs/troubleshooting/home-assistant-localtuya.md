@@ -107,7 +107,9 @@ when cooling is wanted.
 - Light: clear `color_mode` (DP 2) and `color` (`-1`).
 - Fan and light device: remove `scan_interval: 10` (sends empty `UPDATEDPS` every 10 s, none of
   its DPs are in the update allow-list), `enable_debug`, and manual DP `300`.
-- "Thermostat office A" device name has a stray trailing `"`.
+- "Thermostat office A" device: the localtuya `friendly_name` has a stray trailing `"`. Masked on
+  2026-10-10 with a device-registry `name_by_user` override (entity names never included it); the
+  config entry value is unchanged and is harmless to leave.
 
 ## Operational Notes
 
