@@ -1,0 +1,41 @@
+# ScrapeConfig for K3s embedded etcd metrics.
+#
+# K3s runs etcd as part of the k3s systemd service (not a pod), so there is no
+# Kubernetes Service to target with a ServiceMonitor. Instead we use a
+# ScrapeConfig with a static target pointing at the control-plane node.
+#
+# Prerequisites:
+#   - k3s config.yaml must have `etcd-expose-metrics: true` (set via
+#     metal/roles/k3s/defaults/main.yml k3s_server_config)
+#   - etcd metrics are served on port 2381 (http, no auth)
+#
+# Key metric families:
+#   - etcd_disk_wal_fsync_duration_seconds: WAL fsync latency (disk health)
+#   - etcd_disk_backend_commit_duration_seconds: backend commit latency
+#   - etcd_server_has_leader / etcd_server_leader_changes_seen_total: leadership
+#   - etcd_mvcc_db_total_size_in_bytes / etcd_mvcc_db_total_size_in_use_in_bytes: DB size
+#   - etcd_server_proposals_failed_total / etcd_server_proposals_pending: Raft health
+#   - etcd_debugging_snap_save_total_duration_seconds: snapshot duration
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: etcd
+  labels:
+    release: monitoring
+spec:
+  staticConfigs:
+    - targets:
+        - prusik.grigri:2381
+  scrapeInterval: 30s
+  metricsPath: /metrics
+  relabelings:
+    - sourceLabels:
+        - __address__
+      separator: ":"
+      regex: "(.*):(.*)"
+      replacement: "${1}"
+      targetLabel: instance
+      action: replace
+    - replacement: etcd
+      targetLabel: job
+      action: replace

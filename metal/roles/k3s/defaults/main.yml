@@ -12,3 +12,4 @@ k3s_server_config:
     - traefik
   disable-cloud-controller: true
   secrets-encryption: true
+  etcd-expose-metrics: true
