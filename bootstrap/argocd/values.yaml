@@ -154,6 +154,16 @@ repoServer:
   env:
     - name: ARGOCD_EXEC_TIMEOUT
       value: "300s"
+    # Argo CD >= v3.5.4 runs kustomize's `helm` through a wrapper that forces
+    # HELM_CONFIG_HOME to an empty Argo CD-owned dir (GHSA-fw5c-w8rc-j7fx), so
+    # helm no longer finds the helm-auth registry config below via
+    # HELM_CONFIG_HOME. DOCKER_CONFIG is not rewritten and helm falls back to
+    # the Docker credential store, so point it at the same mounted config.json.
+    # Not HELM_REGISTRY_CONFIG: that would make native Helm-OCI sources'
+    # `helm registry login` write into this read-only mount.
+    # See docs/troubleshooting/argocd-kustomize-helm-oci-auth.md
+    - name: DOCKER_CONFIG
+      value: /helm-working-dir/registry
 
   metrics: *metrics
   volumeMounts:
