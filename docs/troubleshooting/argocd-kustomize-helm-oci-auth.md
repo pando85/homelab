@@ -55,3 +55,10 @@ native Helm-OCI Applications write into the read-only secret mount.
 The `config.json` must still carry an `auths` entry for every private OCI registry that kustomize
 pulls charts from. The `ArgoCDAppSyncUnknown` alert (`bootstrap/argocd/resources/prometheus-rules.yaml`)
 fires when an Application cannot generate manifests for 30 minutes.
+
+## Removal
+
+This workaround can be removed once argoproj/argo-cd#28678 ships natively — that PR passes OCI
+registry credentials through to kustomize's helm invocations without relying on `DOCKER_CONFIG`.
+When the fix lands, remove the `DOCKER_CONFIG` env entry from `bootstrap/argocd/values.yaml` and
+verify that `helm pull oci://...` succeeds through the wrapper without it.

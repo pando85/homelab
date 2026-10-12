@@ -162,6 +162,7 @@ repoServer:
     # Not HELM_REGISTRY_CONFIG: that would make native Helm-OCI sources'
     # `helm registry login` write into this read-only mount.
     # See docs/troubleshooting/argocd-kustomize-helm-oci-auth.md
+    # TODO: remove once argoproj/argo-cd#28678 ships natively
     - name: DOCKER_CONFIG
       value: /helm-working-dir/registry
 

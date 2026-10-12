@@ -267,6 +267,11 @@ matters there.
 - ArgoCD `argo-cd` chart >= 10.0 defaults `networkPolicy.create: true` — keep it `false` because
   it interacts with Cilium's stale-datapath bug on rebooted nodes (kubelet probes get dropped).
   See `docs/troubleshooting/argocd-repo-server-probe-death-spiral.md`
+- ArgoCD ≥ 3.5.4 overrides `HELM_CONFIG_HOME` during `kustomize build --enable-helm`
+  (GHSA-fw5c-w8rc-j7fx), so private OCI chart pulls go anonymous → 401 and apps stick
+  `Sync=Unknown`. Fix: set `DOCKER_CONFIG` on repo-server to the mounted registry dir.
+  Check env after any ArgoCD version bump. See
+  `docs/troubleshooting/argocd-kustomize-helm-oci-auth.md`
 - Unattended-upgrades must blacklist NVIDIA packages — host-level driver upgrades conflict with
   the GPU Operator's containerized driver management, causing `Driver/library version mismatch`.
   Fix: `cd metal && ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare`
