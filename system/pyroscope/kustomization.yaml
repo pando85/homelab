@@ -9,7 +9,7 @@ resources:
 helmCharts:
   - name: pyroscope
     repo: https://grafana.github.io/helm-charts
-    version: 2.3.2
+    version: 2.4.0
     releaseName: pyroscope
     namespace: pyroscope
     includeCRDs: true
