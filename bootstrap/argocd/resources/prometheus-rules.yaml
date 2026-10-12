@@ -1,0 +1,67 @@
+---
+# Alerts for ArgoCD Applications that stop converging on git, so a broken
+# manifest generation or sync is noticed instead of silently leaving stale
+# workloads running (e.g. the v3.5.4 kustomize helm OCI 401 incident, see
+# docs/troubleshooting/argocd-kustomize-helm-oci-auth.md).
+#
+# Metric names/labels verified against the live application-controller
+# /metrics on grigri (2026-10-12): argocd_app_info{name,sync_status,
+# health_status,autosync_enabled}, argocd_app_sync_total{name,phase}.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: argocd-app-rules
+  namespace: argocd
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: argocd_apps
+      rules:
+        - alert: ArgoCDAppSyncUnknown
+          annotations:
+            summary: ArgoCD app {{ $labels.name }} cannot compare against git
+            description: |
+              Application {{ $labels.name }} has had sync status Unknown for more than
+              30 minutes. This usually means manifest generation fails (repo-server
+              error, chart pull 401, invalid kustomization), so new commits are not
+              being deployed. Check: kubectl -n argocd get app {{ $labels.name }}
+              -o jsonpath='{.status.conditions}'
+          expr: |
+            max by (name) (argocd_app_info{sync_status="Unknown"}) == 1
+          for: 30m
+          labels:
+            severity: warning
+        - alert: ArgoCDAppOutOfSync
+          annotations:
+            summary: ArgoCD app {{ $labels.name }} stuck OutOfSync
+            description: |
+              Application {{ $labels.name }} has automated sync enabled but has been
+              OutOfSync for more than 30 minutes: live state no longer matches git.
+          expr: |
+            max by (name) (argocd_app_info{sync_status="OutOfSync", autosync_enabled="true"}) == 1
+          for: 30m
+          labels:
+            severity: warning
+        - alert: ArgoCDAppSyncFailing
+          annotations:
+            summary: ArgoCD app {{ $labels.name }} sync keeps failing
+            description: |
+              Sync operations for application {{ $labels.name }} have been ending in
+              Error/Failed for more than 30 minutes.
+          expr: |
+            sum by (name) (increase(argocd_app_sync_total{phase=~"Error|Failed"}[15m])) > 0
+          for: 30m
+          labels:
+            severity: warning
+        - alert: ArgoCDAppUnhealthy
+          annotations:
+            summary: ArgoCD app {{ $labels.name }} is {{ $labels.health_status }}
+            description: |
+              Application {{ $labels.name }} has been {{ $labels.health_status }} for
+              more than 30 minutes.
+          expr: |
+            max by (name, health_status) (argocd_app_info{health_status=~"Degraded|Missing"}) == 1
+          for: 30m
+          labels:
+            severity: warning
