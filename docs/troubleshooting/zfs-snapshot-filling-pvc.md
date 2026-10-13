@@ -16,9 +16,9 @@ Two independent backup mechanisms create ZFS snapshots on every PVC:
 1. **Snapscheduler** (`snapscheduler.backube/v1` SnapshotSchedule) — daily at 01:00 UTC,
    configurable `maxCount` per app (default: 20). Creates `snapshot-<uuid>` ZFS snapshots.
 
-2. **Velero** (Schedule CRD) — weekly on Tuesdays at 02:30 UTC, 90-day TTL. Uses the
-   `openebs.io/zfspv-blockstore` plugin which creates `retain-quaterly-<timestamp>` ZFS snapshots
-   and uploads volume data to MinIO.
+2. **Velero** (Schedule CRD) — weekly on Tuesdays at 02:30 UTC and quarterly on Wednesdays at
+   03:30 UTC, 90-day TTL. Uses the `openebs.io/zfspv-blockstore` plugin which creates
+   `retain-quaterly-<timestamp>` ZFS snapshots and uploads volume data to MinIO.
 
 ### Known High-Churn Applications
 
@@ -106,6 +106,6 @@ sudo zfs set quota=20G <dataset>
 | File | Purpose |
 |------|---------|
 | `apps/<name>/templates/snapshots.yaml` | Snapscheduler SnapshotSchedule CRD per app |
-| `platform/velero/templates/schedule-retain-quaterly.yaml` | Velero weekly backup schedule |
+| `platform/velero/templates/schedule-retain-quaterly.yaml` | Velero quarterly-chain backup schedule (Wed 03:30 UTC) |
 | `platform/velero/templates/schedule-retain-weekly.yaml` | Velero weekly full backup schedule |
 | `system/zfs-localpv/` | ZFS-LocalPV driver and VolumeSnapshotClass (`zfspv-snapclass`) |

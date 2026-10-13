@@ -65,8 +65,16 @@ The following do **not** disable any SATA ports:
 
 ### NVMe Drives
 
-| Device | Model | Serial | Size | PCIe Path |
-|--------|-------|--------|------|-----------|
+> **WARNING — kernel names are not stable.** The two NVMe devices swap `nvme0n1`/`nvme1n1` across
+> reboots. During the 2026-09-25 incident the root disk was `nvme1n1`; after the 2026-10-02 reboot
+> it became `nvme0n1`. They will flip again. The table below reflects the state at the last
+> verification, **not** a stable mapping. Always identify these disks by model, serial, or
+> `/dev/disk/by-id` in queries, alerts, runbooks, and docs. See
+> `docs/troubleshooting/prusik-etcd-swap-thrash.md` for the full mechanism and the
+> `PrusikRootDiskQueueHigh` alert follow-up.
+
+| Device (at last verification) | Model | Serial | Size | PCIe Path |
+|-------------------------------|-------|--------|------|-----------|
 | nvme0n1 | FIKWOT FN960 2TB | AA240141547 | 1.8T | 00:01.2 → 02:00.0 (M.2_1, CPU lanes) |
 | nvme1n1 | SanDisk Extreme 500GB | 23414Q803583 | 465.8G | 00:02.2 → 10:00.0 (M.2_2, CPU lanes) |
 

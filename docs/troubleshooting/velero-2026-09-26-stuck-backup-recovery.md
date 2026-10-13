@@ -196,7 +196,7 @@ clones are in use before cleaning up these datasets and `ZFSSnapshot` resources.
 
 ## Quarterly Incremental Chain Verification
 
-`retain-quaterly` runs every Tuesday and uses `zfspv-incr`. Its `incrBackupCount: "11"` setting
+`retain-quaterly` runs every Wednesday at 03:30 UTC and uses `zfspv-incr`. Its `incrBackupCount: "11"` setting
 creates one full backup followed by up to eleven incrementals. The schedule name describes the
 approximately quarterly full cycle, not its execution frequency.
 

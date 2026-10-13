@@ -101,7 +101,7 @@ RandomizedDelaySec=10h
 ```
 
 This runs upgrades Monday + Wednesday–Sunday, 08:00–18:00, avoiding:
-- Velero weekly/quarterly backups (Tuesday 02:30)
+- Velero weekly (Tuesday 02:30) and quarterly (Wednesday 03:30) backups
 - Velero remote syncs (Thursday/Friday 02:30)
 - Kanidm backups (daily 03:00)
 
