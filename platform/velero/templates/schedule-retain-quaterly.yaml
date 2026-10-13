@@ -4,7 +4,11 @@ metadata:
   name: retain-quaterly
   namespace: velero
 spec:
-  schedule: 30 2 * * 2
+  # Velero serializes backup runs (Oct 6: quarterly 02:30→02:57, weekly 02:57→03:05), so the
+  # shared Tue 02:30 cron caused queue pile-up, not concurrent zfs sends. CI pressure predates
+  # the Oct 13 freeze, so schedule separation is an operational precaution, not a proven fix.
+  # Wed 03:30 runs before Thu 02:30 offsite replication, so next-day copy instead of 7-day lag.
+  schedule: 30 3 * * 3
   template:
     includedNamespaces:
       - "*"
