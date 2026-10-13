@@ -1,0 +1,16 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: low-priority
+# Default value: 0
+# Value range: -2147483648 to 1000000000
+# Negative, so these pods rank below every default (0) workload and are picked
+# first by the node's eviction/signalling order. preemptionPolicy: Never keeps
+# them from evicting anything else - being expendable must not make them
+# disruptive. Does not protect control-plane pods: system criticality is
+# carried by `system-critical`/`node-critical` (values 2000000000/1000000000),
+# which this class can never outrank.
+value: -1000
+globalDefault: false
+preemptionPolicy: Never
+description: "This priority class is used for expendable batch/CI pods that must be evicted before control-plane and system pods."

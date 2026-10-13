@@ -15,6 +15,7 @@ resources:
   - resources/nodelocaldns/service-upstream.yaml
   - resources/nodelocaldns/serviceaccount.yaml
   - resources/priority-class-high.yaml
+  - resources/priority-class-low.yaml
   - resources/runtime-class-gvisor.yaml
   - resources/runtime-class-nvidia.yaml
 
