@@ -31,6 +31,14 @@ LimitNOFILE=1048576
 LimitNPROC=infinity
 LimitCORE=infinity
 TasksMax=infinity
+{% if 'kube_control_plane' in group_names %}
+# Best-effort reclaim protection for the k3s process (embeds etcd). memory.low is a soft
+# preference within the cgroup hierarchy: it protects this unit's subtree from reclaim, but
+# only up to the parent's own low threshold. 6G is about the measured k3s-direct working set
+# (5.5 GiB); whether it actually shields etcd depends on whether system.slice ancestors have
+# competing low values. Deliberately MemoryLow rather than MemoryMin or MemorySwapMax.
+MemoryLow=6G
+{% endif %}
 TimeoutStartSec=0
 Restart=always
 RestartSec=5s

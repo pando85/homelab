@@ -5,10 +5,17 @@ ntp_config_file: /etc/ntpsec/ntp.conf
 ntp_package: ntpsec
 ntp_driftfile: /var/lib/ntpsec/ntp.drift
 
+# eviction-hard at 300Mi fired too late on this 62 GiB host: it stalls near 3 GiB, and by the
+# time kubelet acted the reclaim/swap pressure had already frozen the embedded etcd on the root
+# NVMe. Soft thresholds start evicting expendable workloads 1 GiB earlier (hard) and 4 GiB
+# (soft, after a 1m grace), so the control plane is starved last. kubelet requires the soft
+# threshold to be at or above the hard one, and grace-period uses map signal duration syntax.
 k3s_kubelet_extra_args:
   - kube-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi
   - system-reserved=cpu=2,memory=10Gi,ephemeral-storage=1Gi
-  - eviction-hard=memory.available<300Mi,nodefs.available<10%
+  - eviction-hard=memory.available<1Gi,nodefs.available<10%
+  - eviction-soft=memory.available<4Gi
+  - eviction-soft-grace-period=memory.available=1m
 
 zfs_arc_min_gb: 2
 zfs_arc_max_gb: 5
