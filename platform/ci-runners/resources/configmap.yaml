@@ -20,11 +20,21 @@ data:
       # Where to store the registration result.
       file: .runner
       # Execute how many tasks concurrently at the same time.
-      capacity: 3
-      # Extra environment variables to run jobs.
-      envs: {}
-        # A_TEST_ENV_NAME_1: a_test_env_value_1
-        # A_TEST_ENV_NAME_2: a_test_env_value_2
+      # 3 -> 2: aggregate peak RSS is roughly capacity x per-job peak, so lowering
+      # concurrency is the coarsest and most effective lever against the node-wide
+      # memory collapse. Pairs with the 12Gi container limit and CARGO_BUILD_JOBS
+      # cap on the runner pod; raise it only if measured peaks stay clear of the
+      # node's MemAvailable floor.
+      capacity: 2
+      # Extra environment variables to run jobs. These are injected into BOTH
+      # host-mode and docker-mode jobs. The StatefulSet's `env:` block only reaches
+      # the runner process itself (host-mode jobs inherit from it); docker-mode jobs
+      # run in separate containers spawned by dockerd and get their environment from
+      # this `envs:` map instead. Keeping them in sync ensures the parallelism caps
+      # apply uniformly.
+      envs:
+        CARGO_BUILD_JOBS: "4"
+        MAKEFLAGS: "-j4"
       # Extra environment variables to run jobs from a file.
       # It will be ignored if it's empty or the file doesn't exist.
       env_file: .env

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ci-runners-memory
+spec:
+  # A coarse namespace-level guard, NOT the primary control. The real bounds are the
+  # per-container limits and the runner `capacity`; this only catches the failure
+  # mode they cannot - someone adding more unbounded runner pods to a namespace that
+  # already has no headroom.
+  #
+  # Sized to the two runner StatefulSets that share this namespace: their container
+  # limits sum to ~37Gi (prusik 12Gi + 8Gi + overheads, k8s-amd64-1 12Gi + 4.5Gi +
+  # overheads), so 48Gi is that total plus ~30% headroom. A third runner at the
+  # current shape would exceed it and be rejected at admission.
+  #
+  # Requests cover the same pods at steady state (~9.4Gi of the 16Gi) plus the
+  # nightly cleanup Jobs. They are deliberately not set to the node's allocatable:
+  # prusik has 62GiB of RAM with a hard `zfs_arc_max` that needs it back, so the
+  # quota's job is to stop CI growth, not to reserve it.
+  hard:
+    requests.memory: 16Gi
+    limits.memory: 48Gi

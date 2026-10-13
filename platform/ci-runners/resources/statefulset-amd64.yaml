@@ -46,9 +46,10 @@ spec:
               cpu: "200m"
             limits:
               # 12Gi gives the runner headroom for moderate concurrent loads. At
-              # capacity 5, jobs can still demand ~17.4GiB (measured on prusik),
-              # so OOM kills remain possible at full concurrency. The pod's total
-              # limits (12Gi + 4.5Gi + 192Mi = 16.7Gi) now exceed the node's
+              # capacity 2 the aggregate peak is bounded by concurrency as well as
+              # by this limit, but jobs can still demand ~17.4GiB individually
+              # (measured on prusik), so OOM kills remain possible. The pod's total
+              # limits (12Gi + 4.5Gi + 192Mi = 16.7Gi) still exceed the node's
               # 12.53Gi allocatable, so the "pod dies before node" property is
               # gone - if every container peaks simultaneously, the node itself
               # will pressure. Accepted trade-off: more runner headroom at the
@@ -61,6 +62,15 @@ spec:
           env:
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
+            # Caps Rust/make parallelism so peak RSS stays under the 12Gi limit:
+            # cargo defaults to one linker/rustc job per core, so per-job RSS
+            # multiplies with the CPU count and blows the cgroup ceiling. Same
+            # rationale as the prusik runner; these are the build-throughput knobs
+            # to tune against this node's 12.53Gi allocatable.
+            - name: CARGO_BUILD_JOBS
+              value: "4"
+            - name: MAKEFLAGS
+              value: "-j4"
           volumeMounts:
             - name: runner-data
               mountPath: /workspace
@@ -341,18 +351,23 @@ spec:
           - 1001
         runAsGroup: 1001
         runAsUser: 1001
-      # Higher priority than default workloads so the runner is not the first
-      # pod evicted under memory pressure.
-      priorityClassName: high-priority
+      # CI is expendable batch work. It used to be high-priority, which meant the
+      # runner was deliberately protected from eviction while the control plane was
+      # not - backwards for a workload that caused the outage. low-priority (value
+      # -1000, preemptionPolicy: Never) puts it first in the eviction queue so the
+      # runner dies instead of etcd/apiserver, and it never preempts anything itself.
+      priorityClassName: low-priority
+      # No tolerations: this pod must NOT be schedulable onto a node already marked
+      # `node.kubernetes.io/memory-pressure`. It used to tolerate that taint, which
+      # kept the runner pinned to a node that was already starving - the opposite of
+      # what a memory-hungry CI workload should do. The node carries no permanent
+      # taints, so an empty set still schedules.
+      #
       # hostPath volumes are node-local, so this pod must be pinned explicitly -
       # unlike ci-runner, which lands on prusik implicitly through its ZFS volume
       # topology and has no nodeSelector at all.
       nodeSelector:
         kubernetes.io/hostname: k8s-amd64-1
-      tolerations:
-        - key: node.kubernetes.io/memory-pressure
-          operator: Exists
-          effect: NoSchedule
       volumes:
         # hostPath rather than PVCs: this node has no ZFS pool and there is
         # deliberately no local StorageClass (planning/k8s-amd64-1-node-addition.md,

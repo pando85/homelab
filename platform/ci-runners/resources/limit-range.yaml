@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ci-runners
+spec:
+  limits:
+    # Namespace-level backstop for the memory-burst incident: no single container in
+    # ci-runners may exceed 12Gi, whether as a request or a limit. That keeps the
+    # ceiling where the runner's own limit already sits (see
+    # resources/statefulset.yaml) and makes any future pod that asks for more a hard
+    # admission error rather than a node-wide reclaim storm on prusik's root NVMe,
+    # which also holds etcd's WAL and /swapfile.
+    #
+    # The defaults are what keep the resource-less nightly cache-cleanup Jobs
+    # (resources/cronjob.yaml, resources/cronjob-amd64.yaml) admissible at all once
+    # resources/resource-quota.yaml exists: a quota that constrains
+    # `requests.memory` rejects pods with no computed request. 2Gi is also the
+    # default ceiling for anything that forgets to declare a limit, so a forgotten
+    # `resources:` block degrades to small rather than unbounded.
+    - type: Container
+      defaultRequest:
+        memory: 256Mi
+      default:
+        memory: 2Gi
+      max:
+        memory: 12Gi

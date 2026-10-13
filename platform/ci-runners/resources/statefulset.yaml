@@ -80,7 +80,14 @@ spec:
               memory: "4Gi"
               cpu: "100m"
             limits:
-              memory: "18Gi"
+              # 12Gi sits above the ~10.7Gi peak RSS observed for a Rust build, so
+              # normal jobs are not squeezed, but it is far below the node's headroom
+              # and bounds the blast radius: the container now OOMs before the kernel
+              # runs out of MemAvailable and starts thrashing the root NVMe that etcd
+              # and /swapfile share. Tunable - raise it only alongside the parallelism
+              # envs below, since cargo defaults to one job per core and the limit has
+              # to stay above the resulting peak.
+              memory: "12Gi"
               cpu: "14"
           securityContext:
             privileged: true
@@ -88,6 +95,17 @@ spec:
           env:
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
+            # Caps Rust/make parallelism so peak RSS stays under the 12Gi limit:
+            # cargo defaults to one linker/rustc job per core, so on 14 CPUs a build
+            # multiplies per-job RSS by an order of magnitude and hits the cgroup
+            # ceiling (or the node) instead of finishing. These are the primary
+            # build-throughput knobs to tune - trade jobs for memory. Host-mode jobs
+            # inherit them from this process; docker-mode jobs get the same values
+            # from `runner.envs` in resources/configmap.yaml (kept in sync).
+            - name: CARGO_BUILD_JOBS
+              value: "4"
+            - name: MAKEFLAGS
+              value: "-j4"
           volumeMounts:
             - name: ci-runner-data
               mountPath: /workspace
@@ -171,6 +189,12 @@ spec:
               memory: "256Mi"
               cpu: "250m"
             limits:
+              # FOLLOW-UP: 8Gi is kept as-is for now because there is no usage data
+              # for this container's cgroup. Docker-mode jobs run as sibling containers
+              # under the runner's dockerd, so their memory is accounted in THIS
+              # container's cgroup, not the runner's. Once per-container peak RSS is
+              # measured, this is the next limit to cut - it is the second-largest
+              # memory limit in the pod.
               memory: "8Gi"
               cpu: "4"
           startupProbe:
@@ -342,6 +366,11 @@ spec:
           - 1001
         runAsGroup: 1001
         runAsUser: 1001
+      # CI is expendable batch work on the control-plane node. low-priority (value
+      # -1000, preemptionPolicy: Never) puts this pod at the FRONT of the eviction
+      # queue, so a memory burst kills the runner instead of the apiserver/etcd that
+      # had to be restarted after the last incident. Never preempts anything itself.
+      priorityClassName: low-priority
       volumes:
         - name: ci-runner-data
           persistentVolumeClaim:

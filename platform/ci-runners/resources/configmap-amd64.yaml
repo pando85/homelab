@@ -32,11 +32,21 @@ data:
       # No `file:` key - the v15 `server.connections` block above replaces the
       # deprecated `.runner` registration file.
       # Execute how many tasks concurrently at the same time.
-      capacity: 5
-      # Extra environment variables to run jobs.
-      envs: {}
-        # A_TEST_ENV_NAME_1: a_test_env_value_1
-        # A_TEST_ENV_NAME_2: a_test_env_value_2
+      # 5 -> 2: this node has only ~12.53 GiB allocatable, so five concurrent jobs
+      # against the runner's 12Gi limit guaranteed node-wide thrash as soon as builds
+      # got big - a per-container limit cannot bound the aggregate. Two concurrent
+      # jobs keep the pod's combined peak inside what the node can absorb. Raise only
+      # with measured per-job peaks and CARGO_BUILD_JOBS/MAKEFLAGS caps in view.
+      capacity: 2
+      # Extra environment variables to run jobs. These are injected into BOTH
+      # host-mode and docker-mode jobs. The StatefulSet's `env:` block only reaches
+      # the runner process itself (host-mode jobs inherit from it); docker-mode jobs
+      # run in separate containers spawned by dockerd and get their environment from
+      # this `envs:` map instead. Keeping them in sync ensures the parallelism caps
+      # apply uniformly.
+      envs:
+        CARGO_BUILD_JOBS: "4"
+        MAKEFLAGS: "-j4"
       # Extra environment variables to run jobs from a file.
       # It will be ignored if it's empty or the file doesn't exist.
       env_file: .env
