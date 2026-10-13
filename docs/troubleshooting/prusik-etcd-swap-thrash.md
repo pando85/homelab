@@ -237,7 +237,8 @@ copy schedule.
 | File | Change |
 |---|---|
 | `metal/inventory/host_vars/prusik.yml` | `eviction-hard=memory.available<300Mi` → **`<1Gi`**, plus `eviction-soft=memory.available<4Gi` and `eviction-soft-grace-period=1m`. 300Mi fired far too late on a 62 GiB host: the node stalls near 3 GiB, so by the time kubelet acted the etcd freeze had already happened. |
-| `metal/roles/k3s/templates/k3s.service.j2` | added **`MemoryLow=6G`** to the k3s unit, gated on the `kube_control_plane` group so agent nodes are unaffected. **Caveat:** newly verified that `system.slice` has `memory.low=0` and `k3s.service` has `memory.low=0` (before this change), and there is no `memory_recursiveprot` set. The 6G service-level proposal effective protection is **uncertain** without ancestor budget configured and validated. `MemoryLow` without ancestor protection does not guarantee "take pods first" — it is a preference that needs the ancestor cgroup hierarchy to be configured. **Follow-up:** validate ancestor budget (system.slice, init.scope) and enable recursive protection if needed. Current change is staged but not yet effective. |
+| `metal/roles/k3s/templates/k3s.service.j2` | added **`MemoryLow=6G`** to the k3s unit, gated on the `kube_control_plane` group so agent nodes are unaffected. Value shared via `k3s_control_plane_memory_low` default. |
+| `metal/roles/k3s/templates/memory-protection.conf.j2` | new drop-in template for `system.slice`: `[Slice] MemoryLow=6G`. Kernel cgroup v2 requires ancestor `memory.low` ≥ children's effective low; without this parent budget the k3s service `MemoryLow` is capped at the parent's value (0). Deployed to `/etc/systemd/system/system.slice.d/memory-protection.conf`, control-plane only. |
 
 ### Tier 1 — detect it next time
 
@@ -278,14 +279,18 @@ nothing. Do not re-enable it expecting coverage.
   yet applied** to host
 - ❌ `metal/roles/k3s/templates/k3s.service.j2` — `MemoryLow=6G` configured in git but **not yet
   applied** to host (current `systemctl show k3s -p MemoryLow` returns 0)
-- ❌ Ancestor cgroup budget — `system.slice` and `init.scope` still have `memory.low=0`, no
-  `memory_recursiveprot` set. The 6G service-level protection is **not verified effective** without
-  parent budget. See Deferred §3.
+- ❌ `metal/roles/k3s/templates/memory-protection.conf.j2` — system.slice parent budget drop-in
+  configured in git but **not yet applied** to host (current
+  `cat /sys/fs/cgroup/system.slice/memory.low` returns 0)
 
 **Before claiming the incident is cured:**
 
 - [ ] Apply metal changes during scheduled maintenance: `cd /home/agil/homelab/metal && ANSIBLE_EXTRA_ARGS="-t k3s --limit prusik" make cluster` (USER ONLY, ~30-75s possible API outage)
-- [ ] Validate ancestor cgroup budget and enable recursive protection if needed
+- [ ] After apply, verify parent and child cgroup budgets:
+  ```bash
+  # Expect: 6442450944 (6G) for system.slice, 6442450944 for k3s.service
+  ssh prusik 'cat /sys/fs/cgroup/system.slice/memory.low /sys/fs/cgroup/system.slice/k3s.service/memory.low'
+  ```
 - [ ] Watch CI + backup windows for sustained peak behavior (no lease-loss exits, etcd latency <100ms p99, memory-PSI ≈0, swap rate ≈0)
 - [ ] Verify calypso gVisor runner bounds in `multivara/gitops` repo
 
@@ -304,11 +309,13 @@ Ordered by how much of the failure mode each one removes.
    0.29 GiB and they take gigabytes. They drove the second failure of 2026-10-13. The existing
    ResourceQuota is CI-only; calypso is outside this repo's scope, so the second failure mode
    remains unresolved until the other repo is updated.
-3. **Validate MemoryLow ancestor protection** — the 6G `MemoryLow` on `k3s.service` is staged but
-   not yet effective without ancestor cgroup budget. Verify `system.slice` and `init.scope` have
-   appropriate `memory.low` values, and enable `memory_recursiveprot` if needed so the protection
-   propagates correctly. Without this, the service-level preference may not provide the intended
-   "pods before control plane" behaviour.
+3. **Validate MemoryLow effectiveness after apply** — the 6G `MemoryLow` on `k3s.service` and the
+   matching 6G on `system.slice` (via drop-in) are staged but **not yet applied** to prusik. After
+   the user applies the metal changes, verify the cgroup values are set (see validation checklist
+   above). The cgroup chain is `-.slice → system.slice → k3s.service`; `init.scope` is a sibling of
+   `system.slice` under the root slice, not an ancestor. Whether this actually prevents the etcd
+   freeze under CI pressure is **not yet validated** — monitor during the next pressure window.
+   Calypso gVisor runners remain uncovered (see Deferred §2).
 4. **gVisor-aware memory recording rule + dashboard**, so CI stops being under-reported by ~50% —
    until then attribution on prusik is wrong in a way that looks like "nothing was using that memory".
 5. **Raise `zfs_arc_max` above 5 GiB** (`planning/k8s-amd64-1-node-addition.md` TODO-6.6) — **only
