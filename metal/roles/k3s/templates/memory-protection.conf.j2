@@ -1,0 +1,6 @@
+# Managed by ansible: metal/roles/k3s/templates/memory-protection.conf.j2
+# Parent cgroup budget so k3s.service MemoryLow is effective (kernel requires
+# ancestor memory.low >= sum of children). daemon-reload applies this to the
+# active system.slice without restarting it.
+[Slice]
+MemoryLow={{ k3s_control_plane_memory_low }}

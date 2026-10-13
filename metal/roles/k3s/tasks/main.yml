@@ -83,6 +83,29 @@
       dest: "{{ k3s_service_file }}"
   notify: Restart k3s
 
+- name: Configure system.slice memory budget for k3s protection
+  # Kernel cgroup v2 requires ancestor memory.low >= children's effective low.
+  # Drop-in on system.slice gives the parent budget; daemon-reload (in the Restart
+  # k3s handler) applies it to the active slice without restarting system.slice.
+  when: "'kube_control_plane' in group_names"
+  block:
+    - name: Ensure system.slice drop-in directory exists
+      file:
+        path: /etc/systemd/system/system.slice.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy system.slice memory protection drop-in
+      template:
+        src: memory-protection.conf.j2
+        dest: /etc/systemd/system/system.slice.d/memory-protection.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart k3s
+
 - name: Create containerd config directory
   file:
     path: "{{ k3s_containerd_config_dir }}"
