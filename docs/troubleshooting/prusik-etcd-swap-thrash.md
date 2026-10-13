@@ -207,10 +207,13 @@ They will flip again at the next reboot. Therefore:
 
 ## What we changed
 
-**Status: PARTIALLY DEPLOYED, HOST PENDING.** GitOps changes committed and synced (PriorityClass
-e61bce19, CI dbb28f62, Velero 78dc33a1, monitoring 48eba216). Metal changes committed (85c1c518)
-but **NOT YET APPLIED** to prusik — requires user-initiated maintenance window. See validation
-status checklist below.
+**Status: DEPLOYED AND VERIFIED APPLIED — NOT YET PROVEN CURED.** GitOps changes committed and
+synced (PriorityClass e61bce19, CI dbb28f62, Velero 78dc33a1, monitoring 48eba216). Metal changes
+committed (85c1c518, b7e1df17) and **applied to prusik** on 2026-10-13 in a maintenance window
+(`ANSIBLE_EXTRA_ARGS="-t k3s --limit prusik" make cluster`). That apply proves the configuration
+landed and that k3s came back cleanly — it does **not** prove the incident is cured, which needs
+observation across a representative CI burst **and** a backup window. See *Host apply — verified
+state* and the validation status checklist below.
 
 ### Tier 0 — bound CI so it dies before the control plane does
 
@@ -259,6 +262,39 @@ here. They are gated on `kubeEtcd.enabled`, which is `false` in `system/monitori
 (etcd runs as a systemd process, not a mirrored pod), so `defaultRules.rules.etcd: true` renders
 nothing. Do not re-enable it expecting coverage.
 
+### Host apply — verified state (2026-10-13)
+
+Applied on prusik with `cd metal && ANSIBLE_EXTRA_ARGS="-t k3s --limit prusik" make cluster`
+(config-only, `k3s_version` unchanged, so nothing was re-downloaded or re-versioned). k3s restarted
+**once** — ~8s of downtime at ~12:28 UTC, far inside the 30–75s cycles the incident produced — with a
+clean recovery and no crash loop. The startup defrag that restart triggered took **106 MB → 68 MB in
+~297 ms**, where the same step cost 0.5–4.06s on a saturated device during the incident.
+
+| Check | Verified value | Why it matters |
+|---|---|---|
+| `system.slice` `memory.low` | `6442450944` (6 GiB) | the ancestor budget exists, so the child's `MemoryLow` is **effective** instead of capped to the parent's 0 |
+| `k3s.service` `memory.low` | `6442450944` (6 GiB) | from `MemoryLow=6G`; the slice value comes from the drop-in `/etc/systemd/system/system.slice.d/memory-protection.conf` |
+| kubelet `eviction-hard` | `memory.available<1Gi`, `nodefs.available<10%` | live on the node, was `300Mi` |
+| kubelet `eviction-soft` | `memory.available<4Gi`, grace `memory.available=1m` | kubelet acts before the node reaches the ~3 GiB stall point |
+| kube-reserved / system-reserved | 1 GiB / 10 GiB | recorded for the eviction arithmetic |
+| etcd WAL fsync p99 | ~2–3 ms | incident peak 1.92s |
+| etcd backend commit p99 | ~1.9 ms | incident peak 3.71s |
+| etcd `has_leader` / DB size | 1 / ~76 MB | single member kept leadership across the restart |
+| Host `MemAvailable` | ~17.7 GiB (29%) | incident collapse was to ~3 GiB |
+| Root-NVMe avg queue (SanDisk, resolved by model) | ~0.03 | incident peaks were in the hundreds |
+
+**Alerts validated against a real event:** during the restart `EtcdTargetDown` went pending for
+exactly one scrape — sub-minute, i.e. under its `for: 1m`, so it did not page — and
+`K3sEtcdRestarted` fired as designed and stays firing ~1h after any restart before self-clearing. All
+11 rules loaded with valid input series, so none of them is silently empty.
+
+**Two caveats about those readings.** The residual **~4.8 GiB of swap occupancy** alongside
+`pswpin`/`pswpout` ≈ 0 and memory-PSI ≈ 0 is *left over from the earlier incident*, not active
+thrashing — reserved swap only drains as pages are touched or the process restarts. And an
+after-restart, light-load snapshot of etcd latency is not the success criterion: criterion 2 of
+[Prevention and success criteria](#prevention-and-success-criteria) is sub-100ms p99 **during a CI
+burst and a backup window**, which this apply did not exercise.
+
 ### Validation status checklist
 
 **GitOps (committed and synced via ArgoCD):**
@@ -273,25 +309,32 @@ nothing. Do not re-enable it expecting coverage.
 - ⚠️ Monitoring ArgoCD shows pre-existing OutOfSync on KanidmGroup `grafana-mcp-users` — unrelated
   to these rules, does not affect alert functionality
 
-**Metal (committed but NOT applied to prusik):**
+**Metal (committed and APPLIED to prusik, 2026-10-13):**
 
-- ❌ `metal/inventory/host_vars/prusik.yml` — eviction-soft thresholds configured in git but **not
-  yet applied** to host
-- ❌ `metal/roles/k3s/templates/k3s.service.j2` — `MemoryLow=6G` configured in git but **not yet
-  applied** to host (current `systemctl show k3s -p MemoryLow` returns 0)
-- ❌ `metal/roles/k3s/templates/memory-protection.conf.j2` — system.slice parent budget drop-in
-  configured in git but **not yet applied** to host (current
-  `cat /sys/fs/cgroup/system.slice/memory.low` returns 0)
+- ✅ `metal/inventory/host_vars/prusik.yml` — eviction-hard `memory.available<1Gi,nodefs.available<10%`,
+  eviction-soft `memory.available<4Gi` with grace `memory.available=1m`, kube-reserved 1Gi /
+  system-reserved 10Gi, all live on kubelet
+- ✅ `metal/roles/k3s/templates/k3s.service.j2` — `MemoryLow=6G` applied: `k3s.service`
+  `memory.low` = `6442450944`
+- ✅ `metal/roles/k3s/templates/memory-protection.conf.j2` — drop-in present at
+  `/etc/systemd/system/system.slice.d/memory-protection.conf`: `system.slice` `memory.low` =
+  `6442450944`, so the ancestor budget exists and the protection is **effective**, not capped to 0
+- ✅ k3s restarted once and recovered cleanly (~8s, ~12:28 UTC), etcd healthy afterwards — values in
+  *Host apply — verified state* above
 
-**Before claiming the incident is cured:**
+Re-verify the protection chain at any time:
 
-- [ ] Apply metal changes during scheduled maintenance: `cd /home/agil/homelab/metal && ANSIBLE_EXTRA_ARGS="-t k3s --limit prusik" make cluster` (USER ONLY, ~30-75s possible API outage)
-- [ ] After apply, verify parent and child cgroup budgets:
-  ```bash
-  # Expect: 6442450944 (6G) for system.slice, 6442450944 for k3s.service
-  ssh prusik 'cat /sys/fs/cgroup/system.slice/memory.low /sys/fs/cgroup/system.slice/k3s.service/memory.low'
-  ```
-- [ ] Watch CI + backup windows for sustained peak behavior (no lease-loss exits, etcd latency <100ms p99, memory-PSI ≈0, swap rate ≈0)
+```bash
+ssh prusik 'cat /sys/fs/cgroup/system.slice/memory.low /sys/fs/cgroup/system.slice/k3s.service/memory.low'
+# Expect 6442450944 on both lines. A 0 on the first line means the ancestor budget is gone and the
+# service-level MemoryLow is silently capped to 0.
+```
+
+**Still pending before claiming the incident is cured:**
+
+- [ ] Observe a representative CI burst **and** a Velero backup window: no lease-loss exits, etcd
+      latency <100ms p99, memory-PSI ≈0, swap rate ≈0. The 2026-10-13 apply verified the config landed
+      and k3s recovered cleanly — it did not exercise behaviour under load
 - [ ] Verify calypso gVisor runner bounds in `multivara/gitops` repo
 
 **Do not claim "fixed" or "resolved"** until sustained peak test passes. The calypso second-failure
@@ -309,13 +352,13 @@ Ordered by how much of the failure mode each one removes.
    0.29 GiB and they take gigabytes. They drove the second failure of 2026-10-13. The existing
    ResourceQuota is CI-only; calypso is outside this repo's scope, so the second failure mode
    remains unresolved until the other repo is updated.
-3. **Validate MemoryLow effectiveness after apply** — the 6G `MemoryLow` on `k3s.service` and the
-   matching 6G on `system.slice` (via drop-in) are staged but **not yet applied** to prusik. After
-   the user applies the metal changes, verify the cgroup values are set (see validation checklist
-   above). The cgroup chain is `-.slice → system.slice → k3s.service`; `init.scope` is a sibling of
-   `system.slice` under the root slice, not an ancestor. Whether this actually prevents the etcd
-   freeze under CI pressure is **not yet validated** — monitor during the next pressure window.
-   Calypso gVisor runners remain uncovered (see Deferred §2).
+3. **Validate MemoryLow effectiveness under load** — the 6G `MemoryLow` on `k3s.service` and the
+   matching 6G on `system.slice` (via drop-in) are now **applied and verified** on prusik
+   (`6442450944` in both cgroups), so the ancestor budget exists and the child's protection is not
+   capped to 0. The cgroup chain is `-.slice → system.slice → k3s.service`; `init.scope` is a sibling of
+   `system.slice` under the root slice, not an ancestor. What is still unvalidated is behaviour:
+   whether this actually prevents the etcd freeze under CI pressure — monitor during the next
+   pressure window. Calypso gVisor runners remain uncovered (see Deferred §2).
 4. **gVisor-aware memory recording rule + dashboard**, so CI stops being under-reported by ~50% —
    until then attribution on prusik is wrong in a way that looks like "nothing was using that memory".
 5. **Raise `zfs_arc_max` above 5 GiB** (`planning/k8s-amd64-1-node-addition.md` TODO-6.6) — **only
@@ -348,8 +391,11 @@ Everything below is **read-only**. SSH commands on prusik are for inspection onl
 (`AGENTS.md`: no ad-hoc mutation on a remote host); if a command needs root, it is marked `[root]`
 and it only reads. All `kubectl` commands use `--context=grigri` (the kustomize local context can
 include other contexts). Do not escalate to local privileged commands; do not execute mutating
-`kubectl` commands. If a `-t k3s` maintenance command is present, it is clearly **NOT agent-allowed** —
-the user must run it manually.
+`kubectl` commands. The one mutating command this doc names — a **scoped, committed, config-only**
+`ANSIBLE_EXTRA_ARGS="-t k3s --limit <node>" make cluster` — is agent-allowed per `AGENTS.md`, and only
+in that form: an unscoped or all-node `make cluster`, `-t k3s` **without** `--limit`, and any
+`k3s_version` bump remain prohibited. It restarts k3s on the targeted node (brief API downtime on the
+sole control plane), so it is a maintenance action, not part of this read-only investigation path.
 
 Resolve the root device first — see the device-instability section. Use `DEVICE` below for
 "whatever `node_disk_info`/`lsblk` says the SanDisk Extreme 500GB is today".

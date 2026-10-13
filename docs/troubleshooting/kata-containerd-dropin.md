@@ -38,10 +38,18 @@ And the drop-in directory must exist on the node before kata-deploy starts.
 
 ### Apply
 
+Scope the run to a single node — this is per-node config, so repeat it once per amd64 node that
+needs the drop-in:
+
 ```bash
-cd metal && ANSIBLE_EXTRA_ARGS="-t k3s" make cluster
+cd metal && ANSIBLE_EXTRA_ARGS="-t k3s --limit <node>" make cluster
 ```
 
-This re-runs the k3s Ansible role which updates the containerd template and creates the drop-in
-directory. After k3s restarts, kata-deploy will pass its validation check and write runtime configs
-into the drop-in directory.
+This re-runs the k3s Ansible role on the targeted node, which updates the containerd template and
+creates the drop-in directory. After k3s restarts, kata-deploy will pass its validation check and
+write runtime configs into the drop-in directory.
+
+Agents may run exactly this scoped form when the change is committed and **config-only** (no
+`k3s_version` bump) — see `AGENTS.md`. The role restarts k3s on the targeted node, so on the sole
+control-plane node (`prusik`) expect brief API downtime. An unscoped or all-node `-t k3s` run is
+human-only.
