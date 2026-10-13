@@ -52,12 +52,16 @@ curl -sIL https://<domain> | head -10
 
 **For Ansible-managed components:**
 ```bash
-# Run the specific Ansible tag
-cd metal && ANSIBLE_EXTRA_ARGS="-t <tag>" make cluster
+# Run the specific Ansible tag, scoped to the node(s) that need it
+cd metal && ANSIBLE_EXTRA_ARGS="-t <tag> --limit <node>" make cluster
 
 # Verify on nodes
 ssh <node> "<command-to-check-version>"
 ```
+
+Never drop `--limit`: an unscoped `make cluster` and `-t k3s` without a limit are on the AGENTS.md
+never-run list. For the `k3s` role, agents may apply a committed, **config-only** change this way;
+a `k3s_version` bump stays human-only (see `docs/user-guide/kubernetes-upgrade.md`).
 
 **For K3s upgrades:**
 ```bash

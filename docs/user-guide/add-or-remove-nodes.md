@@ -127,7 +127,8 @@ the playbook path (`metal/Makefile:10,43-82`), so the last `--limit` wins.
 # 1. OS preparation (scoped to the new node)
 cd metal && ANSIBLE_EXTRA_ARGS="--limit <node>" make prepare
 
-# 2. Join the cluster (HUMAN ONLY — make cluster is on the AGENTS.md never-run list)
+# 2. Join the cluster (HUMAN ONLY — an untagged make cluster is on the AGENTS.md never-run list;
+#    agents may run only a committed, config-only "-t k3s --limit <node>" apply)
 cd metal && ANSIBLE_EXTRA_ARGS="--limit <node>" make cluster
 ```
 

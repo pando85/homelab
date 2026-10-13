@@ -91,16 +91,30 @@ tree.
   `helm template`, `helm lint`, `helm dependency build`, `pre-commit run`
 - **Narrowly scoped `metal/` Ansible** for config that is already committed, using explicit
   `--tags` and `--limit`. Example: `cd metal && ANSIBLE_EXTRA_ARGS="-t zfs-config --limit prusik" make prepare`
+- **Scoped `k3s` role config apply** for an already-committed, **config-only** change:
+  `cd metal && ANSIBLE_EXTRA_ARGS="-t k3s --limit <node>" make cluster`. This re-templates
+  `/etc/rancher/k3s/config.yaml` and `k3s.service` and restarts k3s on the targeted node only if the
+  committed config changed (idempotent — the binary install is gated on `/usr/local/bin/k3s` being
+  absent, so nothing is re-downloaded or re-versioned while `k3s_version` is unchanged). On the sole
+  control-plane node (`prusik`) this causes brief (~30–75s) API downtime — expected for a scoped
+  config apply. Requires: change committed first, config-only (no `k3s_version` bump), explicit
+  `--limit`
 - ArgoCD sync of an already-committed and pushed change
 
-Report the command run and its outcome. Prefer the narrowest tag and limit that does the job.
+Report the command run and its outcome. Prefer the narrowest tag and limit that does the job. Choose
+the target by playbook: `prepare.yml` roles (`prepare`, `setup` incl. `zfs-config`, `swap`,
+`nvidia-container-runtime`) → `make prepare`; `cluster.yml` roles (`ntp`, `gvisor`, `k3s`) →
+`make cluster`. Always with `-t <tag> --limit <node>`.
 
 ### Never run
 
 - **`kubectl apply/delete/edit/patch`** on cluster resources — ArgoCD `selfHeal: true` with real-time
   watches reverts these almost instantly, so they are futile, not merely risky
-- **Node lifecycle / high blast radius:** `make cluster`, `make bootstrap`, `make dev`,
-  `make uninstall-k3s`, anything with `-t k3s`. These can take down the sole control-plane node
+- **Node lifecycle / high blast radius:** `make bootstrap`, `make dev`, `make uninstall-k3s`, an
+  unscoped or all-node `make cluster` (a node join), and `-t k3s` **without** `--limit`. Also never
+  a k3s **version** bump or upgrade through Ansible (changing `k3s_version`, or any run that
+  re-downloads the binary). These can take down the sole control-plane node. Exception: a scoped,
+  committed, config-only `-t k3s --limit <node>` apply — see "Agents may run"
 - **Anything data-destroying:** PVC/PV deletion, `zpool destroy`, `zfs destroy`, pool re-creation,
   disk formatting (`prepare_additional_disks_force_format`)
 - Untagged or unlimited `make prepare` / `ansible-playbook` runs — always scope them

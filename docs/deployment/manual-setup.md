@@ -164,6 +164,8 @@ cd metal && ANSIBLE_EXTRA_ARGS="--limit <node>" make cluster
 
 !!! warning
 
-    `make cluster` is on the AGENTS.md never-run list. An agent must hand it to a human even when
-    scoped. With `--limit` the k3s role's `run_once` + `delegate_to: prusik` tasks are read-only
-    (`slurp`) and the kubeconfig write is `delegate_to: localhost`.
+    A node join — an untagged `make cluster`, even with `--limit` — stays human-only per the AGENTS.md
+    never-run list. Agents may run only a committed, **config-only** apply of the `k3s` role:
+    `ANSIBLE_EXTRA_ARGS="-t k3s --limit <node>" make cluster` (see AGENTS.md "Agents may run").
+    With `--limit` the k3s role's `run_once` + `delegate_to: prusik` tasks are read-only (`slurp`)
+    and the kubeconfig write is `delegate_to: localhost`.
