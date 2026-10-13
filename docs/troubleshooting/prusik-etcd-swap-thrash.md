@@ -108,18 +108,50 @@ Non-CI baseline on prusik is flat at **30–35 GiB** — every GiB of the collap
 
 ### The observability blind spot (why CI looked half its real size)
 
-The `container!=""` filter used nearly everywhere — and in kube-prometheus-stack's recording rule
-(`image!=""`) — **drops all gVisor sandbox series**, because those carry no `container` label.
+The `container!=""` filter used nearly everywhere — and the `image!=""` filter in
+kube-prometheus-stack's recording rule — **cannot see gVisor sandboxes**. A runsc pod exports
+only two series, both with an empty `container` label: the pod cgroup (no `image` label, so
+`image!=""` drops it) and the pause/sandbox child cgroup
+(`image="docker.io/rancher/mirrored-pause"`, so the chart rule keeps *only* that child). The
+workload container runs inside the sandbox VM and is never exported as its own cgroup, so there
+is no named series to fall back on.
+
+Original incident-window measurement (decimal GB, 10^9 bytes; convert to GiB by dividing by
+1.074):
 
 ```
 calypso working set, container!="POD":  3.96 GB (decimal, ~3.69 GiB)   (actual)
 calypso working set, container!="":     1.97 GB (decimal, ~1.83 GiB)   (what dashboards showed)
 ```
 
-CI memory was under-reported by ~50%. The values above are decimal GB (10^9 bytes) as reported by
-Prometheus; convert to GiB (2^30 bytes) by dividing by 1.074 if you need binary units. The fix is a gVisor-aware recording rule; **it is not yet
-implemented** (see Deferred). Until then, use the verified pod-aggregate query from the runbook for
-any attribution on prusik.
+The second line is the blind spot. Read the first line as an upper bound rather than the true pod
+total: `container!="POD"` keeps both the pod cgroup *and* its sandbox child, so it double counts
+(row 3 of the table below).
+
+Re-measured 2026-10-13 across the incident window (02:00–04:00Z, namespace `calypso-runners`,
+2 concurrent `autonomous-runner-*` pods on prusik). For that namespace the blind spot is worse
+than "half":
+
+| Query form | Result |
+|---|---|
+| per-container (`container!=""`) | **no series at all — 0 B**, while the pod cgroups held 4.20 GB mean / 7.27 GB peak |
+| chart rule `node_namespace_pod_container:container_memory_working_set_bytes` | 3.65 GB mean, and per sample anywhere from **0.30× to 1.53×** of the pod cgroup (mean 0.86×) — it reports the sandbox *child* cgroup, read at a different instant than its parent, so it skews both ways under a burst |
+| naive `sum(container_memory_working_set_bytes{container!="POD"})` | 18.83 GB at 03:07:30Z = pod cgroup + sandbox child added together, **2.3×** the real 8.13 GB |
+
+**FIXED (2026-10-13):** recording rule `node_namespace_pod:container_memory_working_set_bytes_incl_gvisor`
+in `system/monitoring/resources/gvisor-memory-recording-rules.yaml`. It selects the pod-level
+cgroup series (`container=""`, `id!~".*cri-containerd.*"`, `job="kubelet"`,
+`metrics_path="/metrics/cadvisor"`) and collapses the duplicates per pod with
+`max by (node, namespace, pod)`, so gVisor pods are included and a sum over the rule is safe.
+
+Per-pod memory attribution — dashboards and ad-hoc queries — should use that rule, or the
+equivalent `container=""` pod-level form in the runbook below, instead of `image!=""` /
+`container!=""`.
+
+Caveat: it is a **pod-level** series, so verify per pod and never add it to a named-container
+sum for the same pod — that is exactly the 2× error above. The two are alternatives, not
+additive: measured pod-level 3,693,756,416 B vs named-container sum 3,690,844,160 B in
+`monitoring` (1.0008×) and 169,762,816 B vs 167,165,952 B in `ci-runners` (1.0155×).
 
 ## Why snapshots are not the observed trigger
 
@@ -262,6 +294,12 @@ here. They are gated on `kubeEtcd.enabled`, which is `false` in `system/monitori
 (etcd runs as a systemd process, not a mirrored pod), so `defaultRules.rules.etcd: true` renders
 nothing. Do not re-enable it expecting coverage.
 
+`system/monitoring/resources/gvisor-memory-recording-rules.yaml` (new, wired in
+`system/monitoring/kustomization.yaml`) is the other half of detecting it next time: the recording
+rule `node_namespace_pod:container_memory_working_set_bytes_incl_gvisor` is what makes the gVisor
+runners visible to per-pod attribution at all (see
+[The observability blind spot](#the-observability-blind-spot-why-ci-looked-half-its-real-size)).
+
 ### Host apply — verified state (2026-10-13)
 
 Applied on prusik with `cd metal && ANSIBLE_EXTRA_ARGS="-t k3s --limit prusik" make cluster`
@@ -359,8 +397,11 @@ Ordered by how much of the failure mode each one removes.
    `system.slice` under the root slice, not an ancestor. What is still unvalidated is behaviour:
    whether this actually prevents the etcd freeze under CI pressure — monitor during the next
    pressure window. Calypso gVisor runners remain uncovered (see Deferred §2).
-4. **gVisor-aware memory recording rule + dashboard**, so CI stops being under-reported by ~50% —
-   until then attribution on prusik is wrong in a way that looks like "nothing was using that memory".
+4. **Attribution dashboard on top of the gVisor-aware recording rule** — the rule itself is
+   **done** (2026-10-13): `node_namespace_pod:container_memory_working_set_bytes_incl_gvisor` in
+   `system/monitoring/resources/gvisor-memory-recording-rules.yaml`, so CI memory is no longer
+   invisible to per-pod queries. What remains is a dashboard that consumes it, replacing panels
+   built on `image!=""` / `container!=""`.
 5. **Raise `zfs_arc_max` above 5 GiB** (`planning/k8s-amd64-1-node-addition.md` TODO-6.6) — **only
    after CI leaves.** Raising the cap while `MemAvailable` bottoms out at ~3 GiB trades one stall for
    a worse one. See `docs/conventions/prusik-fast-storage-tier.md`.
@@ -640,5 +681,7 @@ memory/swap floors after the Tier 0/1 changes land rather than reusing these num
 - gVisor runner ownership: `planning/odroid-decommission.md`
 - Alerts: `system/monitoring/resources/etcd-host-memory-rules.yaml` (each alert's annotation links
   here), scrape config `system/monitoring/resources/etcd-scrape-config.yaml`
+- gVisor-inclusive per-pod memory: recording rule
+  `system/monitoring/resources/gvisor-memory-recording-rules.yaml`
 - Hardware and device mapping: `docs/hardware/prusik.md`
 - Writing docs like this one: `docs/conventions/documenting-learnings.md`

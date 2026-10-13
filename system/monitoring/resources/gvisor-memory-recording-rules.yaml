@@ -1,0 +1,69 @@
+# Per-pod memory working set that INCLUDES gVisor (runsc) sandboxes.
+#
+# Why this exists: gVisor pods are invisible to the memory queries everyone uses.
+# cAdvisor exports exactly two series per pod whose `container` label is empty:
+#   1. the pod cgroup itself - id="/kubepods.slice/.../kubepods-<qos>-pod<uid>.slice",
+#      and NO `image` label at all;
+#   2. the pause/sandbox child cgroup - id=".../cri-containerd-<cid>.scope", with
+#      image="docker.io/rancher/mirrored-pause".
+# A pod running under runsc has no other series: the workload container lives inside
+# the sandbox VM and is never exported as its own cgroup, so nothing carries a
+# container name. Consequences, both verified live on 2026-10-13:
+#   - every filter shaped like `container!=""` / `container!="POD"` reports NOTHING
+#     for those pods (not "less" - literally zero series);
+#   - kube-prometheus-stack's recording rule
+#     `node_namespace_pod_container:container_memory_working_set_bytes`, whose expr is
+#     `container_memory_working_set_bytes{image!="",job="kubelet",metrics_path="/metrics/cadvisor"} * on (cluster, namespace, pod) group_left (node) topk by (...) kube_pod_info{node!=""}`,
+#     drops series 1 (no image) and keeps only series 2, the sandbox CHILD - a value
+#     sampled at a different instant than its own parent, so it skews in both
+#     directions under load.
+# Measured over the 2026-10-13 prusik incident window (02:00-04:00Z, namespace
+# calypso-runners, 2 concurrent autonomous-runner pods):
+#   `container!=""` (what the dashboards show)  no series at all, 0 B, while the pod
+#                                               cgroups held 4.20 GB mean / 7.27 GB peak
+#   chart rule (via `image!=""`)                3.65 GB mean; per sample 0.30x to 1.53x
+#                                               of the pod cgroup (mean 0.86x)
+#   this rule (pod cgroup)                      4.20 GB mean, 8.13 GB at 03:07:30Z
+#                                               (4.62 GB + 3.50 GB across the two pods)
+# So CI memory in these windows was under-attributed to nothing at all through
+# `container!=""`, and mis-attributed by up to -70% / +53% through the chart rule.
+# Full context: docs/troubleshooting/prusik-etcd-swap-thrash.md
+#
+# Why this selector, and why `max`:
+#   - `container=""` selects the POD-level cgroup, which hierarchically already
+#     contains every container in the pod. Mixing it with the named-container series
+#     double counts: pod cgroups plus named containers summed to 7.38 GB in
+#     ns monitoring against 3.69 GB of real pod memory (exactly 2.0x).
+#   - `id!~".*cri-containerd.*"` drops the sandbox child so the recorded value is the
+#     authoritative parent total. Coverage is unchanged by this filter - pod counts
+#     with and without it were identical at three samples (240/240, 220/220,
+#     243/243 pods), so no pod loses its only series. If a future runtime ever stops
+#     exporting the pod cgroup, that pod disappears from this rule and the filter has
+#     to be relaxed to plain `container=""` (which then picks the sandbox, as now).
+#   - `max by`, never `sum by`: two series per pod carry `container=""` and pod churn
+#     leaves stale duplicates for the same (node, namespace, pod) - the same failure
+#     mode as the node-exporter duplicate-series pitfall in AGENTS.md. `max` collapses
+#     them to one correct value instead of inventing phantom memory.
+#   - runc cross-check that the pod-level value is NOT double counting, i.e. it
+#     matches the sum of that pod's named containers rather than being 2x:
+#       ns monitoring  3,693,756,416 B pod-level vs 3,690,844,160 B named-sum (1.0008x)
+#       ns ci-runners    169,762,816 B pod-level vs   167,165,952 B named-sum (1.0155x)
+#
+# Labels are deliberately minimal (node, namespace, pod) so the series drops into
+# per-pod attribution queries. Use EITHER this rule OR the named-container series per
+# panel - never add the two together.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: monitoring-prometheus-gvisor-memory.rules
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: gvisor-memory.rules
+      rules:
+        - record: node_namespace_pod:container_memory_working_set_bytes_incl_gvisor
+          expr: |
+            max by (node, namespace, pod) (
+              container_memory_working_set_bytes{job="kubelet", metrics_path="/metrics/cadvisor", container="", pod!="", id!~".*cri-containerd.*"}
+            )
