@@ -32,6 +32,7 @@ resources:
   - resources/alertmanager-secret.yaml
   - resources/alertmanager-telegram-template.yaml
   - resources/blackbox-exporter-dashboard-configmap.yaml
+  - resources/etcd-host-memory-rules.yaml
   - resources/etcd-scrape-config.yaml
   - resources/grafana-admin-secret.yaml
   - resources/kanidm-groups-grafana.yaml

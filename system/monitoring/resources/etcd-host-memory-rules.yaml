@@ -1,0 +1,290 @@
+# etcd disk-latency alerts and the host-side memory/swap conditions that cause
+# them on prusik (the single control-plane node).
+#
+# Mechanism, root-caused in docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md:
+# k3s runs etcd in-process on prusik, and both its WAL/DB (/var/lib/rancher/k3s) and
+# the 16 GiB /swapfile live on the OS disk - the SanDisk Extreme 500GB that holds the
+# root LV. That same disk is nvme0n1 today and was nvme1n1 during the September
+# incident, because prusik's NVMe kernel names are not stable across reboots (the
+# Oct 1/2 reboot swapped them). So nothing here selects a disk by kernel name;
+# PrusikRootDiskQueueHigh joins on the device model instead.
+#
+# Container limits (210 GiB summed against 62 GiB of RAM) drive MemAvailable to
+# single-digit gigabytes, page reclaim plus swap-in/out saturates the device queue
+# and etcd's fsync/commit latency follows it: WAL fsync p99 ~1.9s, backend commit
+# p99 ~3.7s, ReadIndex timeouts, lost leader election, k3s exit(1) and a 30-75s
+# API outage.
+#
+# So the alerts below come in pairs: the etcd metrics are the symptom that pages,
+# the node metrics are the cause that explains it. A WAL-fsync alert with no host
+# memory signal next to it means a failing device; with the host signal it means
+# the node is out of RAM and CI is the usual suspect.
+#
+# Labels: etcd metrics are scraped by resources/etcd-scrape-config.yaml as
+# job="etcd", instance="prusik.grigri"; node-exporter series for the same host use
+# instance="prusik".
+#
+# Intentionally NOT alerted on: node_vmstat_pgscan_direct / node_vmstat_pgscan_kswapd.
+# Both were confirmed absent from prusik's node-exporter, so a rule on them would
+# sit silently empty forever. Every metric name used below was checked against the
+# live Prometheus on 2026-10-13 (job="etcd" and instance="prusik"), including
+# node_disk_info's device/model mapping, and each expression was run as an instant
+# query to confirm it parses and returns the expected series.
+#
+# Full runbook: docs/troubleshooting/prusik-etcd-swap-thrash.md
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: monitoring-prometheus-etcd-host-memory.rules
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: prusik-etcd-host-memory.rules
+      rules:
+        # Availability first: if the scrape target is gone the latency rules below
+        # have no data, so they cannot report anything. k3s exiting (the incident's
+        # terminal step) drops :2381 with it, making this the fastest signal.
+        - alert: EtcdTargetDown
+          annotations:
+            summary: etcd metrics target is down ({{ $labels.instance }})
+            description: |
+              Prometheus cannot scrape the k3s embedded etcd at {{ $labels.instance }}:2381
+              (job="{{ $labels.job }}"). k3s serves etcd metrics in-process, so this
+              usually means k3s itself exited or is restarting - commonly after losing
+              etcd leader election during host memory-reclaim/swap pressure on the
+              shared root NVMe. The API server is likely unavailable for 30-75s.
+              Check `systemctl status k3s` on prusik and the k3s journal for
+              "ReadIndex" / "leaderelection lost".
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: up{job="etcd"} == 0
+          for: 1m
+          labels:
+            severity: critical
+        # process_start_time_seconds only changes when the process restarts, so
+        # `changes() > 0` over 1h is a restart detector rather than a rate. The
+        # value stays constant between restarts, which is why it can be reported
+        # with for: 0m - it fires for the whole hour after a restart on purpose, so
+        # a blip inside a Velero backup window is still caught by whoever is awake.
+        # k3s runs etcd in-process, so this series is the k3s process start time: a
+        # restart here is a k3s restart. Verified present on job="etcd" (2026-10-13).
+        - alert: K3sEtcdRestarted
+          annotations:
+            summary: k3s embedded etcd restarted in the last hour ({{ $labels.instance }})
+            description: |
+              The process start time exposed by job="{{ $labels.job }}" on
+              {{ $labels.instance }} changed within the last hour, i.e. k3s (which runs
+              etcd in-process) restarted. k3s self-exits when embedded etcd loses leader
+              election, and the documented trigger is disk latency from host
+              memory-reclaim/swap storms on the shared root NVMe - not an etcd bug.
+              Correlate with PrusikMemoryAvailableLow / PrusikSwapThrashing /
+              PrusikRootDiskQueueHigh for the same window, and verify any Velero backup
+              that was running then did not stay InProgress.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: changes(process_start_time_seconds{job="etcd"}[1h]) > 0
+          for: 0m
+          labels:
+            severity: warning
+        # WAL fsync is the tightest disk-latency signal etcd exposes: every raft
+        # entry must hit the WAL before it is acknowledged, so a reclaim storm that
+        # queues behind swap I/O shows up here seconds before leader election fails.
+        # 0.25s is well below etcd's own 1s warning heuristic; the incident reached
+        # ~1.9s p99. Aggregating with `by (job, instance, le)` (rather than `by (le)`)
+        # keeps the target identity on the alert, which Alertmanager groups on `job`
+        # and the description above renders.
+        - alert: EtcdWALFsyncSlow
+          annotations:
+            summary: etcd WAL fsync p99 is slow ({{ $labels.instance }})
+            description: |
+              99th percentile etcd WAL fsync duration is {{ $value }}s on
+              {{ $labels.instance }} (job="{{ $labels.job }}", k3s on prusik) over 5m,
+              above the 0.25s budget. The WAL is fsynced to the SanDisk root NVMe - the
+              same disk that holds /swapfile - so this is normally disk contention
+              caused by host memory reclaim and swap-in/out rather than a
+              failing device. Sustained values past ~1s precede etcd ReadIndex timeouts
+              and k3s exiting.
+              Check PrusikMemoryAvailableLow, PrusikMemoryPSIHigh, PrusikSwapThrashing and
+              PrusikRootDiskQueueHigh for the same window.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: |
+            histogram_quantile(0.99, sum by (job, instance, le) (
+              rate(etcd_disk_wal_fsync_duration_seconds_bucket{job="etcd"}[5m])
+            )) > 0.25
+          for: 5m
+          labels:
+            severity: warning
+        - alert: EtcdWALFsyncCritical
+          annotations:
+            summary: etcd WAL fsync p99 is critically slow ({{ $labels.instance }})
+            description: |
+              99th percentile etcd WAL fsync duration is {{ $value }}s on
+              {{ $labels.instance }} (job="{{ $labels.job }}"), above 1s for 2m. At this
+              point embedded etcd is within one lease timeout of losing leader election,
+              which takes k3s and the API server down with it. This is host
+              memory-reclaim/swap I/O queueing ahead of etcd on the shared root NVMe.
+              Relieve memory pressure on prusik now (stop or move the CI runner) before
+              it becomes an outage; a SLOG/ZIL will not help, Postgres runs
+              synchronous_commit=off and the bottleneck is RAM.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: |
+            histogram_quantile(0.99, sum by (job, instance, le) (
+              rate(etcd_disk_wal_fsync_duration_seconds_bucket{job="etcd"}[5m])
+            )) > 1
+          for: 2m
+          labels:
+            severity: critical
+        # Backend commits are the other half of etcd's write path (applied raft
+        # entries into the bbolt DB). They usually degrade together with WAL fsync;
+        # commit-only latency with a healthy WAL points at defrag/db size instead.
+        - alert: EtcdBackendCommitSlow
+          annotations:
+            summary: etcd backend commit p99 is slow ({{ $labels.instance }})
+            description: |
+              99th percentile etcd backend commit duration is {{ $value }}s on
+              {{ $labels.instance }} (job="{{ $labels.job }}") over 5m, above 0.25s.
+              Writes into the bbolt backend are queueing on the prusik root NVMe, which
+              is shared with /swapfile and contended by host memory reclaim/swap I/O.
+              Every API write (and therefore every kube-apiserver mutation) waits on
+              this commit.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: |
+            histogram_quantile(0.99, sum by (job, instance, le) (
+              rate(etcd_disk_backend_commit_duration_seconds_bucket{job="etcd"}[5m])
+            )) > 0.25
+          for: 5m
+          labels:
+            severity: warning
+        - alert: EtcdBackendCommitCritical
+          annotations:
+            summary: etcd backend commit p99 is critically slow ({{ $labels.instance }})
+            description: |
+              99th percentile etcd backend commit duration is {{ $value }}s on
+              {{ $labels.instance }} (job="{{ $labels.job }}"), above 1s for 2m (the
+              incident peaked near 3.7s). etcd is applying writes far slower than the
+              raft proposal rate, which is what turns into ReadIndex timeouts and a k3s
+              self-exit. Caused by host memory-reclaim/swap pressure on the shared root
+              NVMe, not by etcd itself.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: |
+            histogram_quantile(0.99, sum by (job, instance, le) (
+              rate(etcd_disk_backend_commit_duration_seconds_bucket{job="etcd"}[5m])
+            )) > 1
+          for: 2m
+          labels:
+            severity: critical
+        # ---- Host-side causes on prusik (these explain the etcd alerts above) ----
+        # Container limits on prusik sum to 210 GiB against 62 GiB of RAM, so the
+        # node reaches this state from ordinary scheduling, and the 7d minimum
+        # MemAvailable measured during the analysis was 1.97 GiB (~3.2%).
+        - alert: PrusikMemoryAvailableLow
+          annotations:
+            summary: prusik is low on available memory
+            description: |
+              MemAvailable on prusik is {{ $value | humanizePercentage }} of MemTotal for
+              5m. Below this line the kernel starts reclaiming aggressively and, with the
+              16 GiB swapfile in use, the page cache moves to and from the root NVMe -
+              the same device as the k3s etcd WAL. Expect etcd WAL fsync and backend
+              commit latency to follow.
+              Usual cause: CI builds (ci-runner-0 alone peaks near 17.4 GiB) landing on a
+              node already at its limits. Reduce pressure by moving CI off prusik; do not
+              buy SSDs first - RAM beats SSD by about 1000x here.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: |
+            node_memory_MemAvailable_bytes{instance="prusik"}
+              / node_memory_MemTotal_bytes{instance="prusik"} < 0.08
+          for: 5m
+          labels:
+            severity: warning
+        - alert: PrusikMemoryAvailableCritical
+          annotations:
+            summary: prusik is critically low on available memory
+            description: |
+              MemAvailable on prusik is {{ $value | humanizePercentage }} of MemTotal for
+              2m. Reclaim plus swap I/O is saturating the root NVMe queue, which is the
+              documented precursor to k3s losing etcd leader election, exiting, and taking
+              the API server down for 30-75s - and to Velero backups being left
+              InProgress with orphaned ZFSBackup CRs.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md and
+              docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md.
+          expr: |
+            node_memory_MemAvailable_bytes{instance="prusik"}
+              / node_memory_MemTotal_bytes{instance="prusik"} < 0.05
+          for: 2m
+          labels:
+            severity: critical
+        # node-exporter's *_stalled series is the "full" PSI line, which is what the
+        # incident recorded above 0.4 (0.1 = 10% of wall clock with tasks stalled on
+        # memory reclaim).
+        - alert: PrusikMemoryPSIHigh
+          annotations:
+            summary: prusik memory pressure stall (PSI full) is high
+            description: |
+              Memory PSI "full" on prusik is {{ $value }} seconds of stall per second of
+              wall clock over 5m, i.e. tasks are blocked in direct reclaim, not merely
+              evicting pages. That reclaim I/O is what delays etcd's WAL fsync on the
+              shared root NVMe, so this fires alongside or just before the etcd disk
+              latency alerts.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: rate(node_pressure_memory_stalled_seconds_total{instance="prusik"}[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+        # Units are pages/s (node-exporter counters are page events, not bytes): at the
+        # default 4 KiB page size, 1000 pages/s is ~4 MiB/s of swap traffic, while the
+        # 2026-09-25 storm ran 100+ MiB/s (~25k pages/s). Measured now: pswpin rate is
+        # ~0.5 pages/s, so the threshold is ~2000x above idle. Raise it if ordinary
+        # swap use proves noisy; node_memory_page_size_bytes does not exist on this
+        # node-exporter, so the threshold stays in pages rather than bytes.
+        - alert: PrusikSwapThrashing
+          annotations:
+            summary: prusik is swapping actively
+            description: |
+              Swap-in or swap-out on prusik is above 1000 pages/s over 5m ({{ $value }}).
+              The 16 GiB /swapfile sits on the root NVMe next to the k3s etcd WAL, so
+              every swapped page is I/O that etcd's fsync has to queue behind. This is
+              the mechanism behind the etcd disk-latency alerts and the k3s
+              leader-election loss.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: |
+            (rate(node_vmstat_pswpin{instance="prusik"}[5m]) > 1000)
+              or (rate(node_vmstat_pswpout{instance="prusik"}[5m]) > 1000)
+          for: 5m
+          labels:
+            severity: warning
+        # Weighted I/O time is average in-flight request count (queue depth). Normal
+        # for this disk is single digits; the incident measured 218 and a later storm
+        # 400+.
+        #
+        # The device is selected by MODEL, not by kernel name, because prusik's NVMe
+        # kernel names flip across reboots. Live proof from node_disk_info over 30d:
+        # the SanDisk Extreme 500GB (serial 23414Q803583, the root/etcd/swap disk) was
+        # scraped as device="nvme1n1" from 2026-09-13 through 2026-10-01T17:15 and as
+        # device="nvme0n1" from 2026-10-01T23:15 on, i.e. the Oct 1/2 reboot renamed it.
+        # The Sept incident doc therefore says "nvme1n1" and `findmnt -T /swapfile`
+        # today says nvme0n1p2 - same disk, both correct at their own date. docs/
+        # hardware/prusik.md and the incident doc carry the stale pairing; trust
+        # node_disk_info (model + serial), which is what this rule does.
+        #
+        # Keep the pattern tight: "SanDisk Extreme.*" matches only the root NVMe, while
+        # a bare "SanDisk.*" would also match the sdb/sde SanDisk_SDSSDHII SATA drives of
+        # the fast-pool mirror. group_left() (not plain 1:1 matching) so that duplicate
+        # node-exporter pod-labelled series for the same device within the rate window -
+        # after a DaemonSet pod restart - do not fail the whole query.
+        - alert: PrusikRootDiskQueueHigh
+          annotations:
+            summary: prusik root NVMe I/O queue is backed up
+            description: |
+              Average in-flight I/O is {{ $value }} over 5m on prusik's SanDisk root NVMe
+              (currently kernel device {{ $labels.device }}), above 32. That disk carries
+              the k3s etcd WAL/DB, the root filesystem and /swapfile at once, so a queue
+              here is shared by reclaim/swap traffic and etcd's fsyncs - the direct cause
+              of high WAL fsync and backend commit latency.
+              If this fires with low memory pressure, check the disk itself (SMART, write
+              cache, throttling) instead of the workload.
+              See docs/troubleshooting/prusik-etcd-swap-thrash.md.
+          expr: |
+            rate(node_disk_io_time_weighted_seconds_total{instance="prusik"}[5m])
+              * on(device) group_left() node_disk_info{instance="prusik",model=~"SanDisk Extreme.*"} > 32
+          for: 5m
+          labels:
+            severity: warning
