@@ -25,7 +25,7 @@ data:
       # memory collapse. Pairs with the 12Gi container limit and CARGO_BUILD_JOBS
       # cap on the runner pod; raise it only if measured peaks stay clear of the
       # node's MemAvailable floor.
-      capacity: 2
+      capacity: 1
       # Extra environment variables to run jobs. These are injected into BOTH
       # host-mode and docker-mode jobs. The StatefulSet's `env:` block only reaches
       # the runner process itself (host-mode jobs inherit from it); docker-mode jobs
