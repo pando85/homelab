@@ -1,10 +1,10 @@
 tempo:
   resources:
     requests:
-      cpu: 50m
-      memory: 200Mi
+      cpu: 500m
+      memory: 1Gi
     limits:
-      cpu: 2000m
+      cpu: 4000m
       memory: 6Gi
   memBallastSizeMbs: 1024
   multitenancyEnabled: false
