@@ -1,11 +1,22 @@
 tempo:
   resources:
+    # Sized from 14d of measured usage (2026-10-17): CPU peak 0.375 cores during
+    # compaction cycles, memory working-set peak 5.3Gi / heap_sys peak 6.3Gi (88-105%
+    # of the previous 6Gi limit) driven by block-metadata cache, not WAL I/O.
+    # requests.memory raised 1Gi->3Gi to match the observed p95 (~2.9Gi) so kubelet
+    # does not evict the pod under node pressure while it is legitimately using that
+    # much; limits.memory raised 6Gi->8Gi to leave real headroom above the worst
+    # observed compaction spike (~5.3Gi) plus the fixed 1Gi mem-ballast, instead of
+    # sitting at 88-105% of the old limit. limits.cpu lowered 4->2 cores since the
+    # measured peak is only 0.375 cores - 2 cores is still 5x headroom and reduces
+    # burst pressure on prusik, which is memory/latency bound.
+    # Re-measure 7d after this change; see sizing queries in the commit message.
     requests:
       cpu: 500m
-      memory: 1Gi
+      memory: 3Gi
     limits:
-      cpu: 4000m
-      memory: 6Gi
+      cpu: "2"
+      memory: 8Gi
   memBallastSizeMbs: 1024
   multitenancyEnabled: false
   reportingEnabled: false
@@ -36,7 +47,13 @@ tempo:
     storage:
       path: "/var/tempo/metrics"
     traces_storage:
-      path: "/var/tempo/traces"
+      # Must NOT share a path with storage.trace.local.path below. In single-binary
+      # (monolithic) mode the metrics-generator's local-blocks WAL and the main
+      # trace backend would otherwise write into the same tenant directory, and the
+      # blocklist poller fails with "invalid UUID length: 60" when it encounters the
+      # generator's <uuid>+<tenant>+<version> WAL directory names.
+      # See docs/troubleshooting/tempo-metrics-generator-wal-collision.md
+      path: "/var/tempo/generator-traces"
     # NOTE: metrics_ingestion_time_range_slack is NOT rendered by the Helm chart
     # template (tempo-1.24.4). It must be set via the `config` override below.
     # See the `config` section at the end of this file.

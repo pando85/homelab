@@ -180,6 +180,15 @@ matters there.
   is too slow to clear backlog. Loki sinks also need explicit `buffer.when_full: block` or events
   are silently dropped under backpressure. Tuned values: 5000 / false / 60 / 16384 / block. See
   `docs/troubleshooting/vector-log-loss-and-starvation.md`
+- Single-binary Tempo (`tempo-1.24.4` chart, v2.9.0): `metrics_generator.traces_storage.path` must
+  never equal `storage.trace.local.path` when `local_blocks` processing is on — the generator's WAL
+  writes `<uuid>+<tenant>+<version>` dirs (e.g. `…+single-tenant+vParquet4`, 60 chars) into the same
+  tenant directory the blocklist poller scans, and `uuid.Parse` fails with `invalid UUID length: 60`,
+  aborting that poll. Compaction/retention can look healthy while the block index silently goes stale
+  between the ~1-in-5 polls that succeed. Fixed by giving the generator its own path
+  (`/var/tempo/generator-traces`) plus a Kustomize-patched init container to migrate the already-written
+  WAL (the chart has no `initContainers` values hook). See
+  `docs/troubleshooting/tempo-metrics-generator-wal-collision.md`
 - Never let needrestart restart `k3s.service` or `systemd-networkd` on nodes: needrestart < 3.9
   re-flags k3s after every package (restart storm), and a networkd restart flushes Cilium's
   native-routing routes. Both are deferred via `metal/` (`unattended-upgrades`/`networkd` tags).

@@ -1,0 +1,98 @@
+# Strategic-merge patch (kustomize `patches:`) injecting a one-time migration
+# initContainer into the tempo StatefulSet. The vendored tempo-1.24.4 chart has no
+# values hook for initContainers, so this is applied on top of the helm-rendered
+# manifest, following the same pattern as system/gpu-operator/cluster-policy-patch.yaml.
+#
+# Why: metrics_generator.traces_storage.path used to equal storage.trace.local.path
+# (/var/tempo/traces). In single-binary mode both the blocklist poller and the
+# metrics-generator's local-blocks WAL write into the same tenant directory, and the
+# poller aborts with "invalid UUID length: 60" when it lists the generator's
+# <uuid>+<tenant>+<version> WAL directory names as if they were backend block UUIDs.
+# values.yaml now points traces_storage.path at /var/tempo/generator-traces, but that
+# alone does not clean up WAL directories already written under the old path - this
+# initContainer moves them (and the generator's own completed-block staging directory)
+# to the new root before tempo starts, so the leftover entries stop breaking the poller.
+# See docs/troubleshooting/tempo-metrics-generator-wal-collision.md
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tempo
+  namespace: tempo
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: migrate-generator-wal
+          # renovate: datasource=docker
+          image: busybox:1.38.0
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              OLD_ROOT="/var/tempo/traces/single-tenant"
+              NEW_ROOT="/var/tempo/generator-traces/single-tenant"
+
+              # Fresh install (never had a generator WAL at the old path) - nothing to do.
+              # Also makes this idempotent on every restart after the first migration,
+              # since the second run finds no generator-style entries left at OLD_ROOT.
+              if [ ! -d "$OLD_ROOT" ]; then
+                echo "no existing generator WAL at $OLD_ROOT, nothing to migrate"
+                exit 0
+              fi
+
+              mkdir -p "$NEW_ROOT/blocks"
+
+              moved=0
+              # Active WAL block dirs: <uuid>+<tenant>+<version>, e.g.
+              # 9915fb18-...+single-tenant+vParquet4. These are the exact entries the
+              # blocklist poller misparses as block UUIDs. Bare-UUID dirs (main backend
+              # blocks) never match this glob and are left untouched.
+              for d in "$OLD_ROOT"/*+single-tenant+vParquet*; do
+                [ -d "$d" ] || continue
+                base=$(basename "$d")
+                if [ -e "$NEW_ROOT/$base" ]; then
+                  echo "FATAL: $NEW_ROOT/$base already exists, refusing to overwrite" >&2
+                  exit 1
+                fi
+                mv "$d" "$NEW_ROOT/$base"
+                moved=$((moved+1))
+              done
+
+              # The generator's own completed-block staging area (wal.New() creates
+              # <Filepath>/blocks/); distinct from the main backend's flat <uuid>/ dirs.
+              if [ -d "$OLD_ROOT/blocks" ]; then
+                for d in "$OLD_ROOT/blocks"/*; do
+                  [ -e "$d" ] || continue
+                  base=$(basename "$d")
+                  if [ -e "$NEW_ROOT/blocks/$base" ]; then
+                    echo "FATAL: $NEW_ROOT/blocks/$base already exists, refusing to overwrite" >&2
+                    exit 1
+                  fi
+                  mv "$d" "$NEW_ROOT/blocks/$base"
+                  moved=$((moved+1))
+                done
+                rmdir "$OLD_ROOT/blocks"
+              fi
+
+              echo "migrated $moved generator WAL entries from $OLD_ROOT to $NEW_ROOT"
+
+              # Guard: nothing generator-shaped should remain at the old root. If this
+              # ever trips, it means an entry did not match the expected naming pattern
+              # (e.g. a future Tempo version changed VersionString) - fail loudly rather
+              # than let tempo start against a half-migrated directory.
+              remaining=$(find "$OLD_ROOT" -maxdepth 1 -type d -name '*+single-tenant+vParquet*' | wc -l)
+              if [ "$remaining" -ne 0 ]; then
+                echo "FATAL: $remaining generator WAL entries still present at $OLD_ROOT after migration" >&2
+                exit 1
+              fi
+          volumeMounts:
+            - name: storage
+              mountPath: /var/tempo
+          resources:
+            requests:
+              memory: "16Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

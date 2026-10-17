@@ -17,6 +17,9 @@ helmCharts:
     includeCRDs: true
     valuesFile: values.yaml
 
+patches:
+  - path: statefulset-wal-migration-patch.yaml
+
 configMapGenerator:
   - name: tempo-dashboards
     namespace: tempo
