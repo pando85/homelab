@@ -19,13 +19,23 @@ spec:
           for: 60m
           labels:
             severity: warning
+        # prusik: SSDs run warm (SATA P95: 51-52°C, NVMe P95: 51-52°C)
+        - alert: SmartCTLDeviceHighTemperature
+          annotations:
+            description: |
+              Device {{ $labels.device }} on instance {{ $labels.instance }} has
+              a temperature of {{ $value }} celsius degrees.
+          expr: smartctl_device_temperature{instance="prusik", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance="prusik", device!~"nvme.*"} > 65
+          for: 60m
+          labels:
+            severity: warning
         # Default thresholds for other hosts
         - alert: SmartCTLDeviceHighTemperature
           annotations:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{instance!="k8s-amd64-1", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance!="k8s-amd64-1", device!~"nvme.*"} > 45
+          expr: smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", device!~"nvme.*"} > 45
           for: 60m
           labels:
             severity: warning
