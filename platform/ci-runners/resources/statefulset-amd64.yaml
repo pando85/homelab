@@ -357,12 +357,11 @@ spec:
       # -1000, preemptionPolicy: Never) puts it first in the eviction queue so the
       # runner dies instead of etcd/apiserver, and it never preempts anything itself.
       priorityClassName: low-priority
-      # No tolerations: this pod must NOT be schedulable onto a node already marked
-      # `node.kubernetes.io/memory-pressure`. It used to tolerate that taint, which
-      # kept the runner pinned to a node that was already starving - the opposite of
-      # what a memory-hungry CI workload should do. The node carries no permanent
-      # taints, so an empty set still schedules.
-      #
+      tolerations:
+        - key: "dedicated"
+          operator: "Equal"
+          value: "ci"
+          effect: "NoSchedule"
       # hostPath volumes are node-local, so this pod must be pinned explicitly -
       # unlike ci-runner, which lands on prusik implicitly through its ZFS volume
       # topology and has no nodeSelector at all.
