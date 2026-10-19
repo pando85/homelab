@@ -292,6 +292,19 @@
       commitMessagePrefix: 'immich: ',
     },
     {
+      description: 'Group OpenTelemetry collector updates in one PR',
+      groupName: 'otel-collector',
+      groupSlug: 'otel-collector',
+      additionalBranchPrefix: 'otel-collector-',
+      addLabels: [
+        'renovate/otel-collector',
+      ],
+      commitMessagePrefix: 'otel-collector: ',
+      matchPackageNames: [
+        '/opentelemetry-collector/',
+      ],
+    },
+    {
       description: 'Group Silo (MinIO fork) updates in one PR',
       matchDatasources: [
         'docker',

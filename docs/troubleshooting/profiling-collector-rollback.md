@@ -14,7 +14,7 @@ observes them.
 
 ## Why OTel-first is blocked (do not "roll back" to it)
 
-The OTel eBPF profiler (`otel/opentelemetry-collector-ebpf-profiler:0.162.0`) emits an OTLP
+The OTel eBPF profiler (`otel/opentelemetry-collector-ebpf-profiler:0.163.1`) emits an OTLP
 resource attribute with an **empty key**. Pyroscope's OTLP ingest
 (`POST /v1development/profiles`) copies resource attribute keys straight into Prometheus-style
 label names without sanitising, so every profile is rejected with
