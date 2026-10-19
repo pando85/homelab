@@ -3,7 +3,7 @@
 # STATUS: ACTIVE (deployed via ArgoCD auto-discovery of system/alloy/).
 #
 # WHY ALLOY INSTEAD OF OTel eBPF PROFILER:
-# - OTel eBPF profiler (0.162.0) generates OTLP profiles with an empty-key resource
+# - OTel eBPF profiler (0.163.1) generates OTLP profiles with an empty-key resource
 #   attribute from its process context. Pyroscope's OTLP ingest (/v1development/profiles)
 #   converts resource attributes → Prometheus-style labels without sanitization,
 #   rejecting ALL profiles with HTTP 400: invalid label name ''.
