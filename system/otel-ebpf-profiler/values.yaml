@@ -4,7 +4,7 @@
 # the `profiling` receiver. The chart's `presets.profiling` block generates
 # hostPID, security context, and volumes automatically.
 #
-# IMAGE PIN: otel/opentelemetry-collector-ebpf-profiler:0.162.0
+# IMAGE PIN: otel/opentelemetry-collector-ebpf-profiler:0.163.1
 #   - Published 2026-09-29, amd64 + arm64
 #   - Uses profiles bindings v0.4.0 (proto v1.11.x) — compatible with
 #     Pyroscope 2.3.2 (bindings v0.3.0, proto v1.10.0, field-identical)
@@ -48,7 +48,7 @@
 # Use the dedicated ebpf-profiler distribution (NOT the contrib image)
 image:
   repository: otel/opentelemetry-collector-ebpf-profiler
-  tag: 0.162.0
+  tag: 0.163.1
   pullPolicy: IfNotPresent
 
 mode: daemonset
