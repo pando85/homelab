@@ -34,7 +34,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=ghcr.io/readest/readest
             repository: ghcr.io/readest/readest
-            tag: 0.12.12
+            tag: 0.12.16
           env:
             SUPABASE_PUBLIC_URL: https://readest.grigri.cloud
             SUPABASE_ANON_KEY:
@@ -124,7 +124,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=ghcr.io/readest/readest
             repository: ghcr.io/readest/readest
-            tag: 0.12.12
+            tag: 0.12.16
           env:
             SUPABASE_URL: https://readest.grigri.cloud
             SUPABASE_PUBLIC_URL: https://readest.grigri.cloud
