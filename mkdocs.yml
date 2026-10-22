@@ -45,3 +45,5 @@ nav:
       - user-guide
   - Troubleshooting:
       - troubleshooting
+  - Architecture decisions:
+      - adr
