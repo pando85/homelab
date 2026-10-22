@@ -118,7 +118,7 @@ app-template:
     php-cve-mitigation:
       enabled: true
       type: configMap
-      name: wallabag-php-cve-mitigation
+      name: wallabag
       globalMounts:
         - path: /etc/php81/conf.d/99-cve.ini
           subPath: 99-cve.ini
