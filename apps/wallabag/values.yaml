@@ -101,9 +101,25 @@ app-template:
             - *host
           secretName: wallabag-external-tls-certificate
 
+  configMaps:
+    php-cve-mitigation:
+      enabled: true
+      data:
+        99-cve.ini: |
+          memory_limit=-1
+          session.upload_progress.enabled=0
+
   persistence:
     images:
       enabled: true
       globalMounts:
         - path: /var/www/wallabag/web/assets/images
       existingClaim: wallabag-images
+    php-cve-mitigation:
+      enabled: true
+      type: configMap
+      name: wallabag-php-cve-mitigation
+      globalMounts:
+        - path: /etc/php81/conf.d/99-cve.ini
+          subPath: 99-cve.ini
+          readOnly: true
