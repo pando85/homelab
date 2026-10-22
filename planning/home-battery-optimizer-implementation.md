@@ -88,7 +88,7 @@ Phases 0–4 can proceed without the physical battery. **Phase 5 requires verifi
 - [ ] **TODO-4.1** Implement a time-stepped state model and constrained receding-horizon optimizer. Start with a deterministic LP solved with HiGHS; add MILP binary modes or piecewise converter efficiency when the relaxed solution is physically invalid.
 - [ ] **TODO-4.2** Replan at a 15-minute cadence over a configurable 24–48 h horizon; execute only the next action in simulation. The next day's **unpublished** prices are forecasts/scenarios, not historical knowledge.
 - [ ] **TODO-4.3** Add terminal SOC valuation (or extending horizon value), dwell/ramp limits as supported, charge/discharge efficiency vs power, degradation penalty sensitivity and the option of reserved SOC for backup (disabled by default for economic comparisons).
-- [ ] **TODO-4.4** Test robust constraints and alternative demand percentiles. Explicitly prevent negative-price arbitrage through simultanous charge/discharge or fictitious export.
+- [ ] **TODO-4.4** Test robust constraints and alternative demand percentiles. Explicitly prevent negative-price arbitrage through simultaneous charge/discharge or fictitious export.
 - [ ] **TODO-4.5** Replay fully chronological months; compare simple price-only, baseline demand, advanced demand and oracle on the same days, using uncertainty bands (block bootstrap over days/weeks).
 - [ ] **TODO-4.6** Publish a machine-readable dispatch plan contract: start/end UTC, mode (`idle/charge/discharge`), target power W, SOC target, expected buy price, confidence, generation timestamp and expiry/sequence ID.
 
