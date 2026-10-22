@@ -1,6 +1,6 @@
 image:
   repository: nextcloud
-  tag: 32.0.3
+  tag: 32.0.15
 
 deploymentLabels:
   backup/retain: quaterly
