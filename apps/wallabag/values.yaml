@@ -89,16 +89,13 @@ app-template:
         external-dns.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
         # PHP2Shell (CVE-2026-109618 / CVE-2026-109619) defense-in-depth
+        nginx.ingress.kubernetes.io/proxy-body-size: "32m"
         nginx.ingress.kubernetes.io/server-snippet: |
           # Block PHP_SESSION_UPLOAD_PROGRESS parameter (CVE-2026-109619)
           # PHP already has session.upload_progress.enabled=0, this is belt-and-suspenders
           if ($args ~* "PHP_SESSION_UPLOAD_PROGRESS") {
             return 403;
           }
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          # Limit request body to reduce OOM attack surface (CVE-2026-109618)
-          # PHP recommendation: 32M for apps with uploads
-          client_max_body_size 32m;
       hosts:
         - host: &host wallabag.grigri.cloud
           paths:
