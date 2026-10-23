@@ -125,8 +125,17 @@ uv run energy-baseline benchmark \
   --train-end 2026-09-01T00:00:00+00:00 \
   --policies all \
   --terminal-mode free \
-  --time-limit-s 120.0
+  --time-limit-s 600.0
 ```
+
+**`--time-limit-s 600.0` in the example is deliberate, not decoration.** ADR-0003 §*Benchmark
+methodology clarifications* records what a full-year horizon actually costs: at the default 120 s the
+oracle terminated as a time-limited incumbent — `solver_status="time_limit"`, `bound_kind="upper"`,
+`is_certified=False` — so its saving is only a lower bound, while 600 s on the same horizon certified
+within tolerance and could be reported as a proven optimum. `benchmark.py` still pins
+`DEFAULT_TIME_LIMIT_S = 120.0`, so any run that wants a certified ceiling must pass this flag
+explicitly. The day-ahead rung is a separate knob: `--day-ahead-time-limit-s` is per **local day**
+(default 5.0 s), not per horizon, and the run records which one a number came from.
 
 `--train-end` is **required with no default**: thresholds are fitted on the earlier split and
 frozen before evaluation, so the cut must be declared explicitly and is never inherited. Optional
@@ -205,9 +214,17 @@ schedules `run_daily(..., "00:00:40")` and lines 73-91 of the same file read
 day's curve is therefore in hand at local midnight in production today. What the pipeline still
 cannot verify is the *archival* half of ADR-0003 line 100: the store keeps the price realised in each
 hour, not a midnight snapshot of the attribute dict, so `day_ahead` assumes published-in-advance
-equals realised-and-archived (true by construction for day-ahead PVPC, and the sensor's day-boundary
-convention remains unresolved — TODO-0.4). The assumption is recorded in every run artifact under
-`day_ahead.information_set.assumptions_disclosed` instead of being quietly relied on.
+equals realised-and-archived. The artifact's own disclosure calls that assumption "true by construction
+for day-ahead PVPC, but not measured here" — the first half describes how the tariff is designed to
+publish, not what this archive holds, so the assumption is **unverified** and the sensor's day-boundary
+convention remains unresolved (TODO-0.4). It is recorded in every run artifact under
+`day_ahead.information_set.assumptions_disclosed` instead of being quietly relied on, and it claims no
+**direction of error** — nor does this README. A wrong midnight curve would change which decisions the
+policy makes, not the prices those decisions are costed on, because the plan is re-scored against the
+same archived realised prices every other policy is scored on; so divergence can hurt or help, its
+expected direction is adverse, and that is an expectation, not a bound. Establishing a direction needs a
+midnight snapshot to compare against, which is the cheap fix ADR-0003 keeps open (snapshot
+`sensor.esios_pvpc`'s attribute dict at `00:00:40` daily).
 
 Mechanically the policy is a **rolling daily MILP**: the evaluation window is partitioned on
 `Europe/Madrid` calendar days (never UTC days — the tariff is hourly in local time, so a
@@ -324,9 +341,14 @@ effect is already embedded in the measured load, which is why the *no-battery* p
 counterfactual. `day_ahead` shares the *information* AppDaemon uses (tomorrow's prices), not its
 thermal actuators or its rule.
 
-**Oracle certification:** the oracle is **not certified** as optimal. It hits its solver time
-limit (default 120 s) and is reported as a feasible incumbent with an upper bound on cost,
-never as an optimum. The implied saving is therefore a lower bound on optimal saving.
+**Oracle certification:** certification is a property of the time limit, not of the oracle. At the
+default 120 s on a full-year horizon the oracle returns a **time-limited incumbent**
+(`is_certified=False`, its cost an upper bound), so the implied saving is only a lower bound on
+optimal saving; at 600 s or more on that same horizon it **certified within tolerance**
+(`solver_status="optimal"`, `bound_kind="certified"`) and is reported as a proven optimum. ADR-0003
+§*Benchmark methodology clarifications* carries the measured telemetry for both. The knob that decides
+this is the whole-horizon `--time-limit-s` above — not `--day-ahead-time-limit-s`, which is a separate
+per **local day** limit (default 5.0 s) on the day-ahead solves and certifies nothing about the oracle.
 
 **Solver noise at the no-export bound:** HiGHS can return a discharge one ulp above the load that
 its own no-export row is bounded by, so a plan `battery.check_feasible` accepts (its slack is
@@ -352,6 +374,23 @@ uv run energy-baseline report --benchmark ~/data/energy-baseline/analysis/v1/<da
 
 `--dataset` must contain exactly one benchmark run; if multiple runs exist, the error lists the
 available run ids rather than silently picking the newest. `--benchmark` overrides `--dataset`.
+`--config` is optional but recommended: when passed, its canonical hash is checked against the one
+pinned in the run and a mismatch refuses (`ReportError`) instead of reporting against another tariff.
+
+**The report states its own horizon scope.** `report.md` carries a *Horizon scope* line under
+*Evaluation window*, and `report.json` carries the same sentence as `horizon_scope_note`: the horizon
+is a **UTC-scoped window, not a calendar year in the dataset's local timezone**, unless both bounds
+genuinely fall on local midnights, in which case the line says it is a local calendar year too. The
+sentence is derived from the run's own bound labels and the build manifest's pinned `params.timezone`,
+so it hardcodes no year — the rule under *`benchmark`* above ("the claim is UTC-scoped and the report
+must say so") is now enforced by the report instead of left to `Z`-suffixed labels to imply it.
+
+Reports are written into the run directory with the same no-clobber rule as every other artifact, so a
+changed report does not silently rewrite a run that has already been reviewed: re-generating a report
+whose bytes differ raises `FileExistsError`, which the CLI surfaces as one line and exit code 1 — it is
+intended. An existing run's `report.md` and `report.json` are evidence, not a rendering to refresh; the
+tool never deletes canonical data on your behalf, so if a report genuinely must be rebuilt, remove that
+one file by hand and know that its bytes will differ from what was reviewed.
 
 ### `inspect-sql`
 

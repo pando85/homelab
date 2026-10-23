@@ -552,6 +552,75 @@ class TestInspectSQL:
         assert "Nothing is scaled to a year" in markdown
         assert "/year" not in markdown and "per year" not in markdown.lower()
 
+    def test_report_states_the_utc_scoped_horizon(self, tmp_path: Path) -> None:
+        """The horizon's calendar scope is stated, not implied by ``Z`` labels.
+
+        The README rule: a report must say the scope is UTC-scoped when the bounds are
+        UTC instants rather than leave the reader to infer it.  The fixture's bounds are
+        2026-01-03 → 2026-01-08 UTC, which are 01:00 Europe/Madrid — a local day is cut
+        on both edges, so the note must say the window is not a local calendar year.
+        """
+        requires_core()
+        run_dir = run_benchmark(tmp_path)
+        config_path = tmp_path / "tariff.yaml"
+        report_dir = rp.generate_report(config_path=str(config_path), benchmark_path=str(run_dir))
+        markdown = (report_dir / rp.REPORT_MD_NAME).read_text()
+        payload = json.loads((report_dir / rp.REPORT_JSON_NAME).read_text())
+        note = payload["horizon_scope_note"]
+        # One and the same string carries the line into both artifacts.
+        assert f"* {note}" in markdown
+        assert note.startswith("Horizon scope:")
+        assert "UTC-scoped" in note
+        assert "not a Europe/Madrid calendar year" in note
+        # Derived from the run: both bound labels from the payload appear verbatim.
+        evaluation = payload["evaluation"]
+        assert evaluation["horizon_start"] in note
+        assert evaluation["horizon_end"] in note
+        assert "local_day" in note
+
+    def test_horizon_scope_note_is_derived_from_the_run(self) -> None:
+        """The note follows the bounds: it does not assert non-locality as a constant."""
+
+        def run_with(horizon_start: str, horizon_end: str, timezone: str | None) -> rp._Run:
+            params: dict[str, object] = {}
+            if timezone is not None:
+                params["timezone"] = timezone
+            payload = {
+                "evaluation": {"horizon_start": horizon_start, "horizon_end": horizon_end},
+                "lineage": {"build_manifest_pinned_fields": {"params": params}},
+            }
+            return rp._Run(
+                directory=Path("."),
+                payload=payload,
+                results=pa.table({}),
+                schedules=pa.table({}),
+            )
+
+        # Madrid local midnights: 2025-01-01 00:00 CET is 2024-12-31T23:00Z.  A horizon
+        # bounded by two of them IS a local calendar year and the note must say so.
+        aligned = rp._horizon_scope_note(
+            run_with("2024-12-31T23:00:00Z", "2025-12-31T23:00:00Z", "Europe/Madrid")
+        )
+        assert "calendar year too" in aligned
+        assert "2024" in aligned and "2025" in aligned
+
+        # Bounds on UTC midnights are one hour into the local day on each edge.
+        offset = rp._horizon_scope_note(
+            run_with("2025-01-01T00:00:00Z", "2026-01-01T00:00:00Z", "Europe/Madrid")
+        )
+        assert "not a Europe/Madrid calendar year" in offset
+        assert "2025-01-01 01:00" in offset
+        assert "2026-01-01 01:00" in offset
+
+        # A payload that pins no timezone still states the UTC scope, without inventing a
+        # zone name or a verdict about a local year.
+        unknown = rp._horizon_scope_note(
+            run_with("2025-01-01T00:00:00Z", "2026-01-01T00:00:00Z", None)
+        )
+        assert "UTC-scoped" in unknown
+        assert "Europe/Madrid" not in unknown
+        assert "calendar year" in unknown
+
     def test_unknown_curated_query_raises(self, tmp_path: Path) -> None:
         requires_core()
         run_dir = run_benchmark(tmp_path)

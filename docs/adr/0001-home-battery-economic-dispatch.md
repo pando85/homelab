@@ -98,6 +98,7 @@ Use walk-forward training/evaluation without future consumption leakage, measure
 ## References
 
 - [Implementation plan](../../planning/home-battery-optimizer-implementation.md)
+- [ADR-0003 — Phase 1 measurement and baseline](0003-phase1-measurement-and-baseline.md) — **Accepted** (2026-10-23): the offline backtest and strategy baseline this decision prescribes before any battery writes, now an information ladder of four policies
 - [Current AppDaemon PVPC climate/DHW configuration](../../apps/home-assistant/appdaemon/apps/apps.yaml)
 - [Home Assistant deployment](../../apps/home-assistant/values.yaml)
 - [Existing negative-price fallback runbook](../troubleshooting/appdaemon-pvpc-negative-prices.md)

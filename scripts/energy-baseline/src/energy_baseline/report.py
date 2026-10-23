@@ -40,6 +40,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import duckdb
 import numpy as np
@@ -484,6 +485,61 @@ def _terminal_note(run: _Run) -> str:
     return f"Terminal accounting: {used!r}."
 
 
+def _horizon_scope_note(run: _Run) -> str:
+    """Say which calendar the evaluation horizon is measured on.
+
+    The package README records the rule: a report must state plainly that the horizon
+    is UTC-scoped instead of letting ``Z``-suffixed labels imply it — a UTC year is not
+    a local calendar year, because the local year turns before UTC midnight east of
+    Greenwich.  Both bounds and the dataset's tariff timezone already live in the run
+    payload, so the note is derived from them and names no year of its own.  The local
+    rendering is the pinned zone name resolved through the system tzdata — the same
+    dependency the build already has for ``local_day``, and the zone offset at these two
+    instants is not one of the ambiguous ones.
+    """
+    evaluation = run.payload["evaluation"]
+    start = str(evaluation["horizon_start"])
+    end = str(evaluation["horizon_end"])
+    timezone = (
+        run.payload.get("lineage", {})
+        .get("build_manifest_pinned_fields", {})
+        .get("params", {})
+        .get("timezone")
+    )
+    bounds: tuple[datetime, datetime] | None = None
+    if timezone:
+        try:
+            zone = ZoneInfo(str(timezone))
+            bounds = (
+                datetime.fromisoformat(start).astimezone(zone),
+                datetime.fromisoformat(end).astimezone(zone),
+            )
+        except (ValueError, TypeError, ZoneInfoNotFoundError):  # pragma: no cover
+            bounds = None
+    if bounds is None:  # pragma: no cover - payload without a pinned timezone
+        return (
+            f"Horizon scope: {start} → {end} are UTC instants, so the horizon above is "
+            "UTC-scoped and is not claimed to be a calendar year in any local timezone; "
+            "monthly buckets are taken on ``local_day``, a different partition of the "
+            "same intervals"
+        )
+    local_start, local_end = bounds
+    if all(
+        (moment.month, moment.day, moment.hour, moment.minute) == (1, 1, 0, 0)
+        for moment in (local_start, local_end)
+    ):
+        return (
+            f"Horizon scope: the horizon above is UTC-scoped ({start} → {end}) and both "
+            f"bounds fall on {timezone} midnight, so it is a {timezone} calendar year too"
+        )
+    return (
+        f"Horizon scope: the horizon above is a UTC-scoped window, not a {timezone} calendar "
+        f"year — {start} is {local_start.strftime('%Y-%m-%d %H:%M')} and {end} is "
+        f"{local_end.strftime('%Y-%m-%d %H:%M')} {timezone} local, so the local day on each "
+        "edge is partial, while the monthly buckets are taken on ``local_day``"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Markdown rendering
 # ---------------------------------------------------------------------------
@@ -554,6 +610,7 @@ def _render_markdown(
         "Evaluation window",
         [
             f"* **Horizon:** {evaluation['horizon_start']} → {evaluation['horizon_end']}",
+            f"* {_horizon_scope_note(run)}",
             f"* **Intervals:** {evaluation['interval_count']} total, "
             f"{evaluation['usable_interval_count']} usable, "
             f"{evaluation['excluded_interval_count']} excluded",
@@ -925,6 +982,7 @@ def generate_report(
         "distributions": distributions,
         "solver_errors": run.payload.get("solver", {}).get("errors", {}),
         "lineage": run.payload["lineage"],
+        "horizon_scope_note": _horizon_scope_note(run),
         "report_note": (
             "This report is a pure function of the run's own artifacts and the pinned config: "
             "no wall-clock timestamp and no code version of its own, so re-generating it from "
