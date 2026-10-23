@@ -1,7 +1,7 @@
 # Home battery optimizer: phased implementation plan
 
 **Status:** PROPOSED — documentation only; no equipment selected or deployment authorized  
-**Architecture decision:** [ADR-0001 — Forecast-informed economic dispatch](../docs/adr/0001-home-battery-economic-dispatch.md)  
+**Architecture decisions:** [ADR-0001 — Forecast-informed economic dispatch](../docs/adr/0001-home-battery-economic-dispatch.md); [ADR-0002 — Appliance-aware load forecasting](../docs/adr/0002-appliance-aware-load-forecasting.md)  
 **Scope:** AC grid-charged home battery, initially targeting Marstek Venus E 3.0 (~5.12 kWh, ~2.5 kW); preserve vendor neutrality at the planner boundary.
 
 ## 1. Goal and current state
@@ -59,10 +59,14 @@ Phases 0–4 can proceed without the physical battery. **Phase 5 requires verifi
 - [ ] **TODO-1.4** Calculate billable marginal buy prices including time-applicable taxes and variable fees, preserving price/feed publication timestamps. Keep raw wholesale/PVPC readings separately. Accept negative prices.
 - [ ] **TODO-1.5** Derive *uncontrolled* household load independently from battery charge/discharge telemetry when live; never train from grid import alone after installing the battery.
 - [ ] **TODO-1.6** Build monthly invoice reconciliation, data-health metrics and export to a deterministic offline dataset.
+- [ ] **TODO-1.7** Inventory existing Home Assistant washing-machine/dishwasher entities and verify which operational states, programs, phases, remaining-time estimates, scheduled starts, completion events and optional power/energy readings *actually exist*. Record semantics, update latency, history availability and a versioned entity mapping; do not assume attributes.
+- [ ] **TODO-1.8** Ingest timestamped HA appliance state changes and availability alongside power readings. Preserve event time vs observation/ingestion time, raw vs normalized state, provenance, clock skew, out-of-order events and missing/unknown values. Produce historical **as-of** snapshots that never use later cycle outcomes as input.
+- [ ] **TODO-1.9** Assess whether the verified Shelly transport can supply useful higher-rate **gross household** power (e.g. ~1–2 s) without excessive overhead. Preserve true sample resolution; never synthesize event signatures from hourly aggregates or treat signed grid import as home demand while a battery is active.
+- [ ] **TODO-1.10** Export a separate, optional appliance-events dataset and example labeled sessions; retain private activity histories locally, not in Git. Missing appliance telemetry must not block the baseline data pipeline. See [ADR-0002](../docs/adr/0002-appliance-aware-load-forecasting.md).
 
 **Exit criteria:** ≥99% documented usable interval coverage for a reference year, with all remaining gaps explicitly flagged; no unexplained sign inversions or DST duplicates; historical energy totals and the billable variable term reconcile within an agreed tolerance (document any missing billing components).
 
-**Tests:** energy conservation; kW vs kWh; zero and negative prices; missing/duplicate/late meters; stepwise tariff and tax changes; PV generation presence/absence; 23-/25-hour days.
+**Tests:** energy conservation; kW vs kWh; zero and negative prices; missing/duplicate/late meters; stepwise tariff and tax changes; PV generation presence/absence; 23-/25-hour days. For the optional appliance stream: unavailable entities, delayed/out-of-order transitions, state pauses/restarts, program changes, incomplete cycles and strict as-of feature reconstruction.
 
 ## 5. Phase 2 — Establish simple alternatives and an upper bound
 
@@ -80,8 +84,13 @@ Phases 0–4 can proceed without the physical battery. **Phase 5 requires verifi
 - [ ] **TODO-3.2** Quantify P10/P50/P90 demand by interval; group metrics by expensive hours and compare with a conservative fixed 250 W fallback.
 - [ ] **TODO-3.3** Use walk-forward validation (train before test only). Use only weather, schedules and prices **actually available at prediction time**; record publication lag to prevent leakage.
 - [ ] **TODO-3.4** Evaluate CatBoost/LightGBM only if the incremental dispatch saving over the baseline forecast is material after complexity/maintenance costs. Define the economic improvement threshold from Phase 2 before trying candidate models.
+- [ ] **TODO-3.5** Benchmark an **appliance-conditioned aggregate** CatBoost/LightGBM forecast against the same simple whole-home baseline, using only HA states, program/phase/remaining-time information and recent power available at forecast issue time. Report performance separately for 15 min, 1 h, 6 h and 24 h.
+- [ ] **TODO-3.6** Where independent device power or sufficiently isolated/labeled cycles exist, learn per-program empirical duration/remaining-energy profiles. Explore HSMM/sequence methods only if they improve the simpler solution; do not mistake total-home power changes for measured per-device energy.
+- [ ] **TODO-3.7** Optionally prototype NILM event detection and appliance classification for devices not already observed in HA; use HA event timestamps as weak labels, explicitly handle overlapping loads and unknown/ambiguous classes, and calibrate confidence against verified held-out events. Do not force a device identity when evidence is insufficient.
+- [ ] **TODO-3.8** Prevent appliance **double-counting**: first prefer a single aggregate model with appliance-state features; use an additive residual + appliance model only when subtraction/attribution is reliable and the residual is trained consistently. Handle future *unknown* appliance starts probabilistically rather than using observed future sessions.
+- [ ] **TODO-3.9** Compare predictive uncertainty, forecasting error and replayed incremental net EUR savings against TODO-3.1 under identical as-of information; retain ADR-0001's baseline fallback if HA is stale, labels are uncertain or the economic threshold is not met. See [ADR-0002](../docs/adr/0002-appliance-aware-load-forecasting.md).
 
-**Exit criteria:** compared out-of-sample WAPE/MAE and **EUR regret vs oracle**; selected model wins on net saving rather than forecast accuracy alone; versioned feature specification and reproducible model training.
+**Exit criteria:** compared out-of-sample WAPE/MAE and **EUR regret vs oracle**; selected model wins on net saving rather than forecast accuracy alone; versioned feature specification and reproducible model training. Appliance-specific models are optional and require session-disjoint/walk-forward evaluation, calibrated uncertainty and a positive economic go/no-go result before shadow deployment.
 
 ## 7. Phase 4 — Implement and benchmark MPC offline
 
@@ -137,6 +146,8 @@ Phases 0–4 can proceed without the physical battery. **Phase 5 requires verifi
 ## 12. Verification checklist
 
 - [ ] Replay fixture handles 2026 spring-forward/fall-back transitions correctly; no timezone-naive price lookups.
+- [ ] Appliance events/remaining-time estimates are reconstructed **as known at forecast time**, not from final program outcomes; overlapping appliances or offline HA states never force fabricated power attribution.
+- [ ] Appliance-conditioned or NILM-assisted forecasts are compared to the unchanged aggregate baseline with no double-counted load and with deterministic fallback.
 - [ ] Negative and zero PVPC values do not break scheduling or allow fake profit.
 - [ ] Household load excludes battery charging and includes battery discharge when reconstructing gross consumption.
 - [ ] Time-series gaps, sample duration and cumulative meter resets do not create phantom spikes.
@@ -154,6 +165,7 @@ Phases 0–4 can proceed without the physical battery. **Phase 5 requires verifi
 |---|---|---|
 | `planning/home-battery-optimizer-implementation.md` | This phased spec and decision trail | Now |
 | `docs/adr/0001-home-battery-economic-dispatch.md` | Decision, alternatives and boundaries | Now |
+| `docs/adr/0002-appliance-aware-load-forecasting.md` | Optional appliance telemetry/NILM extension to the forecasting pipeline | Documentation |
 | `scripts/battery-optimizer/` or a dedicated standalone project | Ingestion, offline simulation, predictor, optimizer and CLI | 1–4 |
 | `test/` or project-local tests | Replay fixtures, controller property tests and financial correctness | 1–6 |
 | `apps/home-assistant/` | Optional Omnibattery integration and observability, using existing HACS/runbook processes | 5 |
