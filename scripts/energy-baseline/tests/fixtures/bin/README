@@ -1,0 +1,4 @@
+Synthetic test fixtures are generated in-memory by tests/conftest.py.
+
+No static binary fixture files are committed.  All Parquet data used in
+tests is written to pytest's tmp_path and discarded after the test run.

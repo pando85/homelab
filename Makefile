@@ -40,3 +40,12 @@ git-hooks:	## pre-commit install
 git-hooks:
 	pre-commit install
 	pre-commit install --hook-type commit-msg
+
+energy-baseline-test:	## run energy-baseline tests
+	cd scripts/energy-baseline && uv run pytest
+
+energy-baseline-lock:	## lock energy-baseline dependencies
+	cd scripts/energy-baseline && uv lock
+
+energy-baseline-lint:	## lint and format-check energy-baseline
+	cd scripts/energy-baseline && uv run ruff check . && uv run ruff format --check .

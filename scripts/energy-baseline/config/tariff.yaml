@@ -1,0 +1,30 @@
+---
+# Tariff configuration for energy-baseline (ADR-0003).
+#
+# The PVPC sensor (via pvpc_updated / ESIOS indicator 1001) reports €/kWh and
+# already includes access tolls + charges + production cost.  It EXCLUDES taxes.
+# Source: https://www.esios.ree.es/  indicator 1001 "PVPC".
+#
+# Tax rates below are effective-dated and MUST be confirmed against real invoices
+# before the pipeline will compute billed costs.  A null percentage means
+# UNCONFIRMED — the pipeline will refuse to produce a billed cost figure.
+version: 1
+
+taxes:
+  - valid_from: "2024-01-01"
+    iee_pct: null        # Impuesto Especial de Electricidad — null = UNCONFIRMED
+    iva_pct: null        # IVA — null = UNCONFIRMED
+    source: "unconfirmed"
+
+tariff_periods:
+  timezone: "Europe/Madrid"
+  # P1/P2/P3 local-time boundaries are configured here, not assumed.
+  # To be filled when the pipeline needs period assignment.
+
+battery:
+  capacity_kwh: 5.12               # Nameplate — confirmed
+  power_kw: 2.5                    # Max AC power — confirmed
+  round_trip_efficiency: null      # Must be measured before simulator runs
+  soc_window_min: null             # Must be set before simulator runs (fraction 0–1)
+  soc_window_max: null             # Must be set before simulator runs (fraction 0–1)
+  import_limit_kw: null            # Must be set or confirmed before cost model runs
