@@ -26,7 +26,7 @@ The Grafana dashboard "IoT - Energy" (uid `fe5f72fc-46b6-4cb0-adbf-cb08582dfd9e`
 
 ### Cost model
 
-The PVPC sensor is a published input. Its actual source, version, unit, and component composition (via `pvpc_updated` integration or ESIOS documentation) **must be confirmed** before double-adding tolls or decomposing into OMIE residuals. Tax rates are effective-dated and sourced from verified invoices or official tariff documentation; the pipeline reads them from configuration keyed by date, never from hardcoded defaults.
+The PVPC sensor is a published input. Per ESIOS documentation for indicator 1001 ("PVPC"), the published price **includes** access tolls, charges, and production cost; it **excludes** taxes (Impuesto Especial de Electricidad, IVA). Tax rates are effective-dated and sourced from verified invoices or official tariff documentation; the pipeline reads them from configuration keyed by date, never from hardcoded defaults. The installed sensor is `pvpc_updated` (HACS custom integration from [oscarrgarciia/HA-PVPC-Updated](https://github.com/oscarrgarciia/HA-PVPC-Updated)), which reads from the ESIOS API (`api.esios.ree.es`). The exact component composition delivered by the installed version **must be verified** against the live sensor output before double-adding tolls or decomposing into OMIE residuals — the upstream integration's behaviour may differ from the built-in [`pvpc` integration](https://www.home-assistant.io/integrations/pvpc/). See [ESIOS indicator 1001](https://www.esios.ree.es/es/indicadores/1001) for the official price definition.
 
 The existing dashboard cost model has an identifiable defect: a `>= 0` guard silently discards negative-price intervals, destroying the best charging opportunities. The precise magnitude of this defect is **not claimed** here — the dashboard code shows the filter; its impact must be measured by the pipeline.
 
@@ -40,7 +40,7 @@ Build a narrow, reproducible measurement-and-baseline capability as an offline i
 
 | In scope | Out of scope |
 |----------|-------------|
-| Reproducible Parquet dataset from Prometheus | New cluster service or `apps/` chart |
+| Reproducible Parquet dataset from Prometheus | Any cluster deployment *in this phase* (a scheduled extractor CronJob is planned for a later phase — see [production execution plan](../../planning/energy-baseline-production-execution.md)) |
 | Tariff-verified cost model (configurable tax) | Controller architecture selection |
 | Three benchmark policies on historical intervals | Appliance-aware forecasting / NILM |
 | Monthly reconciliation report | Live battery writes or actuation |
@@ -77,7 +77,17 @@ flowchart TB
     ANA -.-> MIRROR
 ```
 
-Price input comes from HA/Prometheus as the **current** input source. ESIOS tomorrow-prices are deferred. The optional `make db-load` mirror is dotted — no deployed DB is mandatory, no new PVC is claimed for this offline work. The offline dataset lives in a local output directory (private) or user-selected storage; a future PVC is optional and is not a deployment decision now. Concurrent DuckDB processes may read immutable Parquet; Postgres can snapshot for other consumers. TimescaleDB is preloaded in the observed Spilo image, making an optional mirror path plausible, but this is an extension availability observation, not a commitment. `openebs-zfspv` PVs are node-local and cannot mount on a remote node; scheduling guidance is limited to aligning PV affinity.
+Price input comes from HA/Prometheus as the **current** input source. ESIOS tomorrow-prices are deferred. The optional `make db-load` mirror is dotted — no deployed DB is mandatory, and this phase deploys nothing. The offline dataset lives in a local output directory (private) or user-selected storage. Durable production storage is a **planned follow-on**: a prusik-backed PVC mounted by a scheduled extractor CronJob, described in the [production execution plan](../../planning/energy-baseline-production-execution.md) and deliberately not created by this phase. Concurrent DuckDB processes may read immutable Parquet; Postgres can snapshot for other consumers. TimescaleDB is preloaded in the observed Spilo image, making an optional mirror path plausible, but this is an extension availability observation, not a commitment. `openebs-zfspv` PVs are node-local and cannot mount on a remote node; scheduling guidance is limited to aligning PV affinity.
+
+### Development and production deployment clarification (2026-10-23)
+
+This ADR was committed with status **Proposed**. The following clarification was recorded on 2026-10-23 and does not change the decision or status:
+
+- **Current development**: supervised offline work on a local PC, using `/tmp` for temporary exports. No cluster deployment, no persistent storage, no live battery/controller/Home Assistant configuration changes.
+- **Future production**: when the extraction pipeline is mature, it will run as a **scheduled batch extractor CronJob** in the cluster via GitOps, with a persistent PVC on prusik. This is an architecture clarification for future implementation, not a deployment decision made now. The extractor is a batch job, not a deployed service.
+- **Scope boundary preserved**: no live actuation, no controller architecture selection, no Home Assistant configuration changes. The production CronJob extracts data; it does not control anything.
+
+See [planning/energy-baseline-production-execution.md](../../planning/energy-baseline-production-execution.md) for concrete requirements when the production CronJob is scheduled.
 
 ### Data contract
 
@@ -107,26 +117,17 @@ The existing dashboard shows whole-house consumption around 14.35 kWh/day over a
 
 `recorder.purge_keep_days` is a single global setting (default 10 days, verified in effect: the `states` window measures 10.19 days). `include`/`exclude` gate whether an entity is recorded at all, never how long it is kept. There is no per-entity retention in Home Assistant.
 
-**Raising global retention was rejected.** Measured on `home-assistant-postgres` (PG 17.5): database 1.759 GB logical, PVC physical usage 684 MiB, ZFS compression ratio 2.622x. 24.2% of the database is long-term statistics, which is fixed and does not scale with retention; 75.3% is retention-sensitive. Marginal growth measures ~130 MB/day logical at the current write rate. Projected physical PVC usage:
+**Raising global retention was rejected.** The decisive factor: one entity, `sensor.rack_controller_fan_speed`, accounts for 45.8% of all recorder rows (~83k rows/day) while carrying one constant attribute blob and no value to this project. The appliance enum entities actually needed are a few hundred rows per day — roughly 0.1% of write volume. Raising global retention therefore pays a large amount of write growth, about half of it for that one sensor, to preserve a negligible row count. Secondary: long retention implies very large `states` tables, where autovacuum and history/API latency, not disk capacity, become the binding constraint.
 
-| `purge_keep_days` | Physical PVC usage |
-|-------------------|--------------------|
-| 90 | ~4.78 GiB |
-| 180 | ~9.15 GiB |
-| 365 | ~18.14 GiB |
-| 400 | ~19.84 GiB |
-
-The current PVC is 6 Gi with 5.09 GiB free, so 90 days would fit and 365+ days would require expansion (`allowVolumeExpansion=true`). The decisive factor: one entity, `sensor.rack_controller_fan_speed`, accounts for 45.8% of all recorder rows (~83k rows/day) while carrying one constant attribute blob and no value to this project. The appliance enum entities actually needed are a few hundred rows per day — roughly 0.1% of write volume. Raising global retention therefore pays ~130 MB/day, about half of it for that one sensor, to preserve a negligible row count. Secondary: 365–400 day retention implies ~71.5M `states` rows (~39x current), where autovacuum and history/API latency, not disk capacity, become the binding constraint. Also measured ~530 MB of index bloat in `states` (indexes 504.7 B/row vs 148.8 B heap), reclaimable only by `VACUUM FULL`/`REINDEX`, which is out of scope for this phase.
-
-**Adopted:** recorder configuration is left UNCHANGED — default 10-day retention, no include/exclude filters added, no PVC expansion. Appliance enum telemetry is preserved by periodic extraction into the canonical Parquet store via the CLI's `extract` command, reading the Home Assistant history API. No new always-running service and no cluster deployment is introduced.
+**Adopted:** recorder configuration is left UNCHANGED — default 10-day retention, no include/exclude filters added, no PVC expansion. Appliance enum telemetry is preserved by periodic extraction into the canonical Parquet store via the CLI's `extract` command, reading the Home Assistant history API. During development this runs manually on a local PC; when mature, extraction will run as a scheduled CronJob in the cluster (see [production execution plan](../../planning/energy-baseline-production-execution.md)). No new always-running service and no live configuration change is introduced.
 
 The recorder is the only coverage gap:
 
 | Data type | Source | Retention |
 |-----------|--------|-----------|
-| Numeric sensors (power, energy, price) | `prometheus-long-term` | 2.5 years, retention 9999d |
+| Numeric sensors (power, energy, price) | `prometheus-long-term` | retention 9999d; per-series start must be audited |
 | Numeric hourly aggregates | HA long-term statistics | indefinite |
-| Binary sensors | Prometheus `hass_binary_sensor_state` | 2.5 years |
+| Binary sensors | Prometheus `hass_binary_sensor_state` | retention 9999d; per-series start must be audited |
 | Enum state strings (washer/dishwasher status, cycle) | HA recorder only | 10 days — **the only gap** |
 
 `sensor`-domain non-numeric states are not exported to Prometheus as value gauges (only `state_change` counters, availability and last-updated), which is precisely why extraction is required.
@@ -179,15 +180,20 @@ These three policies are the complete set for this phase. They establish the dat
 | Naive dashboard-style cost model | Rejected | Drops negative prices, omits tax config |
 | Select controller architecture | Deferred | This phase produces evidence; later phase selects |
 | Hardware measurement and bringup | Deferred | Battery not yet installed; parameters flagged |
-| Raise recorder retention to preserve enum states | Rejected | ~130 MB/day global growth, 45.8% of it a single fan-speed sensor; enum extraction into Parquet is ~0.1% of the write volume |
+| Raise recorder retention to preserve enum states | Rejected | 45.8% of recorder writes are a single fan-speed sensor with no project value; enum extraction into Parquet is ~0.1% of the write volume |
 | Change HA recorder include/exclude filters | Rejected | Not required; recorder config left unchanged |
+| Production CronJob for enum extraction | Deferred | Development runs locally; production scheduling deferred until CLI is mature. See [execution plan](../../planning/energy-baseline-production-execution.md) |
 
 ## References
 
 - [ADR-0001 — Forecast-informed economic dispatch](0001-home-battery-economic-dispatch.md)
 - [ADR-0002 — Appliance-aware load forecasting](0002-appliance-aware-load-forecasting.md)
 - [Home battery optimizer implementation plan](../../planning/home-battery-optimizer-implementation.md)
+- [Production execution plan](../../planning/energy-baseline-production-execution.md)
 - [IoT Energy dashboard source](../../apps/home-assistant/dashboards/iot-energy.json)
 - [Home Assistant Prometheus integration](https://www.home-assistant.io/integrations/prometheus/)
 - [Home Assistant Recorder](https://www.home-assistant.io/integrations/recorder/)
+- [Home Assistant PVPC integration](https://www.home-assistant.io/integrations/pvpc/)
+- [HA-PVPC-Updated custom integration (oscarrgarciia)](https://github.com/oscarrgarciia/HA-PVPC-Updated)
+- [ESIOS indicator 1001 — PVPC](https://www.esios.ree.es/es/indicadores/1001)
 - [Prometheus query_range API](https://prometheus.io/docs/prometheus/latest/querying/api/#range-queries)
