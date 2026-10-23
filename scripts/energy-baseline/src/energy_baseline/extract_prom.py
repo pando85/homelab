@@ -58,6 +58,10 @@ Three empty cases are distinguished and recorded per entity in the manifest:
 ``c`` **query error** (HTTP error, ``status: "error"``, malformed payload) →
     raises, and no success manifest is written.
 
+Additionally, identical ``(labels_json, ts)`` samples (same full label set,
+same timestamp) are deduplicated; when such a sample carries **different**
+values, both rows are kept and the manifest flags ``overlapping_target_samples``.
+
 Other guarantees
 ----------------
 * Naive datetime strings are rejected; ISO-8601 is required and normalised to
@@ -70,6 +74,11 @@ Other guarantees
   4xx (including auth errors) and PromQL errors are raised immediately.
 * Row order is deterministic (``series_key``, then ``ts``, then
   ``scrape_instance``), so identical inputs produce byte-identical parts.
+* Dedup is keyed on ``(labels_json, ts)`` — the **full** label set including
+  ``instance``, so samples from different scrape targets are preserved and the
+  counter stitcher reconciles them.  An identical full-series sample appearing
+  twice (the SD race) is deduped; a conflicting value at the same timestamp is
+  retained and flagged as ``overlapping_target_samples``.
 * Parts are written with :func:`paths.write_part_atomic` (no-clobber,
   content-addressed).  A manifest is written **only** after every chunk
   succeeds, so orphaned parts from a failed run are ignored by consumers that
@@ -551,14 +560,16 @@ class _Row:
 
     @property
     def dedup_key(self) -> tuple[str, int]:
-        """Logical identity: one row per ``(series_key, ts)``.
+        """Logical identity: one row per ``(labels_json, ts)``.
 
-        Two scrape targets whose labels differ only in ``instance`` / ``pod_ip``
-        are the same logical series, so a sample exported twice at one timestamp
-        (the classic service-discovery race) must not become two rows — that
-        would look like a zero-width delta to the counter stitcher.
+        The **full** label set (including ``instance``) is the dedup key so that
+        observations from different scrape targets at the same timestamp are
+        preserved — collapsing them would silently discard raw data.  Only
+        truly identical series (same full labels, same timestamp) are deduped.
+        Value conflicts (same labels + same ts, different value) are retained
+        and flagged as ``overlapping_target_samples`` for the stitch step.
         """
-        return (self.series_key, self.ts_us)
+        return (self.labels_json, self.ts_us)
 
 
 @dataclass
@@ -577,6 +588,7 @@ class _EntityStats:
     duplicates: int = 0
     boundary_duplicates: int = 0
     non_finite: int = 0
+    overlapping_target_samples: int = 0
 
     @property
     def entity_id(self) -> str:
@@ -604,6 +616,8 @@ class _EntityStats:
             out.append(f"boundary_duplicates_dropped:{e}:{self.boundary_duplicates}")
         if self.non_finite:
             out.append(f"non_finite_samples_dropped:{e}:{self.non_finite}")
+        if self.overlapping_target_samples:
+            out.append(f"overlapping_target_samples:{e}:{self.overlapping_target_samples}")
         if e in DEAD_DUPLICATE_ENTITY_IDS:
             out.append(f"dead_duplicate_entity:{e}")
         return out
@@ -626,6 +640,7 @@ class _EntityStats:
             "samples_outside_window": self.samples_outside_window,
             "duplicates_dropped": self.duplicates + self.boundary_duplicates,
             "non_finite_dropped": self.non_finite,
+            "overlapping_target_samples": self.overlapping_target_samples,
         }
 
 
@@ -754,36 +769,47 @@ def dedupe_rows(
     stats_by_entity: dict[str, _EntityStats],
     watermark: dict[str, int],
 ) -> list[_Row]:
-    """Drop repeated ``(series_key, ts)`` samples and stale boundary rows.
+    """Drop repeated ``(labels_json, ts)`` samples and stale boundary rows.
 
-    * Within a chunk: one row per logical series per timestamp.  Two targets
-      whose labels differ only in ``instance`` are the same series, so a sample
-      they both export at the same instant is a duplicate scrape artefact — the
-      first in deterministic order survives and its ``scrape_instance`` is kept.
-    * Across chunks: anything at or below the per-series watermark was already
-      emitted, which the half-open partition makes impossible for legitimate
-      samples.  The watermark is read from a snapshot taken before this chunk is
-      applied, so two distinct series sharing one timestamp both survive.
+    * Within a chunk: one row per **full** label set per timestamp.  Two targets
+      whose labels differ in any label (including ``instance``) produce distinct
+      rows — collapsing them would silently discard raw data.  A truly identical
+      sample (same full labels, same timestamp, same value) is deduped.  When
+      the same full series reports the same timestamp with *different* values the
+      conflict is retained and flagged as ``overlapping_target_samples``.
+    * Across chunks: anything at or below the per-``labels_json`` watermark was
+      already emitted, which the half-open partition makes impossible for
+      legitimate samples.  The watermark is read from a snapshot taken before
+      this chunk is applied, so two distinct series sharing one timestamp both
+      survive.
     """
     ordered = sorted(rows)
     previous = dict(watermark)
-    seen: set[tuple[str, int]] = set()
+    seen_values: dict[tuple[str, int], set[float]] = {}
     kept: list[_Row] = []
     for row in ordered:
         stats = stats_by_entity[row.entity]
-        if row.ts_us <= previous.get(row.series_key, -1):
+        if row.ts_us <= previous.get(row.labels_json, -1):
             stats.boundary_duplicates += 1
             continue
-        if row.dedup_key in seen:
-            stats.duplicates += 1
+        if row.dedup_key in seen_values:
+            if row.value in seen_values[row.dedup_key]:
+                stats.duplicates += 1
+                continue
+            # Value conflict: same full labels + timestamp, different value.
+            # Retain both and flag for the stitch step.
+            stats.overlapping_target_samples += 1
+            seen_values[row.dedup_key].add(row.value)
+            kept.append(row)
+            stats.record_kept(row)
             continue
-        seen.add(row.dedup_key)
+        seen_values[row.dedup_key] = {row.value}
         kept.append(row)
         stats.record_kept(row)
     for row in kept:
-        current = watermark.get(row.series_key, -1)
+        current = watermark.get(row.labels_json, -1)
         if row.ts_us > current:
-            watermark[row.series_key] = row.ts_us
+            watermark[row.labels_json] = row.ts_us
     return kept
 
 
@@ -1069,7 +1095,9 @@ def validate_raw(
     :func:`schemas.validate_table`, and additionally reports non-finite values,
     a filename content hash that does not match the file bytes, ``labels_json``
     that is not a JSON object (spot-checked on the first row), duplicate
-    ``(series_key, ts)`` rows, and parts whose rows are not in the
+    ``(labels_json, ts, value)`` rows (exact same sample twice — a different
+    ``series_key`` at the same ``ts`` is legitimate; different instances sharing
+    a ``series_key`` are distinct raw rows), and parts whose rows are not in the
     deterministic ``(series_key, ts, scrape_instance)`` order the extractor
     guarantees.
 
@@ -1176,9 +1204,21 @@ def validate_raw(
         order = list(zip(keys, ts_us, inst, strict=True))
         if order != sorted(order):
             violations.append(f"{path.name}: rows are not in deterministic order")
-        if len(set(zip(keys, ts_us, strict=True))) != len(keys):
+        # Check for exact-duplicate raw rows (same full label set + timestamp + value).
+        # Different ``labels_json`` values sharing one ``series_key`` at the same
+        # timestamp are legitimate (distinct scrape targets) and must not be
+        # flagged.  Overlapping values (same labels_json, same ts, different value)
+        # are also expected — the extractor retains both.  Only an exact
+        # ``(labels_json, ts, value)`` triple that appears more than once is a bug.
+        raw_triples = [
+            (lj, ts, v)
+            for lj, ts, v in zip(
+                table.column("labels_json").to_pylist(), ts_us, values, strict=True
+            )
+        ]
+        if len(set(raw_triples)) != len(raw_triples):
             violations.append(
-                f"{path.name}: duplicate (series_key, ts) rows — not one sample per instant"
+                f"{path.name}: duplicate (labels_json, ts, value) rows — exact same sample twice"
             )
 
         if n:

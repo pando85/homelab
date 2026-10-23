@@ -165,11 +165,61 @@ def _ensure_private_dir(path: Path) -> None:
         d.mkdir(mode=0o700, exist_ok=True)
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    """Write *all* of *data* to file descriptor *fd*, handling partial writes.
+
+    ``os.write`` is not guaranteed to write the full buffer in a single call
+    (especially on network filesystems, pipes, or under memory pressure). This
+    helper loops until every byte is flushed. A zero-byte return from
+    ``os.write`` is treated as a fatal signal — it means the descriptor is
+    broken (closed, pipe drained, or otherwise unable to make progress) and
+    continuing would silently truncate the manifest.
+
+    Raises:
+        OSError: zero-byte progress before the full buffer was written.
+    """
+    offset = 0
+    length = len(data)
+    while offset < length:
+        written = os.write(fd, data[offset:])
+        if written == 0:
+            raise OSError(
+                f"os.write returned 0 after {offset}/{length} bytes — "
+                "refusing to continue writing a truncated manifest"
+            )
+        offset += written
+
+
+def _fsync_directory(path: Path) -> None:
+    """Best-effort fsync of the directory entry at *path*.
+
+    After a hard-link publish the file content is already fsynced, but the
+    directory entry itself is only crash-durable if the directory is fsynced
+    too. Failures are silent — the content is already durable, and not every
+    filesystem exposes a directory fd that can be fsynced.
+    """
+    try:
+        dir_fd = os.open(str(path), os.O_RDONLY | os.O_DIRECTORY)
+    except OSError:
+        return
+    try:
+        os.fsync(dir_fd)
+    except OSError:
+        pass
+    finally:
+        os.close(dir_fd)
+
+
 def write_manifest(data_dir: Path, manifest: ExtractionManifest) -> Path:
     """Write a manifest JSON file atomically with no-clobber semantics.
 
     * Uses the same atomic-write pattern as :func:`paths.write_part_atomic`:
       unique temp file, fsync, hard-link publish.
+    * The content is written through :func:`_write_all`, which loops on
+      partial writes and raises on zero-byte progress, so a truncated
+      manifest can never be silently published.
+    * After the hard link is published, the **directory** is fsynced
+      (best-effort) so the link is crash-durable.
     * Refuses to overwrite an existing manifest (raises ``FileExistsError``).
     * Sets file mode 0o600 and directory mode 0o700 (new dirs only).
     * Returns the path written.
@@ -201,7 +251,7 @@ def write_manifest(data_dir: Path, manifest: ExtractionManifest) -> Path:
             dir=str(manifests_dir),
         )
         tmp_path = Path(tmp_str)
-        os.write(fd, content_bytes)
+        _write_all(fd, content_bytes)
         os.fsync(fd)
         os.close(fd)
         fd = None
@@ -215,6 +265,9 @@ def write_manifest(data_dir: Path, manifest: ExtractionManifest) -> Path:
                 raise FileExistsError(
                     f"refusing to overwrite manifest {path} with different content"
                 )
+        else:
+            # Best-effort directory fsync so the hard link is crash-durable.
+            _fsync_directory(manifests_dir)
     except BaseException:
         if fd is not None:
             os.close(fd)
@@ -231,6 +284,34 @@ def read_manifest(data_dir: Path, extraction_id: str) -> ExtractionManifest:
     path = data_dir / "manifests" / f"{extraction_id}.json"
     data = json.loads(path.read_text())
     return ExtractionManifest(**data)
+
+
+#: Suffix appended to a code version whose working tree carries uncommitted changes.
+DIRTY_SUFFIX = "-dirty"
+
+#: Prefix of the code version when git itself is unavailable.  A sentinel, never a
+#: real commit, so "nothing is known" can never be mistaken for a clean tree.
+NO_GIT_MARKER = "nogit"
+
+
+def code_version() -> str:
+    """Single shared code identity for lineage, including an unambiguous dirty marker.
+
+    Clean working tree: the bare 40-character commit SHA.  Dirty tree: the SHA
+    followed by :data:`DIRTY_SUFFIX` (``-dirty``).  Git unavailable: the sentinel
+    :data:`NO_GIT_MARKER` (``nogit``) followed by the package distribution
+    version, so "nothing is known" can never be mistaken for a clean tree.
+
+    Used by both :mod:`build` and :mod:`benchmark` so a dirty tree produces a
+    different ``dataset_id`` from a clean one — the reproducibility guarantee
+    the id exists to provide.
+    """
+    rev, dirty = _get_code_version()
+    if rev is None:
+        from energy_baseline import __version__
+
+        return f"{NO_GIT_MARKER}@energy-baseline=={__version__}"
+    return f"{rev}{DIRTY_SUFFIX if dirty else ''}"
 
 
 def new_manifest(

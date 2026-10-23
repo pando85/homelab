@@ -140,12 +140,31 @@ def _ensure_private_dir(path: Path) -> None:
         d.mkdir(mode=0o700, exist_ok=True)
 
 
+def _write_all(fd: int, data: bytes) -> None:
+    """Write *all* of *data* to file descriptor *fd*, handling partial writes.
+
+    ``os.write`` is not guaranteed to write the full buffer in a single call.
+    This helper loops until every byte is flushed, raising on zero-byte
+    progress (which would signal a broken pipe or closed fd).
+    """
+    offset = 0
+    while offset < len(data):
+        written = os.write(fd, data[offset:])
+        if written == 0:
+            raise OSError(f"os.write returned 0 after {offset}/{len(data)} bytes")
+        offset += written
+
+
 def write_part_atomic(path: Path, data: bytes) -> str:
     """Write *data* atomically to *path* with no-clobber semantics.
 
     * Creates a uniquely-named temp file in the same parent directory,
-      writes *data*, fsyncs, then publishes via :func:`os.link` for
-      atomic no-clobber semantics.
+      writes all of *data* (partial writes handled via :func:`_write_all`),
+      fsyncs the file, then publishes via :func:`os.link` for atomic
+      no-clobber semantics.
+    * After the link, fsyncs the **directory** entry so the hard link is
+      durable even after a crash (best-effort on Linux; silent failure is
+      acceptable because the file content is already fsynced).
     * If *path* already exists with **identical** content (same SHA-256),
       returns immediately (idempotent).
     * If *path* already exists with **different** content, raises
@@ -181,7 +200,7 @@ def write_part_atomic(path: Path, data: bytes) -> str:
             dir=str(path.parent),
         )
         tmp_path = Path(tmp_str)
-        os.write(fd, data)
+        _write_all(fd, data)
         os.fsync(fd)
         os.close(fd)
         fd = None  # closed above
@@ -199,6 +218,17 @@ def write_part_atomic(path: Path, data: bytes) -> str:
                     f"(existing={existing_sha[:8]}, new={content_sha[:8]})"
                 )
             # Content matches — idempotent, just clean up temp
+        else:
+            # Best-effort directory fsync so the link is crash-durable.
+            # On Linux, directory fsync flushes the directory entry to disk.
+            try:
+                dir_fd = os.open(str(path.parent), os.O_RDONLY | os.O_DIRECTORY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError:
+                pass  # best-effort: content is already fsynced
     except BaseException:
         if fd is not None:
             os.close(fd)

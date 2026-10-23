@@ -31,9 +31,63 @@ Temporary development exports in `/tmp` are **not durable** and do not meet prod
 
 ### 1. Freshness and Coverage
 
-- **Export freshness**: each run must cover data no older than 10 days from the current date. The 10-day recorder window is a hard deadline — enum history not extracted within it is permanently lost.
+- **Export freshness**: each run must cover data no older than the recorder's
+  declared retention, with margin. Enum history not extracted within that window is
+  permanently lost — unlike the Prometheus archive, this source cannot be re-queried
+  later.
 - **Overlap dedup**: extraction windows may overlap between consecutive runs. Raw part files are append-only and *do* contain duplicated rows across overlapping pulls (each run stamps its own `extraction_id`); deduplication happens deterministically at **build** time, not in the raw store. The natural keys are the full original label set plus the true sample timestamp for Prometheus rows, and `entity_id` plus `last_changed` for HA history rows. Because the volume is negligible, re-pulling an overlapping window is cheap and safe.
 - **Unfinished runs produce no coverage**: a run that fails or is interrupted before writing its manifest does not count toward coverage. The next run must re-cover the same window. Orphaned raw parts from a failed run are therefore possible and must be ignored by consumers that resolve coverage from manifests rather than from part-file listing.
+- **Empty chunks are recorded, not absorbed**: each successful run's manifest declares how
+  many chunks it asked for, how many parts it wrote, and names every zero-row chunk in
+  `quality_flags` plus `params.chunk_outcomes`. Treat a `chunk_accounting_mismatch` or
+  `empty_chunk` flag as coverage that must be re-attempted while the window may still exist.
+
+#### Recorder retention: declared, not measured
+
+The retention that freshness is sized against comes from configuration, not from inference
+off extracted rows:
+
+- **Declared:** [`apps/home-assistant/config/configuration.yaml`](../apps/home-assistant/config/configuration.yaml)
+  has a `recorder:` block that sets **only** `db_url`. There is no `purge_keep_days`, no
+  `commit_interval`, and no `exclude`/`include` anywhere in that file or in the packages it
+  includes (`apps/home-assistant/config/integrations/`), so Home Assistant's documented
+  defaults apply — `purge_keep_days: 10`, `auto_purge: true` (nightly at 04:12 local),
+  `commit_interval: 5`, no entity filter
+  ([HA recorder integration reference](https://www.home-assistant.io/integrations/recorder/)).
+  No filter gates the appliance enum entities, so they are recorded. That declared 10 days is
+  the only retention figure this plan treats as fact.
+  [ADR-0003 §"Appliance enum telemetry — resolved"](../docs/adr/0003-phase1-measurement-and-baseline.md)
+  separately records an audit in which the recorder's `states` window measured 10.19 days; that
+  is a table-wide observation from a different audit, not a measured coverage boundary for these
+  entities, and this plan does not rely on it.
+- **Observed on the 2026-10-23 run** (manifest `750bce0e-6956-472b-9f0b-172ce4936a86`,
+  source `ha_history`, window 2026-10-14 → 2026-10-23T10:59:56Z): 10 chunks declared,
+  9 parts written, 39 rows; the 2026-10-14 chunk returned nothing and `quality_flags` was
+  `[]`. The earliest observed `last_changed` across those rows is 2026-10-15T11:39:47Z,
+  with per-entity earliest on 10-15 and 10-17, and 14 of the 39 rows carry `carry_in=True`.
+  These are the facts; the declared figure above is not derived from them.
+- **What the declared retention already rules out:** the nightly purge keeps 10 days relative to
+  the purge, so at the 2026-10-23 run the declared window reached back to roughly 2026-10-13. The
+  empty 2026-10-14 chunk therefore sits **inside** the declared retention and is not explained by
+  it. That is arithmetic from configuration, not an inference from extracted rows — and it is a
+  further reason not to read a purge boundary out of a run's data.
+- **Unverified:** the **effective coverage boundary**. A "~8 days, measured" figure is **not
+  established** and should not be repeated. An earliest *observed* row is not a global
+  retention boundary — the appliances may simply not have changed state before it — and one
+  empty chunk has at least three causes (no transitions in the window, already purged, or a
+  degenerate empty response) that the HA history API does not distinguish. The extractor
+  records all three possibilities without selecting one, and does not probe retention or write
+  a synthetic state to find out, because that would change recorder configuration, which
+  ADR-0003 forbids in this phase. The effective boundary **could be shorter than the declared
+  10 days** (a failed or lagging purge, or missing rows, is not ruled out); nothing here proves
+  it is, and nothing here proves it is not. Establishing it requires reading the recorder
+  database directly (read-only), which is out of scope for this phase.
+
+The operational conclusion does not depend on which number is right, and is unchanged: enum
+history must be extracted on a recurring schedule **well inside the declared retention**,
+because it cannot be recovered later, and that recurring production schedule is **still not
+implemented** — this document remains a plan, and the extraction has only ever been run
+manually.
 
 ### 2. Deterministic Immutable Manifests
 
@@ -46,7 +100,7 @@ Temporary development exports in `/tmp` are **not durable** and do not meet prod
 - **`concurrencyPolicy: Forbid`** — no overlapping jobs. If a run is still active when the next schedule fires, the new run is skipped.
 - **Retries**: `backoffLimit` configured to retry transient failures (network timeouts, HA API 5xx). Permanent failures (auth, schema mismatch) must not retry indefinitely — set a reasonable limit (e.g. 3–5) and alert on exhaustion.
 - **Timeouts**: `activeDeadlineSeconds` set to bound runaway jobs. The timeout must be generous enough for a full backfill but short enough to detect hangs.
-- **Schedule**: to be determined when the CronJob is created. Daily is comfortable against a 10-day window; the exact cron expression is a deployment-time decision.
+- **Schedule**: to be determined when the CronJob is created. Daily is comfortable against the declared 10-day retention and stays comfortable even if the effective boundary turns out to be shorter; the exact cron expression is a deployment-time decision.
 
 ### 4. Credentials and Secrets
 
@@ -64,7 +118,8 @@ Temporary development exports in `/tmp` are **not durable** and do not meet prod
 
 ### 6. Observability and Alerting
 
-- **Scheduler heartbeat alert**: a PrometheusRule that fires when the CronJob has not completed a successful run within a configurable threshold (e.g. `> 2 days` since last successful completion). The threshold must leave a recovery window before the 10-day hard deadline.
+- **Scheduler heartbeat alert**: a PrometheusRule that fires when the CronJob has not completed a successful run within a configurable threshold (e.g. `> 2 days` since last successful completion). The threshold must leave a recovery window before the declared retention expires — sized against the 10 days in config, which is the only figure this plan can cite.
+- **Silent-gap alerting**: a job that exits 0 having skipped chunks is a data-loss event for this source, so alert on the manifest's chunk accounting (`params.chunk_accounting.mismatch`, `empty_chunk:*` and `chunk_accounting_mismatch` quality flags), not only on job failure.
 - **Job metrics**: `kube_job_status_failed`, `kube_job_status_succeeded`, and `kube_job_complete` are available from kube-state-metrics. The alert queries these to detect missed runs.
 - **Pod logs**: captured by Vector and shipped to Loki (standard cluster path). No special logging configuration required beyond structured output from the CLI.
 
@@ -94,7 +149,9 @@ When the CLI is mature and this plan is approved, the implementation commit must
 - [ ] Reference the ExternalSecret via `envSecret` in the CronJob pod spec (never copy to files)
 - [ ] Set `concurrencyPolicy: Forbid`, `backoffLimit`, `activeDeadlineSeconds`
 - [ ] Create PrometheusRule for scheduler heartbeat alert
-- [ ] Verify extraction covers a window < 10 days old on first run
+- [ ] Alert on per-chunk accounting flags (`chunk_accounting_mismatch`, `empty_chunk:*`), not only on job failure
+- [ ] Verify extraction covers a window inside the declared retention (10 days per `recorder` config, no override) with margin on first run
+- [ ] If a tighter bound is needed, establish the effective retention boundary from a **read-only** recorder database query — do not infer it from the earliest extracted row
 - [ ] Document the Vault path and PVC size in this file (update from "to be determined")
 
 ## References

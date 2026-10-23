@@ -369,3 +369,172 @@ class TestManifestDeterminism:
         # Verify keys are sorted in the JSON
         keys = list(data.keys())
         assert keys == sorted(keys)
+
+
+class TestPartialWriteHandling:
+    def test_short_write_is_retried_until_complete(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Simulate os.write returning fewer bytes than requested (partial write).
+
+        The write loop must retry until all bytes are flushed. We simulate a
+        filesystem that only accepts 10 bytes at a time, so a 100-byte manifest
+        requires 10 calls. The final file must contain all 100 bytes.
+        """
+        from energy_baseline import manifest as manifest_mod
+
+        original_write = os.write
+        call_count = {"n": 0}
+
+        def short_write(fd: int, data: bytes) -> int:
+            """Simulate a filesystem that only accepts 10 bytes per call."""
+            call_count["n"] += 1
+            # Return at most 10 bytes written
+            return original_write(fd, data[:10])
+
+        monkeypatch.setattr(manifest_mod.os, "write", short_write)
+
+        eid = new_extraction_id()
+        manifest = ExtractionManifest(
+            manifest_version=1,
+            extraction_id=eid,
+            started_at="2026-01-01T00:00:00Z",
+            finished_at=None,
+            source="prometheus",
+            code_version=None,
+            code_dirty=None,
+            config_hash="a" * 64,
+            schema_version=1,
+            params={},
+            entities=[],
+            source_window_start="2026-01-01T00:00:00Z",
+            source_window_end="2026-01-02T00:00:00Z",
+            row_count=0,
+        )
+        path = write_manifest(tmp_path, manifest)
+        # The manifest should be fully written despite the short writes
+        assert path.exists()
+        content = path.read_bytes()
+        assert len(content) > 0
+        # Verify we can parse it back
+        loaded = read_manifest(tmp_path, eid)
+        assert loaded.extraction_id == eid
+        # The loop should have been called multiple times
+        assert call_count["n"] > 1, "expected multiple write calls for short writes"
+
+    def test_zero_progress_raises_oserror(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Simulate os.write returning 0 (zero-byte progress) — must raise OSError.
+
+        A zero-byte return from os.write signals a broken descriptor (closed,
+        pipe drained, or otherwise unable to make progress). The write loop
+        must raise immediately rather than silently truncating the manifest.
+        """
+        from energy_baseline import manifest as manifest_mod
+
+        call_count = {"n": 0}
+
+        def zero_write(fd: int, data: bytes) -> int:
+            """Simulate a broken descriptor that returns 0 after the first call."""
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                # First call: write some bytes normally
+                return len(data)
+            # Subsequent calls: return 0 (broken)
+            return 0
+
+        monkeypatch.setattr(manifest_mod.os, "write", zero_write)
+
+        eid = new_extraction_id()
+        manifest = ExtractionManifest(
+            manifest_version=1,
+            extraction_id=eid,
+            started_at="2026-01-01T00:00:00Z",
+            finished_at=None,
+            source="prometheus",
+            code_version=None,
+            code_dirty=None,
+            config_hash="a" * 64,
+            schema_version=1,
+            params={},
+            entities=[],
+            source_window_start="2026-01-01T00:00:00Z",
+            source_window_end="2026-01-02T00:00:00Z",
+            row_count=0,
+        )
+        # The first write succeeds, but the loop will call write again (since
+        # we returned len(data), the loop thinks it's done). Actually, the loop
+        # checks offset < length; if we return len(data), offset becomes length
+        # and the loop exits. So we need to return LESS than len(data) on the
+        # first call, then 0 on the second.
+        call_count["n"] = 0
+
+        def partial_then_zero(fd: int, data: bytes) -> int:
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                # First call: write half the data
+                return len(data) // 2
+            # Second call: return 0 (broken)
+            return 0
+
+        monkeypatch.setattr(manifest_mod.os, "write", partial_then_zero)
+
+        with pytest.raises(OSError, match="os.write returned 0"):
+            write_manifest(tmp_path, manifest)
+
+        # The temp file should be cleaned up
+        tmps = list((tmp_path / "manifests").glob(".*tmp"))
+        assert tmps == []
+
+
+class TestCodeVersionHelper:
+    """Tests for the shared code_version() helper (Fix 3)."""
+
+    def test_clean_tree_no_suffix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Clean tree: bare 40-char SHA, no suffix."""
+        from energy_baseline.manifest import code_version
+
+        monkeypatch.setattr(
+            "energy_baseline.manifest._get_code_version",
+            lambda: ("a" * 40, False),
+        )
+        result = code_version()
+        assert result == "a" * 40
+        assert "-dirty" not in result
+
+    def test_dirty_tree_has_suffix(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Dirty tree: SHA + '-dirty' suffix."""
+        from energy_baseline.manifest import code_version
+
+        monkeypatch.setattr(
+            "energy_baseline.manifest._get_code_version",
+            lambda: ("a" * 40, True),
+        )
+        result = code_version()
+        assert result == "a" * 40 + "-dirty"
+
+    def test_no_git_returns_sentinel(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Git unavailable: sentinel containing 'nogit' and package version."""
+        from energy_baseline.manifest import code_version
+
+        monkeypatch.setattr(
+            "energy_baseline.manifest._get_code_version",
+            lambda: (None, None),
+        )
+        result = code_version()
+        assert "nogit" in result
+        assert "energy-baseline==" in result
+        assert result != "a" * 40  # sentinel is distinct from a clean SHA
+
+    def test_build_and_benchmark_use_same_helper(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """build.code_version() and benchmark.code_version() delegate to the same helper."""
+        from energy_baseline import benchmark as bm
+        from energy_baseline import build as build_mod
+
+        monkeypatch.setattr(
+            "energy_baseline.manifest._get_code_version",
+            lambda: ("b" * 40, True),
+        )
+        assert build_mod.code_version() == bm.code_version()
+        assert build_mod.code_version() == "b" * 40 + "-dirty"

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from energy_baseline import paths as paths_module
 from energy_baseline.paths import (
     _find_git_root,
     _is_inside_git_tree,
@@ -274,3 +275,100 @@ class TestWritePartAtomic:
 
         assert errors == [], f"unexpected errors: {errors}"
         assert len(successes) >= 1, "at least one writer should succeed"
+
+
+# ---------------------------------------------------------------------------
+# Partial-write handling (private helper _write_all)
+# ---------------------------------------------------------------------------
+
+
+class TestPartialWrite:
+    """_write_all must loop until every byte is flushed.
+
+    ``os.write`` is not guaranteed to write the whole buffer in one call —
+    the previous ``os.write(fd, data)`` silently truncated payloads on a short
+    write.  These tests monkeypatch :func:`os.write` to return short counts and
+    verify the published file still contains *all* bytes (no-clobber semantics
+    preserved: hash must match).
+    """
+
+    def test_os_write_short_write_loops_until_complete(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        real_write = os.write
+        calls: list[int] = []
+
+        def short_write(fd: int, buf: bytes, *_args: object) -> int:
+            calls.append(len(buf))
+            # Never write more than 1 byte at a time (pathological case).
+            return real_write(fd, buf[:1])
+
+        monkeypatch.setattr(paths_module.os, "write", short_write)
+        target = tmp_path / "partial.parquet"
+        data = bytes(range(256)) * 4  # 1 KiB of structured content
+        sha = write_part_atomic(target, data)
+
+        assert target.read_bytes() == data, "short write must not truncate the file"
+        import hashlib
+
+        assert sha == hashlib.sha256(data).hexdigest()
+        assert len(calls) >= len(data), "must have made at least one write per byte"
+
+    def test_os_write_zero_progress_raises(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A zero-byte return from os.write signals a dead fd and must raise."""
+
+        def dead_write(*_args: object, **_kw: object) -> int:
+            return 0
+
+        monkeypatch.setattr(paths_module.os, "write", dead_write)
+        target = tmp_path / "dead.parquet"
+        with pytest.raises(OSError, match="returned 0"):
+            write_part_atomic(target, b"never written")
+        # No-clobber: nothing was published.
+        assert not target.exists()
+
+    def test_short_write_does_not_clobber_existing_different_content(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Integrity holds under short writes: conflicting content still raises."""
+        target = tmp_path / "noclobber.parquet"
+        write_part_atomic(target, b"original content")
+
+        real_write = os.write
+
+        def short_write(fd: int, buf: bytes, *_args: object) -> int:
+            return real_write(fd, buf[:2])
+
+        monkeypatch.setattr(paths_module.os, "write", short_write)
+        with pytest.raises(FileExistsError, match="refusing to overwrite"):
+            write_part_atomic(target, b"totally different")
+        assert target.read_bytes() == b"original content"
+
+    def test_directory_fsync_is_best_effort(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failing directory fsync must not break the write (content is already durable)."""
+        real_fsync = os.fsync
+        fsynced: list[int] = []
+
+        def selective_fsync(fd: int) -> None:
+            fsynced.append(fd)
+            # Directory fds fail; file fds succeed.
+            try:
+                mode = os.fstat(fd).st_mode
+            except OSError:
+                return
+            import stat as stat_mod
+
+            if stat_mod.S_ISDIR(mode):
+                raise OSError("simulated fsync failure on directory")
+            real_fsync(fd)
+
+        monkeypatch.setattr(paths_module.os, "fsync", selective_fsync)
+        target = tmp_path / "dir" / "fsync.parquet"
+        sha = write_part_atomic(target, b"payload")
+        assert target.read_bytes() == b"payload"
+        assert len(sha) == 64
+        assert len(fsynced) >= 2, "file fsync and directory fsync should both be attempted"

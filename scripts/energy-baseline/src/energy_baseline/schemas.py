@@ -37,13 +37,30 @@ Allowed categorical values
     - ``counter_reset_bridged`` — counter reset detected and bridged
 
 ``allocation_quality`` (ANALYSIS_INTERVAL):
-    - ``exact``       — energy allocated exactly to 15-min intervals
-    - ``unknown_gap`` — gap in allocation; unknown where energy falls
+    - ``exact``              — every contributing counter span lay wholly inside
+      this interval, so its energy is attributed without any assumption
+    - ``estimated_boundary`` — the interval's energy is a real counter delta
+      (``energy_quality="measured"``), but at least one contributing span crossed
+      a 15-minute boundary and its share was split proportionally to time at that
+      boundary; the split is an estimate of *where* inside the span the energy
+      fell, never an invented total.  On the live archive samples arrive every
+      ~60 s at irregular sub-second offsets, so almost every span straddles a
+      boundary and this is the normal case, not the exception.  Totals still
+      telescope: a span's pieces re-sum to its delta, so daily and monthly sums
+      stay exact counter differences
+    - ``unknown_gap``        — no allocation claim at all: the interval sits in a
+      genuine data gap, spans a counter reset, or has no overlapping sample span
 
 ``price_quality`` (ANALYSIS_INTERVAL):
-    - ``measured``      — actual price from PVPC sensor
-    - ``forward_filled`` — price forward-filled from last known value
+    - ``measured``      — price observed within this clock hour, and every sample
+      in that hour agreed (PVPC is hourly by construction, so all four intervals
+      of the hour share one value)
+    - ``forward_filled`` — no sample within the hour; a value still within the
+      builder's staleness bound was carried forward from the previous hour
     - ``missing``       — no price available
+    - ``ambiguous``     — samples within the hour disagreed; nothing was averaged
+      or silently picked, so the hour carries no price and the disagreement is
+      counted in the build manifest
 
 ``dst_transition`` (ANALYSIS_INTERVAL):
     - null / empty  — normal interval

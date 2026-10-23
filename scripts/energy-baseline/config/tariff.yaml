@@ -19,12 +19,74 @@ taxes:
 tariff_periods:
   timezone: "Europe/Madrid"
   # P1/P2/P3 local-time boundaries are configured here, not assumed.
-  # To be filled when the pipeline needs period assignment.
+  # Hours are local wall-clock and half-open: [start_hour, end_hour), so
+  # end_hour: 24 closes the day.  Each day type must tile hours 0-24 exactly
+  # once — load_config() rejects a hole or an overlap rather than guessing.
+  #
+  # Standard 2.0TD bands (P1 peak / P2 intermediate / P3 valle).  The band
+  # *shape* is the published structure of the tariff; the prices themselves
+  # always come from the PVPC sensor, never from this file.
+  rules:
+    weekday:
+      - {period: 3, start_hour: 0, end_hour: 8}    # 00:00-08:00 valle
+      - {period: 2, start_hour: 8, end_hour: 10}   # 08:00-10:00 intermediate
+      - {period: 1, start_hour: 10, end_hour: 14}  # 10:00-14:00 peak
+      - {period: 2, start_hour: 14, end_hour: 18}  # 14:00-18:00 intermediate
+      - {period: 1, start_hour: 18, end_hour: 22}  # 18:00-22:00 peak
+      - {period: 2, start_hour: 22, end_hour: 24}  # 22:00-24:00 intermediate
+    saturday:
+      - {period: 3, start_hour: 0, end_hour: 24}   # 00:00-24:00 valle
+    sunday:
+      - {period: 3, start_hour: 0, end_hour: 24}   # 00:00-24:00 valle
+  # KNOWN INACCURACY: no national or regional (autonomous-community) holiday
+  # calendar has been sourced yet, so this list stays empty and holiday dates
+  # fall back to their natural day type — a holiday on a Monday is priced with
+  # the weekday bands, which over-states peak for those days.  Do not invent
+  # holiday dates here: add one only when it is sourced, and say where from.
+  holidays: []
+  # Day type a sourced holiday borrows its bands from (once the list above is
+  # populated, holidays behave like Sunday: all-day valle).
+  holiday_day_type: "sunday"
 
 battery:
+  # USER-CONFIRMED 2026-10-23.  Only the two nameplate figures below are
+  # confirmed hardware facts; every other value in this block is a PROVISIONAL
+  # assumption that still has to be replaced by a measurement.
   capacity_kwh: 5.12               # Nameplate — confirmed
   power_kw: 2.5                    # Max AC power — confirmed
-  round_trip_efficiency: null      # Must be measured before simulator runs
-  soc_window_min: null             # Must be set before simulator runs (fraction 0–1)
-  soc_window_max: null             # Must be set before simulator runs (fraction 0–1)
-  import_limit_kw: null            # Must be set or confirmed before cost model runs
+  # Round-trip efficiency, NOT one-way.  One-way is sqrt(0.88) = 0.93808 per
+  # direction (charge leg AND discharge leg); feeding 0.88 in as a one-way
+  # value would silently double-count the loss.  Provisional — must be measured.
+  round_trip_efficiency: 0.88
+  # User chose a 20-95% SOC window to extend battery life.  The usable window is
+  # 95% - 20% = 75% of nameplate = 3.84 kWh.  This is NOT the illustrative
+  # "80% window" in ADR-0003, and it is a different thing from the efficiency
+  # above: window (how much) and efficiency (how much of it survives) are
+  # separate assumptions.  Provisional — the real controller limits must be read.
+  soc_window_min: 0.20             # fraction of capacity_kwh (1.024 kWh floor)
+  soc_window_max: 0.95             # fraction of capacity_kwh (4.864 kWh ceiling)
+  # Start at the floor so no stored energy is handed to the optimiser for free at
+  # the start of a horizon; every kWh used must first be bought and logged.
+  # Provisional — needs the actual observed SOC at horizon start.
+  initial_soc_frac: 0.20
+  # Contracted site import power in kW.  5.0 is USER-CONFIRMED FROM THE CONTRACT on
+  # 2026-10-23.  It is not, and must never be, inferred from sensor data.
+  #
+  # An earlier comment here argued that measured peaks above 5 kW proved the
+  # contract could not really be 5 kW.  That was a non-sequitur: contracted power is
+  # enforced against the 15-minute average meter reading, not against instantaneous
+  # readings, so sub-minute excursions above it are normal, compliant behaviour.  On
+  # the basis the contract actually uses, the full-population 2025 archive (520 151
+  # power samples, 34 744 clean intervals) tops 5.0 kW in 5 intervals (0.014 %): max
+  # 6.358 kW as allocated kWh x 4, 6.24 kW as the mean of 15-minute power samples,
+  # against an annual mean load of 0.633 kW — 12.7 % of this ceiling.  The
+  # instantaneous 8.68 kW peak bears only on the battery's power rating (power_kw:
+  # 2.5) and on wiring/protection headroom, never on contract feasibility.  See
+  # battery.py invariants 6 and 7 for the full table and the peak dates.
+  #
+  # So the ceiling constrains CHARGING DECISIONS (the optimizer must not add load on
+  # top of a near-ceiling interval); it must never be treated as making the
+  # historical measured baseline infeasible — the house really did draw that power,
+  # and net import above the ceiling is an observation, not a violation.  No safety
+  # margin is applied anywhere: this value is used exactly as configured.
+  import_limit_kw: 5.0

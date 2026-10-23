@@ -530,10 +530,17 @@ class TestSeriesIdentity:
         assert json.loads(canonical_labels_json(labels)) == labels
         assert '"instance":"x:8123"' in canonical_labels_json(labels)
 
-    def test_two_targets_one_logical_series_yield_one_row(
+    def test_two_targets_different_instances_both_retained(
         self, tmp_path: Path, config: Path
     ) -> None:
-        """The SD race that exports one sample twice is deduped, not doubled."""
+        """Different scrape targets are distinct raw observations, not duplicates.
+
+        The old behaviour collapsed two ``instance`` variants into one row via
+        ``(series_key, ts)`` dedup, silently losing raw data.  The new dedup key
+        is ``(labels_json, ts)``: two targets whose labels differ in any field
+        (including ``instance``) produce distinct rows.  The counter stitcher
+        reconciles them.
+        """
         spec = ENTITY_SPECS[DEFAULT_ENTITY_IDS[0]]
         live = labels_for(
             spec.entity_id, metric=spec.metric, instance="10.42.0.1:8123", job="home-assistant"
@@ -543,17 +550,63 @@ class TestSeriesIdentity:
         path = run_extract(tmp_path, fake.client, config, entities=[spec.entity_id])
 
         table = read_rows(tmp_path / "data")
+        # Both rows are preserved — they have different full label sets
+        assert table.num_rows == 2
+        # They share the same series_key (instance is excluded from it)
+        keys = set(table.column("series_key").to_pylist())
+        assert keys == {compute_series_key(live)}
+        # But different labels_json (the full label set including instance)
+        labels = [json.loads(r["labels_json"]) for r in table.to_pylist()]
+        instances = sorted(r["scrape_instance"] for r in table.to_pylist())
+        assert instances == sorted([live["instance"], stale["instance"]])
+        for inst in instances:
+            assert any(lbls["instance"] == inst for lbls in labels)
+        # No duplicates were dropped
+        stats = manifest_of(path).params["entity_stats"][0]
+        assert stats["duplicates_dropped"] == 0
+
+    def test_identical_labels_same_ts_same_value_deduped(
+        self, tmp_path: Path, config: Path
+    ) -> None:
+        """Truly identical sample (same full labels, same ts, same value) is deduped."""
+        spec = ENTITY_SPECS[DEFAULT_ENTITY_IDS[0]]
+        labels = labels_for(
+            spec.entity_id, metric=spec.metric, instance="10.42.0.1:8123", job="home-assistant"
+        )
+        # Fake returns the same series twice (SD race exporting identical sample)
+        fake = FakePrometheus([(labels, [(_BASE + 5, 3.0)]), (labels, [(_BASE + 5, 3.0)])])
+        path = run_extract(tmp_path, fake.client, config, entities=[spec.entity_id])
+
+        table = read_rows(tmp_path / "data")
         assert table.num_rows == 1
-        assert (
-            table.column("series_key")[0].as_py()
-            == compute_series_key(live)
-            == compute_series_key(stale)
+        stats = manifest_of(path).params["entity_stats"][0]
+        assert stats["duplicates_dropped"] == 1
+
+    def test_overlapping_target_samples_value_conflict_retained(
+        self, tmp_path: Path, config: Path
+    ) -> None:
+        """Same full labels + same ts but different values: both kept, flagged.
+
+        Prometheus can return conflicting values for one series at one timestamp
+        when two targets report simultaneously.  The extractor retains both rows
+        and flags the manifest with ``overlapping_target_samples``.  The build
+        stitch step is responsible for resolving the conflict.
+        """
+        spec = ENTITY_SPECS[DEFAULT_ENTITY_IDS[0]]
+        labels = labels_for(
+            spec.entity_id, metric=spec.metric, instance="10.42.0.1:8123", job="home-assistant"
         )
-        assert table.column("scrape_instance")[0].as_py() in (live["instance"], stale["instance"])
-        assert manifest_of(path).params["entity_stats"][0]["duplicates_dropped"] == 1
-        assert any(
-            f.startswith("duplicate_samples_dropped:") for f in manifest_of(path).quality_flags
-        )
+        # Two identical label sets with conflicting values at the same timestamp
+        fake = FakePrometheus([(labels, [(_BASE + 5, 3.0)]), (labels, [(_BASE + 5, 9.0)])])
+        path = run_extract(tmp_path, fake.client, config, entities=[spec.entity_id])
+
+        table = read_rows(tmp_path / "data")
+        assert table.num_rows == 2
+        assert sorted(table.column("value").to_pylist()) == [3.0, 9.0]
+        stats = manifest_of(path).params["entity_stats"][0]
+        assert stats["overlapping_target_samples"] == 1
+        manifest = manifest_of(path)
+        assert any(f.startswith("overlapping_target_samples:") for f in manifest.quality_flags)
 
     def test_same_timestamp_different_identity_keeps_both(
         self, tmp_path: Path, config: Path
