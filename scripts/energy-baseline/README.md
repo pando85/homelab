@@ -132,9 +132,18 @@ uv run energy-baseline benchmark \
 frozen before evaluation, so the cut must be declared explicitly and is never inherited. Optional
 flags (`--train-days`, `--charge-pct`, `--discharge-pct`, `--initial-soc-frac`, `--import-limit-kw`,
 `--min-usable-fraction`, `--time-limit-s`, `--mip-rel-gap`, `--mip-abs-gap`,
-`--allow-reconstructed-quality`, `--terminal-mode`) default to the benchmark module's constants.
-The CLI calls `core_available()` first and refuses with a clear message if the numeric core
-(battery / policies / oracle / cost) is not usable.
+`--allow-reconstructed-quality`, `--terminal-mode`, `--day-ahead-forecast-window-days`,
+`--day-ahead-terminal-value`, `--day-ahead-time-limit-s`) default to the benchmark module's
+constants. The CLI calls `core_available()` first and refuses with a clear message if the numeric
+core (battery / policies / oracle / cost) is not usable.
+
+**A full-year training window is 366 days, not 365.** When the split is meant to cover all of a
+leap year — e.g. `--train-end 2025-01-01T00:00:00+00:00 --train-days N` for calendar 2024 —
+`N` must be **366**, not 365: a leap year has 366 days and 365 excludes 2024-01-01. This applies
+only to the day's *date* boundary; the day-ahead partition respects local Madrid calendar days
+regardless. A UTC-midnight `--train-end` is also not a Madrid-local-year boundary (Madrid is
+UTC+1 or UTC+2, so the local year turns at 23:00Z the day before); if a "full calendar year" is
+being claimed, the claim is UTC-scoped and the report must say so.
 
 **Usability gate:** intervals with `allocation_quality="estimated_boundary"` are benchmarked by
 default (it is a bounded, telescoping-preserving approximation, not a degraded fallback).  The
@@ -168,15 +177,167 @@ config hash, the code version (including the working-tree dirty marker), the sch
 the requested window and the builder parameters.  A dirty working tree produces a different id
 from a clean one, so the reproducibility guarantee the id exists to provide is preserved.
 
-**Policy set:** exactly three policies are benchmarked (no-battery, causal price-threshold,
-and perfect-information oracle). A fourth "day-ahead-informed" variant was considered and
-deferred — see `planning/energy-baseline-appdaemon-baseline-context.md`. The causal policy is
-deliberately **not** a replica of the household's AppDaemon rule; AppDaemon's effect is already
-embedded in the measured load, which is why the *no-battery* policy is the counterfactual.
+**Policy set — four rungs, one per information level.** The evaluation window is scored by
+`no_battery`, `causal_price`, `day_ahead` and `oracle` (ADR-0003 §"Strategy comparison"; the
+day-ahead rung was previously "considered and deferred" in
+`planning/energy-baseline-appdaemon-baseline-context.md` and is now built):
+
+| Policy | Prices known | Load known |
+|---|---|---|
+| `no_battery` | none — measured history is the counterfactual | none |
+| `causal_price` | none (percentile thresholds frozen on the train split) | none |
+| `day_ahead` | **the day's 24 h, at local midnight** | **a strictly causal forecast** |
+| `oracle` | whole horizon, perfect | whole horizon, perfect |
+
+The causal rule captured a known share of the oracle's optimum, but the oracle also knows future
+*load*, so the unreachable remainder conflated two different things. `day_ahead` separates them:
+whatever it recovers is value reachable from information that is genuinely published for free, and
+what remains is value that needs load foresight nobody has. That split —
+`comparison.day_ahead_closes_gap_fraction` — is the number a build/no-build decision should read,
+not the causal→oracle gap on its own.
+
+The day-ahead price assumption is **not** self-certifying; it rests on this household's own
+deployed automation, verified from source: `apps/home-assistant/appdaemon/apps/climate_control.py:45`
+schedules `run_daily(..., "00:00:40")` and lines 73-91 of the same file read
+`pvpc["attributes"][f"price_{i:02d}h"]` for `i in range(24)` off `sensor.esios_pvpc`
+(`apps/home-assistant/appdaemon/apps/apps.yaml:10`), re-labelling them onto the current local day
+(line 85); `apps/home-assistant/appdaemon/apps/dhw_control.py:48` does the same at `00:00:30`. A full
+day's curve is therefore in hand at local midnight in production today. What the pipeline still
+cannot verify is the *archival* half of ADR-0003 line 100: the store keeps the price realised in each
+hour, not a midnight snapshot of the attribute dict, so `day_ahead` assumes published-in-advance
+equals realised-and-archived (true by construction for day-ahead PVPC, and the sensor's day-boundary
+convention remains unresolved — TODO-0.4). The assumption is recorded in every run artifact under
+`day_ahead.information_set.assumptions_disclosed` instead of being quietly relied on.
+
+Mechanically the policy is a **rolling daily MILP**: the evaluation window is partitioned on
+`Europe/Madrid` calendar days (never UTC days — the tariff is hourly in local time, so a
+spring-forward day is 92 intervals and a fall-back day 100, each in exactly one solve), one
+`scipy.optimize.milp`/HiGHS solve per day through the *same* `oracle.solve_oracle` assembly the
+ceiling uses, and the actual end-of-day SOC rolled forward as the next day's initial condition. The
+load forecast is a trailing mean of the same slot position over the previous
+`--day-ahead-forecast-window-days` days (`default 28`), reading only intervals strictly before the
+target day; a slot with no prior sample falls back to the pooled window mean, and the first local day
+of a dataset forecasts zero — the ladder is recorded in `day_ahead.forecast.fallback_rule`, never
+applied silently. The forecast constrains decisions and **never** enters cost: every euro is
+re-computed against the measured load, and a plan the measured load cannot absorb is clipped to it
+(discharge beyond measured load would export; charge beyond measured-load headroom would breach the
+ceiling) with the clipped energy reported.
+
+`day_ahead` is **myopic by construction** and that is disclosed rather than tuned away: a daily solve
+cannot see tomorrow, so end-of-day SOC is credited at `--day-ahead-terminal-value` EUR/kWh — the
+policy's only cross-day coupling, per ADR-0001's "preserve a terminal SOC value … instead of
+artificially emptying the battery at midnight". Omitted, the value is the mean price of the frozen
+training window and the artifact records provenance `default:training_window_mean_price`; passing a
+number records it as `cli`. `0.0` is a legal, documented choice (pure cash flow, battery emptied by
+design). Note what a low terminal value does *not* mean: because charging only pays off once the
+credit covers the charge, valuing storage far below the cheap-hours price is not conservatism, it is
+a disabled battery.
+
+**Two terminal values, not one (a withdrawn claim recorded because it was the first draft).**
+An earlier version of `day_ahead` used one value — the internal training-window mean V — for
+*both* the daily planning and the reported `cost_eur`, while the oracle used 0.0 for its
+reported cost. The two policies were therefore being scored on different terminal bases, which
+made the headline comparison and `oracle_dominates_day_ahead` meaningless: the day-ahead policy
+was receiving a credit for its ending SOC that the oracle wasn't, and the credit could be worth
+more than the entire causal→day-ahead delta it was meant to measure. Fixing this required
+separating the two numbers:
+
+- **`terminal_value_eur_per_kwh`** (V, set by `--day-ahead-terminal-value` or defaulted to the
+  training-window mean): used *inside* each daily objective so the myopic daily solve has a
+  reason to keep useful energy overnight. Recorded in the artifact as
+  `day_ahead.terminal_value.eur_per_kwh` and as `internal_planning_value_eur_per_kwh` in
+  `assumptions.terminal_accounting.day_ahead`. The sum of the daily objectives under V is
+  recorded as `day_ahead.internal_daily_objective_sum_eur` with an explicit note that it is
+  **not** the common score.
+- **`scoring_terminal_value_eur_per_kwh`** (default `0.0`, threaded from
+  `_oracle_kwargs["terminal_value_eur_per_kwh"]`): what the returned Schedule's `cost_eur` and
+  `inventory_adjustment_eur` use, and the same number the oracle is scored on. Recorded as
+  `policies.day_ahead.terminal_value_eur_per_kwh` (which is what `BENCHMARK_RESULT` and the
+  per-policy JSON record expose) and as `day_ahead.scoring_terminal_value_eur_per_kwh`.
+
+With V ≠ 0 and a positive final SOC, the internal sum and the reported cost differ by exactly
+`V × (terminal - initial)` — the credit the daily objectives gave stored energy. The reported
+number is the metered cost on the shared scoring basis. This is what makes
+`oracle ≤ day_ahead` a real dominance rather than a bookkeeping artefact, and it is pinned
+by `tests/test_benchmark.py::TestDayAheadScoringValue` and the V=0.4 case in
+`TestDayAheadPolicy.test_cost_is_meter_plus_telescoped_inventory`.
+
+**Seed protection is horizon-level, not day-level.** The charge the evaluation window was *handed*
+is not any policy's to spend; everything bought after the window opened is, including across a day
+boundary. A first draft of `day_ahead` floored each daily solve at that day's own opening SOC, which
+silently re-classified yesterday's purchased charge as unspendable seed: on a synthetic fixture the
+battery filled on day one, froze at the ceiling for the rest of the window, and lost to the causal
+rule while holding 4.6 kWh it was forbidden to use. The floor is now fixed at
+`max(soc_min, initial SOC)` for the whole roll — the same floor `causal_price` and the free `oracle`
+use, which is what keeps all four policies on one common feasible set and what makes
+`oracle ≤ day_ahead` a provable relation rather than a hope. Supporting it needed one defaulted
+parameter on `oracle.build_model`/`solve_oracle` (`floor_kwh`); with the default the certified model
+is byte-identical, pinned by
+`tests/test_oracle.py::TestDayAheadReusesOracleAssembly::test_default_floor_reproduces_the_certified_model_exactly`.
+A spec whose opening seed already fills the SOC window has no headroom in either direction: those days
+are reported as `frozen_by_seed_at_ceiling` with zero flows instead of being sent to the solver as an
+invalid spec.
+
+One day's MILP failing does **not** abort the run: that day holds SOC, charges nothing, is flagged in
+`day_ahead.per_day[].degradation`, and the counts surface in `day_ahead.days_infeasible` /
+`days_no_incumbent` / `days_skipped_no_usable_intervals` / `days_without_headroom`. The oracle's
+answer is never substituted.
+
+A forecast-derived plan can ask for more than the measured load allows — discharge beyond it would
+export, charge beyond the measured-load headroom would breach the ceiling — so the plan is clipped to
+the measured constraints in chronological order and the refused energy is reported as
+`charge_clipped_kwh` / `discharge_clipped_kwh` with `days_with_clipping`. Clipping only ever reduces
+a flow, never re-plans one: a wrong forecast costs dispatch quality and is disclosed, it does not
+buy feasibility.
+
+Ordering is asserted only where it is provable. Oracle ≤ baseline and oracle ≤ causal hold as before.
+Oracle ≤ day-ahead is guaranteed when the oracle is a *certified* optimum **and**
+`terminal_mode_used == "free"`: the free oracle minimises over exactly the feasible set that
+contains the day-ahead plan (same SOC floor `max(soc_min, initial)`, same physics, same endpoint
+freedom, and the same scoring terminal value, now 0.0 by default), so `oracle.cost_eur ≤
+day_ahead.cost_eur` is arithmetic. On a time-limited incumbent the oracle reports its own best
+feasible cost and the comparison is empirical — hence the separate
+`comparison.oracle_dominates_day_ahead_guaranteed` flag. **When `terminal_mode_used` is `"fixed"`
+the guarantee is `False` by construction:** the fixed oracle pins final SOC to the initial value,
+which may exclude the day-ahead plan's actual final SOC, so the day-ahead plan is not in the
+oracle's feasible set and no dominance is provable even if the empirical comparison happens to
+hold. Do not assert fixed dominance; a `terminal_mode=fixed` run with a day-ahead plan ending
+above its seed is the canonical counterexample the test suite pins
+(`TestDayAheadScoringValue::test_fixed_terminal_mode_does_not_guarantee_day_ahead_dominance`).
+**Day-ahead versus causal is guaranteed in NEITHER direction** and is never asserted: a myopic
+optimiser with a poor forecast and a badly chosen terminal value can lose to a dumb threshold
+rule. The difference is reported as `comparison.day_ahead_minus_causal_eur`, and if it is
+positive, that is the result, not a defect.
+
+Per-day solve **wall-clock** times are deliberately absent from the artifacts: runs are
+content-addressed and written no-clobber (`write_part_atomic` refuses the same run id with different
+bytes), so a timing field would make an identical re-run fail and would destroy byte-level
+reproducibility. Deterministic per-day telemetry (`solver_status`, `is_certified`, `mip_gap`, the
+count of days that consumed their limit) is recorded instead.
+
+Artifacts follow the existing precedent: `BENCHMARK_RESULT` and `Schedule.as_dict()` are unchanged,
+and the day-ahead detail lives in `benchmark.json` (`day_ahead.*`) plus the wide
+`schedules.parquet` (`policy="day_ahead"` rows).
+
+The causal policy is deliberately **not** a replica of the household's AppDaemon rule; AppDaemon's
+effect is already embedded in the measured load, which is why the *no-battery* policy is the
+counterfactual. `day_ahead` shares the *information* AppDaemon uses (tomorrow's prices), not its
+thermal actuators or its rule.
 
 **Oracle certification:** the oracle is **not certified** as optimal. It hits its solver time
 limit (default 120 s) and is reported as a feasible incumbent with an upper bound on cost,
 never as an optimum. The implied saving is therefore a lower bound on optimal saving.
+
+**Solver noise at the no-export bound:** HiGHS can return a discharge one ulp above the load that
+its own no-export row is bounded by, so a plan `battery.check_feasible` accepts (its slack is
+`_TOL_KWH = 1e-6` kWh) can carry a net grid import of `-1.4e-16` kWh. `cost.compute_interval_cost`
+refuses *any* negative energy by design — export credits are not modelled — so the orchestrator
+costs a negative inside the kernel's own slack as zero and reports how many intervals needed that per
+policy in `cost_consistency.<policy>.grid_noise_snapped_intervals` with an explanatory
+`grid_noise_note`. Beyond that slack a negative is never clamped and the cost model's error is the
+correct, loud outcome. This was found by a four-policy run on synthetic data (the final interval of
+a 100-slot fall-back day), not by the day-ahead policy itself — its clipped plans come out with
+exact zeros, which `TestGridNoiseSnapping` pins.
 
 **Cost basis:** all cost figures are **pre-tax** (untaxed energy cost). Tax rates
 (`iee_pct`, `iva_pct`) are null/unconfirmed in `config/tariff.yaml`, so no billed number

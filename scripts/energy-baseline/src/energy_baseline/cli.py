@@ -110,7 +110,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_bench.add_argument(
         "--policies",
         default="all",
-        help="Comma-separated policy names or 'all' (default: all)",
+        help="Comma-separated policy names or 'all' (default: all). The set is "
+        "no_battery, causal_price, day_ahead, oracle — one rung per information level, "
+        "from measured history only up to perfect foresight",
     )
     p_bench.add_argument(
         "--train-end",
@@ -193,7 +195,36 @@ def build_parser() -> argparse.ArgumentParser:
         choices=["free", "fixed"],
         default="free",
         help="Oracle terminal SOC accounting: 'free' leaves ending SOC unvalued (not a closed "
-        "cycle, the default), 'fixed' closes the cycle (default: free)",
+        "cycle, the default), 'fixed' closes the cycle (default: free). The day-ahead policy "
+        "is always per-day free with a declared terminal SOC value — that valuation is what "
+        "stops a myopic daily solve from emptying the battery at midnight",
+    )
+    p_bench.add_argument(
+        "--day-ahead-forecast-window-days",
+        type=int,
+        default=None,
+        help="Trailing window, in local days, of the day-ahead policy's strictly causal load "
+        "forecast (default: the benchmark module's forecast window). Only intervals before the "
+        "target day are ever read; the window may reach back past --train-end because "
+        "strictly-past measured load is causally available at that day's midnight",
+    )
+    p_bench.add_argument(
+        "--day-ahead-terminal-value",
+        type=float,
+        default=None,
+        help="EUR per DC-kWh credited for end-of-day SOC in each daily solve — the day-ahead "
+        "policy's only cross-day coupling. Omitted derives it from the frozen training window "
+        "(mean of its usable prices) and records that provenance; passing a number records it "
+        "as a hand-picked cli override. Pass 0.0 for the documented pure cash-flow variant, "
+        "which empties the battery by midnight on purpose",
+    )
+    p_bench.add_argument(
+        "--day-ahead-time-limit-s",
+        type=float,
+        default=None,
+        help="Solver time limit PER LOCAL DAY for the rolling day-ahead MILPs (default: the "
+        "benchmark module's day_ahead_time_limit_s). This is not --time-limit-s, which is the "
+        "whole-horizon oracle's limit; days that consumed this one are counted in the artifact",
     )
 
     # -- report -----------------------------------------------------------
@@ -603,7 +634,10 @@ def _benchmark_kwargs(args: argparse.Namespace, benchmark: Any) -> dict[str, Any
     constants rather than a second copy of the numbers, so the CLI cannot drift away
     from the contract that gets hashed into the run id.  ``initial_soc_frac`` and
     ``import_limit_kw`` are passed through as ``None`` when unset: for those two, "not
-    supplied" is itself a meaningful value the run must record as an assumption.
+    supplied" is itself a meaningful value the run must record as an assumption.  So is
+    ``day_ahead_terminal_value``: unset means "derive it from the frozen training
+    window", which is a different measurement from any number an operator could type,
+    and the artifact records which of the two happened.
     """
     from energy_baseline.config import resolve_config_path
 
@@ -623,6 +657,13 @@ def _benchmark_kwargs(args: argparse.Namespace, benchmark: Any) -> dict[str, Any
         "mip_rel_gap": _or_default(args.mip_rel_gap, benchmark.DEFAULT_MIP_REL_GAP),
         "mip_abs_gap": _or_default(args.mip_abs_gap, benchmark.DEFAULT_MIP_ABS_GAP),
         "terminal_mode": args.terminal_mode,
+        "day_ahead_forecast_window_days": _or_default(
+            args.day_ahead_forecast_window_days, benchmark.DEFAULT_FORECAST_WINDOW_DAYS
+        ),
+        "day_ahead_terminal_value_eur_per_kwh": args.day_ahead_terminal_value,
+        "day_ahead_time_limit_s": _or_default(
+            args.day_ahead_time_limit_s, benchmark.DEFAULT_DAY_AHEAD_TIME_LIMIT_S
+        ),
         "data_dir": args.data_dir,
     }
 
@@ -636,7 +677,13 @@ def _benchmark_summary(run_dir: Path, benchmark: Any) -> str:
     try:
         payload = json.loads((run_dir / benchmark.RESULTS_JSON_NAME).read_bytes().decode("utf-8"))
         basis = payload.get("assumptions", {}).get("cost_objective", {}).get("cost_basis", "?")
-        terminal = payload.get("assumptions", {}).get("terminal_accounting", {}).get("used", "?")
+        # The ORACLE's terminal accounting, which is what this word means in the header:
+        # the day-ahead policy has its own, per-day, and is reported separately below.
+        # Shadowing this with the day-ahead value is a bug that was actually made here,
+        # caught only because the printed line turned into a dict.
+        oracle_terminal = (
+            payload.get("assumptions", {}).get("terminal_accounting", {}).get("used", "?")
+        )
         ev = payload.get("evaluation", {})
         months = ",".join(ev.get("months_included", []) or []) or "?"
         parts = []
@@ -652,8 +699,27 @@ def _benchmark_summary(run_dir: Path, benchmark: Any) -> str:
                 )
         for name in payload.get("solver", {}).get("errors") or {}:
             parts.append(f"{name}=no result row")
+        day_ahead = payload.get("day_ahead") or {}
+        if day_ahead.get("ran"):
+            # The day-ahead rung is the one whose result is telemetry-shaped: days
+            # solved, days degraded to hold-SOC, and the forecast error the decisions
+            # rode on. A single "cost=" figure would hide all of it.
+            forecast = (day_ahead.get("forecast") or {}).get("summary") or {}
+            day_ahead_terminal = day_ahead.get("terminal_value") or {}
+            mae = forecast.get("mae_kwh")
+            closed = (payload.get("comparison") or {}).get("day_ahead_closes_gap_fraction")
+            parts.append(
+                f"day_ahead: "
+                f"{day_ahead.get('days_solved')}/{day_ahead.get('day_count')} local days "
+                f"solved, {day_ahead.get('days_degraded_to_hold', 0)} held SOC, "
+                f"{day_ahead.get('days_at_time_limit', 0)} at time limit, "
+                f"forecast MAE={'n/a' if mae is None else f'{mae:.4f}'} kWh/interval, "
+                f"end-of-day SOC={day_ahead_terminal.get('eur_per_kwh')} EUR/kWh, "
+                f"causal->oracle gap closed={'n/a' if closed is None else f'{closed:.1%}'}"
+            )
         return (
-            f"run={payload.get('run_id') or run_dir.name} basis={basis} terminal={terminal} "
+            f"run={payload.get('run_id') or run_dir.name} basis={basis} "
+            f"oracle_terminal={oracle_terminal} "
             f"months={months} intervals="
             f"{ev.get('usable_interval_count')}/{ev.get('interval_count')} "
             f"usable | " + "; ".join(parts)

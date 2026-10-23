@@ -50,7 +50,7 @@ Constraints
    In ``terminal_mode="free"`` the floor is raised to the shared causal floor
    ``max(soc_min, initial_soc)`` for **every** step, so a free plan can never
    spend the seed charge it did not pay for — the same floor the causal policy
-   uses in its neutral case, which is what puts all three policies on one common
+   uses in its neutral case, which is what puts all four policies on one common
    feasible set.
 4. **Terminal SOC** (``fixed`` only): bounds on ``soc[n-1]`` equal to
    ``capacity * terminal_soc_frac``, or ``capacity * initial_soc_frac`` when the
@@ -88,7 +88,7 @@ Constraints
    :class:`OracleInfeasibleError`.
 7. **Unusable intervals** (``usable[t] is False``): ``charge = discharge = 0`` via
    variable bounds and zero objective coefficients, so gap exclusions are
-   identical to the two policies' cost basis.  A horizon with no usable intervals
+   identical to the other policies' cost basis.  A horizon with no usable intervals
    is rejected by :class:`~energy_baseline.battery.Horizon` before it gets here.
 
 Objective (minimise)
@@ -284,6 +284,7 @@ def build_model(
     *,
     terminal_mode: str = _TERMINAL_FIXED,
     terminal_value_eur_per_kwh: float | None = None,
+    floor_kwh: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray, Bounds, list[LinearConstraint]]:
     """Assemble the MILP: ``(objective, integrality, bounds, constraints)``.
 
@@ -297,6 +298,20 @@ def build_model(
     default is ``"fixed"`` so the historical neutral model is byte-for-byte
     unchanged.
 
+    ``floor_kwh`` overrides the SOC floor.  ``None`` — the default, and the only
+    value the whole-horizon oracle passes — is exactly the historical behaviour:
+    ``max(soc_min, initial SOC)`` in free mode, the bare window floor in fixed
+    mode, row for row as certified.  A **rolling** policy needs to pass the floor
+    of the horizon it belongs to rather than the floor implied by the day it is
+    solving, because seed protection is a property of the window: what may not be
+    spent is the charge the window was handed when it opened, and everything bought
+    after that is the policy's to spend, including across a day boundary.  Without
+    the knob, reusing this assembly for a daily solve whose opening SOC is the
+    carried value silently re-classifies an earlier day's purchased charge as
+    unspendable seed — which freezes a filled battery at the ceiling and is a
+    functional bug, not a conservatism.  See
+    :func:`energy_baseline.policies.policy_day_ahead`, which uses it.
+
     The single constraint block has ``4n`` rows — two mutual-exclusion rows, one
     SOC recurrence row and one no-export row per interval — plus ``n`` more rows
     when :attr:`energy_baseline.battery.Horizon.import_limit_kw` is configured
@@ -309,8 +324,26 @@ def build_model(
     n_vars = 4 * n
     limit = spec.interval_energy_limit_kwh(horizon.interval_seconds)
     # Free mode shares the causal floor (cannot spend the seed); fixed mode uses
-    # the bare window floor and pins the terminal SOC instead.
-    floor_kwh = spec.causal_floor_kwh() if free else spec.soc_bound_kwh("min")
+    # the bare window floor and pins the terminal SOC instead.  An explicit
+    # floor_kwh replaces both, and is validated against the physical window below.
+    if floor_kwh is None:
+        bound_kwh = spec.causal_floor_kwh() if free else spec.soc_bound_kwh("min")
+    else:
+        bound_kwh = float(floor_kwh)
+        physical_min = spec.soc_bound_kwh("min")
+        if not math.isfinite(bound_kwh):
+            raise ValueError(f"floor_kwh must be finite kWh, got {floor_kwh!r}")
+        if bound_kwh < physical_min - _TOL_KWH:
+            raise ValueError(
+                f"floor_kwh={bound_kwh} is below the physical SOC window floor "
+                f"{physical_min}: no floor may authorise energy that does not exist"
+            )
+    floor_kwh = bound_kwh
+    if floor_kwh > spec.soc_bound_kwh("max") + _TOL_KWH:
+        raise ValueError(
+            f"floor_kwh={floor_kwh} is above the physical SOC ceiling "
+            f"{spec.soc_bound_kwh('max')}: the variable bounds would be empty"
+        )
     ceil_kwh = spec.soc_bound_kwh("max")
     soc_init = spec.soc_bound_kwh("init")
     terminal_kwh = spec.soc_bound_kwh("terminal")
@@ -502,6 +535,7 @@ def solve_oracle(
     mip_abs_gap: float = 1e-6,
     terminal_mode: str = _TERMINAL_FIXED,
     terminal_value_eur_per_kwh: float | None = None,
+    floor_kwh: float | None = None,
 ) -> Schedule:
     """Cost-minimising dispatch over the whole horizon with perfect information.
 
@@ -534,6 +568,11 @@ def solve_oracle(
             Required (finite; ``0.0`` allowed) when ``terminal_mode="free"``, and
             must be ``None`` when ``terminal_mode="fixed"`` (a fixed cycle
             returns to its seed, so there is nothing to value).
+        floor_kwh: Override for the ``"free"`` mode SOC floor.  Left ``None`` by the
+            whole-horizon oracle, which is then exactly the certified behaviour —
+            ``max(soc_min, initial SOC)``, the shared causal floor.  A rolling day-ahead
+            solve passes its **horizon's** seed floor here so that the day's opening SOC
+            does not become unspendable seed; see :func:`build_model`.
 
     Raises:
         ValueError: If *spec* is not physically meaningful, a tolerance or the
@@ -543,8 +582,9 @@ def solve_oracle(
         OracleNoIncumbentError: If the solver stopped without any feasible plan.
 
     Returns:
-        Schedule on the same pretax, usable-interval-only cost basis as the two
-        policies.  ``cost_eur`` is the **total objective**
+        Schedule on the same pretax, usable-interval-only cost basis as the traced
+        policies (no-battery, causal) and the rolling day-ahead one.  ``cost_eur`` is
+        the **total objective**
         (``meter_cost_eur + inventory_adjustment_eur``), where the adjustment is
         ``-terminal_value * (terminal_soc_kwh - initial_soc_kwh)`` — zero for a
         fixed (or free-and-unvalued) plan — so ``oracle.savings_vs(no_battery)``
@@ -574,6 +614,7 @@ def solve_oracle(
         horizon,
         terminal_mode=terminal_mode,
         terminal_value_eur_per_kwh=terminal_value_eur_per_kwh if free else None,
+        floor_kwh=floor_kwh,
     )
     options = _solver_options(time_limit_s, mip_rel_gap, mip_abs_gap)
     with warnings.catch_warnings():

@@ -2,7 +2,11 @@
 
 Tests use ``httpx.MockTransport`` where HTTP is involved, never the live
 server.  No secrets are logged or leaked in error output.
-"""
+
+
+The benchmark CLI tests cover the day-ahead flags as well: policy names, the forecast
+window, the per-day time limit, and the distinction between "no terminal value given"
+(derive it from the training window) and "0.0 given" (a deliberate cash-flow objective)."""
 
 from __future__ import annotations
 
@@ -1363,3 +1367,288 @@ class TestCmdExtractMock:
         parsed = __import__("json").loads(data)
         assert parsed["source"] == "ha_history"
         assert parsed["row_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Tests: benchmark CLI wiring for the day-ahead policy
+# ---------------------------------------------------------------------------
+
+
+class TestDayAheadCLI:
+    @staticmethod
+    def _capture(monkeypatch, argv):
+        from energy_baseline import benchmark
+
+        monkeypatch.setattr(benchmark, "core_available", lambda: True)
+        captured = {}
+
+        def fake(**kw):
+            captured.update(kw)
+            return Path("/tmp/run")
+
+        monkeypatch.setattr(benchmark, "benchmark_dataset", fake)
+        rc = main(argv)
+        assert rc == 0
+        return captured
+
+    def test_day_ahead_is_an_acceptable_policy_name(self, monkeypatch):
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+                "--policies",
+                "no_battery,day_ahead",
+            ],
+        )
+        assert captured["policies"] == "no_battery,day_ahead"
+
+    def test_help_lists_the_four_rungs(self, capsys):
+        with pytest.raises(SystemExit) as exc:
+            main(["benchmark", "--help"])
+        assert exc.value.code == 0
+        text = capsys.readouterr().out
+        assert "no_battery, causal_price, day_ahead, oracle" in text
+
+    def test_defaults_come_from_the_benchmark_module(self, monkeypatch):
+        from energy_baseline import benchmark
+
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ],
+        )
+        assert captured["day_ahead_forecast_window_days"] == benchmark.DEFAULT_FORECAST_WINDOW_DAYS
+        assert captured["day_ahead_time_limit_s"] == benchmark.DEFAULT_DAY_AHEAD_TIME_LIMIT_S
+        # Unset is NOT 0.0: unset means "derive it from the frozen training window".
+        assert captured["day_ahead_terminal_value_eur_per_kwh"] is None
+
+    @pytest.mark.parametrize(
+        "flag, value, kwarg, expected",
+        [
+            ("--day-ahead-forecast-window-days", "14", "day_ahead_forecast_window_days", 14),
+            ("--day-ahead-time-limit-s", "2.5", "day_ahead_time_limit_s", 2.5),
+            ("--day-ahead-terminal-value", "0.213", "day_ahead_terminal_value_eur_per_kwh", 0.213),
+            # 0.0 is a real, documented choice (pure cash flow, battery emptied by
+            # midnight), so it must survive as 0.0 and never look like an omission.
+            ("--day-ahead-terminal-value", "0", "day_ahead_terminal_value_eur_per_kwh", 0.0),
+        ],
+    )
+    def test_day_ahead_flags_reach_the_contract(self, monkeypatch, flag, value, kwarg, expected):
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+                flag,
+                value,
+            ],
+        )
+        assert captured[kwarg] == expected
+
+    def test_summary_reports_day_ahead_telemetry(self, monkeypatch, tmp_path, capsys):
+        from energy_baseline import benchmark
+
+        monkeypatch.setattr(benchmark, "core_available", lambda: True)
+        run_dir = tmp_path / "benchmarks" / "def456"
+        run_dir.mkdir(parents=True)
+        payload = {
+            "run_id": "def456",
+            "assumptions": {
+                "cost_objective": {"cost_basis": "untaxed"},
+                "terminal_accounting": {"used": "free"},
+            },
+            "evaluation": {
+                "months_included": ["2026-01"],
+                "interval_count": 384,
+                "usable_interval_count": 384,
+            },
+            "policies": {
+                "no_battery": {
+                    "cost_eur": 100.0,
+                    "solver_status": "not_applicable",
+                    "is_certified": False,
+                    "bound_kind": "none",
+                },
+                "causal_price": {
+                    "cost_eur": 90.0,
+                    "solver_status": "not_applicable",
+                    "is_certified": False,
+                    "bound_kind": "none",
+                },
+                "day_ahead": {
+                    "cost_eur": 80.0,
+                    "solver_status": "feasible",
+                    "is_certified": False,
+                    "bound_kind": "none",
+                },
+                "oracle": {
+                    "cost_eur": 70.0,
+                    "solver_status": "optimal",
+                    "is_certified": True,
+                    "bound_kind": "certified",
+                },
+            },
+            "solver": {"errors": {}},
+            "day_ahead": {
+                "ran": True,
+                "day_count": 4,
+                "days_solved": 4,
+                "days_degraded_to_hold": 0,
+                "days_at_time_limit": 0,
+                "forecast": {"summary": {"mae_kwh": 0.0312}},
+                "terminal_value": {"eur_per_kwh": 0.1705},
+            },
+            "comparison": {"day_ahead_closes_gap_fraction": 0.5},
+        }
+        (run_dir / benchmark.RESULTS_JSON_NAME).write_text(json.dumps(payload))
+
+        def fake(**_kw):
+            return run_dir
+
+        monkeypatch.setattr(benchmark, "benchmark_dataset", fake)
+        rc = main(
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ]
+        )
+        assert rc == 0
+        summary = capsys.readouterr().out
+        assert "day_ahead=80.0000 EUR (feasible, uncertified, bound=none)" in summary
+        assert "4/4 local days solved" in summary
+        assert "0 held SOC" in summary
+        assert "forecast MAE=0.0312 kWh/interval" in summary
+        assert "end-of-day SOC=0.1705 EUR/kWh" in summary
+        assert "causal->oracle gap closed=50.0%" in summary
+
+    def test_summary_keeps_the_two_terminal_assumptions_apart(self, monkeypatch, tmp_path, capsys):
+        """`oracle_terminal=` is the oracle's; the day-ahead value is named separately.
+
+        Both policies end their horizon under a terminal-SOC assumption and they are
+        deliberately *different* numbers (the ceiling values leftover inventory at zero,
+        the myopic policy must value it).  Collapsing them into one word, or printing the
+        day-ahead dict where the oracle's mode used to be, makes the line unreadable and
+        the two claims indistinguishable — this pin keeps them named.
+        """
+        from energy_baseline import benchmark
+
+        monkeypatch.setattr(benchmark, "core_available", lambda: True)
+        run_dir = tmp_path / "benchmarks" / "bbb222"
+        run_dir.mkdir(parents=True)
+        (run_dir / benchmark.RESULTS_JSON_NAME).write_text(
+            json.dumps(
+                {
+                    "run_id": "bbb222",
+                    "assumptions": {
+                        "cost_objective": {"cost_basis": "untaxed"},
+                        "terminal_accounting": {"used": "fixed"},
+                    },
+                    "evaluation": {
+                        "months_included": ["2026-01"],
+                        "interval_count": 96,
+                        "usable_interval_count": 96,
+                    },
+                    "policies": {
+                        "day_ahead": {
+                            "cost_eur": 5.0,
+                            "solver_status": "feasible",
+                            "is_certified": False,
+                            "bound_kind": "none",
+                        }
+                    },
+                    "solver": {"errors": {}},
+                    "comparison": {"day_ahead_closes_gap_fraction": None},
+                    "day_ahead": {
+                        "ran": True,
+                        "day_count": 1,
+                        "days_solved": 1,
+                        "days_degraded_to_hold": 0,
+                        "days_at_time_limit": 0,
+                        "forecast": {"summary": {"mae_kwh": None}},
+                        "terminal_value": {
+                            "eur_per_kwh": 0.2,
+                            "source": "cli: 0.2 EUR/DC-kWh supplied explicitly by the caller",
+                        },
+                    },
+                }
+            )
+        )
+        monkeypatch.setattr(benchmark, "benchmark_dataset", lambda **_kw: run_dir)
+        rc = main(
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ]
+        )
+        assert rc == 0
+        summary = capsys.readouterr().out
+        assert "oracle_terminal=fixed" in summary
+        assert "end-of-day SOC=0.2 EUR/kWh" in summary
+        assert "forecast MAE=n/a" in summary
+        assert "gap closed=n/a" in summary
+        # The day-ahead block is summarised, never dumped: no dict repr in the line.
+        assert "{'eur_per_kwh'" not in summary
+        assert "source" not in summary.split("day_ahead:")[1]
+
+    def test_summary_omits_day_ahead_when_it_did_not_run(self, monkeypatch, tmp_path, capsys):
+        from energy_baseline import benchmark
+
+        monkeypatch.setattr(benchmark, "core_available", lambda: True)
+        run_dir = tmp_path / "benchmarks" / "aaa111"
+        run_dir.mkdir(parents=True)
+        (run_dir / benchmark.RESULTS_JSON_NAME).write_text(
+            json.dumps(
+                {
+                    "run_id": "aaa111",
+                    "assumptions": {
+                        "cost_objective": {"cost_basis": "untaxed"},
+                        "terminal_accounting": {"used": "free"},
+                    },
+                    "evaluation": {
+                        "months_included": ["2026-01"],
+                        "interval_count": 96,
+                        "usable_interval_count": 96,
+                    },
+                    "policies": {
+                        "no_battery": {
+                            "cost_eur": 1.0,
+                            "solver_status": "not_applicable",
+                            "is_certified": False,
+                            "bound_kind": "none",
+                        }
+                    },
+                    "solver": {"errors": {}},
+                    "day_ahead": {"ran": False},
+                }
+            )
+        )
+        monkeypatch.setattr(benchmark, "benchmark_dataset", lambda **_kw: run_dir)
+        rc = main(
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ]
+        )
+        assert rc == 0
+        assert "local days solved" not in capsys.readouterr().out

@@ -9,7 +9,12 @@ policy), the site import ceiling as a *charging-headroom* constraint (measured
 load above it is an observation, never an infeasibility), and the failure modes —
 infeasible specs raise instead of returning garbage, and a tiny time limit returns
 a non-certified incumbent or raises, but never hangs.
-"""
+
+
+The day-ahead tests here are about *shared assembly*: with one local day and a forecast
+equal to the measured load, the rolling policy must reproduce ``solve_oracle`` in free
+terminal mode exactly — same flows, same SOC, same objective — because it reuses this
+module's model instead of re-deriving one."""
 
 from __future__ import annotations
 
@@ -35,7 +40,13 @@ from energy_baseline.oracle import (
     classify_result,
     solve_oracle,
 )
-from energy_baseline.policies import fit_thresholds, policy_causal_price, policy_no_battery
+from energy_baseline.policies import (
+    DayAheadDay,
+    fit_thresholds,
+    policy_causal_price,
+    policy_day_ahead,
+    policy_no_battery,
+)
 
 HOUR = 3600.0
 QUARTER = 900.0
@@ -1687,3 +1698,318 @@ class TestPeakShavingStillAvailable:
         # and the oracle beats a baseline that has no battery to shave with
         assert orc.cost_eur <= nb.cost_eur + 1e-9
         assert orc.ceiling_exceeding_intervals == 0
+
+
+# ---------------------------------------------------------------------------
+# Day-ahead reuse of this module's assembly
+# ---------------------------------------------------------------------------
+
+
+def _assert_models_identical(left, right) -> None:
+    """Byte-for-byte MILP equality: objective, integrality, bounds, constraint triplets.
+
+    Used to prove the ``floor_kwh`` knob cannot disturb the certified oracle: with the
+    default (``None``) and with the value the model would have chosen for itself, every
+    array that reaches HiGHS has to be identical.
+    """
+    obj_l, int_l, bounds_l, cons_l = left
+    obj_r, int_r, bounds_r, cons_r = right
+    assert np.array_equal(obj_l, obj_r)
+    assert np.array_equal(int_l, int_r)
+    assert np.array_equal(bounds_l.lb, bounds_r.lb)
+    assert np.array_equal(bounds_l.ub, bounds_r.ub)
+    assert len(cons_l) == len(cons_r)
+    for cl, cr in zip(cons_l, cons_r, strict=True):
+        al, ar = cl.A.tocoo(), cr.A.tocoo()
+        assert np.array_equal(al.row, ar.row)
+        assert np.array_equal(al.col, ar.col)
+        assert np.array_equal(al.data, ar.data)
+        assert np.array_equal(cl.lb, cr.lb)
+        assert np.array_equal(cl.ub, cr.ub)
+
+
+class TestDayAheadReusesOracleAssembly:
+    """The rolling day-ahead policy must be THIS model, solved one local day at a time.
+
+    Three properties are pinned here, all of them about drift:
+
+    * **Same assembly.** With one local day in the horizon and a forecast equal to the
+      measured load, the day-ahead plan has to be exactly what ``solve_oracle`` returns
+      in free terminal mode — same flows, same SOC trajectory, same objective, same
+      ceiling-exceedance observation.  If the policy ever re-derived its own constraints
+      (a looser big-M, a different ceiling row, a recurrence routed differently) the
+      equality breaks.
+    * **The roll is arithmetic, not a re-optimisation.** Two days solved sequentially by
+      the policy equal two explicit ``solve_oracle`` calls where the second starts at the
+      first day's actual end SOC.
+    * **Same call.** The policy reaches the oracle through its public API with
+      ``terminal_mode="free"`` and a declared terminal value, one solve per local day.
+    """
+
+    @staticmethod
+    def day_case(prices, load, *, import_limit_kw=None, **spec_overrides):
+        base = dict(
+            capacity_kwh=5.12,
+            power_kw=2.5,
+            charge_efficiency=0.95,
+            discharge_efficiency=0.95,
+            soc_min_frac=0.05,
+            soc_max_frac=0.95,
+            initial_soc_frac=0.2,
+        )
+        base.update(spec_overrides)
+        s = BatterySpec(**base)
+        h = Horizon(
+            QUARTER,
+            np.asarray(prices, dtype=float),
+            np.asarray(load, dtype=float),
+            np.ones(len(prices), dtype=bool),
+            import_limit_kw,
+        )
+        days = [
+            DayAheadDay(
+                label="2026-01-01",
+                start=0,
+                stop=len(prices),
+                forecast_load=np.asarray(load, dtype=float),
+            )
+        ]
+        return s, h, days
+
+    def test_single_day_equals_the_free_oracle(self) -> None:
+        """One local day, forecast == measured: the two paths are one path.
+
+        The day-ahead policy uses the internal planning value V for the daily solve,
+        but the scoring value (default 0.0) for the reported cost.  To make the
+        comparison with the oracle fair, we pass the same scoring value to both.
+        """
+        rng = np.random.default_rng(11)
+        prices = rng.uniform(0.02, 0.32, 96)
+        load = rng.uniform(0.05, 0.9, 96)
+        value = 0.17
+        s, h, days = self.day_case(prices, load)
+        rolled, telemetry = policy_day_ahead(
+            s,
+            h,
+            days,
+            terminal_value_eur_per_kwh=value,
+            scoring_terminal_value_eur_per_kwh=value,
+            time_limit_s=60.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+        )
+        direct = solve_oracle(
+            s,
+            h,
+            time_limit_s=60.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+            terminal_mode="free",
+            terminal_value_eur_per_kwh=value,
+        )
+        assert np.allclose(rolled.charge_kwh, direct.charge_kwh, atol=1e-6)
+        assert np.allclose(rolled.discharge_kwh, direct.discharge_kwh, atol=1e-6)
+        assert np.allclose(rolled.soc_kwh, direct.soc_kwh, atol=1e-6)
+        assert rolled.cost_eur == pytest.approx(direct.cost_eur, abs=1e-6)
+        assert rolled.meter_cost_eur == pytest.approx(direct.meter_cost_eur, abs=1e-6)
+        assert rolled.inventory_adjustment_eur == pytest.approx(
+            direct.inventory_adjustment_eur, abs=1e-6
+        )
+        assert rolled.ceiling_exceeding_intervals == direct.ceiling_exceeding_intervals
+        assert telemetry["day_count"] == 1 and telemetry["days_solved"] == 1
+        assert telemetry["charge_clipped_kwh"] == pytest.approx(0.0)
+        assert telemetry["discharge_clipped_kwh"] == pytest.approx(0.0)
+        assert telemetry["per_day"][0]["day_objective_eur"] == pytest.approx(
+            direct.cost_eur, abs=1e-6
+        )
+
+    def test_single_day_under_a_ceiling_equals_the_free_oracle(self) -> None:
+        """The ceiling row the daily solve uses is the oracle's, on published headroom."""
+        prices = [0.02, 0.05, 0.35, 0.40, 0.30, 0.03]
+        # t2's load alone breaches a 1.0 kW ceiling: history, not a violation.
+        load = [0.1, 0.0, 1.4, 0.6, 0.4, 0.2]
+        value = 0.2
+        s, h, days = self.day_case(prices, load, import_limit_kw=1.0)
+        rolled, telemetry = policy_day_ahead(
+            s,
+            h,
+            days,
+            terminal_value_eur_per_kwh=value,
+            scoring_terminal_value_eur_per_kwh=value,
+            time_limit_s=30.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+        )
+        direct = solve_oracle(
+            s,
+            h,
+            time_limit_s=30.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+            terminal_mode="free",
+            terminal_value_eur_per_kwh=value,
+        )
+        assert np.allclose(rolled.charge_kwh, direct.charge_kwh, atol=1e-6)
+        assert np.allclose(rolled.discharge_kwh, direct.discharge_kwh, atol=1e-6)
+        assert rolled.cost_eur == pytest.approx(direct.cost_eur, abs=1e-6)
+        assert rolled.ceiling_exceeding_intervals == direct.ceiling_exceeding_intervals
+        assert rolled.ceiling_exceeding_intervals > 0  # the load, not the plan, breached it
+        assert telemetry["charge_clipped_kwh"] == pytest.approx(0.0)
+        headroom = h.charge_headroom_kwh
+        assert headroom is not None
+        assert np.all(rolled.charge_kwh <= headroom + 1e-9)
+
+    def test_two_days_equal_two_sequential_free_oracle_solves(self) -> None:
+        import dataclasses
+
+        rng = np.random.default_rng(12)
+        per_day = 24
+        prices = rng.uniform(0.02, 0.32, 2 * per_day)
+        load = rng.uniform(0.05, 0.9, 2 * per_day)
+        # One horizon, two local days inside it: the spec is the run's, not the day's.
+        s, h, _ = self.day_case(prices, load)
+        value = 0.2
+        days = [
+            DayAheadDay(label="d0", start=0, stop=per_day, forecast_load=np.array(load[:per_day])),
+            DayAheadDay(
+                label="d1",
+                start=per_day,
+                stop=2 * per_day,
+                forecast_load=np.array(load[per_day:]),
+            ),
+        ]
+        rolled, telemetry = policy_day_ahead(
+            s,
+            h,
+            days,
+            terminal_value_eur_per_kwh=value,
+            scoring_terminal_value_eur_per_kwh=value,
+            time_limit_s=60.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+        )
+        first = solve_oracle(
+            s,
+            Horizon(QUARTER, prices[:per_day], load[:per_day], np.ones(per_day, dtype=bool)),
+            time_limit_s=60.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+            terminal_mode="free",
+            terminal_value_eur_per_kwh=value,
+        )
+        carried = float(first.soc_kwh[-1]) / s.capacity_kwh
+        # The floor handed to day 2 is the HORIZON's seed floor, not day 2's opening SOC:
+        # energy paid for on day 1 is the policy's to spend.  Passing the default here
+        # would re-create the frozen-battery bug this pin exists to prevent.
+        second = solve_oracle(
+            dataclasses.replace(s, initial_soc_frac=carried),
+            Horizon(QUARTER, prices[per_day:], load[per_day:], np.ones(per_day, dtype=bool)),
+            time_limit_s=60.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+            terminal_mode="free",
+            terminal_value_eur_per_kwh=value,
+            floor_kwh=s.causal_floor_kwh(),
+        )
+        assert np.allclose(rolled.charge_kwh[:per_day], first.charge_kwh, atol=1e-6)
+        assert np.allclose(rolled.charge_kwh[per_day:], second.charge_kwh, atol=1e-6)
+        assert np.allclose(rolled.discharge_kwh[per_day:], second.discharge_kwh, atol=1e-6)
+        # The second solve really did start where the first ended: that is the roll.
+        assert telemetry["per_day"][1]["soc_start_kwh"] == pytest.approx(
+            float(first.soc_kwh[-1]), abs=1e-6
+        )
+        assert rolled.cost_eur == pytest.approx(
+            float(first.cost_eur) + float(second.cost_eur), abs=1e-6
+        )
+
+    def test_default_floor_reproduces_the_certified_model_exactly(self) -> None:
+        """``floor_kwh=None`` is byte-identical to the oracle that was certified.
+
+        The knob exists for the rolling policy and must not have touched the ceiling:
+        passing the floor explicitly as the spec's own causal floor has to produce the
+        same objective vector, the same integrality mask, the same variable bounds and
+        the same constraint triplets as passing nothing at all.
+        """
+        rng = np.random.default_rng(13)
+        prices = rng.uniform(0.02, 0.3, 40)
+        load = rng.uniform(0.05, 0.8, 40)
+        s, h, _ = self.day_case(prices, load, import_limit_kw=5.0)
+        for mode in ("fixed", "free"):
+            kwargs = {"terminal_mode": mode}
+            if mode == "free":
+                kwargs["terminal_value_eur_per_kwh"] = 0.15
+            # The value each mode would have picked for itself, stated explicitly.
+            restated = build_model(
+                s,
+                h,
+                floor_kwh=(s.causal_floor_kwh() if mode == "free" else s.soc_bound_kwh("min")),
+                **kwargs,
+            )
+            untouched = build_model(s, h, **kwargs)
+            _assert_models_identical(untouched, restated)
+            # And the floor is visible where it belongs: on the SOC variable block only.
+            free_lb = restated[2].lb[3 * h.n :]
+            if mode == "free":
+                assert np.all(free_lb == pytest.approx(s.causal_floor_kwh()))
+            else:
+                assert free_lb[-1] == pytest.approx(s.soc_bound_kwh("terminal"))
+
+    def test_an_impossible_floor_is_refused(self) -> None:
+        """A floor below the physical window would authorise energy that does not exist."""
+        rng = np.random.default_rng(14)
+        s, h, _ = self.day_case(rng.uniform(0.02, 0.3, 12), rng.uniform(0.05, 0.8, 12))
+        with pytest.raises(ValueError, match="below the physical SOC window"):
+            build_model(s, h, terminal_mode="free", terminal_value_eur_per_kwh=0.1, floor_kwh=-1.0)
+        with pytest.raises(ValueError, match="above the physical SOC ceiling"):
+            build_model(
+                s,
+                h,
+                terminal_mode="free",
+                terminal_value_eur_per_kwh=0.1,
+                floor_kwh=10.0 * s.capacity_kwh,
+            )
+        with pytest.raises(ValueError, match="finite"):
+            build_model(
+                s,
+                h,
+                terminal_mode="free",
+                terminal_value_eur_per_kwh=0.1,
+                floor_kwh=float("nan"),
+            )
+
+    def test_policy_calls_solve_oracle_with_free_terminal_mode(self, monkeypatch) -> None:
+        """Recorded, not assumed: the day-ahead policy goes through this module's API."""
+        import energy_baseline.policies as policies_mod
+
+        seen: list[dict[str, object]] = []
+        real = policies_mod.solve_oracle
+
+        def spy(spec_arg, horizon_arg, **kwargs):
+            seen.append({"kwargs": kwargs, "n": horizon_arg.n})
+            return real(spec_arg, horizon_arg, **kwargs)
+
+        monkeypatch.setattr(policies_mod, "solve_oracle", spy)
+        s, h, _ = self.day_case([0.05, 0.3, 0.2, 0.1], [0.3, 0.4, 0.9, 0.2])
+        days = [
+            DayAheadDay(label="A", start=0, stop=2, forecast_load=np.array([0.3, 0.4])),
+            DayAheadDay(label="B", start=2, stop=4, forecast_load=np.array([0.9, 0.2])),
+        ]
+        policy_day_ahead(
+            s,
+            h,
+            days,
+            terminal_value_eur_per_kwh=0.18,
+            time_limit_s=7.0,
+            mip_rel_gap=1e-8,
+            mip_abs_gap=1e-11,
+        )
+        assert len(seen) == 2
+        assert all(entry["n"] == 2 for entry in seen), "one local day per solve"
+        for entry in seen:
+            assert entry["kwargs"]["terminal_mode"] == "free"
+            assert entry["kwargs"]["terminal_value_eur_per_kwh"] == 0.18
+            # The horizon's seed floor on every day, including the one that starts full.
+            assert entry["kwargs"]["floor_kwh"] == pytest.approx(s.causal_floor_kwh())
+            assert entry["kwargs"]["time_limit_s"] == 7.0
+            assert entry["kwargs"]["mip_rel_gap"] == 1e-8
+            assert entry["kwargs"]["mip_abs_gap"] == 1e-11

@@ -2,8 +2,18 @@
 
 - **Status:** RECORD ONLY — no scope change to ADR-0003
 - **Date:** 2026-10-23
+- **Supersession note (2026-10-23):** The [Scope decision](#scope-decision-and-rationale) below
+  states "no fourth policy is added in this phase" and the [day-ahead
+  variant](#considered-and-deferred-a-day-ahead-informed-variant) was "considered and deferred".
+  **This is superseded as of 2026-10-23:** the user approved implementation of a day-ahead policy
+  (B2) as a new rung between causal and oracle. The policy is implemented in
+  `scripts/energy-baseline/src/energy_baseline/policies.py` (`policy_day_ahead`) and is currently
+  uncommitted (code review in progress). The historical analysis below remains valid as baseline
+  context — the AppDaemon rule is still thermal, not electrical, and still not a battery policy —
+  but the day-ahead price variant it motivated is no longer deferred. See
+  [energy-baseline-progress.md](./energy-baseline-progress.md) for current status.
 - **Extends:** [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md)
-- **Related:** [Production execution plan](./energy-baseline-production-execution.md), [Implementation plan](./home-battery-optimizer-implementation.md)
+- **Related:** [Production execution plan](./energy-baseline-production-execution.md), [Implementation plan](./home-battery-optimizer-implementation.md), [Progress & handoff](./energy-baseline-progress.md)
 
 ## Purpose
 

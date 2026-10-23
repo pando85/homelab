@@ -8,12 +8,22 @@ configured site import ceiling leaves (and charge nothing where the measured
 load already used it all — without ever failing on such history), and may cost
 more than the no-battery baseline.  Gap exclusion must be identical for every
 policy.
-"""
+
+
+The day-ahead policy (added as ADR-0003's deferred fourth rung) is tested for the
+things it is actually claimed to do: a load forecast that cannot read the day it
+forecasts, a plan that costs money on the *measured* load and never on the forecast,
+end-of-day SOC valued by a single cross-day number, clipping instead of export when
+the forecast was optimistic, and a day whose MILP refuses to solve degrading to
+hold-SOC rather than aborting the roll."""
 
 from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Sequence
+from datetime import date
+from typing import Any
 
 import numpy as np
 import pytest
@@ -26,9 +36,15 @@ from energy_baseline.battery import (
     check_feasible,
     simulate,
 )
+from energy_baseline.oracle import solve_oracle
 from energy_baseline.policies import (
+    FORECAST_FALLBACK_RULE,
+    DayAheadDay,
+    contiguous_day_bounds,
     fit_thresholds,
+    forecast_load_trailing_slot_mean,
     policy_causal_price,
+    policy_day_ahead,
     policy_no_battery,
 )
 
@@ -1064,3 +1080,990 @@ class TestPurity:
                 )
                 == []
             ), label
+
+
+# ---------------------------------------------------------------------------
+# Policy 3 — day-ahead load forecast
+# ---------------------------------------------------------------------------
+
+PER_DAY = 8  # short synthetic "local days": enough slots to test position alignment
+
+
+def day_labels(n_days: int, per_day: int = PER_DAY) -> list[int]:
+    """Integer local-day keys, ``per_day`` intervals each."""
+    return [i // per_day for i in range(n_days * per_day)]
+
+
+def ragged_labels(sizes: Sequence[int]) -> list[int]:
+    """Integer local-day keys for days of *different* lengths (DST-shaped input)."""
+    return [i for i, size in enumerate(sizes) for _ in range(size)]
+
+
+def bounds(labels: Sequence[Any]) -> list[tuple[Any, int, int]]:
+    return contiguous_day_bounds(labels)
+
+
+class TestContiguousDayBounds:
+    def test_groups_runs_in_order(self) -> None:
+        labels = [date(2026, 1, 1), date(2026, 1, 1), date(2026, 1, 2), date(2026, 1, 3)]
+        assert contiguous_day_bounds(labels) == [
+            (date(2026, 1, 1), 0, 2),
+            (date(2026, 1, 2), 2, 3),
+            (date(2026, 1, 3), 3, 4),
+        ]
+
+    def test_ragged_days_are_the_norm_not_an_error(self) -> None:
+        """92 / 96 / 100-slot DST days each become exactly one run."""
+        labels = ragged_labels([92, 96, 100])
+        runs = contiguous_day_bounds(labels)
+        assert [stop - start for _label, start, stop in runs] == [92, 96, 100]
+
+    def test_empty_input_raises(self) -> None:
+        with pytest.raises(ValueError, match="empty"):
+            contiguous_day_bounds([])
+
+    def test_non_chronological_raises(self) -> None:
+        """A label that reappears after a later one is a sort bug, not a new day."""
+        labels = ragged_labels([4, 4, 4])
+        labels[6] = 0
+        with pytest.raises(ValueError, match="not chronological"):
+            contiguous_day_bounds(labels)
+
+
+class TestTrailingSlotForecast:
+    def test_equals_manual_trailing_mean_per_position(self) -> None:
+        rng = np.random.default_rng(4)
+        n_days, per_day = 5, PER_DAY
+        load = rng.uniform(0.2, 1.5, n_days * per_day)
+        forecast, _diag = forecast_load_trailing_slot_mean(
+            load, bounds(day_labels(n_days, per_day)), window_days=3
+        )
+        # Day 4, slot k: mean of the same slot of days 1, 2, 3 (day 0 is out of window).
+        for k in range(per_day):
+            expected = float(np.mean([load[d * per_day + k] for d in (1, 2, 3)]))
+            assert forecast[4 * per_day + k] == pytest.approx(expected)
+
+    def test_window_days_limits_the_lookback(self) -> None:
+        n_days, per_day = 4, PER_DAY
+        load = np.arange(1.0, n_days * per_day + 1.0)
+        forecast, diag = forecast_load_trailing_slot_mean(
+            load, bounds(day_labels(n_days, per_day)), window_days=2
+        )
+        target = 3 * per_day
+        expected = float(np.mean([load[per_day + 2], load[2 * per_day + 2]]))
+        assert forecast[target + 2] == pytest.approx(expected)
+        assert diag[3]["window_days_available"] == 2
+        assert diag[3]["window_days_requested"] == 2
+        assert diag[3]["trailing_mean_samples_max"] == 2
+
+    def test_leakage_forecast_of_day_d_ignores_day_d_entirely(self) -> None:
+        """The crux: day D's own load is wildly different and the forecast never notices.
+
+        If the forecast could read the day it is forecasting, the target day's huge
+        values would dominate the mean and the assertion below would fail by a mile.
+        """
+        n_days, per_day = 5, PER_DAY
+        load = np.full(n_days * per_day, 0.5)
+        load[3 * per_day :] = 50.0  # days 3 and 4 are nothing like days 0..2
+        forecast, diag = forecast_load_trailing_slot_mean(
+            load, bounds(day_labels(n_days, per_day)), window_days=3
+        )
+        assert np.allclose(forecast[3 * per_day : 4 * per_day], 0.5)
+        assert diag[3]["mae_kwh"] == pytest.approx(49.5)  # the error is disclosed
+        # Day 4 legitimately sees days 1..3 — including day 3's shock, which by then is
+        # history.  It must NOT see its own 50.0, hence 17.0 and not 50.0.
+        assert np.allclose(forecast[4 * per_day :], (0.5 + 0.5 + 50.0) / 3)
+        assert diag[4]["mae_kwh"] == pytest.approx(50.0 - (0.5 + 0.5 + 50.0) / 3)
+
+    def test_perturbing_later_days_leaves_earlier_forecast_identical(self) -> None:
+        n_days, per_day = 6, PER_DAY
+        rng = np.random.default_rng(5)
+        base = rng.uniform(0.2, 1.5, n_days * per_day)
+        perturbed = base.copy()
+        perturbed[4 * per_day :] = 40.0
+        days = bounds(day_labels(n_days, per_day))
+        f_base, _ = forecast_load_trailing_slot_mean(base, days, window_days=3)
+        f_pert, _ = forecast_load_trailing_slot_mean(perturbed, days, window_days=3)
+        assert np.array_equal(f_base[: 4 * per_day], f_pert[: 4 * per_day])
+
+    def test_unusable_intervals_are_missing_not_zero(self) -> None:
+        """A measurement hole must not drag the forecast toward free energy."""
+        n_days, per_day = 3, PER_DAY
+        load = np.full(n_days * per_day, 1.0)
+        usable = np.ones(n_days * per_day, dtype=bool)
+        usable[per_day : 2 * per_day] = False  # all of day 1 is a gap
+        forecast, diag = forecast_load_trailing_slot_mean(
+            load, bounds(day_labels(n_days, per_day)), window_days=2, usable=usable
+        )
+        # Day 2's window is days 0 and 1; only day 0 contributes, still 1.0 not 0.5.
+        assert np.allclose(forecast[2 * per_day :], 1.0)
+        assert diag[2]["window_days_available"] == 2
+        assert diag[2]["window_days_with_usable_data"] == 1
+
+    def test_first_day_of_data_has_no_history_and_says_so(self) -> None:
+        n_days, per_day = 3, PER_DAY
+        load = np.full(n_days * per_day, 0.7)
+        forecast, diag = forecast_load_trailing_slot_mean(
+            load, bounds(day_labels(n_days, per_day)), window_days=3
+        )
+        assert np.allclose(forecast[:per_day], 0.0)
+        assert diag[0]["fallback"] == "zero_no_history"
+        assert diag[0]["slots_zero_no_history"] == per_day
+        assert diag[0]["window_days_available"] == 0
+
+    def test_pooled_fallback_when_only_longer_days_have_the_slot(self) -> None:
+        """A 100-slot fall-back day following 96-slot days: slots 96..99 have no twin."""
+        labels = ragged_labels([4, 4, 6])
+        load = np.array([1.0, 2.0, 3.0, 4.0, 10.0, 20.0, 30.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        forecast, diag = forecast_load_trailing_slot_mean(load, bounds(labels), window_days=3)
+        # Slots 0..3 have two prior samples each; slots 4..5 exist only on this long day.
+        assert np.allclose(forecast[8:12], [5.5, 11.0, 16.5, 22.0])
+        pooled = float(np.mean(load[:8]))
+        assert np.allclose(forecast[12:14], pooled)
+        assert diag[2]["slots_pooled_fallback"] == 2
+        assert diag[2]["slots_using_trailing_mean"] == 4
+        assert diag[2]["fallback"] == "pooled_window_mean"
+
+    def test_diagnostics_shape_and_sums(self) -> None:
+        n_days, per_day = 4, PER_DAY
+        rng = np.random.default_rng(6)
+        load = rng.uniform(0.1, 1.0, n_days * per_day)
+        _forecast, diag = forecast_load_trailing_slot_mean(
+            load, bounds(day_labels(n_days, per_day)), window_days=3
+        )
+        assert len(diag) == n_days
+        assert diag[3]["intervals"] == per_day
+        assert diag[3]["forecast_sum_kwh"] == pytest.approx(
+            float(_forecast[3 * per_day : 4 * per_day].sum())
+        )
+        assert diag[3]["measured_sum_kwh"] == pytest.approx(float(load[3 * per_day :].sum()))
+        assert diag[3]["bias_kwh"] == pytest.approx(
+            float(_forecast[3 * per_day : 4 * per_day].mean() - load[3 * per_day :].mean())
+        )
+        assert diag[3]["forecast_fallback_rule"] == FORECAST_FALLBACK_RULE
+
+    def test_rejects_bad_inputs(self) -> None:
+        days = bounds(day_labels(2, PER_DAY))
+        with pytest.raises(ValueError, match="window_days"):
+            forecast_load_trailing_slot_mean([1.0] * 16, days, window_days=0)
+        with pytest.raises(ValueError, match="empty"):
+            forecast_load_trailing_slot_mean(np.array([]), days)
+        with pytest.raises(ValueError, match="non-finite"):
+            forecast_load_trailing_slot_mean(np.array([1.0, np.nan] + [1.0] * 14), days)
+        with pytest.raises(ValueError, match="usable"):
+            forecast_load_trailing_slot_mean(np.ones(16), days, usable=np.ones(8, dtype=bool))
+
+    def test_never_mutates_its_inputs(self) -> None:
+        n_days, per_day = 4, PER_DAY
+        load = np.arange(1.0, n_days * per_day + 1)
+        labels = day_labels(n_days, per_day)
+        copy = load.copy()
+        forecast, _diag = forecast_load_trailing_slot_mean(load, bounds(labels), window_days=2)
+        assert np.array_equal(load, copy)
+        assert not forecast.flags["WRITEABLE"]
+
+
+# ---------------------------------------------------------------------------
+# Policy 3 — the rolling day-ahead policy itself
+# ---------------------------------------------------------------------------
+
+
+def day_ahead_case(
+    n_days: int = 5,
+    per_day: int = PER_DAY,
+    *,
+    seed: int = 7,
+    window_days: int = 3,
+    import_limit_kw: float | None = None,
+    eval_from: int = 3,
+    usable: np.ndarray | None = None,
+) -> dict[str, Any]:
+    """A synthetic rolling-day-ahead fixture: history days then evaluation days."""
+    rng = np.random.default_rng(seed)
+    n = n_days * per_day
+    hour = np.tile(np.arange(per_day), n_days)
+    prices = np.where(hour < 3, 0.04, 0.24) + rng.uniform(0.0, 0.03, n)
+    load = np.where(hour >= 5, 0.9, 0.25) + rng.uniform(0.0, 0.05, n)
+    mask = np.ones(n, dtype=bool) if usable is None else usable
+    labels = day_labels(n_days, per_day)
+    runs = contiguous_day_bounds(labels)
+    forecast, diag = forecast_load_trailing_slot_mean(
+        load, runs, window_days=window_days, usable=mask
+    )
+    start = eval_from * per_day
+    horizon = Horizon(QUARTER, prices[start:], load[start:], mask[start:], import_limit_kw)
+    days = [
+        DayAheadDay(
+            label=f"D{i}",
+            start=lo - start,
+            stop=hi - start,
+            forecast_load=forecast[lo:hi],
+            forecast=diag[i],
+        )
+        for i, (label, lo, hi) in enumerate(runs)
+        if i >= eval_from
+    ]
+    return {
+        "prices": prices,
+        "load": load,
+        "usable": mask,
+        "runs": runs,
+        "forecast": forecast,
+        "diagnostics": diag,
+        "horizon": horizon,
+        "days": days,
+        "start": start,
+        "per_day": per_day,
+        "terminal_value": float(prices[: eval_from * per_day].mean()),
+    }
+
+
+class TestDayAheadPolicy:
+    def test_plan_is_feasible_against_measured_load(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        sched, _tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert (
+            check_feasible(
+                s,
+                case["horizon"],
+                sched.charge_kwh,
+                sched.discharge_kwh,
+                enforce_terminal_soc=False,
+            )
+            == []
+        )
+        assert np.all(sched.grid_kwh >= -1e-9)
+        assert sched.solver_status == "feasible"
+        assert sched.bound_kind == "none"
+        assert sched.is_certified is False
+        assert sched.solver_gap is None
+
+    def test_cost_is_meter_plus_telescoped_inventory(self) -> None:
+        """Same accounting as the free oracle: cost == meter - scoring_value*(terminal - initial).
+
+        The scoring terminal value (default 0.0) is what the Schedule uses for cost_eur
+        and inventory_adjustment_eur, so the comparison with the oracle is on the same
+        basis.  The internal planning value V is used inside each daily objective to
+        prevent the battery from emptying at midnight, and is recorded in the telemetry
+        as internal_terminal_value_eur_per_kwh.  The per-day objectives sum to the
+        internal-V-based cost, which is recorded as internal_daily_objective_sum_eur and
+        is NOT the common score.
+        """
+        s = spec()
+        case = day_ahead_case()
+        internal_v = 0.2
+        scoring_v = 0.0  # default
+        sched, tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=internal_v,
+            scoring_terminal_value_eur_per_kwh=scoring_v,
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        # The reported cost uses the scoring value, not the internal planning value.
+        expected_adjustment = -scoring_v * (sched.terminal_soc_kwh - sched.initial_soc_kwh)
+        assert sched.inventory_adjustment_eur == pytest.approx(expected_adjustment, abs=1e-12)
+        assert sched.cost_eur == pytest.approx(
+            sched.meter_cost_eur + sched.inventory_adjustment_eur, abs=1e-12
+        )
+        assert sched.terminal_value_eur_per_kwh == pytest.approx(scoring_v)
+        # The telemetry records both values.
+        assert tele["terminal_value_eur_per_kwh"] == pytest.approx(internal_v)
+        assert tele["scoring_terminal_value_eur_per_kwh"] == pytest.approx(scoring_v)
+        # The per-day roll-up must agree with the kernel's single whole-horizon pass.
+        assert tele["meter_cost_rollup_abs_diff_eur"] < 1e-9
+        # The per-day objectives sum to the internal-V-based cost, not the reported cost.
+        assert tele["internal_daily_objective_sum_eur"] == pytest.approx(
+            sum(d["objective_eur"] for d in tele["per_day"] if d["objective_eur"] is not None),
+            abs=1e-9,
+        )
+
+    def test_day_counts_are_recorded_per_day(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        _sched, tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert tele["day_count"] == len(case["days"]) == 2
+        assert tele["days_solved"] + tele["days_skipped_no_usable_intervals"] == tele["day_count"]
+        assert {d["local_day"] for d in tele["per_day"]} == {"D3", "D4"}
+        assert all(d["solver_status"] == "optimal" for d in tele["per_day"])
+        assert all(d["forecast"]["intervals"] == case["per_day"] for d in tele["per_day"])
+        assert tele["wall_clock_note"].startswith("per-day solver wall-clock time is")
+
+    def test_soc_is_rolled_forward_as_the_actual_end_of_day(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        sched, tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        per_day = case["per_day"]
+        for i, record in enumerate(tele["per_day"]):
+            assert record["soc_start_kwh"] == pytest.approx(
+                sched.soc_kwh[i * per_day - 1] if i else s.soc_bound_kwh("init"), abs=1e-6
+            )
+            assert record["soc_end_kwh"] == pytest.approx(
+                sched.soc_kwh[(i + 1) * per_day - 1], abs=1e-6
+            )
+
+    def test_myopia_terminal_value_is_the_only_cross_day_coupling(self) -> None:
+        """Zero terminal value empties the battery by midnight; a positive one does not.
+
+        This is the ADR-0001 artefact made visible: the daily solve cannot see tomorrow,
+        so what it does with end-of-day SOC is entirely a function of how we value it.
+        """
+        s = spec()
+        case = day_ahead_case()
+        kwargs = {
+            "days": case["days"],
+            "time_limit_s": 5.0,
+            "mip_rel_gap": 1e-6,
+            "mip_abs_gap": 1e-9,
+        }
+        empty, _ = policy_day_ahead(s, case["horizon"], terminal_value_eur_per_kwh=0.0, **kwargs)
+        hoarded, _ = policy_day_ahead(s, case["horizon"], terminal_value_eur_per_kwh=0.5, **kwargs)
+        assert empty.terminal_soc_kwh <= hoarded.terminal_soc_kwh
+        assert hoarded.terminal_soc_kwh > s.soc_bound_kwh("min") + 1e-9
+
+    def test_causality_escalation_later_prices_leave_earlier_days_untouched(self) -> None:
+        """Day D's plan cannot depend on a price published for a day after D."""
+        s = spec()
+        case = day_ahead_case()
+        sched, _ = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        per_day = case["per_day"]
+        changed_prices = case["prices"].copy()
+        changed_prices[4 * per_day :] = 0.99  # tomorrow is expensive: not today's business
+        horizon2 = Horizon(
+            QUARTER,
+            changed_prices[case["start"] :],
+            case["load"][case["start"] :],
+            case["usable"][case["start"] :],
+        )
+        sched2, _ = policy_day_ahead(
+            s,
+            horizon2,
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert np.array_equal(sched.charge_kwh[:per_day], sched2.charge_kwh[:per_day])
+        assert np.array_equal(sched.soc_kwh[:per_day], sched2.soc_kwh[:per_day])
+        # …and the same day's plan DOES respond to that day's own curve: the dependency
+        # is real, not a no-op policy that would make the equality above vacuous.
+        same_day_change = case["prices"].copy()
+        same_day_change[3 * per_day : 4 * per_day] = 0.99
+        horizon3 = Horizon(
+            QUARTER,
+            same_day_change[case["start"] :],
+            case["load"][case["start"] :],
+            case["usable"][case["start"] :],
+        )
+        sched3, _ = policy_day_ahead(
+            s,
+            horizon3,
+            case["days"],
+            terminal_value_eur_per_kwh=0.0,
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert np.any(sched3.charge_kwh[:per_day] != sched.charge_kwh[:per_day]) or np.any(
+            sched3.discharge_kwh[:per_day] != sched.discharge_kwh[:per_day]
+        )
+
+    def test_load_after_day_d_leaves_day_d_plan_bit_identical(self) -> None:
+        """Perturb measured load from day D+1 onwards: day D's plan must not move a bit.
+
+        The requested leakage test, at plan level rather than forecast level.  Day D's
+        decision reads day D's prices, day D's forecast, and its own state; the measured
+        load *after* it enters neither the forecast nor day D's own clip pass (which is
+        bounded by day D's intervals), so the arrays for day D must compare exactly —
+        not approximately, and not just in cost.
+        """
+        s = spec()
+        case = day_ahead_case()
+        per_day = case["per_day"]
+        baseline, _ = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        perturbed_load = case["load"].copy()
+        # Later days collapse to near-zero draw.  Downward is the direction that has to
+        # bite: a plan sized by the forecast gets clipped harder against a load that
+        # disappeared, whereas a bigger load is simply more headroom the plan never asked
+        # for and would leave both windows identical for the wrong reason.
+        perturbed_load[4 * per_day :] = 0.01
+        horizon_2 = Horizon(
+            QUARTER,
+            case["prices"][case["start"] :],
+            perturbed_load[case["start"] :],
+            case["usable"][case["start"] :],
+        )
+        # …and the forecast the policy is handed is rebuilt from the perturbed archive,
+        # so even a history that now contains a huge later day must not reach back and
+        # alter the earlier plan.
+        labels = day_labels(5, per_day)  # same fixture shape: 5 days, eval from day 3
+        runs = contiguous_day_bounds(labels)
+        forecast_2, diag_2 = forecast_load_trailing_slot_mean(
+            perturbed_load, runs, window_days=3, usable=case["usable"]
+        )
+        days_2 = [
+            DayAheadDay(
+                label=d.label,
+                start=d.start,
+                stop=d.stop,
+                forecast_load=forecast_2[case["start"] + d.start : case["start"] + d.stop],
+                forecast=diag_2[3 + i],
+            )
+            for i, d in enumerate(case["days"])
+        ]
+        after, _ = policy_day_ahead(
+            s,
+            horizon_2,
+            days_2,
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        first = slice(0, per_day)  # day D of the evaluation window
+        assert np.array_equal(baseline.charge_kwh[first], after.charge_kwh[first])
+        assert np.array_equal(baseline.discharge_kwh[first], after.discharge_kwh[first])
+        assert np.array_equal(baseline.soc_kwh[first], after.soc_kwh[first])
+        # The perturbed day is where the difference lands, and it is the *delivered*
+        # energy that changes, not the requested plan: day 4's forecast is untouched (it
+        # is built from days 1..3, none of them perturbed) and so is its MILP plan, but
+        # the measured-load clip that converts plan into delivery now has almost nothing
+        # to spend into.  So the equality above is causality, not an inert policy.
+        assert not np.array_equal(baseline.discharge_kwh[per_day:], after.discharge_kwh[per_day:])
+        assert after.discharge_kwh[per_day:].sum() < baseline.discharge_kwh[per_day:].sum()
+
+    def test_forecast_input_is_not_inert_and_leaking_would_not_help(self) -> None:
+        """Negative control: day D's forecast genuinely drives day D's plan.
+
+        Without this, the leakage assertion above would be satisfied by a policy that
+        ignored its forecast entirely.  It also records the less obvious finding: a
+        *leaked* (too large) forecast does not buy the policy extra discharge — it plans
+        energy into load that does not exist, and the measured-load clip throws the
+        difference away.  Honesty costs the policy nothing here, and the artifact shows
+        the clipped energy either way.
+        """
+        s = spec()
+        case = day_ahead_case()
+        honest, _tele_honest = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        leaked_days = [
+            dataclasses.replace(
+                d,
+                forecast_load=np.where(i == 0, np.full(case["per_day"], 4.0), d.forecast_load),
+            )
+            for i, d in enumerate(case["days"])
+        ]
+        leaked, _tele_leaked = policy_day_ahead(
+            s,
+            case["horizon"],
+            leaked_days,
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        per_day = case["per_day"]
+        assert not np.array_equal(honest.discharge_kwh[:per_day], leaked.discharge_kwh[:per_day])
+        # The leaked plan wants much more discharge than the measured load can absorb…
+        assert (
+            _tele_leaked["per_day"][0]["discharge_kwh_planned"]
+            > _tele_honest["per_day"][0]["discharge_kwh_planned"]
+        )
+        # …and the difference is clipped and reported, not exported.
+        assert (
+            _tele_leaked["per_day"][0]["discharge_clipped_kwh"]
+            > _tele_honest["per_day"][0]["discharge_clipped_kwh"]
+        )
+        assert np.all(leaked.grid_kwh >= -1e-9)
+
+    def test_forecast_underestimate_is_clipped_not_exported(self) -> None:
+        """A plan built on a too-small load forecast is repaired, never allowed to export."""
+        s = spec()
+        case = day_ahead_case()
+        starved = [
+            dataclasses.replace(d, forecast_load=np.zeros(case["per_day"])) for d in case["days"]
+        ]
+        sched, tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            starved,
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert np.all(sched.grid_kwh >= -1e-9)
+        assert (
+            check_feasible(
+                s,
+                case["horizon"],
+                sched.charge_kwh,
+                sched.discharge_kwh,
+                enforce_terminal_soc=False,
+            )
+            == []
+        )
+        assert sched.discharge_kwh.sum() == pytest.approx(0.0)
+        assert tele["days_infeasible"] == 0  # a wrong forecast is not an infeasibility
+
+    def test_ceiling_headroom_is_the_measured_load_not_the_forecast(self) -> None:
+        """Charging is bounded by the ceiling on the MEASURED load, and breach is an observation."""
+        s = spec()
+        case = day_ahead_case(import_limit_kw=1.0)
+        # A forecast that claims zero load would leave the whole ceiling free…
+        greedy = [
+            dataclasses.replace(d, forecast_load=np.zeros(case["per_day"])) for d in case["days"]
+        ]
+        sched, tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            greedy,
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        headroom = case["horizon"].charge_headroom_kwh
+        assert headroom is not None
+        assert np.all(sched.charge_kwh <= headroom + 1e-6)
+        assert tele["charge_clipped_kwh"] > 0.0
+        assert tele["days_with_clipping"] > 0
+        # Net import above the ceiling stays an observation the run reports, not a failure.
+        assert sched.ceiling_exceeding_intervals == len(
+            ceiling_exceedance_indices(case["horizon"], sched.grid_kwh)
+        )
+
+    def test_deterministic(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        kwargs = {
+            "days": case["days"],
+            "terminal_value_eur_per_kwh": case["terminal_value"],
+            "time_limit_s": 5.0,
+            "mip_rel_gap": 1e-6,
+            "mip_abs_gap": 1e-9,
+        }
+        a, ta = policy_day_ahead(s, case["horizon"], **kwargs)
+        b, tb = policy_day_ahead(s, case["horizon"], **kwargs)
+        assert a.cost_eur == b.cost_eur
+        assert np.array_equal(a.charge_kwh, b.charge_kwh)
+        assert np.array_equal(a.soc_kwh, b.soc_kwh)
+        assert ta["per_day"] == tb["per_day"]
+
+    def test_ragged_dst_days_are_one_solve_each(self) -> None:
+        """A 92-slot day and a 100-slot day are each partitioned and solved whole."""
+        s = spec()
+        sizes = [8, 8, 7, 10]  # a short "spring-forward" day and a long "fall-back" day
+        labels: list[int] = []
+        for i, size in enumerate(sizes):
+            labels += [i] * size
+        n = len(labels)
+        rng = np.random.default_rng(9)
+        prices = rng.uniform(0.05, 0.3, n)
+        load = rng.uniform(0.2, 1.2, n)
+        runs = contiguous_day_bounds(labels)
+        forecast, diag = forecast_load_trailing_slot_mean(load, runs, window_days=2)
+        horizon = Horizon(
+            QUARTER, prices[runs[2][1] :], load[runs[2][1] :], np.ones(n - runs[2][1], dtype=bool)
+        )
+        days = [
+            DayAheadDay(
+                label=f"D{i}",
+                start=lo - runs[2][1],
+                stop=hi - runs[2][1],
+                forecast_load=forecast[lo:hi],
+                forecast=diag[i],
+            )
+            for i, (label, lo, hi) in enumerate(runs)
+            if i >= 2
+        ]
+        sched, tele = policy_day_ahead(
+            s,
+            horizon,
+            days,
+            terminal_value_eur_per_kwh=0.15,
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert [d["intervals"] for d in tele["per_day"]] == [7, 10]
+        assert (
+            check_feasible(
+                s, horizon, sched.charge_kwh, sched.discharge_kwh, enforce_terminal_soc=False
+            )
+            == []
+        )
+
+
+class TestDayAheadDegradation:
+    def test_infeasible_day_holds_soc_and_the_run_continues(self, monkeypatch) -> None:
+        """One bad day must not abort the horizon and must not borrow the oracle's answer."""
+        import energy_baseline.policies as policies_mod
+        from energy_baseline.oracle import OracleInfeasibleError
+
+        s = spec()
+        case = day_ahead_case()
+        real_solve = policies_mod.solve_oracle
+        calls = {"n": 0}
+
+        def refuse(spec_arg, horizon_arg, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OracleInfeasibleError("day is infeasible: unit test")
+            return real_solve(spec_arg, horizon_arg, **kwargs)
+
+        monkeypatch.setattr(policies_mod, "solve_oracle", refuse)
+        sched, tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        per_day = case["per_day"]
+        assert tele["days_infeasible"] == 1
+        assert tele["days_degraded_to_hold"] == 1
+        assert tele["per_day"][1]["degradation"] == "infeasible_hold_soc_no_charging"
+        assert np.allclose(sched.charge_kwh[per_day : 2 * per_day], 0.0)
+        assert np.allclose(sched.discharge_kwh[per_day : 2 * per_day], 0.0)
+        # SOC held: the degraded day neither gained nor lost stored energy…
+        assert sched.soc_kwh[2 * per_day - 1] == pytest.approx(sched.soc_kwh[per_day - 1], abs=1e-9)
+        # …and the days around it were still optimised normally.
+        assert tele["days_solved"] == 1
+        assert sched.charge_kwh.sum() + sched.discharge_kwh.sum() > 0.0
+
+    def test_no_incumbent_day_is_counted_separately(self, monkeypatch) -> None:
+        import energy_baseline.policies as policies_mod
+        from energy_baseline.oracle import OracleNoIncumbentError
+
+        s = spec()
+        case = day_ahead_case()
+
+        def refuse(*args, **kwargs):
+            raise OracleNoIncumbentError("no feasible schedule found (time limit): unit test")
+
+        monkeypatch.setattr(policies_mod, "solve_oracle", refuse)
+        sched, tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert tele["days_no_incumbent"] == tele["day_count"]
+        assert tele["days_infeasible"] == 0
+        assert tele["days_degraded_to_hold"] == tele["day_count"]
+        assert np.all(sched.charge_kwh == 0.0)
+        assert np.all(sched.discharge_kwh == 0.0)
+        # Held-SOC days still cost the meter exactly what the baseline paid.
+        assert sched.cost_eur == pytest.approx(policy_no_battery(s, case["horizon"]).cost_eur)
+
+    def test_all_gap_day_is_skipped_not_solved(self) -> None:
+        """A day whose intervals are all unusable has no cost basis: hold and disclose."""
+        s = spec()
+        case = day_ahead_case()
+        usable = case["usable"].copy()
+        per_day = case["per_day"]
+        usable[4 * per_day : 5 * per_day] = False
+        rebuilt = Horizon(
+            QUARTER,
+            case["prices"][case["start"] :],
+            case["load"][case["start"] :],
+            usable[case["start"] :],
+        )
+        days = [
+            DayAheadDay(
+                label=d.label,
+                start=d.start,
+                stop=d.stop,
+                forecast_load=np.zeros(d.stop - d.start),
+            )
+            for d in case["days"]
+        ]
+        sched, tele = policy_day_ahead(
+            s,
+            rebuilt,
+            days,
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert tele["days_skipped_no_usable_intervals"] == 1
+        assert tele["per_day"][1]["degradation"] == "skipped_no_usable_intervals"
+        assert np.all(sched.charge_kwh[per_day : 2 * per_day] == 0.0)
+        assert sched.soc_kwh[2 * per_day - 1] == pytest.approx(sched.soc_kwh[per_day - 1], abs=1e-9)
+
+
+class TestDayAheadInputValidation:
+    def _kwargs(self, case):
+        return {
+            "terminal_value_eur_per_kwh": 0.15,
+            "time_limit_s": 5.0,
+            "mip_rel_gap": 1e-6,
+            "mip_abs_gap": 1e-9,
+        }
+
+    def test_partition_must_cover_the_horizon(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        with pytest.raises(ValueError, match="partition must"):
+            policy_day_ahead(s, case["horizon"], case["days"][:-1], **self._kwargs(case))
+
+    def test_days_must_be_contiguous(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        shifted = [case["days"][0], dataclasses.replace(case["days"][1], start=case["per_day"] + 1)]
+        with pytest.raises(ValueError, match="previous day ended"):
+            policy_day_ahead(s, case["horizon"], shifted, **self._kwargs(case))
+
+    def test_forecast_length_must_match_the_day(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        bad = [dataclasses.replace(case["days"][0], forecast_load=np.zeros(3))] + case["days"][1:]
+        with pytest.raises(ValueError, match="forecast carries"):
+            policy_day_ahead(s, case["horizon"], bad, **self._kwargs(case))
+
+    def test_negative_forecast_is_refused(self) -> None:
+        """A negative energy forecast would make the no-export row unsatisfiable."""
+        s = spec()
+        case = day_ahead_case()
+        bad = [
+            dataclasses.replace(case["days"][0], forecast_load=np.full(case["per_day"], -1.0))
+        ] + case["days"][1:]
+        with pytest.raises(ValueError, match="negative load"):
+            policy_day_ahead(s, case["horizon"], bad, **self._kwargs(case))
+
+    def test_terminal_value_must_be_finite(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        kwargs = self._kwargs(case)
+        kwargs["terminal_value_eur_per_kwh"] = math.nan
+        with pytest.raises(ValueError, match="terminal_value_eur_per_kwh"):
+            policy_day_ahead(s, case["horizon"], case["days"], **kwargs)
+
+    def test_solver_knobs_must_be_positive(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        for knob, bad in (("time_limit_s", 0.0), ("mip_rel_gap", 0.0), ("mip_abs_gap", -1.0)):
+            kwargs = self._kwargs(case)
+            kwargs[knob] = bad
+            with pytest.raises(ValueError):
+                policy_day_ahead(s, case["horizon"], case["days"], **kwargs)
+
+
+class TestDayAheadPurity:
+    def test_inputs_not_mutated(self) -> None:
+        s = spec()
+        case = day_ahead_case()
+        prices = case["horizon"].prices.copy()
+        load = case["horizon"].load_kwh.copy()
+        forecasts = [d.forecast_load.copy() for d in case["days"]]
+        policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=case["terminal_value"],
+            time_limit_s=5.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert np.array_equal(case["horizon"].prices, prices)
+        assert np.array_equal(case["horizon"].load_kwh, load)
+        for day, before in zip(case["days"], forecasts, strict=True):
+            assert np.array_equal(day.forecast_load, before)
+
+    def test_day_ahead_sits_between_causal_and_oracle_on_a_clean_fixture(self) -> None:
+        """Ordering sanity for the fixture, NOT a guaranteed relation between policies.
+
+        The benchmark deliberately asserts no day-ahead-vs-causal ordering, because none
+        is guaranteed.  On this fixture (good forecast, honest terminal value) the
+        expected result does hold, and pinning it here keeps the ladder from silently
+        collapsing into one flat line — while saying out loud that it is a fixture
+        property, not a theorem.
+        """
+        s = spec()
+        case = day_ahead_case()
+        terminal = case["terminal_value"]
+        sched, _tele = policy_day_ahead(
+            s,
+            case["horizon"],
+            case["days"],
+            terminal_value_eur_per_kwh=terminal,
+            time_limit_s=10.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        history = Horizon(
+            QUARTER,
+            case["prices"][: case["start"]],
+            case["load"][: case["start"]],
+            case["usable"][: case["start"]],
+        )
+        ct, dt = fit_thresholds(history.prices, charge_pct=25.0, discharge_pct=75.0)
+        causal = policy_causal_price(
+            s, case["horizon"], charge_threshold=ct, discharge_threshold=dt
+        )
+        oracle = solve_oracle(
+            s,
+            case["horizon"],
+            time_limit_s=30.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+            terminal_mode="free",
+            terminal_value_eur_per_kwh=terminal,
+        )
+        assert oracle.cost_eur <= sched.cost_eur + 1e-6
+        assert sched.cost_eur <= causal.cost_eur + 1e-6
+
+
+class TestSeedProtectionIsHorizonLevel:
+    """Energy bought on day D must still be spendable on day D+1.
+
+    These pin a withdrawn claim.  The first version of this policy floored each daily
+    solve at *that day's* opening SOC, calling it seed protection.  It is not: it turns
+    every earlier day's purchased charge into unspendable seed, so a battery that filled
+    froze at the ceiling, did nothing for the rest of the window, and lost to the causal
+    rule while hoarding energy it was forbidden to use.  Seed protection means the single
+    opening charge of the evaluation window is not the policy's to spend — full stop.
+    """
+
+    def test_charge_bought_on_a_cheap_day_is_spent_on_an_expensive_one(self) -> None:
+        s = spec(
+            capacity_kwh=5.12,
+            power_kw=2.5,
+            charge_efficiency=0.95,
+            discharge_efficiency=0.95,
+            soc_min_frac=0.0,
+            soc_max_frac=1.0,
+            initial_soc_frac=0.05,
+        )
+        per_day = 24
+        prices = np.array([0.05] * per_day + [0.35] * per_day)
+        load = np.full(2 * per_day, 0.3)
+        h = horizon(prices, load, interval_seconds=HOUR)
+        days = [
+            DayAheadDay(label="cheap", start=0, stop=per_day, forecast_load=load[:per_day]),
+            DayAheadDay(
+                label="expensive", start=per_day, stop=2 * per_day, forecast_load=load[per_day:]
+            ),
+        ]
+        sched, tele = policy_day_ahead(
+            s,
+            h,
+            days,
+            # Valued above the cheap price and below the expensive one: that is the whole
+            # mechanism.  Below 0.05/eta_c = 0.0526 the daily solve would rationally refuse
+            # to store at all (the credit would not cover the charge), and above 0.35 it
+            # would refuse to spend.  A terminal value that never lets the battery fill is
+            # not a conservative choice, it is a disabled battery — which is why the
+            # default is the training-window mean price rather than zero.
+            terminal_value_eur_per_kwh=0.20,
+            time_limit_s=30.0,
+            mip_rel_gap=1e-9,
+            mip_abs_gap=1e-12,
+        )
+        # Day 1 charged, day 2 discharged what day 1 bought.
+        assert sched.charge_kwh[:per_day].sum() > 1.0
+        assert tele["per_day"][1]["discharge_kwh"] > 1.0
+        assert sched.discharge_kwh[:per_day].sum() == pytest.approx(0.0)
+        # …and the SOC really fell on day 2 instead of being pinned at its opening value.
+        assert sched.soc_kwh[per_day - 1] > 4.0
+        assert sched.soc_kwh[-1] < sched.soc_kwh[per_day - 1]
+        # Seed protection still holds, at the horizon's floor and nowhere higher.
+        floor_kwh = s.causal_floor_kwh()
+        assert float(sched.soc_kwh.min()) >= floor_kwh - 1e-6
+        assert sched.cost_eur < policy_no_battery(s, h).cost_eur
+
+    def test_a_seed_that_already_fills_the_window_is_reported_not_crashed(self) -> None:
+        """Opening at the ceiling leaves no headroom either way: zero flows, and said so."""
+        s = spec(
+            capacity_kwh=5.12,
+            power_kw=2.5,
+            charge_efficiency=0.95,
+            discharge_efficiency=0.95,
+            soc_min_frac=0.05,
+            soc_max_frac=0.95,
+            initial_soc_frac=0.95,
+        )
+        per_day = 12
+        prices = np.array([0.05] * per_day + [0.4] * per_day)
+        load = np.full(2 * per_day, 0.3)
+        h = horizon(prices, load)
+        days = [
+            DayAheadDay(label="a", start=0, stop=per_day, forecast_load=load[:per_day]),
+            DayAheadDay(label="b", start=per_day, stop=2 * per_day, forecast_load=load[per_day:]),
+        ]
+        sched, tele = policy_day_ahead(
+            s,
+            h,
+            days,
+            terminal_value_eur_per_kwh=0.1,
+            time_limit_s=10.0,
+            mip_rel_gap=1e-6,
+            mip_abs_gap=1e-9,
+        )
+        assert tele["days_without_headroom"] == 2
+        assert tele["days_solved"] == 0
+        assert tele["days_degraded_to_hold"] == 0
+        assert all(d["degradation"] == "frozen_by_seed_at_ceiling" for d in tele["per_day"])
+        assert np.all(sched.charge_kwh == 0.0)
+        assert np.all(sched.discharge_kwh == 0.0)
+        assert sched.cost_eur == pytest.approx(policy_no_battery(s, h).cost_eur)
+        assert "no headroom" in tele["degradation_note"]
