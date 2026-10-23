@@ -88,8 +88,7 @@ app-template:
         external-dns.kubernetes.io/enabled: "true"
         external-dns.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        # PHP2Shell (CVE-2026-109618 / CVE-2026-109619) defense-in-depth
-        nginx.ingress.kubernetes.io/proxy-body-size: "32m"
+        # PHP2Shell (CVE-2026-109619) defense-in-depth
         nginx.ingress.kubernetes.io/server-snippet: |
           # Block PHP_SESSION_UPLOAD_PROGRESS parameter (CVE-2026-109619)
           # PHP already has session.upload_progress.enabled=0, this is belt-and-suspenders
