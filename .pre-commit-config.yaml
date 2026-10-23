@@ -47,3 +47,11 @@ repos:
         language: script
         files: apps/readest/(values\.yaml|files/sql/)
         pass_filenames: false
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^scripts/energy-baseline/
+      - id: ruff-format
+        files: ^scripts/energy-baseline/
