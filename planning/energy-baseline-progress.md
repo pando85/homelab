@@ -78,6 +78,7 @@
   the open design decision under *Rolling-horizon promoted to the fifth canonical rung*. No cost,
   saving, monetary or household-energy figure from it appears in this file and none will be added —
   those live only in the private data directory.
+  **Superseded at the causal basis** by run `fe3cbfec46b6…` (gap closure 69.8% vs 65.1%); see *Pinned evidence runs*.
 - **Superseded — do not cite:** `5dc71800ae28…` on dataset `4eb4ee1fd1dc…` ran pre-fix code in which
   the day-ahead policy valued terminal SOC at the training-window mean while the oracle valued it at
   zero. The two costs sat on different objectives, so that run's gap-closed percentage is invalid.
@@ -219,6 +220,8 @@ These are the substance of the accept. None is monetary.
    own `monthly` table, bucketed directly on `local_day`, reconciles exactly.
 4. **Provenance blast radius.** `hack/compare_forecasts.py` records NO code identity, yet produced the 81-configuration grid cited in ADR-0003 line 182 and README line 459. The grid's DATA is commit-pinned (`build_manifest_sha256 = 15ce9b8f…` verifies against dataset `da2ac07a…`, whose manifest records `code_version = c1569314…`, a real ancestor of HEAD), but its EVALUATION CODE is not: the runner was first committed at `5fc27b9f` ~11.6 h after the 03:57 run, and `a3d22316` later rewrote 353 lines of `rolling_horizon.py`. The grid also sits on the SUPERSEDED 0.88 dataset (`da2ac07a…` carries a SUPERSEDED.md), and `/tmp/opencode/energy-baseline/q4-at-080/` is n=1, NOT a re-run of the 81-arm grid. The leakage review's STRUCTURAL conclusions (training-before-test separation, true-price scoring, baseline equality, DST handling) do not depend on code pinning and remain usable; noise-sharing remains code-proven only (erratum E2); numeric citation of the 81-arm grid remains unavailable. Root cause: `artifact_integrity.finalize_run_outputs` (line 477) stamps only `{"schema_version", "files"}` — file integrity with no code or config provenance — so each runner invented its own lineage block. Extending that sidecar to stamp provenance once is recommended but deferred (requires MANIFEST_SCHEMA_VERSION bump, touches many test call sites).
 5. **Causal per-event audit metadata is first-event only.** `rolling_horizon.py` computes cutoff index, training hash and support count for EVERY event, but `forecast_metadata` exposes only the first event's values (`first_event_cutoff_idx`, `first_event_training_hash`, `first_event_training_usable_intervals`, `first_event_training_usable_support`). On a 719-solve full-year run, the other 718 per-event audit records are computed and discarded. The leak-regression tests pin causality at every event they exercise, so the code guarantee is real — but a reviewer auditing a shipped artifact can verify the cutoff of one event out of 719 from the artifact alone; auditing the rest requires re-execution. Per-event records could be written to schedules parquet or a sidecar if full auditability is later required, but artifact size grows proportionally to solve count, so this is deferred deliberately.
+6. **Basis-labelling validator narrowed** from descriptive substrings to complete fraction/pct/percent/ratio tokens plus a numeric type gate, after false-positiving on the string field `captured_at_phase`. Independent sweep: 898 numeric keys matched the old broad pattern, 96 lacked a basis token, all 96 confirmed false positives (`shared_soc_floor_kwh` matching "share", `frac_within_*` matching "pct"). Empirically safe for this driver's output; weaker guard against a future field named with only a descriptive term.
+7. **Skips are not passes (hygiene lesson).** Both experiment runners previously had tests that silently skipped rather than failed — one from invalid git config key=value syntax in a fixture, five from converting provenance cross-check refusals into skips labelled "working correctly". Both classes removed; package now reports zero skips. A green suite can be green by omission.
 
 ## Known Issues
 
@@ -653,7 +656,8 @@ passing** at `90feb857`); the milestone itself is **1848 tests passing**. Nothin
 **Validation.** The representative stage (4 windows × 7 arms, 28/28 completed) and the full-year
 stage (4 arms) were both executed on the 0.80 dataset. The causal rolling arm beats `day_ahead` in
 all 4 representative windows and on the full year, reversing the frozen-basis result. The cadence
-ladder 96 → 4 → 1 improves or ties monotonically. The quality gate in `report` mode flags April (0.717, full-year stage: 2066/2880) and the March representative window (0.761, window-scoped 216/284) without dropping either. Validation artifacts carry no code lineage: `hack/validate_pre_migration.py` recorded `code_version` from the hardcoded `energy_baseline.__version__` string (`"0.1.0"`), so neither artifact ties to a commit; only `dataset_id` and `build_manifest_sha256` are pinned. A reconstruction found only two inert hunks differ between the run-time tree and `818e16aa`, so the numbers are very likely reproducible — but they are pending regeneration at the final commit, and a runner fix is in flight. Cite as "runner at approximately 2026-10-24T20:10, source hashes not recorded".
+ladder 96 → 4 → 1 improves or ties monotonically. The quality gate in `report` mode flags April (0.717, full-year stage: 2066/2880) and the March representative window (0.761, window-scoped 216/284) without dropping either. Validation artifacts carry no code lineage: `hack/validate_pre_migration.py` recorded `code_version` from the hardcoded `energy_baseline.__version__` string (`"0.1.0"`), so neither artifact ties to a commit; only `dataset_id` and `build_manifest_sha256` are pinned. A reconstruction found only two inert hunks differ between the run-time tree and `818e16aa`, so the numbers are very likely reproducible — but they are pending regeneration at the final commit, and a runner fix is in flight.
+**Now superseded:** the earlier artifacts were unpinnable and have been regenerated at pinned commit `3c7ddc9ca9c4` with full provenance (bit-identical `results.parquet`); see *Pinned evidence runs* below.
 
 **Integrity wiring.** Wired into `benchmark` (`finalize_run_outputs` after the 3 artifact writes)
 and into `report` (verifies the benchmark sidecar before reading, writes its own report sidecar
@@ -685,7 +689,70 @@ only for a *fresh* build; historical identities stay immutable. Extraction (PROD
 validation arms run; the explicit causal-default decision made; artifact integrity wired into the
 canonical writers.
 
-**Still pending:** (i) numeric/acceptance review of the validation artifacts at the final commit — the leakage review (see *Two separate reviews* below) covered structural properties, not numeric acceptance at `90feb857`; (ii) economic-sensitivity re-execution at the final commit, because its artifacts were produced by an intermediate working tree (on-disk hashes of `economic_sensitivity.py`, `oracle.py`, `benchmark.py` and `rolling_horizon.py` drifted after the run; recorded test count moved from 45 to 53); (iii) the canonical five-rung benchmark has **not** been re-run at the causal basis — run `f816306cb8ad…` records `method="trailing_slot_mean_frozen"` and the full-year validation stage ran 4 arms with `oracle=false`, so no certified-oracle five-rung artifact exists at the causal basis despite the headline at line 36. 81-grid re-derivation at 0.80 is **optional, not a completion gate**. Final evidence expected only when the owner asks.
+**Still pending (updated 2026-10-24):** (i) Numeric reproduction of the validation artifacts is **done** — bit-identical regeneration at pinned commit `3c7ddc9ca9c4` (see *Pinned evidence runs*); an independent review of the regenerated artifacts remains open. (ii) Economic-sensitivity re-execution at the final commit is **CLOSED** — new artifact at `sensitivity-study-final-20261024/results`, deterministic manifest digest `3b8102b5bdbb9d055e422e632f5c8b9b844a60b8d210272942c7597fb0172a90`, superseded study superseded in fact. (iii) Canonical five-rung benchmark at the causal basis is **CLOSED** by run `fe3cbfec46b6e51514fdc115a65a2165`. 81-grid re-derivation at 0.80 remains **optional, not a completion gate**, and still sits on the superseded 0.88 dataset with unpinnable evaluation code. Independent leakage/acceptance review of the 81-configuration grid remains open. The deferred extension of the shared integrity sidecar to stamp code and config provenance once (needs MANIFEST_SCHEMA_VERSION bump, touches many test call sites) remains open.
+
+### Pinned evidence runs (2026-10-24, at `3c7ddc9ca9c4`)
+
+**Validation bit-identical at pinned commit.** Both stages re-executed into
+`validation-{representative,fullyear}-final-20261024` under
+`/tmp/opencode/energy-baseline/`. Each records `code_version`/`git_head` =
+`3c7ddc9ca9c4`, `git_dirty` false, 14 module digests in `source_hashes`, both
+config digests, and a stable start-versus-end drift cross-check with zero
+drift. `results.parquet` byte-identical to the unpinned run on both stages
+(sha256 `d322d815…` representative, `d65470b5…` full-year); `validation.json`
+identical excluding `run_identity`. The earlier artifacts were unpinnable and
+are superseded in fact.
+
+**Sensitivity deterministic.** Re-run into `sensitivity-study-final-20261024`;
+second independent execution: identical manifest digest `3b8102b5…` across 56
+files, differing only in the deliberately non-deterministic `timings.json`.
+Provenance gate passed: 24 hashes, empty drift, `manifest.py` now included
+(superseded study re-hashed only 7 of 8). Census reconciles to exactly 48 arms
+on all five dimensions. Hash distinctness recorded honestly as 36 distinct
+executed hashes across 8 collision groups covering 20 arms, with
+`one_distinct_hash_per_arm` explicitly false (superseded claimed 48). Tolerance
+checks report signed magnitudes and float ULPs: floor parity exact at 0.0, SOC
+floor worst 2.887e-15 kWh (13 ULPs, 17 arms), bound ordering worst 1.776e-15
+(1 ULP, 4 arms), all within 1e-9 tolerance.
+
+**Basis-labelled ranges overturn superseded headline.** At throughput penalty
+0.2× training mean price: erosion 22–23% meter-bill basis, 61–74%
+degradation-adjusted objective basis; oracle capture 71–91% meter, 19–89%
+objective (collapsing to 19% in January). At 0.05×: erosion 0.2–1.2% meter,
+21–23% objective; capture 77–90% meter, 73–88% objective. At zero penalty:
+79–89% both bases. At 1.0× both policies go idle, capture undefined
+(non-positive denominator). The superseded study's "erodes 55–61%" reproduces
+on neither basis and its "captures 79–91%" was meter-only — this is precisely
+the distortion the basis-labelling requirement exists to prevent. All penalties
+and terminal values remain user-supplied hypotheticals; no arm is promoted.
+
+**Five-rung ladder at causal basis.** Run `fe3cbfec46b6e51514fdc115a65a2165`
+on dataset `2e01620ba727…`, replacing frozen-basis run `f816306cb8ad…`.
+`code_version` `3c7ddc9ca9c4` with no dirty suffix, forecast method
+`trailing_slot_mean_causal_event_specific`, `load_forecast_mode` `causal`,
+`shared_with_day_ahead` true (was false), integrity sidecar covering all three
+artifacts verified with the package's own verifier, oracle certification
+retained (`is_certified` true, `bound_kind` certified, solver gap 5.179e-07).
+**Single-variable discipline verified:** `no_battery`, `causal_price`,
+`day_ahead` and `oracle` are all bit-identical to the frozen-basis run; only
+the rolling-horizon rung moved. EFC 143.46 / 405.07 / 410.56 / 477.61 for
+`causal_price` / `day_ahead` / `rolling_horizon` / `oracle`; throughput
+492.71 / 1391.24 / 1410.12 / 1640.40 kWh; terminal SOC 1.024 / 2.354 / 1.595
+/ 1.024 kWh; 360 of 366 `day_ahead` days; 719 solves over 731 events for
+`rolling_horizon`. **Gap closure: rolling-horizon 69.8% (was 61.0%), day_ahead
+unchanged at 65.1%; the rolling-horizon rung now costs less than day_ahead.**
+Quality gate at threshold 0.80 in report mode: 2025-04 flagged at 0.7174
+usable (2066 of 2880 evaluation intervals), run marked `not_accepted` and
+`incomplete`, `dropped_months` empty, every month retained in scoring. Wall
+time 3 min 7 s against the prior 2 min 52 s.
+
+**Sufficient to explain, not proven.** The forecast-basis asymmetry is
+sufficient to explain the ordering reversal. A residual interaction remains
+possible because the causal rung's per-event cutoff differs slightly from
+`day_ahead`'s per-day cutoff. The reversal is not evidence that the
+rolling-horizon strategy was inferior under the frozen basis; the frozen basis
+was correct and deliberate for the noise experiments, which need one identical
+load basis across arms.
 
 ## Forecast experiments
 

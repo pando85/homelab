@@ -148,9 +148,10 @@ so every dataset and every benchmark figure in it — the ladder, the holdout gr
 superseded optimistic 0.88 result. The clean-tree rebuild **has** run: dataset
 `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, analysis content
 byte-identical to its 0.88 predecessor), and the five-rung ladder has been re-run on it (run
-`f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified). On the full-year evaluation `rolling_horizon`
-cost more than `day_ahead` — a load-forecast-basis asymmetry, since resolved: on the aligned causal
-basis the same rung costs less than `day_ahead` on the full year and in all four representative
+`f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified, frozen basis). On the full-year evaluation `rolling_horizon`
+cost more than `day_ahead` — a load-forecast-basis asymmetry, since resolved at the causal basis
+by run `fe3cbfec46b6…`: rolling-horizon closes 69.8% of the causal-to-oracle gap against
+day_ahead's unchanged 65.1%, and now costs less on the full year and in all four representative
 windows. The 81-configuration holdout grid has not been re-executed at 0.80, and that re-derivation
 is optional rather than a completion gate. Treat any 0.88-era magnitude quoted in
 the linked documents as historical, and treat the *orderings* the holdout grid establishes as unconfirmed
