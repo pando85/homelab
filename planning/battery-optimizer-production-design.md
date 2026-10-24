@@ -61,7 +61,7 @@ Produce a reproducible, observable, GitOps-delivered service that recommends eco
 
 All module names are placeholders; preserve pure model/forecast functions and separate adapters from domain code.
 
-`
+```text
 battery_optimizer/
   domain/
     battery.py            # pure physical model; sourced from existing package
@@ -92,7 +92,7 @@ tests/
   replay/
   fault_injection/
   hardware/               # opt-in, never default CI
-`
+```
 
 ### Runtime lifecycle
 
