@@ -71,7 +71,7 @@ offline iteration safe, and it is why the absence of hardware blocks only one co
 |---|---|---|---|---|
 | **Price feed** | archived realised prices; published = realised (owner-asserted 2026-10-24, `verified_from_data: false`) | OMIE day-ahead plus PVPC adjustments, giving a real 14:00 estimate for the next day | daily attribute snapshot, converting the assertion into a measurement | No |
 | **Load forecast** | trailing slot mean, 28-day window | server baseline and AppDaemon schedules as explicit inputs | quantiles P10/P50/P90, then appliance-conditioned using the preserved HA enum history | No |
-| **Optimizer / MPC** | two-publication rolling horizon, ~34 h, two solves per local day — **done, and promoted: `rolling_horizon` is the fifth canonical rung (2026-10-24), the ladder is `no_battery`, `causal_price`, `day_ahead`, `rolling_horizon`, `oracle`, and `--policies all` runs all five** | 15-minute replan cadence over a 24–48 h horizon, executing only the next interval — **done as of 2026-10-24** (`replan_interval_slots` / `horizon_slots`; cadence 1 with `horizon_slots=96` is ADR-0001 §3), **not yet validated on real data**, and roughly **48× the solve count** (about **37× the wall time**, since per-solve time is lower at a fine cadence) | degradation and throughput cost, then scenario or robust price handling | No |
+| **Optimizer / MPC** | two-publication rolling horizon, ~34 h, two solves per local day — **done, and promoted: `rolling_horizon` is the fifth canonical rung (2026-10-24), the ladder is `no_battery`, `causal_price`, `day_ahead`, `rolling_horizon`, `oracle`, and `--policies all` runs all five** | 15-minute replan cadence over a 24–48 h horizon, executing only the next interval — **done as of 2026-10-24** (`replan_interval_slots` / `horizon_slots`; cadence 1 with `horizon_slots=96` is ADR-0001 §3), **now exercised on real data** across the four representative windows (the ladder 96 → 4 → 1 improves or ties monotonically), and roughly **48× the solve count** (about **37× the wall time**, since per-solve time is lower at a fine cadence). Causal load-forecast alignment **complete** (`--rolling-horizon-load-forecast-mode`): conservative event-local-day cutoff, entire horizon uses that cutoff, `"frozen"` preserved for goldens, `"causal"` now the benchmark and CLI default | degradation and throughput cost — **mechanism complete, uncalibrated**: `--throughput-cost-eur-per-kwh` planning flag, `economic_sensitivity.py` sweeps (user-supplied hypotheticals, no calibration, terminal optimization vs scoring separated). Then scenario or robust price handling | No |
 | **Battery model** | scalar round-trip efficiency, nameplate capacity and power, SOC window — **the scalar is now 0.80** (adopted 2026-10-24, bottom of the community-measured 0.80–0.84 range, superseding 0.88; still an assumption, not a measurement), and the shipped block is pinned by a test | measured efficiency-versus-power curve plus idle draw | SOC hysteresis and real physical rate limits | **Yes, from v2** |
 | **Dispatch contract** | absent — **no longer the state** | versioned schema: interval, mode, target power, SOC target, expected price, confidence, generation instant, expiry, sequence — **done 2026-10-24** (`src/energy_baseline/dispatch.py`, TODO-4.6): typed, validated, canonically serialized, physics delegated to `battery.py`, caller-supplied clock with no wall-clock fallback and an AST test proving it | acknowledged, one-in-flight, bounded retries | No — **the contract is not gated; the writer that would use it is** |
 | **Appliance states** | preserved in Parquet by `extract`, invisible to Prometheus — **and now readable**: `src/energy_baseline/ha_states.py` with the `ha-states` subcommand (2026-10-24), deduplicating at read time and answering as-of queries that cannot leak a later transition | feeding those states into the load forecast | appliance-conditioned forecasting / NILM | No |
@@ -133,6 +133,11 @@ Present but not actuating: the **dispatch contract** (`dispatch.py`), which is A
 committed piece and is types, validation and canonical serialization only — no writer, no I/O,
 no subcommand. It cannot move a battery and was not built to.
 
+Completed (committed): artifact-integrity sidecars (wired into the canonical benchmark and report
+writers), economic-sensitivity sweeps, replay runtime (recording only, not deployed), and causal
+load-forecast alignment (now the default load basis at the benchmark and CLI layer). None are
+deployed.
+
 Absent: the device writer and the safety guard — **ACT cannot actuate anything**, which is what
 "the whole ACT column is absent" meant and still means in substance — plus battery telemetry in
 SENSE. Nothing on this roadmap is deployed, and no hardware is authorized.
@@ -144,8 +149,10 @@ superseded optimistic 0.88 result. The clean-tree rebuild **has** run: dataset
 `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, analysis content
 byte-identical to its 0.88 predecessor), and the five-rung ladder has been re-run on it (run
 `f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified). On the full-year evaluation `rolling_horizon`
-cost more than `day_ahead` — a load-forecast-basis asymmetry sufficient to explain the reversal; the
-81-configuration holdout grid has not been re-executed at 0.80. Treat any 0.88-era magnitude quoted in
+cost more than `day_ahead` — a load-forecast-basis asymmetry, since resolved: on the aligned causal
+basis the same rung costs less than `day_ahead` on the full year and in all four representative
+windows. The 81-configuration holdout grid has not been re-executed at 0.80, and that re-derivation
+is optional rather than a completion gate. Treat any 0.88-era magnitude quoted in
 the linked documents as historical, and treat the *orderings* the holdout grid establishes as unconfirmed
 until re-derived.
 
@@ -171,24 +178,39 @@ the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to
 the reversal is the load-forecast basis: this rung's profile is frozen at the training
 cut while `day_ahead` re-learns before each dispatch day. Re-running the identical
 Q4-2025 window on the same dataset reproduced the win, which rules out the efficiency
-correction as the cause. Note that both bullets above rest on 0.88-era figures; they are
+correction as the cause. That counterexample has since been explained and reversed: with the two
+rungs on an aligned causal load-forecast basis, the rolling rung beats `day_ahead` on the full year
+and in all four representative windows (winter, summer, DST spring, DST fall), and the cadence ladder
+96 → 4 → 1 improves or ties monotonically. Note that both bullets above rest on 0.88-era figures; they are
 information orderings, which is why they survived the efficiency decision intact as
 claims about *shape* and not as magnitudes.
 
-**Open design decision (2026-10-24): whether to align `rolling_horizon`'s load-forecast basis with
+**Design decision (2026-10-24, now taken): align `rolling_horizon`'s load-forecast basis with
 `day_ahead`'s causal rolling one.** The original claim was that the two rungs "differ only in price
-information and cadence, not in load knowledge"; that claim is now known to be false, and the
+information and cadence, not in load knowledge"; that claim was known to be false, and the
 identified asymmetry (this rung's profile frozen at the training cut, `day_ahead` re-learning before
-each dispatch day) is sufficient to explain the full-year reversal. Aligning the bases would make
-the claim true and the comparison like-for-like. The tension is honest: the frozen profile was
+each dispatch day) was sufficient to explain the full-year reversal. Aligning the bases makes the
+claim true and the comparison like-for-like. The tension was honest: the frozen profile was
 **correct and deliberate in the experiment** — it keeps every noise arm on one identical load basis
 so arms are comparable to each other, and it cannot leak evaluation data; carrying it into the
-canonical ladder unchanged placed it beside a rung that does not freeze, and the two bases are now
+canonical ladder unchanged placed it beside a rung that does not freeze, and the two bases were
 incommensurable. Changing the default would invalidate the golden-value tests that pin legacy
-behaviour bit-for-bit, so it needs new goldens and an explicit decision, not a drive-by edit. The
-decisive test — re-running the full year with the two rungs on an aligned load-forecast basis — has
-**not** been run. The correction, and the guard test that now pins the three artifact fields so the
-false claim cannot silently return, are in commit `6fca56af`.
+behaviour bit-for-bit, so it needed new goldens and an explicit decision, not a drive-by edit. The
+decision is **causal, scoped to the canonical layers**: the benchmark and the CLI default to
+`"causal"`, while `run_rolling_horizon`'s direct-call default stays `"frozen"` so the noise
+experiments keep one shared load basis and the 14 legacy goldens pass untouched — one new causal
+golden is added alongside them, none is regenerated. The decisive test — re-running the full year
+with the two rungs on an aligned load-forecast basis — **has now been run**: the causal arm beats
+`day_ahead` on the full year and in all four representative windows, reversing the frozen-basis
+result. The earlier correction, and the guard test that pins the three artifact fields so the false
+claim cannot silently return, are in commit `6fca56af`.
+
+**Causal alignment complete.** `--rolling-horizon-load-forecast-mode` accepts `"causal"` (uses
+the same trailing-slot-mean function as `day_ahead`) or `"frozen"` (legacy mode). Decision:
+**event-local-day cutoff** — each solve sees only observations strictly before the event's local
+day, and the entire horizon uses that one cutoff; no target day uses a forecast fitted through a
+later midnight. `"frozen"` preserved for experiments. **`"causal"` is now the benchmark and CLI
+default**; frozen remains the direct-call default for backward compatibility.
 
 ## 5. Sequencing rule
 
@@ -216,7 +238,9 @@ figures were placeholders until the commit landed. The rebuild has since produce
   nothing in this repository writes a setpoint, holds a lease, or stops a battery. The contract is the
   seam, not the actuator — and the roadmap's rule in §1 ("nothing moves from DECIDE to ACT until the
   backtest harness has re-validated it") now has teeth it did not have before, because there is
-  something on the other side of the seam to validate against.
+  something on the other side of the seam to validate against. The replay runtime exercises the
+  planner and contract deterministically but is **recording only** — no writer, no HA adapter,
+  not a resident service. It validates shape, not deployment.
 - **A measured efficiency curve or idle-draw figure.** Hardware-gated. Until then the model carries one
   assumed scalar, now 0.80, pinned by a test that also pins that it is an assumption.
 - **Machine-learning or NILM demand forecasting.** ADR-0001 already rejects
@@ -226,10 +250,13 @@ figures were placeholders until the commit landed. The rebuild has since produce
   changed what is *available*, not what is *worth building*: nothing consumes those states yet, and
   the reader is deliberately the whole of that work for now.
 - **Battery capacity sizing sweeps.** Moot — the unit is purchased.
-- **Degradation cost refinement.** Worth doing, but it needs a throughput cost basis,
-  and the honest form is a break-even threshold rather than an invented per-cycle
-  figure. Do it once, deliberately, not incrementally. It is also the first v3 item on the optimizer,
-  and the fifth rung's cadence gives it more switching events to cost than the daily solve did.
+- **Throughput cost calibration.** Mechanics exist (`economic_sensitivity.py`,
+  `--throughput-cost-eur-per-kwh`); no calibration against measured degradation. Honest form is a
+  break-even threshold, not an invented figure.
+- **Degradation cost as a committed default.** Flag reachable (bit-identical at 0.0); setting a
+  non-zero canonical value is a future explicit decision.
+- **Quality gate enforcement.** Helper built with `reject` / `report` policies; not yet enabled on
+  canonical pipeline (`min_usable_fraction = 0.0` is inert). Enabling requires a threshold decision.
 - **Joint HVAC/DHW and battery optimisation.** Phase 8, and it requires its own ADR:
   AppDaemon currently owns comfort scheduling, and two controllers must not
   independently change the same load.

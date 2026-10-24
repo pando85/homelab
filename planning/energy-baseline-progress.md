@@ -5,14 +5,21 @@
   were subsequently committed and pushed in `a4837f6d`. The documentation pass described below is
   historical, not outstanding work.
 - **Baseline test suite:** 1122 passed after the reporting change (1120 at `c1569314`). The package
-  has grown since: the suite is **1444 passing** today, `ruff check` clean and `ruff format --check`
-  clean on 39 files. Every historical count in this file stays as written — a stale count pasted from
-  memory is worse than no count, so quote the one that matches the revision you are describing.
-- **Current extension:** the rolling-horizon policy has been **promoted from an offline experiment to
-  the fifth canonical rung**, with a configurable replan cadence implementing ADR-0001 §3; the shipped
-  round-trip efficiency has been **changed from 0.88 to 0.80**; a read-side Home Assistant enum state
-  reader and a dispatch intent contract exist. See *2026-10-24 pass* below. None of this deploys or
-  actuates anything.
+  has grown since: the suite is **1445 passing at HEAD** (`90feb857`), `ruff check` clean and
+  `ruff format --check` clean. Every historical count in this file stays as written — a stale count
+  pasted from memory is worse than no count, so quote the one that matches the revision you are
+  describing.
+- **Current extension (committed):** the rolling-horizon policy has been **promoted from an offline
+  experiment to the fifth canonical rung**, with a configurable replan cadence implementing ADR-0001 §3;
+  the shipped round-trip efficiency has been **changed from 0.88 to 0.80**; a read-side Home Assistant
+  enum state reader and a dispatch intent contract exist. See *2026-10-24 pass* below. None of this
+  deploys or actuates anything.
+- **Completed bounded milestone (committed):** causal load-forecast alignment, a throughput-cost
+  planning flag, artifact-integrity sidecars, economic-sensitivity sweeps and a replay runtime. The
+  tree **is green at this checkpoint — 1848 tests passing**, `ruff check` clean, `ruff format
+  --check` clean — and the validation arms at the new modes have run on the 0.80 dataset; see
+  *2026-10-24 bounded pre-migration milestone* below. Nothing is deployed; recording only where
+  actuation could be imagined.
 - **Rebuild complete:** the dataset rebuild at 0.80 **has happened**
   (dataset `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9`, 70,176 rows,
   analysis content byte-identical to its 0.88 predecessor). The five-rung ladder has been re-run on it
@@ -26,19 +33,20 @@
 |------|--------|-------|
 | **B1: Train 2024 / Eval full 2025** | **superseded (0.88 era)** | The conditionally accepted run `b0a9b59aa846…` is the result the acceptance review read, and the review itself stands as a record. Its battery figures were computed at the round-trip efficiency the config has since replaced (0.88 → 0.80), so they are optimistic and must be re-derived before use — see *Round-trip efficiency applied (2026-10-24)*. Independent read-only acceptance review on 2026-10-23 found **no mathematical blocker**; the verdict and its eight conditions are in [Acceptance (conditional accept)](#acceptance-conditional-accept) |
 | **B2: Day-ahead policy** | **committed** | Implemented at `c1569314` (was reported as 9 uncommitted files / 1116 tests — both superseded: the work is committed and the suite is 1120 tests after the comparability fix). Authoritative run complete and conditionally accepted, results not in git, see [Benchmark runs](#benchmark-runs) |
-| **Rolling-horizon policy** | **committed, run PENDING** | `rolling_horizon` is now the **fifth canonical policy** (`POLICY_NAMES` = `no_battery, causal_price, day_ahead, rolling_horizon, oracle`; `all` includes it), promoted from the [forecast experiments](energy-baseline-forecast-experiments.md) to ADR-0003's *Strategy comparison* rung 4. Canonical defaults: exact prices (`sigma = 0.0`, `bias_sigma = 0.0`, `seed = 0`) on the legacy two-publication cadence, horizon 96 slots. No five-policy run exists yet |
+| **Rolling-horizon policy** | **committed, five-policy run complete** | `rolling_horizon` is now the **fifth canonical policy** (`POLICY_NAMES` = `no_battery, causal_price, day_ahead, rolling_horizon, oracle`; `all` includes it), promoted from the [forecast experiments](energy-baseline-forecast-experiments.md) to ADR-0003's *Strategy comparison* rung 4. Canonical defaults: exact prices (`sigma = 0.0`, `bias_sigma = 0.0`, `seed = 0`) on the legacy two-publication cadence, horizon 96 slots. Five-policy run `f816306cb8ad…` executed on the rebuilt dataset `2e01620ba727…`, oracle certified. The causal load-forecast alignment has since landed and is the default load basis at the benchmark and CLI layer |
 | **Configurable replan cadence** | **committed, not validated on real data** | `replan_interval_slots` / `horizon_slots` implement ADR-0001 §3's "re-solve every 15 minutes over a rolling 24–48 h horizon, execute only the current interval". `replan_interval_slots=None` is the legacy schedule and is proven **bit-identical** to it by golden digests extracted from `HEAD` with `git show`; cadence 1 with `horizon_slots=96` is roughly **48× the solve count** (about **37× the wall time** — per-solve time is *lower* at a fine cadence, ~20 ms against ~25 ms, so wall time grows more slowly than solve count) |
 | **Oracle reference** | completed (0.88 era) | Certified in the earlier 11-month reference run **and** in the authoritative run (gap inside the 1e-06 tolerance at a 900 s limit) — see [Acceptance](#acceptance-conditional-accept). Certification is a property of the time limit, not of the efficiency, so the gate still works; the certified *numbers* are superseded |
 | **B3: HA enum state reader** | **done (no longer deferred)** | `src/energy_baseline/ha_states.py` plus the `ha-states` CLI subcommand. Reads the preserved appliance enum history and deduplicates **at read time** on `(entity, last_changed, last_updated, state, attributes_json)`; as-of queries are inclusive at the transition boundary and cannot leak a later transition into an earlier snapshot (ADR-0002's requirement). Verified live, read-only, against the real store: `parts=12 rows_before_dedup=51 rows_after_dedup=39 duplicates=12 entities=2`. Read-side only — it does not feed `build`, does not change `dataset_id`, and no appliance modelling, NILM or forecasting was built on it |
 | **Dispatch intent contract (TODO-4.6)** | **done, contract only** | `src/energy_baseline/dispatch.py`: typed, validated, canonically serialized `DispatchIntent` / `DispatchPlan` (interval, mode, target power, SOC target, expected price, confidence, generation instant, expiry, sequence). The clock is a **required caller argument with no default** — there is no fallback path to a wall clock, and a test walks the module's AST to prove no clock call and no `time`/`timeit` import, which holds against future edits rather than only against its author. Physics delegated to `battery.py`; the import ceiling stays an **observation**, never a rejection; `confidence` and `expected_buy_price_eur_per_kwh` are optional with absence distinguishable from a value. **No writer, no I/O, no CLI subcommand** |
 | **Battery-assumption guard** | **done** | `tests/test_benchmark.py::TestResolveBatteryAssumptions::test_shipped_tariff_battery_assumptions_are_pinned` pins the shipped battery block; see *Round-trip efficiency applied (2026-10-24)* |
-| **Round-trip efficiency 0.80** | **applied to config; rebuild pending** | `config/tariff.yaml` now ships `round_trip_efficiency: 0.80`; `config_hash` `41fdc30b…` → `7a901801…`; dataset superseded — see *Round-trip efficiency applied (2026-10-24)* |
+| **Round-trip efficiency 0.80** | **applied; dataset rebuilt** | `config/tariff.yaml` now ships `round_trip_efficiency: 0.80`; `config_hash` `41fdc30b…` → `7a901801…`; rebuilt as dataset `2e01620ba727…` — see *Round-trip efficiency applied (2026-10-24)* |
 | **Data extraction (Prometheus)** | completed | validate740: 4198469 rows, all pass |
 | **Data extraction (HA)** | **extracted and readable** | Extraction was always in place; what B3 added is the read side. HA states are still NOT consumed by the benchmark pipeline or `build`, so they remain optional future appliance forecasting rather than a blocker for current work |
 | **Dataset build (2-year)** | **done — rebuilt at 0.80** | Rebuilt clean-tree dataset `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, window 2024-01-01T00:00Z to 2025-12-31T23:45Z, analysis content byte-identical to its 0.88 predecessor). See [Built datasets](#built-datasets) |
 | **ADR-0003 update for B2** | **done** | Amended 2026-10-23: policy set became a four-rung information ladder with `day_ahead` at rung 3, plus a *Comparability rule — one objective, different information* section and an open *day-ahead publication versus realised archive* validation item; scope table, Consequences and the ESIOS deferred row updated; status **Proposed → Accepted** |
 | **ADR-0003 update for the fifth rung** | **done 2026-10-24** | Real amendment, not a mention: ladder, ladder table, scope table, *Comparability rule* (extended to the fifth rung on the same shared-scoring basis), *Consequences* and *Definition of done* all now say five; the four-rung wording is kept visible as the prior state. Status line and Definition-of-done semantics unchanged |
 | **Script cleanup / commit** | done | B2 + fixes committed at `c1569314` (1120 tests) |
+| **Pre-migration milestone (causal mode, throughput flag, integrity sidecars, sensitivity, replay runtime)** | **complete, green suite** | Mechanism implemented across `rolling_horizon.py` / `benchmark.py` / `cli.py` plus the integrity, sensitivity and replay modules and `hack/` runners. **1848 tests passing**; `ruff check` and `ruff format --check` clean. One cutoff per solve from the **event's** local day, entire horizon same vintage; `"frozen"` preserved as the direct-call default; the 14 legacy goldens untouched and 1 causal golden added. Validation executed on the 0.80 dataset. No dataset rebuild needed — benchmark-only changes against `2e01620ba727…`. See *2026-10-24 bounded pre-migration milestone* |
 
 ## Data Artifacts
 
@@ -621,6 +629,63 @@ built** — the contract only has to be capable of supporting them.
   exactly what a fixed 96-slot horizon would get wrong.
 - **Suite:** **1444 passing**; `ruff check` clean; `ruff format --check` clean on 39 files.
 
+## 2026-10-24 bounded pre-migration milestone — COMPLETE
+
+**Status: complete.** The suite is green at the new modes, the validation arms have been executed on
+the 0.80 dataset, and every track below is committed. HEAD remains historical record (**1445 tests
+passing** at `90feb857`); the milestone itself is **1848 tests passing**. Nothing deployed.
+
+| Track | Location | State |
+|---|---|---|
+| Causal load-forecast alignment | `rolling_horizon.py` + `--rolling-horizon-load-forecast-mode` | `"causal"` uses same provider as `day_ahead`; `"frozen"` preserved. **Default at the benchmark and CLI layer**; validated on real data |
+| Throughput-cost planning flag | `benchmark.py` / `oracle.py` / `--throughput-cost-eur-per-kwh` | Planning-only term; `0.0` default leaves plans bit-identical; never enters reported cost |
+| Artifact integrity | `artifact_integrity.py`, `hack/verify_artifacts.py` | Manifest sidecars. **Detects integrity, not authenticity** (no signature claim). Wired into the canonical benchmark and report writers |
+| Economic sensitivity | `economic_sensitivity.py`, `hack/economic_sensitivity.py` | Sweeps under **user-supplied hypothetical** costs; terminal optimization vs scoring separated; **no calibration**. Experiment module |
+| Replay runtime | `replay_runtime.py`, `src/energy_baseline/hack/replay_runtime_demo.py` | Deterministic replay loop. **Recording-only sink; no writer, no HA adapter, not deployed** |
+| Pre-migration validation runner | `hack/validate_pre_migration.py` | Multi-arm comparison harness (frozen vs causal, cadence 1/4/96/192); quality gate in `report` mode. Executed |
+
+**Suite at this milestone:** **1848 tests passing**; `ruff check` clean; `ruff format --check` clean.
+
+**Validation.** The representative stage (4 windows × 7 arms, 28/28 completed) and the full-year
+stage (4 arms) were both executed on the 0.80 dataset. The causal rolling arm beats `day_ahead` in
+all 4 representative windows and on the full year, reversing the frozen-basis result. The cadence
+ladder 96 → 4 → 1 improves or ties monotonically. The quality gate in `report` mode flags March
+(0.761) and April (0.717) without dropping them.
+
+**Integrity wiring.** Wired into `benchmark` (`finalize_run_outputs` after the 3 artifact writes)
+and into `report` (verifies the benchmark sidecar before reading, writes its own report sidecar
+after).
+
+**Causal default.** The canonical benchmark and CLI default is causal; `run_rolling_horizon`'s
+direct-call default remains frozen for backward compatibility. The 14 frozen goldens are untouched;
+1 new causal golden was added.
+
+**The causal-alignment decision, recorded conservatively.** One cutoff per solve: the **entire**
+horizon is forecast from observations strictly before the **event's** local day — no interval uses
+information that only exists after the event day. `"frozen"` remains reachable. The **14 legacy
+golden digests are preserved unchanged — none regenerated**; one additional causal golden was added
+alongside them. The decisive aligned-basis run **has** been executed, on both the representative
+windows and the full year (see *Validation* above), and the reversal disappears once the bases are
+aligned.
+
+**Quality gate is explicit, with April disclosed on both month bases.** Live knobs:
+`--min-usable-fraction` (default `0.0` = disabled) and `--quality-policy {reject, report}` — both
+hashed into the run identity. For April 2025: **local-month** partition gives **2066/2880 = 71.74
+%**; **UTC-bucketed schedules** gives **2073 = 71.98 %**. Always state the month basis next to
+either figure. Quality fractions are structural telemetry, not monetary.
+
+**No dataset rebuild, no migration, no new repo.** Benchmark-side code only; dataset
+`2e01620ba727…` remains reproducible and usable for re-runs. `code_version()` feeds `dataset_id`
+only for a *fresh* build; historical identities stay immutable. Extraction (PROD-1) is out of scope.
+
+**Resolved at this milestone:** green suite and lint at the new modes (**1848 passing**); the
+validation arms run; the explicit causal-default decision made; artifact integrity wired into the
+canonical writers.
+
+**Still pending:** independent review of the corrected holdout artifacts — a future gate, not
+something this milestone declares closed. 81-grid re-derivation at 0.80 is **optional, not a
+completion gate**. Final evidence expected only when the owner asks.
+
 ## Forecast experiments
 
 ### 2026-10-24: completed rolling-history sensitivity
@@ -720,6 +785,17 @@ Protocol and limitations: [forecast experiments](energy-baseline-forecast-experi
   The adoption question that used to sit in this list has been decided — `rolling_horizon` is a
   canonical rung now — and it does not retire the review, because the rung's *numbers* are still the
   superseded 0.88 ones. Do not cite unreviewed results as accepted.
+- **Two separate reviews, different dates and scopes.** The **acceptance review** (2026-10-23) was
+  read-only against run `b0a9b59a…` (four-policy, 0.88 era) and returned **no mathematical blocker**
+  for the structural scope it tested — not for the full 81-configuration holdout grid, which was
+  not part of that review. The **independent leakage review** (2026-10-24) covered the holdout-final
+  81 arms and the full-year benchmark `f816306cb8ad…`; verdict **PASS with WARN items** and
+  **errata**: (a) noise streams are not saved in artifacts, so determinism is code-proven but not
+  artifact-proven; (b) the day-ahead publication assumption (published ≡ realised) is reasonable
+  but not verified from data — now resolved by owner assertion 2026-10-24 (`verified_from_data:
+  false`). The acceptance review stands as a record against the run as it was; the config changed
+  underneath it (0.88 → 0.80), so the behavioural conditions it verified at 0.88 are superseded
+  but the accounting properties it established do not depend on the efficiency.
 
 ## Constraints
 

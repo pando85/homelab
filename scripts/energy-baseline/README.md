@@ -47,16 +47,18 @@ Every command below is run manually (or by a human-driven runbook). A scheduled 
 | `ha-states`    | **functional** | Read Home Assistant enum state history (read-side, deduplicated, as-of) |
 | `mirror`       | deferred     | Deferred — not implemented in Phase 1          |
 
-**A module with no CLI surface, deliberately:** `dispatch.py` is the dispatch **intent contract**
-(ADR-0001's `planner → intent → writer` seam, TODO-4.6) — typed, validated, canonically serialized
-`DispatchIntent` / `DispatchPlan` values carrying interval, mode (`idle`/`charge`/`discharge`), target
-power, SOC target, expected price, confidence, generation instant, expiry and sequence. Its clock is a
-**required caller argument with no default**, so there is no fallback path to a wall clock (an AST test
-proves the module contains no clock call and no `time`/`timeit` import — a guard against future edits,
-not only against its author), physics is delegated to `battery.py`, the import ceiling stays an
-**observation** rather than a rejection, and `confidence` / `expected_buy_price_eur_per_kwh` are optional
-with **absence distinguishable from a value**. No writer, no I/O and no subcommand were built: the contract
-only has to be capable of supporting them, and this package still actuates nothing.
+**Modules with no CLI surface (or `hack/` only), deliberately:**
+
+- `dispatch.py` — the dispatch **intent contract** (see *Dispatch intent contract* below).
+  Typed, validated, canonically serialized `DispatchIntent` / `DispatchPlan`. No writer, no I/O,
+  no subcommand. This package still actuates nothing.
+- `artifact_integrity.py` — output-manifest sidecars for the benchmark and report stages
+  (see *Artifact integrity* below).
+- `economic_sensitivity.py` — pure rescoring / re-optimisation under user-supplied throughput-cost
+  and terminal-value sweeps (see *Economic sensitivity* below). Experiment only, not part of the
+  canonical benchmark pipeline.
+- `replay_runtime.py` — replay-only asyncio dispatch runtime with a recording sink. No writer,
+  no actuation, no HA adapter, no wall clock. See *Replay runtime* below.
 
 ### `extract`
 
@@ -152,11 +154,12 @@ explicitly. The day-ahead rung is a separate knob: `--day-ahead-time-limit-s` is
 `--train-end` is **required with no default**: thresholds are fitted on the earlier split and
 frozen before evaluation, so the cut must be declared explicitly and is never inherited. Optional
 flags (`--train-days`, `--charge-pct`, `--discharge-pct`, `--initial-soc-frac`, `--import-limit-kw`,
-`--min-usable-fraction`, `--time-limit-s`, `--mip-rel-gap`, `--mip-abs-gap`,
+`--min-usable-fraction`, `--quality-policy`, `--time-limit-s`, `--mip-rel-gap`, `--mip-abs-gap`,
 `--allow-reconstructed-quality`, `--terminal-mode`, `--day-ahead-forecast-window-days`,
 `--day-ahead-terminal-value`, `--day-ahead-time-limit-s`,
 `--rolling-horizon-replan-interval-slots`, `--rolling-horizon-horizon-slots`, `--rolling-horizon-sigma`,
-`--rolling-horizon-bias-sigma`, `--rolling-horizon-seed`, `--rolling-horizon-time-limit-s`) default to the
+`--rolling-horizon-bias-sigma`, `--rolling-horizon-seed`, `--rolling-horizon-time-limit-s`,
+`--rolling-horizon-load-forecast-mode`, `--throughput-cost-eur-per-kwh`) default to the
 benchmark module's constants. The CLI calls `core_available()` first and refuses with a clear message if
 the numeric core (battery / policies / oracle / cost) is not usable.
 
@@ -414,6 +417,7 @@ Canonical defaults, all verified:
 | `--rolling-horizon-replan-interval-slots` | unset (legacy two-publication 14:00 / 20:30 schedule) | The configuration the golden-value tests pin bit-for-bit and the one validated on real data |
 | `--rolling-horizon-horizon-slots` | unset with the legacy cadence; `96` when a cadence is given | The legacy horizon is DST-dependent and derived from the local-day partition, so a single recorded number would be fabricated |
 | `--rolling-horizon-time-limit-s` | the day-ahead per-solve limit | Per **solve**, like the day-ahead's per-day limit, and unlike the whole-horizon `--time-limit-s` |
+| `--rolling-horizon-load-forecast-mode` | `"causal"` at the benchmark and CLI layer (`"frozen"` for a direct `run_rolling_horizon` call) | `"causal"` uses the same trailing-slot-mean function as `day_ahead`, so both rungs share a like-for-like load basis. `"frozen"` is the legacy mode the golden-value tests pin bit-for-bit and remains reachable, and stays the default when the function is called directly so the noise experiments keep one shared load basis. See *Causal load-forecast alignment* below. |
 
 **Cadence, and what it costs.** `--rolling-horizon-replan-interval-slots 1` with
 `--rolling-horizon-horizon-slots 96` is ADR-0001 §3's controller: re-solve every 15 minutes over a rolling
@@ -423,8 +427,11 @@ over a 92-day holdout — **and roughly 37× the wall time** (~175 s against ~4.
 synthetic fixtures). The two multipliers differ because a fine-cadence solve is *cheaper* than a legacy one
 (~20 ms/solve against ~24 ms/solve): each legacy event plans the rest of its local day *and the next one*
 (~34 h at 14:00), while cadence 1 plans a fixed 96 slots, and per-solve time tracks horizon length. So wall
-time grows more slowly than solve count, and neither ratio is the horizon length. It has **not** been
-validated on real data; the legacy cadence has. Legacy
+time grows more slowly than solve count, and neither ratio is the horizon length. The two multipliers
+themselves are still synthetic-fixture measurements. The fine-cadence arms have **now been run on real
+data** on the 0.80 dataset across the four representative windows, where the ladder 96 → 4 → 1 improves
+or ties monotonically; the legacy cadence remains the validated canonical configuration on the full-year
+ladder. Legacy
 behaviour is not merely unchanged but **bit-identical**, pinned by golden digests extracted from `HEAD` with
 `git show` and pinned as literals — digests of the charge/discharge/SOC/grid arrays, exact cost, EFC, terminal
 SOC, event and clipping counts, noise statistics, plus digests of the whole event table and the frozen
@@ -453,12 +460,37 @@ That `rolling_horizon ≤ day_ahead` held in **81 of 81** offline configurations
 **within that configuration**, not a proof — it is recorded as an observation about that experiment,
 whose figures are themselves superseded (see the efficiency note below). All 81 configurations were a
 Q4 holdout immediately following the training cut; that scope does not transfer to evaluation windows
-that extrapolate far beyond the cut, and a measured counterexample now exists: on the 2025 full-year
+that extrapolate far beyond the cut, and a measured counterexample existed: on the 2025 full-year
 ladder the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to explain the
 reversal is the load-forecast basis: this rung's profile is frozen at the training cut while
 `day_ahead` re-learns before each dispatch day. Re-running the identical Q4-2025 window on the same
-dataset reproduced the win, which rules out the efficiency correction as the cause. Cost consistency (`cost_eur == meter_cost_eur`, inventory adjustment 0) is a
+dataset reproduced the win, which rules out the efficiency correction as the cause. That reversal is
+now resolved: on the aligned causal basis the rolling rung beats `day_ahead` on the full year and in
+all four representative windows. Cost consistency (`cost_eur == meter_cost_eur`, inventory adjustment 0) is a
 loop over whichever policies ran, so the fifth rung is covered by extension rather than duplication.
+
+**Causal load-forecast alignment (`--rolling-horizon-load-forecast-mode`, complete).**
+The full-year reversal exposed a load-forecast-basis asymmetry: `rolling_horizon`'s profile was frozen
+at the training cut while `day_ahead` re-learns before each dispatch day, making the two rungs
+incommensurable. The fix introduces a `"causal"` mode that uses the **same** trailing-slot-mean
+function `day_ahead` already uses, so the two rungs share a like-for-like load basis. Decision:
+**conservative per-event local-day cutoff** — each solve builds one forecast truncated at the **event's
+own** local-day start, and that **single vintage is held across the entire horizon**; a later target day
+in the same horizon therefore keeps using the cutoff of the day the solve was dispatched for, never its
+own midnight. No interval anywhere in the horizon sees information that only exists after the event day
+(the per-target-day-midnight variant was the leaky one and is not what is implemented);
+**frozen mode preserved** — `"frozen"` remains reachable as the legacy mode the golden-value tests pin
+bit-for-bit, so the comparison to the superseded experiment remains reproducible. **The canonical
+benchmark and CLI default is now `"causal"`**; `run_rolling_horizon` called directly still defaults to
+`"frozen"` for backward compatibility. The 14 legacy golden digests are untouched and one new causal
+golden has been added. The frozen profile's original design intent — keeping every noise arm
+on one identical load basis so arms are comparable to each other — is preserved: `"causal"` only
+changes the *canonical rung's* default load basis, not the experiment module's behaviour.
+
+**Throughput cost (`--throughput-cost-eur-per-kwh`, complete).** Planning-only term on a shared
+basis. User-supplied **hypothetical** economic convention, **not a physical aging model, not
+calibrated**. `0.0` (default) leaves plans bit-identical; never enters reported cost. Recorded in
+run identity. See *Economic sensitivity* above.
 
 **Invalid input is refused, in one line, with exit 1 and no traceback.** All five paths were verified:
 cadence < 1; horizon < 1; `--rolling-horizon-horizon-slots` given **without** a cadence — refused on purpose,
@@ -602,6 +634,35 @@ start.
 
 Deferred — not implemented in Phase 1 (ADR-0003 §optional). The optional TimescaleDB / SQL mirror
 is out of scope for this phase.
+
+## Dispatch intent contract (`dispatch.py`)
+
+Typed, validated, canonically serialized `DispatchIntent` / `DispatchPlan`. Clock is a **required
+caller argument with no default**. **No writer, no I/O, no CLI subcommand.** See module docstring.
+
+## Artifact integrity (`artifact_integrity.py`)
+
+**Status: complete — committed and wired into the canonical writers.** Output-manifest sidecars for benchmark
+and report stages: `finalize_run_outputs` runs after the three benchmark artifact files, and the report
+reader verifies the benchmark sidecar before consuming the payload and writes its own sidecar after.
+**Detects integrity, not authenticity** (no signature claim). Legacy runs without a sidecar are
+accepted but marked unverified. CLI: `hack/verify_artifacts.py <run-dir> [--report]`. See module
+docstring.
+
+## Economic sensitivity (`economic_sensitivity.py`)
+
+**Status: complete — committed, experiment module.** Sweeps under **user-supplied hypothetical**
+throughput costs and terminal values, re-optimizing at every parameter pair rather than rescoring a
+fixed schedule. Break-even uses the **closed-form algebraic intersection** of the two schedules'
+cost lines (accounting for unequal initial SOC), not a binary search. **Not a physical aging model,
+no calibration.** Terminal optimization vs scoring separated. Runner: `hack/economic_sensitivity.py`.
+See module docstring.
+
+## Replay runtime (`replay_runtime.py`)
+
+**Status: complete — committed. NOT deployed, NOT a resident service, NO HA adapter, recording
+only.** Deterministic replay loop. Caller-supplied time; recording-only sink; injectable planner.
+Demo: `python -m energy_baseline.hack.replay_runtime_demo`. See module docstring.
 
 ## HA authentication
 
