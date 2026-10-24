@@ -1,0 +1,2224 @@
+"""Tests for the rolling horizon dispatcher.
+
+Pins the invariants the two-event policy is claimed to satisfy:
+
+* Deterministic price noise (same seed → same result; different seed → different).
+* No future contamination: scoring uses TRUE prices, not noisy ones.
+* Each interval executed exactly once across all events.
+* SOC carry-forward: the overnight coupling changes the starting SOC, so the
+  rolling horizon is NOT bit-identical to a day-ahead with the same data.
+* Future price perturbations do NOT change already-committed current actions.
+* Solver failure degrades to zero flows, not substitution.
+* Seed floor is respected throughout the roll.
+* DST events are placed at the correct local time.
+* Cost is ``dot(true_prices, actual_grid)`` — no fake credit from noise.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
+from zoneinfo import ZoneInfo
+
+import numpy as np
+import pytest
+
+from energy_baseline.battery import (
+    BatterySpec,
+)
+from energy_baseline.policies import contiguous_day_bounds
+from energy_baseline.rolling_horizon import (
+    _clock_slot_position,
+    build_frozen_load_profile,
+    compute_rolling_events,
+    generate_price_noise,
+    run_rolling_horizon,
+)
+
+QUARTER = 900.0
+MADRID = ZoneInfo("Europe/Madrid")
+
+
+def _spec(**overrides) -> BatterySpec:
+    base = dict(
+        capacity_kwh=5.12,
+        power_kw=2.5,
+        charge_efficiency=0.95,
+        discharge_efficiency=0.95,
+        soc_min_frac=0.05,
+        soc_max_frac=0.95,
+        initial_soc_frac=0.5,
+        terminal_soc_frac=None,
+    )
+    base.update(overrides)
+    return BatterySpec(**base)
+
+
+def _make_dataset(
+    start_utc: datetime,
+    n_days: int,
+    *,
+    intervals_per_day: int = 96,
+    base_price: float = 0.15,
+    base_load: float = 0.2,
+    interval_seconds: float = QUARTER,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[date], list[datetime]]:
+    """Synthetic dataset: n_days of uniform intervals starting at start_utc."""
+    n = n_days * intervals_per_day
+    prices = np.full(n, base_price)
+    load = np.full(n, base_load)
+    usable = np.ones(n, dtype=bool)
+    interval_starts = [start_utc + timedelta(seconds=i * interval_seconds) for i in range(n)]
+    local_days = []
+    for i in range(n):
+        local_dt = interval_starts[i].astimezone(MADRID)
+        local_days.append(local_dt.date())
+    return prices, load, usable, local_days, interval_starts
+
+
+def _dst_fall_back_window() -> tuple[
+    np.ndarray, np.ndarray, np.ndarray, list[date], list[datetime]
+]:
+    """Whole local days 2025-10-25/26/27 in Europe/Madrid (the fall-back weekend).
+
+    Start at 2025-10-24T22:00Z — which is 2025-10-25 00:00 CEST — and generate five
+    local days' worth of intervals so the day after the returned slice exists in the
+    grid (the events on the 27th plan to that midnight).  The slice keeps days 25, 26
+    and 27 **whole**: starting at UTC midnight would cut the 25-hour fall-back day in
+    half and make its interval count meaningless.
+    """
+    start = datetime(2025, 10, 24, 22, 0, tzinfo=UTC)
+    prices, load, usable, local_days, starts = _make_dataset(start, 5)
+    first_of_25 = next(i for i, d in enumerate(local_days) if d == date(2025, 10, 25))
+    first_of_28 = next(i for i, d in enumerate(local_days) if d == date(2025, 10, 28))
+    assert first_of_25 == 0, "fixture should open exactly at local midnight on the 25th"
+    return (
+        prices[first_of_25:first_of_28],
+        load[first_of_25:first_of_28],
+        usable[first_of_25:first_of_28],
+        local_days[first_of_25:first_of_28],
+        starts[first_of_25:first_of_28],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Price noise
+# ---------------------------------------------------------------------------
+
+
+class TestPriceNoise:
+    def test_sigma_zero_is_exact(self) -> None:
+        prices = np.array([0.1, 0.2, -0.05, 0.0, 0.3])
+        days = [(date(2025, 1, 1), 0, 5)]
+        noisy, meta = generate_price_noise(prices, None, 0.0, seed=42, day_bounds=days)
+        assert np.array_equal(noisy, prices)
+        assert meta["noise_applied"] is False
+        assert meta["sign_flips"] == 0
+
+    def test_deterministic_same_seed(self) -> None:
+        prices = np.linspace(0.1, 0.3, 96)
+        days = [(date(2025, 6, 15), 0, 96)]
+        noisy1, _ = generate_price_noise(prices, None, 0.1, seed=7, day_bounds=days)
+        noisy2, _ = generate_price_noise(prices, None, 0.1, seed=7, day_bounds=days)
+        assert np.array_equal(noisy1, noisy2)
+
+    def test_different_seeds_differ(self) -> None:
+        prices = np.linspace(0.1, 0.3, 96)
+        days = [(date(2025, 6, 15), 0, 96)]
+        noisy1, _ = generate_price_noise(prices, None, 0.1, seed=0, day_bounds=days)
+        noisy2, _ = generate_price_noise(prices, None, 0.1, seed=1, day_bounds=days)
+        assert not np.array_equal(noisy1, noisy2)
+
+    def test_different_dates_differ(self) -> None:
+        prices = np.full(192, 0.15)
+        days = [(date(2025, 6, 15), 0, 96), (date(2025, 6, 16), 96, 192)]
+        noisy, meta = generate_price_noise(prices, None, 0.1, seed=0, day_bounds=days)
+        # The two days should have different noise patterns
+        assert not np.array_equal(noisy[:96], noisy[96:])
+
+    def test_negative_prices_no_clamping(self) -> None:
+        prices = np.array([-0.05, -0.02, 0.0, 0.1, 0.2])
+        days = [(date(2025, 1, 1), 0, 5)]
+        noisy, meta = generate_price_noise(prices, None, 0.1, seed=0, day_bounds=days)
+        # Negative prices can become positive and vice versa (sign flip)
+        # No clamping: noisy values can be anything
+        assert meta["sign_flips"] >= 0  # may or may not flip with small sigma
+
+    def test_zero_prices_stay_zero(self) -> None:
+        prices = np.array([0.0, 0.0, 0.1, 0.2])
+        days = [(date(2025, 1, 1), 0, 4)]
+        noisy, meta = generate_price_noise(prices, None, 0.1, seed=0, day_bounds=days)
+        # 0 * (1 + noise) = 0
+        assert noisy[0] == 0.0
+        assert noisy[1] == 0.0
+        assert meta["zero_price_count"] == 2
+
+    def test_mape_excludes_zero_denominator(self) -> None:
+        prices = np.array([0.0, 0.1, 0.2, 0.3])
+        days = [(date(2025, 1, 1), 0, 4)]
+        _, meta = generate_price_noise(prices, None, 0.1, seed=0, day_bounds=days)
+        assert meta["mape"] is not None  # computed over non-zero prices only
+        assert meta["zero_price_count"] == 1
+
+    def test_full_day_generated_regardless_of_horizon(self) -> None:
+        """Noise is generated for the complete day, not just the test horizon."""
+        prices = np.full(96, 0.15)
+        days = [(date(2025, 6, 15), 0, 96)]
+        noisy, meta = generate_price_noise(prices, None, 0.1, seed=0, day_bounds=days)
+        assert noisy.size == 96
+        assert len(meta["per_day"]) == 1
+        assert meta["per_day"][0]["intervals"] == 96
+
+
+# ---------------------------------------------------------------------------
+# Day-level multiplicative bias
+#
+# The i.i.d. per-slot model above largely preserves the ordering of tomorrow's hours
+# and averages out over a day, so an optimiser can shrug it off.  A persistent
+# day-level bias instead moves tomorrow as a whole relative to today — which is how a
+# real day-ahead proxy errs when a weather regime or a forward component is misjudged —
+# and attacks the cross-day hold-versus-spend decision, where averaging does not help.
+# These tests pin that second channel *without* deciding whether it matters: nothing
+# here tunes a sigma to make any conclusion come out either way.
+# ---------------------------------------------------------------------------
+
+
+def _golden_digest(values: np.ndarray) -> str:
+    """Order- and width-explicit digest of an array, for pinning bit-identical output."""
+    return hashlib.sha256(np.asarray(values, dtype=">f8").tobytes()).hexdigest()
+
+
+class TestPriceNoiseBitCompat:
+    """``bias_sigma=0`` must reproduce the pre-bias model *bit-for-bit*.
+
+    The holdout runs already on disk were produced by the i.i.d.-only model.  If adding
+    a bias channel perturbed that stream — even by consuming one extra variate from the
+    same generator — the old and new rows would silently describe different noise
+    processes while carrying the same sigma.  The digests below were captured from the
+    implementation *before* the bias existed and are pinned, not recomputed at runtime,
+    so this test fails loudly on any re-derivation of the stream.
+    """
+
+    def test_bias_sigma_zero_reproduces_pre_bias_array(self) -> None:
+        prices = np.linspace(0.02, 0.31, 288)
+        days = [
+            (date(2025, 6, 15), 0, 96),
+            (date(2025, 6, 16), 96, 192),
+            (date(2025, 6, 17), 192, 288),
+        ]
+        noisy_default, _ = generate_price_noise(prices, None, 0.1, seed=1234, day_bounds=days)
+        noisy_explicit, _ = generate_price_noise(
+            prices, None, 0.1, seed=1234, bias_sigma=0.0, day_bounds=days
+        )
+
+        assert _golden_digest(noisy_default) == (
+            "1b241f5aebfe3d898ec1c722070a1ed1e0dd087294feb8258397a4e4726db146"
+        )
+        # Omitting the argument and passing 0.0 are the same run.
+        assert np.array_equal(noisy_default, noisy_explicit)
+
+    def test_bias_sigma_zero_reproduces_pre_bias_array_with_zeroes_and_negatives(self) -> None:
+        """The pinned stream also covers the zero/negative paths, which a bias would scale."""
+        prices = np.array([-0.05, 0.0, 0.07, -0.001, 0.2, 0.0, 0.13])
+        days = [(date(2025, 1, 1), 0, prices.size)]
+        noisy, _ = generate_price_noise(prices, None, 0.2, seed=7, day_bounds=days)
+
+        assert _golden_digest(noisy) == (
+            "604f21315c01817a83145cfaa5251405a5b0becec315dd140a2da34b77b94b89"
+        )
+        assert noisy[1] == 0.0 and noisy[5] == 0.0, "a zero true price must stay exactly zero"
+
+    def test_pre_bias_stream_is_the_documented_derivation(self) -> None:
+        """Pin the stream against an inline replica of the pre-bias algorithm.
+
+        A bare digest only proves "unchanged since I recorded it".  This re-implements
+        the *original* derivation — one ``default_rng(sha256(seed:date)[:8])`` per local
+        day, ``m`` normal draws, ``p * (1 + e)`` — and requires the shipped function to
+        agree exactly.  Together with the digests above it pins both ends: the stream is
+        what the old code produced, and it is still that recipe.
+        """
+        prices = np.linspace(0.02, 0.31, 288)
+        days = [
+            (date(2025, 6, 15), 0, 96),
+            (date(2025, 6, 16), 96, 192),
+            (date(2025, 6, 17), 192, 288),
+        ]
+        reference = prices.copy()
+        for label, start, stop in days:
+            key = f"{1234}:{label}".encode()
+            rng_seed = int.from_bytes(hashlib.sha256(key).digest()[:8], "big")
+            noise = np.random.default_rng(rng_seed).normal(0.0, 0.1, size=stop - start)
+            reference[start:stop] = prices[start:stop] * (1.0 + noise)
+
+        noisy, _ = generate_price_noise(prices, None, 0.1, seed=1234, day_bounds=days)
+        assert np.array_equal(noisy, reference)
+
+    def test_bias_stream_is_the_other_digest_slice(self) -> None:
+        """The bias must come from ``digest[8:16]`` of the same key, not a new derivation."""
+        prices = np.full(96, 0.2)
+        days = [(date(2025, 6, 15), 0, 96)]
+        noisy, meta = generate_price_noise(
+            prices, None, 0.0, seed=3, bias_sigma=0.15, day_bounds=days
+        )
+        digest = hashlib.sha256(b"3:2025-06-15").digest()
+        expected_bias = float(
+            np.random.default_rng(int.from_bytes(digest[8:16], "big")).normal(0.0, 0.15)
+        )
+
+        assert meta["per_day"][0]["bias_applied"] == pytest.approx(expected_bias, abs=0.0)
+        assert noisy[0] == pytest.approx(0.2 * (1.0 + expected_bias), rel=1e-15, abs=0.0)
+
+
+class TestPriceNoiseDayBias:
+    def test_sigma_zero_bias_only_is_pure_day_scaling(self) -> None:
+        """``sigma=0, bias_sigma>0``: the estimate is a per-day scaling of truth.
+
+        ``p_hat/p_true - 1`` must be exactly one constant per local day (no within-day
+        distortion at all), and a different constant on another day.
+        """
+        prices = np.concatenate([np.full(96, 0.10) + 0.001 * np.arange(96), np.full(96, -0.04)])
+        days = [(date(2025, 6, 15), 0, 96), (date(2025, 6, 16), 96, 192)]
+        noisy, meta = generate_price_noise(
+            prices, None, 0.0, seed=3, bias_sigma=0.15, day_bounds=days
+        )
+
+        rel = noisy / prices - 1.0
+        assert np.all(np.isfinite(rel))
+        first_day, second_day = rel[:96], rel[96:]
+        assert float(first_day.max() - first_day.min()) == 0.0, "within-day spread must be zero"
+        assert float(second_day.max() - second_day.min()) == 0.0
+        # Both days are scaled, and not by the same factor (otherwise the bias would be
+        # a global constant rather than a per-day draw).
+        assert first_day[0] != pytest.approx(second_day[0], abs=1e-12)
+        assert abs(float(first_day[0])) > 1e-9 and abs(float(second_day[0])) > 1e-9
+
+        # The realised bias is reported, and it IS the relative deviation drawn above.
+        assert meta["sigma"] == 0.0 and meta["bias_sigma"] == 0.15
+        assert meta["noise_applied"] is True
+        applied = [rec["bias_applied"] for rec in meta["per_day"]]
+        assert applied == pytest.approx([float(first_day[0]), float(second_day[0])])
+        assert meta["bias_days_applied"] == 2
+        assert meta["bias_mean_applied"] == pytest.approx(np.mean(applied))
+        assert meta["bias_std_applied"] == pytest.approx(np.std(applied))
+
+    def test_deterministic_same_seed_and_bias_sigma(self) -> None:
+        prices = np.linspace(0.1, 0.3, 192)
+        days = [(date(2025, 6, 15), 0, 96), (date(2025, 6, 16), 96, 192)]
+        kwargs: dict[str, Any] = {"bias_sigma": 0.2, "day_bounds": days}
+        noisy1, meta1 = generate_price_noise(prices, None, 0.1, seed=11, **kwargs)
+        noisy2, meta2 = generate_price_noise(prices, None, 0.1, seed=11, **kwargs)
+        assert np.array_equal(noisy1, noisy2)
+        assert meta1["per_day"] == meta2["per_day"]
+
+    def test_bias_only_is_also_deterministic(self) -> None:
+        """Determinism holds on the bias-only path too (``sigma=0`` draws no slot noise)."""
+        prices = np.full(96, 0.15)
+        days = [(date(2025, 6, 15), 0, 96)]
+        noisy1, _ = generate_price_noise(prices, None, 0.0, seed=5, bias_sigma=0.3, day_bounds=days)
+        noisy2, _ = generate_price_noise(prices, None, 0.0, seed=5, bias_sigma=0.3, day_bounds=days)
+        assert np.array_equal(noisy1, noisy2)
+
+    def test_different_seeds_give_different_bias(self) -> None:
+        prices = np.full(96, 0.15)
+        days = [(date(2025, 6, 15), 0, 96)]
+        rel = []
+        for seed in (0, 1):
+            noisy, meta = generate_price_noise(
+                prices, None, 0.0, seed=seed, bias_sigma=0.2, day_bounds=days
+            )
+            rel.append(float(noisy[0] / prices[0] - 1.0))
+            assert meta["bias_sigma"] == 0.2
+        assert rel[0] != pytest.approx(rel[1], abs=1e-12)
+
+    def test_bias_differs_across_local_days_for_one_seed(self) -> None:
+        """A single seed must not apply one global bias, or the design tests nothing."""
+        prices = np.full(3 * 96, 0.15)
+        days = [
+            (date(2025, 6, 15), 0, 96),
+            (date(2025, 6, 16), 96, 192),
+            (date(2025, 6, 17), 192, 288),
+        ]
+        _, meta = generate_price_noise(prices, None, 0.0, seed=0, bias_sigma=0.2, day_bounds=days)
+        applied = [rec["bias_applied"] for rec in meta["per_day"]]
+        assert len(set(applied)) == 3, f"per-day draws collapsed to {applied}"
+
+    def test_bias_and_slot_noise_are_independent_streams(self) -> None:
+        """With both channels on, within-day spread is non-zero: ``e`` still varies.
+
+        If the bias were drawn from the *same* generator as the slot noise, or if a
+        day-level term had replaced the per-slot draws, the within-day spread of the
+        relative deviation would collapse (or become an order-dependent function of how
+        many slots the day has).
+        """
+        prices = np.full(96, 0.15)
+        days = [(date(2025, 6, 15), 0, 96)]
+        noisy, meta = generate_price_noise(
+            prices, None, 0.1, seed=8, bias_sigma=0.2, day_bounds=days
+        )
+        rel = noisy / prices - 1.0
+        bias = meta["per_day"][0]["bias_applied"]
+        within_day_spread = float(rel.max() - rel.min())
+        assert within_day_spread > 0.0, "per-slot noise vanished inside the day"
+        # The day's mean deviation is the bias; its spread is the slot noise.  They are
+        # different numbers of different origins, and neither dominates the other here.
+        assert abs(bias) < within_day_spread
+        assert float(np.mean(rel)) == pytest.approx(bias, abs=0.05)
+
+    def test_bias_does_not_reuse_the_slot_noise_stream(self) -> None:
+        """With a shared slot stream, the biased run is exactly the unbiased one + ``p*b``.
+
+        ``p*(1+b+e)`` versus ``p*(1+e)`` differ by precisely ``p*b``, so if both channels
+        draw the same per-slot sequence (the design here), subtracting the reported bias
+        term reproduces the unbiased run to floating-point noise.  A bias drawn from the
+        *same* generator instead would shift the slot sequence itself and miss this by an
+        amount on the order of ``p*e``, orders of magnitude larger than the tolerance.
+        """
+        prices = np.linspace(0.05, 0.25, 192)
+        days = [(date(2025, 6, 15), 0, 96), (date(2025, 6, 16), 96, 192)]
+        plain, _ = generate_price_noise(prices, None, 0.1, seed=17, day_bounds=days)
+        biased, meta = generate_price_noise(
+            prices, None, 0.1, seed=17, bias_sigma=0.25, day_bounds=days
+        )
+        rebuilt = plain.copy()
+        for rec, (start, stop) in zip(meta["per_day"], [(d[1], d[2]) for d in days], strict=True):
+            rebuilt[start:stop] = plain[start:stop] + prices[start:stop] * rec["bias_applied"]
+        assert np.allclose(biased, rebuilt, rtol=1e-12, atol=1e-15), (
+            "biased run is not the unbiased run shifted by its own day bias: the two "
+            "channels are sharing one draw sequence"
+        )
+
+    def test_bias_preserves_zero_and_negative_prices_without_nan(self) -> None:
+        """A multiplicative model keeps ``p_true = 0`` at exactly 0 and never NaNs."""
+        prices = np.array([-0.30, -0.05, 0.0, 0.0, 0.02, 0.40])
+        days = [(date(2025, 1, 1), 0, prices.size)]
+        noisy, meta = generate_price_noise(
+            prices, None, 0.1, seed=2, bias_sigma=0.4, day_bounds=days
+        )
+        assert np.all(np.isfinite(noisy))
+        assert noisy[2] == 0.0 and noisy[3] == 0.0
+        # A negative price stays on its own side of zero for a bias smaller than 1: no
+        # clamping is applied, so only the multiplier acts.
+        assert noisy[0] < 0.0 and noisy[1] < 0.0 and noisy[4] > 0.0
+        # Zero denominators are excluded from the relative metrics, which therefore stay
+        # finite while still reporting how many slots were excluded.
+        assert meta["zero_price_count"] == 2
+        for key in ("mape", "mae", "frac_within_10pct", "frac_within_20pct"):
+            value = meta[key]
+            assert value is not None and np.isfinite(value), key
+
+    @pytest.mark.parametrize("bad_bias", [-0.1, float("nan"), float("inf")])
+    def test_rejects_an_unusable_bias_sigma(self, bad_bias: float) -> None:
+        prices = np.full(96, 0.15)
+        days = [(date(2025, 6, 15), 0, 96)]
+        with pytest.raises(ValueError, match="bias_sigma"):
+            generate_price_noise(prices, None, 0.1, bias_sigma=bad_bias, day_bounds=days)
+
+    def test_no_estimated_slots_reports_zero_bias_without_nan(self) -> None:
+        """A mask that estimates nothing must not produce a NaN mean over an empty list."""
+        prices = np.full(192, 0.15)
+        days = [(date(2025, 6, 15), 0, 96), (date(2025, 6, 16), 96, 192)]
+        mask = np.zeros(192, dtype=bool)
+        _, meta = generate_price_noise(
+            prices, None, 0.1, seed=4, bias_sigma=0.2, day_bounds=days, estimated_slots_mask=mask
+        )
+        assert meta["per_day"] == []
+        assert meta["bias_days_applied"] == 0
+        assert meta["bias_mean_applied"] == 0.0
+        assert meta["bias_std_applied"] == 0.0
+        assert json.dumps(meta, allow_nan=False)  # the runner writes with allow_nan=False
+
+    def test_exact_control_shares_the_noisy_schema(self) -> None:
+        """``sigma=0, bias_sigma=0`` keeps every bias key present so rows have one schema."""
+        prices = np.full(96, 0.15)
+        days = [(date(2025, 6, 15), 0, 96)]
+        _, exact = generate_price_noise(prices, None, 0.0, day_bounds=days)
+        _, noisy = generate_price_noise(prices, None, 0.1, bias_sigma=0.1, day_bounds=days)
+        missing = set(exact) - set(noisy)
+        assert not missing, f"schema drift: {missing}"
+        assert exact["noise_applied"] is False
+        assert exact["bias_sigma"] == 0.0
+        assert exact["bias_mean_applied"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Frozen load profile
+# ---------------------------------------------------------------------------
+
+
+def _clock_only_grid(
+    start_utc: datetime,
+    n_intervals: int,
+) -> tuple[list[datetime], list[date]]:
+    """Interval grid and its local-day labels for a slice starting at *start_utc*."""
+    starts = [start_utc + timedelta(seconds=i * QUARTER) for i in range(n_intervals)]
+    return starts, [s.astimezone(MADRID).date() for s in starts]
+
+
+def _load_by_wall_clock(starts: list[datetime], tz: ZoneInfo = MADRID) -> np.ndarray:
+    """Load that is a pure function of the local wall clock: slots since local midnight.
+
+    Integer-valued (one unit per slot), so every trailing mean over identical values is
+    exact in binary floating point and an assertion like "the forecast equals the truth"
+    is a statement about positioning rather than about rounding.
+
+    It makes a sharp fixture for positioning: all local days share one shape *on the
+    clock*, so a correctly-positioned slot mean reproduces the truth exactly, while a
+    profile that reads position off by *n* slots predicts a value *n* slots away from it —
+    visibly, instead of accidentally matching a merely periodic series.  Wall-clock slots
+    collide on a DST fall-back day (the repeated hour has one wall time but two elapsed
+    positions), so use it only over regions without a transition.
+    """
+    load = np.empty(len(starts), dtype=float)
+    for i, s in enumerate(starts):
+        local = s.astimezone(tz)
+        load[i] = float(local.hour * 4 + local.minute // 15)
+    return load
+
+
+class TestFrozenLoadProfile:
+    def test_uses_only_prior_data(self) -> None:
+        """Forecast for day D uses only data strictly before day D."""
+        rng = np.random.default_rng(42)
+        n_days = 60
+        n = n_days * 96
+        load = rng.uniform(0.1, 0.5, n)
+        usable = np.ones(n, dtype=bool)
+        local_days = []
+        base = datetime(2025, 1, 1, tzinfo=UTC)
+        interval_starts = [base + timedelta(seconds=i * QUARTER) for i in range(n)]
+        for i in range(n):
+            dt = base + timedelta(seconds=i * QUARTER)
+            local_days.append(dt.astimezone(MADRID).date())
+
+        forecast, meta = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=28,
+            interval_starts_utc=interval_starts,
+        )
+        assert forecast.size == n
+        # The forecast should not be all zeros (except possibly the very first day)
+        # Check that later days have non-zero forecasts
+        assert np.any(forecast[96:] > 0)
+
+    def test_window_days_respected(self) -> None:
+        """Wider window uses more prior days."""
+        rng = np.random.default_rng(42)
+        n_days = 60
+        n = n_days * 96
+        load = rng.uniform(0.1, 0.5, n)
+        usable = np.ones(n, dtype=bool)
+        local_days = []
+        base = datetime(2025, 1, 1, tzinfo=UTC)
+        interval_starts = [base + timedelta(seconds=i * QUARTER) for i in range(n)]
+        for i in range(n):
+            dt = base + timedelta(seconds=i * QUARTER)
+            local_days.append(dt.astimezone(MADRID).date())
+
+        # Use 30 days of training data (indices 0 to 30*96)
+        training_end = 30 * 96
+        f28, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=training_end,
+            window_days=28,
+            interval_starts_utc=interval_starts,
+        )
+        f7, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=training_end,
+            window_days=7,
+            interval_starts_utc=interval_starts,
+        )
+        # Different windows should give different forecasts (at least for some days)
+        # because window_days=28 uses more historical data than window_days=7
+        assert not np.array_equal(f28, f7)
+
+    def test_eval_load_change_leaves_forecast_unchanged(self) -> None:
+        """Strict train-cut check: perturbing data after the cut changes nothing.
+
+        The weak version above only asks for non-zero values, which a profile fitted on
+        the test window would also pass.  A frozen profile by definition cannot react to
+        anything at or after ``training_end_idx``, so mutating that region and rebuilding
+        must reproduce the evaluation forecast bit-for-bit.
+
+        This fixture opens at 01:00 CET, so its local days are truncated at both ends and it
+        does already exercise the partial-day path; the strengthened
+        :meth:`test_strict_train_cut_holds_on_partial_first_local_day` below targets that
+        region specifically, with a hand-derived mean to prove the cut was applied to the
+        right index set.
+        """
+        rng = np.random.default_rng(7)
+        n_days = 40
+        n = n_days * 96
+        load = rng.uniform(0.1, 0.5, n)
+        usable = np.ones(n, dtype=bool)
+        base = datetime(2025, 1, 1, tzinfo=UTC)
+        interval_starts = [base + timedelta(seconds=i * QUARTER) for i in range(n)]
+        local_days = [
+            (base + timedelta(seconds=i * QUARTER)).astimezone(MADRID).date() for i in range(n)
+        ]
+
+        cut = 30 * 96
+        forecast, meta = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=28,
+            interval_starts_utc=interval_starts,
+        )
+        perturbed = load.copy()
+        perturbed[cut:] = rng.uniform(5.0, 9.0, n - cut)  # absurdly different test-period load
+        forecast_p, _ = build_frozen_load_profile(
+            perturbed,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=28,
+            interval_starts_utc=interval_starts,
+        )
+        assert np.array_equal(forecast[cut:], forecast_p[cut:]), (
+            "the frozen profile moved when only evaluation-period load changed: it is "
+            "reading test data"
+        )
+        # Provenance describes the real window that was learned, not an estimate of it.
+        # (The fixture opens at 01:00 CET, so local days do not land on multiples of 96.)
+        train_days = contiguous_day_bounds(local_days[:cut])
+        assert meta["training_end_idx"] == cut
+        assert meta["training_days_used"] == 28
+        assert meta["training_start_idx"] == train_days[-28][1]
+        assert meta["slot_positions_learned"] == 96
+
+    def test_dst_slot_offsets_fall_back_to_pooled_mean(self) -> None:
+        """A fall-back day's extra slot offsets have no learned clock on either side.
+
+        Training on the 96-slot day before the transition and evaluating across it is the
+        case a DST day silently breaks: slot position is the offset within its own local
+        day, so the long day's slots 96..99 were never learned, and neither can they be
+        borrowed from another day without landing on the wrong clock time.  They get the
+        pooled mean, and the metadata counts them rather than hiding it.
+        """
+        start = datetime(2025, 10, 24, 22, 0, tzinfo=UTC)  # == 2025-10-25 00:00 CEST
+        _, load, usable, local_days, starts = _make_dataset(start, 5, base_load=0.0)
+        rng = np.random.default_rng(11)
+        n = load.size
+        load = rng.uniform(0.1, 0.5, n)
+
+        first_of_26 = next(i for i, d in enumerate(local_days) if d == date(2025, 10, 26))
+        cut = first_of_26  # train on day 25 only (96 slots), evaluate the DST days
+        forecast, meta = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+
+        # Offsets 0..95 carry their learned mean on every day, DST included.
+        oct26 = np.array([d == date(2025, 10, 26) for d in local_days], dtype=bool)
+        assert oct26.sum() == 100
+        pooled = meta["pooled_mean_kwh"]
+        head = forecast[cut:][oct26[cut:]][:96]
+        tail = forecast[cut:][oct26[cut:]][96:]
+        assert head.size == 96 and tail.size == 4
+        # Per-slot learning really did produce distinct clock values, so "the tail equals
+        # the pooled mean" below is a statement about the fallback, not a tautology.  The
+        # pooled mean is the average of the learned slots (one training day, one sample
+        # per slot), which is exactly the relation asserted here.
+        assert np.ptp(head) > 1e-9
+        assert pooled == pytest.approx(float(head.mean()))
+        assert np.all(tail == pytest.approx(pooled)), (
+            "the fall-back day's unlearned offsets did not get the pooled fallback"
+        )
+        # The four pooled intervals are reported, and they are exactly the unlearned ones.
+        assert meta["eval_slots_pooled_fallback"] == 4
+
+    def test_missing_interval_starts_is_refused(self) -> None:
+        """No timestamps means no correct positioning, so refuse instead of guessing.
+
+        ``interval_starts_utc`` used to be optional and only fed the training hash; when
+        it was absent the slot position silently fell back to the offset within each run
+        of the sliced array.  That is what produced the misalignment below, so the silent
+        path is gone: an omitted argument raises rather than returning a plausible profile
+        whose first partial day is shifted by hours.
+        """
+        start = datetime(2025, 6, 14, 22, 0, tzinfo=UTC)  # 2025-06-15 00:00 CEST
+        starts, local_days = _clock_only_grid(start, 3 * 96)
+        load = _load_by_wall_clock(starts)
+        usable = np.ones(len(starts), dtype=bool)
+
+        with pytest.raises(ValueError, match="interval_starts_utc is required"):
+            build_frozen_load_profile(load, local_days, usable, training_end_idx=2 * 96)
+
+    def test_partial_first_local_day_gets_clock_positions(self) -> None:
+        """A slice edge that is not local midnight must not shift the first day's slots.
+
+        This is the regression that real data hit.  The evaluation slice opened at
+        ``2025-10-01T00:00:00Z``, which is **02:00 CEST**, so local day 2025-10-01 exists
+        in the slice with only its last 88 intervals.  Position was the offset *within that
+        run*, so those intervals were labelled 0..87 while their clock says 8..95: every
+        forecast on the first partial day was the mean of a slot two hours earlier, and the
+        profile shifted by exactly the 8 missing morning slots.
+
+        The fixture reproduces that edge and uses a load that is a pure function of the wall
+        clock, so the correct answer is known exactly: interval ``i`` must forecast the value
+        of its own clock position.  Eight positions = two hours, asserted numerically.
+        """
+        # Opens at 00:00 UTC on 2025-10-01 == 02:00 CEST, exactly like the real eval slice.
+        start = datetime(2025, 9, 24, 0, 0, tzinfo=UTC)
+        starts, local_days = _clock_only_grid(start, 12 * 96)
+        load = _load_by_wall_clock(starts)
+        usable = np.ones(len(starts), dtype=bool)
+
+        # The cut is the first interval of the evaluation slice: 2025-10-01T00:00Z.
+        cut = next(i for i, s in enumerate(starts) if s == datetime(2025, 10, 1, tzinfo=UTC))
+        assert local_days[cut] == date(2025, 10, 1), "fixture must open inside a local day"
+
+        # How truncated the first local day is, measured independently of the code:
+        # midnight of that local day sits 8 intervals before the cut.
+        local_midnight = datetime(2025, 10, 1, 0, 0, tzinfo=MADRID).astimezone(UTC)
+        expected_shift = round((starts[cut] - local_midnight).total_seconds() / QUARTER)
+        assert expected_shift == 8, "fixture drifted: 2025-10-01T00:00Z is 02:00 CEST"
+
+        forecast, meta = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=7,
+            interval_starts_utc=starts,
+        )
+
+        # Positions 8..11, not 0..3 — the exact before/after pair for this defect.
+        assert list(forecast[cut : cut + 4]) == [8.0, 9.0, 10.0, 11.0], (
+            "the first partial local day was positioned from its offset within the slice "
+            f"run (would give {list(np.arange(4, dtype=float))}), not from the clock"
+        )
+
+        # The shift is exactly 8 positions across the whole partial day: what the old rule
+        # assigned (0..87) is this array shifted by 8, so asserting the unshifted form pins
+        # both the magnitude and that nothing else moved.
+        first_run_len = 96 - expected_shift
+        assert list(forecast[cut : cut + first_run_len]) == [
+            float(k) for k in range(expected_shift, 96)
+        ]
+
+        # And every later evaluation interval is right too: with a wall-clock-only load a
+        # correctly positioned slot mean is exact, so this fails loudly on any offset error.
+        assert np.array_equal(forecast[cut:], load[cut:]), (
+            "positions past the first day drifted as well; the clock rule must be uniform"
+        )
+        assert meta["eval_slots_pooled_fallback"] == 0, "no DST here, so nothing may fall back"
+        # The training side is positioned by the same rule, so it too is exact.
+        assert np.array_equal(forecast[:cut], load[:cut])
+
+    def test_trailing_partial_local_day_is_not_shifted(self) -> None:
+        """Pin the trailing edge as CORRECT, so it is not "fixed" later.
+
+        A previous analysis claimed the end of the evaluation window was misaligned by 92
+        positions too.  It is not.  The last interval of the real dataset is
+        ``2025-12-31T23:00:00Z`` = **2026-01-01 00:00 CET**, whose true slot position is 0 —
+        and a run-based offset also gives 0 there, because the trailing partial day *starts*
+        at the slice edge rather than ending mid-way through it.  Both rules agree, which is
+        why this boundary was never broken.
+
+        Asserting it explicitly costs nothing and prevents a well-meaning future "fix" from
+        shifting a boundary that is already right.
+        """
+        # Ends at 2025-12-31T23:45Z, so local day 2026-01-01 exists with only 4 intervals:
+        # the mirror image of the leading-edge case, at the other end of the array.
+        # Opens at local midnight (22:00Z == 00:00 CET on the 17th) so the 15 interior days
+        # are whole and only the final day is truncated.
+        start = datetime(2025, 12, 16, 23, 0, tzinfo=UTC)
+        starts, local_days = _clock_only_grid(start, 15 * 96 + 4)
+        load = _load_by_wall_clock(starts)
+        usable = np.ones(len(starts), dtype=bool)
+
+        trailing = [i for i, d in enumerate(local_days) if d == date(2026, 1, 1)]
+        assert len(trailing) == 4, "trailing day must be the partial one"
+        assert starts[trailing[0]] == datetime(2025, 12, 31, 23, 0, tzinfo=UTC)
+        # Cut mid-local-day (07:00 CET on the 29th), so the evaluation region carries a
+        # partial leading day AND this trailing one — both slice edges in a single call.
+        cut = next(i for i, s in enumerate(starts) if s == datetime(2025, 12, 29, 6, 0, tzinfo=UTC))
+
+        forecast, meta = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=7,
+            interval_starts_utc=starts,
+        )
+
+        # True clock positions 0..3 (local midnight is exactly at starts[trailing[0]]).
+        assert list(forecast[trailing]) == [0.0, 1.0, 2.0, 3.0]
+        # Explicitly NOT the alleged 92-position shift.
+        assert list(forecast[trailing]) != [92.0, 93.0, 94.0, 95.0]
+        assert np.array_equal(forecast[cut:], load[cut:])
+        assert meta["eval_slots_pooled_fallback"] == 0
+
+    def test_strict_train_cut_holds_on_partial_first_local_day(self) -> None:
+        """The train cut must stay exact in the region where the positioning bug lived.
+
+        ``test_eval_load_change_leaves_forecast_unchanged`` uses a fixture whose first day is
+        already partial, but it only checks the aggregate array.  Rewriting positions means a
+        post-cutoff interval could now be *averaged into* a pre-cutoff slot mean if the cut
+        were applied to the wrong quantity.  So: perturb every single post-cutoff load value,
+        on a slice opening mid-local-day, and require bit-identical output everywhere —
+        including inside the shifted first run, where the bug actually was.
+        """
+        start = datetime(2025, 9, 24, 0, 0, tzinfo=UTC)
+        starts, local_days = _clock_only_grid(start, 12 * 96)
+        rng = np.random.default_rng(23)
+        load = rng.uniform(0.1, 0.5, len(starts))
+        usable = np.ones(len(starts), dtype=bool)
+
+        cut = next(i for i, s in enumerate(starts) if s == datetime(2025, 10, 1, tzinfo=UTC))
+        baseline, meta = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=7,
+            interval_starts_utc=starts,
+        )
+
+        perturbed = load.copy()
+        perturbed[cut:] = rng.uniform(50.0, 90.0, len(starts) - cut)
+        after, _ = build_frozen_load_profile(
+            perturbed,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=7,
+            interval_starts_utc=starts,
+        )
+
+        assert np.array_equal(baseline, after), (
+            "evaluation-period load leaked into the profile on a slice that opens at a "
+            "non-midnight boundary"
+        )
+        # Non-vacuity: the perturbed region really does cover the whole partial first day.
+        assert cut < cut + 8 <= len(starts)
+        assert np.any(perturbed[cut : cut + 88] != load[cut : cut + 88])
+
+        # The strict means come only from indices < training_end_idx, and only from the
+        # trailing window that was actually learned.  Re-derive position 8's mean by hand
+        # over exactly those indices and require the profile to agree with THAT rather than
+        # with any value at or after the cut — a leak through the rewritten positioning
+        # would move this number, since position 8 now lives inside the first partial day.
+        train_days = contiguous_day_bounds(list(local_days[:cut]))
+        window_start = train_days[-min(7, len(train_days))][1]
+        assert window_start == meta["training_start_idx"] < cut
+        positions = [_clock_slot_position(s, MADRID, QUARTER) for s in starts]
+        members = [i for i in range(window_start, cut) if positions[i] == 8]
+        assert members and members[-1] < cut, "the hand-derived mean must be pre-cutoff only"
+        expected_mean_8 = float(np.mean([load[i] for i in members]))
+        # Non-vacuity again: post-cutoff intervals share position 8, so including them (a
+        # leak) would give a different number.
+        post_members = [i for i in range(cut, len(starts)) if positions[i] == 8]
+        assert post_members
+        leaked = float(np.mean([load[i] for i in members + post_members]))
+        assert expected_mean_8 != pytest.approx(leaked, abs=1e-9)
+        assert baseline[cut] == pytest.approx(expected_mean_8, rel=0.0, abs=1e-12)
+        assert meta["training_end_idx"] == cut
+
+    def test_dst_fall_back_clock_positions_run_zero_to_ninety_nine(self) -> None:
+        """The 2025-10-26 fall-back day must yield positions 0..99, repeated hour included.
+
+        Stated convention: position is measured as elapsed intervals since the **fold=0**
+        local midnight (the first instant whose local date is that day), and each UTC instant
+        maps to exactly one position.  The repeated 02:00 hour therefore gets two positions —
+        02:00 CEST is 8, 02:00 CET an hour later in real time is 12 — because position counts
+        real elapsed time, not wall-clock readings.
+
+        This matters for correctness of the means too: computing "offset from local midnight"
+        as ``local_dt - local_dt.replace(hour=0)`` keeps the current utcoffset, so after the
+        fall-back it re-anchors to 01:00 CET and pushes the whole post-transition afternoon
+        back by an hour — collapsing the 25-hour day onto 0..95, duplicating 8..11 and quietly
+        serving those slots' evening means at the wrong clock time.  Asserting 0..99 rules that
+        out, and so does the ordering check below.
+        """
+        _, load, usable, local_days, starts = _dst_fall_back_window()
+        oct26 = [i for i, d in enumerate(local_days) if d == date(2025, 10, 26)]
+        assert len(oct26) == 100
+
+        positions = [_clock_slot_position(starts[i], MADRID, QUARTER) for i in oct26]
+        assert positions == list(range(100)), (
+            f"fall-back day positions are not the contiguous 0..99: {positions}"
+        )
+
+        # The repeated hour, one position per real instant rather than one per reading.
+        first_0200 = datetime(2025, 10, 26, 2, 0, tzinfo=MADRID, fold=0)
+        second_0200 = datetime(2025, 10, 26, 2, 0, tzinfo=MADRID, fold=1)
+        assert _clock_slot_position(first_0200.astimezone(UTC), MADRID, QUARTER) == 8
+        assert _clock_slot_position(second_0200.astimezone(UTC), MADRID, QUARTER) == 12
+
+        # Behaviour through the public API: encode position into the training day's load so
+        # each learned mean IS its position, then check the long day comes out ordered.
+        cut = oct26[0]
+        shaped = _load_by_wall_clock(starts)
+        forecast, meta = build_frozen_load_profile(
+            shaped,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+        pooled = meta["pooled_mean_kwh"]
+        # 0..95 keep their own clock mean; only the four offsets no normal day reaches (the
+        # extra hour's tail) fall back.  The repeated hour is NOT among them.
+        assert list(forecast[oct26]) == [float(k) for k in range(96)] + [pooled] * 4
+        assert meta["eval_slots_pooled_fallback"] == 4
+
+    def test_dst_spring_forward_clock_positions_run_zero_to_ninety_one(self) -> None:
+        """The 2026-03-29 spring-forward day is 92 intervals and must run 0..91.
+
+        Pinning the short direction of the same transition, because it shows what the chosen
+        convention really counts: positions are **elapsed intervals since the local midnight
+        instant**, so the skipped 02:00 hour leaves no hole (positions stay contiguous) and
+        nothing needs the pooled fallback — a 92-slot day is a prefix of a 96-slot one.
+
+        The consequence, stated rather than left to be discovered: on that day position 8 is
+        wall-clock 03:00 CEST while position 8 on an ordinary day is 02:00, so the afternoon
+        means are applied one hour early in wall-clock terms.  That is unavoidable for any
+        contiguous-position scheme and it is what this function has always done — offsets
+        within a full local day give exactly these numbers — so no behaviour changes here;
+        only truncated days move, which is the defect being fixed.
+        """
+        # 2026-03-27T23:00Z == 2026-03-28 00:00 CET, so day 29 is whole and 23 h long.
+        start = datetime(2026, 3, 27, 23, 0, tzinfo=UTC)
+        starts, local_days = _clock_only_grid(start, 5 * 96)
+        usable = np.ones(len(starts), dtype=bool)
+
+        day29 = [i for i, d in enumerate(local_days) if d == date(2026, 3, 29)]
+        assert len(day29) == 92
+        # The skipped hour really is absent from the wall-clock readings of that day.
+        assert 2 not in {starts[i].astimezone(MADRID).hour for i in day29}
+
+        positions = [_clock_slot_position(starts[i], MADRID, QUARTER) for i in day29]
+        assert positions == list(range(92))
+
+        # Behaviour: trained on the preceding normal day, whose load is its own position, so
+        # the short day must come back as 0..91 with no fallback at all.
+        cut = day29[0]
+        shaped = np.arange(len(starts), dtype=float)
+        forecast, meta = build_frozen_load_profile(
+            shaped,
+            local_days,
+            usable,
+            training_end_idx=cut,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+        assert list(forecast[day29]) == [float(k) for k in range(92)]
+        assert meta["eval_slots_pooled_fallback"] == 0
+
+    def test_full_local_day_positions_are_unchanged_from_offset_within_run(self) -> None:
+        """Only truncated days may move: a whole local day keeps its old offsets.
+
+        The fix changes position from "offset within the run of the sliced array" to
+        "elapsed intervals since the local midnight instant".  For a day that is present in
+        full, those are the same numbers by construction — and they must stay the same, or
+        this would silently re-index every learned mean in the whole experiment rather than
+        repair the partial-day boundary.  DST days are included: a whole 100- or 92-slot day
+        keeps offsets 0..99 / 0..91 under both rules.
+        """
+        # The fall-back weekend from local midnight: 25th (96) + 26th (100) + 27th (96),
+        # sized so that all three local days are present in full and none is a slice edge.
+        start = datetime(2025, 10, 24, 22, 0, tzinfo=UTC)  # 2025-10-25 00:00 CEST
+        starts, local_days = _clock_only_grid(start, 96 + 100 + 96)
+
+        day_bounds = contiguous_day_bounds(list(local_days))
+        assert [hi - lo for _l, lo, hi in day_bounds] == [96, 100, 96], (
+            "fixture drifted: the whole-day premise needs one normal day either side of "
+            "the 25-hour fall-back day"
+        )
+        for label, lo, hi in day_bounds:
+            del label
+            offset_positions = list(range(hi - lo))
+            clock_positions = [
+                _clock_slot_position(starts[i], MADRID, QUARTER) for i in range(lo, hi)
+            ]
+            assert clock_positions == offset_positions, (
+                f"local day {local_days[lo]} re-indexed under the clock rule: "
+                f"{clock_positions[:8]} vs {offset_positions[:8]}"
+            )
+
+
+# ---------------------------------------------------------------------------
+# Event computation
+# ---------------------------------------------------------------------------
+
+
+class TestComputeEvents:
+    def test_basic_two_events_per_day(self) -> None:
+        """Normal day: 14:00 and 20:30 events."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)  # CEST = UTC+2
+        prices, load, usable, local_days, starts = _make_dataset(start, 3)
+        # 14:00 CEST = 12:00 UTC, 20:30 CEST = 18:30 UTC
+        eval_start = 0
+        eval_end = len(starts)
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=eval_start,
+            eval_end_idx=eval_end,
+            tz=MADRID,
+        )
+        # Should have warmup + 2 events per day for 3 days = 1 + 6 = 7
+        kinds = [e.kind for e in events]
+        assert kinds[0] == "warmup"
+        assert kinds.count("afternoon") == 3
+        assert kinds.count("evening") == 3
+
+    def test_warmup_only_current_day_prices(self) -> None:
+        """Warmup event plans only current day, no tomorrow."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        _, _, _, local_days, starts = _make_dataset(start, 2)
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+        warmup = events[0]
+        assert warmup.kind == "warmup"
+        # Warmup prices_exact_end == plan_end (all exact, no noisy portion)
+        assert warmup.prices_exact_end_idx == warmup.plan_end_idx
+
+    def test_afternoon_has_noisy_portion(self) -> None:
+        """Afternoon event: exact for rest of D, noisy for D+1."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        _, _, _, local_days, starts = _make_dataset(start, 3)
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+        afternoon = [e for e in events if e.kind == "afternoon"][0]
+        # prices_exact_end should be before plan_end (there's a noisy portion)
+        assert afternoon.prices_exact_end_idx < afternoon.plan_end_idx
+
+    def test_evening_all_exact(self) -> None:
+        """Evening event: all prices exact (D+1 now available)."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        _, _, _, local_days, starts = _make_dataset(start, 3)
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+        evening = [e for e in events if e.kind == "evening"][0]
+        assert evening.prices_exact_end_idx == evening.plan_end_idx
+
+    def test_each_interval_executed_once(self) -> None:
+        """Execution windows tile the evaluation window without gaps or overlaps."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        _, _, _, local_days, starts = _make_dataset(start, 5)
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+        # Check that execution windows tile [0, eval_end)
+        covered = set()
+        for e in events:
+            for i in range(e.start_idx, e.exec_end_idx):
+                assert i not in covered, f"interval {i} executed twice"
+                covered.add(i)
+        assert covered == set(range(len(starts)))
+
+    def test_no_warmup_when_eval_starts_after_14(self) -> None:
+        """If eval starts after 14:00, no warmup needed."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        _, _, _, local_days, starts = _make_dataset(start, 3)
+        # 14:00 CEST = 12:00 UTC = interval 48
+        eval_start = 48  # start at 14:00 local
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=eval_start,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+        kinds = [e.kind for e in events]
+        # First event should be evening (20:30), not warmup
+        assert kinds[0] in ("afternoon", "evening")
+
+
+def _assert_events_tile(
+    events: list[Any],
+    eval_start_idx: int,
+    eval_end_idx: int,
+) -> None:
+    """Shared invariant check for every event-computation test.
+
+    Each interval in the window is executed exactly once, no event executes past its
+    own plan, prices are never exact past a plan's end, and indices are sequential.
+    """
+    assert [e.index for e in events] == list(range(len(events))), "event indices must be 0..n-1"
+    coverage = np.zeros(eval_end_idx, dtype=int)
+    prev_stop = eval_start_idx
+    for e in events:
+        assert e.start_idx == prev_stop, (
+            f"event {e.index} ({e.kind}) starts at {e.start_idx}, previous execution "
+            f"stopped at {prev_stop}: the roll would skip or repeat intervals"
+        )
+        assert e.start_idx < e.exec_end_idx, f"event {e.index} ({e.kind}) executes nothing"
+        assert e.exec_end_idx <= e.plan_end_idx, (
+            f"event {e.index} ({e.kind}) executes [{e.start_idx}, {e.exec_end_idx}) from a "
+            f"plan ending at {e.plan_end_idx}: those intervals have no plan"
+        )
+        assert e.prices_exact_end_idx <= e.plan_end_idx, (
+            f"event {e.index} ({e.kind}) marks prices exact past its own plan end"
+        )
+        coverage[e.start_idx : e.exec_end_idx] += 1
+        prev_stop = e.exec_end_idx
+    assert prev_stop == eval_end_idx, (
+        f"execution stops at {prev_stop}, window ends at {eval_end_idx}: "
+        f"{eval_end_idx - prev_stop} intervals are left unexecuted"
+    )
+    assert np.all(coverage[eval_start_idx:eval_end_idx] == 1), "gap or overlap in coverage"
+
+
+class TestWarmupSplitting:
+    """Warmups cover what the window opens with, but never plan past a local midnight.
+
+    This is where the two requirements collide: an evaluation window that opens after
+    the 20:30 event must still be executed until the next day's 14:00, yet a warmup may
+    not plan (let alone price) tomorrow.  Splitting at midnight satisfies both; clamping
+    the execution to the current day instead would have left the rest of that night with
+    no plan at all.
+    """
+
+    @staticmethod
+    def _local_idx(starts: list[datetime], local: datetime) -> int:
+        target = local.astimezone(UTC)
+        return next(i for i, s in enumerate(starts) if s >= target)
+
+    def test_start_after_evening_event_splits_at_midnight(self) -> None:
+        """A 21:00 start (after both daily events) yields one warmup per night day."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        _, _, _, local_days, starts = _make_dataset(start, 3)
+        eval_start = self._local_idx(starts, datetime(2025, 6, 15, 21, 0, tzinfo=MADRID))
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=eval_start,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+
+        warmups = [e for e in events if e.kind == "warmup"]
+        assert [e.local_day for e in warmups] == [date(2025, 6, 15), date(2025, 6, 16)]
+        # The first stops exactly at local midnight; the second runs to the 14:00 event.
+        # (The fixture opens at 02:00 CEST, so the first midnight is index 88, not 96.)
+        midnight = next(i for i, d in enumerate(local_days) if d == date(2025, 6, 16))
+        assert warmups[0].start_idx == eval_start
+        assert warmups[0].plan_end_idx == midnight
+        assert warmups[0].exec_end_idx == midnight
+        assert warmups[1].start_idx == midnight
+        assert warmups[1].plan_end_idx == self._local_idx(
+            starts, datetime(2025, 6, 16, 14, 0, tzinfo=MADRID)
+        )
+        assert warmups[1].exec_end_idx == warmups[1].plan_end_idx
+
+        # Neither warmup plans past its own local day, so neither has tomorrow's prices.
+        day_end = {label: stop for label, _, stop in contiguous_day_bounds(list(local_days))}
+        for w in warmups:
+            assert w.prices_exact_end_idx == w.plan_end_idx
+            assert w.plan_end_idx <= day_end[w.local_day], (
+                f"warmup on {w.local_day} plans to {w.plan_end_idx}, past its local "
+                f"midnight at {day_end[w.local_day]}"
+            )
+
+        _assert_events_tile(events, eval_start, len(starts))
+
+    def test_short_window_with_no_events_is_still_executed(self) -> None:
+        """A window between two events (no event inside it) must not vanish."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        _, _, _, local_days, starts = _make_dataset(start, 3)
+        # 09:00 → 13:00 local on the first day: no 14:00 or 20:30 boundary inside.
+        lo = self._local_idx(starts, datetime(2025, 6, 15, 9, 0, tzinfo=MADRID))
+        hi = self._local_idx(starts, datetime(2025, 6, 15, 13, 0, tzinfo=MADRID))
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=lo,
+            eval_end_idx=hi,
+            tz=MADRID,
+        )
+
+        assert len(events) == 1
+        assert events[0].kind == "warmup"
+        _assert_events_tile(events, lo, hi)
+
+    def test_warmup_spanning_several_midnights(self) -> None:
+        """No event on the grid at all: warmups tile the window across every midnight.
+
+        A misaligned interval grid (starts :05 past the hour) means neither 14:00 nor
+        20:30 exists as an interval start, so nothing is scheduled inside the window.
+        The fallback must still execute it — one exact-price warmup per local day —
+        rather than return no events and leave the whole window unexecuted.
+        """
+        # 00:05 local on each day, so wall-clock event times never land on a boundary.
+        start = datetime(2025, 6, 14, 22, 5, tzinfo=UTC)  # == 2025-06-15 00:05 CEST
+        _, _, _, local_days, starts = _make_dataset(start, 4)
+        lo = self._local_idx(starts, datetime(2025, 6, 15, 23, 0, tzinfo=MADRID))
+        hi = self._local_idx(starts, datetime(2025, 6, 18, 1, 0, tzinfo=MADRID))
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=lo,
+            eval_end_idx=hi,
+            tz=MADRID,
+        )
+
+        assert all(e.kind == "warmup" for e in events), [e.kind for e in events]
+        assert len(events) == 4  # the tail of the 15th, two whole days, head of the 18th
+        assert [e.local_day for e in events] == [
+            date(2025, 6, 15),
+            date(2025, 6, 16),
+            date(2025, 6, 17),
+            date(2025, 6, 18),
+        ]
+        # Interior warmups are whole local days, and none reaches into the next one.
+        assert [e.plan_end_idx for e in events[1:3]] == [events[2].start_idx, events[3].start_idx]
+        _assert_events_tile(events, lo, hi)
+
+    def test_missing_local_day_continues_instead_of_clamping(self) -> None:
+        """A day missing from the data must not be papered over by clamping execution.
+
+        With a two-day hole (17th and 18th absent), the 16th's 20:30 plan cannot reach a
+        real D+1 midnight, while the next scheduled event sits on the 19th — past that
+        plan.  Clamping execution to the plan would silently drop the 19th's morning; the
+        dispatcher instead continues with a day-only warmup, so coverage stays exact.
+        """
+        origin = datetime(2025, 6, 14, 22, 0, tzinfo=UTC)  # == 2025-06-15 00:00 CEST
+        starts: list[datetime] = []
+        for offset in (0, 1, 4, 5):  # Jun 15, 16, then a hole, then Jun 19, 20
+            day_start = origin + timedelta(days=offset)
+            starts += [day_start + timedelta(seconds=i * QUARTER) for i in range(96)]
+        local_days = [s.astimezone(MADRID).date() for s in starts]
+        hole_end = 2 * 96  # first interval after the hole (local midnight of Jun 19)
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+
+        before_hole = [e for e in events if e.start_idx < hole_end]
+        last_before = before_hole[-1]
+        assert last_before.kind == "evening"
+        assert last_before.plan_end_idx <= hole_end
+        continuation = [e for e in events if e.start_idx == hole_end]
+        assert len(continuation) == 1
+        assert continuation[0].kind == "warmup"
+        # Day-only plan with exact prices: the continuation has no tomorrow either.
+        assert continuation[0].prices_exact_end_idx == continuation[0].plan_end_idx
+        _assert_events_tile(events, 0, len(starts))
+
+    def test_run_rolling_horizon_after_evening_event(self) -> None:
+        """End-to-end: a window that opens at 21:00 local dispatches without crashing.
+
+        The dispatcher used to build a warmup whose execution ran past its own plan
+        here, and the clipped-plan slice died on a broadcast error.
+        """
+        # Opens at 2025-06-15 00:00 CEST so local days land on multiples of 96.
+        start = datetime(2025, 6, 14, 22, 0, tzinfo=UTC)
+        prices, load, usable, local_days, starts = _make_dataset(start, 4, base_load=0.2)
+        for i in range(len(prices)):
+            hour = (i % 96) // 4
+            prices[i] = 0.05 if hour < 6 else 0.25 if 18 <= hour < 22 else 0.12
+
+        frozen_load, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=28,
+            interval_starts_utc=starts,
+        )
+        # Evaluate from 21:00 local on the third local day: after both events that day,
+        # so the roll must warm up through the night before its first scheduled event.
+        eval_start = 2 * 96 + 84
+        assert local_days[eval_start] == date(2025, 6, 17)
+        assert frozen_load[eval_start] > 0, "the window opened inside the training region"
+
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=eval_start,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen_load,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=3,
+        )
+
+        n_eval = len(starts) - eval_start
+        covered = np.zeros(n_eval, dtype=int)
+        for rec in result.per_event:
+            covered[rec["start_idx"] - eval_start : rec["exec_end_idx"] - eval_start] += 1
+        assert np.all(covered == 1), (
+            f"post-20:30 coverage violation: {int((covered == 0).sum())} gaps, "
+            f"{int((covered > 1).sum())} overlaps"
+        )
+        # The night was dispatched by warmups, and they were charged exact prices.
+        warmup_recs = [r for r in result.per_event if r["kind"] == "warmup"]
+        assert len(warmup_recs) == 2
+        assert all(r["solver_status"] != "not_solved" for r in warmup_recs)
+        assert result.schedule.grid_kwh.size == n_eval
+
+
+# ---------------------------------------------------------------------------
+# Rolling horizon integration
+# ---------------------------------------------------------------------------
+
+
+class TestRollingHorizon:
+    def _simple_setup(self, n_days: int = 5):
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        prices, load, usable, local_days, starts = _make_dataset(
+            start,
+            n_days,
+            base_price=0.15,
+            base_load=0.2,
+        )
+        # Add some price variation so the solver has something to optimise
+        for i in range(len(prices)):
+            hour = (i % 96) // 4
+            if 0 <= hour < 6:
+                prices[i] = 0.05  # cheap at night
+            elif 6 <= hour < 10:
+                prices[i] = 0.20  # expensive morning
+            elif 10 <= hour < 14:
+                prices[i] = 0.12  # moderate
+            elif 14 <= hour < 18:
+                prices[i] = 0.08  # cheap afternoon (solar)
+            elif 18 <= hour < 22:
+                prices[i] = 0.25  # expensive evening
+            else:
+                prices[i] = 0.06  # cheap night
+
+        spec = _spec()
+        frozen_load, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=28,
+            interval_starts_utc=starts,
+        )
+        return spec, prices, load, usable, local_days, starts, frozen_load
+
+    def test_deterministic_same_seed(self) -> None:
+        """Same seed → identical result."""
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup()
+        r1 = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=42,
+        )
+        r2 = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=42,
+        )
+        assert r1.cost_eur == r2.cost_eur
+        assert np.array_equal(r1.schedule.charge_kwh, r2.schedule.charge_kwh)
+
+    def test_different_seeds_differ(self) -> None:
+        """Different seeds → different plans (noise changes the solve)."""
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup()
+        r1 = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.2,
+            seed=0,
+        )
+        r2 = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.2,
+            seed=1,
+        )
+        # Different noise → different plans → different costs
+        # (not guaranteed to differ in cost, but plans should differ)
+        assert not np.array_equal(r1.schedule.charge_kwh, r2.schedule.charge_kwh)
+
+    def test_cost_uses_true_prices(self) -> None:
+        """Scoring cost is dot(true_prices, actual_grid), not noisy prices."""
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup()
+        result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.2,
+            seed=0,
+        )
+        # Recompute cost from schedule and true prices
+        grid = result.schedule.grid_kwh
+        true_p = prices[0 : len(starts)]
+        expected_cost = float(np.dot(true_p[usable], grid[usable]))
+        assert result.cost_eur == pytest.approx(expected_cost, rel=1e-6)
+
+    def test_soc_never_below_floor(self) -> None:
+        """SOC stays within the physical window throughout the roll."""
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup()
+        result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=0,
+        )
+        soc = result.schedule.soc_kwh
+        floor = spec.soc_bound_kwh("min")
+        ceil = spec.soc_bound_kwh("max")
+        assert np.all(soc >= floor - 1e-9)
+        assert np.all(soc <= ceil + 1e-9)
+
+    def test_no_simultaneous_charge_discharge(self) -> None:
+        """Binary mode: charge and discharge never both positive."""
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup()
+        result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=0,
+        )
+        c = result.schedule.charge_kwh
+        d = result.schedule.discharge_kwh
+        assert not np.any((c > 1e-9) & (d > 1e-9))
+
+    def test_grid_non_negative(self) -> None:
+        """No intentional export: grid >= 0."""
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup()
+        result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=0,
+        )
+        assert np.all(result.schedule.grid_kwh >= -1e-9)
+
+    def test_solver_failure_zero_flows(self, monkeypatch) -> None:
+        """If the solver fails, that event gets zero flows, not substitution."""
+        from energy_baseline import rolling_horizon
+
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup()
+
+        # Monkeypatch solve_oracle to raise OracleError on first call
+        original_solve = rolling_horizon.solve_oracle
+        call_count = [0]
+
+        def failing_solve(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                from energy_baseline.oracle import OracleError
+
+                raise OracleError("Simulated solver failure")
+            return original_solve(*args, **kwargs)
+
+        monkeypatch.setattr(rolling_horizon, "solve_oracle", failing_solve)
+
+        result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.0,
+            seed=0,
+        )
+
+        # First event should have degraded to zero flows
+        assert result.per_event[0]["degradation"] != "none"
+        assert result.per_event[0]["charge_kwh"] == 0.0
+        assert result.per_event[0]["discharge_kwh"] == 0.0
+
+        # But still produce a valid schedule
+        assert result.schedule is not None
+        assert result.cost_eur is not None
+
+    def test_not_bit_identical_to_day_ahead(self) -> None:
+        """Rolling horizon with sigma=0 is NOT identical to day-ahead.
+
+        Zero noise does NOT imply the same plan, but the honest reason is worth
+        stating precisely, because an earlier version of this test attributed the
+        difference to the wrong thing.  Both policies carry their **actual** clipped
+        SOC across the boundary — the day-ahead roll in :func:`policy_day_ahead`
+        rolls the end-of-day SOC forward exactly like the rolling dispatcher — so
+        "rolling carries actual, day-ahead carries planned" is not what separates
+        them.  With sigma=0 both also see identical prices; warmup events are exact
+        too, so there is no information advantage on either side.
+
+        What actually differs is *when a plan can be revised*:
+
+        * **horizon** — a rolling solve plans to midnight ending D+1 (~34 h), a
+          day-ahead solve sees one local day (24 h);
+        * **cadence** — the rolling roll re-plans at 14:00 and 20:30, so it can
+          still act on information about the coming day inside the current one,
+          while a day-ahead plan is frozen for its whole day.
+
+        Those only show up in cost when prices are not constant within a solve's own
+        day *and* differ between days, so this fixture gives each local day its own
+        price level plus a within-day tilt on top of the night/morning/evening
+        shape.  With flat intra-day buckets the two policies agree to the cent and
+        an earlier version of this test failed for that reason, not because the
+        invariant was broken.
+
+        The **load level** must also move day to day, for the same kind of reason and
+        for one the slot-position fix exposed.  A frozen trailing-mean profile is only
+        a forecast if there is something to predict: on a load that is identical at the
+        same clock position of every day, the per-slot mean reproduces the truth
+        exactly, and once both policies are handed a perfect forecast and (at sigma=0)
+        perfect prices they plan the same dispatch.  Before the fix they did *not* —
+        only because positions were taken as offsets within each sliced run, which on
+        this fixture (starting at 02:00 CEST, so local days are 88- and 96-slot runs)
+        mis-assigned every interval below the cut by up to eight slots.  That shift was
+        itself a forecast error, and the test was passing for the wrong reason.  The
+        per-day load factor here supplies the imperfection deliberately.
+        """
+        from energy_baseline.battery import Horizon
+        from energy_baseline.rolling_horizon import run_day_ahead_with_frozen_forecast
+
+        # Create a scenario with varying load and prices to expose differences
+        spec = _spec()
+        n_days = 5
+        n = n_days * 96
+
+        base = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        starts = [base + timedelta(seconds=i * QUARTER) for i in range(n)]
+        local_days = [s.astimezone(MADRID).date() for s in starts]
+
+        # Prices: the usual intra-day shape, a small tilt so no two intervals inside a
+        # single solve are interchangeable, and a per-day offset so *which* day a kWh is
+        # bought for changes the cost.  Loads vary by hour AND carry a per-day level, so
+        # the frozen profile is genuinely imperfect (see the docstring).
+        local_day_set = sorted(set(local_days))
+        day_offset = {d: 0.04 * (i % 3) - 0.04 for i, d in enumerate(local_day_set)}
+        day_level = {d: [1.0, 1.4, 0.7][i % 3] for i, d in enumerate(local_day_set)}
+        prices = np.zeros(n)
+        load = np.zeros(n)
+        for i in range(n):
+            hour = (i % 96) // 4
+            if 0 <= hour < 6:
+                price, day_load = 0.05, 0.1  # cheap and quiet at night
+            elif 6 <= hour < 10:
+                price, day_load = 0.20, 0.4  # expensive morning peak
+            elif 10 <= hour < 14:
+                price, day_load = 0.12, 0.3  # moderate
+            elif 14 <= hour < 18:
+                price, day_load = 0.08, 0.25  # cheap afternoon (solar)
+            elif 18 <= hour < 22:
+                price, day_load = 0.25, 0.5  # expensive evening peak
+            else:
+                price, day_load = 0.06, 0.15  # cheap night
+            tilt = 0.02 * ((i % 96) / 96 - 0.5)
+            prices[i] = price + tilt + day_offset[local_days[i]]
+            load[i] = day_load * day_level[local_days[i]]
+
+        usable = np.ones(n, dtype=bool)
+
+        # Build frozen forecast
+        frozen_load, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=28,
+            interval_starts_utc=starts,
+        )
+
+        # Run rolling horizon
+        rh_result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=96,  # Start from day 2
+            eval_end_idx=n,
+            tz=MADRID,
+            frozen_load=frozen_load,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.0,
+            seed=0,
+        )
+
+        # Run day-ahead with same frozen forecast
+        eval_horizon = Horizon(
+            interval_seconds=QUARTER,
+            prices=prices[96:n],
+            load_kwh=load[96:n],
+            usable=usable[96:n],
+        )
+        da_schedule, _da_telemetry = run_day_ahead_with_frozen_forecast(
+            spec,
+            eval_horizon,
+            frozen_load=frozen_load,
+            eval_start_idx=0,
+            eval_end_idx=n - 96,
+            local_days=local_days[96:],
+            terminal_value_eur_per_kwh=0.10,
+            scoring_terminal_value_eur_per_kwh=0.0,
+        )
+
+        # Verify both ran successfully
+        assert rh_result.schedule is not None
+        assert da_schedule is not None
+
+        # The costs should differ (not necessarily which is better, just different):
+        # a longer horizon and two re-plans per day buy the rolling roll opportunities
+        # the day-ahead plan does not have.
+        cost_diff = abs(rh_result.cost_eur - da_schedule.cost_eur)
+        assert cost_diff > 1e-6, (
+            f"Rolling horizon and day-ahead produced identical costs ({rh_result.cost_eur}), "
+            "but they plan different horizons at different cadence; if this fixture ever stops "
+            "exposing that, vary prices within a day as well as between days"
+        )
+
+        # The charge/discharge patterns should also differ
+        charge_diff = np.abs(rh_result.schedule.charge_kwh - da_schedule.charge_kwh).sum()
+        discharge_diff = np.abs(rh_result.schedule.discharge_kwh - da_schedule.discharge_kwh).sum()
+        total_flow_diff = charge_diff + discharge_diff
+        assert total_flow_diff > 1e-6, (
+            "Rolling horizon and day-ahead produced identical flows, "
+            "but they should differ due to different execution patterns"
+        )
+
+        # And both start the window from what they were handed: the difference is in
+        # the dispatch, not in one policy getting a different battery.
+        assert rh_result.schedule.soc_kwh[0] == pytest.approx(float(da_schedule.soc_kwh[0]))
+
+    def test_dst_fall_back_2025_oct_26(self) -> None:
+        """DST fall-back (2025-10-26, Europe/Madrid) is a 100-interval local day.
+
+        Madrid goes from CEST (UTC+2) to CET (UTC+1) at 03:00 local, so that local
+        day is 25 hours long. This pins four things that silently break on a DST day:
+
+        * events are placed by **local** wall time (14:00/20:30), not UTC;
+        * a plan horizon spans real elapsed time, so an afternoon solve the day
+          **before** the transition is 35 h and one **on** it is 34 h;
+        * a full 100-slot noise curve is drawn for that day even though only part of
+          it is estimated;
+        * every interval — including the repeated hour — executes exactly once.
+        """
+        # Whole local days 25, 26 and 27 (see the fixture helper for why the slice is
+        # built this way); day 26 is the 25-hour fall-back day.
+        prices, load, usable, local_days, starts = _dst_fall_back_window()
+
+        counts: dict[date, int] = {}
+        for day in local_days:
+            counts[day] = counts.get(day, 0) + 1
+        assert counts == {
+            date(2025, 10, 25): 96,
+            date(2025, 10, 26): 100,  # the 25-hour fall-back day
+            date(2025, 10, 27): 96,
+        }
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+
+        def afternoon(day: date) -> Any:
+            found = [e for e in events if e.kind == "afternoon" and e.local_day == day]
+            assert len(found) == 1, found
+            return found[0]
+
+        # Events sit at local wall time, verified against the interval they landed on.
+        for event in events:
+            if event.kind == "warmup":
+                continue
+            local = starts[event.start_idx].astimezone(MADRID)
+            assert (local.hour, local.minute) == (
+                (14, 0) if event.kind == "afternoon" else (20, 30)
+            ), f"{event.kind} on {event.local_day} landed at {local:%H:%M} local"
+
+        # Horizon length follows real elapsed time across the transition: solving at
+        # 14:00 the day BEFORE a 25-hour day plans 10 h + 25 h = 35 h; solving ON the
+        # long day leaves 10 h of it and plans 10 h + 24 h = 34 h.
+        assert (
+            afternoon(date(2025, 10, 25)).plan_end_idx - afternoon(date(2025, 10, 25)).start_idx
+        ) == 35 * 4
+        assert (
+            afternoon(date(2025, 10, 26)).plan_end_idx - afternoon(date(2025, 10, 26)).start_idx
+        ) == 34 * 4
+
+        # An execution window never runs past its own plan.
+        for event in events:
+            assert event.exec_end_idx <= event.plan_end_idx, event
+
+        frozen_load, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen_load,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=42,
+        )
+
+        # Every interval executed exactly once — the 100 slots of the long day included.
+        coverage = np.zeros(len(starts), dtype=int)
+        for record in result.per_event:
+            coverage[record["start_idx"] : record["exec_end_idx"]] += 1
+        assert np.all(coverage == 1), (
+            f"DST coverage violation: {int(np.sum(coverage == 0))} gaps, "
+            f"{int(np.sum(coverage > 1))} overlaps"
+        )
+
+        # A complete day of noise was drawn for the fall-back day, including its
+        # repeated hour, even though only the D+1 tails are actually estimated.
+        noisy, meta = generate_price_noise(
+            prices,
+            local_days,
+            0.1,
+            seed=42,
+            day_bounds=contiguous_day_bounds(list(local_days)),
+        )
+        oct26 = np.array([d == date(2025, 10, 26) for d in local_days], dtype=bool)
+        assert oct26.sum() == 100
+        changed = np.abs(noisy - prices) > 0.0
+        assert changed[oct26].all(), "the fall-back day's noise curve is incomplete"
+        assert meta["noise_applied"]
+
+        # Accuracy stats describe only the estimated slots, never all three days.
+        assert result.noise_metadata["stats_on_estimated_slots_only"] is True
+        assert 0 < result.noise_metadata["stats_slots_considered"] < len(starts)
+
+        assert result.schedule is not None
+        assert np.all(result.schedule.grid_kwh >= -1e-9)
+
+    def test_warmup_after_evening_event_on_dst_day(self) -> None:
+        """DST and the after-20:30 split together: the long day's tail is dispatched.
+
+        Starting on 2025-10-26 (the 25-hour fall-back day) after its 20:30 event is
+        where both bugs land at once: that night crosses a midnight that is 25 hours
+        after the day started, so a single warmup either plans past its own local
+        midnight or leaves the night unexecuted.
+        """
+        prices, load, usable, local_days, starts = _dst_fall_back_window()
+        oct26_start = next(i for i, d in enumerate(local_days) if d == date(2025, 10, 26))
+        oct27_start = next(i for i, d in enumerate(local_days) if d == date(2025, 10, 27))
+
+        # 21:30 local on the fall-back day (i.e. CET, after the repeated hour).
+        target = datetime(2025, 10, 26, 21, 30, tzinfo=MADRID).astimezone(UTC)
+        eval_start = next(i for i, s in enumerate(starts) if s >= target)
+        assert local_days[eval_start] == date(2025, 10, 26)
+
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=eval_start,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+        warmups = [e for e in events if e.kind == "warmup"]
+        assert [w.local_day for w in warmups] == [date(2025, 10, 26), date(2025, 10, 27)]
+        # The first warmup stops at the fall-back day's midnight, which is index
+        # oct26_start + 100 — not +96 — because that local day really is 25 hours long.
+        assert warmups[0].plan_end_idx == oct27_start == oct26_start + 100
+        _assert_events_tile(events, eval_start, len(starts))
+
+        # And the roll itself survives the same window end to end.
+        frozen_load, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=oct26_start,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=eval_start,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen_load,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=5,
+        )
+        covered = np.zeros(len(starts) - eval_start, dtype=int)
+        for rec in result.per_event:
+            covered[rec["start_idx"] - eval_start : rec["exec_end_idx"] - eval_start] += 1
+        assert np.all(covered == 1), (
+            f"DST + after-20:30 coverage violation: {int((covered == 0).sum())} gaps, "
+            f"{int((covered > 1).sum())} overlaps"
+        )
+
+    def test_future_prices_dont_change_past_execution(self) -> None:
+        """Changing future prices does NOT change already-committed actions.
+
+        The first event's execution is based on its own plan horizon.  Changing
+        prices after the execution window should not retroactively change what
+        was executed.
+        """
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup(5)
+        r1 = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.0,
+            seed=0,
+        )
+        # Change prices in the last day
+        prices2 = prices.copy()
+        prices2[-96:] = 0.50  # very expensive
+        r2 = run_rolling_horizon(
+            spec,
+            prices=prices2,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.0,
+            seed=0,
+        )
+        # The first event's execution should be identical
+        first_exec_end = r1.per_event[0]["exec_end_idx"]
+        assert np.array_equal(
+            r1.schedule.charge_kwh[:first_exec_end],
+            r2.schedule.charge_kwh[:first_exec_end],
+        )
+
+    def test_each_interval_executed_exactly_once(self) -> None:
+        """Every interval in the eval window is covered by exactly one event."""
+        spec, prices, load, usable, local_days, starts, frozen = self._simple_setup(3)
+        result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.0,
+            seed=0,
+        )
+        n_eval = len(starts)
+        covered = np.zeros(n_eval, dtype=int)
+        for ev in result.per_event:
+            lo = ev["start_idx"]
+            hi = ev["exec_end_idx"]
+            covered[lo:hi] += 1
+        # Every interval should be covered exactly once
+        assert np.all(covered == 1), f"coverage: min={covered.min()}, max={covered.max()}"
+
+    def test_negative_prices_handled(self) -> None:
+        """Negative prices are valid and don't crash the dispatcher."""
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        prices, load, usable, local_days, starts = _make_dataset(
+            start,
+            3,
+            base_price=0.05,
+            base_load=0.2,
+        )
+        # Add some negative prices
+        prices[10:20] = -0.02
+        spec = _spec()
+        frozen_load, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=28,
+            interval_starts_utc=starts,
+        )
+        result = run_rolling_horizon(
+            spec,
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen_load,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.0,
+            seed=0,
+        )
+        assert result.cost_eur is not None
+        assert np.all(result.schedule.grid_kwh >= -1e-9)
+
+
+# ---------------------------------------------------------------------------
+# Paired design: one bias realisation shared by every load-window variant
+# ---------------------------------------------------------------------------
+
+
+class TestDayBiasSharedAcrossVariants:
+    """The day-level bias must be a function of ``(seed, local_date)`` **only**.
+
+    The whole point of the paired experiment is that two runs differing only in their
+    load-forecast window face the *same* price realisation.  If the bias draw depended on
+    anything else — the profile, the estimated mask, how many variants ran before it — a
+    window comparison would be measuring two different price worlds and the profile
+    effect could not be isolated.
+    """
+
+    def _setup(self, n_days: int = 8):
+        """3 training days + 5 evaluation days on a realistic daily price shape.
+
+        Two details are load-bearing for the claims made below:
+
+        * The **price shape** is the cheap-night / expensive-evening profile (the same
+          one ``tests/test_compare_forecasts_cli.py`` builds), not a flat or repeating
+          level.  A pure multiplicative day bias rescales a whole day, so on a fixture
+          where every day has an identical profile there is nothing for it to reorder —
+          the variant would be measuring nothing and the test below would pass only by
+          accident of the arithmetic.
+        * The **load level** moves day to day, because ``window_days`` selects the
+          trailing N training days.  On a flat load a 1-day and a 2-day profile are
+          identical and "the two arms differ" would be unprovable.
+
+        Three training days is also the reason both windows are requested as ``1`` and
+        ``2``: requesting more than exists clamps to the same thing.
+        """
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        prices, load, usable, local_days, starts = _make_dataset(
+            start, n_days, base_price=0.15, base_load=0.2
+        )
+        for i in range(len(prices)):
+            hour = (i % 96) / 4.0
+            if hour < 6:
+                prices[i] = 0.04
+            elif hour < 10:
+                prices[i] = 0.19
+            elif hour < 14:
+                prices[i] = 0.11
+            elif hour < 18:
+                prices[i] = 0.07
+            elif hour < 22:
+                prices[i] = 0.24
+            else:
+                prices[i] = 0.05
+        for i in range(len(load)):
+            load[i] = 0.10 + 0.05 * ((i // 96) % 3)
+        return prices, load, usable, local_days, starts
+
+    TRAIN_END = 3 * 96
+
+    def test_bias_identical_across_load_window_variants(self) -> None:
+        """Two window variants at the same ``(seed, bias_sigma)`` see one price array."""
+        prices, load, usable, local_days, starts = self._setup()
+        day_bounds = contiguous_day_bounds(list(local_days))
+        profiles = {
+            window: build_frozen_load_profile(
+                load,
+                local_days,
+                usable,
+                training_end_idx=self.TRAIN_END,
+                window_days=window,
+                interval_starts_utc=starts,
+            )[0]
+            for window in (1, 2)
+        }
+        # Non-vacuity: the two arms really are different forecasts, or "identical noise"
+        # would be trivially true of two identical runs.
+        assert not np.array_equal(profiles[1], profiles[2])
+
+        realised: dict[int, list[dict[str, Any]]] = {}
+        arrays: dict[int, np.ndarray] = {}
+        for window in profiles:
+            # The estimated region is identical on purpose: what varies is only the load
+            # profile the caller would otherwise hand to the dispatcher.
+            mask = np.zeros(len(prices), dtype=bool)
+            mask[200:400] = True
+            noisy, meta = generate_price_noise(
+                prices,
+                local_days,
+                0.05,
+                seed=9,
+                bias_sigma=0.2,
+                day_bounds=day_bounds,
+                estimated_slots_mask=mask,
+            )
+            arrays[window] = noisy
+            realised[window] = meta["per_day"]
+
+        assert np.array_equal(arrays[1], arrays[2]), "variants saw different price draws"
+        bias_1 = [r["bias_applied"] for r in realised[1]]
+        assert bias_1 == [r["bias_applied"] for r in realised[2]]
+        assert len(set(bias_1)) > 1, "one global bias, not per-day"
+
+    def test_bias_shared_through_the_dispatcher_for_different_profiles(self) -> None:
+        """End to end: two windows' ``noise_metadata`` report the same applied bias."""
+        prices, load, usable, local_days, starts = self._setup()
+        runs = []
+        profiles = {}
+        for window in (1, 2):
+            frozen, _ = build_frozen_load_profile(
+                load,
+                local_days,
+                usable,
+                training_end_idx=self.TRAIN_END,
+                window_days=window,
+                interval_starts_utc=starts,
+            )
+            profiles[window] = frozen
+            runs.append(
+                run_rolling_horizon(
+                    _spec(),
+                    prices=prices,
+                    load_kwh=load,
+                    usable=usable,
+                    interval_seconds=QUARTER,
+                    local_days=local_days,
+                    interval_starts_utc=starts,
+                    eval_start_idx=self.TRAIN_END,
+                    eval_end_idx=len(starts),
+                    tz=MADRID,
+                    frozen_load=frozen,
+                    terminal_value_eur_per_kwh=0.10,
+                    sigma=0.05,
+                    bias_sigma=0.2,
+                    seed=9,
+                )
+            )
+        assert not np.array_equal(profiles[1], profiles[2]), "the two arms are the same arm"
+        a, b = runs
+        # Same noise realisation on both sides: only the load forecast differed.
+        assert a.noise_metadata["per_day"] == b.noise_metadata["per_day"]
+        assert a.noise_metadata["bias_mean_applied"] == pytest.approx(
+            b.noise_metadata["bias_mean_applied"]
+        )
+        assert a.noise_metadata["bias_std_applied"] == pytest.approx(
+            b.noise_metadata["bias_std_applied"]
+        )
+        assert a.noise_metadata["bias_sigma"] == 0.2
+        # And the bias is recorded on the dispatcher's telemetry too, so a reader can
+        # tell which arm of the matrix a row came from without opening the noise block.
+        assert a.telemetry["bias_sigma"] == 0.2
+        assert b.telemetry["bias_sigma"] == 0.2
+
+    def test_bias_only_run_changes_the_plan_but_never_the_scoring(self) -> None:
+        """A pure day-level scaling is a real planning input, yet cost stays true-priced."""
+        prices, load, usable, local_days, starts = self._setup()
+        frozen, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=self.TRAIN_END,
+            window_days=2,
+            interval_starts_utc=starts,
+        )
+
+        def run(bias_sigma: float, seed: int):
+            return run_rolling_horizon(
+                _spec(),
+                prices=prices,
+                load_kwh=load,
+                usable=usable,
+                interval_seconds=QUARTER,
+                local_days=local_days,
+                interval_starts_utc=starts,
+                eval_start_idx=self.TRAIN_END,
+                eval_end_idx=len(starts),
+                tz=MADRID,
+                frozen_load=frozen,
+                terminal_value_eur_per_kwh=0.10,
+                sigma=0.0,
+                bias_sigma=bias_sigma,
+                seed=seed,
+            )
+
+        exact = run(0.0, 9)
+        assert exact.noise_metadata["noise_applied"] is False
+        # Not every draw lands near zero, and a near-zero day bias legitimately leaves the
+        # plan alone.  What must not happen is that NO seed ever changes anything: with
+        # sigma=0 the per-day multiplier is the only difference between the two runs, so a
+        # variant that can never move the plan would be measuring nothing.
+        changed = [
+            seed
+            for seed in range(6)
+            if not np.array_equal(exact.schedule.charge_kwh, run(0.3, seed).schedule.charge_kwh)
+        ]
+        assert changed, "a 30 % day-level bias never changed the executed plan"
+
+        biased = run(0.3, 9)
+        assert biased.noise_metadata["noise_applied"] is True
+        # Scoring is still dot(true price, actual grid) — the biased estimate never
+        # enters the bill, however much it moved the plan.
+        grid = np.asarray(biased.schedule.grid_kwh, dtype=float)
+        true_slice = prices[self.TRAIN_END : len(starts)]
+        assert biased.cost_eur == pytest.approx(
+            float(np.dot(true_slice, grid[: true_slice.size])), rel=1e-9, abs=1e-9
+        )

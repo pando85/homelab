@@ -1,15 +1,12 @@
 # Energy Baseline — Progress & Handoff
 
-- **Date:** 2026-10-23
-- **HEAD:** c1569314 — B2 (day-ahead policy) and the comparability fix are committed, with no
-  uncommitted source files in that commit
-- **Uncommitted at the time of writing (documentation pass):** `docs/adr/0003-…`,
-  `planning/energy-baseline-progress.md`, `scripts/energy-baseline/README.md`, plus one additive change
-  in `report.py` and two tests in `tests/test_report.py` — see *Documentation-pass changes to
-  `report.py`* under *Commands*. Nothing else. `git commit` was off-limits for this pass, so these
-  edits are left for review
-- **Test suite:** 1120 tests pass at `c1569314` (the 1116 reported before the comparability fix is
-  superseded); 1122 with the two horizon-scope tests
+- **Updated:** 2026-10-24
+- **Accepted baseline code:** `c1569314`; acceptance documentation and the two horizon-scope tests
+  were subsequently committed and pushed in `a4837f6d`. The documentation pass described below is
+  historical, not outstanding work.
+- **Baseline test suite:** 1122 passed after the reporting change (1120 at `c1569314`).
+- **Current extension:** offline forecast-window and two-publication rolling-horizon experiments;
+  see [Forecast experiments](#forecast-experiments). These do not deploy or actuate anything.
 
 ## Task Status
 
@@ -17,7 +14,8 @@
 |------|--------|-------|
 | **B1: Train 2024 / Eval full 2025** | **conditionally accepted** | Independent read-only acceptance review on 2026-10-23 found **no mathematical blocker**. The verdict, its eight conditions, the verified structural findings and the three known gaps are in [Acceptance (conditional accept)](#acceptance-conditional-accept) — read the result *with* those conditions, not as an unqualified accept |
 | **B2: Day-ahead policy** | **committed** | Implemented at `c1569314` (was reported as 9 uncommitted files / 1116 tests — both superseded: the work is committed and the suite is 1120 tests after the comparability fix). Authoritative run complete and conditionally accepted, results not in git, see [Benchmark runs](#benchmark-runs) |
-| **B3: Oracle policy** | completed | Certified in the earlier 11-month reference run **and** in the authoritative run (gap inside the 1e-06 tolerance at a 900 s limit) — see [Acceptance](#acceptance-conditional-accept) |
+| **Oracle reference** | completed | Certified in the earlier 11-month reference run **and** in the authoritative run (gap inside the 1e-06 tolerance at a 900 s limit) — see [Acceptance](#acceptance-conditional-accept) |
+| **B3: HA history reader** | deferred | Earlier versions of this table incorrectly labelled the existing oracle as B3. The planned appliance-state reader is not implemented and is not needed by the forecast experiments |
 | **Data extraction (Prometheus)** | completed | validate740: 4198469 rows, all pass |
 | **Data extraction (HA)** | not_applicable | HA data NOT consumed by B1/B2 or build pipeline; optional future appliance forecasting — states not exported as numeric values; does not block current work |
 | **Dataset build (2-year)** | completed | Clean-tree `da2ac07a7a39…` supersedes the dirty `4eb4ee1…`; see [Built datasets](#built-datasets) |
@@ -296,6 +294,85 @@ One additive change; nothing else in the module was touched:
   not re-extractable. Still deferred, and consumed by nothing today; see ADR-0003 §*Appliance enum
   telemetry — resolved*
 - Historical price snapshot verification for day-ahead assumption
+
+## Forecast experiments
+
+### 2026-10-24: completed rolling-history sensitivity
+
+The existing `day_ahead` policy was run on the same UTC 2025 evaluation population using trailing
+load-history windows of 7, 28, 56, 182 and 365 local days. All use dataset `da2ac07a7a39…`, the same
+366-day training split, battery assumptions, shared zero terminal scoring value and strict quality
+mask. Only the forecast-window length changes; these are rolling forecasts, not frozen holdouts.
+
+| Window (local days) | Private benchmark run id |
+|---|---|
+| 7 | `2403a37cd34b9360f4a53c511cf7e6e9` |
+| 28 | `a572dbc7413d42082f0a71263d8c66cf` |
+| 56 | `ad517b8e9884fa29289582bf9da0d451` |
+| 182 | `3f6a0775d9a26a317dc6f688841415ed` |
+| 365 | `531a8ab9b27bfaeedbea7eb5f31ed911` |
+
+The longer history did not improve dispatch cost in this sweep. The shortest window had the lowest
+forecast mean absolute error, but the 28-day window had the lowest dispatch cost: forecast accuracy
+and dispatch value are different metrics. This is a retrospective sensitivity, not an independently
+selected winner or evidence of statistical significance. Monetary results remain private.
+
+### Completed 2026-10-24: frozen three-month holdout and two-publication policy
+
+Protocol and limitations: [forecast experiments](energy-baseline-forecast-experiments.md).
+
+- **Holdout:** `[2025-10-01T00:00:00Z, 2026-01-01T00:00:00Z)`. Fit only on data strictly before
+  the holdout, comparing the previous 28 days, previous 365 days and all available preceding data.
+  This avoids training on dates after a test observation. The UTC split contains 61,344 training
+  intervals and 8,832 test intervals; the coverage audit finds 8,820 test intervals usable (12
+  excluded), subject to the runner's canonical quality-mask check. Available extracted history begins
+  in January 2024; "all" is not a claim that several complete training years exist.
+- **Frozen versus rolling:** freeze each consumption profile before the holdout. Do not call this
+  identical to the rolling full-year sweep above: the experiment changes both history length and
+  whether recent test-period observations can update the forecast.
+- **New planning schedule:** at local 14:00, use today's exact prices and tomorrow's estimated
+  prices, planning through the end of tomorrow; at 20:30, the first quarter-hour boundary safely
+  after the user-stated 20:15–20:20 publication window, revise using exact prices. Execute only up
+  to the next event and carry the actually reached SOC forward. At 14:00 this is approximately
+  34 hours, conventionally called the "36-hour" variant, with DST-dependent duration.
+- **Correction to the initial brief:** a 14:00 forecast is not a no-op merely because exact prices
+  arrive before tomorrow starts. Actions executed before publication change tomorrow's opening
+  SOC. Even zero price-estimation error need not reproduce the single-day policy, because the
+  horizons and earlier actions differ.
+- **Price uncertainty:** without archived 14:00 forecasts, test seeded synthetic relative-error
+  scenarios and report measured errors. "80–90% precision" has no unique mathematical definition;
+  do not present a chosen noise parameter as empirical forecasting skill. Exact evening publication
+  is a user-specified scenario assumption, not a new measurement of the archive.
+- **Scope:** isolated offline experiment; canonical benchmark registry stays at four policies until
+  a separate adoption decision. No new telemetry extraction, controller deployment or actuation.
+- **Executed 2026-10-24, then re-run the same day:** a slot-positioning defect in the frozen load
+  profile (positions derived from offsets within the sliced array instead of the local wall clock)
+  was found during verification and fixed, and the whole matrix was re-run. **Cite only**
+  `/tmp/opencode/energy-baseline/holdout-final-20261024T035727/`; the earlier
+  `holdout-bias-20261024T023833/` and `holdout-full-*` / `holdout-sigma0-*` directories predate the
+  fix and are superseded (they sit outside git and outside the canonical store, so they are not
+  immutable artifacts — re-derive rather than cite). Corrected run: 81 configurations (3 windows ×
+  3 per-slot σ × 3 per-day bias σ × 3 seeds); each rolling run solved 185 events (92 days × 2 + 1
+  warmup), each `day_ahead` run 93 days; zero infeasible / no-incumbent / at-limit in every run. The
+  two-publication rolling horizon beat `day_ahead` in 81 of 81 configurations; the margin was narrow
+  and never changed sign — same verdict as before the fix. Load-forecast MAE ranked windows
+  best→worst 28 / 365 / all; dispatch cost ranked 365 first under both policies in every one of the
+  27 noise cells (27 of 27). Price-estimate accuracy was close to irrelevant: the worst mean noise
+  penalty is about one tenth of the mean policy margin, and a persistent day-level bias is roughly
+  five times as damaging as per-slot noise at the same σ. Full results in [forecast experiments
+  §11](energy-baseline-forecast-experiments.md#11-results--executed-holdout-matrix-2026-10-24-corrected-run).
+- **Not affected by that defect — record it, because the opposite is the natural assumption:** the
+  canonical `day_ahead` policy computes its forecast over the **full** array and selects evaluation
+  indices afterwards (`benchmark.py:1053` → `:1058`), so the accepted authoritative run
+  `b0a9b59aa846487a82d08fc4ba718708` stands unchanged. The generalisable rule — derive positions,
+  *then* slice; slicing first is unsafe whenever a window edge is not a local midnight — and the
+  evidence are in [forecast experiments §5](energy-baseline-forecast-experiments.md#slot-positioning-defect-in-the-frozen-profile--found-fixed-matrix-re-run).
+  It is also why `--train-end` values that are not local midnights, per *Known issues §2*, are safe
+  for the canonical forecast but were not for the experiment module.
+- **Outstanding:** independent leakage review of the **corrected** executed artifacts (the defect
+  itself is fixed and pinned by tests, including one that pins the trailing boundary as *not* broken;
+  what is missing is the independent review); final adoption decision. Do not cite unreviewed results
+  as accepted.
 
 ## Constraints
 
