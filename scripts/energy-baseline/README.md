@@ -661,7 +661,7 @@ See module docstring.
 ## Replay runtime (`replay_runtime.py`)
 
 **Status: complete — committed. NOT deployed, NOT a resident service, NO HA adapter, recording
-only.** Deterministic replay loop. Caller-supplied time; recording-only sink; injectable planner.
+only.** Deterministic plan content; record ids are per-run random (`generation_id` is `uuid.uuid4()`). Caller-supplied time; recording-only sink; injectable planner.
 Demo: `python -m energy_baseline.hack.replay_runtime_demo`. See module docstring.
 
 ## HA authentication

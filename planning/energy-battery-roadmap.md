@@ -178,7 +178,7 @@ the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to
 the reversal is the load-forecast basis: this rung's profile is frozen at the training
 cut while `day_ahead` re-learns before each dispatch day. Re-running the identical
 Q4-2025 window on the same dataset reproduced the win, which rules out the efficiency
-correction as the cause. That counterexample has since been explained and reversed: with the two
+correction as the cause. That counterexample has since been reversed: with the two
 rungs on an aligned causal load-forecast basis, the rolling rung beats `day_ahead` on the full year
 and in all four representative windows (winter, summer, DST spring, DST fall), and the cadence ladder
 96 → 4 → 1 improves or ties monotonically. Note that both bullets above rest on 0.88-era figures; they are

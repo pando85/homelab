@@ -217,6 +217,8 @@ These are the substance of the accept. None is monetary.
    to 35,044 intervals / 33,957 usable against the evaluation block's 35,040 / 33,953, because a
    month-granular flag straddles the local-month boundary — 4 intervals land in `2026-01`. The report's
    own `monthly` table, bucketed directly on `local_day`, reconciles exactly.
+4. **Provenance blast radius.** `hack/compare_forecasts.py` records NO code identity, yet produced the 81-configuration grid cited in ADR-0003 line 182 and README line 459. The grid's DATA is commit-pinned (`build_manifest_sha256 = 15ce9b8f…` verifies against dataset `da2ac07a…`, whose manifest records `code_version = c1569314…`, a real ancestor of HEAD), but its EVALUATION CODE is not: the runner was first committed at `5fc27b9f` ~11.6 h after the 03:57 run, and `a3d22316` later rewrote 353 lines of `rolling_horizon.py`. The grid also sits on the SUPERSEDED 0.88 dataset (`da2ac07a…` carries a SUPERSEDED.md), and `/tmp/opencode/energy-baseline/q4-at-080/` is n=1, NOT a re-run of the 81-arm grid. The leakage review's STRUCTURAL conclusions (training-before-test separation, true-price scoring, baseline equality, DST handling) do not depend on code pinning and remain usable; noise-sharing remains code-proven only (erratum E2); numeric citation of the 81-arm grid remains unavailable. Root cause: `artifact_integrity.finalize_run_outputs` (line 477) stamps only `{"schema_version", "files"}` — file integrity with no code or config provenance — so each runner invented its own lineage block. Extending that sidecar to stamp provenance once is recommended but deferred (requires MANIFEST_SCHEMA_VERSION bump, touches many test call sites).
+5. **Causal per-event audit metadata is first-event only.** `rolling_horizon.py` computes cutoff index, training hash and support count for EVERY event, but `forecast_metadata` exposes only the first event's values (`first_event_cutoff_idx`, `first_event_training_hash`, `first_event_training_usable_intervals`, `first_event_training_usable_support`). On a 719-solve full-year run, the other 718 per-event audit records are computed and discarded. The leak-regression tests pin causality at every event they exercise, so the code guarantee is real — but a reviewer auditing a shipped artifact can verify the cutoff of one event out of 719 from the artifact alone; auditing the rest requires re-execution. Per-event records could be written to schedules parquet or a sidecar if full auditability is later required, but artifact size grows proportionally to solve count, so this is deferred deliberately.
 
 ## Known Issues
 
@@ -523,14 +525,14 @@ legacy two-publication 14:00/20:30 schedule), horizon `96`.
 - **Legacy cadence by default**, because it is the configuration the golden-value tests pin bit-for-bit
   and the one validated on real data. ADR-0001's 15-minute cadence is reachable but costs roughly **48×
   the solve count** (about **37× the wall time** — the ratios differ because a fine-cadence solve is
-  cheaper) and has not been validated on real data.
+  cheaper) and has not been validated on real data. **Update, later the same day:** the cadence has since been exercised on real data across the four representative windows — see *2026-10-24 bounded pre-migration milestone* §*Validation*.
 
 Dominance is asserted only where provable, which is the ADR-0003 comparability rule applied to a new
 rung rather than a new rule: `oracle <= rolling_horizon` is claimed only when the oracle is **certified**
 and scored in `free` terminal mode, and the artifact records
 `comparison.rolling_horizon_may_lose_day_ahead` as **`true`** (as it does for causal and baseline). That
 the relation held in **81 of 81** offline configurations is strong empirical evidence **within that configuration**, not a proof — so
-it is recorded as an observation, and one produced at 0.88 on a now-superseded dataset. All 81 configurations were a Q4 holdout immediately following the training cut; that scope does not transfer to evaluation windows that extrapolate far beyond the cut, and a measured counterexample now exists: on the 2025 full-year ladder the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to explain the reversal is the load-forecast basis: this rung's profile is frozen at the training cut while `day_ahead` re-learns before each dispatch day. Re-running the identical Q4-2025 window on the same dataset reproduced the win, which rules out the efficiency correction as the cause. Cost consistency
+it is recorded as an observation, and one produced at 0.88 on a now-superseded dataset. All 81 configurations were a Q4 holdout immediately following the training cut; that scope does not transfer to evaluation windows that extrapolate far beyond the cut, and a measured counterexample existed at the frozen basis: on the 2025 full-year ladder the same rung cost MORE than `day_ahead` (since reversed by causal alignment — see *2026-10-24 bounded pre-migration milestone* §*Validation*). The identified asymmetry sufficient to explain the reversal is the load-forecast basis: this rung's profile is frozen at the training cut while `day_ahead` re-learns before each dispatch day. Re-running the identical Q4-2025 window on the same dataset reproduced the win, which rules out the efficiency correction as the cause. Cost consistency
 (`cost_eur == meter_cost_eur`, inventory adjustment 0) was **extended** to the fifth policy by the
 existing per-policy loop rather than duplicated for it.
 
@@ -549,6 +551,8 @@ decisive test — re-running the full year with the two rungs on an aligned load
 **not** been run. The correction itself, the guard test that now pins the three artifact fields so
 the false claim cannot silently return, and the corrected `shared_with_day_ahead` /
 `measured_counterexample` fields are in commit `6fca56af`.
+
+**Update, later the same day:** the decisive aligned-basis run has since been executed on both the representative windows and the full year — see *2026-10-24 bounded pre-migration milestone* §*Validation*.
 
 New CLI flags, all on the `benchmark` subcommand: `--rolling-horizon-replan-interval-slots`,
 `--rolling-horizon-horizon-slots`, `--rolling-horizon-sigma`, `--rolling-horizon-bias-sigma`,
@@ -637,20 +641,19 @@ passing** at `90feb857`); the milestone itself is **1848 tests passing**. Nothin
 
 | Track | Location | State |
 |---|---|---|
-| Causal load-forecast alignment | `rolling_horizon.py` + `--rolling-horizon-load-forecast-mode` | `"causal"` uses same provider as `day_ahead`; `"frozen"` preserved. **Default at the benchmark and CLI layer**; validated on real data |
+| Causal load-forecast alignment | `rolling_horizon.py` + `--rolling-horizon-load-forecast-mode` | `"causal"` uses same forecast function as `day_ahead`; `"frozen"` preserved. **Default at the benchmark and CLI layer**; validated on real data |
 | Throughput-cost planning flag | `benchmark.py` / `oracle.py` / `--throughput-cost-eur-per-kwh` | Planning-only term; `0.0` default leaves plans bit-identical; never enters reported cost |
 | Artifact integrity | `artifact_integrity.py`, `hack/verify_artifacts.py` | Manifest sidecars. **Detects integrity, not authenticity** (no signature claim). Wired into the canonical benchmark and report writers |
 | Economic sensitivity | `economic_sensitivity.py`, `hack/economic_sensitivity.py` | Sweeps under **user-supplied hypothetical** costs; terminal optimization vs scoring separated; **no calibration**. Experiment module |
-| Replay runtime | `replay_runtime.py`, `src/energy_baseline/hack/replay_runtime_demo.py` | Deterministic replay loop. **Recording-only sink; no writer, no HA adapter, not deployed** |
-| Pre-migration validation runner | `hack/validate_pre_migration.py` | Multi-arm comparison harness (frozen vs causal, cadence 1/4/96/192); quality gate in `report` mode. Executed |
+| Replay runtime | `replay_runtime.py`, `src/energy_baseline/hack/replay_runtime_demo.py` | Deterministic plan content; record ids are per-run random (`generation_id` is `uuid.uuid4()`). **Recording-only sink; no writer, no HA adapter, not deployed** |
+| Pre-migration validation runner | `hack/validate_pre_migration.py` | Multi-arm comparison harness (frozen vs causal, cadence 1/4/96/optional 192); quality gate in `report` mode. Executed |
 
 **Suite at this milestone:** **1848 tests passing**; `ruff check` clean; `ruff format --check` clean.
 
 **Validation.** The representative stage (4 windows × 7 arms, 28/28 completed) and the full-year
 stage (4 arms) were both executed on the 0.80 dataset. The causal rolling arm beats `day_ahead` in
 all 4 representative windows and on the full year, reversing the frozen-basis result. The cadence
-ladder 96 → 4 → 1 improves or ties monotonically. The quality gate in `report` mode flags March
-(0.761) and April (0.717) without dropping them.
+ladder 96 → 4 → 1 improves or ties monotonically. The quality gate in `report` mode flags April (0.717, full-year stage: 2066/2880) and the March representative window (0.761, window-scoped 216/284) without dropping either. Validation artifacts carry no code lineage: `hack/validate_pre_migration.py` recorded `code_version` from the hardcoded `energy_baseline.__version__` string (`"0.1.0"`), so neither artifact ties to a commit; only `dataset_id` and `build_manifest_sha256` are pinned. A reconstruction found only two inert hunks differ between the run-time tree and `818e16aa`, so the numbers are very likely reproducible — but they are pending regeneration at the final commit, and a runner fix is in flight. Cite as "runner at approximately 2026-10-24T20:10, source hashes not recorded".
 
 **Integrity wiring.** Wired into `benchmark` (`finalize_run_outputs` after the 3 artifact writes)
 and into `report` (verifies the benchmark sidecar before reading, writes its own report sidecar
@@ -682,9 +685,7 @@ only for a *fresh* build; historical identities stay immutable. Extraction (PROD
 validation arms run; the explicit causal-default decision made; artifact integrity wired into the
 canonical writers.
 
-**Still pending:** independent review of the corrected holdout artifacts — a future gate, not
-something this milestone declares closed. 81-grid re-derivation at 0.80 is **optional, not a
-completion gate**. Final evidence expected only when the owner asks.
+**Still pending:** (i) numeric/acceptance review of the validation artifacts at the final commit — the leakage review (see *Two separate reviews* below) covered structural properties, not numeric acceptance at `90feb857`; (ii) economic-sensitivity re-execution at the final commit, because its artifacts were produced by an intermediate working tree (on-disk hashes of `economic_sensitivity.py`, `oracle.py`, `benchmark.py` and `rolling_horizon.py` drifted after the run; recorded test count moved from 45 to 53); (iii) the canonical five-rung benchmark has **not** been re-run at the causal basis — run `f816306cb8ad…` records `method="trailing_slot_mean_frozen"` and the full-year validation stage ran 4 arms with `oracle=false`, so no certified-oracle five-rung artifact exists at the causal basis despite the headline at line 36. 81-grid re-derivation at 0.80 is **optional, not a completion gate**. Final evidence expected only when the owner asks.
 
 ## Forecast experiments
 
@@ -757,8 +758,8 @@ Protocol and limitations: [forecast experiments](energy-baseline-forecast-experi
   and never changed sign — same verdict as before the fix. That 81-of-81 record is strong evidence
   **within that configuration** (all 81 were a Q4 holdout immediately following the training cut)
   and not a proof; it does not transfer to evaluation windows that extrapolate far beyond the cut,
-  and a measured counterexample now exists: on the 2025 full-year ladder the same rung cost MORE
-  than `day_ahead`. The identified asymmetry sufficient to explain the reversal is the load-forecast
+  and a measured counterexample existed at the frozen basis: on the 2025 full-year ladder the same rung cost MORE
+  than `day_ahead` (since reversed by causal alignment — see *2026-10-24 bounded pre-migration milestone* §*Validation*). The identified asymmetry sufficient to explain the reversal is the load-forecast
   basis: this rung's profile is frozen at the training cut while `day_ahead` re-learns before each
   dispatch day. Re-running the identical Q4-2025 window on the same dataset reproduced the win,
   which rules out the efficiency correction as the cause. Load-forecast MAE ranked windows
@@ -784,16 +785,19 @@ Protocol and limitations: [forecast experiments](energy-baseline-forecast-experi
   what is missing is the independent review); re-derivation of the grid at 0.80 on a rebuilt dataset.
   The adoption question that used to sit in this list has been decided — `rolling_horizon` is a
   canonical rung now — and it does not retire the review, because the rung's *numbers* are still the
-  superseded 0.88 ones. Do not cite unreviewed results as accepted.
+  superseded 0.88 ones. Do not cite unreviewed results as accepted. **Update, later the same day:** the leakage review has since been executed — see *Two separate reviews* below.
 - **Two separate reviews, different dates and scopes.** The **acceptance review** (2026-10-23) was
   read-only against run `b0a9b59a…` (four-policy, 0.88 era) and returned **no mathematical blocker**
   for the structural scope it tested — not for the full 81-configuration holdout grid, which was
   not part of that review. The **independent leakage review** (2026-10-24) covered the holdout-final
-  81 arms and the full-year benchmark `f816306cb8ad…`; verdict **PASS with WARN items** and
+  81 arms and the full-year benchmark `f816306cb8ad…`; verdict **PASS with WARN items** within the
+  structural scope tested — it does **not** claim full unconditional acceptance of the entire 81-grid;
+  code scope is git HEAD `90feb857`, which predates the causal commits, and the 81 arms sit on the
+  0.88-era dataset `da2ac07a…` with forecast method `trailing_slot_mean_frozen`;
   **errata**: (a) noise streams are not saved in artifacts, so determinism is code-proven but not
   artifact-proven; (b) the day-ahead publication assumption (published ≡ realised) is reasonable
-  but not verified from data — now resolved by owner assertion 2026-10-24 (`verified_from_data:
-  false`). The acceptance review stands as a record against the run as it was; the config changed
+  but not verified from data — now mitigated by owner assertion 2026-10-24; still not verified from
+  data (`verified_from_data: false`). The acceptance review stands as a record against the run as it was; the config changed
   underneath it (0.88 → 0.80), so the behavioural conditions it verified at 0.88 are superseded
   but the accounting properties it established do not depend on the efficiency.
 
