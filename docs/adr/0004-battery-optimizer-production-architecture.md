@@ -4,7 +4,7 @@
 - **Date:** 2026-10-24
 - **Decision owners:** Homelab maintainers
 - **Extends:** [ADR-0001 — economic dispatch](0001-home-battery-economic-dispatch.md)
-- **Implementation and acceptance:** [Home battery optimizer implementation plan](../../planning/home-battery-optimizer-implementation.md) (§16, plus Phases 5–6)
+- **Implementation and acceptance:** [Home battery optimizer implementation plan, §16](../../planning/home-battery-optimizer-implementation.md#16-production-packaging-and-runtime-rollout) (plus Phases 5–6)
 - **Current component state:** [Battery roadmap](../../planning/energy-battery-roadmap.md)
 
 ## Context
