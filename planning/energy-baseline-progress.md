@@ -1,6 +1,6 @@
 # Energy Baseline — Progress & Handoff
 
-- **Updated:** 2026-10-24
+- **Updated:** 2026-10-25
 - **Accepted baseline code:** `c1569314`; acceptance documentation and the two horizon-scope tests
   were subsequently committed and pushed in `a4837f6d`. The documentation pass described below is
   historical, not outstanding work.
@@ -689,7 +689,23 @@ only for a *fresh* build; historical identities stay immutable. Extraction (PROD
 validation arms run; the explicit causal-default decision made; artifact integrity wired into the
 canonical writers.
 
-**Still pending (updated 2026-10-24):** (i) Numeric reproduction of the validation artifacts is **done** — bit-identical regeneration at pinned commit `3c7ddc9ca9c4` (see *Pinned evidence runs*); an independent review of the regenerated artifacts remains open. (ii) Economic-sensitivity re-execution at the final commit is **CLOSED** — new artifact at `sensitivity-study-final-20261024/results`, deterministic manifest digest `3b8102b5bdbb9d055e422e632f5c8b9b844a60b8d210272942c7597fb0172a90`, superseded study superseded in fact. (iii) Canonical five-rung benchmark at the causal basis is **CLOSED** by run `fe3cbfec46b6e51514fdc115a65a2165`. 81-grid re-derivation at 0.80 remains **optional, not a completion gate**, and still sits on the superseded 0.88 dataset with unpinnable evaluation code. Independent leakage/acceptance review of the 81-configuration grid remains open. The deferred extension of the shared integrity sidecar to stamp code and config provenance once (needs MANIFEST_SCHEMA_VERSION bump, touches many test call sites) remains open.
+**Still pending (updated 2026-10-24):** (i) Numeric reproduction of the validation artifacts is **done** — bit-identical regeneration at pinned commit `3c7ddc9ca9c4` (see *Pinned evidence runs*). **Update, 2026-10-25:** the independent review of the regenerated artifacts is now **CLOSED** — see *Independent evidence review (2026-10-25)* below. (ii) Economic-sensitivity re-execution at the final commit is **CLOSED** — new artifact at `sensitivity-study-final-20261024/results`, deterministic manifest digest `3b8102b5bdbb9d055e422e632f5c8b9b844a60b8d210272942c7597fb0172a90`, superseded study superseded in fact. (iii) Canonical five-rung benchmark at the causal basis is **CLOSED** by run `fe3cbfec46b6e51514fdc115a65a2165`. 81-grid re-derivation at 0.80 remains **optional, not a completion gate**, and still sits on the superseded 0.88 dataset with unpinnable evaluation code. Independent leakage/acceptance review of the 81-configuration grid remains open. The deferred extension of the shared integrity sidecar to stamp code and config provenance once (needs MANIFEST_SCHEMA_VERSION bump, touches many test call sites) remains open.
+
+### Independent evidence review (2026-10-25)
+
+Three read-only audits ran in parallel against the regenerated artifacts, each backed by its own reproducible script executed under the package's `uv` environment (never against a moving worktree): the validation harness's two regenerated stages, the sensitivity study's two executions, and the canonical causal five-rung benchmark. Reviewers read the pinned source via `git show 3c7ddc9ca9c4:<path>` and recomputed arithmetic from raw artifact bytes rather than accepting a prior report's field values.
+
+**Validation harness: PASS, 35 checks, zero warnings, zero failures.** All 14 source-module hashes match the committed blobs in the git object store (not merely the recorded start/end snapshots agreeing with each other). `results.parquet` is byte-identical to the unpinned predecessor on both stages; `validation.json` differs only in `run_identity`. Quality-gate denominators were recomputed independently from the raw dataset: March's representative window 216/284 and April's full-year 2066/2880, both confirmed. Cadence ordering holds without blanket dominance — the fine-cadence arm ties rather than strictly beats the coarse arm in two of four windows.
+
+**Sensitivity study: artifacts PASS, doc FAIL, now corrected.** All 59 artifact checks passed on both executions — manifest integrity, census reconciling to exactly 48 on every dimension, hash distinctness recorded honestly as 36 across 8 collision groups, cost decomposition exact, SOC floor and bound ordering within tolerance, and both executions byte-identical apart from the deliberately non-deterministic `timings.json`. The reviewer then independently recomputed the meter bill from saved arrays against true prices, the SOC recursion, AC throughput and EFC, rather than trusting the emitted `cross_checks` block, and confirmed all of it. It found **three errors in this document's own summary**, not in the data: the objective-basis capture range at penalty 0.2× was quoted as 19–89% when the artifact shows 19–81% (the 89% figure belongs to zero penalty); the zero-penalty range was quoted without naming that it applies only to planning terminal-value factor zero, hiding that factor two drops to 42–43%; and the claim that all arms go idle at penalty 1.0× was false for the four terminal-value-factor-two arms, which stay active and charge to the 4.864 kWh ceiling. All three are corrected above in *Basis-labelled ranges*. The lesson recorded here, not just fixed: basis labelling alone was not enough — window, penalty and planning terminal value must all match before two ratios are comparable, and this document violated that rule in the very section written to celebrate fixing it elsewhere.
+
+**Canonical five-rung ladder: PASS, 39 checks, zero warnings, zero failures** — but only after the reviewer's own first script was caught producing vacuous passes (wrong JSON nesting for `lineage.code_version`, a quality-gate check defaulting to zero instead of failing closed, and a forecast-method field read from the wrong path) and was rewritten to fail closed on any missing key. The corrected script independently verified: array-level bit-identity of the four unchanged rungs across all 35,040 intervals, cost recomputation from schedules matching reported figures to 1.14e-13, SOC recursion without clipping at 8.88e-16 residual, grid balance exact, zero power-limit or import-cap violations, build-manifest and analysis-file hashes recomputed independently, run ids recomputed via the package's own frozen-input algorithm, and April's report-mode gate at 2066/2880 retained without dropping any month. The reviewer also corrected its own report's claim that `terminal_mode: free` means "same endpoint for all policies" — it means the same feasible endpoint *constraint*, not equal terminal SOC, which differs by rung (2.354 vs 1.595 vs 1.024 kWh).
+
+**Non-blocking WARNs that remain, disclosed rather than resolved:**
+- The validation harness does not persist per-interval schedule arrays, so independent cost recomputation from those artifacts alone requires re-execution rather than inspection. The scoring-basis identity (`cost == meter == recompute`, deviation 0.0 across every arm) is strong evidence but is not a substitute for the arrays themselves.
+- Causal per-event audit metadata is surfaced for the first event only (a known gap recorded elsewhere in this file); the other events' cutoffs are enforced in code and pinned by tests, but are not inspectable from a shipped artifact without re-execution.
+
+**What this review does not cover:** the 81-configuration forecast grid (separate, still open, on a superseded dataset with unpinnable evaluation code), the deferred shared-sidecar provenance extension, live deployment, hardware-gated work, and physical aging-model calibration. This is a retrospective evidence audit, not an acceptance of operational readiness.
 
 ### Pinned evidence runs (2026-10-24, at `3c7ddc9ca9c4`)
 
@@ -715,16 +731,21 @@ checks report signed magnitudes and float ULPs: floor parity exact at 0.0, SOC
 floor worst 2.887e-15 kWh (13 ULPs, 17 arms), bound ordering worst 1.776e-15
 (1 ULP, 4 arms), all within 1e-9 tolerance.
 
-**Basis-labelled ranges overturn superseded headline.** At throughput penalty
-0.2× training mean price: erosion 22–23% meter-bill basis, 61–74%
-degradation-adjusted objective basis; oracle capture 71–91% meter, 19–89%
-objective (collapsing to 19% in January). At 0.05×: erosion 0.2–1.2% meter,
-21–23% objective; capture 77–90% meter, 73–88% objective. At zero penalty:
-79–89% both bases. At 1.0× both policies go idle, capture undefined
-(non-positive denominator). The superseded study's "erodes 55–61%" reproduces
-on neither basis and its "captures 79–91%" was meter-only — this is precisely
-the distortion the basis-labelling requirement exists to prevent. All penalties
-and terminal values remain user-supplied hypotheticals; no arm is promoted.
+**Basis-labelled ranges overturn superseded headline.** The following ranges
+are across the two windows at **planning terminal-value factor zero**. At
+throughput penalty 0.2× training mean price: erosion 22–23% meter-bill basis,
+61–74% degradation-adjusted objective basis; oracle capture 71–91% meter-bill
+basis, **19–81% objective basis** (19% in January). At 0.05×: erosion 0.2–1.2%
+meter-bill basis, 21–23% objective basis; capture 77–90% meter-bill basis,
+73–88% objective basis. At zero penalty and terminal-value factor zero:
+79–89% capture on both bases. These ranges do not describe other terminal-value
+factors. At penalty 1.0×, terminal-value factors zero and one yield idle plans,
+but **all four factor-two arms remain active and end at 4.864 kWh**; capture
+is undefined throughout that penalty level because its denominator is
+non-positive. The superseded study's "erodes 55–61%" reproduces on neither
+basis. Basis labels alone are insufficient: window, penalty and planning
+terminal value must also match before ratios are compared. All penalties and
+terminal values remain user-supplied hypotheticals; no arm is promoted.
 
 **Five-rung ladder at causal basis.** Run `fe3cbfec46b6e51514fdc115a65a2165`
 on dataset `2e01620ba727…`, replacing frozen-basis run `f816306cb8ad…`.

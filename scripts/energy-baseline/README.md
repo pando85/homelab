@@ -208,7 +208,9 @@ Two consequences follow, and both are why the whole block is pinned by
   `7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1`. The rebuild at 0.80 **has run**:
   dataset `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, analysis
   content byte-identical to its 0.88 predecessor), and the five-rung ladder has been re-run on it
-  (run `f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified). Rebuild *after* committing:
+  (run `f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified, **frozen load-forecast basis** —
+  superseded at the causal basis by run `fe3cbfec46b6e51514fdc115a65a2165`, see *Causal
+  load-forecast alignment* below). Rebuild *after* committing:
   `code_version()` is the git HEAD of a clean tree and also feeds `dataset_id`, so every commit
   re-mints the identity and a pre-commit build is invalidated by the very commit it waits for.
 
