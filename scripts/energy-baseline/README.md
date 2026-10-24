@@ -202,11 +202,12 @@ Two consequences follow, and both are why the whole block is pinned by
   figure computed at 0.88 is an optimistic superseded result — including the accepted authoritative run
   and the forecast-experiment grid. `config_hash` moved from
   `41fdc30b926c099be2cbef201db4141244d82faaa80b9907c7530354f64bf182` to
-  `7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1`. The rebuild at 0.80 **has not run**,
-  so the new `dataset_id` and all corrected figures are `PENDING REBUILD — fill after the clean-tree
-  build`. Rebuild *after* committing: `code_version()` is the git HEAD of a clean tree and also feeds
-  `dataset_id`, so every commit re-mints the identity and a pre-commit build is invalidated by the very
-  commit it waits for.
+  `7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1`. The rebuild at 0.80 **has run**:
+  dataset `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, analysis
+  content byte-identical to its 0.88 predecessor), and the five-rung ladder has been re-run on it
+  (run `f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified). Rebuild *after* committing:
+  `code_version()` is the git HEAD of a clean tree and also feeds `dataset_id`, so every commit
+  re-mints the identity and a pre-commit build is invalidated by the very commit it waits for.
 
 **Import ceiling (`--import-limit-kw`):** the site's contracted power, `import_limit_kw: 5.0` in
 `config/tariff.yaml`, **user-confirmed from the contract on 2026-10-23** — never inferred from

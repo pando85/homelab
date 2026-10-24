@@ -136,13 +136,17 @@ Absent: the device writer and the safety guard — **ACT cannot actuate anything
 "the whole ACT column is absent" meant and still means in substance — plus battery telemetry in
 SENSE. Nothing on this roadmap is deployed, and no hardware is authorized.
 
-**The harness currently has no current numbers.** The shipped round-trip efficiency moved from
+**The harness now has current numbers.** The shipped round-trip efficiency moved from
 0.88 to 0.80 on 2026-10-24, `config_hash` changed, and `compute_dataset_id` hashes `config_hash`,
-so every dataset and every benchmark figure in it — the ladder, the holdout grid, all of it — is a
-superseded optimistic 0.88 result. The clean-tree rebuild that produces current figures **has not
-run**: new dataset id and corrected figures are `PENDING REBUILD`. Treat any magnitude quoted in
-the linked documents as historical, and treat the *orderings* it establishes as unconfirmed until
-re-derived.
+so every dataset and every benchmark figure in it — the ladder, the holdout grid, all of it — was a
+superseded optimistic 0.88 result. The clean-tree rebuild **has** run: dataset
+`2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, analysis content
+byte-identical to its 0.88 predecessor), and the five-rung ladder has been re-run on it (run
+`f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified). On the full-year evaluation `rolling_horizon`
+cost more than `day_ahead` — a load-forecast-basis asymmetry sufficient to explain the reversal; the
+81-configuration holdout grid has not been re-executed at 0.80. Treat any 0.88-era magnitude quoted in
+the linked documents as historical, and treat the *orderings* the holdout grid establishes as unconfirmed
+until re-derived.
 
 Two findings shape what is worth doing next, and both cut against adding
 sophistication:
@@ -182,7 +186,8 @@ canonical ladder unchanged placed it beside a rung that does not freeze, and the
 incommensurable. Changing the default would invalidate the golden-value tests that pin legacy
 behaviour bit-for-bit, so it needs new goldens and an explicit decision, not a drive-by edit. The
 decisive test — re-running the full year with the two rungs on an aligned load-forecast basis — has
-**not** been run.
+**not** been run. The correction, and the guard test that now pins the three artifact fields so the
+false claim cannot silently return, are in commit `6fca56af`.
 
 ## 5. Sequencing rule
 
@@ -197,12 +202,11 @@ The same coupling means a change to `config/tariff.yaml` is not cosmetic — it 
 edits are inert, because the hash is taken over canonical re-dumped YAML and
 re-dumping drops comments.
 
-This rule is not hypothetical right now: the efficiency change from 0.88 to 0.80 is a
+This rule is not hypothetical: the efficiency change from 0.88 to 0.80 is a
 value line in that file, so it re-mints everything downstream. The correct order is
 **commit, then rebuild, then re-run** — which is why the new dataset id and the corrected
-figures are `PENDING REBUILD` placeholders rather than estimates someone could fill in
-before the commit exists. A rebuild done now would be invalidated by the commit it is
-waiting for.
+figures were placeholders until the commit landed. The rebuild has since produced dataset
+`2e01620ba727…` and run `f816306cb8ad…`.
 
 ## 6. Explicitly not now
 

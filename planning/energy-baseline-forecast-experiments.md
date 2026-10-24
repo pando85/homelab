@@ -12,7 +12,9 @@
   cadence — **not** the numbers in §11.
 - **Every figure in this file is a 0.88-era result.** The round-trip efficiency shipped afterwards
   (`0.88` → `0.80`), so §11's numbers are optimistic superseded results: the dataset they were computed on
-  is superseded and corrected figures are `PENDING REBUILD — fill after the clean-tree build`. Findings
+  is superseded and corrected figures have not been re-derived on the rebuilt dataset (the dataset
+  itself has been rebuilt as `2e01620ba727…` and the full-year ladder re-run, but the 81-configuration
+  holdout grid has not been re-executed at 0.80). Findings
   that are *information orderings* rather than magnitudes are not expected to flip, and are labelled where
   they are quoted.
 - **Re-run after a defect fix:** a slot-positioning defect in the frozen load profile was found
@@ -295,7 +297,8 @@ The **canonical** `day_ahead` policy does not have this defect, so the accepted 
 `b0a9b59aa846487a82d08fc4ba718708` stands unchanged. **Read "stands unchanged" narrowly: it is about
 this defect.** The run was not contaminated by the slot-positioning bug; it *was* computed at the 0.88
 round-trip efficiency that has since been superseded, so it is unchanged-but-superseded and its figures
-are `PENDING REBUILD` (see §11's banner). Recorded as a negative result with its
+are superseded (the full-year five-rung ladder has been re-run at 0.80 as run
+`f816306cb8ad46afbb49a77e73e5ff1a`; see §11's banner). Recorded as a negative result with its
 evidence, because a later reader who has just read the section above would otherwise assume the
 accepted run is contaminated too.
 
@@ -361,9 +364,9 @@ the HA enum reader and the dispatch contract — see [Progress §*2026-10-24 pas
 | Two-publication runs (σ ∈ {0, 0.1, 0.2}, bias σ ∈ {0, 0.1, 0.2}, seeds {0, 1, 2}) | **done** | 81 configurations; each rolling run solved 185 events (92 days × 2 + 1 warmup); zero infeasible / no-incumbent / at-limit in every one of the 162 policy runs |
 | Metric computation (MAE, MAPE, frac within 10/20%) | **done** | Load-forecast accuracy by window; price-estimate accuracy by (σ, bias σ) cell; EFC; terminal SOC; clipped kWh — all re-derived from the corrected run in §11 |
 | Leakage review | **not done** | An independent check of the fit-before-test and shared-noise invariants has **not** been performed on the *executed corrected* artifacts. The §5 defect is fixed and pinned by tests, but that is self-verification, not the outstanding independent review — so this row stays open and no result below may be cited as accepted. It bears less on the canonical rung than it did on the grid: the rung's defaults are the noise-free arm, and its promotion did not wait on this review |
-| Artifact identities | **superseded** | Dataset `da2ac07a…` is **no longer current**: the 0.80 config change supersedes it, so the replacement is `PENDING REBUILD — fill after the clean-tree build`. Run directory `/tmp/opencode/energy-baseline/holdout-final-20261024T035727/` (`summary.json` + 81 rolling schedules + 3 `window_*_day_ahead.json` = 84 files). Outside git and outside the canonical store, so **not** immutable: re-derive to cite later. The earlier `holdout-bias-20261024T023833/`, `holdout-full-*` and `holdout-sigma0-*` directories predate the fix and are superseded (§11) |
+| Artifact identities | **superseded** | Dataset `da2ac07a…` is **no longer current**: the 0.80 config change supersedes it; the replacement is `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, analysis content byte-identical to its 0.88 predecessor). Run directory `/tmp/opencode/energy-baseline/holdout-final-20261024T035727/` (`summary.json` + 81 rolling schedules + 3 `window_*_day_ahead.json` = 84 files). Outside git and outside the canonical store, so **not** immutable: re-derive to cite later. The earlier `holdout-bias-20261024T023833/`, `holdout-full-*` and `holdout-sigma0-*` directories predate the fix and are superseded (§11) |
 | Adoption decision | **taken — the policy is canonical** | This row read "**not done** — no adoption is recommended. One held-out quarter plus a few synthetic seeds is a screen, and §7's own review row is still open". That judgement is kept on record because it was the honest reading of a *screen*, and it still is one. What changed is that the adoption taken was adoption of the **mechanism** — a replanning rung with an earlier and longer information set — registered at exact prices on the legacy cadence, which is the arm that does not depend on synthetic noise at all. It is not an endorsement of §11's magnitudes, and it retires neither the leakage review nor the re-derivation the efficiency correction forces |
-| Final comparison table | **done, 0.88-era** | See §11 below. Every figure there was computed at `round_trip_efficiency: 0.88` on a dataset that config change has superseded, and before the rung was promoted: corrected numbers are `PENDING REBUILD` |
+| Final comparison table | **done, 0.88-era** | See §11 below. Every figure there was computed at `round_trip_efficiency: 0.88` on a dataset that config change has superseded, and before the rung was promoted: corrected full-year ladder figures are in [progress](./energy-baseline-progress.md) (run `f816306cb8ad46afbb49a77e73e5ff1a`); the 81-configuration holdout grid has not been re-executed at 0.80 |
 
 ## 8. Validation commands
 
@@ -421,8 +424,10 @@ evening publication separately; no telemetry or Home Assistant configuration cha
 > **Superseded on efficiency — read the numbers below as a record, not as results.** This matrix was
 > computed at `round_trip_efficiency: 0.88` on dataset `da2ac07a…`. Both have been superseded: the
 > shipped config is now 0.80, which makes every figure here an optimistic 0.88-era result, and the
-> dataset that produced them no longer describes that config. The corrected matrix is
-> `PENDING REBUILD`. They are kept rather than deleted because §5 and §7 were reviewed against these
+> dataset that produced them no longer describes that config. The corrected matrix has not been
+> re-derived on the rebuilt dataset (the dataset itself has been rebuilt as `2e01620ba727…` and the
+> full-year ladder re-run, but this 81-configuration holdout grid has not been re-executed at 0.80).
+> They are kept rather than deleted because §5 and §7 were reviewed against these
 > bytes, and because the two findings that carry the section are *orderings* — the rolling rung beat
 > `day_ahead` in every configuration of that Q4 holdout grid (all 81 configurations were a holdout
 > immediately following the training cut), and forecast accuracy ranked the load windows the opposite
@@ -442,7 +447,7 @@ evening publication separately; no telemetry or Home Assistant configuration cha
 - Dataset `da2ac07a7a39affc43ef9e94523fb6a154ee6213d590086d8c261b265d957140` — **SUPERSEDED** by the
   0.80 config change; build manifest sha256
   `15ce9b8f596911cae1bbdb68c03d2efbd322936abb334b7fcafe4f315a445cef`. The rebuild's id is
-  `PENDING REBUILD — fill after the clean-tree build`.
+  `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9`.
 - **Cite only this run directory:** `/tmp/opencode/energy-baseline/holdout-final-20261024T035727/`,
   executed **after** the slot-positioning fix in §5. Contents: `summary.json` + `schedules/` with 81
   rolling files (one per configuration) and 3 `window_*_day_ahead.json` files (the day-ahead baseline
@@ -652,7 +657,8 @@ the mean penalties are one to two orders of magnitude smaller.
 **Both magnitudes above are 0.88-era and are quoted as the record of what was reviewed, not as current
 figures.** The margin between two policies is a difference of two costs computed on the superseded
 battery, so it moves when the efficiency moves; the *ratio* of a noise penalty to that margin is the
-thing the conclusion rests on, and whether the ratio survives is `PENDING REBUILD`. No corrected figure
+thing the conclusion rests on, and whether the ratio survives has not been re-derived on the rebuilt
+dataset (the 81-configuration holdout grid has not been re-executed at 0.80). No corrected figure
 is stated here.
 
 **Decision this licenses:** no investment in price-forecast skill is warranted for this controller.
@@ -695,8 +701,10 @@ be applied by editing a value in place without superseding the accepted dataset"
 sensitivity run was not waited for, dataset `da2ac07a…` is superseded, and §11's EFC, clipping and
 margin figures are 0.88-era. A lower round-trip efficiency penalises cycling, which compresses the
 information ladder and can reorder rungs; **whether it reorders this experiment's rolling-versus-`day_ahead`
-verdict is not known**, because the re-derivation has not run. Corrected dataset id and corrected figures:
-`PENDING REBUILD — fill after the clean-tree build`. Full record in
+verdict is not known**, because the re-derivation has not run. Corrected dataset id:
+`2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9`; corrected figures for the
+full-year ladder are in [progress](./energy-baseline-progress.md) but the 81-configuration holdout
+grid has not been re-executed at 0.80. Full record in
 [Progress §*Round-trip efficiency applied (2026-10-24)*](./energy-baseline-progress.md) and ADR-0003
 §*Round-trip efficiency: 0.88 → 0.80, applied*.
 

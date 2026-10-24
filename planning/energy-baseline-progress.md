@@ -13,11 +13,12 @@
   round-trip efficiency has been **changed from 0.88 to 0.80**; a read-side Home Assistant enum state
   reader and a dispatch intent contract exist. See *2026-10-24 pass* below. None of this deploys or
   actuates anything.
-- **Outstanding, blocking every corrected figure:** the dataset rebuild at 0.80 **has not happened**.
-  It must follow the commit (see *Constraints* and the sequencing rule in the
-  [component roadmap](energy-battery-roadmap.md)), because `code_version()` is the git HEAD of a clean
-  tree and feeds `dataset_id`. Until it lands, the new `dataset_id` and every corrected benchmark
-  figure are `PENDING REBUILD`, and no 0.88-era number in this file may be quoted as current.
+- **Rebuild complete:** the dataset rebuild at 0.80 **has happened**
+  (dataset `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9`, 70,176 rows,
+  analysis content byte-identical to its 0.88 predecessor). The five-rung ladder has been re-run on it
+  (run `f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified, terminal mode free, basis untaxed,
+  33,953 of 35,040 evaluation intervals usable). The new `dataset_id` and every corrected benchmark
+  figure are no longer pending, and no 0.88-era number in this file may be quoted as current.
 
 ## Task Status
 
@@ -34,7 +35,7 @@
 | **Round-trip efficiency 0.80** | **applied to config; rebuild pending** | `config/tariff.yaml` now ships `round_trip_efficiency: 0.80`; `config_hash` `41fdc30b…` → `7a901801…`; dataset superseded — see *Round-trip efficiency applied (2026-10-24)* |
 | **Data extraction (Prometheus)** | completed | validate740: 4198469 rows, all pass |
 | **Data extraction (HA)** | **extracted and readable** | Extraction was always in place; what B3 added is the read side. HA states are still NOT consumed by the benchmark pipeline or `build`, so they remain optional future appliance forecasting rather than a blocker for current work |
-| **Dataset build (2-year)** | **SUPERSEDED — rebuild pending** | Clean-tree `da2ac07a7a39…` was authoritative and is now superseded by the 0.80 config change; the replacement id is `PENDING REBUILD — fill after the clean-tree build`. See [Built datasets](#built-datasets) |
+| **Dataset build (2-year)** | **done — rebuilt at 0.80** | Rebuilt clean-tree dataset `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, window 2024-01-01T00:00Z to 2025-12-31T23:45Z, analysis content byte-identical to its 0.88 predecessor). See [Built datasets](#built-datasets) |
 | **ADR-0003 update for B2** | **done** | Amended 2026-10-23: policy set became a four-rung information ladder with `day_ahead` at rung 3, plus a *Comparability rule — one objective, different information* section and an open *day-ahead publication versus realised archive* validation item; scope table, Consequences and the ESIOS deferred row updated; status **Proposed → Accepted** |
 | **ADR-0003 update for the fifth rung** | **done 2026-10-24** | Real amendment, not a mention: ladder, ladder table, scope table, *Comparability rule* (extended to the fifth rung on the same shared-scoring basis), *Consequences* and *Definition of done* all now say five; the four-rung wording is kept visible as the prior state. Status line and Definition-of-done semantics unchanged |
 | **Script cleanup / commit** | done | B2 + fixes committed at `c1569314` (1120 tests) |
@@ -51,7 +52,7 @@
 
 | Hash | Status | Description |
 |------|--------|-------------|
-| `PENDING REBUILD — fill after the clean-tree build` | **the dataset that must be built next** | Rebuild of the 2-year window from a clean tree at `round_trip_efficiency: 0.80` (`config_hash` `7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1`). It does not exist yet, so its id is unknown and cannot be guessed: `dataset_id` covers the config hash **and** `code_version()`, which is the git HEAD of a clean tree, so the build must follow the commit that lands this change |
+| `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` | **current — rebuilt at 0.80** | Rebuild of the 2-year window from a clean tree at `round_trip_efficiency: 0.80` (`config_hash` `7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1`). 70,176 rows, window 2024-01-01T00:00Z to 2025-12-31T23:45Z. Analysis content byte-identical to its 0.88 predecessor `da2ac07a…` (same SHA-256 `44640950eb87a1aa…` over the IPC serialisation of the grid columns), making the re-run a clean single-variable experiment. `build_manifest_sha256` `d2c6d02d02a139561c4c529a7a054a5c0c4d1963fd7cbc8aba16d899f8c45774`; dataset `code_version` `5fc27b9f2631de10f905b7ffa6460e9b682f94f1` |
 | `da2ac07a7a39affc43ef9e94523fb6a154ee6213d590086d8c261b265d957140` | **SUPERSEDED — clean tree, wrong efficiency** | Was built from committed code (`c1569314`) with no `-dirty` marker and was the dataset every claim being tested ran on. It is superseded because `compute_dataset_id` hashes `config_hash`: the battery block changed (`0.88` → `0.80`), so this build no longer describes the shipped config. Its run `b0a9b59aa846…` is the result the acceptance review read and stays on record, but every battery figure derived from it is optimistic and must be re-derived. Do not cite it as current |
 | `4eb4ee1fd1dcd8ceb76c7ee86f1e4425f5da5ba6f95719e2bffba5a27c4c6f72` | **SUPERSEDED — do not cite** | 2-year dataset, 70,176 intervals, residual 0. Built dirty (uncommitted code). Its run `5dc71800ae28…` used pre-fix code in which the day-ahead policy scored terminal SOC at the training-window mean while the oracle scored it at zero: the two costs sat on different objectives, so that run's gap-closed percentage is invalid and must not be quoted at all. Carries a `SUPERSEDED.md` marker on disk |
 | `f1e6763b8597e687aa2ac3b19bcfeeafb9b568b7a541fa058ad32845b7f9fe51` | **accepted (reference)** | Previous certified dataset: 11-month, 3-policy, benchmark `0a858414fc11834b5f71772b7245f93b` |
@@ -59,10 +60,16 @@
 
 ### Benchmark runs
 
-- **No five-policy run exists yet.** `rolling_horizon` is now selected by `all`, so the next
-  authoritative run is a five-rung run on a rebuilt clean-tree dataset at 0.80. Its run id, artifact
-  paths and every figure in it are `PENDING REBUILD`; none can be stated now, because the run id is
-  derived from the dataset id that the rebuild has not produced.
+- **Five-policy run — completed 2026-10-24 on the rebuilt dataset:** run
+  `f816306cb8ad46afbb49a77e73e5ff1a` on dataset `2e01620ba727…`, oracle certified, terminal mode
+  free, basis untaxed, 33,953 of 35,040 evaluation intervals usable, wall time 2 min 52 s. Ladder
+  by EFC: `causal_price` 143.46, `rolling_horizon` 393.19, `day_ahead` 405.07, `oracle` 477.61.
+  On the full-year evaluation `rolling_horizon` cost more than `day_ahead` — a load-forecast-basis
+  asymmetry sufficient to explain the reversal (the Q4-2025 holdout reproduced the opposite sign,
+  ruling out the efficiency correction as the cause); see *2026-10-24 five-rung ladder* below and
+  the open design decision under *Rolling-horizon promoted to the fifth canonical rung*. No cost,
+  saving, monetary or household-energy figure from it appears in this file and none will be added —
+  those live only in the private data directory.
 - **Superseded — do not cite:** `5dc71800ae28…` on dataset `4eb4ee1fd1dc…` ran pre-fix code in which
   the day-ahead policy valued terminal SOC at the training-window mean while the oracle valued it at
   zero. The two costs sat on different objectives, so that run's gap-closed percentage is invalid.
@@ -176,7 +183,7 @@ These are the substance of the accept. None is monetary.
   (344.66 kWh)** and **24.3 % of planned discharge (521.21 kWh)**. The forecast never enters cost; it
   changed what the plan wanted, and the kernel refused it. This belongs next to the result, not in a
   footnote. These are 0.88-era behaviour figures: a hairier battery plans different flows, so the
-  re-measured numbers are `PENDING REBUILD`. They also need the cadence caveat that now exists — clipped
+  re-measured numbers are in the private data directory (run `f816306cb8ad46afbb49a77e73e5ff1a`). They also need the cadence caveat that now exists — clipped
   totals count each time an interval was **planned**, so they are not comparable across replan cadences
   and are not curtailment (see *Configurable replan cadence*).
 - **Input integrity:** `config_hash`, `build_manifest_sha256` and the part hashes all verify, and
@@ -299,7 +306,7 @@ the reporting change do not depend on the efficiency value.
 They no longer reproduce a citable result: `config/tariff.yaml` now hashes differently, so the same
 command against the same dataset path fails the config-drift check by design. The rebuild and the
 five-policy run come after the commit that lands this change; their dataset and run ids are
-`PENDING REBUILD`, and `--policies all` now selects five rungs rather than four.
+were pending, and `--policies all` now selects five rungs rather than four. The rebuild has since completed: dataset `2e01620ba727…`, run `f816306cb8ad…`.
 
 ```bash
 cd scripts/energy-baseline
@@ -432,9 +439,12 @@ to know why.
    Holdout EFC values quoted here for the same reason — `day_ahead` 114.70 / 111.16 / 110.87 and
    rolling 116.73 / 115.77 / 114.32 for windows 28 / 365 / all over three months — are 0.88-era
    observations from a run that predates the promotion of `rolling_horizon` to a canonical rung.
-   Re-measured at 0.80 they are `PENDING REBUILD`; the corrected ladder ordering is not known yet.
+   Re-measured at 0.80 the full-year ladder is `causal_price` 143.46, `rolling_horizon` 393.19,
+   `day_ahead` 405.07, `oracle` 477.61 EFC — the ladder compressed, and `rolling_horizon` cost more
+   than `day_ahead` on the full year (a load-forecast-basis asymmetry sufficient to explain the
+   reversal; the Q4-2025 holdout reproduced the opposite sign).
    The `config_hash` → `dataset_id` coupling this bullet described as a reason to hold the value
-   **did** fire: dataset `da2ac07a…` is superseded and needs a clean-tree rebuild.
+   **did** fire: dataset `da2ac07a…` was superseded and has been rebuilt as `2e01620ba727…`.
 2. **Published ≡ realised.** Resolved by owner assertion; recorded in *Known issues §3* and
    *Acceptance condition 4* above. The daily attribute snapshot would convert assertion into
    measurement and is now optional.
@@ -465,11 +475,15 @@ previous and current file through the package's own `manifest.config_hash`).
   output power is a curve nobody has measured, and idle draw is still assumed zero and unmeasured.
 - **Dataset `da2ac07a…` is superseded.** `compute_dataset_id` hashes `config_hash`, so the accepted
   dataset no longer describes the shipped config. Corrected dataset id:
-  `PENDING REBUILD — fill after the clean-tree build`.
+  `2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9` (70,176 rows, analysis
+  content byte-identical to its 0.88 predecessor).
 - **Every 0.88 benchmark figure is now an optimistic superseded result**, including the accepted
   four-policy run `b0a9b59aa846…` and the 81-configuration forecast grid. They stay on record as what
-  was reviewed, and are not restated as current. Corrected figures for all five rungs:
-  `PENDING REBUILD — fill after the clean-tree build`.
+  was reviewed, and are not restated as current. Corrected figures for all five rungs are in the
+  private data directory (run `f816306cb8ad46afbb49a77e73e5ff1a`, oracle certified); the full-year
+  ladder by EFC is `causal_price` 143.46, `rolling_horizon` 393.19, `day_ahead` 405.07, `oracle`
+  477.61, and on the full year `rolling_horizon` cost more than `day_ahead` — a load-forecast-basis
+  asymmetry sufficient to explain the reversal.
 - **The rebuild must follow the commit, not precede it.** `code_version()` is the git HEAD of a clean
   tree and also feeds `dataset_id`, so every commit re-mints the identity. Building now would produce an
   id the commit immediately invalidates.
@@ -524,7 +538,9 @@ canonical ladder unchanged placed it beside a rung that does not freeze, and the
 incommensurable. Changing the default would invalidate the golden-value tests that pin legacy
 behaviour bit-for-bit, so it needs new goldens and an explicit decision, not a drive-by edit. The
 decisive test — re-running the full year with the two rungs on an aligned load-forecast basis — has
-**not** been run.
+**not** been run. The correction itself, the guard test that now pins the three artifact fields so
+the false claim cannot silently return, and the corrected `shared_with_day_ahead` /
+`measured_counterexample` fields are in commit `6fca56af`.
 
 New CLI flags, all on the `benchmark` subcommand: `--rolling-horizon-replan-interval-slots`,
 `--rolling-horizon-horizon-slots`, `--rolling-horizon-sigma`, `--rolling-horizon-bias-sigma`,
@@ -687,8 +703,8 @@ Protocol and limitations: [forecast experiments](energy-baseline-forecast-experi
   five times as damaging as per-slot noise at the same σ. **Update, later the same day:** the policy
   this grid measured is now the fifth canonical rung, and the grid itself was computed at
   `round_trip_efficiency: 0.88` on dataset `da2ac07a…`, both since superseded — the ordering findings
-  are information orderings and are not expected to flip, but every figure in them is
-  `PENDING REBUILD`. Full results in [forecast experiments
+  are information orderings and are not expected to flip, but every figure in them has not been
+  re-derived on the rebuilt dataset. Full results in [forecast experiments
   §11](energy-baseline-forecast-experiments.md#11-results--executed-holdout-matrix-2026-10-24-corrected-run).
 - **Not affected by that defect — record it, because the opposite is the natural assumption:** the
   canonical `day_ahead` policy computes its forecast over the **full** array and selects evaluation
