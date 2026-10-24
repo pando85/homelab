@@ -1654,3 +1654,188 @@ class TestDayAheadCLI:
         )
         assert rc == 0
         assert "local days solved" not in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Tests: benchmark CLI wiring for the rolling-horizon load forecast mode
+# ---------------------------------------------------------------------------
+
+
+class TestRollingHorizonLoadForecastModeCLI:
+    @staticmethod
+    def _capture(monkeypatch, argv):
+        from energy_baseline import benchmark
+
+        monkeypatch.setattr(benchmark, "core_available", lambda: True)
+        captured = {}
+
+        def fake(**kw):
+            captured.update(kw)
+            return Path("/tmp/run")
+
+        monkeypatch.setattr(benchmark, "benchmark_dataset", fake)
+        rc = main(argv)
+        assert rc == 0
+        return captured
+
+    def test_default_is_causal(self, monkeypatch):
+        from energy_baseline import benchmark
+
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ],
+        )
+        assert (
+            captured["rolling_horizon_load_forecast_mode"]
+            == benchmark.DEFAULT_ROLLING_HORIZON_LOAD_FORECAST_MODE
+        )
+        assert captured["rolling_horizon_load_forecast_mode"] == "causal"
+
+    @pytest.mark.parametrize("mode", ["frozen", "causal"])
+    def test_mode_reaches_contract(self, monkeypatch, mode):
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+                "--rolling-horizon-load-forecast-mode",
+                mode,
+            ],
+        )
+        assert captured["rolling_horizon_load_forecast_mode"] == mode
+
+    def test_invalid_mode_exits_2(self):
+        with pytest.raises(SystemExit) as exc:
+            main(
+                [
+                    "benchmark",
+                    "--dataset",
+                    "/tmp/nope",
+                    "--train-end",
+                    "2026-01-01T00:00:00+00:00",
+                    "--rolling-horizon-load-forecast-mode",
+                    "bogus",
+                ]
+            )
+        assert exc.value.code == 2
+
+    def test_throughput_cost_default_is_zero(self, monkeypatch):
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ],
+        )
+        assert captured["throughput_cost_eur_per_kwh"] == 0.0
+
+    def test_throughput_cost_reaches_contract(self, monkeypatch):
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+                "--throughput-cost-eur-per-kwh",
+                "0.05",
+            ],
+        )
+        assert captured["throughput_cost_eur_per_kwh"] == 0.05
+
+
+# ---------------------------------------------------------------------------
+# Tests: benchmark CLI wiring for the monthly quality gate
+# ---------------------------------------------------------------------------
+
+
+class TestQualityPolicyCLI:
+    @staticmethod
+    def _capture(monkeypatch, argv):
+        from energy_baseline import benchmark
+
+        monkeypatch.setattr(benchmark, "core_available", lambda: True)
+        captured = {}
+
+        def fake(**kw):
+            captured.update(kw)
+            return Path("/tmp/run")
+
+        monkeypatch.setattr(benchmark, "benchmark_dataset", fake)
+        rc = main(argv)
+        assert rc == 0
+        return captured
+
+    def test_quality_policy_default_is_reject(self, monkeypatch):
+        from energy_baseline import benchmark
+
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ],
+        )
+        assert captured["quality_policy"] == benchmark.QUALITY_POLICY_REJECT
+        assert captured["quality_policy"] == "reject"
+
+    @pytest.mark.parametrize("policy", ["reject", "report"])
+    def test_quality_policy_reaches_contract(self, monkeypatch, policy):
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+                "--quality-policy",
+                policy,
+            ],
+        )
+        assert captured["quality_policy"] == policy
+
+    def test_min_usable_fraction_default_zero(self, monkeypatch):
+        captured = self._capture(
+            monkeypatch,
+            [
+                "benchmark",
+                "--dataset",
+                "/tmp/ds",
+                "--train-end",
+                "2026-01-01T00:00:00+00:00",
+            ],
+        )
+        assert captured["min_usable_fraction"] == 0.0
+
+    def test_exclude_policy_rejected_by_argparse(self):
+        """No silent exclude at the CLI either — only reject/report are accepted."""
+        with pytest.raises(SystemExit) as exc:
+            main(
+                [
+                    "benchmark",
+                    "--dataset",
+                    "/tmp/nope",
+                    "--train-end",
+                    "2026-01-01T00:00:00+00:00",
+                    "--quality-policy",
+                    "exclude",
+                ]
+            )
+        assert exc.value.code == 2

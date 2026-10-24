@@ -285,6 +285,7 @@ def build_model(
     terminal_mode: str = _TERMINAL_FIXED,
     terminal_value_eur_per_kwh: float | None = None,
     floor_kwh: float | None = None,
+    throughput_cost_eur_per_kwh: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, Bounds, list[LinearConstraint]]:
     """Assemble the MILP: ``(objective, integrality, bounds, constraints)``.
 
@@ -316,9 +317,36 @@ def build_model(
     SOC recurrence row and one no-export row per interval — plus ``n`` more rows
     when :attr:`energy_baseline.battery.Horizon.import_limit_kw` is configured
     (the charging-side headroom row ``charge[t] <= max(0, ceiling - load)``).
+
+    ``throughput_cost_eur_per_kwh`` (default ``0.0``) adds a per-kWh penalty on AC
+    energy throughput — the sum of charge and discharge at the meter — to the
+    objective.  It is an explicit economic convention (degradation valued as
+    proportional to energy moved), not a physical aging model.  With the split
+    charge/discharge variables the penalty is linear: ``+tp`` on every charge
+    coefficient and ``+tp`` on every discharge coefficient, so the solver sees
+    ``minimise sum((price + tp) * charge - (price - tp) * discharge)``.  A
+    non-zero value raises the effective charge price and lowers the effective
+    discharge price by the same amount, making marginal arbitrage less attractive
+    without changing the constraint set.  ``0.0`` is byte-identical to the
+    historical model.
     """
     _check_terminal_mode(terminal_mode)
     free = terminal_mode == _TERMINAL_FREE
+
+    if isinstance(throughput_cost_eur_per_kwh, bool):
+        raise ValueError(
+            f"throughput_cost_eur_per_kwh must be a number, got bool "
+            f"{throughput_cost_eur_per_kwh!r}"
+        )
+    if not math.isfinite(throughput_cost_eur_per_kwh):
+        raise ValueError(
+            f"throughput_cost_eur_per_kwh must be finite, got {throughput_cost_eur_per_kwh!r}"
+        )
+    if throughput_cost_eur_per_kwh < 0.0:
+        raise ValueError(
+            f"throughput_cost_eur_per_kwh must be >= 0, got {throughput_cost_eur_per_kwh}"
+        )
+    tp = float(throughput_cost_eur_per_kwh)
 
     n = horizon.n
     n_vars = 4 * n
@@ -360,11 +388,13 @@ def build_model(
     # Objective: minimise sum(usable price * (charge - discharge)), and in free
     # mode credit the terminal inventory at terminal_value EUR/DC-kWh (the
     # +terminal_value*soc_init constant is dropped from the objective and
-    # re-added when the reported bounds are formed).
+    # re-added when the reported bounds are formed).  A non-zero throughput_cost
+    # adds tp to both charge and discharge coefficients, penalising AC energy
+    # throughput (charge + discharge) without changing the constraint set.
     obj = np.zeros(n_vars)
     priced = np.where(usable, horizon.prices, 0.0)
-    obj[c_idx] = priced
-    obj[d_idx] = -priced
+    obj[c_idx] = priced + tp
+    obj[d_idx] = -priced + tp
     if free and terminal_value_eur_per_kwh is not None:
         obj[_soc_idx(n, n - 1)] = -float(terminal_value_eur_per_kwh)
 
@@ -536,6 +566,7 @@ def solve_oracle(
     terminal_mode: str = _TERMINAL_FIXED,
     terminal_value_eur_per_kwh: float | None = None,
     floor_kwh: float | None = None,
+    throughput_cost_eur_per_kwh: float = 0.0,
 ) -> Schedule:
     """Cost-minimising dispatch over the whole horizon with perfect information.
 
@@ -573,6 +604,16 @@ def solve_oracle(
             ``max(soc_min, initial SOC)``, the shared causal floor.  A rolling day-ahead
             solve passes its **horizon's** seed floor here so that the day's opening SOC
             does not become unspendable seed; see :func:`build_model`.
+        throughput_cost_eur_per_kwh: Per-kWh penalty on AC energy throughput
+            (``sum(charge) + sum(discharge)``) added to the MILP objective.  An explicit
+            economic convention — degradation valued as proportional to energy moved at
+            the meter — not a physical aging model.  ``0.0`` (the default) is byte-identical
+            to the historical model.  Must be finite and non-negative.  The penalty
+            raises the effective charge price and lowers the effective discharge price by
+            the same amount, so marginal arbitrage becomes less attractive without
+            changing the constraint set.  The reported ``cost_eur`` stays the meter bill
+            plus inventory adjustment; the throughput penalty is recoverable as
+            ``throughput_cost_eur_per_kwh * (sum(charge) + sum(discharge))``.
 
     Raises:
         ValueError: If *spec* is not physically meaningful, a tolerance or the
@@ -615,6 +656,7 @@ def solve_oracle(
         terminal_mode=terminal_mode,
         terminal_value_eur_per_kwh=terminal_value_eur_per_kwh if free else None,
         floor_kwh=floor_kwh,
+        throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
     )
     options = _solver_options(time_limit_s, mip_rel_gap, mip_abs_gap)
     with warnings.catch_warnings():
@@ -686,8 +728,35 @@ def solve_oracle(
     # Dual bound lives on the dispatch objective; shift it onto the reported-cost
     # basis with the constants the objective dropped (load term and, in free
     # mode, the terminal_value * initial_SOC offset).  value == 0 in fixed mode.
-    load_term = _load_cost_term(horizon)
-    lower = None if dual is None else load_term + value * initial_kwh + float(dual)
+    #
+    # HOWEVER: when throughput_cost > 0, the solver's primal/dual bounds are for
+    # the **penalized** objective (meter_cost + throughput_penalty + inventory),
+    # not the reported meter-cost objective (meter_cost + inventory).  Subtracting
+    # the incumbent's throughput from the dual bound is NOT a valid lower bound
+    # on the unpenalized meter-cost optimum — at the unpenalized optimum the
+    # throughput may be higher, and the optimal unpenalized meter cost can lie
+    # strictly below the incumbent's unpenalized cost.  The dual bound is
+    # discarded (lower = None).
+    #
+    # The incumbent's unpenalized cost IS a valid (loose) upper bound on the
+    # unpenalized optimum: the constraint set is unchanged by tp, so the
+    # incumbent is feasible for the unpenalized problem and its cost is an upper
+    # bound.  Keeping it avoids downstream damage (benchmark savings calculations
+    # and policies.days_at_time_limit need a finite upper bound).
+    upper: float | None = total_cost
+    if throughput_cost_eur_per_kwh > 0.0:
+        lower = None
+        # upper stays total_cost — the incumbent's unpenalized cost is a valid
+        # (loose) upper bound; we discard only the dual bound because it belongs
+        # to the penalized objective.
+        solver_status = "feasible"
+        bound_kind = "upper"
+        is_certified = False
+        rel_gap = None
+    else:
+        # Zero throughput cost: dual bound is valid for the reported cost.
+        load_term = _load_cost_term(horizon)
+        lower = None if dual is None else load_term + value * initial_kwh + float(dual)
 
     return replace(
         traced,
@@ -698,7 +767,7 @@ def solve_oracle(
         initial_soc_kwh=initial_kwh,
         terminal_soc_kwh=terminal_kwh,
         cost_lower_bound_eur=lower,
-        cost_upper_bound_eur=total_cost,
+        cost_upper_bound_eur=upper,
         solver_time_limit_s=float(time_limit_s),
         solver_status=solver_status,
         solver_gap=rel_gap,

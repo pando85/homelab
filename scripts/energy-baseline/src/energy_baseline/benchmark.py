@@ -148,6 +148,16 @@ DEFAULT_TRAIN_DAYS = 30
 DEFAULT_CHARGE_PCT = 25.0
 DEFAULT_DISCHARGE_PCT = 75.0
 
+#: What the monthly usable-fraction gate does with an evaluation month that falls below
+#: the declared ``min_usable_fraction``.  ``"reject"`` (default) aborts the run before any
+#: artifact is written; ``"report"`` keeps the month in the evaluation but marks it
+#: not-accepted and flags the run incomplete.  There is deliberately NO ``"exclude"``: a
+#: silent monthly exclusion would change the evaluation window without changing the
+#: policy's measured cost basis, which is the dilution this whole gate exists to prevent.
+QUALITY_POLICY_REJECT = "reject"
+QUALITY_POLICY_REPORT = "report"
+QUALITY_POLICIES: tuple[str, ...] = (QUALITY_POLICY_REJECT, QUALITY_POLICY_REPORT)
+
 #: Per-day wall-clock limit for the rolling day-ahead MILP, in seconds **per local day**
 #: (the oracle's ``DEFAULT_TIME_LIMIT_S`` is per whole horizon; the two are not the same
 #: knob and the run records which one a number came from).  One local day is at most 100
@@ -197,6 +207,12 @@ DEFAULT_ROLLING_HORIZON_TIME_LIMIT_S = DEFAULT_DAY_AHEAD_TIME_LIMIT_S
 #: ``rolling_horizon.py`` uses; restated here because it goes into the run identity and
 #: a recorded value must not depend on another module's private default.
 DEFAULT_ROLLING_HORIZON_HORIZON_SLOTS = 96
+
+#: Canonical default load forecast mode for the rolling-horizon rung.  ``causal`` uses
+#: the SAME trailing-slot-mean function the day-ahead policy uses, so the two rungs
+#: share a like-for-like load basis.  The frozen mode (profile fixed at the training
+#: cut) is reachable through flags and is what the golden-value tests pin bit-for-bit.
+DEFAULT_ROLLING_HORIZON_LOAD_FORECAST_MODE = "causal"
 
 _EPS = 1e-9
 
@@ -1317,6 +1333,7 @@ def prepare_rolling_horizon(
     seed: int,
     replan_interval_slots: int | None,
     horizon_slots: int | None,
+    load_forecast_mode: str = DEFAULT_ROLLING_HORIZON_LOAD_FORECAST_MODE,
 ) -> tuple[RollingHorizonInputs, dict[str, Any]]:
     """Build the frozen load profile and resolve the planning terminal value.
 
@@ -1355,17 +1372,53 @@ def prepare_rolling_horizon(
         replan_interval_slots=replan_interval_slots,
         horizon_slots=horizon_slots,
     )
+    if load_forecast_mode not in ("frozen", "causal"):
+        raise BenchmarkInputError(
+            f"rolling_horizon_load_forecast_mode must be 'frozen' or 'causal', "
+            f"got {load_forecast_mode!r}"
+        )
 
-    # Build the frozen load profile from training data strictly before the cut.
-    frozen_load, forecast_meta = core.build_frozen_load_profile(
-        load_kwh,
-        local_days,
-        usable,
-        training_end_idx=eval_start_idx,
-        window_days=forecast_window_days,
-        interval_starts_utc=interval_starts_utc,
-        tz=ZoneInfo(timezone),
-    )
+    # Build the load profile according to the selected mode.
+    # Frozen: profile fixed at the training cut, reused by every solve.
+    # Causal: a per-event provider inside run_rolling_horizon computes each event's
+    # forecast from history strictly before that event's local-day start (conservative
+    # day-ahead basis), so there is no single whole-array profile to precompute here.
+    if load_forecast_mode == "causal":
+        # frozen_load is a placeholder; the dispatcher ignores it in causal mode and
+        # builds the event-specific CausalForecastProvider from the raw load arrays.
+        frozen_load = np.zeros_like(load_kwh)
+        forecast_meta = {
+            "method": "trailing_slot_mean_causal_event_specific",
+            "mode": "causal",
+            "window_days": int(forecast_window_days),
+            "training_end_idx": int(eval_start_idx),
+            "shared_function_with_day_ahead": True,
+            "data_cutoff_rule": (
+                "each event's forecast uses only intervals strictly below the event's "
+                "own local-day start (the conservative day-ahead basis).  No "
+                "whole-array per-target-day profile is fitted, so a solve at 20:30 on "
+                "day D whose horizon spans D+1 never reads day D's measured load into "
+                "D+1's estimate; the next-day refresh happens only at the first event "
+                "after that midnight"
+            ),
+            "note": (
+                "Causal mode defers forecast construction to the dispatcher's "
+                "CausalForecastProvider; per-event cutoff and support are recorded in "
+                "the telemetry's forecast_metadata once the roll runs.  This block is "
+                "the prepare-time contract, not a fitted profile."
+            ),
+        }
+    else:
+        # Frozen mode: precompute the profile at the training cut
+        frozen_load, forecast_meta = core.build_frozen_load_profile(
+            load_kwh,
+            local_days,
+            usable,
+            training_end_idx=eval_start_idx,
+            window_days=forecast_window_days,
+            interval_starts_utc=interval_starts_utc,
+            tz=ZoneInfo(timezone),
+        )
 
     inputs = RollingHorizonInputs(
         prices=prices,
@@ -1387,6 +1440,8 @@ def prepare_rolling_horizon(
         seed=seed,
         replan_interval_slots=replan_interval_slots,
         horizon_slots=horizon_slots,
+        load_forecast_mode=load_forecast_mode,
+        forecast_window_days=forecast_window_days,
     )
 
     cadence_text, horizon_text = _rh_cadence_text(
@@ -1410,26 +1465,27 @@ def prepare_rolling_horizon(
             ),
         },
         "forecast": {
-            "method": "trailing_slot_mean_frozen",
+            "method": forecast_meta.get("method", "trailing_slot_mean_frozen"),
             "window_days": int(forecast_window_days),
-            # NOT shared, and previously claimed to be.  Only the window LENGTH is shared;
-            # the basis is not.  day_ahead re-learns its slot means from the trailing window
-            # before each dispatch day (`history_may_cross_train_end = True`), so its load
-            # knowledge advances through the evaluation window.  This rung uses a profile
-            # frozen once at `training_end_idx` and reused by every solve, so its load
-            # knowledge is fixed at the cut and never advances.  Claiming the two "differ
-            # only in price information and cadence" was false, and it mattered: on the
-            # 2025 full-year run this rung cost more than day_ahead, and the frozen profile
-            # is one of the two differences that could explain it.
-            "shared_with_day_ahead": False,
+            "load_forecast_mode": load_forecast_mode,
+            # In causal mode the basis IS shared with day_ahead (same function, same
+            # information set).  In frozen mode it is NOT: the profile is fixed at the
+            # training cut while day_ahead re-learns before each dispatch day.
+            "shared_with_day_ahead": load_forecast_mode == "causal",
             "shared_note": (
-                "window LENGTH is shared, forecast BASIS is not.  Both rungs use a 28-day "
-                "trailing slot mean, but day_ahead recomputes it from the trailing window "
-                "before each dispatch day while this rung freezes the profile once at the "
-                "training cut and reuses it for every solve.  A run whose evaluation window "
-                "extrapolates far beyond that cut therefore gives this rung stale load "
-                "knowledge, so the two rungs differ in load knowledge as well as in price "
-                "information and cadence"
+                "causal mode: uses the SAME trailing-slot-mean function as day_ahead "
+                "(policies.forecast_load_trailing_slot_mean), so the two rungs share a "
+                "like-for-like load basis.  Each event's forecast uses only observations "
+                "strictly before that event's local-day start, and that cutoff is held for "
+                "the entire solve (no per-target-day refresh within the horizon)"
+                if load_forecast_mode == "causal"
+                else "window LENGTH is shared, forecast BASIS is not.  Both rungs use a "
+                "28-day trailing slot mean, but day_ahead recomputes it from the trailing "
+                "window before each dispatch day while this rung freezes the profile once "
+                "at the training cut and reuses it for every solve.  A run whose "
+                "evaluation window extrapolates far beyond that cut therefore gives this "
+                "rung stale load knowledge, so the two rungs differ in load knowledge as "
+                "well as in price information and cadence"
             ),
             "metadata": forecast_meta,
         },
@@ -1470,13 +1526,20 @@ def prepare_rolling_horizon(
                 "more informed than day_ahead on prices"
             ),
             "load": (
-                "a frozen trailing-window forecast built once from training data strictly before "
-                "the cut; the same forecast is reused by every solve, so the policy does not "
-                "see day D's own measured load.  The policy is therefore LESS informed than "
-                "day_ahead on load: day_ahead re-learns from the trailing window before each "
-                "dispatch day while this rung's profile is fixed at the training cut.  The rung "
-                "is more informed on prices and less informed on load, so it does not sit "
-                "strictly between day_ahead and oracle in a single information ordering"
+                "an advancing trailing-window forecast using the SAME function as day_ahead "
+                "(policies.forecast_load_trailing_slot_mean); each local day's forecast is "
+                "recomputed from that day's own trailing window of strictly prior "
+                "observations.  The two rungs therefore share a like-for-like load basis, "
+                "and the only remaining difference is price information and cadence"
+                if load_forecast_mode == "causal"
+                else "a frozen trailing-window forecast built once from training data strictly "
+                "before the cut; the same forecast is reused by every solve, so the policy "
+                "does not see day D's own measured load.  The policy is therefore LESS "
+                "informed than day_ahead on load: day_ahead re-learns from the trailing "
+                "window before each dispatch day while this rung's profile is fixed at the "
+                "training cut.  The rung is more informed on prices and less informed on "
+                "load, so it does not sit strictly between day_ahead and oracle in a single "
+                "information ordering"
             ),
             "state": "own SOC carried forward from the previous event's actual execution",
             "assumptions_disclosed": [
@@ -1671,18 +1734,31 @@ def _bounds_note(record: dict[str, Any]) -> list[str]:
 
 
 def _oracle_kwargs(
-    solve_oracle: Any, terminal_mode: str, time_limit_s: float, rel: float, abs_: float
+    solve_oracle: Any,
+    terminal_mode: str,
+    time_limit_s: float,
+    rel: float,
+    abs_: float,
+    throughput_cost_eur_per_kwh: float = 0.0,
 ) -> tuple[dict[str, Any], str]:
-    """Build the solver kwargs, choosing free terminal mode only if the core has it."""
+    """Build the solver kwargs, choosing free terminal mode only if the core has it.
+
+    ``throughput_cost_eur_per_kwh`` (default ``0.0``) is propagated to ``solve_oracle``
+    only when the core exposes the parameter, so a core that predates point5 stays
+    callable.  ``0.0`` never changes a plan, so the ladder is bit-identical when the
+    knob is unused.
+    """
     if terminal_mode not in ("free", "fixed"):
         raise BenchmarkInputError(f"terminal_mode must be 'free' or 'fixed', got {terminal_mode!r}")
     kwargs: dict[str, Any] = {"time_limit_s": time_limit_s, "mip_rel_gap": rel, "mip_abs_gap": abs_}
-    if terminal_mode != "free":
-        return kwargs, "fixed_default"
     try:
         params = inspect.signature(solve_oracle).parameters
     except (TypeError, ValueError):  # pragma: no cover - exotic callables
         params = {}
+    if "throughput_cost_eur_per_kwh" in params:
+        kwargs["throughput_cost_eur_per_kwh"] = float(throughput_cost_eur_per_kwh)
+    if terminal_mode != "free":
+        return kwargs, "fixed_default"
     if "terminal_mode" not in params:
         return kwargs, "fixed_default"
     kwargs["terminal_mode"] = "free"
@@ -1738,6 +1814,9 @@ class RollingHorizonInputs:
     seed: int
     replan_interval_slots: int | None
     horizon_slots: int | None
+    load_forecast_mode: str = "frozen"
+    throughput_cost_eur_per_kwh: float = 0.0
+    forecast_window_days: int = 28
 
 
 def _rh_cadence_text(
@@ -1780,6 +1859,7 @@ def _run_policies(
     terminal_mode: str,
     day_ahead: DayAheadInputs | None = None,
     rolling_horizon: RollingHorizonInputs | None = None,
+    throughput_cost_eur_per_kwh: float = 0.0,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, dict[str, np.ndarray]]]:
     """Evaluate every selected policy on one horizon with one mask."""
     try:
@@ -1796,7 +1876,12 @@ def _run_policies(
         import_limit_kw=assumptions.import_limit_kw,
     )
     oracle_kwargs, terminal_mode_used = _oracle_kwargs(
-        core.solve_oracle, terminal_mode, time_limit_s, mip_rel_gap, mip_abs_gap
+        core.solve_oracle,
+        terminal_mode,
+        time_limit_s,
+        mip_rel_gap,
+        mip_abs_gap,
+        throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
     )
     if POLICY_DAY_AHEAD in selected and day_ahead is None:
         raise BenchmarkInputError(
@@ -1871,6 +1956,7 @@ def _run_policies(
                     time_limit_s=day_ahead.time_limit_s,
                     mip_rel_gap=mip_rel_gap,
                     mip_abs_gap=mip_abs_gap,
+                    throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
                 )
             elif name == POLICY_ROLLING_HORIZON:
                 if rolling_horizon is None:  # pragma: no cover - guarded above
@@ -1901,6 +1987,9 @@ def _run_policies(
                     import_limit_kw=assumptions.import_limit_kw,
                     replan_interval_slots=rolling_horizon.replan_interval_slots,
                     horizon_slots=rolling_horizon.horizon_slots,
+                    load_forecast_mode=rolling_horizon.load_forecast_mode,
+                    throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
+                    forecast_window_days=rolling_horizon.forecast_window_days,
                 )
                 # The returned schedule comes from simulate() with solver_status="not_applicable"
                 # (a traced plan).  But the rolling horizon IS a solver-based policy (many MILP
@@ -1921,6 +2010,12 @@ def _run_policies(
                 rh_telemetry = dict(result.telemetry)
                 rh_telemetry["forecast_metadata"] = rolling_horizon.forecast
                 rh_telemetry["noise_metadata"] = result.noise_metadata
+                # In causal mode the dispatcher built a real per-event provider; surface its
+                # runtime metadata (per-event cutoff, training content hash, usable support,
+                # zero-support count, per-target-day history) so a reader can audit leakage
+                # against the ACTUAL window fitted, not just the prepare-time contract.
+                if result.forecast_metadata:
+                    rh_telemetry["causal_runtime_metadata"] = result.forecast_metadata
                 telemetry_by_policy[name] = rh_telemetry
             else:
                 sched = core.solve_oracle(spec, horizon, **oracle_kwargs)
@@ -2624,6 +2719,129 @@ def _comparison_block(
 
 
 # ---------------------------------------------------------------------------
+# Monthly usable-fraction quality gate (delegated to artifact_integrity)
+# ---------------------------------------------------------------------------
+
+
+def _expected_intervals_for_month(month: str, interval_seconds: float) -> int:
+    """Full-calendar-month interval count at this dataset's grid, for partial detection.
+
+    A month whose evaluation coverage is below this number is partial — the window cuts
+    it — and the gate declares that explicitly instead of treating a few in-window days
+    as a whole-month sample.  DST stretches or shrinks a day by at most one hour (4 slots
+    at a quarter-hour grid), which is far too small to flip the partial flag, so the
+    calendar-day count is the honest expectation.
+    """
+    import calendar
+
+    year_text, month_text = month.split("-")
+    days = calendar.monthrange(int(year_text), int(month_text))[1]
+    return int(round(days * 86400.0 / float(interval_seconds)))
+
+
+def _run_monthly_quality_gate(
+    *,
+    per_month: dict[str, dict[str, int]],
+    threshold: float,
+    policy: str,
+    eval_months: set[str],
+    interval_seconds: float,
+) -> dict[str, Any]:
+    """Evaluate the monthly gate over **evaluation intervals only** and return a record.
+
+    The denominators are the intervals that are actually in the evaluation window, never
+    the whole-dataset month totals: a month that straddles the train/eval cut would
+    otherwise be diluted by its training half, which is exactly the bias that let a
+    low-coverage first month pass an absolute threshold it had not earned.  The general
+    full-dataset quality table is unaffected — this helper reads only the eval-only buckets
+    the caller built.
+
+    ``threshold == 0`` disables the gate (the legacy inert default): nothing is assessed,
+    ``enabled`` is reported False, and the artifact still carries the measured fractions so
+    a reader can judge coverage by eye.  When the gate is active it validates the threshold
+    (finite, ``0 < t <= 1``, never a bool) — the helper refuses the rest.
+
+    Under ``reject`` a month below threshold raises
+    :class:`energy_baseline.artifact_integrity.MonthlyQualityGateError` before any artifact
+    is written; under ``report`` the month is retained, marked not-accepted, and the run is
+    flagged incomplete.  There is no exclude path (see :data:`QUALITY_POLICIES`).
+    """
+    from energy_baseline.artifact_integrity import (
+        monthly_usable_fraction_gate,
+    )
+
+    enabled = threshold > 0.0
+    if not enabled:
+        return {
+            "enabled": False,
+            "threshold": float(threshold),
+            "policy": policy,
+            "denominator": "evaluation_intervals_only",
+            "accepted": None,
+            "incomplete": False,
+            "months": [],
+            "below_threshold_months": [],
+            "note": (
+                "min_usable_fraction is 0.0, so the gate is DISABLED: no month is assessed "
+                "or rejected. The measured eval-only usable fractions are still reported in "
+                "quality.per_month for the reader to judge; disabling the gate is the legacy "
+                "default, not an endorsement of the data"
+            ),
+        }
+
+    expected = {
+        month: _expected_intervals_for_month(month, interval_seconds) for month in eval_months
+    }
+    result = monthly_usable_fraction_gate(
+        per_month,
+        threshold,
+        policy=policy,
+        eval_months=eval_months,
+        expected_intervals=expected,
+    )
+
+    months_out = [
+        {
+            "month": mf.month,
+            "eval_total": mf.total,
+            "eval_usable": mf.usable,
+            "usable_fraction": mf.fraction,
+            "expected_intervals": mf.expected_intervals,
+            "coverage": mf.coverage,
+            "partial_calendar": mf.coverage is not None and mf.coverage < 0.99,
+            "below_threshold": mf.fraction < threshold,
+            "not_accepted": mf.fraction < threshold,
+        }
+        for mf in result.per_month
+    ]
+    below = [m["month"] for m in months_out if m["below_threshold"]]
+    accepted = not below
+    return {
+        "enabled": True,
+        "threshold": float(threshold),
+        "policy": policy,
+        "denominator": "evaluation_intervals_only",
+        "accepted": accepted,
+        # incomplete is only ever True under report: reject aborts before this block is
+        # ever reached, so a run that got this far and has below-threshold months kept them.
+        "incomplete": bool(below) and policy == QUALITY_POLICY_REPORT,
+        "months": months_out,
+        "below_threshold_months": below,
+        "note": (
+            "the gate is computed over EVALUATION intervals only, so a month straddling the "
+            "train/eval cut is judged on the part the policy actually dispatched, not on a "
+            "whole-calendar-month total that training data would dilute. Under the report "
+            "policy a below-threshold month is retained but marked not-accepted and the run "
+            "is flagged incomplete; under reject the run aborts before any artifact is written"
+            if policy == QUALITY_POLICY_REPORT
+            else "the gate is computed over EVALUATION intervals only, so a month straddling "
+            "the train/eval cut is judged on the part the policy actually dispatched. A "
+            "below-threshold evaluation month aborts the run before any artifact is written"
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
@@ -2640,6 +2858,7 @@ def benchmark_dataset(
     initial_soc_frac: float | None = None,
     import_limit_kw: float | None = None,
     min_usable_fraction: float = 0.0,
+    quality_policy: str = "reject",
     allow_reconstructed_quality: bool = False,
     time_limit_s: float = DEFAULT_TIME_LIMIT_S,
     mip_rel_gap: float = DEFAULT_MIP_REL_GAP,
@@ -2654,6 +2873,8 @@ def benchmark_dataset(
     rolling_horizon_bias_sigma: float = DEFAULT_ROLLING_HORIZON_BIAS_SIGMA,
     rolling_horizon_seed: int = DEFAULT_ROLLING_HORIZON_SEED,
     rolling_horizon_time_limit_s: float = DEFAULT_ROLLING_HORIZON_TIME_LIMIT_S,
+    rolling_horizon_load_forecast_mode: str = DEFAULT_ROLLING_HORIZON_LOAD_FORECAST_MODE,
+    throughput_cost_eur_per_kwh: float = 0.0,
     data_dir: Path | str | None = None,
 ) -> Path:
     """Run the selected policies on a built dataset and write an immutable run.
@@ -2675,9 +2896,18 @@ def benchmark_dataset(
             records which source was used.
         import_limit_kw: overrides ``battery.import_limit_kw``; ``None`` with a null
             config leaves the site import ceiling unapplied and reports that.
-        min_usable_fraction: declared monthly quality threshold; a month in the
-            evaluation window below it aborts the run.  0.0 aborts on nothing but the
-            measured fractions are still reported.
+        min_usable_fraction: declared monthly quality threshold, evaluated over EVALUATION
+            intervals only (a train/eval-straddling month is judged on the dispatched part,
+            not the whole-calendar total).  ``0.0`` (default) DISABLES the gate — the legacy
+            inert behaviour; nothing is assessed or rejected, the measured fractions are
+            still reported.  A positive threshold activates the gate and must be finite, in
+            ``(0, 1]``, and never a bool.  The gate runs before any artifact is written.
+        quality_policy: what the gate does with an evaluation month below ``min_usable_fraction``
+            when the gate is active.  ``"reject"`` (default) aborts the run before any
+            artifact is written; ``"report"`` retains the month, marks it not-accepted, and
+            flags the run ``incomplete``.  There is no silent exclude — an excluded month
+            would move the evaluation window without moving the measured-cost basis, the
+            exact dilution the gate prevents.  Hashed into the run id either way.
         allow_reconstructed_quality: admit reconstructed values: forward-filled
             prices and partially gapped energy totals.  Allocation boundaries
             (``estimated_boundary``) are admitted by default and are NOT gated by
@@ -2737,6 +2967,17 @@ def benchmark_dataset(
         rolling_horizon_time_limit_s: per-solve solver limit for the rolling-horizon
             MILPs.  Events that consumed it are counted in the artifact, because such an
             event makes the run depend on machine speed.
+        rolling_horizon_load_forecast_mode: ``"causal"`` (default) builds the
+            rolling-horizon load forecast with the SAME advancing trailing-slot-mean
+            function the day-ahead rung uses, so the two rungs share a like-for-like
+            load basis and differ only in price information and cadence.  ``"frozen"``
+            builds the legacy profile once from training data at the cut and reuses it
+            for every solve — the mode the golden-value tests pin bit-for-bit.
+        throughput_cost_eur_per_kwh: per-kWh AC-throughput penalty added to the
+            oracle, day-ahead and rolling-horizon planning objectives on a shared
+            basis (default ``0.0``).  ``0.0`` leaves every plan bit-identical to a run
+            without the argument; it is a planning-only term and never enters the
+            reported (true-price) cost.  Recorded in the run identity.
         data_dir: data root, when the manifest lists parts relative to it.
 
     Returns:
@@ -2751,9 +2992,18 @@ def benchmark_dataset(
         BenchmarkError: the numeric core is unavailable, or no policy produced a cost.
     """
     selected = _parse_policies(policies)
-    if not 0.0 <= min_usable_fraction <= 1.0:
+    if isinstance(min_usable_fraction, bool) or not isinstance(min_usable_fraction, (int, float)):
         raise BenchmarkInputError(
-            f"min_usable_fraction must be in [0, 1], got {min_usable_fraction}"
+            f"min_usable_fraction must be a number, got "
+            f"{type(min_usable_fraction).__name__}: {min_usable_fraction!r}"
+        )
+    if not math.isfinite(float(min_usable_fraction)) or not 0.0 <= min_usable_fraction <= 1.0:
+        raise BenchmarkInputError(
+            f"min_usable_fraction must be finite and in [0, 1], got {min_usable_fraction}"
+        )
+    if quality_policy not in QUALITY_POLICIES:
+        raise BenchmarkInputError(
+            f"quality_policy must be one of {list(QUALITY_POLICIES)}, got {quality_policy!r}"
         )
     if time_limit_s <= 0:
         raise BenchmarkInputError(f"time_limit_s must be > 0, got {time_limit_s}")
@@ -2763,6 +3013,11 @@ def benchmark_dataset(
         )
     if train_days < 1:
         raise BenchmarkInputError(f"train_days must be >= 1, got {train_days}")
+    if not math.isfinite(throughput_cost_eur_per_kwh) or throughput_cost_eur_per_kwh < 0.0:
+        raise BenchmarkInputError(
+            "throughput_cost_eur_per_kwh must be finite and >= 0, got "
+            f"{throughput_cost_eur_per_kwh!r}"
+        )
     if POLICY_DAY_AHEAD in selected or POLICY_ROLLING_HORIZON in selected:
         # Only checked when at least one policy is actually run: an unrelated run
         # must not be refused over a knob it never uses.
@@ -2861,22 +3116,37 @@ def benchmark_dataset(
 
     # ---- declared monthly quality thresholds --------------------------------
     months = [_local_month(starts[i], days[i]) for i in range(n)]
+    # General whole-dataset quality table (unchanged; for reporting coverage by eye).
     per_month: dict[str, dict[str, Any]] = {}
     for i, month in enumerate(months):
         bucket = per_month.setdefault(month, {"total": 0, "usable": 0, "usable_fraction": 0.0})
         bucket["total"] += 1
         bucket["usable"] += int(bool(usable[i]))
     eval_months = {months[i] for i in range(n) if eval_mask[i]}
-    thin: list[str] = []
-    for month, bucket in per_month.items():
+    for bucket in per_month.values():
         bucket["usable_fraction"] = bucket["usable"] / bucket["total"] if bucket["total"] else 0.0
-        if month in eval_months and bucket["usable_fraction"] < min_usable_fraction:
-            thin.append(f"{month}: {bucket['usable_fraction']:.3f} < {min_usable_fraction:.3f}")
-    if thin:
-        raise BenchmarkInputError(
-            f"monthly quality threshold not met (declared min_usable_fraction="
-            f"{min_usable_fraction}): " + "; ".join(sorted(thin))
-        )
+
+    # Gate denominators are EVALUATION intervals only, never whole-dataset month totals:
+    # a month straddling the train/eval cut is judged on the part actually dispatched, so
+    # training data cannot dilute a low-coverage first month past an absolute threshold.
+    eval_per_month: dict[str, dict[str, int]] = {}
+    for i in range(n):
+        if not eval_mask[i]:
+            continue
+        month = months[i]
+        bucket = eval_per_month.setdefault(month, {"total": 0, "usable": 0})
+        bucket["total"] += 1
+        bucket["usable"] += int(bool(usable[i]))
+
+    # The gate runs BEFORE any artifact is written, so a reject aborts cheaply and a
+    # half-written run is impossible.
+    gate_block = _run_monthly_quality_gate(
+        per_month=eval_per_month,
+        threshold=float(min_usable_fraction),
+        policy=quality_policy,
+        eval_months=eval_months,
+        interval_seconds=loaded.interval_seconds,
+    )
 
     # ---- evaluation window: one horizon, one mask, every policy -------------
     index = np.array([i for i in range(n) if eval_mask[i]], dtype=int)
@@ -2967,6 +3237,7 @@ def benchmark_dataset(
             seed=rolling_horizon_seed,
             replan_interval_slots=rolling_horizon_replan_interval_slots,
             horizon_slots=rh_horizon_slots,
+            load_forecast_mode=rolling_horizon_load_forecast_mode,
         )
     records, solver_info, plans = _run_policies(
         core=core,
@@ -2983,6 +3254,7 @@ def benchmark_dataset(
         terminal_mode=terminal_mode,
         day_ahead=day_ahead,
         rolling_horizon=rolling_horizon,
+        throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
     )
     if not records:
         raise BenchmarkError(
@@ -3045,10 +3317,21 @@ def benchmark_dataset(
         "discharge_pct": discharge_pct,
         "allow_reconstructed_quality": allow_reconstructed_quality,
         "min_usable_fraction": min_usable_fraction,
+        # The policy only changes behaviour when the gate is enabled (threshold > 0), but
+        # it is hashed unconditionally so a reject run and a report run are never the same
+        # id. The gate's eval-only status (accepted/incomplete) is derived from data the id
+        # already covers, so it is recorded in the payload, not folded into the id.
+        "quality_policy": quality_policy,
         "time_limit_s": time_limit_s,
         "mip_rel_gap": mip_rel_gap,
         "mip_abs_gap": mip_abs_gap,
         "terminal_mode": terminal_mode,
+        # The throughput penalty is a shared planning basis across the oracle, day-ahead
+        # and rolling-horizon rungs, so it belongs in the base identity (like the
+        # day-ahead knobs, which are always hashed even when day_ahead is not selected):
+        # a run whose throughput penalty differs is a different measurement regardless of
+        # which solver rungs ran.  ``0.0`` is the bit-identical default.
+        "throughput_cost_eur_per_kwh": float(throughput_cost_eur_per_kwh),
         # Day-ahead knobs are always part of the identity: a run whose forecast window
         # or terminal SOC valuation differs is a different measurement, and the resolved
         # terminal value (not just "was it overridden") goes in so a re-run with the
@@ -3080,6 +3363,7 @@ def benchmark_dataset(
         identity["rolling_horizon_bias_sigma"] = float(rolling_horizon_bias_sigma)
         identity["rolling_horizon_seed"] = int(rolling_horizon_seed)
         identity["rolling_horizon_time_limit_s"] = float(rolling_horizon_time_limit_s)
+        identity["rolling_horizon_load_forecast_mode"] = rolling_horizon_load_forecast_mode
         identity["rolling_horizon_terminal_value_eur_per_kwh"] = (
             None
             if not rolling_horizon_block
@@ -3136,6 +3420,7 @@ def benchmark_dataset(
             min_usable_fraction,
             allow_reconstructed_quality,
         ),
+        "monthly_quality_gate": gate_block,
         "assumptions": _assumption_block(assumptions, basis, solver_info),
         "solver": solver_info,
         "day_ahead": _day_ahead_payload(
@@ -3198,4 +3483,15 @@ def benchmark_dataset(
             )
         ),
     )
+
+    # The outputs manifest is written LAST, after all three artifacts exist on disk, so
+    # it hashes exactly what a reader will find. finalize_run_outputs is idempotent on
+    # identical content, so re-running the same benchmark does not collide. The manifest
+    # itself is not in its own required set (no self-reference).
+    from energy_baseline.artifact_integrity import (
+        BENCHMARK_REQUIRED_FILES,
+        finalize_run_outputs,
+    )
+
+    finalize_run_outputs(run_dir, BENCHMARK_REQUIRED_FILES)
     return run_dir

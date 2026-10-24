@@ -40,9 +40,23 @@ is not silently given future information it could not have had, and no plan is
 ever shorter than the slice of it that gets executed.  Configurable-cadence mode
 has no warmup events: the cadence starts at *eval_start_idx*.
 
-Load forecasts are **frozen**: computed once from training data (slot-position means
-over the trailing ``window_days`` local days, strictly before the cut) by
-:func:`build_frozen_load_profile` and passed pre-built into every solve.
+Load forecasts have two modes that share one code path, selected by
+``load_forecast_mode``:
+
+* **frozen** (the dispatcher's default, what the legacy experiment and golden tests
+  pin): computed once from training data (slot-position means over the trailing
+  ``window_days`` local days, strictly before the cut) by
+  :func:`build_frozen_load_profile` and passed pre-built into every solve.  The
+  profile never advances through the evaluation window.
+* **causal** (the canonical benchmark default): each event's forecast is built by
+  :class:`CausalForecastProvider` at the event's decision instant, from a usable mask
+  truncated at the event's own local-day start, using the SAME
+  :func:`energy_baseline.policies.forecast_load_trailing_slot_mean` function the
+  day-ahead policy uses.  So the bases are truly comparable, and a solve whose horizon
+  spans into the next local day never reads that day's — or its own day's — measured
+  load into the fit.  The next-day refresh happens only at the first event after that
+  midnight.
+
 Price noise is deterministic per ``(seed, local_date)`` via SHA-256 and has two
 independent channels sharing that one derivation:
 
@@ -98,8 +112,12 @@ from .policies import (
 )
 
 __all__ = [
+    "LOAD_FORECAST_MODE_CAUSAL",
+    "LOAD_FORECAST_MODE_FROZEN",
+    "LOAD_FORECAST_MODES",
     "RollingEvent",
     "RollingResult",
+    "CausalForecastProvider",
     "build_frozen_load_profile",
     "compute_rolling_events",
     "generate_price_noise",
@@ -108,6 +126,15 @@ __all__ = [
 ]
 
 MADRID_TZ = "Europe/Madrid"
+
+#: Load forecast mode names.  ``frozen`` computes slot-position means once from
+#: training data strictly before the cut and reuses them for every solve; ``causal``
+#: recomputes the trailing-slot mean before each local dispatch day using only
+#: observations strictly before that day — the same function the day-ahead policy
+#: uses, so the two rungs share a like-for-like load basis.
+LOAD_FORECAST_MODE_FROZEN = "frozen"
+LOAD_FORECAST_MODE_CAUSAL = "causal"
+LOAD_FORECAST_MODES = (LOAD_FORECAST_MODE_FROZEN, LOAD_FORECAST_MODE_CAUSAL)
 AFTERNOON_EVENT = (14, 0)
 EVENING_EVENT = (20, 30)
 
@@ -827,6 +854,218 @@ def build_frozen_load_profile(
 
 
 # ---------------------------------------------------------------------------
+# Causal (event-specific) load forecast
+# ---------------------------------------------------------------------------
+
+
+class CausalForecastProvider:
+    """Per-event causal load forecast provider — no future leakage.
+
+    For each event, computes the forecast using only data available at the event's
+    decision time.  This is the correct causal semantics: an event at 20:30 on day D
+    spanning to D+1 must use data available at 20:30, not data through D+1's midnight.
+
+    The provider truncates the usable mask to exclude all data at or after the event's
+    start index, then calls :func:`forecast_load_trailing_slot_mean` with this truncated
+    mask.  Each day's forecast then uses only data before the event, not before that
+    day's midnight.  This is conservative (doesn't use any future data) and correct.
+
+    **Slot-position clock conventions.**  Uses the SAME function as day-ahead
+    (``forecast_load_trailing_slot_mean``), so partial first days and DST transitions
+    are handled identically.  The forecast for a partial day uses whatever trailing
+    history exists; if no prior day is available its forecast is zero.
+    """
+
+    def __init__(
+        self,
+        load_kwh: np.ndarray,
+        local_days: Any,
+        usable: np.ndarray,
+        interval_starts_utc: Any,
+        *,
+        window_days: int = 28,
+        interval_seconds: float = 900.0,
+        tz: ZoneInfo | None = None,
+    ) -> None:
+        """Initialize the provider with the full dataset.
+
+        Args:
+            load_kwh: Full load array (training + evaluation).
+            local_days: Local day labels for each interval.
+            usable: Per-interval usability mask.
+            interval_starts_utc: UTC timestamps for each interval.
+            window_days: Trailing window in local days for slot means.
+            interval_seconds: Interval length in seconds (for slot positioning).
+            tz: Timezone for local-wall-clock conversion.
+        """
+        from .policies import forecast_load_trailing_slot_mean
+
+        self._load = np.asarray(load_kwh, dtype=float).reshape(-1)
+        self._local_days = list(local_days)
+        self._usable = np.asarray(usable, dtype=bool).reshape(-1)
+        self._interval_starts_utc = list(interval_starts_utc)
+        self._window_days = int(window_days)
+        self._interval_seconds = float(interval_seconds)
+        self._tz = tz if tz is not None else ZoneInfo("Europe/Madrid")
+        self._forecast_fn = forecast_load_trailing_slot_mean
+        self._day_bounds = contiguous_day_bounds(self._local_days)
+        # Cache: (cutoff_idx, window_days) -> (forecast, metadata)
+        # Two events on the same local day produce identical forecasts, so we cache
+        # to avoid redundant full-dataset fits.  The cache key includes window_days
+        # in case the caller changes it between events (though the dispatcher doesn't).
+        self._cache: dict[tuple[int, int], tuple[np.ndarray, dict[str, Any]]] = {}
+
+    def forecast_for_event(
+        self,
+        event: RollingEvent,
+    ) -> tuple[np.ndarray, dict[str, Any]]:
+        """Compute the forecast for a single event using only data before the event's local day.
+
+        Args:
+            event: The planning event.
+
+        Returns:
+            ``(forecast, metadata)`` — ``forecast`` is the same length as the full
+            dataset.  The event's horizon region ``[event.start_idx:event.plan_end_idx]``
+            is the actual forecast for that event.  ``metadata`` records the cutoff
+            index (the local-day start), the event's local day, and per-day fallback counts.
+        """
+        # Find the local-day start for the event's local_day
+        event_day = _as_local_date(event.local_day)
+        event_local_day_start = next(
+            (
+                start
+                for label, start, _stop in self._day_bounds
+                if _as_local_date(label) == event_day
+            ),
+            event.start_idx,  # fallback to event start if day not found
+        )
+
+        # Cache key: (cutoff_idx, window_days).  Two events on the same local day
+        # produce byte-identical forecasts, so we cache to avoid redundant full-dataset fits.
+        cache_key = (event_local_day_start, self._window_days)
+        if cache_key in self._cache:
+            forecast, base_metadata = self._cache[cache_key]
+            # Return a copy with event-specific fields updated
+            metadata = dict(base_metadata)
+            metadata["event_index"] = event.index
+            metadata["event_local_day"] = str(event.local_day)
+            metadata["event_kind"] = event.kind
+            return forecast, metadata
+
+        # Truncate the usable mask to exclude all data at or after the local-day start
+        truncated_usable = self._usable.copy()
+        truncated_usable[event_local_day_start:] = False
+
+        # Compute forecasts for all days using the truncated mask
+        forecast, per_day_diag = self._forecast_fn(
+            self._load,
+            self._day_bounds,
+            window_days=self._window_days,
+            usable=truncated_usable,
+        )
+
+        # Aggregate diagnostics for the event's horizon
+        horizon_days = [
+            (label, start, stop)
+            for label, start, stop in self._day_bounds
+            if start >= event.start_idx and start < event.plan_end_idx
+        ]
+        diag_by_label = {str(d["local_day"]): d for d in per_day_diag}
+        horizon_diag = [diag_by_label.get(str(label), {}) for label, _s, _e in horizon_days]
+
+        days_with_pooled_fallback = sum(
+            1 for d in horizon_diag if int(d.get("slots_pooled_fallback") or 0) > 0
+        )
+        days_with_zero_history = sum(
+            1 for d in horizon_diag if int(d.get("slots_zero_no_history") or 0) > 0
+        )
+        total_pooled_slots = sum(int(d.get("slots_pooled_fallback") or 0) for d in horizon_diag)
+        total_zero_slots = sum(int(d.get("slots_zero_no_history") or 0) for d in horizon_diag)
+
+        # B4: Window-scoped usable support, not full prefix.  The effective trailing
+        # window is at most ``window_days`` local days before the cutoff; anything older
+        # is not part of the fit.  We approximate by taking the last ``window_days * 96``
+        # intervals (assuming 15-min grid; the frozen path uses the same approximation).
+        window_intervals = self._window_days * 96
+        window_start = max(0, event_local_day_start - window_intervals)
+        training_usable_intervals = int(truncated_usable[window_start:event_local_day_start].sum())
+
+        # B3: Training-data content hash.  SHA-256 of load+usable bytes in the window,
+        # so the hash is blind to load values (unlike the frozen path which hashes timestamps).
+        # We hash the window-scoped slice to match the effective support.
+        window_load = self._load[window_start:event_local_day_start]
+        window_usable = truncated_usable[window_start:event_local_day_start]
+        training_hash = hashlib.sha256(window_load.tobytes() + window_usable.tobytes()).hexdigest()[
+            :16
+        ]
+
+        # B6: Per-target-day usable history count.  For each day in the horizon, count
+        # how many usable intervals from the trailing window contributed to its forecast.
+        per_target_day_usable_history_days: list[dict[str, Any]] = []
+        for label, start, stop in horizon_days:
+            day_diag = diag_by_label.get(str(label), {})
+            per_target_day_usable_history_days.append(
+                {
+                    "local_day": str(label),
+                    "usable_history_days": int(day_diag.get("window_days_with_usable_data") or 0),
+                    "slots_pooled_fallback": int(day_diag.get("slots_pooled_fallback") or 0),
+                    "slots_zero_no_history": int(day_diag.get("slots_zero_no_history") or 0),
+                }
+            )
+
+        metadata: dict[str, Any] = {
+            "method": "trailing_slot_mean_causal_event_specific",
+            "event_index": event.index,
+            "event_local_day": str(event.local_day),
+            "event_kind": event.kind,
+            "cutoff_idx": int(event_local_day_start),
+            "cutoff_time_utc": (
+                self._interval_starts_utc[event_local_day_start].isoformat()
+                if event_local_day_start < len(self._interval_starts_utc)
+                else None
+            ),
+            "data_cutoff_before_local_day_start": True,
+            "training_usable_intervals": training_usable_intervals,
+            "training_usable_support": training_usable_intervals > 0,
+            "training_hash": training_hash,
+            "window_days": self._window_days,
+            "horizon_days": len(horizon_days),
+            "horizon_days_with_pooled_fallback": days_with_pooled_fallback,
+            "horizon_days_with_zero_history": days_with_zero_history,
+            "horizon_slots_pooled_fallback": total_pooled_slots,
+            "horizon_slots_zero_no_history": total_zero_slots,
+            "per_target_day_usable_history_days": per_target_day_usable_history_days,
+            "shared_function_with_day_ahead": True,
+            "data_cutoff_rule": (
+                "the forecast for this event uses only intervals at indices strictly "
+                "below the event's local-day start — no observation from the event's own "
+                "local day or later enters.  For a multi-day horizon, all target days use "
+                "the same pre-day cutoff (the event's local-day start), not their own "
+                "midnight, so no next-day refresh happens before the first event after "
+                "that midnight"
+            ),
+            "note": (
+                "Event-specific causal forecast: uses the SAME trailing-slot-mean function "
+                "as the day-ahead policy (policies.forecast_load_trailing_slot_mean), but "
+                "computed per-event with the usable mask truncated at the event's local-day "
+                "start.  A 20:30 event on day D spanning to D+1 uses data before D's start, "
+                "NOT before D+1's midnight (the whole-array per-target-day vintage that "
+                "leaks D's measured load into D+1's fit).  Conservative and correct."
+            ),
+        }
+
+        # Cache the result (without event-specific fields, which are added on retrieval)
+        base_metadata = dict(metadata)
+        base_metadata.pop("event_index", None)
+        base_metadata.pop("event_local_day", None)
+        base_metadata.pop("event_kind", None)
+        self._cache[cache_key] = (forecast, base_metadata)
+
+        return forecast, metadata
+
+
+# ---------------------------------------------------------------------------
 # Event computation
 # ---------------------------------------------------------------------------
 
@@ -1125,12 +1364,15 @@ def run_day_ahead_with_frozen_forecast(
     time_limit_s: float = 5.0,
     mip_rel_gap: float = 1e-6,
     mip_abs_gap: float = 1e-9,
+    throughput_cost_eur_per_kwh: float = 0.0,
 ) -> tuple[Schedule, dict[str, Any]]:
     """Run the existing day-ahead policy using a frozen load forecast.
 
     Builds :class:`DayAheadDay` objects from the frozen profile and delegates
     to :func:`policy_day_ahead`.  This is the comparison baseline for the
-    rolling horizon.
+    rolling horizon.  ``throughput_cost_eur_per_kwh`` (default ``0.0``) matches the
+    knob the rolling dispatcher and the oracle expose; ``0.0`` keeps the plan
+    bit-identical to a run without the argument.
     """
     from .policies import policy_day_ahead
 
@@ -1170,6 +1412,7 @@ def run_day_ahead_with_frozen_forecast(
         time_limit_s=time_limit_s,
         mip_rel_gap=mip_rel_gap,
         mip_abs_gap=mip_abs_gap,
+        throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
     )
 
 
@@ -1201,6 +1444,9 @@ def run_rolling_horizon(
     import_limit_kw: float | None = None,
     replan_interval_slots: int | None = None,
     horizon_slots: int | None = None,
+    load_forecast_mode: str = LOAD_FORECAST_MODE_FROZEN,
+    throughput_cost_eur_per_kwh: float = 0.0,
+    forecast_window_days: int = 28,
 ) -> RollingResult:
     """Run the rolling horizon dispatcher.
 
@@ -1219,9 +1465,40 @@ def run_rolling_horizon(
     information set is a function of the decision instant, never of the cadence
     (see :func:`_last_published_day`).
 
+    **Load forecast mode.**  Two modes share one code path:
+
+    * ``frozen`` (default): the load forecast is ``frozen_load``, computed once
+      from training data strictly before the cut by
+      :func:`build_frozen_load_profile` and passed pre-built.  The profile never
+      advances through the evaluation window.
+    * ``causal``: each event's forecast is built by :class:`CausalForecastProvider`,
+      which truncates the usable mask at the event's own local-day start and calls the
+      SAME function the day-ahead policy uses
+      (:func:`energy_baseline.policies.forecast_load_trailing_slot_mean`).  A 20:30
+      solve on day D whose horizon spans D+1 therefore never reads day D's measured
+      load into D+1's estimate — no whole-array per-target-day vintage and no future
+      leakage.  The ``frozen_load`` argument is ignored in this mode.
+
+    **Default mode divergence.**  The dispatcher defaults to ``frozen`` for backward
+    compatibility with direct API callers and the 14 legacy golden tests.  The
+    benchmark defaults to ``causal`` because it is the canonical mode: it uses the
+    same forecast function as day-ahead, so the two rungs share a like-for-like load
+    basis and differ only in price information and cadence.  Direct callers who want
+    the canonical basis must pass ``load_forecast_mode="causal"`` explicitly.
+
     ``sigma`` is the per-slot forecast noise and ``bias_sigma`` the per-local-day
     multiplicative bias (see :func:`generate_price_noise`).  Both live in
     :func:`generate_price_noise`'s metadata; neither enters scoring.
+
+    ``throughput_cost_eur_per_kwh`` (default ``0.0``) is a per-kWh AC-throughput
+    penalty added to each solve's planning objective, the same knob the oracle and
+    the day-ahead policy expose so the three rungs stay comparable.  ``0.0`` leaves
+    every plan bit-identical to a run without the argument; a non-zero value is a
+    planning-only term and never enters the reported (true-price) cost.
+
+    ``forecast_window_days`` (default ``28``) is the trailing window in local days
+    for the causal mode's slot means.  Ignored in frozen mode (the frozen profile
+    has its own window baked in at build time).
 
     Cost is always computed against TRUE prices and actual grid import.
 
@@ -1233,13 +1510,50 @@ def run_rolling_horizon(
     exactly that reason — see ``clipping_totals_comparable_across_cadences`` and
     ``clipping_note`` in the telemetry.
     """
+    if load_forecast_mode not in LOAD_FORECAST_MODES:
+        raise ValueError(
+            f"load_forecast_mode must be one of {LOAD_FORECAST_MODES}, got {load_forecast_mode!r}"
+        )
+    if not math.isfinite(throughput_cost_eur_per_kwh) or throughput_cost_eur_per_kwh < 0.0:
+        raise ValueError(
+            f"throughput_cost_eur_per_kwh must be finite and >= 0, got "
+            f"{throughput_cost_eur_per_kwh!r}"
+        )
     if replan_interval_slots is not None and replan_interval_slots < 1:
         raise ValueError(f"replan_interval_slots must be >= 1, got {replan_interval_slots}")
     if horizon_slots is not None and horizon_slots < 1:
         raise ValueError(f"horizon_slots must be >= 1, got {horizon_slots}")
+    if forecast_window_days < 1:
+        raise ValueError(f"forecast_window_days must be >= 1, got {forecast_window_days}")
 
     validate_spec(spec)
     n_eval = eval_end_idx - eval_start_idx
+
+    # Resolve the load forecast provider based on mode.
+    # Frozen mode: use the precomputed array directly.
+    # Causal mode: create a per-event provider that computes forecasts at decision time.
+    forecast_metadata: dict[str, Any] = {}
+    causal_provider: CausalForecastProvider | None = None
+    causal_events_served = 0
+    zero_support_events = 0  # B8: count events with zero usable training support
+
+    if load_forecast_mode == LOAD_FORECAST_MODE_CAUSAL:
+        causal_provider = CausalForecastProvider(
+            load_kwh,
+            local_days,
+            usable,
+            interval_starts_utc,
+            window_days=forecast_window_days,  # B1: wire through from caller
+            interval_seconds=interval_seconds,
+            tz=tz,
+        )
+        forecast_metadata = {
+            "method": "trailing_slot_mean_causal_event_specific",
+            "events_served": 0,
+            "forecast_window_days": forecast_window_days,
+            # B8: zero-support events are counted and visible, never refused.
+            "zero_support_events": 0,
+        }
 
     # Compute events first to know which slots are estimated
     events = compute_rolling_events(
@@ -1369,8 +1683,37 @@ def run_rolling_horizon(
         if exact_m < m:
             plan_prices[exact_m:] = noisy_prices[ev.start_idx + exact_m : ev.plan_end_idx]
 
-        # Build load forecast from frozen profile
-        plan_forecast = frozen_load[ev.start_idx : ev.plan_end_idx]
+        # Build load forecast: causal mode computes per-event, frozen uses precomputed array
+        if causal_provider is not None:
+            # Causal mode: compute forecast for this event using only data before the
+            # event's local-day start (conservative day-ahead basis; no future vintage).
+            event_forecast, event_forecast_meta = causal_provider.forecast_for_event(ev)
+            plan_forecast = event_forecast[ev.start_idx : ev.plan_end_idx]
+            causal_events_served += 1
+            # B8: Count events with zero usable training support (visible, not refused).
+            if not event_forecast_meta.get("training_usable_support", True):
+                zero_support_events += 1
+            forecast_metadata["events_served"] = causal_events_served
+            forecast_metadata["zero_support_events"] = zero_support_events
+            # Record the first event that produced a forecast for the run-level audit.
+            if "first_event_cutoff_idx" not in forecast_metadata:
+                for key in (
+                    "cutoff_idx",
+                    "cutoff_time_utc",
+                    "training_usable_intervals",
+                    "training_usable_support",
+                    "training_hash",
+                    "window_days",
+                    "data_cutoff_before_local_day_start",
+                    "data_cutoff_rule",
+                    "note",
+                ):
+                    forecast_metadata[f"first_event_{key}"] = event_forecast_meta[key]
+                forecast_metadata["first_event_local_day"] = str(ev.local_day)
+                forecast_metadata["first_event_kind"] = ev.kind
+        else:
+            # Frozen mode: use the precomputed array
+            plan_forecast = frozen_load[ev.start_idx : ev.plan_end_idx]
 
         # Construct spec with carried SOC
         carried_frac = min(max(carried_kwh / capacity, soc_min_frac), soc_max_frac)
@@ -1410,6 +1753,7 @@ def run_rolling_horizon(
                 terminal_mode="free",
                 terminal_value_eur_per_kwh=value,
                 floor_kwh=horizon_floor_kwh,
+                throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
             )
         except OracleError as exc:
             text = str(exc).lower()
@@ -1548,12 +1892,14 @@ def run_rolling_horizon(
             "across runs with a different replan_interval_slots or horizon_slots."
         ),
         "terminal_value_eur_per_kwh": value,
+        "throughput_cost_eur_per_kwh": float(throughput_cost_eur_per_kwh),
         "sigma": float(sigma),
         "bias_sigma": float(bias_sigma),
         "seed": int(seed),
         "horizon_floor_kwh": float(horizon_floor_kwh),
         "initial_soc_kwh": float(init_kwh),
         "terminal_soc_kwh": float(traced.soc_kwh[-1]),
+        "load_forecast_mode": load_forecast_mode,
         "per_event": per_event,
     }
 
@@ -1564,5 +1910,5 @@ def run_rolling_horizon(
         cost_eur=cost_eur,
         meter_cost_eur=meter_cost,
         noise_metadata=noise_meta,
-        forecast_metadata={},  # filled by caller
+        forecast_metadata=forecast_metadata,
     )

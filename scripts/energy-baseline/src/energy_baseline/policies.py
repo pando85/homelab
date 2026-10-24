@@ -739,6 +739,7 @@ def policy_day_ahead(
     time_limit_s: float,
     mip_rel_gap: float,
     mip_abs_gap: float,
+    throughput_cost_eur_per_kwh: float = 0.0,
 ) -> tuple[Schedule, dict[str, Any]]:
     """Rolling day-ahead optimiser: one MILP per local day, executed, SOC rolled forward.
 
@@ -880,6 +881,16 @@ def policy_day_ahead(
         raise ValueError(
             f"scoring_terminal_value_eur_per_kwh must be finite, got "
             f"{scoring_terminal_value_eur_per_kwh!r}"
+        )
+    if isinstance(throughput_cost_eur_per_kwh, bool):
+        raise ValueError(
+            f"throughput_cost_eur_per_kwh must be a number, got bool "
+            f"{throughput_cost_eur_per_kwh!r}"
+        )
+    if not math.isfinite(throughput_cost_eur_per_kwh) or throughput_cost_eur_per_kwh < 0.0:
+        raise ValueError(
+            f"throughput_cost_eur_per_kwh must be finite and >= 0, got "
+            f"{throughput_cost_eur_per_kwh!r}"
         )
     if not math.isfinite(time_limit_s) or time_limit_s <= 0:
         raise ValueError(f"time_limit_s must be > 0, got {time_limit_s}")
@@ -1065,6 +1076,7 @@ def policy_day_ahead(
                 terminal_value_eur_per_kwh=value,
                 # The horizon's seed floor, not this day's opening SOC: see the docstring.
                 floor_kwh=floor_kwh,
+                throughput_cost_eur_per_kwh=throughput_cost_eur_per_kwh,
             )
         except OracleError as exc:
             text = str(exc).lower()
@@ -1220,6 +1232,16 @@ def policy_day_ahead(
             "oracle uses, so the comparison is on the same basis. The internal planning "
             "value V is used only inside the daily objectives to prevent the battery from "
             "emptying at midnight"
+        ),
+        "throughput_cost_eur_per_kwh": float(throughput_cost_eur_per_kwh),
+        "throughput_cost_role": (
+            "per-kWh penalty on AC energy throughput (sum of charge and discharge at the "
+            "meter) added to each daily MILP objective. An explicit economic convention "
+            "(degradation valued as proportional to energy moved), not a physical aging "
+            "model. 0.0 (default) is byte-identical to the historical model. The reported "
+            "Schedule.cost_eur stays the meter bill plus inventory adjustment; the "
+            "throughput penalty is recoverable as throughput_cost * (sum(charge) + "
+            "sum(discharge))"
         ),
         "internal_daily_objective_sum_eur": float(
             sum(d["objective_eur"] for d in per_day if d["objective_eur"] is not None)

@@ -1240,7 +1240,10 @@ class TestBenchmarkDataset:
         assert oracle_record["configured_mip_rel_gap"] == bm.DEFAULT_MIP_REL_GAP
 
     def test_min_usable_fraction_enforced(self, tmp_path: Path) -> None:
+        """Reject policy (default): a low eval month aborts before any artifact is written."""
         requires_core()
+        from energy_baseline.artifact_integrity import MonthlyQualityGateError
+
         start = datetime(2026, 1, 1, tzinfo=UTC)
         intervals = 96
         # Half the intervals have missing prices
@@ -1248,13 +1251,12 @@ class TestBenchmarkDataset:
         table = make_analysis_table(start=start, intervals=intervals, prices=prices)
         dataset_dir = write_synthetic_dataset(tmp_path, table)
 
-        config = make_tariff_config()
         config_path = tmp_path / "tariff.yaml"
-        write_tariff_config(config_path, config)
+        write_tariff_config(config_path, make_tariff_config())
 
         train_end = start + timedelta(hours=12)
         # With min_usable_fraction=0.6, the run should fail (only 50% usable)
-        with pytest.raises(bm.BenchmarkInputError, match="monthly quality threshold not met"):
+        with pytest.raises(MonthlyQualityGateError, match="monthly usable-fraction gate failed"):
             bm.benchmark_dataset(
                 dataset=dataset_dir,
                 config_path=config_path,
@@ -1262,6 +1264,163 @@ class TestBenchmarkDataset:
                 min_usable_fraction=0.6,
                 time_limit_s=5.0,
             )
+        # Reject happens BEFORE artifacts: the benchmarks dir was never created.
+        assert not (dataset_dir / bm.BENCHMARKS_DIRNAME).exists()
+
+    def test_quality_policy_report_retains_and_flags_incomplete(self, tmp_path: Path) -> None:
+        """Report policy: the low month is retained, marked not-accepted, run flagged incomplete."""
+        requires_core()
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        intervals = 96
+        prices = [0.15 if i % 2 == 0 else None for i in range(intervals)]
+        table = make_analysis_table(start=start, intervals=intervals, prices=prices)
+        dataset_dir = write_synthetic_dataset(tmp_path, table)
+        config_path = tmp_path / "tariff.yaml"
+        write_tariff_config(config_path, make_tariff_config())
+
+        train_end = start + timedelta(hours=12)
+        run_dir = bm.benchmark_dataset(
+            dataset=dataset_dir,
+            config_path=config_path,
+            train_end=train_end,
+            min_usable_fraction=0.6,
+            quality_policy="report",
+            time_limit_s=5.0,
+        )
+        payload = json.loads((run_dir / bm.RESULTS_JSON_NAME).read_text())
+        gate = payload["monthly_quality_gate"]
+        assert gate["enabled"] is True
+        assert gate["policy"] == "report"
+        assert gate["accepted"] is False
+        assert gate["incomplete"] is True
+        assert gate["below_threshold_months"]
+        # The run completed and retained the below-threshold month (April-equivalent).
+        assert payload["policies"]
+
+    def test_gate_uses_eval_only_denominator(self, tmp_path: Path) -> None:
+        """A month straddling the cut is judged on its evaluation part, not diluted.
+
+        The full dataset is 2 days; day 0 is 100% usable (training), day 1 is 50% usable
+        (evaluation).  A whole-calendar-month denominator would report 75% usable and pass
+        a 0.6 threshold; the EVALUATION-only denominator reports 50% and fails it — which
+        is the dilution this gate must prevent.
+        """
+        requires_core()
+        from energy_baseline.artifact_integrity import MonthlyQualityGateError
+
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        intervals = 2 * 96
+        # First day fully usable (prices present), second day half missing.
+        prices = [0.15] * 96 + [0.15 if i % 2 == 0 else None for i in range(96)]
+        table = make_analysis_table(start=start, intervals=intervals, prices=prices)
+        dataset_dir = write_synthetic_dataset(tmp_path, table)
+        config_path = tmp_path / "tariff.yaml"
+        write_tariff_config(config_path, make_tariff_config())
+
+        train_end = start + timedelta(days=1)  # cut after day 0
+        with pytest.raises(MonthlyQualityGateError):
+            bm.benchmark_dataset(
+                dataset=dataset_dir,
+                config_path=config_path,
+                train_end=train_end,
+                min_usable_fraction=0.6,
+                time_limit_s=5.0,
+            )
+
+    def test_gate_disabled_at_zero(self, tmp_path: Path) -> None:
+        """threshold=0 (default) disables the gate; fractions still reported but accepted=None."""
+        requires_core()
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        intervals = 96
+        prices = [0.15 if i % 2 == 0 else None for i in range(intervals)]
+        table = make_analysis_table(start=start, intervals=intervals, prices=prices)
+        dataset_dir = write_synthetic_dataset(tmp_path, table)
+        config_path = tmp_path / "tariff.yaml"
+        write_tariff_config(config_path, make_tariff_config())
+
+        # Even with 50% usable, min_usable_fraction=0.0 does not abort.
+        run_dir = bm.benchmark_dataset(
+            dataset=dataset_dir,
+            config_path=config_path,
+            train_end=start + timedelta(hours=12),
+            min_usable_fraction=0.0,
+            time_limit_s=5.0,
+        )
+        payload = json.loads((run_dir / bm.RESULTS_JSON_NAME).read_text())
+        gate = payload["monthly_quality_gate"]
+        assert gate["enabled"] is False
+        assert gate["accepted"] is None
+        assert gate["months"] == []
+
+    @pytest.mark.parametrize("bad", [float("nan"), True, False])
+    def test_rejects_nan_or_bool_threshold(self, tmp_path: Path, bad: object) -> None:
+        """min_usable_fraction must be a real number, never NaN or a bool."""
+        requires_core()
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        table = make_analysis_table(start=start, intervals=48)
+        dataset_dir = write_synthetic_dataset(tmp_path, table)
+        config_path = tmp_path / "tariff.yaml"
+        write_tariff_config(config_path, make_tariff_config())
+        with pytest.raises(bm.BenchmarkInputError, match="min_usable_fraction"):
+            bm.benchmark_dataset(
+                dataset=dataset_dir,
+                config_path=config_path,
+                train_end=start + timedelta(hours=6),
+                min_usable_fraction=bad,  # type: ignore[arg-type]
+                time_limit_s=5.0,
+            )
+
+    def test_invalid_quality_policy_rejected(self, tmp_path: Path) -> None:
+        requires_core()
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        table = make_analysis_table(start=start, intervals=48)
+        dataset_dir = write_synthetic_dataset(tmp_path, table)
+        config_path = tmp_path / "tariff.yaml"
+        write_tariff_config(config_path, make_tariff_config())
+        with pytest.raises(bm.BenchmarkInputError, match="quality_policy"):
+            bm.benchmark_dataset(
+                dataset=dataset_dir,
+                config_path=config_path,
+                train_end=start + timedelta(hours=6),
+                min_usable_fraction=0.5,
+                quality_policy="exclude",
+                time_limit_s=5.0,
+            )
+
+    def test_quality_policy_changes_run_id(self, tmp_path: Path) -> None:
+        """reject and report are different measurements, so different ids."""
+        import shutil
+
+        requires_core()
+        start = datetime(2026, 1, 1, tzinfo=UTC)
+        table = make_analysis_table(start=start, intervals=2 * 96)
+        dataset_dir = write_synthetic_dataset(tmp_path, table)
+        config_path = tmp_path / "tariff.yaml"
+        write_tariff_config(config_path, make_tariff_config())
+        cut = start + timedelta(days=1)
+
+        first = bm.benchmark_dataset(
+            dataset=dataset_dir,
+            config_path=config_path,
+            train_end=cut,
+            min_usable_fraction=0.0,
+            quality_policy="reject",
+            time_limit_s=5.0,
+        )
+        second_dir = tmp_path / "second"
+        shutil.copytree(tmp_path / "analysis", second_dir / "analysis")
+        second_dataset = next(
+            p for p in (second_dir / "analysis" / f"v{SCHEMA_VERSION}").iterdir() if p.is_dir()
+        )
+        second = bm.benchmark_dataset(
+            dataset=second_dataset,
+            config_path=config_path,
+            train_end=cut,
+            min_usable_fraction=0.0,
+            quality_policy="report",
+            time_limit_s=5.0,
+        )
+        assert first.name != second.name
 
     def test_allow_reconstructed_quality(self, tmp_path: Path) -> None:
         requires_core()
@@ -1928,23 +2087,27 @@ class TestDayAheadEndToEnd:
     def test_rolling_horizon_forecast_provenance_is_not_silent(self, tmp_path: Path) -> None:
         """The corrected provenance cannot silently regress to the false claim.
 
-        The rolling-horizon rung's load forecast is frozen at the training cut, while
-        day_ahead re-learns before each dispatch day.  The two rungs therefore differ in
-        load knowledge as well as in price information and cadence, and the artifact must
-        say so.  This test pins the three fields that carry that correction: the
-        ``shared_with_day_ahead`` flag (must be False, not True), the method names (must
-        differ: ``trailing_slot_mean_frozen`` vs ``trailing_slot_mean``), and the
-        ``measured_counterexample`` key in the observation dict (must be present, not
-        absent).  A silent regression to the old false claim — that the two rungs "differ
-        only in price information and cadence, not in load knowledge" — would fail at
-        least one of these assertions.
+        The rolling-horizon rung's load forecast basis depends on the mode:
+
+        * ``frozen``: profile fixed at the training cut, NOT shared with day_ahead.
+          The two rungs differ in load knowledge as well as in price information
+          and cadence.
+        * ``causal``: advancing trailing-slot mean using the SAME function as
+          day_ahead, so the basis IS shared.
+
+        This test pins the frozen-mode case: ``shared_with_day_ahead`` must be
+        False, the method must be ``trailing_slot_mean_frozen``, and the
+        ``measured_counterexample`` key must be present.  A silent regression to
+        the old false claim — that the two rungs "differ only in price information
+        and cadence, not in load knowledge" — would fail at least one of these
+        assertions even in frozen mode.
         """
-        _run_dir, payload = self.run(tmp_path)
+        _run_dir, payload = self.run(tmp_path, rolling_horizon_load_forecast_mode="frozen")
         rh_forecast = payload["rolling_horizon"]["forecast"]
         da_forecast = payload["day_ahead"]["forecast"]
-        # The basis is NOT shared; only the window length is.
+        # The basis is NOT shared in frozen mode; only the window length is.
         assert rh_forecast["shared_with_day_ahead"] is False, (
-            "the rolling-horizon forecast basis is frozen at the training cut while "
+            "the frozen rolling-horizon forecast basis is fixed at the training cut while "
             "day_ahead re-learns before each dispatch day; claiming they are shared "
             "was the false claim this test guards against"
         )
@@ -1957,6 +2120,66 @@ class TestDayAheadEndToEnd:
             "the observation dict must record the full-year counterexample; its absence "
             "would silently drop the evidence that the 81/81 record does not transfer"
         )
+
+    def test_rolling_horizon_causal_mode_shares_basis_with_day_ahead(self, tmp_path: Path) -> None:
+        """Canonical causal mode: the load basis IS shared with day_ahead.
+
+        The causal mode uses the SAME trailing-slot-mean function as day_ahead,
+        so the provenance must say so.  This is the whole point of the alignment:
+        the two rungs now differ only in price information and cadence, not in
+        load knowledge.
+        """
+        _run_dir, payload = self.run(tmp_path, rolling_horizon_load_forecast_mode="causal")
+        rh_forecast = payload["rolling_horizon"]["forecast"]
+        da_forecast = payload["day_ahead"]["forecast"]
+        # The basis IS shared in causal mode.
+        assert rh_forecast["shared_with_day_ahead"] is True
+        assert rh_forecast["load_forecast_mode"] == "causal"
+        assert rh_forecast["method"] == "trailing_slot_mean_causal_event_specific"
+        assert da_forecast["method"] == "trailing_slot_mean"
+        # The causal mode's metadata records the shared function.
+        assert rh_forecast["metadata"].get("shared_function_with_day_ahead") is True
+
+    def test_rolling_horizon_causal_runtime_metadata_auditable(self, tmp_path: Path) -> None:
+        """B1/B3/B8: the causal artifact surfaces the provider's ACTUAL runtime metadata.
+
+        A leakage audit needs the window genuinely used, the per-event cutoff, the load
+        content hash, and the zero-support count — none of which the prepare-time contract
+        block can know.  Those live in ``rolling_horizon.causal_runtime_metadata`` once the
+        roll runs.
+        """
+        _run_dir, payload = self.run(
+            tmp_path,
+            rolling_horizon_load_forecast_mode="causal",
+            day_ahead_forecast_window_days=7,
+        )
+        rh = payload["rolling_horizon"]
+        # The artifact records the window the caller asked for (B1).
+        assert rh["forecast"]["window_days"] == 7
+        runtime = rh["causal_runtime_metadata"]
+        assert runtime["method"] == "trailing_slot_mean_causal_event_specific"
+        # B1: the provider actually used the passed window, not a hardcoded 28.
+        assert runtime["forecast_window_days"] == 7
+        assert runtime["first_event_window_days"] == 7
+        # B3: a 16-hex-char load content hash is present and auditable.
+        assert len(runtime["first_event_training_hash"]) == 16
+        # B8: zero-support events counted (>=0 here; this fixture has full training data).
+        assert runtime["zero_support_events"] >= 0
+        # events_served matches the dispatcher's solve count (every solved event got a forecast).
+        assert runtime["events_served"] == rh["solve_count"]
+        # Per-event cutoff recorded for the leakage audit.
+        assert runtime["first_event_cutoff_idx"] >= 0
+
+    def test_rolling_horizon_frozen_mode_has_no_causal_runtime_metadata(
+        self, tmp_path: Path
+    ) -> None:
+        """The frozen path stays clean: no causal runtime metadata, frozen method only."""
+        _run_dir, payload = self.run(tmp_path, rolling_horizon_load_forecast_mode="frozen")
+        rh = payload["rolling_horizon"]
+        assert rh["forecast"]["method"] == "trailing_slot_mean_frozen"
+        assert "causal_runtime_metadata" not in rh
+        # The frozen profile's own metadata (training hash, window) is intact.
+        assert rh["forecast"]["metadata"]["method"] == "trailing_slot_mean_frozen"
 
     def test_day_ahead_artifact_block_records_days_and_forecast(self, tmp_path: Path) -> None:
         _run_dir, payload = self.run(tmp_path)

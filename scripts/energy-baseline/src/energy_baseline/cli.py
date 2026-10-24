@@ -160,9 +160,22 @@ def build_parser() -> argparse.ArgumentParser:
         "--min-usable-fraction",
         type=float,
         default=None,
-        help="Declared monthly usable-interval fraction (0-1); a month in the evaluation window "
-        "below it aborts the run (default: 0 — abort on nothing, still report the measured "
-        "fractions)",
+        help="Declared monthly usable-interval fraction, evaluated over EVALUATION intervals "
+        "only (a train/eval-straddling month is judged on the dispatched part, not the whole "
+        "calendar total). 0.0 (default) DISABLES the gate — nothing is assessed or rejected, "
+        "measured fractions still reported; a positive threshold activates it and must be in "
+        "(0, 1], finite, never a bool",
+    )
+    p_bench.add_argument(
+        "--quality-policy",
+        choices=["reject", "report"],
+        default=None,
+        help="What the monthly quality gate does with an evaluation month below "
+        "--min-usable-fraction when the gate is active. 'reject' (default) aborts the run "
+        "before any artifact is written; 'report' retains the month, marks it not-accepted, "
+        "and flags the run incomplete. There is no silent exclude: excluding a month would "
+        "move the evaluation window without moving the measured-cost basis. Hashed into the "
+        "run identity",
     )
     p_bench.add_argument(
         "--time-limit-s",
@@ -277,6 +290,26 @@ def build_parser() -> argparse.ArgumentParser:
         "benchmark module's rolling_horizon_time_limit_s). This is not --time-limit-s, which "
         "is the whole-horizon oracle's limit; events that consumed this one are counted in "
         "the artifact",
+    )
+    p_bench.add_argument(
+        "--rolling-horizon-load-forecast-mode",
+        choices=["frozen", "causal"],
+        default=None,
+        help="Load forecast mode for the rolling-horizon rung. 'causal' (default) uses the "
+        "SAME trailing-slot-mean function as the day-ahead policy, so the two rungs share a "
+        "like-for-like load basis — each local day's forecast advances using only "
+        "observations strictly before that day. 'frozen' computes the profile once from "
+        "training data at the cut and reuses it for every solve (the legacy mode the "
+        "golden-value tests pin bit-for-bit)",
+    )
+    p_bench.add_argument(
+        "--throughput-cost-eur-per-kwh",
+        type=float,
+        default=None,
+        help="Per-kWh AC-throughput penalty added to the oracle, day-ahead and rolling-horizon "
+        "planning objectives on a shared basis (default 0.0). 0.0 leaves every plan "
+        "bit-identical to a run without this flag; a non-zero value is a planning-only term "
+        "that never enters the reported true-price cost. Recorded in the run identity",
     )
 
     # -- report -----------------------------------------------------------
@@ -727,6 +760,11 @@ def _benchmark_kwargs(args: argparse.Namespace, benchmark: Any) -> dict[str, Any
         "initial_soc_frac": args.initial_soc_frac,
         "import_limit_kw": args.import_limit_kw,
         "min_usable_fraction": _or_default(args.min_usable_fraction, 0.0),
+        "quality_policy": (
+            args.quality_policy
+            if args.quality_policy is not None
+            else benchmark.QUALITY_POLICY_REJECT
+        ),
         "allow_reconstructed_quality": args.allow_reconstructed_quality,
         "time_limit_s": _or_default(args.time_limit_s, benchmark.DEFAULT_TIME_LIMIT_S),
         "mip_rel_gap": _or_default(args.mip_rel_gap, benchmark.DEFAULT_MIP_REL_GAP),
@@ -753,6 +791,12 @@ def _benchmark_kwargs(args: argparse.Namespace, benchmark: Any) -> dict[str, Any
         "rolling_horizon_time_limit_s": _or_default(
             args.rolling_horizon_time_limit_s, benchmark.DEFAULT_ROLLING_HORIZON_TIME_LIMIT_S
         ),
+        "rolling_horizon_load_forecast_mode": (
+            args.rolling_horizon_load_forecast_mode
+            if args.rolling_horizon_load_forecast_mode is not None
+            else benchmark.DEFAULT_ROLLING_HORIZON_LOAD_FORECAST_MODE
+        ),
+        "throughput_cost_eur_per_kwh": _or_default(args.throughput_cost_eur_per_kwh, 0.0),
         "data_dir": args.data_dir,
     }
 
