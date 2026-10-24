@@ -2,7 +2,7 @@ forgejo:
   image:
     rootless: true
     # renovate: datasource=docker depName=code.forgejo.org/forgejo/forgejo
-    tag: "16.0.6"
+    tag: "17.0.0"
   labels:
     backup/retain: quaterly
   strategy:
