@@ -92,13 +92,37 @@ Use walk-forward training/evaluation without future consumption leakage, measure
 
 - Positive: explainable dispatch, local operation, an auditable savings model, reusable battery adapter and a gradual path to more advanced forecasts.
 - Costs: historical data normalization, tariff accounting, command ownership integration and persistent observation/metrics require engineering and calibration.
-- Unresolved: exact main Shelly grid boundary, PVPC billed tariff reconciliation, the real E 3.0/alternative model and firmware, achievable Modbus command contract, and local electrical protection/certification. **Round-trip efficiency** now has an owner-supplied community-measured range of 0.80–0.84, which contradicts the 0.88 the offline model currently uses (`config/tariff.yaml`, self-described as "Provisional — must be measured"); this is community measurement, not measurement of this household's unit, efficiency versus output power is still unresolved (a single scalar is not a curve), and idle draw remains wholly unmeasured. These are Phase 0 gates, not assumed away (cross-reference [ADR-0003](0003-phase1-measurement-and-baseline.md) *Consequences → Unresolved* for the consequence on every figure produced so far).
+- Unresolved: exact main Shelly grid boundary, PVPC billed tariff reconciliation, the real E 3.0/alternative model and firmware, achievable Modbus command contract, and local electrical protection/certification. **Round-trip efficiency:** the owner-supplied community-measured range of 0.80–0.84 contradicted the 0.88 the offline model used, and on 2026-10-24 the owner **adopted 0.80** — the bottom of that range — as a simplifying assumption, reasoning that at 2.5 kW the unit operates mostly near its power rating where efficiency is typically worst. `config/tariff.yaml` now ships `round_trip_efficiency: 0.80`, one value line; the other battery parameters are unchanged. 0.80 **supersedes 0.88** and is still an assumption, not a measurement of this household's unit: efficiency versus output power remains a curve nobody has measured, and idle draw remains assumed zero and wholly unmeasured. These are Phase 0 gates, not assumed away (cross-reference [ADR-0003](0003-phase1-measurement-and-baseline.md) *Consequences → Unresolved* and *Round-trip efficiency: 0.88 → 0.80, applied* for the consequence on every figure produced so far — every 0.88-era result, including the accepted baseline run, is now a superseded optimistic figure awaiting a clean-tree rebuild).
+- **Offline implementation note (2026-10-24), changing no part of this decision.** Two pieces of the architecture above now exist in the offline model, and only in the offline model. **(a)** Item 3's receding-horizon controller is reachable: `rolling_horizon` is a canonical benchmark policy, and `rolling_horizon.py` takes `replan_interval_slots` / `horizon_slots`, so `replan_interval_slots=1` with `horizon_slots=96` is exactly "re-solve every 15 minutes over a rolling 24-hour horizon, execute only the current interval". The publication rule is stated once and derived from the decision instant, so a 09:00 solve estimates the next day and a 21:00 solve does not, at any cadence. The default remains the legacy two-event schedule, which is the configuration validated bit-for-bit; the 15-minute cadence costs roughly **48× the solve count** (8,832 against 185 over a 92-day holdout) and roughly **37× the wall time** (~175 s against ~4.7 s per arm on synthetic fixtures) — the two ratios differ because a fine-cadence solve is cheaper, since each legacy event plans the rest of its local day *and the next one* while cadence 1 plans a fixed 96 slots — and it has **not** been validated on real data. **(b)** The `Dispatch intent: mode, power, expiry` box is now a typed, validated, canonically serialized contract (`src/energy_baseline/dispatch.py`): interval, mode, target power, SOC target, expected price, confidence, generation instant, expiry and sequence, with physics delegated to the battery kernel and a caller-supplied clock that has no wall-clock fallback. It has **no writer, no I/O and no CLI subcommand** — the diagram's `Home Assistant / Omnibattery: sole device writer` node and every safety path in item 6 are still unbuilt, and nothing here actuates a battery.
 - No hardware purchase or automatic actuation is authorized by accepting this ADR.
+
+  - **Owner note (2026-10-24): the battery hardware has already been bought.** The sentence above is
+    unchanged and still true: it describes what *this ADR authorizes*, and it authorizes neither a
+    purchase nor actuation. The purchase is a separate owner decision, taken outside this decision
+    record, and automatic actuation remains unauthorized. What the purchase does change is which
+    Phase 0 gates stay live:
+    - **TODO-0.5 — device *selection* is moot, device *verification* is not.** The model is no longer
+      a candidate to choose but a delivered unit to measure. Everything in TODO-0.5 that was
+      verification remains fully live, and is now verifiable on the installed unit instead of on a
+      datasheet: firmware, the supported local read/write method, power and SOC limits, response
+      latency, partial-load efficiency and idle draw, and how the unit is safely stopped. The E 3.0
+      named in Context is therefore to be *confirmed against the delivered unit*, including whether
+      native Ethernet/Modbus TCP is actually present on it.
+    - **TODO-0.6 is unaffected and remains a gate** — a qualified installer, electrical protection,
+      anti-islanding and BMS independence do not follow from owning the hardware.
+    - **TODO-0.1 is unaffected and remains a gate** — tracing the main Shelly channels to the net grid
+      point of common coupling and verifying clamp directions still precedes any no-export control.
+
+    This is the work the hardware-gated rows of
+    [the battery roadmap](../../planning/energy-battery-roadmap.md) describe (§2, *How each component
+    iterates*): the battery model from v2 onward, the device writer and the safety guard. Nothing here
+    makes the offline Phase 1 baseline results current — the efficiency correction and the clean-tree
+    rebuild still stand.
 
 ## References
 
 - [Implementation plan](../../planning/home-battery-optimizer-implementation.md)
-- [ADR-0003 — Phase 1 measurement and baseline](0003-phase1-measurement-and-baseline.md) — **Accepted** (2026-10-23): the offline backtest and strategy baseline this decision prescribes before any battery writes, now an information ladder of four policies
+- [ADR-0003 — Phase 1 measurement and baseline](0003-phase1-measurement-and-baseline.md) — **Accepted** (2026-10-23): the offline backtest and strategy baseline this decision prescribes before any battery writes, now an information ladder of five policies (four at acceptance; `rolling_horizon` promoted from an offline experiment on 2026-10-24)
 - [Current AppDaemon PVPC climate/DHW configuration](../../apps/home-assistant/appdaemon/apps/apps.yaml)
 - [Home Assistant deployment](../../apps/home-assistant/values.yaml)
 - [Existing negative-price fallback runbook](../troubleshooting/appdaemon-pvpc-negative-prices.md)

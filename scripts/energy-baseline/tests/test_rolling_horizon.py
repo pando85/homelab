@@ -30,6 +30,8 @@ from energy_baseline.battery import (
 )
 from energy_baseline.policies import contiguous_day_bounds
 from energy_baseline.rolling_horizon import (
+    AFTERNOON_EVENT,
+    EVENING_EVENT,
     _clock_slot_position,
     build_frozen_load_profile,
     compute_rolling_events,
@@ -100,6 +102,32 @@ def _dst_fall_back_window() -> tuple[
         usable[first_of_25:first_of_28],
         local_days[first_of_25:first_of_28],
         starts[first_of_25:first_of_28],
+    )
+
+
+def _dst_spring_forward_window() -> tuple[
+    np.ndarray, np.ndarray, np.ndarray, list[date], list[datetime]
+]:
+    """Whole local days 2026-03-28/29/30 in Europe/Madrid (the spring-forward weekend).
+
+    The mirror of :func:`_dst_fall_back_window` for the short direction: 2026-03-29 holds
+    **92** intervals because 02:00 CET never happens.  Starts at 2026-03-27T23:00Z — which
+    is 2026-03-28 00:00 CET — so the slice opens exactly at local midnight and the truncated
+    day is whole rather than cut in half, and generates five days so the day *after* the
+    returned slice exists in the grid (events on the 29th plan through to the end of the
+    30th).  End-to-end coverage of this direction was the gap the fall-back tests left.
+    """
+    start = datetime(2026, 3, 27, 23, 0, tzinfo=UTC)
+    prices, load, usable, local_days, starts = _make_dataset(start, 5)
+    first_of_28 = next(i for i, d in enumerate(local_days) if d == date(2026, 3, 28))
+    first_of_31 = next(i for i, d in enumerate(local_days) if d == date(2026, 3, 31))
+    assert first_of_28 == 0, "fixture should open exactly at local midnight on the 28th"
+    return (
+        prices[first_of_28:first_of_31],
+        load[first_of_28:first_of_31],
+        usable[first_of_28:first_of_31],
+        local_days[first_of_28:first_of_31],
+        starts[first_of_28:first_of_31],
     )
 
 
@@ -2221,4 +2249,1451 @@ class TestDayBiasSharedAcrossVariants:
         true_slice = prices[self.TRAIN_END : len(starts)]
         assert biased.cost_eur == pytest.approx(
             float(np.dot(true_slice, grid[: true_slice.size])), rel=1e-9, abs=1e-9
+        )
+
+
+# ---------------------------------------------------------------------------
+# Golden values: the legacy two-publication schedule must stay bit-identical
+# ---------------------------------------------------------------------------
+
+#: Golden values for the cadence parameters' DEFAULT configuration, captured by
+#: running the implementation at ``git HEAD`` (before ``replan_interval_slots`` and
+#: ``horizon_slots`` existed) over the fixtures below.  They are literals, not
+#: recomputed at runtime, so a refactor that silently shifts the schedule, the
+#: information set, the clipping accounting or the executed dispatch fails here —
+#: the same technique that pinned the pre-bias price-noise stream.
+#:
+#: Both fixtures are pinned at four noise settings, because a golden that only
+#: covers ``sigma=0`` would not notice a perturbed noise stream: ``control`` is the
+#: exact-price arm, ``noisy_seed0``/``noisy_seed1`` are the same sigma at different
+#: seeds (their executed plans differ from each other AND from the control, so the
+#: digests are not vacuous), and ``bias_seed4`` exercises the day-level channel.
+_GOLDEN: dict[str, Any] = {
+    "simple": {
+        "eval_start_idx": 0,
+        "eval_end_idx": 480,
+        "n_events": 11,
+        "events_digest": "59bb99ea82ea3a956c8d92841934bdb3df000a9e538bf482f4e8511c3761eb2b",
+        "frozen_sha_eval": "2664e1f3d61225f33435a84c896b5c98ef16ac05e4d551ef6081cf874daad9f0",
+        "runs": {
+            "control": {
+                "cost_eur": 8.877136842105266,
+                "charge_sha": "6b97722ee240768a588feab902854e812d25254cef84b72af6c67d89dd982054",
+                "discharge_sha": "88d54d722e5352b6a05e428fcf536dd48fcb85c4123eac62795967ff176f8218",
+                "soc_sha": "cff44ece9e4a6597cda536a37583cf1f7f3e04c59fa8c1316cc3457771b8697f",
+                "grid_sha": "aed90b257d02b1c8cf1ebd4467e546e5dff609cc9b36a4b0b165c64905249293",
+                "event_count": 11,
+                "events_solved": 11,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.8640000000000025,
+                "efc": 4.999999999999998,
+                "noise_mape": 0.0,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 392,
+                "noise_bias_mean_applied": 0.0,
+            },
+            "noisy_seed0": {
+                "cost_eur": 8.877136842105267,
+                "charge_sha": "ccc6ad8134278c4bb9d5c35c81e8cffd477b56f0ad2db7532fa80fbf4a776d77",
+                "discharge_sha": "abaef15c323baadbe474b5f5d784df60dff7be2388040c31739510b0f0306250",
+                "soc_sha": "8a10f5fb0c4dc58af28ad2860e057437f8214737c77aebba3849ee46c9dce38c",
+                "grid_sha": "8ffbb7266f5ce17a97c198ca9ddb746c92c3aabba03f681e8130261e44cd8a07",
+                "event_count": 11,
+                "events_solved": 11,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.864000000000006,
+                "efc": 4.999999999999999,
+                "noise_mape": 0.1717510091292121,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 392,
+                "noise_bias_mean_applied": 0.0,
+            },
+            "noisy_seed1": {
+                "cost_eur": 8.877136842105267,
+                "charge_sha": "978ba2f4e9cdb11f9fced7f93cd48a0d3ac7ad48fb13aa5867f0812b4a0883f2",
+                "discharge_sha": "4e09c6221ea453bc1ad3685441421a51145e78736081d89739bd96fec3c969bf",
+                "soc_sha": "3b109f803de4438f11c6e033d1b10a324a5645e24e9093685744f0cc746e9cbe",
+                "grid_sha": "1f8edf627033466565804c7ecf1eaad482a1a02970b7d9617cca7f27de7ddb31",
+                "event_count": 11,
+                "events_solved": 11,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.864000000000008,
+                "efc": 4.999999999999998,
+                "noise_mape": 0.16270968882196465,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 392,
+                "noise_bias_mean_applied": 0.0,
+            },
+            "bias_seed4": {
+                "cost_eur": 8.877136842105267,
+                "charge_sha": "bef782884d9102fa544c65e98b560fdb8b13ec853017c91b98b8285cc227caa3",
+                "discharge_sha": "abcdd68bd4b327c53f7c6027c458c9038fd4f6131064a309177482379f6f3fa8",
+                "soc_sha": "cd519d37f685f72469cc432231c23d8897f5e3c25da5c53578343122d4b9287b",
+                "grid_sha": "1a912b846837311b7085c8d2370f3b7a8722525891269bac6f62331a45cffe80",
+                "event_count": 11,
+                "events_solved": 11,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.864000000000004,
+                "efc": 5.0,
+                "noise_mape": 0.14377740897324268,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 392,
+                "noise_bias_mean_applied": -0.12120637443466142,
+            },
+        },
+    },
+    "dst": {
+        "eval_start_idx": 0,
+        "eval_end_idx": 292,
+        "n_events": 7,
+        "events_digest": "5326a4fc79a7fd327d63edad4588608c00407ff72bf63c2810983671cbadbe23",
+        "frozen_sha_eval": "6622ab694a2d52e04199e5616c13e1b62ac44a9b89554a3191ca656be6ea3ad3",
+        "runs": {
+            "control": {
+                "cost_eur": 6.063828210526316,
+                "charge_sha": "d9218c0d66bd2ff76da0e346808b53e62474c8e464d8e6edf507b1e1732f0a7d",
+                "discharge_sha": "0cbaa480e6509fee96082a88921c6177b377eafdc5439076888eb282cf1fd1e7",
+                "soc_sha": "84775453203422a2fa0a447977e07e0f640b3296612affd3a60e7e4239c09e62",
+                "grid_sha": "8466024a4cf2a847684177d6dc85ec20a2142c19864540c5d04625b89d7935e2",
+                "event_count": 7,
+                "events_solved": 7,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.864000000000002,
+                "efc": 2.0,
+                "noise_mape": 0.0,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 196,
+                "noise_bias_mean_applied": 0.0,
+            },
+            "noisy_seed0": {
+                "cost_eur": 6.063828210526316,
+                "charge_sha": "62d09cd101511a3cf7d6af59eb340ee8dc7e9f140bd2137d107657fbebcf1b05",
+                "discharge_sha": "f4c62f2417b0552a8fac5c0cc371430cbff2173291065af5cfeda756f6ac4e4f",
+                "soc_sha": "265b6611c57f91388191935d33bdbc6a472e090c2d951bee8f04660e294522a3",
+                "grid_sha": "1f809f41dac3c3039cb227dc664a5c45d8053b303acc884736e2dd3e667bc7ff",
+                "event_count": 7,
+                "events_solved": 7,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.863999999999999,
+                "efc": 2.0000000000000004,
+                "noise_mape": 0.16040380367426837,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 196,
+                "noise_bias_mean_applied": 0.0,
+            },
+            "noisy_seed1": {
+                "cost_eur": 6.063828210526316,
+                "charge_sha": "62d09cd101511a3cf7d6af59eb340ee8dc7e9f140bd2137d107657fbebcf1b05",
+                "discharge_sha": "a033a965db787c957291a3c142c5a92e130bdaaca04ca3fa76669b3051325706",
+                "soc_sha": "f6c22bb12c054acd3ef24b1845ab2adc8599587b6cac8c881af5264827bdc881",
+                "grid_sha": "996774eb4abfa5690a5b7c45f516a0fa46f4e409df66f5d0abaa8a9eccde34cf",
+                "event_count": 7,
+                "events_solved": 7,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.864000000000001,
+                "efc": 2.0,
+                "noise_mape": 0.16198595418642733,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 196,
+                "noise_bias_mean_applied": 0.0,
+            },
+            "bias_seed4": {
+                "cost_eur": 6.063828210526316,
+                "charge_sha": "62d09cd101511a3cf7d6af59eb340ee8dc7e9f140bd2137d107657fbebcf1b05",
+                "discharge_sha": "f4c62f2417b0552a8fac5c0cc371430cbff2173291065af5cfeda756f6ac4e4f",
+                "soc_sha": "265b6611c57f91388191935d33bdbc6a472e090c2d951bee8f04660e294522a3",
+                "grid_sha": "1f809f41dac3c3039cb227dc664a5c45d8053b303acc884736e2dd3e667bc7ff",
+                "event_count": 7,
+                "events_solved": 7,
+                "events_with_clipping": 0,
+                "charge_clipped_kwh": 0.0,
+                "discharge_clipped_kwh": 0.0,
+                "terminal_soc_kwh": 4.863999999999999,
+                "efc": 2.0000000000000004,
+                "noise_mape": 0.25680243875573194,
+                "noise_sign_flips": 0,
+                "noise_stats_slots": 196,
+                "noise_bias_mean_applied": -0.24573319248850523,
+            },
+        },
+    },
+}
+
+_GOLDEN_CONFIGS: dict[str, dict[str, float | int]] = {
+    "control": {"sigma": 0.0, "bias_sigma": 0.0, "seed": 0},
+    "noisy_seed0": {"sigma": 0.2, "bias_sigma": 0.0, "seed": 0},
+    "noisy_seed1": {"sigma": 0.2, "bias_sigma": 0.0, "seed": 1},
+    "bias_seed4": {"sigma": 0.1, "bias_sigma": 0.2, "seed": 4},
+}
+
+
+def _golden_fixture(
+    name: str,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[date], list[datetime], np.ndarray]:
+    """The two fixtures the golden values were captured on, rebuilt here.
+
+    ``simple`` is the cheap-night / expensive-evening shape used by
+    :class:`TestRollingHorizon` over five local days opening at 02:00 CEST (so the
+    first local day is partial and a warmup event is required — the golden covers the
+    warmup path too).  ``dst`` is the whole 2025-10-25/26/27 fall-back weekend, where
+    day 26 is 100 intervals.
+
+    Both the fixture construction and the digests must agree with HEAD's numbers, so
+    this builder is deliberately written out in full rather than reusing the helper
+    methods above: if one of those fixtures is ever edited, the golden test fails
+    loudly instead of silently re-baselining.
+    """
+    if name == "simple":
+        start = datetime(2025, 6, 15, 0, 0, tzinfo=UTC)
+        n = 5 * 96
+        prices = np.full(n, 0.15)
+        load = np.full(n, 0.2)
+        starts = [start + timedelta(seconds=i * QUARTER) for i in range(n)]
+        for i in range(n):
+            hour = (i % 96) // 4
+            prices[i] = (
+                0.05
+                if hour < 6
+                else 0.20
+                if hour < 10
+                else 0.12
+                if hour < 14
+                else 0.08
+                if hour < 18
+                else 0.25
+                if hour < 22
+                else 0.06
+            )
+        window = 28
+    elif name == "dst":
+        raw_start = datetime(2025, 10, 24, 22, 0, tzinfo=UTC)
+        raw_n = 5 * 96
+        raw_prices = np.full(raw_n, 0.15)
+        raw_load = np.full(raw_n, 0.2)
+        raw_starts = [raw_start + timedelta(seconds=i * QUARTER) for i in range(raw_n)]
+        for i in range(raw_n):
+            hour = (i % 96) // 4
+            raw_prices[i] = 0.05 if hour < 6 else 0.25 if 18 <= hour < 22 else 0.12
+        raw_days = [s.astimezone(MADRID).date() for s in raw_starts]
+        lo = next(i for i, d in enumerate(raw_days) if d == date(2025, 10, 25))
+        hi = next(i for i, d in enumerate(raw_days) if d == date(2025, 10, 28))
+        prices, load = raw_prices[lo:hi], raw_load[lo:hi]
+        starts = raw_starts[lo:hi]
+        window = 1
+    else:  # pragma: no cover - a typo in the table above must not pass silently
+        raise AssertionError(f"unknown golden fixture {name!r}")
+
+    usable = np.ones(len(starts), dtype=bool)
+    local_days = [s.astimezone(MADRID).date() for s in starts]
+    frozen, _ = build_frozen_load_profile(
+        load,
+        local_days,
+        usable,
+        training_end_idx=96,
+        window_days=window,
+        interval_starts_utc=starts,
+    )
+    return prices, load, usable, local_days, starts, frozen
+
+
+def _run_digest(values: np.ndarray) -> str:
+    """SHA-256 of an array as big-endian float64 — same encoding as ``_golden_digest``."""
+    return hashlib.sha256(np.asarray(values, dtype=">f8").tobytes()).hexdigest()
+
+
+class TestLegacyCadenceGolden:
+    """The default configuration must reproduce HEAD bit-for-bit.
+
+    Requirement: adding a configurable replan cadence must not move the already
+    measured two-publication results.  The digests in :data:`_GOLDEN` came from the
+    implementation at ``git HEAD``, so this test compares against a reference the
+    current code cannot influence.
+    """
+
+    @pytest.mark.parametrize("fixture", sorted(_GOLDEN))
+    @pytest.mark.parametrize("config", sorted(_GOLDEN_CONFIGS))
+    def test_executed_dispatch_matches_golden(self, fixture: str, config: str) -> None:
+        golden = _GOLDEN[fixture]["runs"][config]
+        prices, load, usable, local_days, starts, frozen = _golden_fixture(fixture)
+        block = _GOLDEN[fixture]
+        kwargs = _GOLDEN_CONFIGS[config]
+
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=block["eval_start_idx"],
+            eval_end_idx=block["eval_end_idx"],
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            **kwargs,
+        )
+
+        assert _run_digest(result.schedule.charge_kwh) == golden["charge_sha"], (
+            f"{fixture}/{config}: the executed charge profile moved. The cadence "
+            "parameters were supposed to default to the legacy schedule exactly"
+        )
+        assert _run_digest(result.schedule.discharge_kwh) == golden["discharge_sha"]
+        assert _run_digest(result.schedule.soc_kwh) == golden["soc_sha"]
+        assert _run_digest(result.schedule.grid_kwh) == golden["grid_sha"]
+        assert result.cost_eur == golden["cost_eur"]
+        assert result.meter_cost_eur == golden["cost_eur"]
+        assert float(result.schedule.efc) == pytest.approx(golden["efc"], rel=1e-12)
+        assert result.telemetry["terminal_soc_kwh"] == golden["terminal_soc_kwh"]
+
+        # Event geometry and stage counters.
+        assert result.telemetry["event_count"] == golden["event_count"]
+        assert result.telemetry["events_solved"] == golden["events_solved"]
+        assert result.telemetry["events_with_clipping"] == golden["events_with_clipping"]
+        assert result.telemetry["charge_clipped_kwh"] == golden["charge_clipped_kwh"]
+        assert result.telemetry["discharge_clipped_kwh"] == golden["discharge_clipped_kwh"]
+
+        # Which slots were estimated, and how wrong they were: the information set is
+        # part of the golden, so a cadence refactor that let day D+1 be treated as
+        # published before 20:30 would move noise_stats_slots and the error metrics.
+        assert result.noise_metadata["stats_slots_considered"] == golden["noise_stats_slots"]
+        assert result.noise_metadata["mape"] == pytest.approx(golden["noise_mape"], rel=1e-12)
+        assert result.noise_metadata["sign_flips"] == golden["noise_sign_flips"]
+        assert result.noise_metadata["bias_mean_applied"] == pytest.approx(
+            golden["noise_bias_mean_applied"], rel=1e-12, abs=1e-15
+        )
+
+    @pytest.mark.parametrize("fixture", sorted(_GOLDEN))
+    def test_event_schedule_matches_golden(self, fixture: str) -> None:
+        """The event table itself is pinned, not only the dispatch it produces."""
+        block = _GOLDEN[fixture]
+        _p, _l, _u, local_days, starts, frozen = _golden_fixture(fixture)
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=block["eval_start_idx"],
+            eval_end_idx=block["eval_end_idx"],
+            tz=MADRID,
+        )
+        table = [
+            [
+                e.index,
+                str(e.local_day),
+                e.kind,
+                e.start_idx,
+                e.plan_end_idx,
+                e.exec_end_idx,
+                e.prices_exact_end_idx,
+            ]
+            for e in events
+        ]
+        assert len(table) == block["n_events"]
+        assert hashlib.sha256(json.dumps(table).encode()).hexdigest() == block["events_digest"]
+        # And the new parameters left unset are the same run as them set to None
+        # explicitly: the default IS the legacy schedule, not a close relative.
+        explicit = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=block["eval_start_idx"],
+            eval_end_idx=block["eval_end_idx"],
+            tz=MADRID,
+            replan_interval_slots=None,
+            horizon_slots=None,
+        )
+        assert [
+            [
+                e.index,
+                str(e.local_day),
+                e.kind,
+                e.start_idx,
+                e.plan_end_idx,
+                e.exec_end_idx,
+                e.prices_exact_end_idx,
+            ]
+            for e in explicit
+        ] == table
+
+    @pytest.mark.parametrize("fixture", sorted(_GOLDEN))
+    def test_frozen_forecast_matches_golden(self, fixture: str) -> None:
+        """The frozen load profile is unchanged too (no leakage path was added)."""
+        block = _GOLDEN[fixture]
+        _p, _l, _u, _ld, _st, frozen = _golden_fixture(fixture)
+        lo, hi = block["eval_start_idx"], block["eval_end_idx"]
+        assert _run_digest(frozen[lo:hi]) == block["frozen_sha_eval"]
+
+    def test_golden_arm_labels_are_distinguishable(self) -> None:
+        """Non-vacuity: the pinned digests actually depend on the seed.
+
+        Four arms of the same fixture would all pass a pin of "nothing moved" if the
+        noise had no effect at all, so at least one fixture must show different
+        executed plans for different seeds and for the exact-price control.  If this
+        ever fails, the golden is no longer testing the noise stream and the fixture
+        needs to be made price-sensitive again.
+        """
+        runs = _GOLDEN["simple"]["runs"]
+        assert runs["control"]["charge_sha"] != runs["noisy_seed0"]["charge_sha"]
+        assert runs["noisy_seed0"]["charge_sha"] != runs["noisy_seed1"]["charge_sha"]
+        assert runs["control"]["noise_mape"] == 0.0
+        assert runs["noisy_seed0"]["noise_mape"] > 0.0
+
+    def test_default_run_matches_explicit_none_run(self) -> None:
+        """Omitting the new arguments and passing ``None`` are one and the same run."""
+        prices, load, usable, local_days, starts, frozen = _golden_fixture("simple")
+        common: dict[str, Any] = dict(
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=0,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.2,
+            seed=0,
+        )
+        implicit = run_rolling_horizon(_spec(), **common)
+        explicit = run_rolling_horizon(
+            _spec(), **common, replan_interval_slots=None, horizon_slots=None
+        )
+        assert implicit.cost_eur == explicit.cost_eur
+        assert np.array_equal(implicit.schedule.charge_kwh, explicit.schedule.charge_kwh)
+        for key in ("replan_interval_slots", "horizon_slots", "horizon_hours_nominal"):
+            assert implicit.telemetry[key] is None
+            assert explicit.telemetry[key] is None
+        assert "two daily publications" in implicit.telemetry["replan_cadence"]
+
+
+# ---------------------------------------------------------------------------
+# Configurable replan cadence
+# ---------------------------------------------------------------------------
+
+
+def _daily_shape_window(
+    start: datetime = datetime(2025, 6, 10, 0, 0, tzinfo=UTC),
+    n_days: int = 4,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[date], list[datetime]]:
+    """A DST-free quarter-hour grid with a daily price swing and a ramping load.
+
+    The default start is 00:00 UTC = **02:00 CEST**, so the first local day is partial
+    (88 intervals) and the interior days are whole 96-interval ones — a shape in which a
+    slot-counted cadence and a wall-clock-counted schedule can be compared without a DST
+    day confounding the interval arithmetic.  Prices follow the cheap-night /
+    expensive-evening profile used by the other rolling-horizon fixtures.
+    """
+    n = n_days * 96
+    starts = [start + timedelta(seconds=i * QUARTER) for i in range(n)]
+    local_days = [s.astimezone(MADRID).date() for s in starts]
+    prices = np.empty(n)
+    load = np.empty(n)
+    for i in range(n):
+        hour = (i % 96) // 4
+        prices[i] = (
+            0.05
+            if hour < 6
+            else 0.20
+            if hour < 10
+            else 0.12
+            if hour < 14
+            else 0.08
+            if hour < 18
+            else 0.25
+            if hour < 22
+            else 0.06
+        )
+        load[i] = 0.10 + 0.02 * (i % 96) / 4.0
+    usable = np.ones(n, dtype=bool)
+    return prices, load, usable, local_days, starts
+
+
+def _estimated_days(
+    event: Any,
+    local_days: list[date],
+) -> list[date]:
+    """Local days whose prices this event's plan had to estimate.
+
+    Read off ``prices_exact_end_idx`` — the interval the dispatcher itself uses —
+    rather than recomputed from the clock, so the assertion is about what the solver
+    was actually handed.
+    """
+    return sorted({local_days[i] for i in range(event.prices_exact_end_idx, event.plan_end_idx)})
+
+
+class TestPublicationRuleAtEveryCadence:
+    """The information set is a function of the decision instant, not of the cadence.
+
+    Specification restated from the ADR for verification: day-ahead prices for local
+    day ``D+1`` are published in the 20:15–20:20 window on day ``D``, and this module
+    treats them as available from 20:30 (the first quarter-hour boundary after the
+    window).  So a solve at any local time before 20:30 on day ``D`` sees ``D`` exact
+    and ``D+1`` estimated, and a solve at 20:30 or later sees ``D`` and ``D+1`` exact.
+    The expectations below are built from that statement of the rule, independently of
+    ``_last_published_day``, which is what makes them a check on it rather than an
+    echo of it.
+    """
+
+    #: Six local days starting 2025-06-10T00:00Z (= 02:00 CEST), so days 11–14 are
+    #: whole and a 48 h horizon from any instant of day 11 stays inside the data.
+    _SWEEP_DAYS = 6
+    _SWEEP_DAY = date(2025, 6, 11)
+
+    def _local_midnight_idx(self, local_days: list[date], day: date) -> int:
+        return next(i for i, d in enumerate(local_days) if d == day)
+
+    def test_sweep_of_a_full_day_at_15_minute_cadence(self) -> None:
+        """Every decision instant of one local day, across the 20:30 boundary."""
+        _p, _l, _u, local_days, starts = _daily_shape_window(n_days=self._SWEEP_DAYS)
+        del _p, _l, _u
+        day = self._SWEEP_DAY
+        day_next = day + timedelta(days=1)
+        first_of_day = self._local_midnight_idx(local_days, day)
+        assert local_days[first_of_day - 1] != day, "fixture must open the sweep day at midnight"
+
+        # 48 h horizon, the top of ADR-0001's band, so a plan reaches past tomorrow: a
+        # solve before 20:30 must estimate every day after D, one after that must
+        # estimate every day after D+1.  The window runs to the end of the data so no
+        # plan is clipped short of those days.
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=first_of_day,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            replan_interval_slots=1,
+            horizon_slots=192,
+        )
+        day_events = [ev for ev in events if local_days[ev.start_idx] == day]
+        assert len(day_events) == 96, "one solve per quarter-hour of the local day"
+
+        boundary = None
+        for ev in day_events:
+            local = starts[ev.start_idx].astimezone(MADRID)
+            assert ev.local_day == day
+            assert ev.plan_end_idx == ev.start_idx + 192, "the horizon must not be clipped"
+            before_publication = (local.hour, local.minute) < EVENING_EVENT
+            estimated = _estimated_days(ev, local_days)
+
+            # Expected set, derived from the rule as stated in this class's docstring:
+            # the plan's own local days, minus those already published at the decision
+            # instant.  Days the horizon does not reach are not estimated, so this is
+            # a statement about the split point rather than about horizon length.
+            last_exact = _expected_last_exact_for_event(starts[ev.start_idx])
+            plan_days = sorted({local_days[i] for i in range(ev.start_idx, ev.plan_end_idx)})
+            assert day in plan_days and day_next in plan_days, (
+                f"fixture drifted: a 48 h plan from {local:%H:%M} must cover D and D+1"
+            )
+            assert estimated == [d for d in plan_days if d > last_exact], (
+                f"solve at {local:%H:%M} on {day}: expected {last_exact} to be the last "
+                f"published day, so it should estimate {[d for d in plan_days if d > last_exact]}, "
+                f"got {estimated}"
+            )
+            if before_publication:
+                assert day not in estimated and day_next in estimated, (
+                    f"solve at {local:%H:%M} on {day} estimated {estimated}: day {day} "
+                    "must be exact and D+1 must be estimated before the 20:30 boundary"
+                )
+            else:
+                assert day_next not in estimated, (
+                    f"solve at {local:%H:%M} on {day} estimated {estimated}: D+1 prices "
+                    "are published from 20:30 on D, so they must be exact afterwards"
+                )
+            if boundary is None and not before_publication:
+                boundary = (local.hour, local.minute)
+        assert boundary == EVENING_EVENT, f"first exact-tomorrow solve was at {boundary}"
+
+    def test_just_before_and_just_after_the_publication_boundary(self) -> None:
+        """The two quarter-hours that straddle the window are the whole test."""
+        _p, _l, _u, local_days, starts = _daily_shape_window(n_days=self._SWEEP_DAYS)
+        del _p, _l, _u
+        day = self._SWEEP_DAY
+        day_next = day + timedelta(days=1)
+        for minute, expect_estimated in ((15, True), (30, False)):
+            instant = datetime(2025, 6, 11, 20, minute, tzinfo=MADRID)
+            idx = next(i for i, s in enumerate(starts) if s >= instant.astimezone(UTC))
+            assert starts[idx].astimezone(MADRID).minute == minute
+            assert local_days[idx] == day
+            events = compute_rolling_events(
+                starts,
+                local_days,
+                eval_start_idx=idx,
+                eval_end_idx=len(starts),
+                tz=MADRID,
+                replan_interval_slots=1,
+                horizon_slots=96,
+            )
+            estimated = _estimated_days(events[0], local_days)
+            if expect_estimated:
+                assert estimated == [day_next], (
+                    f"20:15 is inside/before the 20:15–20:20 publication window, so "
+                    f"{day_next} must still be estimated; got {estimated}"
+                )
+            else:
+                assert estimated == [], (
+                    f"20:30 is the first boundary after the publication window, so "
+                    f"{day_next} must be exact; got {estimated}"
+                )
+
+    @pytest.mark.parametrize("cadence", [1, 4, 24, 96])
+    def test_information_set_does_not_depend_on_cadence(self, cadence: int) -> None:
+        """Same decision instants, same information, whatever the replan spacing.
+
+        The legacy afternoon solve at 14:00 and a fine-cadence solve that happens to
+        land at 14:00 must agree on which days are estimated.  If a cadence mode
+        quietly widened the information set, the comparison against day-ahead would be
+        measuring an unrealisable oracle.
+        """
+        _p, _l, _u, local_days, starts = _daily_shape_window(n_days=self._SWEEP_DAYS)
+        del _p, _l, _u
+        # 14:00 is 56 quarter-hours after local midnight on a normal CEST day.
+        four_pm = self._local_midnight_idx(local_days, self._SWEEP_DAY) + 56
+        assert starts[four_pm].astimezone(MADRID).hour == AFTERNOON_EVENT[0]
+
+        # Legacy schedule: the 14:00 afternoon event, planned to midnight ending D+1.
+        legacy_events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=four_pm,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+        )
+        legacy = [ev for ev in legacy_events if ev.kind == "afternoon" and ev.start_idx == four_pm]
+        assert len(legacy) == 1, "the 14:00 event must be the first legacy event in the window"
+        legacy_end = legacy[0].plan_end_idx
+        assert legacy_end > four_pm
+
+        # Same horizon, so the comparison is about the information set and not about
+        # how far each mode looks ahead.
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=four_pm,
+            eval_end_idx=legacy_end,
+            tz=MADRID,
+            replan_interval_slots=cadence,
+            horizon_slots=legacy_end - four_pm,
+        )
+        at_two_pm = [ev for ev in events if ev.start_idx == four_pm]
+        assert at_two_pm, f"no solve at 14:00 with cadence {cadence}"
+        assert _estimated_days(at_two_pm[0], local_days) == _estimated_days(
+            legacy[0], local_days
+        ), f"cadence {cadence} changed which days are estimated at 14:00"
+
+    def test_cadence_mode_never_credits_an_unpublished_tomorrow(self) -> None:
+        """No interval may be priced exact unless its day was published at the instant."""
+        prices, load, usable, local_days, starts = _daily_shape_window()
+        del prices, load, usable
+        events = compute_rolling_events(
+            starts,
+            local_days,
+            eval_start_idx=96,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            replan_interval_slots=4,
+            horizon_slots=96,
+        )
+        for ev in events:
+            assert ev.prices_exact_end_idx <= ev.plan_end_idx, ev
+            assert ev.exec_end_idx <= ev.plan_end_idx, ev
+            last_exact = _expected_last_exact_for_event(starts[ev.start_idx])
+            # Every interval marked exact belongs to a day at or before the boundary,
+            # and every interval past it belongs to a later (unpublished) day.
+            for i in range(ev.start_idx, ev.plan_end_idx):
+                interval_day = local_days[i]
+                if i < ev.prices_exact_end_idx:
+                    assert interval_day <= last_exact, (
+                        f"interval {i} ({interval_day}) was priced exact by the solve at "
+                        f"{starts[ev.start_idx].astimezone(MADRID):%H:%M}, after day "
+                        f"{last_exact} was the last one published"
+                    )
+                else:
+                    assert interval_day > last_exact, (
+                        f"interval {i} ({interval_day}) was estimated although day "
+                        f"{last_exact} was the last published one"
+                    )
+
+
+def _expected_last_exact_for_event(ev_start_utc: datetime) -> date:
+    """Independent restatement of the publication rule for the sweep tests."""
+    local = ev_start_utc.astimezone(MADRID)
+    if (local.hour, local.minute) >= EVENING_EVENT:
+        return local.date() + timedelta(days=1)
+    return local.date()
+
+
+# ---------------------------------------------------------------------------
+# End-to-end dispatch at a configurable cadence
+# ---------------------------------------------------------------------------
+
+
+def _cadence_data(
+    n_days: int = 2,
+    start: datetime = datetime(2025, 6, 10, 0, 0, tzinfo=UTC),
+    *,
+    window_days: int = 1,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[date], list[datetime], np.ndarray]:
+    """Small synthetic fixture plus its frozen profile, for cadence tests.
+
+    The window opens at index 96 so one local day sits before the cut and the frozen
+    profile is a real trailing mean rather than a degenerate one.
+    """
+    prices, load, usable, local_days, starts = _daily_shape_window(start, n_days)
+    frozen, _ = build_frozen_load_profile(
+        load,
+        local_days,
+        usable,
+        training_end_idx=96,
+        window_days=window_days,
+        interval_starts_utc=starts,
+    )
+    return prices, load, usable, local_days, starts, frozen
+
+
+def _cadence_arguments(
+    *,
+    n_days: int = 2,
+    start: datetime = datetime(2025, 6, 10, 0, 0, tzinfo=UTC),
+    sigma: float = 0.0,
+    seed: int = 0,
+) -> dict[str, Any]:
+    """Keyword arguments for :func:`run_rolling_horizon` on a small cadence fixture."""
+    prices, load, usable, local_days, starts, frozen = _cadence_data(n_days, start)
+    return dict(
+        prices=prices,
+        load_kwh=load,
+        usable=usable,
+        interval_seconds=QUARTER,
+        local_days=local_days,
+        interval_starts_utc=starts,
+        eval_start_idx=96,
+        eval_end_idx=len(starts),
+        tz=MADRID,
+        frozen_load=frozen,
+        terminal_value_eur_per_kwh=0.10,
+        sigma=sigma,
+        seed=seed,
+    )
+
+
+def _cadence_run(
+    *,
+    n_days: int = 2,
+    cadence: int = 1,
+    horizon_slots: int | None = 96,
+    sigma: float = 0.0,
+    seed: int = 0,
+    start: datetime = datetime(2025, 6, 10, 0, 0, tzinfo=UTC),
+) -> Any:
+    """Run the dispatcher on a small synthetic fixture at the given cadence.
+
+    Two local days by default (96 executed intervals): enough to prove the roll
+    actually dispatches at a fine cadence, small enough that the suite stays fast.
+    """
+    return run_rolling_horizon(
+        _spec(),
+        **_cadence_arguments(n_days=n_days, start=start, sigma=sigma, seed=seed),
+        replan_interval_slots=cadence,
+        horizon_slots=horizon_slots,
+    )
+
+
+class TestReplanCadenceDispatch:
+    """The 15-minute-cadence mode rolls a real dispatch, at every DST shape."""
+
+    def test_15_minute_cadence_end_to_end(self) -> None:
+        result = _cadence_run(cadence=1, horizon_slots=96)
+        tele = result.telemetry
+        n_eval = result.schedule.grid_kwh.size
+
+        # One solve per executed interval, and every interval executed exactly once.
+        assert tele["replan_interval_slots"] == 1
+        assert tele["horizon_slots"] == 96
+        assert tele["solve_count"] == n_eval == 96
+        assert tele["event_count"] == 96
+        coverage = np.zeros(n_eval, dtype=int)
+        for rec in result.per_event:
+            assert rec["kind"] == "replan"
+            assert rec["exec_end_idx"] <= rec["plan_end_idx"]
+            coverage[rec["start_idx"] - 96 : rec["exec_end_idx"] - 96] += 1
+        assert np.all(coverage == 1), (
+            f"15-minute cadence coverage: {int((coverage == 0).sum())} gaps, "
+            f"{int((coverage > 1).sum())} overlaps"
+        )
+
+        # Physics still holds: the battery is never outside its window, never
+        # simultaneous, never exporting.
+        soc = result.schedule.soc_kwh
+        assert np.all(soc >= _spec().soc_bound_kwh("min") - 1e-9)
+        assert np.all(soc <= _spec().soc_bound_kwh("max") + 1e-9)
+        charge = np.asarray(result.schedule.charge_kwh, dtype=float)
+        discharge = np.asarray(result.schedule.discharge_kwh, dtype=float)
+        assert not np.any((charge > 1e-9) & (discharge > 1e-9))
+        assert np.all(result.schedule.grid_kwh >= -1e-9)
+
+    def test_15_minute_cadence_over_a_dst_fall_back_day(self) -> None:
+        """2025-10-26 is 100 intervals; a slot-counted cadence must still tile it."""
+        prices, load, usable, local_days, starts = _dst_fall_back_window()
+        oct26 = next(i for i, d in enumerate(local_days) if d == date(2025, 10, 26))
+        oct27 = next(i for i, d in enumerate(local_days) if d == date(2025, 10, 27))
+        assert oct27 - oct26 == 100, "fixture drifted: the fall-back day is 100 intervals"
+
+        frozen, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=oct26,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=oct26,
+            eval_end_idx=oct26 + 100,  # exactly the 25-hour local day
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=42,
+            replan_interval_slots=1,
+            horizon_slots=96,
+        )
+        n_eval = result.schedule.grid_kwh.size
+        assert n_eval == 100
+        assert result.telemetry["event_count"] == 100
+        assert result.telemetry["solve_count"] == 100
+
+        # Every interval of the long day, repeated hour included, executed once.
+        coverage = np.zeros(n_eval, dtype=int)
+        for rec in result.per_event:
+            coverage[rec["start_idx"] - oct26 : rec["exec_end_idx"] - oct26] += 1
+        assert np.all(coverage == 1), (
+            f"DST 15-minute cadence: {int((coverage == 0).sum())} gaps, "
+            f"{int((coverage > 1).sum())} overlaps"
+        )
+        # No solve may be shorter than the slice it dispatches.
+        for rec in result.per_event:
+            assert rec["exec_intervals"] >= 1
+            assert rec["exec_intervals"] <= rec["plan_intervals"]
+        # The horizon is a fixed number of *intervals*, so it spans real elapsed time
+        # uniformly across the transition — 96 slots before midnight, fewer after,
+        # because the run ends with the day.
+        assert max(rec["plan_intervals"] for rec in result.per_event) == 96
+
+    def test_legacy_cadence_over_a_dst_spring_forward_day(self) -> None:
+        """2026-03-29 is 92 intervals; the two-publication schedule must still tile it.
+
+        The fall-back direction was covered end to end and this one was not, which matters
+        because the two transitions fail differently: a 25-hour day tests whether the
+        repeated hour is planned twice, a 23-hour day tests whether a horizon counted in
+        *intervals* still reaches the next local midnight when the day is short.
+        """
+        prices, load, usable, local_days, starts = _dst_spring_forward_window()
+        mar29 = next(i for i, d in enumerate(local_days) if d == date(2026, 3, 29))
+        mar30 = next(i for i, d in enumerate(local_days) if d == date(2026, 3, 30))
+        assert mar30 - mar29 == 92, "fixture drifted: the spring-forward day is 92 intervals"
+        # The skipped hour is genuinely absent from the wall clock, not merely unlabelled.
+        assert 2 not in {starts[i].astimezone(MADRID).hour for i in range(mar29, mar30)}
+
+        frozen, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=mar29,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+        # Evaluate the short day *and* the day after it.  Ending the window at the close of
+        # the 29th would clip every horizon there and hide the property worth testing: that
+        # an evening solve on a 23-hour day still plans across midnight into a 24-hour one.
+        eval_end = len(local_days)
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=mar29,
+            eval_end_idx=eval_end,  # the 23-hour day plus the whole day after it
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=42,
+        )
+        n_eval = result.schedule.grid_kwh.size
+        assert n_eval == eval_end - mar29 == 92 + 96
+        assert result.telemetry["events_infeasible"] == 0
+        assert result.telemetry["events_no_incumbent"] == 0
+
+        # Every interval of both days executed exactly once: no gap where 02:00 would
+        # have been, and no double-dispatch either side of it.
+        coverage = np.zeros(n_eval, dtype=int)
+        for rec in result.per_event:
+            coverage[rec["start_idx"] - mar29 : rec["exec_end_idx"] - mar29] += 1
+        assert np.all(coverage == 1), (
+            f"spring-forward legacy cadence: {int((coverage == 0).sum())} gaps, "
+            f"{int((coverage > 1).sum())} overlaps"
+        )
+        for rec in result.per_event:
+            assert rec["exec_intervals"] >= 1
+            assert rec["exec_intervals"] <= rec["plan_intervals"]
+
+        # Both publications happen on the 23-hour day, and the longest plan reaches past
+        # the end of that day into the next one — a horizon counted in local days, not in
+        # a fixed 96 slots, so the short day does not truncate it.
+        assert result.telemetry["event_count"] >= 2
+        assert max(rec["plan_intervals"] for rec in result.per_event) > 92
+        assert any(rec["plan_end_idx"] > mar30 for rec in result.per_event), (
+            "no solve planned across the spring-forward day's midnight"
+        )
+
+    def test_15_minute_cadence_over_a_dst_spring_forward_day(self) -> None:
+        """A slot-counted cadence must tile a 92-interval day exactly as it tiles a 100 one."""
+        prices, load, usable, local_days, starts = _dst_spring_forward_window()
+        mar29 = next(i for i, d in enumerate(local_days) if d == date(2026, 3, 29))
+        mar30 = next(i for i, d in enumerate(local_days) if d == date(2026, 3, 30))
+
+        frozen, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=mar29,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=mar29,
+            eval_end_idx=mar30,
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            sigma=0.1,
+            seed=42,
+            replan_interval_slots=1,
+            horizon_slots=96,
+        )
+        n_eval = result.schedule.grid_kwh.size
+        assert n_eval == 92
+        # One solve per interval of the short day: the cadence counts intervals, so a
+        # 23-hour day gets 92 solves and not the 96 a wall-clock reading would imply.
+        assert result.telemetry["event_count"] == 92
+        assert result.telemetry["solve_count"] == 92
+
+        coverage = np.zeros(n_eval, dtype=int)
+        for rec in result.per_event:
+            coverage[rec["start_idx"] - mar29 : rec["exec_end_idx"] - mar29] += 1
+        assert np.all(coverage == 1), (
+            f"spring-forward 15-minute cadence: {int((coverage == 0).sum())} gaps, "
+            f"{int((coverage > 1).sum())} overlaps"
+        )
+        for rec in result.per_event:
+            assert rec["exec_intervals"] == 1
+            assert rec["plan_intervals"] <= 96
+        # Executed once, planned many times: the multiplicity that makes clipping totals
+        # incomparable across cadences, restated on the short day.
+        assert result.telemetry["executed_multiplicity_mean"] == pytest.approx(1.0)
+        assert result.telemetry["planning_multiplicity_mean"] > 1.0
+        assert result.telemetry["clipping_totals_comparable_across_cadences"] is False
+
+    def test_cadence_coarser_than_one_still_tiles(self) -> None:
+        for cadence in (2, 4, 12, 96):
+            result = _cadence_run(cadence=cadence, horizon_slots=96)
+            n_eval = result.schedule.grid_kwh.size
+            coverage = np.zeros(n_eval, dtype=int)
+            for rec in result.per_event:
+                assert rec["exec_intervals"] == min(cadence, n_eval - (rec["start_idx"] - 96))
+                coverage[rec["start_idx"] - 96 : rec["exec_end_idx"] - 96] += 1
+            assert np.all(coverage == 1), f"cadence {cadence} left gaps or overlaps"
+            assert result.telemetry["event_count"] == int(np.ceil(n_eval / cadence))
+
+    def test_execution_is_clamped_to_the_plan_never_past_it(self) -> None:
+        """A cadence coarser than the horizon cannot execute unplaned intervals.
+
+        ``exec_end_idx`` is clamped to ``plan_end_idx``, so with ``replan_interval_slots``
+        larger than ``horizon_slots`` each solve plans and executes the same short slice:
+        the roll degenerates towards a fixed non-overlapping plan, and coverage still
+        tiles exactly once.  The clamp is what keeps the invariant honest rather than
+        pretending a longer horizon exists.
+        """
+        result = _cadence_run(cadence=24, horizon_slots=8)
+        records = result.per_event
+        for rec in records:
+            assert rec["exec_end_idx"] == rec["plan_end_idx"], rec
+            assert rec["plan_intervals"] == min(
+                8, result.schedule.grid_kwh.size - (rec["start_idx"] - 96)
+            ), rec
+            assert rec["exec_intervals"] == rec["plan_intervals"]
+        coverage = np.zeros(result.schedule.grid_kwh.size, dtype=int)
+        for rec in records:
+            coverage[rec["start_idx"] - 96 : rec["exec_end_idx"] - 96] += 1
+        assert np.all(coverage == 1)
+        # Planned multiplicity is exactly 1 here: no horizon overlaps the next one.
+        assert result.telemetry["planning_multiplicity_max"] == 1
+        assert result.telemetry["planning_multiplicity_mean"] == 1.0
+
+    @pytest.mark.parametrize("horizon_slots", [24, 48, 96, 144, 192])
+    def test_horizon_length_is_configurable(self, horizon_slots: int) -> None:
+        """The plan length follows the parameter, clipped by the end of the window."""
+        result = _cadence_run(cadence=4, horizon_slots=horizon_slots)
+        n_eval = result.schedule.grid_kwh.size
+        tele = result.telemetry
+        assert tele["horizon_slots"] == horizon_slots
+        assert tele["horizon_hours_nominal"] == pytest.approx(horizon_slots * QUARTER / 3600.0)
+        planned = [rec["plan_intervals"] for rec in result.per_event]
+        # Interior solves get the full horizon; only the tail of the window is clipped.
+        assert max(planned) == min(horizon_slots, n_eval)
+        for rec in result.per_event:
+            expected = min(horizon_slots, n_eval - (rec["start_idx"] - 96))
+            assert rec["plan_intervals"] == expected, rec
+            assert rec["exec_end_idx"] <= rec["plan_end_idx"]
+        # And a longer horizon really is a different plan, not the same one relabelled:
+        # the reported planned-slot total grows with it.
+        assert tele["planned_interval_slots_total"] == int(sum(planned))
+
+    def test_horizon_default_is_the_adr_band(self) -> None:
+        """Asking for a cadence without a horizon gives 24 h, inside ADR-0001's band."""
+        result = _cadence_run(cadence=1, horizon_slots=None)
+        assert result.telemetry["horizon_slots"] == 96
+        assert result.telemetry["horizon_hours_nominal"] == pytest.approx(24.0)
+
+    def test_solve_count_is_reported_and_drives_cost(self) -> None:
+        """Solve count is in the artifact, because it is what a run costs."""
+        fine = _cadence_run(cadence=1, horizon_slots=48)
+        coarse = _cadence_run(cadence=4, horizon_slots=48)
+        assert fine.telemetry["solve_count"] == 4 * coarse.telemetry["solve_count"] == 96
+        assert fine.telemetry["solve_count"] <= fine.telemetry["event_count"]
+        # Events that never reach the solver (skipped or frozen) are counted as such,
+        # so solve_count is a lower bound a reader can trust.
+        assert (
+            fine.telemetry["planning_events_not_solved"]
+            == fine.telemetry["event_count"] - fine.telemetry["solve_count"]
+        )
+        assert json.dumps(fine.telemetry, allow_nan=False)
+
+    def test_planned_versus_executed_multiplicity_is_reported(self) -> None:
+        """Multiplicity is stated explicitly so clipping is not read as curtailment."""
+        fine = _cadence_run(cadence=1, horizon_slots=48)
+        coarse = _cadence_run(cadence=4, horizon_slots=48)
+        for result in (fine, coarse):
+            tele = result.telemetry
+            assert tele["executed_multiplicity_mean"] == 1.0
+            assert tele["clipping_totals_comparable_across_cadences"] is False
+            assert "NOT curtailment" in tele["clipping_note"]
+            assert tele["planned_interval_slots_total"] >= tele["executed_interval_slots_total"]
+            assert tele["planning_multiplicity_mean"] >= 1.0
+            assert tele["planning_multiplicity_max"] >= tele["planning_multiplicity_mean"]
+
+        # The inflation is real and it tracks the cadence, which is exactly why the
+        # clipping kWh must not be compared across runs: same intervals executed, many
+        # more overlapping plans.
+        assert (
+            fine.telemetry["executed_interval_slots_total"]
+            == (coarse.telemetry["executed_interval_slots_total"])
+        )
+        assert fine.telemetry["planning_multiplicity_mean"] > (
+            3 * coarse.telemetry["planning_multiplicity_mean"]
+        )
+        # At cadence 1 with a 48-slot horizon every interval is planned by up to 48
+        # overlapping horizons.
+        assert fine.telemetry["planning_multiplicity_max"] == 48
+
+    def test_legacy_multiplicity_is_the_documented_two_and_a_half(self) -> None:
+        """The control configuration reports the multiplicity the status doc recorded.
+
+        ``hack/ROLLING_HORIZON_STATUS.md`` documents a measured planning multiplicity
+        mean of ~2.55 for the two-event schedule.  A five-day run is too short for that
+        mean to have converged (the warmup and the final clipped plans pull it down),
+        so this asserts the same order of magnitude and the exact maximum of 4 — an
+        interval inside the 14:00 and 20:30 plans of its own day and of the previous
+        day's two plans.
+        """
+        prices, load, usable, local_days, starts = _daily_shape_window(
+            datetime(2025, 6, 15, 0, 0, tzinfo=UTC), n_days=7
+        )
+        frozen, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=28,
+            interval_starts_utc=starts,
+        )
+        result = run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=96,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+        )
+        tele = result.telemetry
+        assert tele["replan_interval_slots"] is None
+        assert tele["solve_count"] == tele["event_count"]
+        assert 2.0 < tele["planning_multiplicity_mean"] < 3.0, tele["planning_multiplicity_mean"]
+        assert tele["planning_multiplicity_max"] == 4
+
+    @pytest.mark.parametrize("bad", [0, -1])
+    def test_rejects_a_nonsensical_cadence(self, bad: int) -> None:
+        prices, load, usable, local_days, starts = _daily_shape_window()
+        del prices, load, usable
+        with pytest.raises(ValueError, match="replan_interval_slots"):
+            compute_rolling_events(
+                starts,
+                local_days,
+                eval_start_idx=0,
+                eval_end_idx=96,
+                tz=MADRID,
+                replan_interval_slots=bad,
+            )
+        with pytest.raises(ValueError, match="replan_interval_slots"):
+            _cadence_run(cadence=bad, horizon_slots=96)
+
+    @pytest.mark.parametrize("bad", [0, -5])
+    def test_rejects_a_nonsensical_horizon(self, bad: int) -> None:
+        prices, load, usable, local_days, starts = _daily_shape_window()
+        del prices, load, usable
+        with pytest.raises(ValueError, match="horizon_slots"):
+            compute_rolling_events(
+                starts,
+                local_days,
+                eval_start_idx=0,
+                eval_end_idx=96,
+                tz=MADRID,
+                replan_interval_slots=1,
+                horizon_slots=bad,
+            )
+        with pytest.raises(ValueError, match="horizon_slots"):
+            _cadence_run(cadence=1, horizon_slots=bad)
+
+    def test_frozen_forecast_ignores_realized_future_load_at_cadence(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No cadence may let measured future load into a plan.
+
+        The load the solver sees comes from the frozen profile alone, which
+        :meth:`TestFrozenLoadProfile.test_strict_train_cut_holds_on_partial_first_local_day`
+        pins at the builder.  Here the same guarantee is checked through the dispatcher
+        at a fine cadence: rewriting every post-cut measured load leaves each solve's
+        forecast input bit-identical.  Realized load still bounds what a plan can do
+        (clipping), so the executed dispatch is allowed to differ — the plan inputs are
+        not.
+        """
+        from energy_baseline import rolling_horizon as rh
+
+        prices, load, usable, local_days, starts = _daily_shape_window(
+            datetime(2025, 6, 10, 0, 0, tzinfo=UTC), 3
+        )
+        cut = 96
+        original = rh.solve_oracle
+
+        def run(loads: np.ndarray, capture: list[np.ndarray]) -> Any:
+            frozen, _ = build_frozen_load_profile(
+                loads,
+                local_days,
+                usable,
+                training_end_idx=cut,
+                window_days=1,
+                interval_starts_utc=starts,
+            )
+
+            def spy(day_spec, horizon, **kw):  # noqa: ANN001 - mirrors solve_oracle
+                capture.append(np.asarray(horizon.load_kwh, dtype=float).copy())
+                capture.append(np.asarray(horizon.prices, dtype=float).copy())
+                return original(day_spec, horizon, **kw)
+
+            monkeypatch.setattr(rh, "solve_oracle", spy)
+            return rh.run_rolling_horizon(
+                _spec(),
+                prices=prices,
+                load_kwh=loads,
+                usable=usable,
+                interval_seconds=QUARTER,
+                local_days=local_days,
+                interval_starts_utc=starts,
+                eval_start_idx=cut,
+                eval_end_idx=cut + 96,
+                tz=MADRID,
+                frozen_load=frozen,
+                terminal_value_eur_per_kwh=0.10,
+                replan_interval_slots=4,
+                horizon_slots=48,
+            )
+
+        baseline_inputs: list[np.ndarray] = []
+        baseline = run(load, baseline_inputs)
+        perturbed = load.copy()
+        perturbed[cut:] = 12.0
+        perturbed_inputs: list[np.ndarray] = []
+        run(perturbed, perturbed_inputs)
+
+        # (forecast, prices) pairs per solve; cadence 4 over 96 intervals is 24 solves.
+        assert len(baseline_inputs) == 2 * baseline.telemetry["solve_count"]
+        assert baseline.telemetry["solve_count"] == 24
+        for a, b in zip(baseline_inputs, perturbed_inputs, strict=True):
+            assert np.array_equal(a, b), (
+                "a solve's forecast or price input changed when only post-cutoff "
+                "measured load changed: the plan read test data"
+            )
+        # Non-vacuity: the measured load really did move the executed dispatch, so the
+        # equality above is about the plan inputs, not about two identical runs.
+        after = run(perturbed, [])
+        assert not np.array_equal(baseline.schedule.charge_kwh, after.schedule.charge_kwh)
+
+
+class TestReplanCadenceInvariants:
+    """The invariants the legacy schedule was debugged to satisfy hold at any cadence.
+
+    Each check is the dispatcher's own guarantee (see ``hack/ROLLING_HORIZON_STATUS.md``
+    *Defects Found And Fixed*), re-asserted with ``replan_interval_slots`` set, because
+    a fine cadence changes the number of solves, the horizon overlap and the clipping
+    accounting — and those are exactly the places a bug of this family hides.
+    """
+
+    def test_soc_carried_is_actual_not_planned(self) -> None:
+        """Each solve starts from the real post-clipping SOC, not the plan's own.
+
+        Verified against the traced schedule: the SOC the dispatcher records as the end
+        of one event must equal the measured schedule at that interval boundary.  If the
+        planned end-of-horizon SOC were carried instead, the two would diverge whenever
+        clipping moved energy.
+        """
+        result = _cadence_run(cadence=1, horizon_slots=96, sigma=0.3, seed=2)
+        records = result.per_event
+        assert any(
+            rec["charge_clipped_kwh"] > 0 or rec["discharge_clipped_kwh"] > 0 for rec in records
+        ), "fixture produced no clipping, so actual-versus-planned is not being tested"
+        # ``simulate`` reports the SOC reached at the END of each interval, so an
+        # event's end-of-execution SOC must equal the schedule at its last executed
+        # interval — the real state, not the plan's end-of-horizon state.
+        soc = np.asarray(result.schedule.soc_kwh, dtype=float)
+        assert records[0]["soc_start_kwh"] == pytest.approx(
+            float(result.schedule.initial_soc_kwh), abs=1e-9
+        )
+        for rec in records:
+            last_executed = rec["exec_end_idx"] - 1 - 96
+            assert rec["soc_end_kwh"] == pytest.approx(float(soc[last_executed]), abs=1e-9), (
+                f"event {rec['event_index']} carried {rec['soc_end_kwh']} kWh but the "
+                f"measured schedule says {float(soc[last_executed])} at its own end: a "
+                "planned SOC was carried forward instead of the actual one"
+            )
+        for prev, nxt in zip(records, records[1:], strict=False):
+            assert nxt["soc_start_kwh"] == prev["soc_end_kwh"], (
+                "the roll did not carry the SOC it actually reached"
+            )
+        # A planned SOC would be the plan's own end-of-horizon value, which differs
+        # whenever the horizon extends past what was executed — always true here.
+        assert any(rec["plan_intervals"] > rec["exec_intervals"] for rec in records), (
+            "fixture never executed a short slice of a plan, so the check is vacuous"
+        )
+
+    def test_seed_floor_is_horizon_level_never_per_day(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The causal floor stays at ``max(soc_min, initial SOC of the window)``.
+
+        A per-event floor would let a solve spend charge that an earlier solve paid for.
+        The floor handed to the solver must therefore be the SAME constant for every
+        event of the roll, derived from the evaluation window's initial SOC.
+        """
+        from energy_baseline import rolling_horizon as rh
+
+        captured: list[float] = []
+        original = rh.solve_oracle
+
+        def spy(day_spec, horizon, **kw):  # noqa: ANN001 - mirrors solve_oracle
+            captured.append(float(kw["floor_kwh"]))
+            return original(day_spec, horizon, **kw)
+
+        monkeypatch.setattr(rh, "solve_oracle", spy)
+        result = _cadence_run(cadence=1, horizon_slots=96)
+
+        spec = _spec()
+        assert captured and len(captured) == result.telemetry["solve_count"]
+        assert set(captured) == {spec.causal_floor_kwh()}, (
+            f"the floor varied per solve: {sorted(set(captured))}"
+        )
+        assert result.telemetry["horizon_floor_kwh"] == pytest.approx(spec.causal_floor_kwh())
+
+    def test_solver_failure_degrades_and_still_tiles(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A failed solve holds SOC for its own slice; it is never back-filled."""
+        from energy_baseline import rolling_horizon as rh
+
+        prices, load, usable, local_days, starts = _daily_shape_window(n_days=2)
+        frozen, _ = build_frozen_load_profile(
+            load,
+            local_days,
+            usable,
+            training_end_idx=96,
+            window_days=1,
+            interval_starts_utc=starts,
+        )
+
+        calls = {"n": 0}
+        original = rh.solve_oracle
+
+        def failing(day_spec, horizon, **kw):  # noqa: ANN001 - mirrors solve_oracle
+            calls["n"] += 1
+            if calls["n"] in (1, 2, 5):
+                from energy_baseline.oracle import OracleError
+
+                raise OracleError("Simulated solver infeasible")
+            return original(day_spec, horizon, **kw)
+
+        monkeypatch.setattr(rh, "solve_oracle", failing)
+        result = rh.run_rolling_horizon(
+            _spec(),
+            prices=prices,
+            load_kwh=load,
+            usable=usable,
+            interval_seconds=QUARTER,
+            local_days=local_days,
+            interval_starts_utc=starts,
+            eval_start_idx=96,
+            eval_end_idx=len(starts),
+            tz=MADRID,
+            frozen_load=frozen,
+            terminal_value_eur_per_kwh=0.10,
+            replan_interval_slots=1,
+            horizon_slots=96,
+        )
+
+        failed = [rec for rec in result.per_event if rec["solver_status"] == "failed"]
+        assert len(failed) == 3
+        assert {rec["event_index"] for rec in failed} == {0, 1, 4}
+        for rec in failed:
+            assert rec["degradation"].endswith("_hold_soc"), rec["degradation"]
+            assert rec["note"], "a degraded event must record why it degraded"
+            assert rec["charge_kwh"] == 0.0 and rec["discharge_kwh"] == 0.0
+            assert rec["soc_end_kwh"] == rec["soc_start_kwh"], (
+                "a degraded event moved the SOC it did not earn"
+            )
+        assert result.telemetry["events_infeasible"] == 3
+        # Every event still reached the solver: a failure is counted, not substituted.
+        assert result.telemetry["solve_count"] == result.telemetry["event_count"] == 96
+
+        # Failed slices are executed as zero flows, not re-planned: coverage once more.
+        coverage = np.zeros(len(starts) - 96, dtype=int)
+        for rec in result.per_event:
+            coverage[rec["start_idx"] - 96 : rec["exec_end_idx"] - 96] += 1
+        assert np.all(coverage == 1)
+
+    def test_planning_and_scoring_terminal_values_stay_separate(self) -> None:
+        """Planning values leftover charge; scoring does not."""
+        result = _cadence_run(cadence=4, horizon_slots=96)
+        tele = result.telemetry
+        assert tele["terminal_value_eur_per_kwh"] == pytest.approx(0.10)
+        # Scoring is the metered cost against TRUE prices: the shared zero scoring
+        # terminal value means no inventory adjustment ever enters the reported figure.
+        assert result.cost_eur == pytest.approx(result.meter_cost_eur, rel=0.0, abs=0.0)
+        prices, _l, usable, _ld, _st, _fz = _cadence_data()
+        grid = np.asarray(result.schedule.grid_kwh, dtype=float)
+        expected = float(np.dot(prices[96:][usable[96:]], grid[usable[96:]]))
+        assert result.cost_eur == pytest.approx(expected, rel=1e-9, abs=1e-9)
+
+    def test_per_solve_time_limit_is_configurable_and_threaded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A fine cadence multiplies solves, so each one's budget must be settable.
+
+        The runner's ``--time-limit`` is the knob; this checks it really reaches every
+        solve at the new cadence rather than being applied once per day as before.
+        """
+        from energy_baseline import rolling_horizon as rh
+
+        captured: list[float] = []
+        original = rh.solve_oracle
+
+        def spy(day_spec, horizon, **kw):  # noqa: ANN001 - mirrors solve_oracle
+            captured.append(float(kw["time_limit_s"]))
+            return original(day_spec, horizon, **kw)
+
+        monkeypatch.setattr(rh, "solve_oracle", spy)
+        result = _cadence_run(cadence=2, horizon_slots=24)
+        assert captured and len(captured) == result.telemetry["solve_count"]
+        assert set(captured) == {5.0}, "the default per-solve budget did not reach every solve"
+
+    def test_no_wall_clock_in_the_artifact(self) -> None:
+        """A fine cadence multiplies solves, but no timing may leak into the record."""
+        result = _cadence_run(cadence=4, horizon_slots=48)
+        payload = json.dumps(result.telemetry, allow_nan=False)
+        for forbidden in ("wall_clock", "elapsed", "duration", "seconds_spent", "timestamp"):
+            assert forbidden not in payload, forbidden
+        assert "interval_seconds" not in result.telemetry
+        # Every new cadence key is a count or a parameter, never a measurement of time.
+        for key in (
+            "solve_count",
+            "planning_events_not_solved",
+            "replan_interval_slots",
+            "horizon_slots",
+            "planning_multiplicity_mean",
+            "planning_multiplicity_max",
+            "planned_interval_slots_total",
+            "executed_interval_slots_total",
+            "executed_multiplicity_mean",
+        ):
+            assert key in result.telemetry, key
+
+    def test_deterministic_at_a_fine_cadence(self) -> None:
+        """Same seed, same run — the cadence adds no new source of randomness."""
+        a = _cadence_run(cadence=2, horizon_slots=48, sigma=0.15, seed=6)
+        b = _cadence_run(cadence=2, horizon_slots=48, sigma=0.15, seed=6)
+        assert a.telemetry["solve_count"] == 48, "keep this fixture small"
+        assert a.cost_eur == b.cost_eur
+        assert np.array_equal(a.schedule.charge_kwh, b.schedule.charge_kwh)
+        assert a.telemetry == b.telemetry
+
+    def test_cadence_changes_the_plan_so_the_two_modes_are_not_the_same_policy(self) -> None:
+        """Non-vacuity: a fine cadence really is a different controller.
+
+        Without this, every cadence test above could be passing because the new mode
+        silently ignored its parameters and re-ran the legacy schedule.
+        """
+        common = _cadence_arguments(n_days=3)
+        legacy = run_rolling_horizon(_spec(), **common)
+        fine = run_rolling_horizon(_spec(), **common, replan_interval_slots=2, horizon_slots=96)
+        assert fine.telemetry["replan_interval_slots"] == 2
+        assert fine.telemetry["solve_count"] > legacy.telemetry["solve_count"]
+        assert (
+            fine.telemetry["planning_multiplicity_mean"]
+            > legacy.telemetry["planning_multiplicity_mean"]
+        )
+        assert not np.array_equal(fine.schedule.charge_kwh, legacy.schedule.charge_kwh), (
+            "an exact-price fine cadence planned the same dispatch as the two-event "
+            "schedule; the cadence parameter is not reaching the solver"
         )

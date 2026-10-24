@@ -44,7 +44,19 @@ Every command below is run manually (or by a human-driven runbook). A scheduled 
 | `benchmark`    | **functional** | Run policy benchmarks on a dataset             |
 | `report`       | **functional** | Generate monthly reconciliation report         |
 | `inspect-sql`  | **functional** | Inspect DuckDB SQL queries                     |
+| `ha-states`    | **functional** | Read Home Assistant enum state history (read-side, deduplicated, as-of) |
 | `mirror`       | deferred     | Deferred — not implemented in Phase 1          |
+
+**A module with no CLI surface, deliberately:** `dispatch.py` is the dispatch **intent contract**
+(ADR-0001's `planner → intent → writer` seam, TODO-4.6) — typed, validated, canonically serialized
+`DispatchIntent` / `DispatchPlan` values carrying interval, mode (`idle`/`charge`/`discharge`), target
+power, SOC target, expected price, confidence, generation instant, expiry and sequence. Its clock is a
+**required caller argument with no default**, so there is no fallback path to a wall clock (an AST test
+proves the module contains no clock call and no `time`/`timeit` import — a guard against future edits,
+not only against its author), physics is delegated to `battery.py`, the import ceiling stays an
+**observation** rather than a rejection, and `confidence` / `expected_buy_price_eur_per_kwh` are optional
+with **absence distinguishable from a value**. No writer, no I/O and no subcommand were built: the contract
+only has to be capable of supporting them, and this package still actuates nothing.
 
 ### `extract`
 
@@ -142,9 +154,11 @@ frozen before evaluation, so the cut must be declared explicitly and is never in
 flags (`--train-days`, `--charge-pct`, `--discharge-pct`, `--initial-soc-frac`, `--import-limit-kw`,
 `--min-usable-fraction`, `--time-limit-s`, `--mip-rel-gap`, `--mip-abs-gap`,
 `--allow-reconstructed-quality`, `--terminal-mode`, `--day-ahead-forecast-window-days`,
-`--day-ahead-terminal-value`, `--day-ahead-time-limit-s`) default to the benchmark module's
-constants. The CLI calls `core_available()` first and refuses with a clear message if the numeric
-core (battery / policies / oracle / cost) is not usable.
+`--day-ahead-terminal-value`, `--day-ahead-time-limit-s`,
+`--rolling-horizon-replan-interval-slots`, `--rolling-horizon-horizon-slots`, `--rolling-horizon-sigma`,
+`--rolling-horizon-bias-sigma`, `--rolling-horizon-seed`, `--rolling-horizon-time-limit-s`) default to the
+benchmark module's constants. The CLI calls `core_available()` first and refuses with a clear message if
+the numeric core (battery / policies / oracle / cost) is not usable.
 
 **A full-year training window is 366 days, not 365.** When the split is meant to cover all of a
 leap year — e.g. `--train-end 2025-01-01T00:00:00+00:00 --train-days N` for calendar 2024 —
@@ -166,6 +180,34 @@ the dataset must be rebuilt with the same config, or the same config must be pas
 no bypass: benchmarking a battery against another build's data is exactly the error this check
 exists for.
 
+**Battery assumptions — what is confirmed, what is assumed, and what is pinned.** Only two figures in
+the `battery:` block are confirmed hardware facts: `capacity_kwh: 5.12` (nameplate) and `power_kw: 2.5`
+(max AC power). `import_limit_kw: 5.0` is user-confirmed from the contract, never inferred from sensor
+data. Everything else in the block is a labelled assumption — most importantly `round_trip_efficiency`,
+which since 2026-10-24 ships **0.80**, the bottom of the community-measured 0.80–0.84 range, adopted on
+the reasoning that at 2.5 kW the unit operates mostly near its power rating where efficiency is
+typically worst. It supersedes the previous provisional 0.88 and is **still not a measurement of this
+household's unit**: the efficiency-versus-power curve is unmeasured, and idle draw is assumed zero and
+unmeasured. Because the block is mapped to one-way efficiencies by a symmetric square root, the kernel
+now charges and discharges at `sqrt(0.80) = 0.89443` per direction, replacing `sqrt(0.88) = 0.93808`.
+Two consequences follow, and both are why the whole block is pinned by
+`tests/test_benchmark.py::TestResolveBatteryAssumptions::test_shipped_tariff_battery_assumptions_are_pinned`:
+
+- **A silent edit to efficiency, capacity, the SOC window or the import ceiling moves every reported
+  figure while the test suite stays green** — and re-mints `dataset_id`, because `config_hash` feeds
+  `compute_dataset_id`. The 0.88 → 0.80 change did exactly that, and passing silently is how the gap was
+  found. The test is verified non-vacuous: it fails at the old value. It also pins the *framing*, so
+  changing a number cannot promote an assumption to a measurement — `idle_losses_measured` stays `false`.
+- **Every dataset built at 0.88 now fails the config drift check above, by design**, and every benchmark
+  figure computed at 0.88 is an optimistic superseded result — including the accepted authoritative run
+  and the forecast-experiment grid. `config_hash` moved from
+  `41fdc30b926c099be2cbef201db4141244d82faaa80b9907c7530354f64bf182` to
+  `7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1`. The rebuild at 0.80 **has not run**,
+  so the new `dataset_id` and all corrected figures are `PENDING REBUILD — fill after the clean-tree
+  build`. Rebuild *after* committing: `code_version()` is the git HEAD of a clean tree and also feeds
+  `dataset_id`, so every commit re-mints the identity and a pre-commit build is invalidated by the very
+  commit it waits for.
+
 **Import ceiling (`--import-limit-kw`):** the site's contracted power, `import_limit_kw: 5.0` in
 `config/tariff.yaml`, **user-confirmed from the contract on 2026-10-23** — never inferred from
 sensor data. It constrains the *charging decision* only:
@@ -186,24 +228,44 @@ config hash, the code version (including the working-tree dirty marker), the sch
 the requested window and the builder parameters.  A dirty working tree produces a different id
 from a clean one, so the reproducibility guarantee the id exists to provide is preserved.
 
-**Policy set — four rungs, one per information level.** The evaluation window is scored by
-`no_battery`, `causal_price`, `day_ahead` and `oracle` (ADR-0003 §"Strategy comparison"; the
-day-ahead rung was previously "considered and deferred" in
-`planning/energy-baseline-appdaemon-baseline-context.md` and is now built):
+**Policy set — five rungs, one per information level.** The evaluation window is scored by
+`no_battery`, `causal_price`, `day_ahead`, `rolling_horizon` and `oracle` (ADR-0003
+§"Strategy comparison"; the day-ahead rung was previously "considered and deferred" in
+`planning/energy-baseline-appdaemon-baseline-context.md` and is now built, and `rolling_horizon` was
+promoted from an offline experiment to a canonical rung on 2026-10-24 — the ladder was four rungs until
+then, and `POLICY_NAMES` is now `('no_battery', 'causal_price', 'day_ahead', 'rolling_horizon', 'oracle')`,
+which is also what `--policies all` runs):
 
 | Policy | Prices known | Load known |
 |---|---|---|
 | `no_battery` | none — measured history is the counterfactual | none |
 | `causal_price` | none (percentile thresholds frozen on the train split) | none |
 | `day_ahead` | **the day's 24 h, at local midnight** | **a strictly causal forecast** |
+| `rolling_horizon` | today's 24 h from 20:30 **the evening before**, and tomorrow's from 20:30 today — the same publication the day-ahead rung waits for at midnight, in hand earlier, over a horizon that runs past the local midnight `day_ahead` stops at | **a strictly causal forecast** (the same profile mechanism) |
 | `oracle` | whole horizon, perfect | whole horizon, perfect |
+
+`rolling_horizon` sits **between** `day_ahead` and `oracle` because it is strictly more informed than
+`day_ahead` and still has to forecast its load. The publication rule is stated once, in one function, and
+derived from the decision instant — prices for local day D+1 become exact at 20:30 on day D — so a 09:00
+solve estimates D+1 and a 21:00 solve does not, at **any** cadence. That single statement is what keeps
+the information set from drifting between the two cadences. The rung re-solves on a schedule, executes only
+up to the next event, and carries the **actually reached** SOC forward, so the next solve starts from the
+real state rather than the planned one. Its flags, canonical defaults, cadence costs and dominance rules
+are under *The rolling-horizon rung* below.
 
 The causal rule captured a known share of the oracle's optimum, but the oracle also knows future
 *load*, so the unreachable remainder conflated two different things. `day_ahead` separates them:
 whatever it recovers is value reachable from information that is genuinely published for free, and
 what remains is value that needs load foresight nobody has. That split —
 `comparison.day_ahead_closes_gap_fraction` — is the number a build/no-build decision should read,
-not the causal→oracle gap on its own.
+not the causal→oracle gap on its own. The fifth rung adds the matching measurement,
+`comparison.rolling_horizon_closes_gap_fraction`, alongside `rolling_horizon_minus_day_ahead_eur` and
+`rolling_horizon_minus_causal_eur`. Those differences are reported **without an expected sign**:
+`rolling_horizon_minus_day_ahead_eur` is `rolling_horizon − day_ahead` on the shared basis, so a negative
+value means the better-informed rung came out cheaper and a positive one means it did not — either is the
+result, not a defect. The run also carries
+`comparison.rolling_horizon_vs_day_ahead_observation`, which records the 81-of-81 empirical dominance as
+"strong empirical evidence, not a mathematical proof" and explains why no guarantee is available.
 
 The day-ahead price assumption is **not** self-certifying; it rests on this household's own
 deployed automation, verified from source: `apps/home-assistant/appdaemon/apps/climate_control.py:45`
@@ -212,12 +274,20 @@ schedules `run_daily(..., "00:00:40")` and lines 73-91 of the same file read
 (`apps/home-assistant/appdaemon/apps/apps.yaml:10`), re-labelling them onto the current local day
 (line 85); `apps/home-assistant/appdaemon/apps/dhw_control.py:48` does the same at `00:00:30`. A full
 day's curve is therefore in hand at local midnight in production today. What the pipeline still
-cannot verify is the *archival* half of ADR-0003 line 100: the store keeps the price realised in each
+cannot verify is the *archival* half of ADR-0003 §*Policy design*: the store keeps the price realised in each
 hour, not a midnight snapshot of the attribute dict, so `day_ahead` assumes published-in-advance
 equals realised-and-archived. The artifact's own disclosure calls that assumption "true by construction
 for day-ahead PVPC, but not measured here" — the first half describes how the tariff is designed to
-publish, not what this archive holds, so the assumption is **unverified** and the sensor's day-boundary
-convention remains unresolved (TODO-0.4). It is recorded in every run artifact under
+publish, not what this archive holds. The pipeline's inability to verify it is **unchanged**; what changed
+on 2026-10-24 is the *status of the gap*. ADR-0003 §*Open validation item: day-ahead publication versus
+realised archive* records the **owner assertion** (`user_assertion`, `asserted_on: "2026-10-24"`,
+`verified_from_data: false`) that the 20:15–20:20 publication on D−1 describes day D and is the realised
+curve, which resolves the assumption as an owner-stated fact and closes the day-boundary convention
+(previously TODO-0.4), and makes the midnight attribute-dict snapshot an optional confirmation rather than
+a blocking item. An owner assertion is not a measurement, so nothing here should be read as the archive
+having been checked.
+
+The reliance is still recorded in every run artifact under
 `day_ahead.information_set.assumptions_disclosed` instead of being quietly relied on, and it claims no
 **direction of error** — nor does this README. A wrong midnight curve would change which decisions the
 policy makes, not the prices those decisions are costed on, because the plan is re-scored against the
@@ -286,7 +356,7 @@ silently re-classified yesterday's purchased charge as unspendable seed: on a sy
 battery filled on day one, froze at the ceiling for the rest of the window, and lost to the causal
 rule while holding 4.6 kWh it was forbidden to use. The floor is now fixed at
 `max(soc_min, initial SOC)` for the whole roll — the same floor `causal_price` and the free `oracle`
-use, which is what keeps all four policies on one common feasible set and what makes
+use, which is what keeps all five policies on one common feasible set and what makes
 `oracle ≤ day_ahead` a provable relation rather than a hope. Supporting it needed one defaulted
 parameter on `oracle.build_model`/`solve_oracle` (`floor_kwh`); with the default the certified model
 is byte-identical, pinned by
@@ -326,11 +396,75 @@ optimiser with a poor forecast and a badly chosen terminal value can lose to a d
 rule. The difference is reported as `comparison.day_ahead_minus_causal_eur`, and if it is
 positive, that is the result, not a defect.
 
+**The rolling-horizon rung (`rolling_horizon`) — a fifth policy with a configurable replan cadence.**
+The rung re-solves on a schedule, executes only up to the next event, and carries the **actually reached**
+SOC forward, so the next solve starts from the real state rather than the planned one. Physics are reached
+only through the same kernel the other rungs use, and its scoring terminal value is the same shared 0.0
+threaded from the oracle's own keyword arguments — the fifth rung is scored on the common objective, not on
+one of its own.
+
+Canonical defaults, all verified:
+
+| Knob | Default | Why that default |
+|---|---|---|
+| `--rolling-horizon-sigma` | `0.0` | The ladder compares *information*, not synthetic forecast error; every other rung sees exact prices, so a noisy fifth rung would not be comparable |
+| `--rolling-horizon-bias-sigma` | `0.0` | Same reason |
+| `--rolling-horizon-seed` | `0` | Only matters with noise; noise stays an experiment reachable through flags |
+| `--rolling-horizon-replan-interval-slots` | unset (legacy two-publication 14:00 / 20:30 schedule) | The configuration the golden-value tests pin bit-for-bit and the one validated on real data |
+| `--rolling-horizon-horizon-slots` | unset with the legacy cadence; `96` when a cadence is given | The legacy horizon is DST-dependent and derived from the local-day partition, so a single recorded number would be fabricated |
+| `--rolling-horizon-time-limit-s` | the day-ahead per-solve limit | Per **solve**, like the day-ahead's per-day limit, and unlike the whole-horizon `--time-limit-s` |
+
+**Cadence, and what it costs.** `--rolling-horizon-replan-interval-slots 1` with
+`--rolling-horizon-horizon-slots 96` is ADR-0001 §3's controller: re-solve every 15 minutes over a rolling
+24-hour horizon (96–192 slots covers its 24–48 h band), execute only the current interval. **It costs
+roughly 48× the solve count** — 8,832 solves against the 185 the legacy two-publication schedule needs
+over a 92-day holdout — **and roughly 37× the wall time** (~175 s against ~4.7 s per arm, both measured on
+synthetic fixtures). The two multipliers differ because a fine-cadence solve is *cheaper* than a legacy one
+(~20 ms/solve against ~24 ms/solve): each legacy event plans the rest of its local day *and the next one*
+(~34 h at 14:00), while cadence 1 plans a fixed 96 slots, and per-solve time tracks horizon length. So wall
+time grows more slowly than solve count, and neither ratio is the horizon length. It has **not** been
+validated on real data; the legacy cadence has. Legacy
+behaviour is not merely unchanged but **bit-identical**, pinned by golden digests extracted from `HEAD` with
+`git show` and pinned as literals — digests of the charge/discharge/SOC/grid arrays, exact cost, EFC, terminal
+SOC, event and clipping counts, noise statistics, plus digests of the whole event table and the frozen
+profile — over two fixtures (one with a partial opening local day, one covering the 2025-10-26 fall-back
+weekend) at four noise arms, with non-vacuity asserted (the control and two seeds give three different
+charge digests).
+
+**Two honesty properties the artifact reports; do not drop or reinterpret them.**
+
+- `executed_multiplicity_mean` is exactly **1.0** while `planning_multiplicity_mean` is much higher —
+  about **94.4** at cadence 1 over a 96-slot horizon, about **2.5** at the legacy cadence. An interval is
+  *planned* by every overlapping horizon and *executed* once. **Clipping totals are therefore not
+  comparable across cadences and are not curtailment**: they count repeated planning of the same
+  intervals, not extra refused energy. The artifact says so itself: `clipping_totals_comparable_across_cadences`
+  is `false`, with a note explaining why.
+- `solve_count` is recorded per run, so a run's compute cost is visible in its own artifact instead of
+  being discovered afterwards.
+
+**Dominance is asserted only where provable.** `comparison.oracle_dominates_rolling_horizon_guaranteed`
+follows the existing rule exactly: `oracle ≤ rolling_horizon` is guaranteed only when the oracle is
+**certified** *and* scored in `free` terminal mode, because only then does the oracle minimise over the
+feasible set that contains this plan; under `fixed` it is `False` by construction. The relationship the
+fifth rung is supposed to demonstrate is **not** asserted: `comparison.rolling_horizon_may_lose_day_ahead`
+is recorded as **`true`**, together with `rolling_horizon_may_lose_causal` and `rolling_horizon_may_lose_baseline`.
+That `rolling_horizon ≤ day_ahead` held in **81 of 81** offline configurations is strong empirical evidence,
+not a proof — it is recorded as an observation about that experiment, whose figures are themselves superseded
+(see the efficiency note below). Cost consistency (`cost_eur == meter_cost_eur`, inventory adjustment 0) is a
+loop over whichever policies ran, so the fifth rung is covered by extension rather than duplication.
+
+**Invalid input is refused, in one line, with exit 1 and no traceback.** All five paths were verified:
+cadence < 1; horizon < 1; `--rolling-horizon-horizon-slots` given **without** a cadence — refused on purpose,
+because the legacy schedule derives its horizon from the local-day partition, so accepting the flag would
+emit an artifact claiming a horizon the run never used; sigma < 0 or non-finite; bias sigma < 0 or non-finite.
+
 Per-day solve **wall-clock** times are deliberately absent from the artifacts: runs are
 content-addressed and written no-clobber (`write_part_atomic` refuses the same run id with different
 bytes), so a timing field would make an identical re-run fail and would destroy byte-level
 reproducibility. Deterministic per-day telemetry (`solver_status`, `is_certified`, `mip_gap`, the
-count of days that consumed their limit) is recorded instead.
+count of days that consumed their limit) is recorded instead; the rolling rung adds the same telemetry
+**per event**, plus `prices_exact_end_idx` and `estimated_price_intervals`, so each solve's information
+set is readable from the artifact rather than having to be re-derived.
 
 Artifacts follow the existing precedent: `BENCHMARK_RESULT` and `Schedule.as_dict()` are unchanged,
 and the day-ahead detail lives in `benchmark.json` (`day_ahead.*`) plus the wide
@@ -357,9 +491,10 @@ refuses *any* negative energy by design — export credits are not modelled — 
 costs a negative inside the kernel's own slack as zero and reports how many intervals needed that per
 policy in `cost_consistency.<policy>.grid_noise_snapped_intervals` with an explanatory
 `grid_noise_note`. Beyond that slack a negative is never clamped and the cost model's error is the
-correct, loud outcome. This was found by a four-policy run on synthetic data (the final interval of
-a 100-slot fall-back day), not by the day-ahead policy itself — its clipped plans come out with
-exact zeros, which `TestGridNoiseSnapping` pins.
+correct, loud outcome. This was found by a run over the then-four-policy ladder on synthetic data (the final
+interval of a 100-slot fall-back day), not by the day-ahead policy itself — its clipped plans come out with
+exact zeros, which `TestGridNoiseSnapping` pins. The check is a loop over the policies that ran, so the
+fifth rung is covered by the same code path.
 
 **Cost basis:** all cost figures are **pre-tax** (untaxed energy cost). Tax rates
 (`iee_pct`, `iva_pct`) are null/unconfirmed in `config/tariff.yaml`, so no billed number
@@ -414,6 +549,47 @@ SQL naming them are therefore refused up front, before DuckDB is opened, with on
 missing view and telling you to pass `--benchmark` — instead of leaking a raw
 `duckdb.CatalogException` traceback. Dataset-only queries (`price_distribution`,
 `quality_summary`, `dataset_meta`) work without it.
+
+### `ha-states`
+
+```bash
+# Summary of the store: parts, rows before and after dedup, entities present
+uv run energy-baseline ha-states
+
+# Every deduplicated state for one entity, in order
+uv run energy-baseline ha-states --entity sensor.lavadora_current_status --list-states
+
+# What that entity's state was at an instant (inclusive at the transition boundary)
+uv run energy-baseline ha-states --entity sensor.lavadora_current_status \
+  --as-of 2026-10-20T12:00:00Z
+```
+
+Reads the Home Assistant appliance enum history that `extract --source ha-history` preserves, through
+`ha_states.py`. It exists because the durable Prometheus archive cannot carry these values at all —
+the exporter emits state-value series only for numerically convertible states — and because the
+recorder keeps them for about ten days, so the Parquet store is the only surviving copy.
+
+- **Deduplication happens at read time**, on the same identity the extractor uses:
+  `(entity, last_changed, last_updated, state, attributes_json)`. Part files are immutable and 12 known
+  pre-dedup duplicate rows were **deliberately left in place** rather than rewriting history, so collapsing
+  them is the reader's job; see
+  [Overlapping re-extraction is deduplicated at row level](#overlapping-re-extraction-is-deduplicated-at-row-level).
+- **As-of queries are inclusive at the transition boundary**: at exactly a transition instant the new state
+  is visible, because `last_changed` is when the state became effective. Only rows with
+  `last_changed <= T` are returned, which makes it *structurally* impossible to leak a later transition into
+  an earlier snapshot — ADR-0002's as-of requirement, not a convention to remember.
+- `carry_in` and both timestamps (`last_changed` = event time, `last_updated` = observation time) are
+  preserved verbatim; consumers must filter `carry_in=False` before treating `last_changed` as a real
+  event. Unavailable/unknown states are surfaced, not silently dropped.
+- `--as-of` and `--list-states` both require `--entity`; a refusal is a `ValueError`, which the CLI prints
+  as one line with exit code 1.
+- **Verified live against the real store, read-only:** `parts=12 rows_before_dedup=51 rows_after_dedup=39
+  duplicates=12 entities=2` for `sensor.lavadora_current_status` and `sensor.lavavajillas_current_status`.
+
+**This is a read-side module.** It does not feed `build`, does not enter `dataset_id`, and no policy or
+benchmark reads it. No appliance modelling, NILM or forecasting was built on it: it closes the long-deferred
+"there is no reader" gap and nothing more, and ADR-0002 Phase 3 remains the place where consumption would
+start.
 
 ### `mirror`
 
@@ -565,9 +741,12 @@ constant and overlapping pulls cost nothing.
 
 **The 12 rows already duplicated in the private data dir** (manifest `1ec3085f…`,
 overlapping `750bce0e…`) were not — and will not be — removed by this package. They
-are inert today because `build.py` has no HA reader at all. Two things follow. First,
-the read-side rule is mandatory for any future HA reader regardless of when the store
-is cleaned: dedup on the same row identity, exactly as the Prometheus path collapses
+were inert because `build.py` has no HA reader at all, and they stay inert for a
+consumer that does exist: the read-side `ha-states` reader (see
+[§`ha-states`](#ha-states)) **collapses them at read time** on exactly the identity
+described here, rather than rewriting immutable history. Two things follow. First,
+the read-side rule was mandatory for any HA reader regardless of when the store
+is cleaned, and it is now implemented: dedup on the same row identity, exactly as the Prometheus path collapses
 `(series_key, ts, value)`. Second, if a physically clean store is ever wanted, either
 revert the whole contributing run (its manifest together with the parts that *only*
 that manifest claims, after verifying every one of their keys also exists in another

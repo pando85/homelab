@@ -19,6 +19,24 @@ Usage:
         --bias-sigmas 0,0.1 \\
         --seeds 0,1,2
 
+Cadence (ADR-0001's replan loop) is opt-in and defaults to the measured behaviour:
+
+    uv run python hack/compare_forecasts.py ... \\
+        --replan-interval-slots 1 --horizon-slots 96
+
+``--replan-interval-slots`` omitted keeps the legacy two-publication schedule (14:00
+and 20:30 local), bit-identical to every run already on disk. Giving it re-solves every
+that many 15-minute intervals over a ``--horizon-slots`` horizon (default 96 = 24 h) and
+executes only the next interval — the mode a real controller runs. **It multiplies the
+solve count by roughly 96/cadence against a once-per-day baseline, which against the legacy
+*two*-event schedule works out at ~48x:** over a 92-day holdout the legacy schedule is ~185
+solves and a 15-minute cadence is ~8,832. Wall time rises *more slowly* than the count —
+about 37x, not 48x — because a fine cadence solves faster per call (~20 ms against ~25 ms: a
+legacy event plans to the end of D+1, ~34 h, while a cadence-1 solve plans a fixed 96 slots).
+The count is reported per run as ``rolling_horizon.solve_count`` and summarised in
+``replan_cadence.solve_counts_observed``, so a run's cost is visible in its own
+artifact rather than discovered later.
+
 Honesty rules this runner is written to:
 
 * **Train before test.** The frozen load profile and the terminal-SOC valuation are
@@ -268,6 +286,18 @@ def _policy_block(
     # Stage failures and clipping are what tell a reader WHY a policy is expensive;
     # a bare cost cannot distinguish "optimised well" from "half the days gave up".
     for key in (
+        "solve_count",
+        "planning_events_not_solved",
+        "replan_interval_slots",
+        "replan_cadence",
+        "horizon_slots",
+        "horizon_hours_nominal",
+        "executed_multiplicity_mean",
+        "planning_multiplicity_mean",
+        "planning_multiplicity_max",
+        "planned_interval_slots_total",
+        "executed_interval_slots_total",
+        "clipping_totals_comparable_across_cadences",
         "events_solved",
         "events_infeasible",
         "events_no_incumbent",
@@ -329,6 +359,30 @@ def main() -> int:
     parser.add_argument(
         "--time-limit", type=float, default=5.0, help="Per-solve solver time limit in seconds"
     )
+    parser.add_argument(
+        "--replan-interval-slots",
+        type=int,
+        default=None,
+        help=(
+            "Re-solve every this-many 15-minute intervals (ADR-0001's replan cadence; "
+            "1 is the 15-minute controller). Omit to keep the legacy two-publication "
+            "schedule: the 14:00 and 20:30 events per local day, which is what the "
+            "already-measured runs used. Solve count scales as roughly 96/this value "
+            "against a once-per-day baseline (~48x against the legacy two-event schedule "
+            "at 1); wall time scales more slowly (~37x) because each solve is cheaper"
+        ),
+    )
+    parser.add_argument(
+        "--horizon-slots",
+        type=int,
+        default=None,
+        help=(
+            "Planning horizon in 15-minute intervals for --replan-interval-slots runs "
+            "(96 = 24 h, 192 = 48 h; ADR-0001 specifies a 24-48 h band, and 96 is the "
+            "default). Ignored by the legacy schedule, whose horizon is midnight ending "
+            "D+1 and therefore DST-dependent"
+        ),
+    )
     args = parser.parse_args()
 
     test_start = _parse_iso(args.test_start, name="--test-start")
@@ -341,6 +395,22 @@ def main() -> int:
     seeds = _parse_int_list(args.seeds, name="--seeds")
     if args.time_limit <= 0 or not math.isfinite(args.time_limit):
         raise SystemExit(f"ERROR: --time-limit must be > 0 and finite, got {args.time_limit!r}")
+    if args.replan_interval_slots is not None and args.replan_interval_slots < 1:
+        raise SystemExit(
+            f"ERROR: --replan-interval-slots must be >= 1 (an interval count), got "
+            f"{args.replan_interval_slots}"
+        )
+    if args.horizon_slots is not None and args.horizon_slots < 1:
+        raise SystemExit(
+            f"ERROR: --horizon-slots must be >= 1 (an interval count), got {args.horizon_slots}"
+        )
+    if args.horizon_slots is not None and args.replan_interval_slots is None:
+        raise SystemExit(
+            "ERROR: --horizon-slots needs --replan-interval-slots: the legacy "
+            "two-publication schedule plans to midnight ending D+1, so a slot-counted "
+            "horizon would be silently ignored and the run would not be what its "
+            "artifact claims to be"
+        )
 
     output_dir = Path(args.output).expanduser()
     if output_dir.exists() and any(output_dir.iterdir()):
@@ -423,6 +493,24 @@ def main() -> int:
         f"windows          {windows}, sigmas {sigmas}, bias_sigmas {bias_sigmas}, seeds {seeds}",
         flush=True,
     )
+    # Printed before the matrix starts, because it is the run's cost: 185 solves and
+    # 8,832 solves are not the same experiment and nobody should find out afterwards.
+    if args.replan_interval_slots is None:
+        print(
+            "cadence          legacy two-publication (14:00 and 20:30 local), "
+            "~2 events per evaluation local day",
+            flush=True,
+        )
+    else:
+        horizon = args.horizon_slots or 96
+        n_eval = eval_end_idx - eval_start_idx
+        print(
+            f"cadence          re-solve every {args.replan_interval_slots} interval(s) over a "
+            f"{horizon}-interval horizon, execute only the first "
+            f"({horizon * loaded.interval_seconds / 3600.0:.1f} h); "
+            f"~{math.ceil(n_eval / args.replan_interval_slots)} solves for this window",
+            flush=True,
+        )
 
     # ---- baseline: the same mask, zero battery ----------------------------------
     eval_horizon = Horizon(
@@ -534,6 +622,8 @@ def main() -> int:
                             seed=seed,
                             time_limit_s=args.time_limit,
                             import_limit_kw=assumptions.import_limit_kw,
+                            replan_interval_slots=args.replan_interval_slots,
+                            horizon_slots=args.horizon_slots,
                         )
                         rh_cost = float(result.cost_eur)
                         rh_telemetry = result.telemetry
@@ -558,6 +648,13 @@ def main() -> int:
                             "sigma": sigma,
                             "bias_sigma": bias_sigma,
                             "seed": seed,
+                            # The cadence belongs in the schedule too: a 15-minute-cadence
+                            # file and a legacy file are different controllers over the same
+                            # intervals, and a reader comparing two runs' per_event records
+                            # has to be able to see which schedule produced them.
+                            "replan_interval_slots": args.replan_interval_slots,
+                            "horizon_slots": args.horizon_slots,
+                            "solve_count": (rh_telemetry or {}).get("solve_count"),
                             "cost_eur": rh_cost,
                             **shared_columns,
                             **(_flow_columns(rh_schedule) if rh_schedule is not None else {}),
@@ -640,11 +737,53 @@ def main() -> int:
         "terminal_value_source": (
             "mean of the usable TRAINING prices only; no evaluation price enters it"
         ),
+        # The cadence is a property of the whole run matrix, not of one arm, and it is
+        # what the run COST: solve_count is counted per run and summarised here so a
+        # 15-minute-cadence holdout cannot be mistaken for the ~185-solve legacy run.
+        "replan_cadence": {
+            "replan_interval_slots": args.replan_interval_slots,
+            "horizon_slots": args.horizon_slots,
+            "nominal": (
+                "14:00 and 20:30 local (Europe/Madrid), horizon = midnight ending D+1 "
+                "(DST-dependent: ~34 h at 14:00, ~27.5 h at 20:30)"
+                if args.replan_interval_slots is None
+                else f"every {args.replan_interval_slots} interval(s), horizon = "
+                f"{args.horizon_slots or 96} intervals "
+                f"={(args.horizon_slots or 96) * loaded.interval_seconds / 3600.0:.1f} h"
+            ),
+            "price_information_rule": (
+                "the information set is a function of the decision instant, not of the "
+                "cadence: prices for local day D+1 are treated as exact from 20:30 on "
+                "day D (first quarter-hour boundary after the 20:15-20:20 publication "
+                "window), so a 09:00 solve estimates D+1 and a 21:00 solve does not"
+            ),
+            "solve_counts_observed": _int_range(
+                [
+                    run["rolling_horizon"].get("solve_count")
+                    for run in runs
+                    if run["rolling_horizon"].get("ran")
+                ]
+            ),
+            "planning_multiplicity_mean_range": _float_range(
+                [
+                    run["rolling_horizon"].get("planning_multiplicity_mean")
+                    for run in runs
+                    if run["rolling_horizon"].get("ran")
+                ]
+            ),
+        },
         "runs": runs,
         "notes": [
-            "rolling horizon plans at 14:00 and 20:30 local (Europe/Madrid), executes only "
-            "until the next event and carries the ACTUAL clipped SOC; day-ahead plans once "
-            "per local day and executes the whole day",
+            "rolling horizon plans at 14:00 and 20:30 local (Europe/Madrid) unless "
+            "--replan-interval-slots is given, in which case it re-solves every that many "
+            "intervals over a --horizon-slots horizon; either way it executes only the "
+            "slice before its next replan and carries the ACTUAL clipped SOC. Day-ahead "
+            "plans once per local day and executes the whole day",
+            "clipping totals are counted PER PLAN, and one interval is planned by every "
+            "overlapping horizon while being executed once: planning_multiplicity_mean says "
+            "how many times (~2.5 at the legacy cadence, ~horizon/cadence at a uniform "
+            "one). charge_clipped_kwh and discharge_clipped_kwh are therefore NOT "
+            "curtailment and NOT comparable between runs of different cadence",
             "both policies share one frozen load profile learned strictly before --test-start, "
             "one usable mask, and a scoring terminal value of 0.0, so their costs are directly "
             "comparable against the same zero-battery baseline",
@@ -668,7 +807,7 @@ def main() -> int:
     print()
     print(
         f"{'win':>5} {'sig':>5} {'bias':>5} {'seed':>5}  {'baseline':>10} {'day_ahead':>10} "
-        f"{'rolling':>10}  {'save_DA':>9} {'save_RH':>9}"
+        f"{'rolling':>10}  {'save_DA':>9} {'save_RH':>9}  {'solves':>7} {'plan_mult':>9}"
     )
     for run in runs:
         row = (
@@ -679,6 +818,14 @@ def main() -> int:
         row += f" {_fmt(run['rolling_horizon']['cost_eur']):>10}"
         row += f"  {_fmt(run['day_ahead']['saving_eur']):>9}"
         row += f" {_fmt(run['rolling_horizon']['saving_eur']):>9}"
+        # Solved, and how many times each interval was planned: the two numbers that say
+        # what this run cost and why its clipping kWh is not comparable with another
+        # cadence's.
+        rh = run["rolling_horizon"]
+        solves = rh.get("solve_count")
+        plan_mult = rh.get("planning_multiplicity_mean")
+        row += f"  {'-' if solves is None else solves:>7}"
+        row += f" {'-' if plan_mult is None else f'{plan_mult:.2f}':>9}"
         print(row)
     print(f"\nwrote {output_dir / 'summary.json'} and {len(runs)} schedules")
     return 0
@@ -703,6 +850,27 @@ def _count(reasons: list[str]) -> dict[str, int]:
     for reason in reasons:
         out[reason] = out.get(reason, 0) + 1
     return dict(sorted(out.items(), key=lambda kv: (-kv[1], kv[0])))
+
+
+def _int_range(values: list[Any]) -> dict[str, int] | None:
+    """min/max over the observed solve counts, or None when nothing ran.
+
+    A range rather than a single number because the last events of a window have
+    clipped horizons, so even a fixed cadence does not solve an identical shape
+    everywhere.
+    """
+    present = [int(v) for v in values if isinstance(v, (int, float))]
+    if not present:
+        return None
+    return {"min": min(present), "max": max(present)}
+
+
+def _float_range(values: list[Any]) -> dict[str, float] | None:
+    """min/max of an observed telemetry figure, rounded to a readable precision."""
+    present = [float(v) for v in values if isinstance(v, (int, float))]
+    if not present:
+        return None
+    return {"min": round(min(present), 4), "max": round(max(present), 4)}
 
 
 def _inside_git_worktree(path: Path) -> bool:

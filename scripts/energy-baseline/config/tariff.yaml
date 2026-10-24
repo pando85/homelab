@@ -54,30 +54,31 @@ battery:
   # assumption that still has to be replaced by a measurement.
   capacity_kwh: 5.12               # Nameplate — confirmed
   power_kw: 2.5                    # Max AC power — confirmed
-  # Round-trip efficiency, NOT one-way.  One-way is sqrt(0.88) = 0.93808 per
-  # direction (charge leg AND discharge leg); feeding 0.88 in as a one-way
+  # Round-trip efficiency, NOT one-way.  One-way is sqrt(0.80) = 0.89443 per
+  # direction (charge leg AND discharge leg); feeding 0.80 in as a one-way
   # value would silently double-count the loss.  Provisional — must be measured.
   #
-  # USER_ASSERTION 2026-10-24 (user_assertion, asserted_on: "2026-10-24",
-  # verified_from_data: false): community-measured round-trip efficiency for
-  # similar batteries is 0.80–0.84.  This contradicts the shipped 0.88 above,
-  # which is optimistic by 4–8 percentage points against the only efficiency
-  # evidence that now exists.  The community range is NOT a measurement of this
-  # household's unit — it is an owner-reported figure from other installations
-  # of similar hardware.  Efficiency versus output power is still a curve
-  # nobody has measured at any granularity.
+  # OWNER_DECISION 2026-10-24: adopted 0.80 — the conservative (bottom) end of
+  # the community-measured 0.80–0.84 range.  This supersedes the previous
+  # provisional 0.88.  The community range is NOT a measurement of this
+  # household's unit; it is an owner-reported figure from other installations
+  # of similar hardware.  Chosen at the bottom deliberately: at 2.5 kW the
+  # battery operates mostly near its power rating, where efficiency is
+  # typically worst, so the conservative end is the more plausible point.
+  # Efficiency versus output power is still a curve nobody has measured at any
+  # granularity.  A single scalar is not a curve — Phase 7
+  # (TODO-7.1 in planning/home-battery-optimizer-implementation.md) replaces
+  # this with a measured model plus idle draw.
   #
-  # WHY THE VALUE IS DELIBERATELY LEFT AT 0.88: compute_dataset_id in
-  # src/energy_baseline/build.py hashes config_hash(cfg_path), a SHA-256 over
-  # the canonical re-dumped YAML of the whole file.  Changing this VALUE
-  # therefore changes dataset_id, forces a rebuild, and requires a recorded
-  # supersession of dataset
+  # Every benchmark figure computed at 0.88 is now an optimistic superseded
+  # result; those figures are not restated.
+  #
+  # compute_dataset_id in src/energy_baseline/build.py hashes
+  # config_hash(cfg_path), a SHA-256 over the canonical re-dumped YAML of the
+  # whole file.  Changing this VALUE changes dataset_id, forces a rebuild, and
+  # requires a recorded supersession of dataset
   # da2ac07a7a39affc43ef9e94523fb6a154ee6213d590086d8c261b265d957140.
-  # A COMMENT-ONLY edit changes nothing because re-dumping drops comments.
-  # The value is deliberately left at 0.88 pending an explicit sensitivity run
-  # rather than being silently corrected, so that the accepted baseline stays
-  # reproducible from the shipped config.
-  round_trip_efficiency: 0.88
+  round_trip_efficiency: 0.80
   # User chose a 20-95% SOC window to extend battery life.  The usable window is
   # 95% - 20% = 75% of nameplate = 3.84 kWh.  This is NOT the illustrative
   # "80% window" in ADR-0003, and it is a different thing from the efficiency

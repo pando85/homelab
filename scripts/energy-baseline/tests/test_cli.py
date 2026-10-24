@@ -1406,12 +1406,14 @@ class TestDayAheadCLI:
         )
         assert captured["policies"] == "no_battery,day_ahead"
 
-    def test_help_lists_the_four_rungs(self, capsys):
+    def test_help_lists_the_five_rungs(self, capsys):
         with pytest.raises(SystemExit) as exc:
             main(["benchmark", "--help"])
         assert exc.value.code == 0
-        text = capsys.readouterr().out
-        assert "no_battery, causal_price, day_ahead, oracle" in text
+        # argparse wraps help at the terminal width, so match on the flattened text:
+        # the fifth rung made the four-rung phrase long enough to wrap mid-list.
+        text = " ".join(capsys.readouterr().out.split())
+        assert "no_battery, causal_price, day_ahead, rolling_horizon, oracle" in text
 
     def test_defaults_come_from_the_benchmark_module(self, monkeypatch):
         from energy_baseline import benchmark

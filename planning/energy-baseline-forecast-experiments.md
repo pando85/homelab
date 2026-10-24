@@ -1,17 +1,32 @@
 # Energy Baseline — Forecast Experiments Protocol
 
 - **Updated:** 2026-10-24
-- **Status:** experiment executed on a frozen holdout; independent leakage review and
-  adoption decision outstanding. No monetary figure appears in this file.
+- **Status:** experiment executed on a frozen holdout; independent leakage review outstanding. No
+  monetary figure appears in this file.
+- **The policy this document specifies is no longer only an experiment.** On 2026-10-24 `rolling_horizon`
+  was **promoted to the fifth canonical benchmark policy** — ADR-0003 *Strategy comparison* rung 4, between
+  `day_ahead` and `oracle`, included in `--policies all`. That retires this document's earlier framing of a
+  standalone experiment beside a four-policy registry; the framing is kept visible below (§6, §7, §9, §10)
+  with its wording corrected, because *why* it was once "not a fifth canonical policy" is part of the
+  record. What the promotion adopted is the **mechanism**, at exact prices on the legacy two-publication
+  cadence — **not** the numbers in §11.
+- **Every figure in this file is a 0.88-era result.** The round-trip efficiency shipped afterwards
+  (`0.88` → `0.80`), so §11's numbers are optimistic superseded results: the dataset they were computed on
+  is superseded and corrected figures are `PENDING REBUILD — fill after the clean-tree build`. Findings
+  that are *information orderings* rather than magnitudes are not expected to flip, and are labelled where
+  they are quoted.
 - **Re-run after a defect fix:** a slot-positioning defect in the frozen load profile was found
   during verification, fixed, and **the whole 81-configuration matrix was re-run**. §11 records the
   corrected run; every number written from an earlier run is superseded. The defect, its correction
   and one claim about it that turned out to be false are in §5.
-- **Related:** [Progress & Handoff](./energy-baseline-progress.md) §*Forecast experiments*
+- **Related:** [Progress & Handoff](./energy-baseline-progress.md) §*Forecast experiments* and
+  §*2026-10-24 pass*
 
-This document specifies the offline experiment protocol for comparing a two-publication ~36-hour
+This document specifies the offline experiment protocol that compared a two-publication ~36-hour
 rolling-horizon policy against the existing single-publication `day_ahead` baseline. Nothing here
-is deployed or actuated. No monetary figure appears in this file.
+is deployed or actuated. No monetary figure appears in this file. The policy that came out of it is
+now canonical; the experiment's own numbers remain screening results, produced before the promotion
+and before the efficiency correction.
 
 ## 1. Objective
 
@@ -80,6 +95,11 @@ One MILP per local day, solved at midnight using archived realised prices for th
 the policy from the authoritative run `b0a9b59aa846…` (see [Progress](./energy-baseline-progress.md)).
 
 ### 3.2 New: `two_pub` (two publications, ~36h horizon)
+
+`two_pub` is this experiment's name for what is now the canonical `rolling_horizon` policy. The
+canonical rung's **defaults** are this schedule with the noise turned off (`sigma = 0.0`,
+`bias_sigma = 0.0`) — the arms below are reachable through flags, and the canonical rung also accepts a
+configurable replan cadence this experiment never used, up to ADR-0001's 15-minute mode.
 
 Two publication events per local day:
 
@@ -272,7 +292,10 @@ so nobody "fixes" that boundary later.
 ### Negative result: the canonical `day_ahead` path and the accepted run are NOT affected
 
 The **canonical** `day_ahead` policy does not have this defect, so the accepted authoritative run
-`b0a9b59aa846487a82d08fc4ba718708` stands unchanged. Recorded as a negative result with its
+`b0a9b59aa846487a82d08fc4ba718708` stands unchanged. **Read "stands unchanged" narrowly: it is about
+this defect.** The run was not contaminated by the slot-positioning bug; it *was* computed at the 0.88
+round-trip efficiency that has since been superseded, so it is unchanged-but-superseded and its figures
+are `PENDING REBUILD` (see §11's banner). Recorded as a negative result with its
 evidence, because a later reader who has just read the section above would otherwise assume the
 accepted run is contaminated too.
 
@@ -300,37 +323,47 @@ mis-shifted forecast for 88 intervals.
 
 ## 6. Implementation
 
-Implementation is complete. The comparison lives in a standalone experiment runner; **no new
-canonical `energy-baseline` subcommand or registered benchmark policy is implied**. The canonical
-registry stays at four policies.
+Implementation is complete, and the policy is **no longer experiment-only**: `rolling_horizon` is a
+canonical `benchmark` policy, the fifth rung of ADR-0003's ladder, selected by `--policies all`. The
+standalone experiment runner still exists and still does what it did — it is how the noise arms are
+reachable, since the canonical rung's defaults are exact prices. What changed is the sentence this
+section used to carry: "**no new canonical `energy-baseline` subcommand or registered benchmark policy
+is implied. The canonical registry stays at four policies.**" That was accurate when the matrix was run
+and is withdrawn — the registry is five policies. No subcommand was added for the experiment, and none
+was needed: the canonical flags live on `benchmark` (`--rolling-horizon-replan-interval-slots`,
+`--rolling-horizon-horizon-slots`, `--rolling-horizon-sigma`, `--rolling-horizon-bias-sigma`,
+`--rolling-horizon-seed`, `--rolling-horizon-time-limit-s`).
 
 | File | Role |
 |------|------|
-| `scripts/energy-baseline/src/energy_baseline/rolling_horizon.py` | New module: two-publication policy logic, clock-derived slot positioning (`_clock_slot_position`), synthetic noise with two channels, event-driven execution |
-| `scripts/energy-baseline/hack/compare_forecasts.py` | Comparison script: runs baseline and two-publication on the frozen holdout, computes metrics |
-| `scripts/energy-baseline/tests/test_rolling_horizon.py` | 63 tests covering price noise, day-level bias, frozen profile (7 of them pinning slot positioning), event computation, warmup splitting, DST, integration |
-| `scripts/energy-baseline/tests/test_compare_forecasts_cli.py` | 16 tests running the CLI as a subprocess against a synthetic dataset |
+| `scripts/energy-baseline/src/energy_baseline/rolling_horizon.py` | The policy module, now canonical: two-publication logic **plus** a configurable replan cadence (`replan_interval_slots` / `horizon_slots`, implementing ADR-0001 §3), clock-derived slot positioning (`_clock_slot_position`), synthetic noise with two channels, event-driven execution, and a single publication rule so the information set is derived from the decision instant and cannot drift between cadences |
+| `scripts/energy-baseline/hack/compare_forecasts.py` | Comparison script: runs baseline and two-publication on the frozen holdout, computes metrics; carries the cadence flags |
+| `scripts/energy-baseline/tests/test_rolling_horizon.py` | **112** tests (63 when this section was first written): price noise, day-level bias, frozen profile and slot positioning, event computation, warmup splitting, DST, integration, plus the golden-digest tests that prove the legacy cadence is bit-identical and the cadence-mode tests |
+| `scripts/energy-baseline/tests/test_compare_forecasts_cli.py` | **22** tests running the CLI as a subprocess against a synthetic dataset (16 before the cadence work: +6 subprocess tests for the cadence flags, the multiplicity pair, true-price scoring, and the three validation refusals) |
+| `scripts/energy-baseline/src/energy_baseline/benchmark.py` | Where the rung is registered: `POLICY_NAMES`, canonical defaults, flag validation, artifact blocks, comparison flags |
 | `scripts/energy-baseline/hack/ROLLING_HORIZON_STATUS.md` | Status document for the rolling-horizon code — defect list, slot-positioning rule and test inventory live there |
 
-**Test suite:** **1201 passed** (full package; 1194 before the slot-positioning fix, +7 positioning
-and boundary tests); `ruff check` and `ruff format --check` clean on 35 files.
+**Test suite:** **1201 passed** when this section was written (1194 before the slot-positioning fix, +7
+positioning and boundary tests), `ruff check` and `ruff format --check` clean on 35 files. **Today:
+1444 passing**, ruff clean on **39** files. The growth is the cadence work, the fifth-rung registration,
+the HA enum reader and the dispatch contract — see [Progress §*2026-10-24 pass*](./energy-baseline-progress.md).
 
 ## 7. Status
 
 | Task | Status | Notes |
 |------|--------|-------|
 | Protocol specification | **done** | This document |
-| `rolling_horizon.py` implementation | **done** | Three defects found in review/verification and fixed: the frozen forecast was not truly frozen (fit window was per-day causal, not cut-bounded); a warmup crash when the evaluation window opened after 20:30 local (fixed by splitting warmups at every local midnight); and slot positions taken as slice-run offsets instead of local clock offsets (§5). All three have regression tests. Full suite **1201 passed**; ruff clean |
+| `rolling_horizon.py` implementation | **done, and canonical** | Three defects found in review/verification and fixed: the frozen forecast was not truly frozen (fit window was per-day causal, not cut-bounded); a warmup crash when the evaluation window opened after 20:30 local (fixed by splitting warmups at every local midnight); and slot positions taken as slice-run offsets instead of local clock offsets (§5). All three have regression tests. The module has since gained the configurable replan cadence (§6); suite now **1444 passed**, ruff clean |
 | `hack/compare_forecasts.py` implementation | **done** | End-to-end synthetic invocation verified; exact data-loader API checks passed |
 | Synthetic noise generation | **done** | Deterministic date/seed generation with two independent channels (per-slot noise and per-day bias); diagnostics cover estimated delivery slots only |
 | Frozen profile fits (prior_28, prior_365, prior_all) | **done** | Fit window bounded by explicit `training_end_idx`; regression test perturbs every post-cutoff load value and asserts the forecast is bit-identical. Positions are now clock-derived (§5), so all three profiles were re-fit — which is why the matrix was re-run rather than corrected arithmetically |
 | Baseline runs (day_ahead on holdout) | **done** | 93 days solved per run; invariant to the noise channels (the baseline never sees the estimate), so 81 records collapse to 3 distinct runs — one per load window. Re-run after the fix: all three moved slightly, because every window applies a different forecast on 2025-10-01, and `prior_all`'s learned means moved too (§5) |
 | Two-publication runs (σ ∈ {0, 0.1, 0.2}, bias σ ∈ {0, 0.1, 0.2}, seeds {0, 1, 2}) | **done** | 81 configurations; each rolling run solved 185 events (92 days × 2 + 1 warmup); zero infeasible / no-incumbent / at-limit in every one of the 162 policy runs |
 | Metric computation (MAE, MAPE, frac within 10/20%) | **done** | Load-forecast accuracy by window; price-estimate accuracy by (σ, bias σ) cell; EFC; terminal SOC; clipped kWh — all re-derived from the corrected run in §11 |
-| Leakage review | **not done** | An independent check of the fit-before-test and shared-noise invariants has **not** been performed on the *executed corrected* artifacts. The §5 defect is fixed and pinned by tests, but that is self-verification, not the outstanding independent review — so this row stays open and no result below may be cited as accepted |
-| Artifact identities | **done** | Dataset `da2ac07a…`; run directory `/tmp/opencode/energy-baseline/holdout-final-20261024T035727/` (`summary.json` + 81 rolling schedules + 3 `window_*_day_ahead.json` = 84 files). Outside git and outside the canonical store, so **not** immutable: re-derive to cite later. The earlier `holdout-bias-20261024T023833/`, `holdout-full-*` and `holdout-sigma0-*` directories predate the fix and are superseded (§11) |
-| Adoption decision | **not done** | No adoption is recommended. One held-out quarter plus a few synthetic seeds is a screen, and §7's own review row is still open |
-| Final comparison table | **done** | See §11 below |
+| Leakage review | **not done** | An independent check of the fit-before-test and shared-noise invariants has **not** been performed on the *executed corrected* artifacts. The §5 defect is fixed and pinned by tests, but that is self-verification, not the outstanding independent review — so this row stays open and no result below may be cited as accepted. It bears less on the canonical rung than it did on the grid: the rung's defaults are the noise-free arm, and its promotion did not wait on this review |
+| Artifact identities | **superseded** | Dataset `da2ac07a…` is **no longer current**: the 0.80 config change supersedes it, so the replacement is `PENDING REBUILD — fill after the clean-tree build`. Run directory `/tmp/opencode/energy-baseline/holdout-final-20261024T035727/` (`summary.json` + 81 rolling schedules + 3 `window_*_day_ahead.json` = 84 files). Outside git and outside the canonical store, so **not** immutable: re-derive to cite later. The earlier `holdout-bias-20261024T023833/`, `holdout-full-*` and `holdout-sigma0-*` directories predate the fix and are superseded (§11) |
+| Adoption decision | **taken — the policy is canonical** | This row read "**not done** — no adoption is recommended. One held-out quarter plus a few synthetic seeds is a screen, and §7's own review row is still open". That judgement is kept on record because it was the honest reading of a *screen*, and it still is one. What changed is that the adoption taken was adoption of the **mechanism** — a replanning rung with an earlier and longer information set — registered at exact prices on the legacy cadence, which is the arm that does not depend on synthetic noise at all. It is not an endorsement of §11's magnitudes, and it retires neither the leakage review nor the re-derivation the efficiency correction forces |
+| Final comparison table | **done, 0.88-era** | See §11 below. Every figure there was computed at `round_trip_efficiency: 0.88` on a dataset that config change has superseded, and before the rung was promoted: corrected numbers are `PENDING REBUILD` |
 
 ## 8. Validation commands
 
@@ -350,8 +383,11 @@ Private comparison output must use a fresh destination outside git.
   MAE, MAPE, fraction within error bands, solver gaps, quality fractions, SOC bounds, clipped kWh.
 - **No statistical significance claims.** Per-seed screens, not confidence intervals.
 - **No annual extrapolation.** Results cover Oct–Dec 2025 only.
-- **No deployed changes.** This is an offline experiment; the canonical benchmark registry stays at
-  four policies until a separate adoption decision.
+- **No deployed changes.** This is an offline experiment. The canonical registry no longer "stays at
+  four policies until a separate adoption decision", which is what this bullet used to say: the
+  adoption decision was taken and the registry is **five**. Nothing about that deploys or actuates
+  anything — the promotion moved a policy from `hack/` experiment code into the canonical ladder, it
+  did not move it onto a cluster.
 - **No commit, stash, restore, or pre-commit operations** during this documentation pass.
 - **No live queries.** All data is archived.
 - **No private data written to git.** Numeric results stay local.
@@ -361,6 +397,13 @@ Private comparison output must use a fresh destination outside git.
 No adoption recommendation is made before the results. Compare executed cost, cycling, clipping,
 terminal SOC and price-noise sensitivity, rather than choosing on forecast MAE alone. One held-out
 quarter and a few synthetic seeds are a screening experiment, not a purchase or deployment case.
+
+**Update 2026-10-24 — the rung was adopted, and that does not retire this paragraph.** What was adopted
+is the *mechanism*: a replanning policy that holds the same published information earlier and over a
+longer span, registered at exact prices where no synthetic-noise assumption enters at all. What was
+**not** adopted is a claim about magnitudes — §11 is still a screen over one quarter, still carries the
+open leakage review of §7, and is now additionally marked 0.88-era. Nothing here is a purchase or
+deployment case, and nothing was deployed.
 
 **MAE-ranked windows ≠ cost-ranked windows (verified):** load-forecast MAE ranked the three
 windows best→worst as 28, 365, all; dispatch cost put **365 first in all 27 noise cells under both
@@ -375,10 +418,24 @@ evening publication separately; no telemetry or Home Assistant configuration cha
 
 ## 11. Results — executed holdout matrix (2026-10-24, corrected run)
 
+> **Superseded on efficiency — read the numbers below as a record, not as results.** This matrix was
+> computed at `round_trip_efficiency: 0.88` on dataset `da2ac07a…`. Both have been superseded: the
+> shipped config is now 0.80, which makes every figure here an optimistic 0.88-era result, and the
+> dataset that produced them no longer describes that config. The corrected matrix is
+> `PENDING REBUILD`. They are kept rather than deleted because §5 and §7 were reviewed against these
+> bytes, and because the two findings that carry the section are *orderings* — the rolling rung beat
+> `day_ahead` in every configuration tested, and forecast accuracy ranked the load windows the opposite
+> way to dispatch value — which a change in battery friction does not obviously reverse. What *is*
+> affected is every magnitude, including the noise-penalty-versus-margin ratios, since the margin itself
+> is a 0.88 quantity. The run predates the rung's promotion as well, so it describes an experiment
+> beside a four-policy registry, not the canonical fifth rung.
+
 ### Artifact identities and storage caveat
 
-- Dataset `da2ac07a7a39affc43ef9e94523fb6a154ee6213d590086d8c261b265d957140`; build
-  manifest sha256 `15ce9b8f596911cae1bbdb68c03d2efbd322936abb334b7fcafe4f315a445cef`.
+- Dataset `da2ac07a7a39affc43ef9e94523fb6a154ee6213d590086d8c261b265d957140` — **SUPERSEDED** by the
+  0.80 config change; build manifest sha256
+  `15ce9b8f596911cae1bbdb68c03d2efbd322936abb334b7fcafe4f315a445cef`. The rebuild's id is
+  `PENDING REBUILD — fill after the clean-tree build`.
 - **Cite only this run directory:** `/tmp/opencode/energy-baseline/holdout-final-20261024T035727/`,
   executed **after** the slot-positioning fix in §5. Contents: `summary.json` + `schedules/` with 81
   rolling files (one per configuration) and 3 `window_*_day_ahead.json` files (the day-ahead baseline
@@ -511,7 +568,12 @@ given `(seed, date)` by construction, which is what isolates the profile effect.
    horizons while being **executed** exactly once — measured multiplicity histogram over the 8,820
    usable intervals: 74 planned once, 5,112 twice, 2,364 thrice, 1,270 four times; execution multiplicity
    exactly 1 for every one of them. The totals therefore count repeated planning of the same intervals.
-   Record this explicitly so nobody later reads it as three times more refused energy.
+   Record this explicitly so nobody later reads it as three times more refused energy. **It is now a
+   reported property rather than a reader's duty:** the canonical rung emits
+   `executed_multiplicity_mean` (exactly 1.0), `planning_multiplicity_mean` (about 94.4 at a one-interval
+   cadence over a 96-slot horizon, about 2.5 at this legacy cadence — the same quantity the 2.55 measured
+   here), `clipping_totals_comparable_across_cadences: false` with an explanatory note, and `solve_count`
+   per run, so a run's compute cost is visible in its own artifact.
 
 7. **Terminal SOC** ended between **2.1381 and 2.9692 kWh** across all 162 policy runs against a 1.024
    kWh opening, uncredited under the shared zero scoring value. `day_ahead`'s terminal SOC is invariant
@@ -574,6 +636,12 @@ bracketing MAPE 0.20 the mean penalty against the perfect-price control was **+0
 stated accuracy is roughly **one eighth of the median policy margin** (0.2096 / 1.9270 ≈ 0.11), and
 the mean penalties are one to two orders of magnitude smaller.
 
+**Both magnitudes above are 0.88-era and are quoted as the record of what was reviewed, not as current
+figures.** The margin between two policies is a difference of two costs computed on the superseded
+battery, so it moves when the efficiency moves; the *ratio* of a noise penalty to that margin is the
+thing the conclusion rests on, and whether the ratio survives is `PENDING REBUILD`. No corrected figure
+is stated here.
+
 **Decision this licenses:** no investment in price-forecast skill is warranted for this controller.
 The value sits in horizon length and the evening revision, not in estimate accuracy. This is what
 the grid supports; it is an offline conclusion about a simulated controller — nothing is deployed.
@@ -591,10 +659,33 @@ would still convert assertion into measurement, and is now optional rather than 
 
 ### 12.3 Round-trip efficiency 0.80–0.84
 
-Recorded in `config/tariff.yaml` above the `round_trip_efficiency` value. The shipped 0.88 is
-optimistic by 4–8 percentage points against the only efficiency evidence that now exists; the
-consequence for the information ladder and EFC figures is in
-[Progress §*Pending*](./energy-baseline-progress.md).
+**Applied: the shipped value is now 0.80, and this section's premise has changed under it.** What this
+section used to say — "Recorded in `config/tariff.yaml` above the `round_trip_efficiency` value. **The
+shipped 0.88 is** optimistic by 4–8 percentage points against the only efficiency evidence that now
+exists" — was accurate when written and is withdrawn: on 2026-10-24 the owner **adopted 0.80**, the
+bottom of the community-measured 0.80–0.84 range, reasoning that at 2.5 kW the unit operates mostly near
+its power rating where efficiency is typically worst. `config/tariff.yaml` now ships
+`round_trip_efficiency: 0.80`; one value line, with every other battery parameter untouched
+(`capacity_kwh` 5.12, `power_kw` 2.5, `soc_window_min` 0.20, `soc_window_max` 0.95,
+`initial_soc_frac` 0.20, `import_limit_kw` 5.0). One-way efficiency is `sqrt(0.80) = 0.89443` per
+direction, replacing `sqrt(0.88) = 0.93808`, and `config_hash` moved from
+`41fdc30b926c099be2cbef201db4141244d82faaa80b9907c7530354f64bf182` to
+`7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1`.
+
+**It is still an assumption.** 0.80 is community measurement from other installations, not a measurement
+of this household's unit; the efficiency-versus-power curve is still unmeasured and idle draw is still
+assumed zero and unmeasured.
+
+**Consequence for this document.** The `config_hash` → `dataset_id` coupling the earlier version of this
+section warned about — "a sensitivity run therefore precedes any config change, so the correction cannot
+be applied by editing a value in place without superseding the accepted dataset" — **fired**: the
+sensitivity run was not waited for, dataset `da2ac07a…` is superseded, and §11's EFC, clipping and
+margin figures are 0.88-era. A lower round-trip efficiency penalises cycling, which compresses the
+information ladder and can reorder rungs; **whether it reorders this experiment's rolling-versus-`day_ahead`
+verdict is not known**, because the re-derivation has not run. Corrected dataset id and corrected figures:
+`PENDING REBUILD — fill after the clean-tree build`. Full record in
+[Progress §*Round-trip efficiency applied (2026-10-24)*](./energy-baseline-progress.md) and ADR-0003
+§*Round-trip efficiency: 0.88 → 0.80, applied*.
 
 ## 13. References
 

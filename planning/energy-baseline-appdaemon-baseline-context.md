@@ -1,7 +1,7 @@
 # Energy Baseline — AppDaemon Price Rule as Baseline Context
 
 - **Status:** RECORD ONLY — no scope change to ADR-0003 *(as of writing; the ADR was amended on
-  2026-10-23 — see the supersession note below)*
+  2026-10-23 and its ladder grew again on 2026-10-24 — see the supersession notes below)*
 - **Date:** 2026-10-23
 - **Supersession note (2026-10-23):** The [Scope decision](#scope-decision-and-rationale) below
   states "no fourth policy is added in this phase" and the [day-ahead
@@ -10,13 +10,25 @@
   (B2) as a new rung between causal and oracle. The policy is implemented in
   `scripts/energy-baseline/src/energy_baseline/policies.py` (`policy_day_ahead`) and is **committed
   at `c1569314`**. [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md) was amended the
-  same day: its set is now four policies and its status is **Accepted**, so every three-policy
-  statement below is historical. The analysis itself remains valid as baseline context — the AppDaemon
-  rule is still thermal, not electrical, and still not a battery policy — but the day-ahead price
+  same day: its set is now four policies *(five since 2026-10-24 — see the supersession note
+  below)* and its status is **Accepted**, so every three-policy statement below is historical — and
+  so are the four-policy ones, once that later date is accounted for. The analysis itself remains
+  valid as baseline context — the AppDaemon rule is still thermal, not electrical, and still not a
+  battery policy — but the day-ahead price
   variant it motivated is no longer deferred. The two **UNRESOLVED** items below
   (`min_hours_per_day` and the ESIOS day-boundary semantics) stay unresolved and now constrain how the
   new rung may be read. See [energy-baseline-progress.md](./energy-baseline-progress.md) for current
   status.
+- **Supersession note (2026-10-24):** ADR-0003's ladder no longer has four rungs. `POLICY_NAMES` is
+  the five-name tuple `('no_battery', 'causal_price', 'day_ahead', 'rolling_horizon', 'oracle')`, with
+  `rolling_horizon` placed **between `day_ahead` and `oracle`** because it is strictly more informed
+  than the rung below it: at 20:30 on day D−1 it already sees day D's exact prices, which `day_ahead`
+  does not see until D's own midnight, and its horizon spans to the end of D rather than stopping at
+  it. This is an **insertion at rung 4, not a renumbering of rung 3** — `day_ahead` is still rung 3.
+  Each four-rung statement below stays accurate for the date it carries and stale as a description of
+  today, so they are kept as dated history with a note beside them rather than rewritten. See
+  [energy-baseline-progress.md](./energy-baseline-progress.md) and
+  [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md) for the current ladder.
 - **Extends:** [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md)
 - **Related:** [Production execution plan](./energy-baseline-production-execution.md), [Implementation plan](./home-battery-optimizer-implementation.md), [Progress & handoff](./energy-baseline-progress.md)
 
@@ -25,8 +37,10 @@
 [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md) fixes exactly three benchmark
 policies: no-battery, causal simple price-based, and perfect-information oracle. **(Superseded
 2026-10-23: ADR-0003 now has four rungs; the day-ahead variant was adopted as rung 3. The analysis
-below remains valid as baseline context.)** It had been *assumed* that policy 2 — the causal
-price-threshold policy — was required to mirror the household's existing AppDaemon price rule.
+below remains valid as baseline context.)** **(Superseded again 2026-10-24: five rungs —
+`rolling_horizon` was promoted as rung 4, between `day_ahead` and `oracle`; see the supersession note
+above.)** It had been *assumed* that policy 2 — the causal price-threshold policy — was required to
+mirror the household's existing AppDaemon price rule.
 **That assumption was wrong.** This document records what the AppDaemon code actually does, verified
 from source, and records the decision to keep the three policies unchanged and treat the finding
 as **baseline context** rather than as a policy specification.
@@ -197,9 +211,10 @@ belongs to.
 this phase. The AppDaemon rule is recorded above as baseline context only.**
 
 **(Superseded 2026-10-23: the day-ahead variant was adopted as rung 3; ADR-0003 now has four
-policies. The analysis above remains valid as baseline context for the `no_battery` and
-`causal_price` rungs, and the unresolved items below constrain how the new `day_ahead` rung may be
-read. See [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md) and
+policies — five since 2026-10-24, when `rolling_horizon` was promoted as rung 4 between `day_ahead`
+and `oracle`; see the supersession note above. The analysis above remains valid as baseline context
+for the `no_battery` and `causal_price` rungs, and the unresolved items below constrain how the new
+`day_ahead` rung may be read. See [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md) and
 [energy-baseline-progress.md](./energy-baseline-progress.md) for current status.)**
 
 ### The premise was incorrect
@@ -237,15 +252,18 @@ savings number meaningless.
 
 ### Replacing the causal rung would destroy the information ladder
 
-The three policies form an evidence ladder on information availability: **(now four; the day-ahead
-rung was adopted 2026-10-23 as rung 3 between causal and oracle)**
+The three policies form an evidence ladder on information availability: **(now five; the day-ahead
+rung was adopted 2026-10-23 as rung 3 between causal and oracle, and `rolling_horizon` was promoted
+2026-10-24 as rung 4 between `day_ahead` and `oracle`. The table below showed four rungs until then,
+with oracle as rung 4 — the insertion did not renumber rung 3)**
 
 | Rung | Information used | Interpretation |
 |------|------------------|----------------|
 | 1 — no battery | none (measured) | what we pay today |
 | 2 — causal | current price + past state | achievable with no forecast |
 | 3 — **day_ahead** *(added 2026-10-23)* | today's 24 h at midnight | reachable from published prices alone |
-| 4 — oracle | perfect future prices and load | physically feasible ceiling |
+| 4 — **rolling_horizon** *(added 2026-10-24)* | day D's prices exact from 20:30 on D−1, replanned on a schedule to the end of D; the same strictly causal forecast | the value of holding published prices earlier and across a midnight |
+| 5 — oracle | perfect future prices and load | physically feasible ceiling |
 
 AppDaemon is not rung 2's peer; it is a look-ahead rule, as shown above. Substituting it for the
 causal policy would leave the ladder with no current-price-only rung, and the **causal → oracle gap
@@ -261,7 +279,9 @@ statement about "AppDaemon already doing battery arbitrage" would be a category 
 
 ## Considered and deferred: a day-ahead-informed variant
 
-**Status:** *Adopted 2026-10-23* — the day-ahead policy is now rung 3 in ADR-0003's four-rung ladder.
+**Status:** *Adopted 2026-10-23* — the day-ahead policy is now rung 3 of ADR-0003's ladder, which
+then had four rungs and has five since 2026-10-24; rung 3 is unchanged by that insertion (see the
+supersession note above).
 The analysis below is retained as historical context; see [ADR-0003](../docs/adr/0003-phase1-measurement-and-baseline.md)
 and [energy-baseline-progress.md](./energy-baseline-progress.md) for the current implementation.
 
@@ -289,8 +309,9 @@ It is deferred because adding a fourth rung is a scope change to a decision that
 be needed to interpret it.
 
 **(Superseded 2026-10-23: the day-ahead policy was adopted as rung 3; ADR-0003 is now Accepted with
-four policies. The unresolved ESIOS day-boundary semantics above still constrain interpretation of
-the new rung.)**
+four policies — five since 2026-10-24, when `rolling_horizon` joined the ladder as rung 4; see the
+supersession note above. The unresolved ESIOS day-boundary semantics above still constrain
+interpretation of the new rung.)**
 
 ## What This Document Does NOT Do
 
@@ -299,11 +320,15 @@ the new rung.)**
   table.
 
   **(Superseded 2026-10-23: ADR-0003 now has four policies and is Accepted; this document's
-  three-policy statements are historical. The unresolved items above remain valid constraints.)**
+  three-policy statements are historical. Superseded again 2026-10-24: the set is five policies, so
+  the three- and four-policy statements here are both historical. The unresolved items above remain
+  valid constraints.)**
 
 - **Does not add, implement, or parameterise a fourth policy.**
 
-  **(Superseded 2026-10-23: the fourth policy was implemented and committed at `c1569314`.)**
+  **(Superseded 2026-10-23: the fourth policy was implemented and committed at `c1569314`. A fifth
+  policy, `rolling_horizon`, was promoted into the same ladder on 2026-10-24 — see the supersession
+  note above.)**
 - **Does not assert `min_hours_per_day = 15` as fact.**
 - **Changes no code.** No file under `scripts/energy-baseline/`, no AppDaemon app, and no Home
   Assistant configuration was modified by this investigation. The findings are read-only: the

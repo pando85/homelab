@@ -1,25 +1,44 @@
-"""Rolling horizon dispatcher — two events per day, partial execution, SOC carry.
+"""Rolling horizon dispatcher — configurable replan cadence, partial execution, SOC carry.
 
-Two planning events per local day (Europe/Madrid):
+Two modes share one code path and one publication rule:
 
-* **14:00** — plan from 14:00 to midnight ending D+1 (~34 h).  Prices for the
-  rest of day D are exact; prices for D+1 are a noisy estimate (sigma=0 is the
-  exact-price control).
-* **20:30** — re-plan from 20:30 to midnight ending D+1 (~27.5 h).  Prices for
-  the rest of D **and** all of D+1 are now exact (conservative: first call after
-  the 20:15–20:20 publication window).
+* **Legacy two-event schedule** (``replan_interval_slots is None``, the default):
+  two planning events per local day (Europe/Madrid):
 
-Each plan is executed **only until the next event** (14:00 → 20:30, 20:30 →
-next 14:00).  The actual SOC is carried forward by walking the clipped plan
-chronologically, so the next event's solve starts from the real state, not the
-planned one.
+  * **14:00** — plan from 14:00 to midnight ending D+1 (~34 h).  Prices for the
+    rest of day D are exact; prices for D+1 are a noisy estimate (sigma=0 is the
+    exact-price control).
+  * **20:30** — re-plan from 20:30 to midnight ending D+1 (~27.5 h).  Prices for
+    the rest of D **and** all of D+1 are now exact (conservative: first call after
+    the 20:15–20:20 publication window).
 
-Warmup events cover ``[eval_start, first scheduled event)``.  A warmup never
-plans across a local midnight — when that window spans one it is split at every
-midnight into one warmup per local day, each planning only the day it starts in,
-with exact prices and no tomorrow.  So the first partial day is not silently
-given future information it could not have had, and no plan is ever shorter than
-the slice of it that gets executed.
+* **Configurable cadence** (``replan_interval_slots is not None``): one event every
+  *replan_interval_slots* intervals, each planning *horizon_slots* ahead (default
+  96 = 24 h at 15-min intervals, inside ADR-0001's 24–48 h band), executing only
+  the next *replan_interval_slots* intervals.  The 15-minute cadence
+  (``replan_interval_slots=1``, ``horizon_slots=96``) is the mode a real
+  controller would run.
+
+In both modes the **price information set is a function of the decision instant,
+not of the cadence**.  The single publication rule (see :func:`_last_published_day`)
+is: prices for local day ``D+1`` become exact at 20:30 on day ``D``, the first
+quarter-hour boundary after the 20:15–20:20 publication window.  A solve at 09:00 on
+day D sees day D exact and day D+1 estimated; a solve at 21:00 on day D sees both
+exact.  The legacy 14:00/20:30 events and the configurable cadence derive their
+``prices_exact_end_idx`` from this one rule, so the rule cannot drift between modes.
+
+Each plan is executed **only until the next event** (legacy: 14:00 → 20:30,
+20:30 → next 14:00; configurable: the next *replan_interval_slots* intervals).
+The actual SOC is carried forward by walking the clipped plan chronologically,
+so the next event's solve starts from the real state, not the planned one.
+
+Warmup events cover ``[eval_start, first scheduled event)`` in legacy mode.  A
+warmup never plans across a local midnight — when that window spans one it is
+split at every midnight into one warmup per local day, each planning only the
+day it starts in, with exact prices and no tomorrow.  So the first partial day
+is not silently given future information it could not have had, and no plan is
+ever shorter than the slice of it that gets executed.  Configurable-cadence mode
+has no warmup events: the cadence starts at *eval_start_idx*.
 
 Load forecasts are **frozen**: computed once from training data (slot-position means
 over the trailing ``window_days`` local days, strictly before the cut) by
@@ -41,6 +60,16 @@ its sigma is 0; both at 0 is the exact-price control.
 
 Scoring always uses **true** prices against the **actual** (clipped) grid
 import — noisy prices influence planning only, never the reported cost.
+
+**Multiplicity accounting.** An interval is typically covered by several
+overlapping plan horizons (planned multiplicity) but executed exactly once.  Measured
+on synthetic windows: mean 2.52 with a maximum of 4 at the legacy cadence, and mean
+94.4 with a maximum of 96 for ``replan_interval_slots=1, horizon_slots=96`` (the mean
+is a little under 96 only because the first and last few horizons are clipped by the
+window edges).  Clipping totals therefore are *not* comparable across cadences.
+``telemetry["planning_multiplicity_mean"]`` and
+``telemetry["planning_multiplicity_max"]`` make this explicit so a reader does not
+mistake planned multiplicity for curtailment.
 """
 
 from __future__ import annotations
@@ -101,7 +130,12 @@ class RollingEvent:
     """Local calendar day of the event."""
 
     kind: str
-    """``"warmup"``, ``"afternoon"`` (14:00), or ``"evening"`` (20:30)."""
+    """``"warmup"``, ``"afternoon"`` (14:00), ``"evening"`` (20:30), or ``"replan"``.
+
+    The first three are the legacy two-publication schedule; ``"replan"`` marks an event
+    of a uniform-cadence roll (``replan_interval_slots`` set), whose decision instant is
+    whatever interval the cadence landed on rather than a fixed wall-clock time.
+    """
 
     start_idx: int
     """First interval index of the plan (and execution) window."""
@@ -113,7 +147,14 @@ class RollingEvent:
     """One past the last interval executed from this plan."""
 
     prices_exact_end_idx: int
-    """Prices are exact (true) up to this index; noisy after (for afternoon)."""
+    """Prices are exact (true) up to this index; estimated from it to ``plan_end_idx``.
+
+    Derived from the decision instant alone (see :func:`_last_published_day`), never
+    from the cadence: at the legacy cadence it is the end of the event's own local day
+    for the 14:00 solve and ``plan_end_idx`` for the 20:30 solve, and at any finer
+    cadence it is the same boundary the 20:30 rule gives, evaluated at that solve's own
+    clock time.  Equal to ``plan_end_idx`` means the whole plan used exact prices.
+    """
 
 
 @dataclass
@@ -190,6 +231,117 @@ def _as_local_date(label: Any) -> date:
 def _as_utc(dt: datetime) -> datetime:
     """Treat a naive interval start as UTC; pass an aware one through unchanged."""
     return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
+# ---------------------------------------------------------------------------
+# Price publication rule (the single source of the information set)
+# ---------------------------------------------------------------------------
+
+
+def _last_published_day(decision_utc: datetime, tz: ZoneInfo) -> date:
+    """Last local day whose prices are exact at a decision instant.
+
+    THE publication rule, stated once.  Day-ahead prices for local day ``D+1`` are
+    published in the 20:15–20:20 window on day ``D``; this module conservatively
+    treats them as available from :data:`EVENING_EVENT` (20:30), the first
+    quarter-hour boundary after that window.  So at a decision instant on day ``D``:
+
+    * local time ``< 20:30`` → ``D`` is exact, ``D+1`` and later are estimated;
+    * local time ``>= 20:30`` → ``D`` **and** ``D+1`` are exact, ``D+2`` onward
+      are estimated.
+
+    The answer is a function of the decision instant alone — never of the replan
+    cadence — which is what lets the legacy 14:00/20:30 schedule and a 15-minute
+    cadence describe the same information honestly.  Both derive their
+    ``prices_exact_end_idx`` from this function, so neither carries a second copy
+    of the rule that could drift.
+
+    The comparison is on the local wall clock of the instant.  On a fall-back day
+    the repeated hour is never near the boundary, so ``fold`` cannot change the
+    answer here; :func:`_clock_slot_position` is where the fold matters.
+    """
+    local = _as_utc(decision_utc).astimezone(tz)
+    if (local.hour, local.minute) >= EVENING_EVENT:
+        return local.date() + timedelta(days=1)
+    return local.date()
+
+
+def _prices_exact_end_for_decision(
+    decision_utc: datetime,
+    plan_end_idx: int,
+    day_starts: list[tuple[date, int]],
+    tz: ZoneInfo,
+) -> int:
+    """First index at which the plan must use estimated prices, clipped to the plan.
+
+    Looks the decision instant up through :func:`_last_published_day` and then
+    through ``day_starts`` — ``(local_day, first_index)`` pairs in ascending day
+    order, i.e. the local-day partition of the dataset — to find the first
+    interval of the first day that is NOT yet published.  Everything before that
+    index is exact, everything from it to ``plan_end_idx`` is estimated.
+
+    Returns ``plan_end_idx`` when no unpublished day appears inside the plan,
+    which is the "all prices exact" case the legacy evening and warmup events
+    already mean.
+    """
+    last_exact = _last_published_day(decision_utc, tz)
+    # First day strictly after the last published one, if the dataset has it.
+    pos = _bisect_day_start(day_starts, last_exact)
+    if pos >= len(day_starts):
+        return plan_end_idx
+    return min(day_starts[pos][1], plan_end_idx)
+
+
+def _bisect_day_start(day_starts: list[tuple[date, int]], after: date) -> int:
+    """Index of the first ``(day, start)`` entry whose day is strictly after *after*."""
+    lo, hi = 0, len(day_starts)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if day_starts[mid][0] <= after:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def _day_starts(local_days: Any) -> list[tuple[date, int]]:
+    """Ascending ``(local_day, first_interval_index)`` partition of the dataset."""
+    bounds = contiguous_day_bounds(list(local_days))
+    return sorted(
+        ((_as_local_date(label), start) for label, start, _stop in bounds),
+        key=lambda item: item[0],
+    )
+
+
+def _cadence_telemetry(
+    replan_interval_slots: int | None,
+    horizon_slots: int | None,
+    interval_seconds: float,
+) -> dict[str, Any]:
+    """Describe the cadence a run used, for telemetry and artifacts.
+
+    ``None`` means the legacy two-publication schedule, spelled out here rather than
+    left implicit so an artifact states which controller it measured.  The legacy
+    horizon is reported as ``None`` deliberately: it is DST-dependent (34 h at 14:00 on
+    a normal day, 35 h before a fall-back day, ~27.5 h at 20:30) and clipped by the end
+    of the evaluation window, so any single number would be a fabrication.  A uniform
+    cadence's horizon is fixed in slots and converts honestly to hours.
+    """
+    if replan_interval_slots is None:
+        return {
+            "replan_interval_slots": None,
+            "replan_cadence": f"{AFTERNOON_EVENT[0]:02d}:{AFTERNOON_EVENT[1]:02d} and "
+            f"{EVENING_EVENT[0]:02d}:{EVENING_EVENT[1]:02d} local (two daily publications)",
+            "horizon_slots": None,
+            "horizon_hours_nominal": None,
+        }
+    slots = 96 if horizon_slots is None else horizon_slots
+    return {
+        "replan_interval_slots": int(replan_interval_slots),
+        "replan_cadence": f"every {int(replan_interval_slots)} interval(s)",
+        "horizon_slots": int(slots),
+        "horizon_hours_nominal": slots * float(interval_seconds) / 3600.0,
+    }
 
 
 def _infer_interval_seconds(interval_starts_utc: Any) -> float:
@@ -696,6 +848,12 @@ def _warmup_events(
     midnight — which it does whenever evaluation starts after the 20:30 event and
     the next scheduled event is the following day's 14:00.
 
+    Being exact to its own plan end is not a special case of the warmup rule, it is a
+    consequence of the publication rule: :func:`_last_published_day` at any pre-20:30
+    instant gives the event's own day as the last published one, and because a warmup
+    never plans past that day's midnight there is no unpublished interval inside its
+    plan to mark.
+
     Raises:
         ValueError: If the local-day partition does not cover the whole range.  An
             uncovered interval has no plan, and quietly dropping it would score a
@@ -737,24 +895,54 @@ def compute_rolling_events(
     eval_start_idx: int,
     eval_end_idx: int,
     tz: ZoneInfo,
+    replan_interval_slots: int | None = None,
+    horizon_slots: int | None = None,
 ) -> list[RollingEvent]:
     """Compute the chronological list of planning events.
 
-    Events are at 14:00 and 20:30 local time for each day that has intervals inside
-    the evaluation window.  Warmup events cover whatever the window opens with before
-    the first scheduled event (see :func:`_warmup_events`); unlike an afternoon or
-    evening solve, a warmup never plans past its own local midnight, so it is never
-    credited with tomorrow's prices.
+    Two modes share one publication rule:
 
-    Guarantees:
+    * **Legacy** (``replan_interval_slots is None``): events at 14:00 and 20:30
+      local time for each day that has intervals inside the evaluation window.
+      Warmup events cover whatever the window opens with before the first
+      scheduled event (see :func:`_warmup_events`); unlike an afternoon or
+      evening solve, a warmup never plans past its own local midnight, so it is
+      never credited with tomorrow's prices.
+    * **Configurable cadence** (``replan_interval_slots is not None``): one
+      event every *replan_interval_slots* intervals starting at
+      *eval_start_idx*, each planning *horizon_slots* ahead (default 96 = 24 h
+      at 15-min intervals).  No warmup events: the cadence starts at
+      *eval_start_idx*.  Each event executes only the next
+      *replan_interval_slots* intervals.  The price information set is derived
+      from the decision instant via :func:`_last_published_day`.
+
+    Guarantees (both modes):
     - Each interval in [eval_start_idx, eval_end_idx) is executed exactly once
     - exec_end_idx <= plan_end_idx for every event
     - No gaps or overlaps in execution coverage
     """
+    if replan_interval_slots is not None:
+        if replan_interval_slots < 1:
+            raise ValueError(f"replan_interval_slots must be >= 1, got {replan_interval_slots}")
+        if horizon_slots is None:
+            horizon_slots = 96  # 24 h at 15-min intervals
+        if horizon_slots < 1:
+            raise ValueError(f"horizon_slots must be >= 1, got {horizon_slots}")
+        return _compute_replan_events(
+            interval_starts_utc,
+            local_days,
+            eval_start_idx=eval_start_idx,
+            eval_end_idx=eval_end_idx,
+            tz=tz,
+            replan_interval_slots=replan_interval_slots,
+            horizon_slots=horizon_slots,
+        )
+
     n = len(interval_starts_utc)
     time_index = _build_time_index(interval_starts_utc)
     days = contiguous_day_bounds(list(local_days))
     day_map = _day_bounds_to_dict(days)
+    ds = _day_starts(local_days)
 
     # Find all event times at or after eval_start_idx
     raw_events: list[tuple[datetime, date, str, int]] = []
@@ -825,12 +1013,16 @@ def compute_rolling_events(
             else:
                 plan_end = min(_find_idx_or_next(time_index, midnight_utc, n), eval_end_idx)
 
-        # Prices exact end: for afternoon, midnight D; for evening, plan_end
-        if kind == "afternoon":
-            day_s, day_e = day_map.get(d, (idx, plan_end))
-            prices_exact_end = min(day_e, eval_end_idx)
-        else:
-            prices_exact_end = plan_end  # all exact for evening
+        # Prices exact end: derived from the single publication rule.  For the
+        # legacy afternoon (14:00 < 20:30) the last published day is D, so the
+        # boundary is the first interval of D+1 — which is end-of-D-run, i.e.
+        # the legacy ``min(day_e, eval_end_idx)``.  For the legacy evening
+        # (20:30) the last published day is D+1, so the boundary is the first
+        # interval of D+2 — which is past plan_end, so the result is plan_end,
+        # i.e. the legacy ``prices_exact_end = plan_end``.  Both branches of
+        # the old ``if kind == ...`` collapse to this one call, so the rule
+        # cannot drift between modes.
+        prices_exact_end = _prices_exact_end_for_decision(evt_utc, plan_end, ds, tz)
 
         events.append(
             RollingEvent(
@@ -853,6 +1045,63 @@ def compute_rolling_events(
     if not events:
         raise ValueError(
             f"no rolling events for the evaluation window "
+            f"[{eval_start_idx}, {eval_end_idx}): intervals would have no plan"
+        )
+    return events
+
+
+def _compute_replan_events(
+    interval_starts_utc: Any,
+    local_days: Any,
+    *,
+    eval_start_idx: int,
+    eval_end_idx: int,
+    tz: ZoneInfo,
+    replan_interval_slots: int,
+    horizon_slots: int,
+) -> list[RollingEvent]:
+    """Uniform-cadence replan events.
+
+    One event every *replan_interval_slots* intervals starting at
+    *eval_start_idx*, each planning *horizon_slots* ahead (clipped to
+    *eval_end_idx*).  Each event executes only the next *replan_interval_slots*
+    intervals (or fewer for the last event).  The price information set is
+    derived from the decision instant via :func:`_last_published_day`, the
+    same rule the legacy 14:00/20:30 schedule uses.
+
+    Coverage tiles [eval_start_idx, eval_end_idx) exactly once by construction:
+    ``exec_end`` of each event is the ``start_idx`` of the next, and the last
+    event's ``exec_end`` is ``eval_end_idx``.  ``exec_end_idx <= plan_end_idx``
+    holds because ``exec_end`` is clamped to ``plan_end``.
+    """
+    ds = _day_starts(local_days)
+
+    events: list[RollingEvent] = []
+    idx = eval_start_idx
+    while idx < eval_end_idx:
+        plan_end = min(idx + horizon_slots, eval_end_idx)
+        exec_end = min(idx + replan_interval_slots, plan_end)
+
+        decision_utc = _as_utc(interval_starts_utc[idx])
+        prices_exact_end = _prices_exact_end_for_decision(decision_utc, plan_end, ds, tz)
+        local_day = decision_utc.astimezone(tz).date()
+
+        events.append(
+            RollingEvent(
+                index=len(events),
+                local_day=local_day,
+                kind="replan",
+                start_idx=idx,
+                plan_end_idx=plan_end,
+                exec_end_idx=exec_end,
+                prices_exact_end_idx=prices_exact_end,
+            )
+        )
+        idx = exec_end
+
+    if not events:
+        raise ValueError(
+            f"no replan events for the evaluation window "
             f"[{eval_start_idx}, {eval_end_idx}): intervals would have no plan"
         )
     return events
@@ -950,20 +1199,45 @@ def run_rolling_horizon(
     mip_rel_gap: float = 1e-6,
     mip_abs_gap: float = 1e-9,
     import_limit_kw: float | None = None,
+    replan_interval_slots: int | None = None,
+    horizon_slots: int | None = None,
 ) -> RollingResult:
-    """Run the two-event rolling horizon dispatcher.
+    """Run the rolling horizon dispatcher.
 
-    For each event, solves a MILP over [event_time, midnight D+1] using noisy
-    prices (for the afternoon event) or exact prices (for the evening event and
-    warmup).  Executes only until the next event, carries the actual SOC
-    forward, and re-solves.
+    Two cadences share this one entry point:
+
+    * **Legacy** (``replan_interval_slots is None``, the default): two events per
+      local day, 14:00 and 20:30.  Each solves a MILP over ``[event_time, midnight
+      ending D+1]``, using estimated prices for the part of the horizon whose
+      prices were not yet published, and executes only until the next event.
+    * **Configurable cadence** (``replan_interval_slots`` set): one solve every
+      ``replan_interval_slots`` intervals over a ``horizon_slots``-long horizon
+      (default 96 = 24 h), executing only the next ``replan_interval_slots``
+      intervals — the mode a real controller runs.
+
+    In both cases the actual SOC is carried forward from the clipped plan and the
+    information set is a function of the decision instant, never of the cadence
+    (see :func:`_last_published_day`).
 
     ``sigma`` is the per-slot forecast noise and ``bias_sigma`` the per-local-day
     multiplicative bias (see :func:`generate_price_noise`).  Both live in
     :func:`generate_price_noise`'s metadata; neither enters scoring.
 
     Cost is always computed against TRUE prices and actual grid import.
+
+    **Cost of a run is visible in the artifact**: ``telemetry["solve_count"]``
+    counts events actually sent to the solver (a 15-minute cadence over a 92-day
+    holdout is ~8,832 of them versus 185 at the legacy cadence), and
+    ``planning_multiplicity_*`` says how many overlapping horizons each interval
+    was planned inside.  Clipping totals are NOT comparable across cadences for
+    exactly that reason — see ``clipping_totals_comparable_across_cadences`` and
+    ``clipping_note`` in the telemetry.
     """
+    if replan_interval_slots is not None and replan_interval_slots < 1:
+        raise ValueError(f"replan_interval_slots must be >= 1, got {replan_interval_slots}")
+    if horizon_slots is not None and horizon_slots < 1:
+        raise ValueError(f"horizon_slots must be >= 1, got {horizon_slots}")
+
     validate_spec(spec)
     n_eval = eval_end_idx - eval_start_idx
 
@@ -974,14 +1248,20 @@ def run_rolling_horizon(
         eval_start_idx=eval_start_idx,
         eval_end_idx=eval_end_idx,
         tz=tz,
+        replan_interval_slots=replan_interval_slots,
+        horizon_slots=horizon_slots,
     )
 
-    # Build estimated_slots_mask: slots in the "noisy portion" of afternoon events
-    # (from prices_exact_end_idx to plan_end_idx)
+    # Build estimated_slots_mask: every slot that some plan had to ESTIMATE, i.e. the
+    # part of each plan past its publication boundary (prices_exact_end_idx .. plan_end).
+    # Derived from the events rather than from a kind name, because which kinds carry an
+    # estimated tail depends on the cadence: at the legacy cadence only the 14:00 solve
+    # has one (warmup and evening are exact to their plan end, so they contribute
+    # nothing here and the mask is exactly the old afternoon-only mask), while at a
+    # fine cadence every pre-publication solve contributes its own tail.
     estimated_mask = np.zeros(len(prices), dtype=bool)
     for ev in events:
-        if ev.kind == "afternoon":
-            # Noisy portion is from prices_exact_end_idx to plan_end_idx
+        if ev.prices_exact_end_idx < ev.plan_end_idx:
             estimated_mask[ev.prices_exact_end_idx : ev.plan_end_idx] = True
 
     # Generate noisy prices for the full dataset
@@ -1021,10 +1301,19 @@ def run_rolling_horizon(
         "skipped_no_usable": 0,
         "frozen_by_seed": 0,
         "clipped": 0,
+        "solver_attempts": 0,
     }
     clip_charge_total = 0.0
     clip_discharge_total = 0.0
     value = float(terminal_value_eur_per_kwh)
+
+    # How many overlapping plan horizons cover each interval of the evaluation window.
+    # An interval is PLANNED by every solve whose horizon reaches it but EXECUTED exactly
+    # once, so this count grows with replan frequency: ~2.5 at the legacy two-event
+    # cadence, ~horizon_slots/replan_interval_slots at a uniform one.  It is what makes
+    # clipping totals incomparable across cadences, so it is measured rather than left to
+    # be inferred (and it is not curtailment).
+    planned_multiplicity = np.zeros(n_eval, dtype=int)
 
     for ev in events:
         lo = ev.start_idx - eval_start_idx  # relative to eval window
@@ -1034,6 +1323,7 @@ def run_rolling_horizon(
 
         m = plan_end_rel - lo
         exec_m = exec_end_rel - lo
+        planned_multiplicity[lo:plan_end_rel] += 1
 
         record: dict[str, Any] = {
             "event_index": ev.index,
@@ -1042,8 +1332,10 @@ def run_rolling_horizon(
             "start_idx": ev.start_idx,
             "plan_end_idx": ev.plan_end_idx,
             "exec_end_idx": ev.exec_end_idx,
+            "prices_exact_end_idx": ev.prices_exact_end_idx,
             "plan_intervals": m,
             "exec_intervals": exec_m,
+            "estimated_price_intervals": max(0, plan_end_rel - exact_end_rel),
             "soc_start_kwh": float(carried_kwh),
             "soc_end_kwh": float(carried_kwh),
             "solver_status": "not_solved",
@@ -1102,7 +1394,12 @@ def run_rolling_horizon(
             import_limit_kw=import_limit_kw,
         )
 
-        # Solve
+        # Solve.  Every event that reaches this point is one solver call, which is
+        # the unit of cost of a run: a 15-minute cadence over a 92-day holdout is
+        # ~8,832 of them against ~185 at the legacy cadence.  Counted here, before
+        # the call, so a solve that comes back infeasible or without an incumbent is
+        # still charged to the run's cost — it consumed the time_limit_s budget.
+        counters["solver_attempts"] += 1
         try:
             solved = solve_oracle(
                 day_spec,
@@ -1199,9 +1496,30 @@ def run_rolling_horizon(
     cost_eur = float(traced.meter_cost_eur)
     meter_cost = cost_eur
 
+    cadence: dict[str, Any] = _cadence_telemetry(
+        replan_interval_slots, horizon_slots, interval_seconds
+    )
+    # Planned-versus-executed multiplicity, stated explicitly because it is a known
+    # interpretation trap: an interval is planned by several overlapping horizons but
+    # executed once, so clipping kWh is counted per plan and grows with replan
+    # frequency without one extra joule being curtailed.
+    multiplicity_mean = float(planned_multiplicity.mean()) if n_eval else 0.0
+    multiplicity_max = int(planned_multiplicity.max()) if n_eval else 0
+    # Measured, not asserted: the coverage check above would already have raised on a
+    # gap or an overlap, so this is the record of that fact rather than a claim of it.
+    executed_mean = float(coverage.mean()) if n_eval else 0.0
+
     telemetry: dict[str, Any] = {
         "policy": "rolling_horizon",
         "event_count": len(events),
+        # Cost of the run, in solver calls.  Reported first-class so a 48x cadence
+        # cannot be mistaken for an equally cheap run as the legacy schedule.
+        "solve_count": int(counters["solver_attempts"]),
+        "planning_events_not_solved": int(len(events) - counters["solver_attempts"]),
+        "replan_interval_slots": cadence["replan_interval_slots"],
+        "replan_cadence": cadence["replan_cadence"],
+        "horizon_slots": cadence["horizon_slots"],
+        "horizon_hours_nominal": cadence["horizon_hours_nominal"],
         "events_solved": counters["solved"],
         "events_certified": counters["certified"],
         "events_infeasible": counters["infeasible"],
@@ -1212,6 +1530,23 @@ def run_rolling_horizon(
         "events_with_clipping": counters["clipped"],
         "charge_clipped_kwh": float(clip_charge_total),
         "discharge_clipped_kwh": float(clip_discharge_total),
+        # --- planned-versus-executed multiplicity -------------------------------
+        # Each executed interval is also counted in every other plan whose horizon
+        # covered it.  Executed multiplicity is exactly 1 by the coverage check above;
+        # planned multiplicity is what inflates the clipping totals.
+        "executed_multiplicity_mean": executed_mean,
+        "planning_multiplicity_mean": multiplicity_mean,
+        "planning_multiplicity_max": multiplicity_max,
+        "planned_interval_slots_total": int(planned_multiplicity.sum()),
+        "executed_interval_slots_total": int(n_eval),
+        "clipping_totals_comparable_across_cadences": False,
+        "clipping_note": (
+            f"charge/discharge_clipped_kwh sum per-PLAN clipping over "
+            f"{int(counters['solver_attempts'])} solves, and each interval was planned a "
+            f"mean of {multiplicity_mean:.2f} times (max {multiplicity_max}) while being "
+            "executed once. These totals are therefore NOT curtailment and NOT comparable "
+            "across runs with a different replan_interval_slots or horizon_slots."
+        ),
         "terminal_value_eur_per_kwh": value,
         "sigma": float(sigma),
         "bias_sigma": float(bias_sigma),

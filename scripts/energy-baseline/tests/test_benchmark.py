@@ -12,7 +12,14 @@ The four-policy run adds its own guarantees: the evaluation window is partitione
 local (Europe/Madrid) calendar days, the day-ahead terminal SOC valuation is derived
 from the frozen training window (or labelled ``cli`` when overridden), per-day solve
 status and forecast error land in ``benchmark.json``, and dominance is asserted only
-where it is provable — never over day-ahead versus causal, which is a measurement."""
+where it is provable — never over day-ahead versus causal, which is a measurement.
+
+The fifth rung (``rolling_horizon``) adds: canonical defaults of exact prices
+(``sigma=0``/``bias_sigma=0``) on the legacy two-event cadence, physics reached only
+through ``rolling_horizon.run_rolling_horizon``, one shared 0.0 scoring basis so
+``cost_eur == meter_cost_eur`` for every rung, ``oracle <= rolling_horizon`` claimed only
+when the oracle is certified and free, and ``oracle <= day_ahead`` versus
+``rolling_horizon <= day_ahead`` kept as an observation rather than a guarantee."""
 
 from __future__ import annotations
 
@@ -484,6 +491,48 @@ class TestResolveBatteryAssumptions:
         assert assumptions.import_limit_kw == 3.0
         assert "argument" in assumptions.import_limit_source
 
+    def test_shipped_tariff_battery_assumptions_are_pinned(self) -> None:
+        """The committed battery block drives every figure this package reports.
+
+        Nothing else guards it — ``test_shipped_tariff_yaml_stays_unconfirmed`` pins
+        only the tax rates.  A silent edit to efficiency, capacity, the SOC window or
+        the import ceiling would otherwise move every result while the suite stayed
+        green, and because ``config_hash`` feeds ``compute_dataset_id`` it would also
+        quietly re-mint the dataset identity.  Update this test deliberately.
+        """
+        from energy_baseline.config import load_config
+
+        shipped = Path(__file__).resolve().parents[1] / "config" / "tariff.yaml"
+        if not shipped.exists():  # pragma: no cover - repo layout guard
+            pytest.skip(f"{shipped} not present")
+        assumptions = bm.resolve_battery_assumptions(load_config(shipped))
+
+        # Nameplate capacity and power, and the contracted import ceiling: the three
+        # figures the owner confirmed rather than assumed.
+        assert assumptions.capacity_kwh == 5.12
+        assert assumptions.power_kw == 2.5
+        assert assumptions.import_limit_kw == 5.0
+
+        # Owner decision 2026-10-24: the bottom of the community-measured 0.80-0.84
+        # round-trip range, chosen because at 2.5 kW the unit operates mostly near
+        # its power rating where efficiency is typically worst.  Supersedes 0.88.
+        # Still an assumption — not a measurement of this household's unit.
+        assert assumptions.charge_efficiency == pytest.approx(0.80**0.5)
+        assert assumptions.discharge_efficiency == pytest.approx(0.80**0.5)
+
+        # Owner-chosen SOC window, and the horizon floor that follows from it.
+        assert assumptions.soc_min_frac == 0.20
+        assert assumptions.soc_max_frac == 0.95
+        assert assumptions.initial_soc_frac == 0.20
+
+        # The provisional framing must survive a change of value: the symmetric sqrt
+        # mapping stays a labelled assumption, and idle losses stay unmeasured rather
+        # than silently becoming a measured zero.
+        assert "symmetric assumption" in assumptions.efficiency_mapping
+        assert "provisional assumption" in assumptions.efficiency_mapping
+        assert assumptions.idle_losses_measured is False
+        assert assumptions.idle_loss_kwh_per_hour == 0.0
+
     def test_unsolvable_policy_is_recorded_not_fabricated(
         self, tmp_path: Path, monkeypatch
     ) -> None:
@@ -517,16 +566,19 @@ class TestResolveBatteryAssumptions:
         assert payload["solver"]["errors"]["oracle"]["failure_kind"] == "solver_error"
         assert "no plan" in payload["solver"]["errors"]["oracle"]["error"]
         results = pq.read_table(run_dir / bm.RESULTS_PARQUET_NAME)
-        # The day-ahead row survives this patch on purpose and must be asserted as
-        # present, not assumed away: policies.py binds ``solve_oracle`` at import, so
-        # replacing the attribute on the *oracle module* cannot reach it.  The rolling
-        # policy's own per-day failures are handled inside the policy (hold SOC and keep
-        # going); a whole-policy oracle failure is what this test is about, and patching
-        # the policy's dependency is covered in tests/test_policies.py.
+        # The day-ahead and rolling-horizon rows survive this patch on purpose and must
+        # be asserted as present, not assumed away: both policies.py and rolling_horizon.py
+        # bind ``solve_oracle`` at import, so replacing the attribute on the *oracle module*
+        # cannot reach them.  The day-ahead policy's own per-day failures are handled
+        # inside the policy (hold SOC and keep going); the rolling-horizon policy's own
+        # per-event failures are handled the same way.  A whole-policy oracle failure is
+        # what this test is about, and patching the policy's dependency is covered in
+        # tests/test_policies.py and tests/test_rolling_horizon.py.
         assert set(results.column("policy").to_pylist()) == {
             "no_battery",
             "causal_price",
             "day_ahead",
+            "rolling_horizon",
         }
         # Dominance against a policy that never ran is unknown, not asserted.
         assert payload["comparison"]["oracle_dominates_causal"] is None
@@ -1749,24 +1801,37 @@ class TestPrepareDayAhead:
 
 
 class TestDayAheadEndToEnd:
-    """The four-policy run: rows, artifact block, cost consistency, dominance flags."""
+    """The five-policy run: rows, artifact blocks, cost consistency, dominance flags.
 
-    START = datetime(2026, 1, 1, tzinfo=UTC)
+    The fixture deliberately spans the 2025-10-26 Europe/Madrid **fall-back** day, so one
+    local calendar day carries 100 intervals inside the evaluation window: the local-day
+    partition, the frozen load profile's clock positions and the rolling-horizon event
+    schedule are all exercised against a 25-hour day rather than only against 96-slot days.
+    """
+
+    # 2025-10-19T00:00Z is 02:00 CEST, so every local day in the window is whole.
+    START = datetime(2025, 10, 19, tzinfo=UTC)
+    INTERVALS = 12 * 24 * 4
+    TRAIN_END = START + timedelta(days=2)
 
     @staticmethod
-    def eval_local_days(intervals: int, train_end: datetime) -> list[str]:
+    def eval_local_days(
+        intervals: int, train_end: datetime, start: datetime | None = None
+    ) -> list[str]:
         """Local days the evaluation window touches, derived from the fixture itself.
 
-        Not hardcoded: 2026-01-01T00:00Z is already 2025-12-31T23:00 in Madrid, so a
-        "six day" UTC window is a seven local-day window with a four-interval first
-        day — exactly the offset the partition is supposed to respect.
+        Not hardcoded: the window opens at 02:00 local on its first day and Madrid turns
+        its clock back at 03:00 on 2025-10-26, so the local-day list is neither the UTC-day
+        list nor a uniform 96-interval count — it is exactly the partition the run must
+        respect, including the one 100-interval day.
         """
         from zoneinfo import ZoneInfo
 
         madrid = ZoneInfo("Europe/Madrid")
+        base = start if start is not None else TestDayAheadEndToEnd.START
         labels: list[str] = []
         for i in range(intervals):
-            stamp = TestDayAheadEndToEnd.START + timedelta(seconds=i * 900)
+            stamp = base + timedelta(seconds=i * 900)
             if stamp < train_end:
                 continue
             text = stamp.astimezone(madrid).date().isoformat()
@@ -1776,13 +1841,11 @@ class TestDayAheadEndToEnd:
 
     def run(self, tmp_path: Path, **kwargs: Any) -> tuple[Path, dict[str, Any]]:
         requires_core()
-        start = datetime(2026, 1, 1, tzinfo=UTC)
-        intervals = 6 * 24 * 4
         table = make_analysis_table(
-            start=start,
-            intervals=intervals,
-            prices=_prices(intervals),
-            gross_kwh=_load(intervals),
+            start=self.START,
+            intervals=self.INTERVALS,
+            prices=_prices(self.INTERVALS),
+            gross_kwh=_load(self.INTERVALS),
         )
         dataset_dir = write_synthetic_dataset(tmp_path, table)
         config_path = tmp_path / "tariff.yaml"
@@ -1791,46 +1854,65 @@ class TestDayAheadEndToEnd:
         run_dir = bm.benchmark_dataset(
             dataset=dataset_dir,
             config_path=config_path,
-            train_end=start + timedelta(days=2),
+            train_end=self.TRAIN_END,
             **kwargs,
         )
         return run_dir, json.loads((run_dir / bm.RESULTS_JSON_NAME).read_text())
 
-    def test_all_four_policies_run_and_the_ladder_holds(self, tmp_path: Path) -> None:
+    def test_all_five_policies_run_and_the_ladder_holds(self, tmp_path: Path) -> None:
         run_dir, payload = self.run(tmp_path)
         assert set(payload["policies"]) == set(bm.POLICY_NAMES)
+        assert len(bm.POLICY_NAMES) == 5
         results = pq.read_table(run_dir / bm.RESULTS_PARQUET_NAME)
         assert results.schema == bm.BENCHMARK_RESULT
         assert set(results.column("policy").to_pylist()) == set(bm.POLICY_NAMES)
 
-        da = payload["policies"][bm.POLICY_DAY_AHEAD]
-        assert da["solver_status"] == "feasible"
-        assert da["bound_kind"] == "none"
-        assert da["is_certified"] is False
-        assert da["closed_cycle"] is False
-        assert da["terminal_mode_used"] == "free"
+        # The DST fall-back day is one 100-interval solve, not two UTC-day halves.
+        da = payload["day_ahead"]
+        assert da["partition"]["intervals_per_day_max"] == 100
+        assert 100 in [d["intervals"] for d in da["per_day"]]
+
+        da_record = payload["policies"][bm.POLICY_DAY_AHEAD]
+        assert da_record["solver_status"] == "feasible"
+        assert da_record["bound_kind"] == "none"
+        assert da_record["is_certified"] is False
+        assert da_record["closed_cycle"] is False
+        assert da_record["terminal_mode_used"] == "free"
         # The policy record's terminal_value_eur_per_kwh is the COMMON SCORING value
         # (default 0.0), not the internal planning value.  This is what makes the
         # comparison with the oracle fair.
-        assert da["terminal_value_eur_per_kwh"] == pytest.approx(0.0)
+        assert da_record["terminal_value_eur_per_kwh"] == pytest.approx(0.0)
         # The internal planning value is recorded in the day_ahead block.
         assert payload["day_ahead"]["terminal_value"]["eur_per_kwh"] == pytest.approx(
             payload["day_ahead"]["terminal_value"]["eur_per_kwh"]
         )
-        assert da["solver_time_limit_s"] == bm.DEFAULT_DAY_AHEAD_TIME_LIMIT_S
-        assert da["solver_time_limit_scope"] == "per_local_day"
+        assert da_record["solver_time_limit_s"] == bm.DEFAULT_DAY_AHEAD_TIME_LIMIT_S
+        assert da_record["solver_time_limit_scope"] == "per_local_day"
+
+        # The fifth rung, on the same shared scoring basis.
+        rh_record = payload["policies"][bm.POLICY_ROLLING_HORIZON]
+        assert rh_record["solver_status"] == "feasible"
+        assert rh_record["bound_kind"] == "none"
+        assert rh_record["is_certified"] is False
+        assert rh_record["closed_cycle"] is False
+        assert rh_record["terminal_mode_used"] == "free"
+        assert rh_record["terminal_value_eur_per_kwh"] == pytest.approx(0.0)
+        assert rh_record["solver_time_limit_s"] == bm.DEFAULT_ROLLING_HORIZON_TIME_LIMIT_S
+        assert rh_record["solver_time_limit_scope"] == "per_solve"
 
         comparison = payload["comparison"]
         assert comparison["oracle_dominates_baseline"] is True
         assert comparison["oracle_dominates_causal"] is True
         assert comparison["oracle_dominates_day_ahead"] is True
+        assert comparison["oracle_dominates_rolling_horizon"] is True
         assert comparison["day_ahead_may_lose_causal"] is True
         assert comparison["day_ahead_may_lose_baseline"] is True
+        assert comparison["rolling_horizon_may_lose_day_ahead"] is True
         assert (
             "guaranteed WHENEVER the oracle is a certified optimum" in comparison["dominance_note"]
         )
 
-        # Cost accounting identical to the other three: meter + inventory == reported.
+        # Cost accounting identical to the other four: meter + inventory == reported.
         consistency = payload["cost_consistency"]
         assert set(consistency) == set(bm.POLICY_NAMES)
         for name, check in consistency.items():
@@ -1847,7 +1929,7 @@ class TestDayAheadEndToEnd:
         _run_dir, payload = self.run(tmp_path)
         da = payload["day_ahead"]
         assert da["ran"] is True
-        expected_days = self.eval_local_days(6 * 24 * 4, self.START + timedelta(days=2))
+        expected_days = self.eval_local_days(self.INTERVALS, self.TRAIN_END)
         assert da["day_count"] == len(expected_days)
         assert da["days_solved"] == da["day_count"]
         assert da["days_infeasible"] == 0
@@ -1905,7 +1987,6 @@ class TestDayAheadEndToEnd:
 
     def run_with_dir(self, root: Path, **kwargs: Any) -> tuple[Path, dict[str, Any]]:
         requires_core()
-        start = datetime(2026, 1, 1, tzinfo=UTC)
         config_path = root / "tariff.yaml"
         dataset_dir = next(
             p for p in (root / "analysis" / f"v{SCHEMA_VERSION}").iterdir() if p.is_dir()
@@ -1914,7 +1995,10 @@ class TestDayAheadEndToEnd:
         run_dir = bm.benchmark_dataset(
             dataset=dataset_dir,
             config_path=config_path,
-            train_end=start + timedelta(days=2),
+            # Derived from the class fixture, never hardcoded: this helper re-runs against a
+            # dataset directory built by ``run``, so a start that drifts from ``START`` puts
+            # ``train_end`` outside the dataset and the training split comes back empty.
+            train_end=self.TRAIN_END,
             **kwargs,
         )
         return run_dir, json.loads((run_dir / bm.RESULTS_JSON_NAME).read_text())

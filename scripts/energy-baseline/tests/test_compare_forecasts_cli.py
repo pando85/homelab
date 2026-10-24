@@ -68,7 +68,7 @@ def _write_tariff(path: Path) -> Path:
         "battery": {
             "capacity_kwh": 5.12,
             "power_kw": 2.5,
-            "round_trip_efficiency": 0.88,
+            "round_trip_efficiency": 0.80,
             "soc_window_min": 0.05,
             "soc_window_max": 0.95,
             "initial_soc_frac": 0.20,
@@ -583,6 +583,176 @@ class TestCliBiasSigmas:
         second = _run(smoke_setup, "--windows", "28", "--sigmas", "0,0.1", "--bias-sigmas", "0,0.1")
         assert second.returncode != 0
         assert "not empty" in (second.stdout + second.stderr)
+
+
+class TestCliReplanCadence:
+    """``--replan-interval-slots`` / ``--horizon-slots`` must thread CLI → model → artifact.
+
+    These flags are the ADR-0001 §3 requirement — "re-solve every 15 minutes, with a
+    configurable rolling 24-48 hour horizon; execute only the current interval" — and
+    they had no committed subprocess coverage, only a by-hand check.  Unit tests on
+    ``rolling_horizon`` cannot catch the runner mis-threading them, which is the same
+    API-drift class this whole module exists to guard.
+
+    Cadence 8 over a 96-interval horizon is used rather than the 15-minute cadence
+    (``--replan-interval-slots 1``) to keep the smoke test cheap: the multiplier is the
+    solve *count*, so 1 would cost roughly eight times as much for no extra coverage of
+    the wiring.
+    """
+
+    def test_cadence_flags_reach_the_summary_and_the_schedules(
+        self, smoke_setup: dict[str, Any]
+    ) -> None:
+        proc = _run(
+            smoke_setup,
+            "--windows",
+            "28",
+            "--sigmas",
+            "0",
+            "--seeds",
+            "0",
+            "--replan-interval-slots",
+            "8",
+            "--horizon-slots",
+            "96",
+        )
+        assert proc.returncode == 0, (
+            f"runner exited {proc.returncode}\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+
+        summary = json.loads((smoke_setup["output"] / "summary.json").read_text())
+        cadence = summary["replan_cadence"]
+        assert cadence["replan_interval_slots"] == 8
+        assert cadence["horizon_slots"] == 96
+        assert "every 8 interval(s)" in cadence["nominal"]
+        assert "24.0 h" in cadence["nominal"]
+
+        # The honesty note about *when* prices are known must survive promotion into the
+        # artifact: the information set is a function of the decision instant, not of the
+        # cadence.  Losing this sentence would let a reader assume a fine cadence implies
+        # fresher prices.
+        assert "decision instant" in cadence["price_information_rule"]
+        assert "20:30" in cadence["price_information_rule"]
+
+        rh = summary["runs"][0]["rolling_horizon"]
+        assert rh["events_infeasible"] == 0, rh.get("failure")
+
+        # Each interval is planned by every solve whose horizon covers it: with a 96-slot
+        # horizon re-solved every 8 slots that is exactly 12, while it is *executed* once.
+        # This pair is the reason clipping totals are not comparable across cadences.
+        assert rh["planning_multiplicity_max"] == 96 // 8
+        assert rh["planning_multiplicity_mean"] == pytest.approx(96 / 8, rel=0.25)
+        assert rh["executed_multiplicity_mean"] == pytest.approx(1.0)
+        assert rh["clipping_totals_comparable_across_cadences"] is False
+
+        # The run's cost is visible in its own artifact, and the estimate printed before
+        # the matrix started must match what was actually spent.
+        assert rh["solve_count"] >= 1
+        assert cadence["solve_counts_observed"] is not None
+        assert "solves for this window" in proc.stdout, proc.stdout
+
+        # And the per-schedule record agrees with the summary, so an arm cannot be
+        # mistaken for another after the fact.
+        sched = next(iter(sorted((smoke_setup["output"] / "schedules").glob("*_rolling.json"))))
+        payload = json.loads(sched.read_text())
+        assert payload["replan_interval_slots"] == 8
+        assert payload["horizon_slots"] == 96
+        assert payload["solve_count"] == rh["solve_count"]
+
+    def test_legacy_default_still_reports_its_own_cadence_and_multiplicity(
+        self, smoke_setup: dict[str, Any]
+    ) -> None:
+        """Omitting the flags keeps the validated two-publication schedule, and says so."""
+        proc = _run(smoke_setup, "--windows", "28", "--sigmas", "0", "--seeds", "0")
+        assert proc.returncode == 0, proc.stderr
+
+        summary = json.loads((smoke_setup["output"] / "summary.json").read_text())
+        cadence = summary["replan_cadence"]
+        assert cadence["replan_interval_slots"] is None
+        assert cadence["horizon_slots"] is None
+        assert "14:00" in cadence["nominal"] and "20:30" in cadence["nominal"]
+        assert "legacy two-publication" in proc.stdout, proc.stdout
+
+        rh = summary["runs"][0]["rolling_horizon"]
+        # Two events per local day, plus a warmup: an order of magnitude below a fine
+        # cadence, and the planning multiplicity stays near the ~2.5 the overlapping
+        # 34 h / 27.5 h horizons imply.  Asserted as a range because the exact figure
+        # depends on the window's length, not as a constant.
+        assert 1.0 < rh["planning_multiplicity_mean"] < 4.0
+        assert rh["planning_multiplicity_max"] <= 4
+        assert rh["executed_multiplicity_mean"] == pytest.approx(1.0)
+        assert rh["clipping_totals_comparable_across_cadences"] is False
+
+    def test_cadence_run_still_scores_on_true_prices(self, smoke_setup: dict[str, Any]) -> None:
+        """A finer cadence changes when plans are made, never what they are scored on."""
+        proc = _run(
+            smoke_setup,
+            "--windows",
+            "28",
+            "--sigmas",
+            "0.1",
+            "--seeds",
+            "0",
+            "--replan-interval-slots",
+            "8",
+            "--horizon-slots",
+            "96",
+        )
+        assert proc.returncode == 0, proc.stderr
+
+        out = smoke_setup["output"]
+        raw = (out / "summary.json").read_text()
+        assert "NaN" not in raw and "Infinity" not in raw
+        json.loads(raw, parse_constant=_reject_constant)
+
+        payload = json.loads(
+            next(iter(sorted((out / "schedules").glob("*_rolling.json")))).read_text()
+        )
+        grid = np.asarray(payload["grid_kwh"], dtype=float)
+        prices = np.asarray(payload["true_price_eur_per_kwh"], dtype=float)
+        usable = np.asarray(payload["usable"], dtype=bool)
+        expected = float(np.dot(prices[usable], grid[usable]))
+        run = json.loads(raw)["runs"][0]
+        assert run["rolling_horizon"]["cost_eur"] == pytest.approx(expected, rel=1e-9, abs=1e-9)
+        # Noisy prices were in play, and they still did not reach the cost.
+        assert run["price_noise"]["noise_applied"] is True
+        assert np.all(grid >= -1e-9)
+
+    def test_rejects_a_cadence_below_one_interval(self, smoke_setup: dict[str, Any]) -> None:
+        proc = _run(
+            smoke_setup,
+            "--windows",
+            "28",
+            "--replan-interval-slots",
+            "0",
+        )
+        assert proc.returncode != 0
+        assert "--replan-interval-slots" in (proc.stdout + proc.stderr)
+
+    def test_rejects_a_horizon_below_one_interval(self, smoke_setup: dict[str, Any]) -> None:
+        proc = _run(
+            smoke_setup,
+            "--windows",
+            "28",
+            "--replan-interval-slots",
+            "8",
+            "--horizon-slots",
+            "0",
+        )
+        assert proc.returncode != 0
+        assert "--horizon-slots" in (proc.stdout + proc.stderr)
+
+    def test_rejects_a_horizon_without_a_cadence(self, smoke_setup: dict[str, Any]) -> None:
+        """The legacy horizon comes from the local-day partition, so the flag would lie.
+
+        Silently ignoring ``--horizon-slots`` there would produce an artifact claiming a
+        horizon the run never used.
+        """
+        proc = _run(smoke_setup, "--windows", "28", "--horizon-slots", "96")
+        assert proc.returncode != 0
+        combined = proc.stdout + proc.stderr
+        assert "--horizon-slots" in combined
+        assert "--replan-interval-slots" in combined
 
 
 def _reject_constant(token: str) -> None:

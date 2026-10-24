@@ -10,7 +10,7 @@ load forecast as an argument, computed by
 Every policy routes its plan through
 :func:`energy_baseline.battery.simulate`, so the physics invariants are checked
 by one implementation shared with the oracle.  Gap exclusion (``usable``) and
-the pretax cost basis are therefore *identical* across all four policies.
+the pretax cost basis are therefore *identical* across all five policies.
 
 Charge and discharge are **not** bounded symmetrically.  The no-export rule
 (``grid = load + charge - discharge >= 0``) caps discharge at the household
@@ -48,15 +48,17 @@ with a poor load forecast or a badly chosen terminal SOC value can lose to a dum
 threshold rule.  Which one wins is a measurement, never an assertion (see
 :func:`policy_day_ahead`).
 
-The information ladder the four policies form (ADR-0003 §"Strategy comparison",
+The information ladder the five policies form (ADR-0003 §"Strategy comparison",
 rung 3 added 2026-10-23 as the deferred day-ahead variant recorded in
-``planning/energy-baseline-appdaemon-baseline-context.md``)::
+``planning/energy-baseline-appdaemon-baseline-context.md``, rung 4 added as the
+rolling-horizon variant)::
 
     policy                 prices known                 load known
     ---------------------  ---------------------------  ----------------------------
     no_battery             none (measured history)      none (measured history)
     causal_price           none (frozen thresholds)     none
     day_ahead              today's 24 h, at midnight    strictly causal forecast
+    rolling_horizon        D-1 20:30 → D end, replan    frozen causal forecast
     oracle                 whole horizon, perfect       whole horizon, perfect
 
 The day-ahead policy sits strictly between the causal rule and the oracle, and
@@ -68,6 +70,19 @@ requires load foresight nobody has.  :func:`policy_day_ahead` separates them by
 using tomorrow's prices exactly the way this household's own deployed automation
 already does — a full 24-hour curve read at local midnight — while keeping the
 load forecast strictly causal.
+
+The rolling-horizon policy sits strictly between day_ahead and oracle: at 20:30
+on D-1 it already sees day D's exact prices (published the evening before), which
+day_ahead does not see until D's midnight, and its horizon spans to the end of D
+rather than stopping at it.  The policy replans at configurable cadences (legacy
+two-event: 14:00 / 20:30 local; or uniform cadence such as 15-minute), executing
+only until the next event and carrying the actual SOC forward.  The load forecast
+is frozen once from training data (same trailing-window rule as day_ahead), so the
+two rungs differ only in price information and cadence, not in load knowledge.
+Empirically, rolling_horizon <= day_ahead held in 81 of 81 offline configurations,
+which is strong evidence but not a proof: a longer horizon with an imperfect
+estimate can lose.  The implementation lives in :mod:`energy_baseline.rolling_horizon`;
+the benchmark orchestrator wires it into the ladder.
 
 Its price information set is not an invented convenience.  The claim "a full
 day's price curve is available at local midnight" is verified from this

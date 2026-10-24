@@ -111,8 +111,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--policies",
         default="all",
         help="Comma-separated policy names or 'all' (default: all). The set is "
-        "no_battery, causal_price, day_ahead, oracle — one rung per information level, "
-        "from measured history only up to perfect foresight",
+        "no_battery, causal_price, day_ahead, rolling_horizon, oracle — one rung per "
+        "information level, from measured history only up to perfect foresight",
     )
     p_bench.add_argument(
         "--train-end",
@@ -226,6 +226,58 @@ def build_parser() -> argparse.ArgumentParser:
         "benchmark module's day_ahead_time_limit_s). This is not --time-limit-s, which is the "
         "whole-horizon oracle's limit; days that consumed this one are counted in the artifact",
     )
+    p_bench.add_argument(
+        "--rolling-horizon-replan-interval-slots",
+        type=int,
+        default=None,
+        help="How often to re-solve (in intervals). Omit for the legacy two-event schedule "
+        "(14:00 / 20:30 local), which is the default and what the golden-value tests pin "
+        "bit-for-bit. A positive integer is a uniform cadence (e.g. 1 for 15-minute "
+        "replanning). ADR-0001's 15-minute cadence is reachable but NOT the default because "
+        "it costs roughly 48x the solve count and roughly 37x the wall time (the ratios differ "
+        "because a fine-cadence solve is cheaper than a legacy one) and has not yet been "
+        "validated on real data",
+    )
+    p_bench.add_argument(
+        "--rolling-horizon-horizon-slots",
+        type=int,
+        default=None,
+        help="How far ahead each solve plans (in intervals). Omit for the legacy schedule "
+        "(derives its horizon from the local-day partition: ~34 h at 14:00, ~27.5 h at 20:30). "
+        "A positive integer is required when --rolling-horizon-replan-interval-slots is set "
+        "(e.g. 96 for 24 h at 15-min intervals). Passing this without a cadence is refused: "
+        "the legacy schedule does not accept an explicit horizon length",
+    )
+    p_bench.add_argument(
+        "--rolling-horizon-sigma",
+        type=float,
+        default=None,
+        help="Per-slot price noise standard deviation (>= 0). Default 0.0 is exact prices: "
+        "the ladder is about information, not synthetic forecast error. Non-zero values are "
+        "an experiment reachable through this flag",
+    )
+    p_bench.add_argument(
+        "--rolling-horizon-bias-sigma",
+        type=float,
+        default=None,
+        help="Per-local-day multiplicative bias standard deviation (>= 0). Default 0.0 is "
+        "exact prices. Non-zero values are an experiment",
+    )
+    p_bench.add_argument(
+        "--rolling-horizon-seed",
+        type=int,
+        default=None,
+        help="Random seed for price noise generation. Default 0",
+    )
+    p_bench.add_argument(
+        "--rolling-horizon-time-limit-s",
+        type=float,
+        default=None,
+        help="Solver time limit PER SOLVE for the rolling-horizon MILPs (default: the "
+        "benchmark module's rolling_horizon_time_limit_s). This is not --time-limit-s, which "
+        "is the whole-horizon oracle's limit; events that consumed this one are counted in "
+        "the artifact",
+    )
 
     # -- report -----------------------------------------------------------
     p_report = subs.add_parser("report", help="Generate monthly reconciliation report")
@@ -275,6 +327,29 @@ def build_parser() -> argparse.ArgumentParser:
         "views",
     )
     p_sql.add_argument("--json", action="store_true", help="Print results as JSON")
+
+    # -- ha-states --------------------------------------------------------
+    p_ha = subs.add_parser(
+        "ha-states",
+        help="Read and query Home Assistant enum state history (ADR-0002 Phase 1 ingest)",
+    )
+    _add_common(p_ha)
+    p_ha.add_argument(
+        "--entity",
+        default=None,
+        help="Entity ID to query (default: list all entities in the store)",
+    )
+    p_ha.add_argument(
+        "--as-of",
+        default=None,
+        help="As-of query: ISO-8601 UTC instant.  Returns the state of --entity "
+        "at that instant (last_changed <= instant, inclusive boundary)",
+    )
+    p_ha.add_argument(
+        "--list-states",
+        action="store_true",
+        help="List all deduplicated states for --entity (requires --entity)",
+    )
 
     # -- mirror (deferred) ------------------------------------------------
     p_mirror = subs.add_parser("mirror", help="Mirror dataset to SQL (deferred in Phase 1)")
@@ -664,6 +739,20 @@ def _benchmark_kwargs(args: argparse.Namespace, benchmark: Any) -> dict[str, Any
         "day_ahead_time_limit_s": _or_default(
             args.day_ahead_time_limit_s, benchmark.DEFAULT_DAY_AHEAD_TIME_LIMIT_S
         ),
+        "rolling_horizon_replan_interval_slots": args.rolling_horizon_replan_interval_slots,
+        "rolling_horizon_horizon_slots": args.rolling_horizon_horizon_slots,
+        "rolling_horizon_sigma": _or_default(
+            args.rolling_horizon_sigma, benchmark.DEFAULT_ROLLING_HORIZON_SIGMA
+        ),
+        "rolling_horizon_bias_sigma": _or_default(
+            args.rolling_horizon_bias_sigma, benchmark.DEFAULT_ROLLING_HORIZON_BIAS_SIGMA
+        ),
+        "rolling_horizon_seed": _or_default(
+            args.rolling_horizon_seed, benchmark.DEFAULT_ROLLING_HORIZON_SEED
+        ),
+        "rolling_horizon_time_limit_s": _or_default(
+            args.rolling_horizon_time_limit_s, benchmark.DEFAULT_ROLLING_HORIZON_TIME_LIMIT_S
+        ),
         "data_dir": args.data_dir,
     }
 
@@ -716,6 +805,31 @@ def _benchmark_summary(run_dir: Path, benchmark: Any) -> str:
                 f"forecast MAE={'n/a' if mae is None else f'{mae:.4f}'} kWh/interval, "
                 f"end-of-day SOC={day_ahead_terminal.get('eur_per_kwh')} EUR/kWh, "
                 f"causal->oracle gap closed={'n/a' if closed is None else f'{closed:.1%}'}"
+            )
+        rolling = payload.get("rolling_horizon") or {}
+        if rolling.get("ran"):
+            # Same reasoning for the fifth rung, with the two numbers that define it: the
+            # cadence it ran on and the solver cost of that cadence.  solve_count is the
+            # unit of cost of a run (a 15-minute cadence is ~48x the legacy solve count, and
+            # only ~37x its wall time, because a fine-cadence solve is cheaper), and the
+            # multiplicity says why the clipping kWh below is not curtailment.
+            rh_terminal = rolling.get("terminal_value") or {}
+            noise_bits = (
+                f"sigma={rolling.get('sigma')}, bias_sigma={rolling.get('bias_sigma')}, "
+                f"seed={rolling.get('seed')}"
+            )
+            parts.append(
+                f"rolling_horizon: "
+                f"{rolling.get('events_solved', 0)}/{rolling.get('event_count')} events solved "
+                f"({rolling.get('solve_count')} solves), "
+                f"{rolling.get('events_skipped_no_usable', 0)} skipped, "
+                f"{rolling.get('events_time_limit', 0)} at time limit, "
+                f"cadence={rolling.get('replan_cadence')}, {noise_bits}, "
+                f"end-of-plan SOC={rh_terminal.get('eur_per_kwh')} EUR/kWh, "
+                f"planned multiplicity={rolling.get('planning_multiplicity_mean')}x "
+                f"(max {rolling.get('planning_multiplicity_max')}, executed "
+                f"{rolling.get('executed_multiplicity_mean')}x — clipping kWh is per-plan, "
+                f"not curtailment)"
             )
         return (
             f"run={payload.get('run_id') or run_dir.name} basis={basis} "
@@ -891,6 +1005,57 @@ def cmd_inspect_sql(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ha_states(args: argparse.Namespace) -> int:
+    """Read and query Home Assistant enum state history."""
+    from energy_baseline.ha_states import format_as_of_result, format_summary, load_store
+    from energy_baseline.paths import resolve_data_dir
+
+    data_dir = resolve_data_dir(args.data_dir)
+    if not data_dir.exists():
+        raise ValueError(f"data directory does not exist: {data_dir}")
+
+    store = load_store(data_dir)
+
+    # --as-of query
+    if args.as_of is not None:
+        if not args.entity:
+            raise ValueError("--as-of requires --entity")
+        from energy_baseline.extract_ha import parse_utc
+
+        at = parse_utc(args.as_of, name="--as-of")
+        result = store.as_of(args.entity, at)
+        print(format_as_of_result(result, entity=args.entity, at=at))
+        return 0
+
+    # --list-states
+    if args.list_states:
+        if not args.entity:
+            raise ValueError("--list-states requires --entity")
+        states = store.states_for_entity(args.entity)
+        if not states:
+            print(f"no states found for {args.entity}")
+            return 0
+        for s in states:
+            print(
+                f"  {s.last_changed.isoformat()}  state={s.state}  "
+                f"carry_in={s.carry_in}  part={s.part_name}"
+            )
+        print(f"({len(states)} state(s))")
+        return 0
+
+    # Default: summary
+    print(f"ha-states: data_dir={data_dir}")
+    print(f"  {format_summary(store)}")
+    if store.entities:
+        print(f"  entities: {', '.join(store.entities)}")
+    if store.duplicate_rows:
+        print(
+            f"  dedup: {store.total_rows_before_dedup} → {store.total_rows_after_dedup} "
+            f"({store.duplicate_rows} duplicate(s) collapsed)"
+        )
+    return 0
+
+
 def cmd_mirror(args: argparse.Namespace) -> int:
     """Mirror dataset to SQL — deferred in Phase 1."""
     print(
@@ -912,6 +1077,7 @@ _HANDLERS = {
     "benchmark": cmd_benchmark,
     "report": cmd_report,
     "inspect-sql": cmd_inspect_sql,
+    "ha-states": cmd_ha_states,
     "mirror": cmd_mirror,
 }
 

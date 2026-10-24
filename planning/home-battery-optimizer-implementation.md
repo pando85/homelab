@@ -1,7 +1,9 @@
 # Home battery optimizer: phased implementation plan
 
-**Status:** PROPOSED — documentation only; no equipment selected or deployment authorized  
-**Architecture decisions:** [ADR-0001 — Forecast-informed economic dispatch](../docs/adr/0001-home-battery-economic-dispatch.md); [ADR-0002 — Appliance-aware load forecasting](../docs/adr/0002-appliance-aware-load-forecasting.md)  
+**Status:** IN PROGRESS — the offline machinery is built and tested (Phase 1 **accepted**; Phases 2–4 partly delivered, including the dispatch-intent contract TODO-4.6, the configurable replan cadence and the five-rung policy ladder). Battery hardware has been bought (owner statement, 2026-10-24), which moots device *selection* but not device *verification*. **No deployment exists and no battery actuation is built or authorized** — the ACT column is entirely unbuilt. Component-level status and iteration plan: [the battery roadmap](energy-battery-roadmap.md).
+
+**Architecture decisions:** [ADR-0001 — Forecast-informed economic dispatch](../docs/adr/0001-home-battery-economic-dispatch.md); [ADR-0002 — Appliance-aware load forecasting](../docs/adr/0002-appliance-aware-load-forecasting.md)
+
 **Scope:** AC grid-charged home battery, initially targeting Marstek Venus E 3.0 (~5.12 kWh, ~2.5 kW); preserve vendor neutrality at the planner boundary.
 
 ## 1. Goal and current state
@@ -99,7 +101,11 @@ Phases 0–4 can proceed without the physical battery. **Phase 5 requires verifi
 - [ ] **TODO-4.3** Add terminal SOC valuation (or extending horizon value), dwell/ramp limits as supported, charge/discharge efficiency vs power, degradation penalty sensitivity and the option of reserved SOC for backup (disabled by default for economic comparisons).
 - [ ] **TODO-4.4** Test robust constraints and alternative demand percentiles. Explicitly prevent negative-price arbitrage through simultaneous charge/discharge or fictitious export.
 - [ ] **TODO-4.5** Replay fully chronological months; compare simple price-only, baseline demand, advanced demand and oracle on the same days, using uncertainty bands (block bootstrap over days/weeks).
-- [ ] **TODO-4.6** Publish a machine-readable dispatch plan contract: start/end UTC, mode (`idle/charge/discharge`), target power W, SOC target, expected buy price, confidence, generation timestamp and expiry/sequence ID.
+- [x] **TODO-4.6** Publish a machine-readable dispatch plan contract: start/end UTC, mode (`idle/charge/discharge`), target power W, SOC target, expected buy price, confidence, generation timestamp and expiry/sequence ID.
+
+  **Built 2026-10-24 as a contract, in `scripts/energy-baseline/src/energy_baseline/dispatch.py`.** A frozen, validated `DispatchIntent` / `DispatchPlan` pair plus a `CommandPolicy` value, all serialized through one canonical-JSON and content-hash path (`canonical_json` / `content_hash` / `plan_to_canonical_json` / `plan_from_canonical_json`) so two components that agree on the bytes agree on the meaning. Every field this TODO lists is carried: `start` / `end` (aware UTC, validated), `mode` (`DispatchMode` — `idle` / `charge` / `discharge`, with charge and discharge mutually exclusive by construction), `target_power_w`, `soc_target_frac`, `expected_buy_price_eur_per_kwh` and `confidence` (both optional, absence distinguishable from a value), `generated_at`, `expires_at` and `sequence_id`. Physical feasibility is delegated to `battery.py` rather than restated, and the clock is a **required caller argument with no default**, so there is no fallback path to a wall clock.
+
+  **Deliberately not built: no writer, no I/O, no CLI subcommand, and no device integration.** Nothing here opens a socket, holds a lease, or reaches Home Assistant, and `build`/`benchmark` do not import the module. `CommandPolicy` carries TODO-6.3's parameters as validated *data* — `max_attempts` (the send budget including the first), `min_setpoint_change_w`, `min_command_interval_seconds`, `lease_seconds`, and `allow_concurrent_in_flight`, which is refused if set to `True` — with pure predicates (`attempt_allowed`, `remaining_attempts`, `change_is_worth_sending`, `lease_deadline`) and **no default instance**, because those values are live-integration decisions gated by TODO-5.2/TODO-6.3 rather than measurements this repository holds. The obligation was only that the contract be *capable* of expressing the one-in-flight and bounded-retry behaviour TODO-6.3 requires; implementing that behaviour is TODO-6.3's own work and remains open.
 
 **Exit criteria:** no violated physical constraints in simulated replay; out-of-sample net saving is positive against *no battery* and competitive with the cheapest practical control; advanced predictor retained only if justified. Record threshold, model and command parameters for reproducibility.
 
