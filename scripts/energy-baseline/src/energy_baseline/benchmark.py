@@ -1335,18 +1335,27 @@ def prepare_rolling_horizon(
     horizon_slots: int | None,
     load_forecast_mode: str = DEFAULT_ROLLING_HORIZON_LOAD_FORECAST_MODE,
 ) -> tuple[RollingHorizonInputs, dict[str, Any]]:
-    """Build the frozen load profile and resolve the planning terminal value.
+    """Build the load forecast inputs and resolve the planning terminal value.
 
     The rolling horizon operates on the full dataset arrays with absolute indices,
     because its local-day partition and the price-publication rule need whole local
-    days.  The frozen load profile is built once from training data strictly before the
-    cut, using the same trailing-window LENGTH as the day-ahead rung but a DIFFERENT
-    BASIS: day_ahead re-learns its slot means from the trailing window before each
-    dispatch day (``history_may_cross_train_end = True``), while this rung freezes the
-    profile once at ``training_end_idx`` and reuses it for every solve.  The two rungs
-    therefore differ in load knowledge as well as in price information and cadence; the
-    frozen profile is not a like-for-like load basis for the comparison with day_ahead,
-    and on the 2025 full-year ladder the asymmetry dominated.
+    days.  The load forecast mode determines the basis:
+
+    In **frozen** mode, the profile is built once from training data strictly before
+    the cut, using the same trailing-window LENGTH as the day-ahead rung but a
+    DIFFERENT BASIS: day_ahead re-learns its slot means from the trailing window
+    before each dispatch day (``history_may_cross_train_end = True``), while this
+    rung freezes the profile once at ``training_end_idx`` and reuses it for every
+    solve.  The two rungs therefore differ in load knowledge as well as in price
+    information and cadence; the frozen profile is not a like-for-like load basis
+    for the comparison with day_ahead, and on the 2025 full-year ladder the
+    asymmetry dominated.
+
+    In **causal** mode, no whole-array profile is built here; instead a per-event
+    ``CausalForecastProvider`` is constructed by the dispatcher using the same
+    trailing-slot-mean function as day_ahead, so the two rungs share a like-for-like
+    load basis.  Each event's forecast uses only observations strictly before that
+    event's local-day start.
 
     The planning terminal value is internal, causal, and derived from the training window
     (same rule as the day-ahead rung).  It is the only cross-event coupling: each solve
@@ -2005,7 +2014,8 @@ def _run_policies(
                     solver_time_limit_s=float(rolling_horizon.time_limit_s),
                 )
                 # The telemetry carries solve_count, multiplicity, per-event detail, noise
-                # diagnostics, and the frozen-profile forecast metadata.  The forecast_metadata
+                # diagnostics, and the load-forecast metadata (frozen-profile in frozen mode,
+                # per-event provider contract in causal mode).  The forecast_metadata
                 # field is filled by the caller (us), so we merge it here.
                 rh_telemetry = dict(result.telemetry)
                 rh_telemetry["forecast_metadata"] = rolling_horizon.forecast

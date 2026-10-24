@@ -286,11 +286,14 @@ def _validate_comparable_schedules(
     schedule_a: Schedule,
     schedule_b: Schedule,
 ) -> None:
-    """Raise ValueError if two schedules are not on the same horizon.
+    """Raise ValueError if two schedules have different horizon lengths.
 
-    Two schedules from different horizons (different lengths or different
-    interval_seconds) are incommensurable: their meter costs, throughputs and
-    terminal SOCs refer to different time bases and cannot be compared.
+    Two schedules with different numbers of intervals are incommensurable:
+    their meter costs, throughputs and terminal SOCs refer to different time
+    bases and cannot be compared.  Grid identity (same ``interval_seconds``)
+    is the caller's contract and is not enforced here — the ``Schedule``
+    carries no interval field, so same-length schedules on different grids
+    pass this check silently.
     """
     n_a = len(schedule_a.charge_kwh)
     n_b = len(schedule_b.charge_kwh)
@@ -640,6 +643,8 @@ def compare_schedules(
         schedules: A dict mapping schedule names to :class:`Schedule` objects.
             All schedules must have the same horizon length (number of
             intervals); schedules from different horizons are incommensurable.
+            Grid identity (same ``interval_seconds``) is the caller's contract
+            and is not enforced here.
         throughput_cost_eur_per_kwh: Per-kWh penalty on AC energy throughput.
         terminal_value_eur_per_kwh: EUR/DC-kWh value of the terminal inventory.
 

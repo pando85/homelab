@@ -985,14 +985,16 @@ class CausalForecastProvider:
 
         # B4: Window-scoped usable support, not full prefix.  The effective trailing
         # window is at most ``window_days`` local days before the cutoff; anything older
-        # is not part of the fit.  We approximate by taking the last ``window_days * 96``
-        # intervals (assuming 15-min grid; the frozen path uses the same approximation).
-        window_intervals = self._window_days * 96
+        # is not part of the fit.  We approximate by taking the last ``window_days *
+        # slots_per_day`` intervals (the frozen path uses the same approximation).
+        slots_per_day = int(round(86400 / self._interval_seconds))
+        window_intervals = self._window_days * slots_per_day
         window_start = max(0, event_local_day_start - window_intervals)
         training_usable_intervals = int(truncated_usable[window_start:event_local_day_start].sum())
 
         # B3: Training-data content hash.  SHA-256 of load+usable bytes in the window,
-        # so the hash is blind to load values (unlike the frozen path which hashes timestamps).
+        # so the hash IS sensitive to load values and usable-mask bytes.  This is
+        # stronger than the frozen path, which hashes only timestamps.
         # We hash the window-scoped slice to match the effective support.
         window_load = self._load[window_start:event_local_day_start]
         window_usable = truncated_usable[window_start:event_local_day_start]
