@@ -74,12 +74,25 @@ Honesty rules:
   EXCLUDED from the deterministic ``outputs_manifest.json``.  ``timing.json``
   carries no digest of the deterministic artifacts; run identity lives in
   ``validation.json``.
+* **The artifact names its own bytes.**  ``run_identity`` records ``code_version``
+  from ``manifest.code_version()`` — the real ``git rev-parse HEAD`` plus
+  ``-dirty`` — with ``git_head`` and ``git_dirty`` alongside it so the dirty state
+  needs no suffix parsing, a ``source_hashes`` map of sha256 over the raw bytes of
+  EVERY ``energy_baseline`` module the runner imports (traced from the import graph,
+  not a hand-kept list) plus this file itself, and both ``config_sha256`` (raw
+  bytes) and the canonical ``config_hash`` next to ``config_path``.  The identity is
+  snapshotted at the START and again at the END of the run and cross-checked: code
+  or config that moved while the run was computing aborts the run instead of
+  writing an artifact that cannot say which bytes produced its numbers.
+  ``--require-clean-tree`` is what a citable run uses: it refuses to start at all on
+  a dirty tree, or when git cannot be asked (``nogit``) and so the revision is
+  unknown.
 
 Do NOT run this against the real dataset yet: main is still being stabilised
 (per-event causal forecast, runtime, economic and forecast work are active in
 parallel).  Wait for explicit approval.
 
-Example (representative stage, bounded arm set):
+Example (representative stage, bounded arm set, citable run):
 
     uv run python hack/validate_pre_migration.py \\
         --dataset /path/to/analysis/v1/<dataset_id> \\
@@ -88,12 +101,14 @@ Example (representative stage, bounded arm set):
         --stage representative \\
         --arms day_ahead,rolling_causal_legacy,rolling_causal_h96_c96,\\
 rolling_causal_h96_c4,rolling_causal_h96_c1 \\
-        --lookback-days 28 --time-limit 5
+        --lookback-days 28 --time-limit 5 --require-clean-tree
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
+import hashlib
 import json
 import math
 import sys
@@ -110,11 +125,13 @@ import pyarrow.parquet as pq
 
 # Add src to path for direct execution (the package is not pip-installed for this run)
 _here = Path(__file__).resolve().parent
-_src = _here.parent / "src"
+_project = _here.parent
+_src = _project / "src"
+_package = _src / "energy_baseline"
+_runner_path = Path(__file__).resolve()
 if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
-from energy_baseline import __version__ as code_version  # noqa: E402
 from energy_baseline.artifact_integrity import (  # noqa: E402
     finalize_run_outputs,
     monthly_usable_fraction_gate,
@@ -131,6 +148,16 @@ from energy_baseline.benchmark import (  # noqa: E402
     usable_mask,
 )
 from energy_baseline.config import load_config  # noqa: E402
+from energy_baseline.manifest import (  # noqa: E402
+    DIRTY_SUFFIX,
+    NO_GIT_MARKER,
+)
+from energy_baseline.manifest import (  # noqa: E402
+    code_version as git_code_version,
+)
+from energy_baseline.manifest import (  # noqa: E402
+    config_hash as canonical_config_hash,
+)
 from energy_baseline.oracle import OracleError, solve_oracle  # noqa: E402
 from energy_baseline.policies import (  # noqa: E402
     DayAheadDay,
@@ -243,6 +270,380 @@ def _inside_git_worktree(path: Path) -> bool:
         if probe.parent == probe:
             return False
         probe = probe.parent
+
+
+# ---------------------------------------------------------------------------
+# Code provenance: git identity, per-module source hashes, config digests
+# ---------------------------------------------------------------------------
+
+#: Modules that are not reachable from this runner's import graph today but belong
+#: to the same dispatch contract this milestone scores: :mod:`energy_baseline.dispatch`
+#: is the planner-to-writer seam that ``replay_runtime`` builds out of exactly these
+#: schedules.  Recording it is one extra digest; *omitting* a module is how a
+#: provenance map silently under-attests (the failure mode this runner is built to
+#: avoid, and the one a sibling study shipped).
+_MANDATORY_SOURCE_MODULES: tuple[str, ...] = ("energy_baseline.dispatch",)
+
+
+def _file_sha256(path: Path) -> str:
+    """sha256 of a file's raw bytes as 64 lowercase hex characters."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(65536), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _git_identity() -> tuple[str, str | None, bool | None]:
+    """``(code_version, git_head, git_dirty)`` from ONE read of the shared identity.
+
+    :func:`energy_baseline.manifest.code_version` is the facility ``build`` and
+    ``benchmark`` already pin their artifacts with: the 40-character
+    ``git rev-parse HEAD``, plus :data:`~energy_baseline.manifest.DIRTY_SUFFIX` when
+    the working tree carries uncommitted changes, or
+    :data:`~energy_baseline.manifest.NO_GIT_MARKER` when git cannot be asked at all.
+
+    Deriving all three from that one string keeps ``code_version`` and ``git_head``
+    / ``git_dirty`` from ever contradicting each other, while the explicit fields
+    spare a reader the suffix parsing.  No git is a recorded state (``None``/
+    ``None``), never an exception: an artifact that says ``nogit`` is honest, one
+    that aborts on a developer machine is not.
+    """
+    version = git_code_version()
+    if version == NO_GIT_MARKER or version.startswith(f"{NO_GIT_MARKER}@"):
+        return version, None, None
+    if version.endswith(DIRTY_SUFFIX):
+        return version, version[: -len(DIRTY_SUFFIX)], True
+    return version, version, False
+
+
+def _module_to_path(name: str) -> Path | None:
+    """Resolve a dotted first-party module name to its source file, or ``None``.
+
+    ``None`` means "not a module we can hash": a third-party name, or an attribute
+    named in a ``from ... import`` clause (``energy_baseline.battery.BatterySpec``
+    is a class, not a file).
+    """
+    parts = name.split(".")
+    if parts[0] != "energy_baseline":
+        return None
+    if len(parts) == 1:
+        return _package / "__init__.py"
+    candidate = _package.joinpath(*parts[1:])
+    as_module = candidate.with_suffix(".py")
+    if as_module.is_file():
+        return as_module
+    as_package = candidate / "__init__.py"
+    if as_package.is_file():
+        return as_package
+    return None
+
+
+def _relative_import_anchor(path: Path) -> str:
+    """Dotted package that *path*'s relative imports resolve against (PEP 328)."""
+    parts = list(path.relative_to(_src).with_suffix("").parts)
+    if parts and parts[-1] == "__init__":
+        parts.pop()  # a package __init__: the anchor is itself
+    elif len(parts) > 1:
+        parts.pop()  # a module: the anchor is its containing package
+    return ".".join(parts)
+
+
+def _relative_import_base(anchor: str, level: int) -> str:
+    """Package a ``level``-deep relative import resolves against.
+
+    ``from .x import y`` in a module inside package ``p`` is anchored at ``p``
+    itself; ``from ..x import y`` walks one package up.
+    """
+    if level <= 1 or not anchor:
+        return anchor
+    parts = anchor.split(".")
+    return ".".join(parts[: -(level - 1)])
+
+
+def _names_imported_by(tree: ast.AST, anchor: str) -> set[str]:
+    """Every dotted name an ``import`` statement in *tree* could refer to.
+
+    Both the imported package and each alias are returned, because
+    ``from energy_baseline import cost`` and ``from .battery import BatterySpec``
+    name a module in one position and a symbol in the next — the resolver in
+    :func:`_static_first_party_closure` keeps whichever one maps to a file.
+    ``importlib.import_module("literal")`` is followed too, and function-level
+    imports are included: ``ast.walk`` descends into bodies, which is what catches
+    ``benchmark._modules()`` pulling in :mod:`energy_baseline.cost` only on call.
+    """
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                base = _relative_import_base(anchor, node.level)
+                prefix = f"{base}.{node.module}" if node.module else base
+            elif node.module:
+                prefix = node.module
+            else:  # pragma: no cover - `from (bare) import x` is not valid syntax
+                prefix = ""
+            if prefix:
+                names.add(prefix)
+                names.update(f"{prefix}.{alias.name}" for alias in node.names)
+        elif isinstance(node, ast.Call):
+            callee = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            if callee in {"import_module", "__import__"} and node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    names.add(first.value)
+    return {name for name in names if name}
+
+
+def _parent_package_inits(path: Path) -> list[tuple[str, Path]]:
+    """The package ``__init__.py`` files importing *path* necessarily executes.
+
+    ``energy_baseline/hack/x.py`` pulls in ``energy_baseline/hack/__init__.py`` and
+    ``energy_baseline/__init__.py``; both sets of bytes are on the causal path and
+    both have to be pinned, or a change that lives only in a package initialiser is
+    invisible to the artifact.
+    """
+    inits: list[tuple[str, Path]] = []
+    current = path.parent
+    while current != _src and _src in current.parents:
+        init = current / "__init__.py"
+        if init.is_file():
+            dotted = ".".join(current.relative_to(_src).parts)
+            inits.append((dotted, init))
+        current = current.parent
+    return inits
+
+
+def _static_first_party_closure(entry: Path) -> dict[str, Path]:
+    """Transitive first-party import closure of *entry*, traced from the source.
+
+    Walks ``import`` statements rather than trusting a hand-kept list, so an import
+    added tomorrow is recorded tomorrow instead of quietly missing from the
+    artifact today.
+    """
+    found: dict[str, Path] = {}
+    pending = [entry]
+    visited: set[Path] = set()
+    while pending:
+        path = pending.pop()
+        if path in visited:
+            continue
+        visited.add(path)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError, ValueError) as exc:
+            raise SystemExit(
+                f"ERROR: cannot trace imports in {path} to build the source-hash map: {exc}"
+            ) from exc
+        anchor = "" if path == entry else _relative_import_anchor(path)
+        for name in sorted(_names_imported_by(tree, anchor)):
+            target = _module_to_path(name)
+            if target is None:
+                continue
+            found[name] = target
+            pending.append(target)
+        if path != entry:
+            for dotted, init in _parent_package_inits(path):
+                found.setdefault(dotted, init)
+                if init not in visited:
+                    pending.append(init)
+    return found
+
+
+def _runtime_first_party_modules() -> dict[str, Path]:
+    """First-party modules present in :data:`sys.modules` right now.
+
+    The second of the two derivations.  It catches anything a static read of the
+    source could miss — a module imported by a package ``__init__``, or one pulled
+    in by a computed import — and it is the set the sibling study's hand-kept list
+    was measured against and found short.
+    """
+    found: dict[str, Path] = {}
+    for name in list(sys.modules):
+        if name != "energy_baseline" and not name.startswith("energy_baseline."):
+            continue
+        target = _module_to_path(name)
+        if target is not None and target.is_file():
+            found[name] = target
+    return found
+
+
+def _source_module_map() -> dict[str, Path]:
+    """Every first-party source file whose bytes this run depends on."""
+    modules = _static_first_party_closure(_runner_path)
+    modules.update(_runtime_first_party_modules())
+    for name in _MANDATORY_SOURCE_MODULES:
+        target = _module_to_path(name)
+        if target is None or not target.is_file():
+            raise SystemExit(
+                f"ERROR: {name} is declared mandatory provenance but does not resolve "
+                "to a source file; the source-hash map would be short by one module"
+            )
+        modules[name] = target
+    return modules
+
+
+def _project_relative(path: Path) -> str:
+    """*path* relative to the project root, for use as a map key."""
+    try:
+        return path.resolve().relative_to(_project).as_posix()
+    except ValueError as exc:
+        raise SystemExit(
+            f"ERROR: {path} is outside the project root {_project}; its bytes could not "
+            "be cited from this repository, so recording it as provenance would mislead"
+        ) from exc
+
+
+def _collect_source_hashes() -> dict[str, str]:
+    """sha256 of the raw bytes of every module this run depends on, plus this file.
+
+    Keys are project-relative paths (``src/energy_baseline/battery.py``), so a
+    reviewer holding a commit can read exactly these bytes with
+    ``git show <sha>:scripts/energy-baseline/<key>``.
+    """
+    paths = {_project_relative(path): path for path in _source_module_map().values()}
+    paths[_project_relative(_runner_path)] = _runner_path
+    missing = [rel for rel, path in paths.items() if not path.is_file()]
+    if missing:  # pragma: no cover - a traced module that vanished mid-run
+        raise SystemExit(
+            f"ERROR: source files listed as provenance are unreadable: {sorted(missing)}"
+        )
+    return {rel: _file_sha256(path) for rel, path in sorted(paths.items())}
+
+
+#: Fields the start/end snapshots carry; every one is cross-checked before the
+#: artifact is written.
+_PROVENANCE_SCALARS: tuple[str, ...] = (
+    "code_version",
+    "git_head",
+    "git_dirty",
+    "config_sha256",
+    "config_hash",
+)
+
+
+def _collect_provenance(config_path: Path) -> dict[str, Any]:
+    """One full provenance snapshot: git identity, source hashes, config digests.
+
+    Deterministic by construction — no clock reads anywhere in it, so two identical
+    invocations on an unchanged tree produce byte-identical artifacts.
+    """
+    version, head, dirty = _git_identity()
+    source_hashes = _collect_source_hashes()
+    return {
+        "code_version": version,
+        "git_head": head,
+        "git_dirty": dirty,
+        "config_path": str(config_path),
+        "config_sha256": _file_sha256(config_path),
+        # Canonical convention (manifest.config_hash): yaml.dump(sort_keys=True,
+        # width=1000) then sha256 — semantic equality.  config_sha256 above is the
+        # raw bytes, so a comment-only edit is visible here and invisible there, and
+        # the pair says which kind of change a re-run actually is.
+        "config_hash": canonical_config_hash(config_path),
+        "source_hashes": source_hashes,
+        "source_module_count": len(source_hashes),
+    }
+
+
+def _assert_provenance_stable(start: dict[str, Any], end: dict[str, Any]) -> dict[str, Any]:
+    """Compare the run's two snapshots and abort if any pinned byte moved.
+
+    Reports *every* difference rather than the first: an operator facing this needs
+    the whole list to know what to freeze.  A run whose code or config shifted under
+    it cannot say which bytes produced its numbers, so it writes nothing.
+    """
+    problems: list[str] = []
+    for key in _PROVENANCE_SCALARS:
+        if start.get(key) != end.get(key):
+            problems.append(f"{key}: start={start.get(key)!r} end={end.get(key)!r}")
+
+    start_hashes = start.get("source_hashes") or {}
+    end_hashes = end.get("source_hashes") or {}
+    for rel in sorted(set(start_hashes) | set(end_hashes)):
+        before = start_hashes.get(rel)
+        after = end_hashes.get(rel)
+        if before is None:
+            problems.append(
+                f"source_hashes[{rel}]: first hashed at the END of the run — it was "
+                "imported mid-flight, so the numbers above may not be its bytes"
+            )
+        elif after is None:
+            problems.append(
+                f"source_hashes[{rel}]: hashed at the start but gone at the end "
+                "(deleted, moved, or replaced with a different module)"
+            )
+        elif before != after:
+            problems.append(f"source_hashes[{rel}]: {before} -> {after}")
+
+    if problems:
+        raise SystemExit(
+            "ERROR: code or config changed while this run was computing.  The artifact "
+            "could not attest to the bytes that produced these numbers, so nothing is "
+            "being written:\n  " + "\n  ".join(problems) + "\nRe-run on a tree that stays still."
+        )
+
+    return {
+        "stable": True,
+        "scalar_fields_compared": list(_PROVENANCE_SCALARS),
+        "git_head_stable": True,
+        "code_version_stable": True,
+        "config_digests_stable": True,
+        "source_hashes_stable": True,
+        "source_modules_compared": len(start_hashes),
+        "drift": [],
+        "note": (
+            "the start and end snapshots are identical, so the pinned revision and "
+            "the pinned per-module bytes below are the ones every arm was solved "
+            "against.  This is measured, not asserted: any change to git_head, either "
+            "config digest, or any module digest during the run aborts before "
+            "validation.json is written"
+        ),
+    }
+
+
+def _report_provenance(snapshot: dict[str, Any], *, require_clean_tree: bool) -> None:
+    """Echo the identity to stdout so an operator sees what they are about to cite."""
+    head = snapshot["git_head"]
+    print(f"code_version      {snapshot['code_version']}")
+    print(
+        f"git               head={head if head else 'unknown (nogit)'} "
+        f"dirty={snapshot['git_dirty']}"
+    )
+    print(
+        f"provenance        {snapshot['source_module_count']} source files hashed, "
+        f"config sha256={snapshot['config_sha256'][:16]}... "
+        f"canonical hash={snapshot['config_hash'][:16]}..."
+    )
+    if require_clean_tree:
+        print("provenance        --require-clean-tree: this run is meant to be citable")
+
+
+def _refuse_unattributable_run(snapshot: dict[str, Any]) -> None:
+    """``--require-clean-tree``: no artifact from bytes that cannot be named.
+
+    Refuses before the output directory is created, so a rejected run leaves no
+    half-written directory behind for the next operator to mistake for a result.
+    """
+    version = str(snapshot["code_version"])
+    if snapshot["git_head"] is None:
+        raise SystemExit(
+            f"ERROR: --require-clean-tree cannot be satisfied: git reported no revision "
+            f"(code_version={version!r}, the {NO_GIT_MARKER} sentinel).  A run whose "
+            "commit is unknown cannot be cited, and 'unknown' must never be read as "
+            "'clean'."
+        )
+    dirty = snapshot["git_dirty"] is True or version.endswith(DIRTY_SUFFIX)
+    if dirty:
+        raise SystemExit(
+            f"ERROR: --require-clean-tree refuses to run on a dirty working tree "
+            f"(code_version={version!r}, git_dirty=true, suffix {DIRTY_SUFFIX!r}).  "
+            f"The numbers would belong to commit {snapshot['git_head']} plus whatever "
+            "uncommitted edits were on disk, and the artifact could not tell a reader "
+            "what those were.  Commit or revert them, then re-run; drop the flag for a "
+            "development run, which records git_dirty=true instead of refusing."
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1121,6 +1522,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dst-days", type=int, default=3)
     parser.add_argument("--full-year-start", default=None)
     parser.add_argument("--full-year-end", default=None)
+    parser.add_argument(
+        "--require-clean-tree",
+        action="store_true",
+        help="refuse to run unless the working tree is clean at a recorded commit, so "
+        "this artifact can be cited by SHA alone.  Default off: development runs and "
+        "the test suite work on a dirty tree and record git_dirty=true instead of "
+        "being blocked.  Also refuses when git cannot be asked at all (nogit), "
+        "because then no revision exists to cite",
+    )
     return parser
 
 
@@ -1150,6 +1560,15 @@ def main() -> int:
     if args.full_year_end:
         _parse_iso(args.full_year_end, name="--full-year-end")
 
+    # ---- provenance, before anything is computed, created, or written -----------
+    config_path = Path(args.config).expanduser()
+    if not config_path.is_file():
+        raise SystemExit(f"ERROR: tariff config not found: {config_path}")
+    provenance_start = _collect_provenance(config_path)
+    _report_provenance(provenance_start, require_clean_tree=args.require_clean_tree)
+    if args.require_clean_tree:
+        _refuse_unattributable_run(provenance_start)
+
     output_dir = Path(args.output).expanduser()
     if output_dir.exists() and any(output_dir.iterdir()):
         raise SystemExit(
@@ -1171,9 +1590,6 @@ def main() -> int:
     except BenchmarkInputError as exc:
         raise SystemExit(f"ERROR: dataset cannot be loaded: {exc}") from exc
 
-    config_path = Path(args.config).expanduser()
-    if not config_path.is_file():
-        raise SystemExit(f"ERROR: tariff config not found: {config_path}")
     config = load_config(config_path)
 
     table = loaded.table
@@ -1235,6 +1651,10 @@ def main() -> int:
                 f"endSOC={(0.0 if terminal is None else terminal):>6.3f}"
             )
 
+    # ---- provenance again, and prove nothing moved while we were solving ---------
+    provenance_end = _collect_provenance(config_path)
+    provenance_check = _assert_provenance_stable(provenance_start, provenance_end)
+
     # ---- every requested arm must have run; otherwise fail loudly ---------------
     missing = [
         f"{r['window']}/{arm}: {r['arms'][arm].get('failure', 'absent')}"
@@ -1290,10 +1710,35 @@ def main() -> int:
         "run_identity": {
             "runner": "hack/validate_pre_migration.py",
             "mode": "pre_migration_validation",
-            "code_version": code_version,
+            # Git identity, not the distribution string: ``manifest.code_version()``
+            # is what ``build`` and ``benchmark`` already pin with, so an artifact
+            # from this runner can be checked out and re-run by SHA.
+            "code_version": provenance_start["code_version"],
+            "git_head": provenance_start["git_head"],
+            "git_dirty": provenance_start["git_dirty"],
             "dataset_id": loaded.dataset_id,
             "build_manifest_sha256": loaded.manifest_sha256,
             "config_path": str(config_path),
+            "config_sha256": provenance_start["config_sha256"],
+            "config_hash": provenance_start["config_hash"],
+            "source_hashes": provenance_start["source_hashes"],
+            "provenance": {
+                "start": provenance_start,
+                "end": provenance_end,
+                "cross_check": provenance_check,
+                "note": (
+                    "code_version/git_head/git_dirty above, config_sha256 and "
+                    "config_hash, and source_hashes are the START snapshot; "
+                    "cross_check proves the END snapshot is byte-for-byte the same, so "
+                    "these digests describe the code every arm actually ran. Paths are "
+                    f"relative to {_project.name}/, i.e. "
+                    "git show <git_head>:scripts/energy-baseline/<path> reads back the "
+                    "exact bytes hashed here. source_hashes is traced from the import "
+                    "graph (static walk of every import statement plus the modules "
+                    "present in sys.modules), not a hand-kept list, so a newly imported "
+                    "module is pinned without anyone remembering to add it"
+                ),
+            },
             "interval_seconds": float(loaded.interval_seconds),
             "stage": args.stage,
             "arms_requested": arms,
@@ -1307,6 +1752,7 @@ def main() -> int:
                 "quality_policy": "report",
                 "oracle": bool(args.oracle),
                 "include_192": bool(args.include_192),
+                "require_clean_tree": bool(args.require_clean_tree),
             },
             "cutoffs": [
                 {
@@ -1446,6 +1892,10 @@ def main() -> int:
     else:
         print(f"QUALITY: every evaluation month is at or above {QUALITY_THRESHOLD}")
     print(f"meter recompute max abs dev: {max_meter_dev:.3e} EUR")
+    print(
+        f"provenance: {provenance_start['code_version']} "
+        f"({provenance_check['source_modules_compared']} source files, stable)"
+    )
     print(f"wrote {validation_path}")
     print(f"wrote {results_path}")
     print(f"wrote {timing_path} (private timing, own manifest)")

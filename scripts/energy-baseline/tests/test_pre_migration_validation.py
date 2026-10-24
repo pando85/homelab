@@ -26,9 +26,13 @@ Everything is synthetic: no network, no credentials, no real data directory.
 
 from __future__ import annotations
 
+import ast
+import copy
 import hashlib
 import importlib.util
 import json
+import re
+import shutil
 import subprocess
 import sys
 from datetime import UTC, date, datetime, timedelta
@@ -43,6 +47,8 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNNER = REPO_ROOT / "hack" / "validate_pre_migration.py"
+SRC_ROOT = REPO_ROOT / "src"
+PKG_ROOT = SRC_ROOT / "energy_baseline"
 MADRID = ZoneInfo("Europe/Madrid")
 
 _INTERVAL_SECONDS = 900
@@ -71,6 +77,239 @@ def _load_runner() -> Any:
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+def _load_runner_at(path: Path, name: str) -> Any:
+    """Load a *copy* of the runner (used to prove the source-hash map is derived)."""
+    spec = importlib.util.spec_from_file_location(name, str(path))
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+# ---------------------------------------------------------------------------
+# Provenance helpers
+# ---------------------------------------------------------------------------
+
+#: Every module the headline numbers depend on, named here on purpose.  A map that
+#: silently drops one of them — the ``manifest.py`` omission a sibling study shipped,
+#: which re-hashed 7 of 8 modules and noticed nothing — has to fail this list.
+_REQUIRED_SOURCE_PATHS: tuple[str, ...] = (
+    "hack/validate_pre_migration.py",
+    "src/energy_baseline/__init__.py",
+    "src/energy_baseline/artifact_integrity.py",
+    "src/energy_baseline/battery.py",
+    "src/energy_baseline/benchmark.py",
+    "src/energy_baseline/config.py",
+    "src/energy_baseline/cost.py",
+    "src/energy_baseline/dispatch.py",
+    "src/energy_baseline/manifest.py",
+    "src/energy_baseline/oracle.py",
+    "src/energy_baseline/paths.py",
+    "src/energy_baseline/policies.py",
+    "src/energy_baseline/rolling_horizon.py",
+    "src/energy_baseline/schemas.py",
+)
+
+#: A module that reaches the solver only through a function-level import
+#: (``benchmark._modules()``), so a snapshot of ``sys.modules`` taken after the
+#: runner's own imports cannot see it.  Its presence is what proves the map is
+#: traced from the source rather than scraped off the live interpreter.
+_LAZY_IMPORT_PATH = "src/energy_baseline/cost.py"
+
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
+_GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+
+def _resolve_first_party(name: str) -> Path | None:
+    """Project-relative source file for a dotted ``energy_baseline`` name."""
+    if name == "energy_baseline":
+        return PKG_ROOT / "__init__.py"
+    if not name.startswith("energy_baseline."):
+        return None
+    base = PKG_ROOT.joinpath(*name.split(".")[1:])
+    for candidate in (base.with_suffix(".py"), base / "__init__.py"):
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _test_side_import_closure(entry: Path = RUNNER) -> set[str]:
+    """Re-derive the runner's transitive first-party import closure, in the test.
+
+    A second, independent implementation of the trace on purpose: coverage asserted
+    against the runner's own tracer would only prove it agrees with itself.
+    ``ast.walk`` descends into function bodies, so a call-time import is caught.
+    """
+    found: set[Path] = set()
+    pending = [entry]
+    seen: set[Path] = set()
+    while pending:
+        path = pending.pop()
+        if path in seen:
+            continue
+        seen.add(path)
+        # A file's relative imports anchor on the package that contains it.
+        anchor = (
+            "" if path == entry else ".".join(path.relative_to(SRC_ROOT).with_suffix("").parts[:-1])
+        )
+        names: set[str] = set()
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Import):
+                names |= {alias.name for alias in node.names}
+            elif isinstance(node, ast.ImportFrom):
+                parts = anchor.split(".") if anchor else []
+                if node.level:
+                    if node.level > 1:
+                        parts = parts[: -(node.level - 1)]
+                    prefix = ".".join([*parts, *([node.module] if node.module else [])])
+                else:
+                    prefix = node.module or ""
+                if prefix:
+                    names.add(prefix)
+                    names |= {f"{prefix}.{alias.name}" for alias in node.names}
+            elif isinstance(node, ast.Call):
+                callee = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+                if callee in {"import_module", "__import__"} and node.args:
+                    first = node.args[0]
+                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                        names.add(first.value)
+        for name in names:
+            target = _resolve_first_party(name)
+            if target is None:
+                continue
+            found.add(target)
+            # Importing a submodule executes every parent package's __init__.
+            parent = target.parent
+            while parent != SRC_ROOT and SRC_ROOT in parent.parents:
+                init = parent / "__init__.py"
+                if init.is_file():
+                    found.add(init)
+                parent = parent.parent
+            pending.append(target)
+    return {p.relative_to(REPO_ROOT).as_posix() for p in found}
+
+
+def _sys_module_source_paths(runner: Any) -> set[str]:
+    """Project-relative paths of the ``energy_baseline`` modules live in this process."""
+    paths: set[str] = set()
+    for name in list(sys.modules):
+        if name != "energy_baseline" and not name.startswith("energy_baseline."):
+            continue
+        target = _resolve_first_party(name)
+        if target is not None:
+            paths.add(target.relative_to(REPO_ROOT).as_posix())
+    return paths
+
+
+@pytest.fixture(scope="module")
+def scratch_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """A throwaway COMMITTED git repo holding a copy of the package and the runner.
+
+    ``--require-clean-tree`` can only be tested against a tree this fixture owns:
+    the real working tree is shared with whatever else is in flight, and a test that
+    asserted "the repo is clean" would be asserting about somebody else's checkout.
+    """
+    root = tmp_path_factory.mktemp("prov-repo")
+    repo = root / "repo"
+    repo.mkdir(parents=True)
+    for cmd in (
+        ["init", "-q"],
+        ["config", "user.email", "prov@test.invalid"],
+        ["config", "user.name", "provenance"],
+    ):
+        probe = subprocess.run(
+            ["git", "-C", str(repo), *cmd],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        assert probe.returncode == 0, f"git command failed: {probe.stderr}"
+    shutil.copytree(
+        PKG_ROOT,
+        repo / "src" / "energy_baseline",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    (repo / "hack").mkdir(parents=True)
+    shutil.copy2(RUNNER, repo / "hack" / "validate_pre_migration.py")
+    # Byte-compiled files land in the copy as soon as it runs; they are not source.
+    (repo / ".gitignore").write_text("__pycache__/\n*.pyc\n")
+    _git(repo, "add", "-A")
+    committed = _git(repo, "commit", "-q", "-m", "provenance fixture")
+    assert committed.returncode == 0, committed.stderr
+    head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    assert _GIT_SHA.match(head), head
+    return {
+        "root": root,
+        "repo": repo,
+        "runner": repo / "hack" / "validate_pre_migration.py",
+        "head": head,
+    }
+
+
+def _scratch_run(
+    scratch: dict[str, Any],
+    dataset: dict[str, Any],
+    output: Path,
+    *extra: str,
+    stage: str = "full-year",
+    arms: str = "causal_price",
+) -> subprocess.CompletedProcess[str]:
+    """Run the COPIED runner over the shared synthetic dataset."""
+    cmd = [
+        sys.executable,
+        str(scratch["runner"]),
+        "--dataset",
+        str(dataset["dataset"]),
+        "--config",
+        str(dataset["tariff"]),
+        "--output",
+        str(output),
+        "--stage",
+        stage,
+        "--arms",
+        arms,
+        "--time-limit",
+        "2",
+    ]
+    if stage == "full-year":
+        cmd.extend(
+            [
+                "--full-year-start",
+                "2025-06-10T00:00:00+02:00",
+                "--full-year-end",
+                "2025-06-11T00:00:00+02:00",
+            ]
+        )
+    elif stage == "representative":
+        # Match the same window sizes as _run for consistency
+        cmd.extend(
+            [
+                "--winter-days",
+                "2",
+                "--summer-days",
+                "2",
+                "--dst-days",
+                "2",
+            ]
+        )
+    cmd.extend(extra)
+    return subprocess.run(
+        cmd,
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -288,10 +527,10 @@ def _assert_ok(proc: subprocess.CompletedProcess[str]) -> None:
 
 
 @pytest.fixture(scope="module")
-def representative_run(dataset: dict[str, Any]) -> dict[str, Any]:
+def representative_run(dataset: dict[str, Any], scratch_repo: dict[str, Any]) -> dict[str, Any]:
     """A full representative-stage run over all four windows with a causal arm."""
     out = dataset["root"] / "out-representative"
-    proc = _run(dataset, out)
+    proc = _scratch_run(scratch_repo, dataset, out, stage="representative", arms=_CHEAP_ARMS)
     _assert_ok(proc)
     return {
         "proc": proc,
@@ -471,10 +710,13 @@ class TestAllRequestedArmsRun:
             assert card["load_forecast_mode"] == "frozen"
             assert card["frozen_profile_meta"]["method"] == "trailing_slot_mean_frozen"
 
-    def test_cadence_ladder_runs_h96_only(self, dataset: dict[str, Any]) -> None:
+    def test_cadence_ladder_runs_h96_only(
+        self, dataset: dict[str, Any], scratch_repo: dict[str, Any]
+    ) -> None:
         """The 96-slot ladder arms run and share one horizon; solve counts ascend."""
         out = dataset["root"] / "out-ladder"
-        proc = _run(
+        proc = _scratch_run(
+            scratch_repo,
             dataset,
             out,
             "--stage",
@@ -483,7 +725,8 @@ class TestAllRequestedArmsRun:
             "2025-06-10T00:00:00+02:00",
             "--full-year-end",
             "2025-06-13T00:00:00+02:00",
-            arms="rolling_causal_h96_c96,rolling_causal_h96_c4,rolling_causal_h96_c1",
+            "--arms",
+            "rolling_causal_h96_c96,rolling_causal_h96_c4,rolling_causal_h96_c1",
         )
         _assert_ok(proc)
         summary = json.loads((out / "validation.json").read_text())
@@ -499,9 +742,12 @@ class TestAllRequestedArmsRun:
         assert counts["rolling_causal_h96_c96"] < counts["rolling_causal_h96_c4"]
         assert counts["rolling_causal_h96_c4"] < counts["rolling_causal_h96_c1"]
 
-    def test_horizon192_is_separate_from_the_ladder(self, dataset: dict[str, Any]) -> None:
+    def test_horizon192_is_separate_from_the_ladder(
+        self, dataset: dict[str, Any], scratch_repo: dict[str, Any]
+    ) -> None:
         out = dataset["root"] / "out-h192"
-        proc = _run(
+        proc = _scratch_run(
+            scratch_repo,
             dataset,
             out,
             "--include-192",
@@ -511,7 +757,8 @@ class TestAllRequestedArmsRun:
             "2025-06-10T00:00:00+02:00",
             "--full-year-end",
             "2025-06-12T00:00:00+02:00",
-            arms="rolling_causal_h96_c1",
+            "--arms",
+            "rolling_causal_h96_c1",
         )
         _assert_ok(proc)
         arms = json.loads((out / "validation.json").read_text())["windows"][0]["arms"]
@@ -835,9 +1082,12 @@ class TestFairnessSharing:
 
 
 class TestQualityReport:
-    def test_full_year_range_covers_april_and_names_it(self, dataset: dict[str, Any]) -> None:
+    def test_full_year_range_covers_april_and_names_it(
+        self, dataset: dict[str, Any], scratch_repo: dict[str, Any]
+    ) -> None:
         out = dataset["root"] / "out-april"
-        proc = _run(
+        proc = _scratch_run(
+            scratch_repo,
             dataset,
             out,
             "--stage",
@@ -846,7 +1096,8 @@ class TestQualityReport:
             "2025-04-10T00:00:00+02:00",
             "--full-year-end",
             "2025-04-16T00:00:00+02:00",
-            arms="causal_price",
+            "--arms",
+            "causal_price",
         )
         _assert_ok(proc)
         summary = json.loads((out / "validation.json").read_text())
@@ -1063,6 +1314,457 @@ class TestRunnerContract:
 
     def test_quality_threshold_is_the_declared_gate(self) -> None:
         assert _load_runner().QUALITY_THRESHOLD == 0.80
+
+
+# ---------------------------------------------------------------------------
+# Provenance: the artifact must name the bytes that produced it
+# ---------------------------------------------------------------------------
+
+
+class TestCodeProvenance:
+    """``code_version`` used to be the hardcoded distribution string.
+
+    That made the two headline artifacts untieable from any commit: ``0.1.0`` is
+    what ``pyproject.toml`` says, and it says the same thing at every revision.
+    """
+
+    def test_code_version_is_the_git_revision_not_the_distribution_string(
+        self,
+        representative_run: dict[str, Any],
+        dataset: dict[str, Any],
+        scratch_repo: dict[str, Any],
+    ) -> None:
+        from energy_baseline import __version__ as static_version
+
+        # The run is in the scratch repo, so check its HEAD, not the real repo's
+        head = _git(scratch_repo["repo"], "rev-parse", "HEAD")
+        assert head.returncode == 0, head.stderr
+        identity = representative_run["summary"]["run_identity"]
+        # The exact string the defect recorded — the value a reader could pin nothing to.
+        assert static_version == "0.1.0"
+        assert identity["code_version"] != static_version
+        assert re.fullmatch(r"[0-9a-f]{40}(-dirty)?", identity["code_version"]), identity
+        assert identity["git_head"] == head.stdout.strip()
+
+    def test_git_head_and_git_dirty_are_present_and_correctly_typed(
+        self, representative_run: dict[str, Any]
+    ) -> None:
+        identity = representative_run["summary"]["run_identity"]
+        assert "git_head" in identity and "git_dirty" in identity
+        assert _GIT_SHA.match(str(identity["git_head"])), identity["git_head"]
+        assert isinstance(identity["git_dirty"], bool)
+        # The explicit fields must agree with the suffix, so nobody has to parse it.
+        assert (identity["code_version"].endswith("-dirty")) is identity["git_dirty"]
+        assert identity["code_version"] == identity["git_head"] + (
+            "-dirty" if identity["git_dirty"] else ""
+        )
+
+    def test_git_dirty_reflects_the_real_working_tree(
+        self, representative_run: dict[str, Any], scratch_repo: dict[str, Any]
+    ) -> None:
+        # The run is in the scratch repo, so check its dirty state, not the real repo's
+        status = _git(scratch_repo["repo"], "status", "--porcelain", "--untracked-files=all")
+        assert status.returncode == 0, status.stderr
+        expected = bool(status.stdout.strip())
+        identity = representative_run["summary"]["run_identity"]
+        # Same convention as manifest._get_code_version: untracked files count as dirty.
+        assert identity["git_dirty"] is expected
+
+    def test_runner_no_longer_imports_the_distribution_version(self) -> None:
+        src = RUNNER.read_text()
+        assert "from energy_baseline import __version__ as code_version" not in src
+        assert "from energy_baseline.manifest import" in src
+
+    def test_no_git_records_the_sentinel_instead_of_raising(self, monkeypatch) -> None:
+        """``nogit`` degrades to unknown fields; it never pretends to be clean."""
+        runner = _load_runner()
+        marker = runner.NO_GIT_MARKER
+        monkeypatch.setattr(runner, "git_code_version", lambda: f"{marker}@energy-baseline==0.1.0")
+        version, head, dirty = runner._git_identity()
+        assert version.startswith(marker)
+        assert head is None
+        assert dirty is None
+        with pytest.raises(SystemExit, match="nogit"):
+            runner._refuse_unattributable_run(
+                {"code_version": version, "git_head": head, "git_dirty": dirty}
+            )
+
+
+class TestSourceHashCoverage:
+    def test_covers_every_module_the_runner_imports(
+        self, representative_run: dict[str, Any]
+    ) -> None:
+        recorded = representative_run["summary"]["run_identity"]["source_hashes"]
+        # Use the static closure trace, not sys.modules, because other tests in the
+        # same pytest session may have imported modules the runner doesn't use.
+        expected = _test_side_import_closure() | set(_REQUIRED_SOURCE_PATHS)
+        missing = sorted(expected - set(recorded))
+        assert not missing, f"imported by the runner but absent from source_hashes: {missing}"
+        # A map trimmed to one hand-picked list is the defect this closes.
+        assert len(recorded) >= len(_REQUIRED_SOURCE_PATHS)
+
+    def test_catches_a_function_level_import_a_runtime_snapshot_misses(
+        self, representative_run: dict[str, Any]
+    ) -> None:
+        """``cost`` arrives only through ``benchmark._modules()``, at call time.
+
+        Its presence in the map is therefore evidence the trace reads the source:
+        the probe below shows a snapshot of the live interpreter cannot see it.
+        """
+        recorded = representative_run["summary"]["run_identity"]["source_hashes"]
+        assert _LAZY_IMPORT_PATH in recorded, "the trace must reach call-time imports"
+        probe = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import importlib.util, sys;"
+                f"spec = importlib.util.spec_from_file_location('p', {str(RUNNER)!r});"
+                "mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod);"
+                "print('cost_imported=' + str('energy_baseline.cost' in sys.modules))",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        assert probe.returncode == 0, probe.stderr
+        assert "cost_imported=False" in probe.stdout, (
+            "the probe assumed a module-scope import never reaches cost.py; if it now "
+            "does, this test's evidence needs re-stating, not deleting"
+        )
+
+    def test_includes_the_runner_itself_and_every_digest_is_a_full_sha256(
+        self, representative_run: dict[str, Any]
+    ) -> None:
+        recorded = representative_run["summary"]["run_identity"]["source_hashes"]
+        assert "hack/validate_pre_migration.py" in recorded
+        for rel, digest in recorded.items():
+            assert _HEX64.match(str(digest)), f"{rel}: {digest!r} is not 64 lowercase hex"
+            # The digest is of the bytes at snapshot time, not necessarily current disk state.
+            # If the file changed during the run (e.g., concurrent edits), the cross-check
+            # will catch it; this test only verifies the format is correct.
+
+    def test_a_new_import_is_pinned_without_anyone_editing_a_list(
+        self, scratch_repo: dict[str, Any], dataset: dict[str, Any]
+    ) -> None:
+        """The map is derived: give the copy a new import and the map grows."""
+        runner_copy = scratch_repo["runner"]
+        original = runner_copy.read_text()
+        probe_rel = "src/energy_baseline/_prov_probe.py"
+
+        # First run: get baseline source hashes
+        out_before = scratch_repo["root"] / "out-before"
+        proc_before = _scratch_run(scratch_repo, dataset, out_before)
+        _assert_ok(proc_before)
+        before = json.loads((out_before / "validation.json").read_text())["run_identity"][
+            "source_hashes"
+        ]
+        assert probe_rel not in before
+
+        try:
+            # Add the probe module
+            (scratch_repo["repo"] / probe_rel).write_text("PROBE = 1\n")
+
+            # Add an import of the probe module to the runner
+            anchor = "from energy_baseline.config import load_config  # noqa: E402\n"
+            assert anchor in original
+            mutated = original.replace(
+                anchor,
+                anchor + "from energy_baseline import _prov_probe  # noqa: F401\n",
+                1,
+            )
+            runner_copy.write_text(mutated)
+
+            # Second run: the probe should now be in the source hashes
+            out_after = scratch_repo["root"] / "out-after"
+            proc_after = _scratch_run(scratch_repo, dataset, out_after)
+            _assert_ok(proc_after)
+            after = json.loads((out_after / "validation.json").read_text())["run_identity"][
+                "source_hashes"
+            ]
+
+            assert probe_rel in after, "a freshly imported module went unrecorded"
+            assert (
+                after[probe_rel]
+                == hashlib.sha256((scratch_repo["repo"] / probe_rel).read_bytes()).hexdigest()
+            )
+            assert set(after) - set(before) == {probe_rel}
+        finally:
+            runner_copy.write_text(original)
+            (scratch_repo["repo"] / probe_rel).unlink(missing_ok=True)
+
+
+class TestConfigDigests:
+    def test_config_sha256_and_config_hash_match_an_independent_computation(
+        self, representative_run: dict[str, Any], dataset: dict[str, Any]
+    ) -> None:
+        import io
+
+        import yaml
+
+        identity = representative_run["summary"]["run_identity"]
+        tariff: Path = dataset["tariff"]
+        raw = tariff.read_bytes()
+
+        assert identity["config_path"]  # the bare path is still recorded
+        assert identity["config_sha256"] == hashlib.sha256(raw).hexdigest()
+
+        from energy_baseline.manifest import config_hash as canonical_config_hash
+
+        assert identity["config_hash"] == canonical_config_hash(tariff)
+        # ...and that function really is the declared convention, re-derived here.
+        buf = io.StringIO()
+        yaml.dump(
+            yaml.safe_load(raw.decode("utf-8")),
+            buf,
+            default_flow_style=False,
+            sort_keys=True,
+            allow_unicode=True,
+            width=1000,
+        )
+        assert identity["config_hash"] == hashlib.sha256(buf.getvalue().encode("utf-8")).hexdigest()
+        # The two digests answer different questions, so they must not be the same value.
+        assert identity["config_hash"] != identity["config_sha256"]
+
+    def test_canonical_hash_survives_a_key_reorder_and_the_raw_digest_does_not(
+        self, dataset: dict[str, Any], tmp_path: Path
+    ) -> None:
+        import yaml
+
+        from energy_baseline.manifest import config_hash as canonical_config_hash
+
+        original = Path(dataset["tariff"])
+        data = yaml.safe_load(original.read_text())
+        reordered_path = tmp_path / "tariff-reordered.yaml"
+        reordered_path.write_text(
+            yaml.safe_dump(dict(reversed(list(data.items()))), sort_keys=False)
+        )
+        assert reordered_path.read_bytes() != original.read_bytes()
+        assert canonical_config_hash(reordered_path) == canonical_config_hash(original)
+        assert (
+            hashlib.sha256(reordered_path.read_bytes()).hexdigest()
+            != hashlib.sha256(original.read_bytes()).hexdigest()
+        )
+
+
+class TestProvenanceCrossCheck:
+    def test_artifact_records_start_and_end_snapshots_that_agree(
+        self, representative_run: dict[str, Any]
+    ) -> None:
+        provenance = representative_run["summary"]["run_identity"]["provenance"]
+        start, end, check = provenance["start"], provenance["end"], provenance["cross_check"]
+        assert start["source_hashes"] == end["source_hashes"]
+        assert start["git_head"] == end["git_head"]
+        assert start["code_version"] == end["code_version"]
+        assert start["config_sha256"] == end["config_sha256"]
+        assert check["stable"] is True
+        assert check["drift"] == []
+        assert int(check["source_modules_compared"]) == len(start["source_hashes"])
+        # The headline fields are the start snapshot, which the check just proved
+        # is also the end snapshot.
+        identity = representative_run["summary"]["run_identity"]
+        assert identity["source_hashes"] == start["source_hashes"]
+        assert identity["git_head"] == start["git_head"]
+
+    def test_unchanged_snapshots_pass(self, dataset: dict[str, Any]) -> None:
+        runner = _load_runner()
+        start = runner._collect_provenance(Path(dataset["tariff"]))
+        end = runner._collect_provenance(Path(dataset["tariff"]))
+        assert runner._assert_provenance_stable(start, end)["stable"] is True
+
+    @pytest.mark.parametrize(
+        "field",
+        ["code_version", "git_head", "config_sha256", "config_hash"],
+    )
+    def test_detects_a_changed_scalar(self, dataset: dict[str, Any], field: str) -> None:
+        runner = _load_runner()
+        start = runner._collect_provenance(Path(dataset["tariff"]))
+        end = copy.deepcopy(start)
+        end[field] = f"{end[field]}-moved"
+        with pytest.raises(SystemExit, match=re.escape(field)):
+            runner._assert_provenance_stable(start, end)
+
+    def test_detects_a_simulated_mid_run_source_change(self, dataset: dict[str, Any]) -> None:
+        runner = _load_runner()
+        start = runner._collect_provenance(Path(dataset["tariff"]))
+        end = copy.deepcopy(start)
+        target = "src/energy_baseline/battery.py"
+        assert _HEX64.match(start["source_hashes"][target])
+        end["source_hashes"][target] = "0" * 64  # the monkeypatched "file was rewritten"
+        with pytest.raises(SystemExit) as excinfo:
+            runner._assert_provenance_stable(start, end)
+        message = str(excinfo.value)
+        assert target in message
+        assert "0" * 64 in message, "must name the digest it found, not just complain"
+        assert start["source_hashes"][target] in message
+
+    def test_detects_a_module_imported_for_the_first_time_mid_run(
+        self, dataset: dict[str, Any]
+    ) -> None:
+        runner = _load_runner()
+        start = runner._collect_provenance(Path(dataset["tariff"]))
+        end = copy.deepcopy(start)
+        end["source_hashes"]["src/energy_baseline/late_arrival.py"] = "1" * 64
+        with pytest.raises(SystemExit, match="first hashed at the END"):
+            runner._assert_provenance_stable(start, end)
+
+    def test_detects_a_module_that_disappears_mid_run(self, dataset: dict[str, Any]) -> None:
+        runner = _load_runner()
+        start = runner._collect_provenance(Path(dataset["tariff"]))
+        end = copy.deepcopy(start)
+        gone = sorted(end["source_hashes"])[1]
+        del end["source_hashes"][gone]
+        with pytest.raises(SystemExit, match="gone at the end"):
+            runner._assert_provenance_stable(start, end)
+
+    def test_drift_aborts_the_run_and_writes_nothing(
+        self, dataset: dict[str, Any], tmp_path: Path, monkeypatch
+    ) -> None:
+        """The check is wired into the run, not merely available to it."""
+        runner = _load_runner()
+        real = runner._collect_provenance
+        calls: list[str] = []
+
+        def drifting(config_path: Path) -> dict[str, Any]:
+            snapshot = dict(real(config_path))
+            calls.append("snapshot")
+            if len(calls) > 1:  # the END snapshot sees one file rewritten
+                key = sorted(snapshot["source_hashes"])[1]
+                snapshot["source_hashes"] = {**snapshot["source_hashes"], key: "f" * 64}
+            return snapshot
+
+        out = tmp_path / "out-drift"
+        monkeypatch.setattr(runner, "_collect_provenance", drifting)
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                str(RUNNER),
+                "--dataset",
+                str(dataset["dataset"]),
+                "--config",
+                str(dataset["tariff"]),
+                "--output",
+                str(out),
+                "--stage",
+                "full-year",
+                "--full-year-start",
+                "2025-06-10T00:00:00+02:00",
+                "--full-year-end",
+                "2025-06-11T00:00:00+02:00",
+                "--arms",
+                "causal_price",
+                "--time-limit",
+                "2",
+            ],
+        )
+        with pytest.raises(SystemExit) as excinfo:
+            runner.main()
+        assert "changed while this run was computing" in str(excinfo.value)
+        assert len(calls) == 2, "both snapshots must be taken inside the run"
+        assert out.exists() and list(out.iterdir()) == [], (
+            "a drifted run must leave an empty directory, never a partial artifact"
+        )
+
+
+class TestRequireCleanTree:
+    def test_refuses_a_dirty_tree_and_creates_no_output_directory(
+        self, scratch_repo: dict[str, Any], dataset: dict[str, Any], tmp_path: Path
+    ) -> None:
+        repo: Path = scratch_repo["repo"]
+        stray = repo / "untracked-work-in-progress.md"
+        stray.write_text("edits that are in no commit\n")
+        out = tmp_path / "out-refused"
+        try:
+            proc = _scratch_run(scratch_repo, dataset, out, "--require-clean-tree")
+            assert proc.returncode != 0, proc.stdout + proc.stderr
+            assert "dirty working tree" in proc.stderr + proc.stdout
+            assert not out.exists(), (
+                "--require-clean-tree must fail before the output directory exists"
+            )
+        finally:
+            stray.unlink(missing_ok=True)
+
+    def test_accepted_on_a_clean_tree_and_citable_from_the_commit_alone(
+        self, scratch_repo: dict[str, Any], dataset: dict[str, Any], tmp_path: Path
+    ) -> None:
+        out = tmp_path / "out-clean"
+        proc = _scratch_run(scratch_repo, dataset, out, "--require-clean-tree")
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        identity = json.loads((out / "validation.json").read_text())["run_identity"]
+        head = scratch_repo["head"]
+        assert identity["git_dirty"] is False
+        assert identity["git_head"] == head
+        assert identity["code_version"] == head  # no suffix on a clean tree
+        assert identity["parameters"]["require_clean_tree"] is True
+
+        # The whole point: a reviewer holding only this SHA can read back every byte.
+        shown_head = _git(scratch_repo["repo"], "rev-parse", "HEAD").stdout.strip()
+        assert shown_head == head
+        for rel, digest in identity["source_hashes"].items():
+            blob = subprocess.run(
+                ["git", "-C", str(scratch_repo["repo"]), "show", f"HEAD:{rel}"],
+                capture_output=True,
+                timeout=120,
+            )
+            assert blob.returncode == 0, f"{rel}: not in the commit the artifact names"
+            assert digest == hashlib.sha256(blob.stdout).hexdigest(), rel
+
+    def test_flag_is_default_off_and_a_dirty_run_says_so(
+        self, scratch_repo: dict[str, Any], dataset: dict[str, Any], tmp_path: Path
+    ) -> None:
+        """Development keeps working: no flag, dirty tree, artifact admits it."""
+        repo: Path = scratch_repo["repo"]
+        stray = repo / "dirty_dev_helper.py"
+        stray.write_text("HELPER = 1\n")
+        out = tmp_path / "out-dirty-ok"
+        try:
+            proc = _scratch_run(scratch_repo, dataset, out)
+            assert proc.returncode == 0, proc.stdout + proc.stderr
+            identity = json.loads((out / "validation.json").read_text())["run_identity"]
+            assert identity["parameters"]["require_clean_tree"] is False
+            assert identity["git_dirty"] is True
+            assert identity["code_version"] == scratch_repo["head"] + "-dirty"
+            assert identity["provenance"]["cross_check"]["stable"] is True
+        finally:
+            stray.unlink(missing_ok=True)
+
+
+class TestByteReproducibility:
+    def test_two_identical_invocations_produce_identical_deterministic_artifacts(
+        self, dataset: dict[str, Any], scratch_repo: dict[str, Any]
+    ) -> None:
+        """Provenance is pinned content, so it must not break bit-for-bit reruns.
+
+        Nothing here reads a clock: if a timestamp ever leaks into ``validation.json``
+        the two digests below stop matching, which is exactly the regression this
+        guards against alongside the separated ``timing.json``.
+        """
+        arms = "day_ahead,causal_price"
+        first = dataset["root"] / "out-repro-a"
+        second = dataset["root"] / "out-repro-b"
+        for out in (first, second):
+            proc = _scratch_run(
+                scratch_repo,
+                dataset,
+                out,
+                "--stage",
+                "full-year",
+                "--full-year-start",
+                "2025-06-10T00:00:00+02:00",
+                "--full-year-end",
+                "2025-06-11T00:00:00+02:00",
+                "--arms",
+                arms,
+            )
+            _assert_ok(proc)
+        for name in ("validation.json", "results.parquet", "outputs_manifest.json"):
+            a = hashlib.sha256((first / name).read_bytes()).hexdigest()
+            b = hashlib.sha256((second / name).read_bytes()).hexdigest()
+            assert a == b, f"{name} is not byte-reproducible: {a} != {b}"
+        text = (first / "validation.json").read_text()
+        assert "wall_time_s" not in text
+        identity = json.loads(text)["run_identity"]
+        assert identity["provenance"]["cross_check"]["stable"] is True
 
 
 import math  # noqa: E402

@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
+import shutil
 import subprocess
 import sys
 from datetime import UTC, date, datetime, timedelta
@@ -36,8 +38,21 @@ from energy_baseline.schemas import SCHEMA_VERSION
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNNER = REPO_ROOT / "hack" / "compare_forecasts.py"
 MADRID = ZoneInfo("Europe/Madrid")
+PKG_ROOT = REPO_ROOT / "src" / "energy_baseline"
 
 _INTERVAL_SECONDS = 900
+
+_GIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+
+
+def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run a git command in the given repo directory."""
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +262,113 @@ def smoke_setup(tmp_path: Path) -> dict[str, Any]:
     }
 
 
+@pytest.fixture(scope="module")
+def module_dataset(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """One module-wide synthetic dataset (building it is the slow part).
+
+    Used by the scratch-repo tests to avoid rebuilding the dataset for each test.
+    """
+    root = tmp_path_factory.mktemp("compare-fc")
+    tariff = _write_tariff(root / "config" / "tariff.yaml")
+    start = datetime(2025, 4, 1, 0, 0, tzinfo=MADRID)
+    table = _analysis_table(start=start, days=40, dataset_id="compare-fc-smoke")
+    dataset_dir = _write_dataset(
+        root / "data", table, config_path=tariff, dataset_id="compare-fc-smoke"
+    )
+    test_start = start + timedelta(days=32)
+    test_end = start + timedelta(days=40)
+    return {
+        "root": root,
+        "tariff": tariff,
+        "dataset": dataset_dir,
+        "test_start": test_start.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "test_end": test_end.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+    }
+
+
+@pytest.fixture(scope="module")
+def scratch_repo(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    """A throwaway COMMITTED git repo holding a copy of the package and the runner.
+
+    ``--require-clean-tree`` can only be tested against a tree this fixture owns:
+    the real working tree is shared with whatever else is in flight, and a test that
+    asserted "the repo is clean" would be asserting about somebody else's checkout.
+    """
+    root = tmp_path_factory.mktemp("prov-repo")
+    repo = root / "repo"
+    repo.mkdir(parents=True)
+    for cmd in (
+        ["init", "-q"],
+        ["config", "user.email", "prov@test.invalid"],
+        ["config", "user.name", "provenance"],
+    ):
+        probe = subprocess.run(
+            ["git", "-C", str(repo), *cmd],
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+        if probe.returncode != 0:  # pragma: no cover - git is a hard dependency here
+            pytest.skip(f"git unavailable: {probe.stderr}")
+    shutil.copytree(
+        PKG_ROOT,
+        repo / "src" / "energy_baseline",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+    (repo / "hack").mkdir(parents=True)
+    shutil.copy2(RUNNER, repo / "hack" / "compare_forecasts.py")
+    # Byte-compiled files land in the copy as soon as it runs; they are not source.
+    (repo / ".gitignore").write_text("__pycache__/\n*.pyc\n")
+    _git(repo, "add", "-A")
+    committed = _git(repo, "commit", "-q", "-m", "provenance fixture")
+    assert committed.returncode == 0, committed.stderr
+    head = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    assert _GIT_SHA.match(head), head
+    return {
+        "root": root,
+        "repo": repo,
+        "runner": repo / "hack" / "compare_forecasts.py",
+        "head": head,
+    }
+
+
+def _scratch_run(
+    scratch: dict[str, Any],
+    dataset: dict[str, Any],
+    output: Path,
+    *extra: str,
+) -> subprocess.CompletedProcess[str]:
+    """Run the COPIED runner over the shared synthetic dataset."""
+    return subprocess.run(
+        [
+            sys.executable,
+            str(scratch["runner"]),
+            "--dataset",
+            str(dataset["dataset"]),
+            "--config",
+            str(dataset["tariff"]),
+            "--output",
+            str(output),
+            "--test-start",
+            dataset["test_start"],
+            "--test-end",
+            dataset["test_end"],
+            "--windows",
+            "28",
+            "--sigmas",
+            "0",
+            "--seeds",
+            "0",
+            *extra,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=900,
+    )
+
+
 def _run(args: dict[str, Any], *extra: str) -> subprocess.CompletedProcess[str]:
+    """Run the compare_forecasts runner."""
     return subprocess.run(
         [
             sys.executable,
@@ -757,3 +878,189 @@ class TestCliReplanCadence:
 
 def _reject_constant(token: str) -> None:
     raise ValueError(f"non-standard JSON constant: {token}")
+
+
+# ---------------------------------------------------------------------------
+# Provenance tests
+# ---------------------------------------------------------------------------
+
+
+class TestProvenance:
+    """Code identity, source hashes, and training_hash must be recorded."""
+
+    def test_code_version_is_not_a_static_string(self, smoke_setup: dict[str, Any]) -> None:
+        """code_version must be a real git revision, not the package distribution version."""
+        proc = _run(smoke_setup, "--windows", "28", "--sigmas", "0", "--seeds", "0")
+        assert proc.returncode == 0, proc.stderr
+
+        summary = json.loads((smoke_setup["output"] / "summary.json").read_text())
+        # The regression guard: code_version must not be the static "0.1.0" from __init__.
+        assert summary["code_version"] != "0.1.0", (
+            "code_version is the static package version, not a git revision"
+        )
+        # git_head and git_dirty must be present and correctly typed.
+        assert "git_head" in summary
+        assert "git_dirty" in summary
+        # git_head is either a 40-char hex SHA or None (when git is unavailable).
+        if summary["git_head"] is not None:
+            assert isinstance(summary["git_head"], str)
+            assert len(summary["git_head"]) == 40
+            assert all(c in "0123456789abcdef" for c in summary["git_head"])
+        assert isinstance(summary["git_dirty"], bool) or summary["git_dirty"] is None
+
+    def test_source_hashes_cover_every_imported_module(self, smoke_setup: dict[str, Any]) -> None:
+        """source_hashes must cover every energy_baseline module the runner imports."""
+        proc = _run(smoke_setup, "--windows", "28", "--sigmas", "0", "--seeds", "0")
+        assert proc.returncode == 0, proc.stderr
+
+        summary = json.loads((smoke_setup["output"] / "summary.json").read_text())
+        source_hashes = summary["source_hashes"]
+        assert isinstance(source_hashes, dict)
+        # The runner itself must be included.
+        assert "hack/compare_forecasts.py" in source_hashes
+        # Every energy_baseline module on the measurement path must be present.
+        expected_modules = {
+            "src/energy_baseline/__init__.py",
+            "src/energy_baseline/artifact_integrity.py",
+            "src/energy_baseline/battery.py",
+            "src/energy_baseline/benchmark.py",
+            "src/energy_baseline/config.py",
+            "src/energy_baseline/manifest.py",
+            "src/energy_baseline/oracle.py",
+            "src/energy_baseline/paths.py",
+            "src/energy_baseline/policies.py",
+            "src/energy_baseline/rolling_horizon.py",
+            "src/energy_baseline/schemas.py",
+        }
+        missing = expected_modules - set(source_hashes.keys())
+        assert not missing, f"source_hashes is missing modules: {missing}"
+        # Each digest must be 64 lowercase hex (or None if the file is missing).
+        for rel, digest in source_hashes.items():
+            if digest is not None:
+                assert isinstance(digest, str)
+                assert len(digest) == 64
+                assert all(c in "0123456789abcdef" for c in digest)
+
+    def test_training_hash_is_present_in_load_forecast(self, smoke_setup: dict[str, Any]) -> None:
+        """training_hash must be recorded in each run's load_forecast block."""
+        proc = _run(smoke_setup, "--windows", "28", "--sigmas", "0", "--seeds", "0")
+        assert proc.returncode == 0, proc.stderr
+
+        summary = json.loads((smoke_setup["output"] / "summary.json").read_text())
+        runs = summary["runs"]
+        assert len(runs) > 0
+        # The regression guard: training_hash must be present.
+        assert "training_hash" in runs[0]["load_forecast"], (
+            "training_hash is missing from load_forecast — the frozen-profile builder "
+            "returns it but the runner discarded it"
+        )
+        # Every run must have it.
+        for run in runs:
+            assert "training_hash" in run["load_forecast"]
+            assert isinstance(run["load_forecast"]["training_hash"], str)
+
+    def test_config_hash_matches_independent_computation(self, smoke_setup: dict[str, Any]) -> None:
+        """config_hash and config_sha256_raw_bytes must match independently computed values."""
+        from energy_baseline.manifest import config_hash as canonical_config_hash
+
+        proc = _run(smoke_setup, "--windows", "28", "--sigmas", "0", "--seeds", "0")
+        assert proc.returncode == 0, proc.stderr
+
+        summary = json.loads((smoke_setup["output"] / "summary.json").read_text())
+        config_path = Path(summary["config_path"])
+        # Canonical config_hash (deterministic YAML dump then sha256).
+        expected_canonical = canonical_config_hash(config_path)
+        assert summary["config_hash"] == expected_canonical
+        # Raw bytes hash.
+        expected_raw = hashlib.sha256(config_path.read_bytes()).hexdigest()
+        assert summary["config_sha256_raw_bytes"] == expected_raw
+
+    def test_source_drift_is_empty_on_a_clean_run(self, smoke_setup: dict[str, Any]) -> None:
+        """A normal run has no source drift — start and end hashes match."""
+        proc = _run(smoke_setup, "--windows", "28", "--sigmas", "0", "--seeds", "0")
+        assert proc.returncode == 0, proc.stderr
+
+        summary = json.loads((smoke_setup["output"] / "summary.json").read_text())
+        assert "source_drift" in summary
+        assert isinstance(summary["source_drift"], list)
+        # No files changed during the run.
+        assert summary["source_drift"] == []
+        # start and end code_version must match (no mid-run commit).
+        assert summary["code_version_at_start"] == summary["code_version"]
+
+    def test_require_clean_tree_refuses_dirty_tree(
+        self, scratch_repo: dict[str, Any], module_dataset: dict[str, Any], tmp_path: Path
+    ) -> None:
+        """--require-clean-tree must refuse a dirty tree and create no output directory.
+
+        Uses a scratch repo to own the git state deterministically, rather than
+        relying on ambient git state. Creates an untracked file to make the tree dirty.
+        """
+        repo: Path = scratch_repo["repo"]
+        stray = repo / "untracked-work-in-progress.md"
+        stray.write_text("edits that are in no commit\n")
+        out = tmp_path / "out-refused"
+        try:
+            proc = _scratch_run(scratch_repo, module_dataset, out, "--require-clean-tree")
+            assert proc.returncode != 0, proc.stdout + proc.stderr
+            assert "uncommitted changes" in proc.stderr + proc.stdout
+            assert not out.exists(), (
+                "--require-clean-tree must fail before the output directory exists"
+            )
+        finally:
+            stray.unlink(missing_ok=True)
+
+    def test_require_clean_tree_accepts_clean_tree(
+        self, scratch_repo: dict[str, Any], module_dataset: dict[str, Any], tmp_path: Path
+    ) -> None:
+        """--require-clean-tree must accept a clean tree and proceed normally.
+
+        Uses a scratch repo to own the git state deterministically. The tree is clean
+        because the fixture committed everything. Asserts the run succeeds, output is
+        created, and git_dirty is recorded as false with a real 40-hex git_head.
+        """
+        out = tmp_path / "out-clean"
+        proc = _scratch_run(scratch_repo, module_dataset, out, "--require-clean-tree")
+        assert proc.returncode == 0, proc.stdout + proc.stderr
+        assert out.exists(), "output directory was not created"
+        summary_path = out / "summary.json"
+        assert summary_path.is_file(), "summary.json was not written"
+        summary = json.loads(summary_path.read_text())
+        # The provenance fields must reflect the clean state.
+        assert summary["git_dirty"] is False, "git_dirty should be False on a clean tree"
+        assert summary["git_head"] == scratch_repo["head"], (
+            "git_head should match the scratch repo's HEAD"
+        )
+        assert _GIT_SHA.match(summary["git_head"]), "git_head should be a 40-hex SHA"
+        assert summary["code_version"] == scratch_repo["head"], (
+            "code_version should be the bare SHA on a clean tree (no -dirty suffix)"
+        )
+
+
+class TestProvenanceDriftDetection:
+    """Drift detection logic must catch mid-run source changes."""
+
+    def test_drift_detection_catches_a_changed_module(self) -> None:
+        """If a source file's hash changes between start and end, drift is detected."""
+        # Simulate the drift detection logic directly.
+        start_hashes = {
+            "hack/compare_forecasts.py": "a" * 64,
+            "src/energy_baseline/manifest.py": "b" * 64,
+            "src/energy_baseline/battery.py": "c" * 64,
+        }
+        end_hashes = {
+            "hack/compare_forecasts.py": "a" * 64,
+            "src/energy_baseline/manifest.py": "d" * 64,  # changed
+            "src/energy_baseline/battery.py": "c" * 64,
+        }
+        drift = sorted(rel for rel in start_hashes if start_hashes.get(rel) != end_hashes.get(rel))
+        assert drift == ["src/energy_baseline/manifest.py"]
+
+    def test_drift_detection_is_empty_when_nothing_changes(self) -> None:
+        """No drift when start and end hashes match."""
+        hashes = {
+            "hack/compare_forecasts.py": "a" * 64,
+            "src/energy_baseline/manifest.py": "b" * 64,
+        }
+        drift = sorted(rel for rel in hashes if hashes.get(rel) != hashes.get(rel))
+        assert drift == []

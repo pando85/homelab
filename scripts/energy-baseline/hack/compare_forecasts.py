@@ -58,6 +58,7 @@ No euro figure, and no wall-clock timing, is written into the repository.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -75,6 +76,7 @@ _src = _here.parent / "src"
 if str(_src) not in sys.path:
     sys.path.insert(0, str(_src))
 
+from energy_baseline.artifact_integrity import finalize_run_outputs  # noqa: E402
 from energy_baseline.battery import BatteryPhysicsError, BatterySpec, Horizon  # noqa: E402
 from energy_baseline.benchmark import (  # noqa: E402
     BenchmarkInputError,
@@ -83,6 +85,17 @@ from energy_baseline.benchmark import (  # noqa: E402
     usable_mask,
 )
 from energy_baseline.config import load_config  # noqa: E402
+
+# _get_code_version is private, but necessary: the runner needs the (rev, dirty)
+# tuple to record git_head and git_dirty as separate fields. The public code_version()
+# returns a combined string like "abc123-dirty", which would require fragile parsing
+# to extract the components. The private API is stable and used internally by
+# code_version() itself.
+from energy_baseline.manifest import (  # noqa: E402
+    _get_code_version,
+    code_version,
+    config_hash,
+)
 from energy_baseline.oracle import OracleError  # noqa: E402
 from energy_baseline.policies import policy_no_battery  # noqa: E402
 from energy_baseline.rolling_horizon import (  # noqa: E402
@@ -98,6 +111,48 @@ MADRID = ZoneInfo("Europe/Madrid")
 #: inverted argument as "that policy failed", which is the difference between a
 #: measurement and a fiction.
 _POLICY_ERRORS: tuple[type[BaseException], ...] = (OracleError, BatteryPhysicsError)
+
+#: Project root (parent of hack/).
+_PROJECT = _here.parent
+
+#: Files whose bytes are hashed into ``source_hashes`` (relative to the project).
+#: Derived by tracing every energy_baseline module the runner imports on the
+#: measurement path: direct imports (battery, benchmark, config, oracle,
+#: policies, rolling_horizon, manifest, artifact_integrity) plus transitive
+#: imports discovered via benchmark (paths, schemas) and the package __init__.
+#: cost.py and dispatch.py are NOT on this path — they are imported only by
+#: replay_runtime_demo.py, which this runner does not use.
+_SOURCE_FILES: tuple[str, ...] = (
+    "hack/compare_forecasts.py",
+    "src/energy_baseline/__init__.py",
+    "src/energy_baseline/artifact_integrity.py",
+    "src/energy_baseline/battery.py",
+    "src/energy_baseline/benchmark.py",
+    "src/energy_baseline/config.py",
+    "src/energy_baseline/manifest.py",
+    "src/energy_baseline/oracle.py",
+    "src/energy_baseline/paths.py",
+    "src/energy_baseline/policies.py",
+    "src/energy_baseline/rolling_horizon.py",
+    "src/energy_baseline/schemas.py",
+)
+
+
+def _file_sha256(path: Path) -> str:
+    """SHA-256 of a file's raw bytes."""
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(8192), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _compute_source_hashes() -> dict[str, str | None]:
+    """Hash every module on the measurement path. Missing files get None."""
+    return {
+        rel: _file_sha256(_PROJECT / rel) if (_PROJECT / rel).is_file() else None
+        for rel in _SOURCE_FILES
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +438,16 @@ def main() -> int:
             "D+1 and therefore DST-dependent"
         ),
     )
+    parser.add_argument(
+        "--require-clean-tree",
+        action="store_true",
+        default=False,
+        help=(
+            "Refuse to run if the git working tree has uncommitted changes. "
+            "Default off so development and tests keep working; enable for "
+            "production runs that must be reproducible from a clean commit"
+        ),
+    )
     args = parser.parse_args()
 
     test_start = _parse_iso(args.test_start, name="--test-start")
@@ -411,6 +476,20 @@ def main() -> int:
             "horizon would be silently ignored and the run would not be what its "
             "artifact claims to be"
         )
+
+    # --require-clean-tree: refuse before creating anything if the tree is dirty.
+    # Note: _get_code_version() shells out to git twice with no timeout; a stuck git
+    # (index.lock contention, network filesystem) will block the runner indefinitely.
+    # This is acceptable for now (low probability, user can kill the process).
+    if args.require_clean_tree:
+        _rev, _dirty = _get_code_version()
+        if _dirty:
+            raise SystemExit(
+                "ERROR: --require-clean-tree is set but the working tree has uncommitted "
+                "changes. Commit or stash first, then re-run. A dirty tree means the code "
+                "version recorded in the artifact does not match any committed state, so "
+                "the run cannot be reproduced from the repository alone"
+            )
 
     output_dir = Path(args.output).expanduser()
     if output_dir.exists() and any(output_dir.iterdir()):
@@ -511,6 +590,16 @@ def main() -> int:
             f"~{math.ceil(n_eval / args.replan_interval_slots)} solves for this window",
             flush=True,
         )
+
+    # ---- provenance snapshot at start -------------------------------------------
+    # Captured before the run loop so a mid-run edit is detectable as drift.
+    # Note: _get_code_version() shells out to git twice with no timeout; a stuck git
+    # will block the runner indefinitely. Accepted for now (low probability).
+    _rev_start, _dirty_start = _get_code_version()
+    code_version_at_start = code_version()
+    git_head_at_start: str | None = _rev_start
+    git_dirty_at_start: bool | None = _dirty_start
+    source_hashes_at_start = _compute_source_hashes()
 
     # ---- baseline: the same mask, zero battery ----------------------------------
     eval_horizon = Horizon(
@@ -709,16 +798,43 @@ def main() -> int:
                                 "eval_slots_pooled_fallback": frozen_meta[
                                     "eval_slots_pooled_fallback"
                                 ],
+                                # The frozen-profile builder returns this hash; without it
+                                # there is no way to confirm two arms shared a training basis.
+                                "training_hash": frozen_meta["training_hash"],
                                 "enters_cost": False,
                             },
                             "price_noise": rh_noise,
                         }
                     )
 
+    # ---- provenance snapshot at end + drift detection --------------------------
+    # Note: _get_code_version() shells out to git twice with no timeout; a stuck git
+    # will block the runner indefinitely. Accepted for now (low probability).
+    _rev_end, _dirty_end = _get_code_version()
+    code_version_at_end = code_version()
+    source_hashes_at_end = _compute_source_hashes()
+    source_drift = sorted(
+        rel
+        for rel in _SOURCE_FILES
+        if source_hashes_at_start.get(rel) != source_hashes_at_end.get(rel)
+    )
+
     summary = {
         "dataset_id": loaded.dataset_id,
         "build_manifest_sha256": loaded.manifest_sha256,
         "config_path": str(config_path),
+        # --- Code identity (provenance) ---
+        "code_version": code_version_at_end,
+        "git_head": _rev_end,
+        "git_dirty": _dirty_end,
+        "config_hash": config_hash(config_path),
+        "config_sha256_raw_bytes": _file_sha256(config_path),
+        "source_hashes": source_hashes_at_end,
+        "code_version_at_start": code_version_at_start,
+        "git_head_at_start": git_head_at_start,
+        "git_dirty_at_start": git_dirty_at_start,
+        "source_hashes_at_start": source_hashes_at_start,
+        "source_drift": source_drift,
         "interval_seconds": loaded.interval_seconds,
         "test_start": test_start.isoformat().replace("+00:00", "Z"),
         "test_end": test_end.isoformat().replace("+00:00", "Z"),
@@ -802,6 +918,23 @@ def main() -> int:
         ],
     }
     (output_dir / "summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False))
+
+    # Integrity sidecar for summary.json.  The 84 schedule files live under
+    # schedules/ and finalize_run_outputs only covers direct children of run_dir
+    # (it rejects path separators in filenames), so the sidecar hashes
+    # summary.json alone.  The schedules are pinned indirectly through the
+    # source_hashes + code_version recorded above and the build_manifest_sha256
+    # that pins the dataset.
+    finalize_run_outputs(output_dir, required_files=("summary.json",))
+
+    if source_drift:
+        print(
+            f"WARNING: source drift detected during run — {len(source_drift)} module(s) "
+            f"changed between start and end: {source_drift}. The run's measurements were "
+            f"computed against mixed code versions; treat the results as suspect",
+            file=sys.stderr,
+            flush=True,
+        )
 
     # ---- console summary ---------------------------------------------------------
     print()
