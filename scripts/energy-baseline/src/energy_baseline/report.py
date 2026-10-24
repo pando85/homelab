@@ -47,6 +47,15 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from energy_baseline.artifact_integrity import (
+    BENCHMARK_MANIFEST_NAME,
+    BENCHMARK_REQUIRED_FILES,
+    REPORT_MANIFEST_NAME,
+    REPORT_REQUIRED_FILES,
+    ArtifactIntegrityError,
+    finalize_run_outputs,
+    verify_run_outputs,
+)
 from energy_baseline.benchmark import (
     BENCHMARK_VERSION,
     BENCHMARKS_DIRNAME,
@@ -155,19 +164,64 @@ class _Run:
     payload: dict[str, Any]
     results: pa.Table
     schedules: pa.Table
+    benchmark_verified: bool = False
 
 
-def _read_run(run_dir: Path) -> _Run:
-    """Read a benchmark run from disk.  Every file is required."""
+def _read_run(run_dir: Path, *, verify_integrity: bool = True) -> _Run:
+    """Read a benchmark run from disk.  Every file is required.
+
+    When *verify_integrity* is True (the default) and a benchmark manifest
+    sidecar exists, the run's artifacts are verified against it before
+    reading.  A tampered manifest raises :class:`ReportError`.  When no
+    manifest is present (legacy run), the run is read without verification
+    — this is reported as unverified provenance, not silently treated as
+    verified.
+    """
     if not run_dir.is_dir():
         raise ReportInputError(f"benchmark run directory does not exist: {run_dir}")
     for name in (RESULTS_JSON_NAME, RESULTS_PARQUET_NAME, SCHEDULES_PARQUET_NAME):
         if not (run_dir / name).is_file():
             raise ReportInputError(f"run {run_dir.name} is missing {name}")
+
+    # Verify the benchmark manifest if it exists.
+    manifest_path = run_dir / BENCHMARK_MANIFEST_NAME
+    benchmark_verified = False
+    if verify_integrity and manifest_path.is_file():
+        try:
+            result = verify_run_outputs(
+                run_dir,
+                required_files=BENCHMARK_REQUIRED_FILES,
+                manifest_name=BENCHMARK_MANIFEST_NAME,
+            )
+        except ArtifactIntegrityError as exc:
+            raise ReportError(
+                f"benchmark manifest verification failed for run {run_dir.name}: {exc}"
+            ) from exc
+        if not result.ok:
+            details: list[str] = []
+            if result.hash_mismatches:
+                details.append(f"hash mismatches: {result.hash_mismatches}")
+            if result.size_mismatches:
+                details.append(f"size mismatches: {result.size_mismatches}")
+            if result.missing_required:
+                details.append(f"missing required: {result.missing_required}")
+            raise ReportError(
+                f"benchmark manifest verification failed for run {run_dir.name}: "
+                + "; ".join(details)
+            )
+        benchmark_verified = True
+
     payload = json.loads((run_dir / RESULTS_JSON_NAME).read_bytes().decode("utf-8"))
     results = pq.read_table(run_dir / RESULTS_PARQUET_NAME)
     schedules = pq.read_table(run_dir / SCHEDULES_PARQUET_NAME)
-    return _Run(directory=run_dir, payload=payload, results=results, schedules=schedules)
+
+    return _Run(
+        directory=run_dir,
+        payload=payload,
+        results=results,
+        schedules=schedules,
+        benchmark_verified=benchmark_verified,
+    )
 
 
 def _resolve_run(
@@ -983,6 +1037,18 @@ def generate_report(
         "solver_errors": run.payload.get("solver", {}).get("errors", {}),
         "lineage": run.payload["lineage"],
         "horizon_scope_note": _horizon_scope_note(run),
+        "artifact_integrity": {
+            "benchmark_manifest_verified": run.benchmark_verified,
+            "benchmark_manifest_present": (run.directory / BENCHMARK_MANIFEST_NAME).is_file(),
+            "note": (
+                "benchmark_manifest_verified=true means the benchmark artifacts were verified "
+                "against the benchmark sidecar manifest before the report was generated. "
+                "benchmark_manifest_verified=false with benchmark_manifest_present=true means "
+                "verification failed (report was not generated). "
+                "benchmark_manifest_verified=false with benchmark_manifest_present=false means "
+                "this is a legacy run with no manifest — provenance is unverified, not verified"
+            ),
+        },
         "report_note": (
             "This report is a pure function of the run's own artifacts and the pinned config: "
             "no wall-clock timestamp and no code version of its own, so re-generating it from "
@@ -996,6 +1062,14 @@ def generate_report(
         json.dumps(report_payload, indent=2, sort_keys=True, default=str).encode("utf-8"),
     )
     write_part_atomic(run.directory / REPORT_MD_NAME, markdown.encode("utf-8"))
+
+    # Finalize the report stage: write the report outputs manifest sidecar.
+    finalize_run_outputs(
+        run.directory,
+        required_files=REPORT_REQUIRED_FILES,
+        manifest_name=REPORT_MANIFEST_NAME,
+    )
+
     return run.directory
 
 

@@ -250,6 +250,75 @@ class TestGenerateReport:
         assert "## Policy results" in markdown
         assert "## Monthly breakdown" in markdown
 
+    def test_report_writes_integrity_sidecar(self, tmp_path: Path) -> None:
+        """generate_report finalizes an independent report sidecar and exposes integrity info."""
+        from energy_baseline.artifact_integrity import (
+            BENCHMARK_MANIFEST_NAME,
+            REPORT_MANIFEST_NAME,
+            REPORT_REQUIRED_FILES,
+            verify_run_outputs,
+        )
+
+        requires_core()
+        run_dir = run_benchmark(tmp_path)
+        config_path = tmp_path / "tariff.yaml"
+        report_dir = rp.generate_report(
+            config_path=str(config_path),
+            benchmark_path=str(run_dir),
+        )
+
+        # The report sidecar exists alongside the report files
+        assert (report_dir / REPORT_MANIFEST_NAME).is_file()
+        # The report sidecar verifies independently
+        result = verify_run_outputs(
+            report_dir,
+            required_files=REPORT_REQUIRED_FILES,
+            manifest_name=REPORT_MANIFEST_NAME,
+        )
+        assert result.ok
+
+        # The report.json exposes the integrity state.
+        # benchmark_dataset now finalizes the benchmark sidecar (BENCHMARK_REQUIRED_FILES)
+        # after its three writes, and the report writes into the same run directory, so the
+        # benchmark manifest is present and verifies clean — the integrated, verified path.
+        payload = json.loads((report_dir / rp.REPORT_JSON_NAME).read_text())
+        integrity = payload["artifact_integrity"]
+        assert integrity["benchmark_manifest_present"] is True
+        assert integrity["benchmark_manifest_verified"] is True
+        # The manifest really is on disk at the documented name, not just reported.
+        assert (report_dir / BENCHMARK_MANIFEST_NAME).is_file()
+        # Paths in the report manifest are relative basenames (never absolute)
+        for entry in json.loads((report_dir / REPORT_MANIFEST_NAME).read_text())["files"]:
+            assert "/" not in entry["filename"]
+            assert not entry["filename"].startswith("/")
+
+    def test_report_manifest_excludes_benchmark_files(self, tmp_path: Path) -> None:
+        """The report sidecar hashes only report files, not benchmark artifacts."""
+        from energy_baseline.artifact_integrity import REPORT_MANIFEST_NAME
+        from energy_baseline.benchmark import (
+            RESULTS_JSON_NAME,
+            RESULTS_PARQUET_NAME,
+            SCHEDULES_PARQUET_NAME,
+        )
+
+        requires_core()
+        run_dir = run_benchmark(tmp_path)
+        rp.generate_report(
+            config_path=str(tmp_path / "tariff.yaml"),
+            benchmark_path=str(run_dir),
+        )
+
+        manifest = json.loads((run_dir / REPORT_MANIFEST_NAME).read_text())
+        filenames = {e["filename"] for e in manifest["files"]}
+        # Exactly the two report files
+        assert filenames == {rp.REPORT_JSON_NAME, rp.REPORT_MD_NAME}
+        # The benchmark files are NOT hashed into the report sidecar
+        assert RESULTS_JSON_NAME not in filenames
+        assert RESULTS_PARQUET_NAME not in filenames
+        assert SCHEDULES_PARQUET_NAME not in filenames
+        # The manifest excludes both sidecars themselves
+        assert REPORT_MANIFEST_NAME not in filenames
+
     def test_tax_null_means_untaxed(self, tmp_path: Path) -> None:
         requires_core()
         run_dir = run_benchmark(tmp_path)
