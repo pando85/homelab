@@ -97,16 +97,19 @@ finish DECIDE and the offline part of ACT before the unit arrives, which turns
 integration into an ACT-and-LEARN exercise rather than a design exercise under
 time pressure.
 
-The single largest architectural risk sits in the gated column and should be
-resolved early even though it cannot be implemented early: ADR-0001 requires that
-**only one component writes battery setpoints at a time**, and that if Omnibattery
-exposes no reliable public interface, the right move is to extend Omnibattery with a
-higher-level dispatch-intent interface rather than write Modbus registers from a
-second controller. The dispatch contract was specified to make that decision concrete before
-hardware is in the loop, and on 2026-10-24 it was built — as a data contract only. That sharpens the
-question rather than answering it: a typed intent with no writer still leaves "does Omnibattery expose
-a usable interface?" untested, and the contract's own `CommandPolicy` shape (bounded retries, minimum
-setpoint change, rate limit, safe-idle lease) is data, not behaviour.
+The single largest architectural risk remains in the gated ACT column:
+ADR-0001 requires **exactly one Modbus/device writer** and reliable fault behaviour.
+The [ADR-0004 source audit](../docs/adr/0004-battery-optimizer-production-architecture.md#omnibattery-integration-contract--source-review-2026-10-24)
+(2026-10-24) found *candidate public HA entities* for a dynamic grid target,
+optional charge/discharge power ceilings and per-battery direction permissions **without
+leaving Omnibattery's PD control**. This changes the preferred first adapter from
+"assume a new upstream API is needed" to "test the existing HA entity surface first".
+However, those writes persist in HA config, are not atomic, and have **no proven
+economic TTL or safe fallback if HA itself fails**; the current `DispatchIntent`
+contract and `CommandPolicy` are data only. A supported atomic upstream intent API
+remains a fallback if tests show the public entities inadequate. The physical device
+writer, app-level safety guard and failure-tested fallback are still absent, so
+**no live dispatch is authorized**.
 
 ## 4. Where we are
 
