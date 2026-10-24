@@ -424,8 +424,15 @@ evening publication separately; no telemetry or Home Assistant configuration cha
 > dataset that produced them no longer describes that config. The corrected matrix is
 > `PENDING REBUILD`. They are kept rather than deleted because §5 and §7 were reviewed against these
 > bytes, and because the two findings that carry the section are *orderings* — the rolling rung beat
-> `day_ahead` in every configuration tested, and forecast accuracy ranked the load windows the opposite
-> way to dispatch value — which a change in battery friction does not obviously reverse. What *is*
+> `day_ahead` in every configuration of that Q4 holdout grid (all 81 configurations were a holdout
+> immediately following the training cut), and forecast accuracy ranked the load windows the opposite
+> way to dispatch value — which a change in battery friction does not obviously reverse. That scope
+> does not transfer to evaluation windows that extrapolate far beyond the cut, and a measured
+> counterexample now exists: on the 2025 full-year ladder the same rung cost MORE than `day_ahead`.
+> The identified asymmetry sufficient to explain the reversal is the load-forecast basis: this rung's
+> profile is frozen at the training cut while `day_ahead` re-learns before each dispatch day.
+> Re-running the identical Q4-2025 window on the same dataset reproduced the win, which rules out
+> the efficiency correction as the cause. What *is*
 > affected is every magnitude, including the noise-penalty-versus-margin ratios, since the margin itself
 > is a 0.88 quantity. The run predates the rung's promotion as well, so it describes an experiment
 > beside a four-policy registry, not the canonical fifth rung.
@@ -515,8 +522,14 @@ given `(seed, date)` by construction, which is what isolates the profile effect.
 1. **The two-publication rolling horizon beat single-publication `day_ahead` in 81 of 81
    configurations** — every window, every noise level, every seed. The margin never changed sign and
    its spread is narrow: the widest margin is less than one and a quarter times the narrowest. This is
-   the robust result, and it is the same verdict the pre-fix run gave — the defect moved margins
-   slightly and never reversed one.
+   the robust result **within that configuration** (all 81 were a Q4 holdout immediately following
+   the training cut), and it is the same verdict the pre-fix run gave — the defect moved margins
+   slightly and never reversed one. That scope does not transfer to evaluation windows that
+   extrapolate far beyond the cut, and a measured counterexample now exists: on the 2025 full-year
+   ladder the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to explain
+   the reversal is the load-forecast basis: this rung's profile is frozen at the training cut while
+   `day_ahead` re-learns before each dispatch day. Re-running the identical Q4-2025 window on the
+   same dataset reproduced the win, which rules out the efficiency correction as the cause.
 
 2. **Price-estimate accuracy remained close to irrelevant.** The worst mean penalty of any noise arm,
    measured against its own exact-price control at the same window (the 28-day window under a day-bias

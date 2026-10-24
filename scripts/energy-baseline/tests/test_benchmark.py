@@ -1925,6 +1925,39 @@ class TestDayAheadEndToEnd:
         schedules = pq.read_table(run_dir / bm.SCHEDULES_PARQUET_NAME)
         assert set(schedules.column("policy").to_pylist()) == set(bm.POLICY_NAMES)
 
+    def test_rolling_horizon_forecast_provenance_is_not_silent(self, tmp_path: Path) -> None:
+        """The corrected provenance cannot silently regress to the false claim.
+
+        The rolling-horizon rung's load forecast is frozen at the training cut, while
+        day_ahead re-learns before each dispatch day.  The two rungs therefore differ in
+        load knowledge as well as in price information and cadence, and the artifact must
+        say so.  This test pins the three fields that carry that correction: the
+        ``shared_with_day_ahead`` flag (must be False, not True), the method names (must
+        differ: ``trailing_slot_mean_frozen`` vs ``trailing_slot_mean``), and the
+        ``measured_counterexample`` key in the observation dict (must be present, not
+        absent).  A silent regression to the old false claim — that the two rungs "differ
+        only in price information and cadence, not in load knowledge" — would fail at
+        least one of these assertions.
+        """
+        _run_dir, payload = self.run(tmp_path)
+        rh_forecast = payload["rolling_horizon"]["forecast"]
+        da_forecast = payload["day_ahead"]["forecast"]
+        # The basis is NOT shared; only the window length is.
+        assert rh_forecast["shared_with_day_ahead"] is False, (
+            "the rolling-horizon forecast basis is frozen at the training cut while "
+            "day_ahead re-learns before each dispatch day; claiming they are shared "
+            "was the false claim this test guards against"
+        )
+        # The methods must differ: frozen vs causal rolling.
+        assert rh_forecast["method"] == "trailing_slot_mean_frozen"
+        assert da_forecast["method"] == "trailing_slot_mean"
+        # The observation dict must carry the measured counterexample.
+        observation = payload["comparison"]["rolling_horizon_vs_day_ahead_observation"]
+        assert "measured_counterexample" in observation, (
+            "the observation dict must record the full-year counterexample; its absence "
+            "would silently drop the evidence that the 81/81 record does not transfer"
+        )
+
     def test_day_ahead_artifact_block_records_days_and_forecast(self, tmp_path: Path) -> None:
         _run_dir, payload = self.run(tmp_path)
         da = payload["day_ahead"]

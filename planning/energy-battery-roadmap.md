@@ -156,12 +156,33 @@ sophistication:
   because exact prices for a whole day arrive before that day starts.
 
 What *did* pay was architectural: a longer horizon plus an evening revision was
-cheaper in every configuration tested. That is why the optimizer's v2 step was a
+cheaper in every configuration of the Q4 holdout grid (all 81 configurations were a
+holdout immediately following the training cut). That is why the optimizer's v2 step was a
 replan cadence, and not a better forecast — and that step is now built, which makes
 the next one the v3 pair: degradation and throughput cost, then scenario or robust
-price handling. Note that both bullets above rest on 0.88-era figures; they are
+price handling. That scope does not transfer to evaluation windows that extrapolate far
+beyond the cut, and a measured counterexample now exists: on the 2025 full-year ladder
+the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to explain
+the reversal is the load-forecast basis: this rung's profile is frozen at the training
+cut while `day_ahead` re-learns before each dispatch day. Re-running the identical
+Q4-2025 window on the same dataset reproduced the win, which rules out the efficiency
+correction as the cause. Note that both bullets above rest on 0.88-era figures; they are
 information orderings, which is why they survived the efficiency decision intact as
 claims about *shape* and not as magnitudes.
+
+**Open design decision (2026-10-24): whether to align `rolling_horizon`'s load-forecast basis with
+`day_ahead`'s causal rolling one.** The original claim was that the two rungs "differ only in price
+information and cadence, not in load knowledge"; that claim is now known to be false, and the
+identified asymmetry (this rung's profile frozen at the training cut, `day_ahead` re-learning before
+each dispatch day) is sufficient to explain the full-year reversal. Aligning the bases would make
+the claim true and the comparison like-for-like. The tension is honest: the frozen profile was
+**correct and deliberate in the experiment** — it keeps every noise arm on one identical load basis
+so arms are comparable to each other, and it cannot leak evaluation data; carrying it into the
+canonical ladder unchanged placed it beside a rung that does not freeze, and the two bases are now
+incommensurable. Changing the default would invalidate the golden-value tests that pin legacy
+behaviour bit-for-bit, so it needs new goldens and an explicit decision, not a drive-by edit. The
+decisive test — re-running the full year with the two rungs on an aligned load-forecast basis — has
+**not** been run.
 
 ## 5. Sequencing rule
 

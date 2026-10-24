@@ -448,9 +448,15 @@ follows the existing rule exactly: `oracle ≤ rolling_horizon` is guaranteed on
 feasible set that contains this plan; under `fixed` it is `False` by construction. The relationship the
 fifth rung is supposed to demonstrate is **not** asserted: `comparison.rolling_horizon_may_lose_day_ahead`
 is recorded as **`true`**, together with `rolling_horizon_may_lose_causal` and `rolling_horizon_may_lose_baseline`.
-That `rolling_horizon ≤ day_ahead` held in **81 of 81** offline configurations is strong empirical evidence,
-not a proof — it is recorded as an observation about that experiment, whose figures are themselves superseded
-(see the efficiency note below). Cost consistency (`cost_eur == meter_cost_eur`, inventory adjustment 0) is a
+That `rolling_horizon ≤ day_ahead` held in **81 of 81** offline configurations is strong empirical evidence
+**within that configuration**, not a proof — it is recorded as an observation about that experiment,
+whose figures are themselves superseded (see the efficiency note below). All 81 configurations were a
+Q4 holdout immediately following the training cut; that scope does not transfer to evaluation windows
+that extrapolate far beyond the cut, and a measured counterexample now exists: on the 2025 full-year
+ladder the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to explain the
+reversal is the load-forecast basis: this rung's profile is frozen at the training cut while
+`day_ahead` re-learns before each dispatch day. Re-running the identical Q4-2025 window on the same
+dataset reproduced the win, which rules out the efficiency correction as the cause. Cost consistency (`cost_eur == meter_cost_eur`, inventory adjustment 0) is a
 loop over whichever policies ran, so the fifth rung is covered by extension rather than duplication.
 
 **Invalid input is refused, in one line, with exit 1 and no traceback.** All five paths were verified:

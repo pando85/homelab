@@ -71,18 +71,25 @@ using tomorrow's prices exactly the way this household's own deployed automation
 already does — a full 24-hour curve read at local midnight — while keeping the
 load forecast strictly causal.
 
-The rolling-horizon policy sits strictly between day_ahead and oracle: at 20:30
-on D-1 it already sees day D's exact prices (published the evening before), which
-day_ahead does not see until D's midnight, and its horizon spans to the end of D
-rather than stopping at it.  The policy replans at configurable cadences (legacy
-two-event: 14:00 / 20:30 local; or uniform cadence such as 15-minute), executing
-only until the next event and carrying the actual SOC forward.  The load forecast
-is frozen once from training data (same trailing-window rule as day_ahead), so the
-two rungs differ only in price information and cadence, not in load knowledge.
-Empirically, rolling_horizon <= day_ahead held in 81 of 81 offline configurations,
-which is strong evidence but not a proof: a longer horizon with an imperfect
-estimate can lose.  The implementation lives in :mod:`energy_baseline.rolling_horizon`;
-the benchmark orchestrator wires it into the ladder.
+The rolling-horizon policy is more informed than day_ahead on PRICES and less informed
+on LOAD, so it does not sit strictly between day_ahead and oracle in a single information
+ordering.  Prices: at 20:30 on D-1 it already sees day D's exact prices (published the
+evening before), which day_ahead does not see until D's midnight, and its horizon spans
+to the end of D rather than stopping at it.  Load: its profile is frozen once from
+training data (same trailing-window LENGTH as day_ahead, but a DIFFERENT BASIS —
+day_ahead re-learns from the trailing window before each dispatch day, while this rung
+freezes the profile at the training cut and reuses it for every solve), so the two rungs
+differ in load knowledge as well as in price information and cadence.  On the 2025
+full-year ladder the load-knowledge asymmetry dominated and the rung cost MORE than
+day_ahead; re-running the identical Q4-2025 holdout on the same dataset reproduced the
+win, which rules out the round-trip efficiency correction as the cause.  The rung is
+therefore not provably between the two in any single ordering; the comparison is a
+measurement, not a ladder step.  Empirically, rolling_horizon <= day_ahead held in 81 of
+81 offline configurations, all of them a Q4 holdout immediately following the training
+cut; that is strong evidence within its own configuration and not a proof, and it does
+not transfer to evaluation windows that extrapolate far beyond the cut.  The
+implementation lives in :mod:`energy_baseline.rolling_horizon`; the benchmark
+orchestrator wires it into the ladder.
 
 Its price information set is not an invented convenience.  The claim "a full
 day's price curve is available at local midnight" is verified from this

@@ -1323,8 +1323,13 @@ def prepare_rolling_horizon(
     The rolling horizon operates on the full dataset arrays with absolute indices,
     because its local-day partition and the price-publication rule need whole local
     days.  The frozen load profile is built once from training data strictly before the
-    cut, using the same trailing-window rule as the day-ahead rung so the two rungs are
-    comparable (they differ only in price information and cadence, not in load knowledge).
+    cut, using the same trailing-window LENGTH as the day-ahead rung but a DIFFERENT
+    BASIS: day_ahead re-learns its slot means from the trailing window before each
+    dispatch day (``history_may_cross_train_end = True``), while this rung freezes the
+    profile once at ``training_end_idx`` and reuses it for every solve.  The two rungs
+    therefore differ in load knowledge as well as in price information and cadence; the
+    frozen profile is not a like-for-like load basis for the comparison with day_ahead,
+    and on the 2025 full-year ladder the asymmetry dominated.
 
     The planning terminal value is internal, causal, and derived from the training window
     (same rule as the day-ahead rung).  It is the only cross-event coupling: each solve
@@ -1407,12 +1412,24 @@ def prepare_rolling_horizon(
         "forecast": {
             "method": "trailing_slot_mean_frozen",
             "window_days": int(forecast_window_days),
-            "shared_with_day_ahead": True,
+            # NOT shared, and previously claimed to be.  Only the window LENGTH is shared;
+            # the basis is not.  day_ahead re-learns its slot means from the trailing window
+            # before each dispatch day (`history_may_cross_train_end = True`), so its load
+            # knowledge advances through the evaluation window.  This rung uses a profile
+            # frozen once at `training_end_idx` and reused by every solve, so its load
+            # knowledge is fixed at the cut and never advances.  Claiming the two "differ
+            # only in price information and cadence" was false, and it mattered: on the
+            # 2025 full-year run this rung cost more than day_ahead, and the frozen profile
+            # is one of the two differences that could explain it.
+            "shared_with_day_ahead": False,
             "shared_note": (
-                "the rolling-horizon rung uses the same causal load-forecast window as the "
-                "day-ahead rung, so the two rungs differ only in price information and cadence, "
-                "not in load knowledge.  The frozen profile is built once from training data "
-                "strictly before the cut and reused by every solve"
+                "window LENGTH is shared, forecast BASIS is not.  Both rungs use a 28-day "
+                "trailing slot mean, but day_ahead recomputes it from the trailing window "
+                "before each dispatch day while this rung freezes the profile once at the "
+                "training cut and reuses it for every solve.  A run whose evaluation window "
+                "extrapolates far beyond that cut therefore gives this rung stale load "
+                "knowledge, so the two rungs differ in load knowledge as well as in price "
+                "information and cadence"
             ),
             "metadata": forecast_meta,
         },
@@ -1449,13 +1466,17 @@ def prepare_rolling_horizon(
             "prices": (
                 "at 20:30 on D-1 the policy already sees day D's exact prices (published the "
                 "evening before), which day_ahead does not see until D's midnight; the horizon "
-                "spans to the end of D rather than stopping at it.  The policy therefore sits "
-                "strictly between day_ahead and oracle in the information ladder"
+                "spans to the end of D rather than stopping at it.  The policy is therefore "
+                "more informed than day_ahead on prices"
             ),
             "load": (
                 "a frozen trailing-window forecast built once from training data strictly before "
                 "the cut; the same forecast is reused by every solve, so the policy does not "
-                "see day D's own measured load"
+                "see day D's own measured load.  The policy is therefore LESS informed than "
+                "day_ahead on load: day_ahead re-learns from the trailing window before each "
+                "dispatch day while this rung's profile is fixed at the training cut.  The rung "
+                "is more informed on prices and less informed on load, so it does not sit "
+                "strictly between day_ahead and oracle in a single information ordering"
             ),
             "state": "own SOC carried forward from the previous event's actual execution",
             "assumptions_disclosed": [
@@ -2523,18 +2544,37 @@ def _comparison_block(
         "the oracle's optimisation problem: no dominance is provable, even if the empirical "
         "comparison happens to hold. Do not assert fixed dominance."
     )
-    # The rolling-horizon rung sits strictly between day_ahead and oracle in the information
-    # ladder: at 20:30 on D-1 it already sees day D's exact prices, which day_ahead does not
-    # see until D's midnight, and its horizon spans to the end of D rather than stopping at it.
-    # Empirically, rolling_horizon <= day_ahead held in 81 of 81 offline configurations, which
-    # is strong evidence but NOT a proof: a longer horizon with an imperfect estimate can lose.
-    # We record the observation with its evidence, but do NOT assert a guarantee.
+    # The rolling-horizon rung is more informed than day_ahead on PRICES and less informed on
+    # LOAD, so it does not sit "strictly between" day_ahead and oracle in a single ordering.
+    # Prices: at 20:30 on D-1 it already sees day D's exact prices, which day_ahead does not see
+    # until D's midnight, and its horizon spans to the end of D rather than stopping at it.
+    # Load: its profile is frozen once at the training cut, while day_ahead re-learns from the
+    # trailing window before every dispatch day.  Over an evaluation window that extrapolates far
+    # beyond the cut that asymmetry dominates, and it is measured, not hypothetical: on the 2025
+    # full-year ladder this rung cost MORE than day_ahead.  Re-running the identical Q4-2025
+    # holdout on the same 0.80 dataset reproduced the win, so the efficiency correction is not
+    # the cause -- the frozen profile's distance from the evaluation window is.
+    # Empirically rolling_horizon <= day_ahead held in 81 of 81 offline configurations, but all
+    # 81 used a holdout immediately following the training cut.  That is strong evidence within
+    # its own configuration and NOT a proof, and it does not transfer to longer windows.  We
+    # record the observation with its evidence and its known counterexample, and assert nothing.
     out["rolling_horizon_vs_day_ahead_observation"] = {
         "empirical_dominance": (
             "rolling_horizon was cheaper than or equal to day_ahead in 81 of 81 offline "
-            "configurations tested"
+            "configurations tested, all of them a Q4 holdout immediately following the "
+            "training cut"
         ),
-        "evidence_strength": "strong empirical evidence, not a mathematical proof",
+        "evidence_strength": (
+            "strong empirical evidence within that configuration, not a mathematical proof, "
+            "and not transferable to evaluation windows that extrapolate far beyond the cut"
+        ),
+        "measured_counterexample": (
+            "on the 2025 full-year ladder this rung cost more than day_ahead.  Re-running the "
+            "identical Q4-2025 window on the same dataset reproduced the win, which rules out "
+            "the round-trip efficiency correction as the cause and leaves the forecast basis: "
+            "this rung's load profile is frozen at the training cut (28 days of December 2024 "
+            "applied to all of 2025) while day_ahead re-learns before each dispatch day"
+        ),
         "why_not_guaranteed": (
             "a longer horizon with an imperfect estimate can lose: the rolling horizon sees "
             "more price information but plans further ahead, and a forecast error over a longer "
@@ -2566,8 +2606,15 @@ def _comparison_block(
         "dumb threshold rule, so the difference is reported as day_ahead_minus_causal_eur and "
         "no assertion is made about its sign. Rolling-horizon versus day-ahead is also not "
         "guaranteed: empirically rolling_horizon <= day_ahead held in 81 of 81 offline "
-        "configurations, which is strong evidence but not a proof (a longer horizon with an "
-        "imperfect estimate can lose), so the difference is reported as "
+        "configurations, all of them a Q4 holdout immediately following the training cut, "
+        "which is strong evidence within that configuration but not a proof and not "
+        "transferable to evaluation windows that extrapolate far beyond the cut; on the "
+        "2025 full-year ladder the same rung cost MORE than day_ahead, and the identified "
+        "asymmetry sufficient to explain the reversal is the load-forecast basis: this "
+        "rung's profile is frozen at the training cut while day_ahead re-learns before "
+        "each dispatch day (re-running the identical Q4-2025 window on the same dataset "
+        "reproduced the win, which rules out the efficiency correction as the cause). "
+        "The difference is reported as "
         "rolling_horizon_minus_day_ahead_eur with an observation note and no guarantee flag. "
         "A violated dominance claim is reported, not clipped: it is an accounting signal, not "
         "a solver bug. The causal policy may lose to the baseline and that loss is reported "
@@ -2650,8 +2697,10 @@ def benchmark_dataset(
         day_ahead_forecast_window_days: trailing window, in local days, of the causal
             load forecast (``>= 1``).  Recorded, along with the fallback rule it uses
             when a slot has no prior sample.  The rolling-horizon rung uses the same
-            forecast window so the two rungs are comparable (they differ only in price
-            information and cadence, not in load knowledge).
+            forecast window LENGTH, but its BASIS is different: this rung freezes the
+            profile once at the training cut while day_ahead re-learns before each
+            dispatch day, so the two rungs differ in load knowledge as well as in price
+            information and cadence.
         day_ahead_terminal_value_eur_per_kwh: EUR/DC-kWh value on end-of-day SOC — the
             day-ahead policy's only cross-day coupling.  ``None`` (default) derives it
             from the frozen training window (:data:`TERMINAL_VALUE_DEFAULT_RULE`); an

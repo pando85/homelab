@@ -507,10 +507,24 @@ Dominance is asserted only where provable, which is the ADR-0003 comparability r
 rung rather than a new rule: `oracle <= rolling_horizon` is claimed only when the oracle is **certified**
 and scored in `free` terminal mode, and the artifact records
 `comparison.rolling_horizon_may_lose_day_ahead` as **`true`** (as it does for causal and baseline). That
-the relation held in **81 of 81** offline configurations is strong empirical evidence, not a proof — so
-it is recorded as an observation, and one produced at 0.88 on a now-superseded dataset. Cost consistency
+the relation held in **81 of 81** offline configurations is strong empirical evidence **within that configuration**, not a proof — so
+it is recorded as an observation, and one produced at 0.88 on a now-superseded dataset. All 81 configurations were a Q4 holdout immediately following the training cut; that scope does not transfer to evaluation windows that extrapolate far beyond the cut, and a measured counterexample now exists: on the 2025 full-year ladder the same rung cost MORE than `day_ahead`. The identified asymmetry sufficient to explain the reversal is the load-forecast basis: this rung's profile is frozen at the training cut while `day_ahead` re-learns before each dispatch day. Re-running the identical Q4-2025 window on the same dataset reproduced the win, which rules out the efficiency correction as the cause. Cost consistency
 (`cost_eur == meter_cost_eur`, inventory adjustment 0) was **extended** to the fifth policy by the
 existing per-policy loop rather than duplicated for it.
+
+**Open design decision (2026-10-24): whether to align `rolling_horizon`'s load-forecast basis with
+`day_ahead`'s causal rolling one.** The original claim was that the two rungs "differ only in price
+information and cadence, not in load knowledge"; that claim is now known to be false, and the
+identified asymmetry (this rung's profile frozen at the training cut, `day_ahead` re-learning before
+each dispatch day) is sufficient to explain the full-year reversal. Aligning the bases would make
+the claim true and the comparison like-for-like. The tension is honest: the frozen profile was
+**correct and deliberate in the experiment** — it keeps every noise arm on one identical load basis
+so arms are comparable to each other, and it cannot leak evaluation data; carrying it into the
+canonical ladder unchanged placed it beside a rung that does not freeze, and the two bases are now
+incommensurable. Changing the default would invalidate the golden-value tests that pin legacy
+behaviour bit-for-bit, so it needs new goldens and an explicit decision, not a drive-by edit. The
+decisive test — re-running the full year with the two rungs on an aligned load-forecast basis — has
+**not** been run.
 
 New CLI flags, all on the `benchmark` subcommand: `--rolling-horizon-replan-interval-slots`,
 `--rolling-horizon-horizon-slots`, `--rolling-horizon-sigma`, `--rolling-horizon-bias-sigma`,
@@ -659,7 +673,14 @@ Protocol and limitations: [forecast experiments](energy-baseline-forecast-experi
   3 per-slot σ × 3 per-day bias σ × 3 seeds); each rolling run solved 185 events (92 days × 2 + 1
   warmup), each `day_ahead` run 93 days; zero infeasible / no-incumbent / at-limit in every run. The
   two-publication rolling horizon beat `day_ahead` in 81 of 81 configurations; the margin was narrow
-  and never changed sign — same verdict as before the fix. Load-forecast MAE ranked windows
+  and never changed sign — same verdict as before the fix. That 81-of-81 record is strong evidence
+  **within that configuration** (all 81 were a Q4 holdout immediately following the training cut)
+  and not a proof; it does not transfer to evaluation windows that extrapolate far beyond the cut,
+  and a measured counterexample now exists: on the 2025 full-year ladder the same rung cost MORE
+  than `day_ahead`. The identified asymmetry sufficient to explain the reversal is the load-forecast
+  basis: this rung's profile is frozen at the training cut while `day_ahead` re-learns before each
+  dispatch day. Re-running the identical Q4-2025 window on the same dataset reproduced the win,
+  which rules out the efficiency correction as the cause. Load-forecast MAE ranked windows
   best→worst 28 / 365 / all; dispatch cost ranked 365 first under both policies in every one of the
   27 noise cells (27 of 27). Price-estimate accuracy was close to irrelevant: the worst mean noise
   penalty is about one tenth of the mean policy margin, and a persistent day-level bias is roughly
