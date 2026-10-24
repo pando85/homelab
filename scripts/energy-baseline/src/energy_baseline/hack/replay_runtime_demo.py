@@ -9,7 +9,9 @@ Demonstrates the replay runtime without modifying any existing files (no
    (the runtime never infers gross load from net grid import).
 2. Telemetry, price publications with publication metadata, and triggers.
 3. Plan expiry, telemetry/price staleness.
-4. Disconnect/reconnect and restart (restart clears observations).
+4. Disconnect/reconnect and both restart paths: a restart clears observations
+   (and requires a fresh complete snapshot) but never the plan sequence, which is
+   monotonic across ``push_restart`` *and* ``start()``.
 5. Bounded worker concurrency: a slow solve shows that at most one real
    worker runs, and a late result is fenced by generation identity.
 6. Restart through ``start()`` over a *stuck* worker: worker occupancy is not
@@ -276,16 +278,63 @@ async def main() -> None:
     print("\n[POST-RECONNECT SOLVE]")
     _print_plan(runtime.active_plan)
 
-    # 8. Restart clears observations
+    # 8. Restart clears observations but never the plan sequence (principle 10)
     restart_t = rec_t + timedelta(seconds=30)
     await runtime.push_restart(at=restart_t)
-    print(f"\n[RESTART] {restart_t.strftime('%H:%M:%S')}")
+    print(f"\n[RESTART via event] {restart_t.strftime('%H:%M:%S')}")
     print(
         f"  observations cleared: telemetry={runtime._state.latest_telemetry} "
         f"prices={runtime._state.latest_prices}"
     )
     _print_plan(runtime.active_plan)
     print(f"  plan_sequence preserved (monotonic): {runtime.plan_sequence}")
+
+    await runtime.push_telemetry(soc_frac=0.65, meter_w=350.0, temp_c=26.0, at=restart_t)
+    await runtime.push_price_publication(
+        pub.prices,
+        interval_starts=pub.interval_starts,
+        published_at=pub.published_at,
+        valid_from=pub.valid_from,
+        valid_to=pub.valid_to,
+        at=restart_t,
+    )
+    await runtime.push_scheduled_trigger(at=restart_t)
+    await runtime.drain(timeout_s=30.0)
+    print("\n[POST-RESTART SOLVE — event path]")
+    _print_plan(runtime.active_plan)
+
+    # The other restart path replaces the whole state object, so it must carry the
+    # counter explicitly: numbered onward, never back to 0.
+    hard_restart_t = restart_t + timedelta(seconds=30)
+    before_hard_restart = runtime.plan_sequence
+    await runtime.start(at=hard_restart_t)
+    print(f"\n[RESTART via start()] {hard_restart_t.strftime('%H:%M:%S')}")
+    print(
+        f"  observations cleared: telemetry={runtime._state.latest_telemetry} "
+        f"prices={runtime._state.latest_prices}"
+    )
+    print(
+        f"  plan_sequence carried, not reset: {runtime.plan_sequence} (was {before_hard_restart})"
+    )
+    assert runtime.plan_sequence == before_hard_restart, "start() reset the plan sequence"
+
+    await runtime.push_telemetry(soc_frac=0.7, meter_w=300.0, temp_c=26.0, at=hard_restart_t)
+    await runtime.push_price_publication(
+        pub.prices,
+        interval_starts=pub.interval_starts,
+        published_at=pub.published_at,
+        valid_from=pub.valid_from,
+        valid_to=pub.valid_to,
+        at=hard_restart_t,
+    )
+    await runtime.push_scheduled_trigger(at=hard_restart_t)
+    await runtime.drain(timeout_s=30.0)
+    print("\n[POST-RESTART SOLVE — start() path]")
+    _print_plan(runtime.active_plan)
+    assert runtime.active_plan is not None
+    assert runtime.active_plan.plan_sequence == before_hard_restart, (
+        "the post-start() generation must be numbered onward"
+    )
 
     # 9. Worker fencing: a timed-out worker is not replaced by a second one
     _section("WORKER FENCING (max one real worker, late result discarded)")

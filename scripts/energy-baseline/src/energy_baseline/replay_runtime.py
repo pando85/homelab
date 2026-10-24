@@ -43,7 +43,10 @@ Design principles
    superseded events all invalidate the active plan.  Reconnection, start
    and restart always invalidate — a persisted plan is never resumed as
    authority.  Restart clears all observations (telemetry, prices, forecast)
-   and requires a new full snapshot before planning can resume.
+   and requires a new full snapshot before planning can resume.  What it never
+   clears is the generation numbering: the plan sequence is provenance about
+   what this runtime has already issued, not an observation, so it carries
+   forward (principle 10).
 
 6. **Bounded solve timeout.**  Solves run in a dedicated single-thread
    executor with a configurable timeout.  Late completions are safely
@@ -68,9 +71,14 @@ Design principles
    planning window.  Gaps or non-contiguous intervals fail validation.
 
 10. **Plan sequence is monotonic.**  The plan sequence never resets across
-    restart/disconnect/reconnect.  It is a strictly increasing counter
-    across all generations from one runtime instance, ensuring the
-    ``accepts_successor`` contract is always satisfiable.
+    restart/disconnect/reconnect — on *either* restart path.  ``push_restart``
+    keeps the live state object, so the counter survives it untouched; ``start()``
+    installs a fresh state and therefore seeds it with the outgoing counter.
+    It is a strictly increasing counter across all generations from one runtime
+    instance, ensuring the ``accepts_successor`` contract is always satisfiable
+    and that one recording sink can never hold two distinct plans numbered
+    alike.  Event-record numbering (``_event_counter``) is likewise instance-level
+    and survives every restart.
 
 Caller API
 ----------
@@ -559,7 +567,14 @@ class RecordingSink:
 
     @property
     def has_device_writes(self) -> bool:
-        """Always False — this sink never writes to devices."""
+        """Convenience flag — always False for this recording-only sink.
+
+        The normative evidence that the runtime never writes to devices is the
+        AST import-allowlist guard in
+        :meth:`TestSinkProperties.test_no_device_library_imports_ast_guard`
+        and the call-scan guard in
+        :meth:`TestSinkProperties.test_no_device_call_expressions_ast_guard`.
+        """
         return False
 
 
@@ -741,7 +756,8 @@ class ReplayRuntime:
     async def start(self, *, at: datetime) -> None:
         """Start the runtime at the given simulated time.
 
-        Invalidates any previous state.  A started runtime is connected.
+        Invalidates any previous plan and drops all observed state.  A started
+        runtime is connected.
 
         Restart does **not** replace the executor and does **not** clear worker
         occupancy.  A planner thread that is still running cannot be killed, so
@@ -753,6 +769,10 @@ class ReplayRuntime:
         refused as saturation.  :meth:`stop` is the only path that shuts the pool
         down, and it joins the worker first, so restarting after a stop gets a
         fresh pool with no worker left behind.
+
+        Restart does **not** reset the plan sequence: it belongs to this runtime
+        instance, not to the observed system, so the outgoing counter is carried
+        into the fresh state (see design principle 10).
         """
         if at.tzinfo is None or at.tzinfo.utcoffset(at) is None:
             raise ReplayRuntimeError("start time must be aware UTC")
@@ -760,13 +780,27 @@ class ReplayRuntime:
         # Restart invalidates everything.  Nothing waits for an in-flight worker
         # here: occupancy is not cleared below, so a stuck worker keeps holding
         # the single slot and the restart itself is instantaneous.
-        if self._state.started:
+        was_started = self._state.started
+        carried_plan_sequence = self._state.plan_sequence
+        if was_started:
             self._invalidate(InvalidationReason.RESTART, at)
 
         self._state = _RuntimeState()
         self._state.now = at
         self._state.started = True
         self._state.connected = True
+        # Principle 10: the plan sequence is a counter of *generations produced by
+        # this runtime*, not observed system state, so a restart must carry it.
+        # ``push_restart`` keeps the live state object and therefore preserves it
+        # implicitly; this path replaces the state, so it is seeded explicitly —
+        # otherwise one sink can hold two distinct plans both numbered 0 and the
+        # successor check would compare against a restarted counter rather than a
+        # globally monotonic one.
+        self._state.plan_sequence = carried_plan_sequence
+        # The invalidation reason is provenance about why no plan is active, not an
+        # observation either: after a restart it reads RESTART on both paths.
+        if was_started:
+            self._state.invalidation_reason = InvalidationReason.RESTART
         if not self._executor_open:
             # Safe to build a new pool only here: stop() joined the previous
             # worker with ``shutdown(wait=True)`` before closing this flag.
@@ -984,8 +1018,11 @@ class ReplayRuntime:
     def _handle_reconnect(self, at: datetime, payload: StateSnapshot | None) -> None:
         """Handle a reconnect event.
 
-        Reconnection invalidates any previous plan and requires a fresh
-        complete snapshot.  A persisted plan is never resumed as authority.
+        Reconnection always invalidates any previous plan — a persisted plan
+        is never resumed as authority.  A fresh complete snapshot is
+        recommended; if none is supplied (``payload is None``), the
+        pre-disconnect telemetry and prices remain and are still subject to
+        the normal solve-time freshness checks before any new solve.
         """
         self._state.connected = True
         # The disconnect before reconnect already invalidated; record reconnect
