@@ -79,12 +79,14 @@ are part of the accepted result — a restatement that drops one of them is not 
 3. **Provisional physics.** Symmetric one-way efficiency (charge = discharge = √RTE) and zero idle
    loss are provisional and unmeasured; the run's own assumptions block says so rather than this file
    vouching for it.
-4. **Day-ahead publication assumption.** Archived price ≡ published-at-midnight is **unverified**, and
-   the **direction of its error is not established** — because each day's plan is re-scored against the
-   same archived realised prices every other policy is scored on, divergence perturbs the *decisions*,
-   not the accounting basis of those decisions. An adverse expectation is reasonable; it is not a
-   bound. See *Known issues §3* below and ADR-0003 §*Open validation item: day-ahead publication
-   versus realised archive*. The ESIOS day-boundary question (TODO-0.4) stays open with it.
+4. **Day-ahead publication assumption — RESOLVED by owner assertion 2026-10-24.** The owner stated
+   on 2026-10-24 that prices published between 20:15 and 20:20 on day D−1 for delivery day D are the
+   prices realised (`user_assertion`, `asserted_on: "2026-10-24"`, `verified_from_data: false`).
+   Published ≡ realised is now an owner-stated fact, though not verified from data. The original
+   concern — that divergence perturbs decisions rather than the accounting basis — remains a
+   structural property of the scoring, not a defect. The ESIOS day-boundary question (TODO-0.4)
+   stays open. See *Known issues §3* below and ADR-0003 §*Open validation item: day-ahead
+   publication versus realised archive*.
 5. **Averaging basis.** No-export and the import ceiling are enforced on **15-minute interval
    averages**, not on instantaneous telemetry. That is the basis on which contracted power is actually
    enforced, so it is correct for the ceiling and **average-only for export**: a sub-interval export
@@ -173,18 +175,22 @@ not claim a full Madrid-local calendar year.
 
 ### 3. Day-ahead policy assumptions (B2)
 
-- Assumes archived realised prices equal the midnight-published day-ahead curve. No historical
-  snapshot verification has been performed, and the assumption stays **unverified**. Its **direction of
-  error is not established**: each day's plan is re-scored by the battery kernel against the same
-  archived realised prices every other policy is scored on, so a divergent published curve changes
-  *which decisions the policy makes*, not the accounting basis of those decisions — the cost of
-  whatever it decides is still computed on realised prices. A wrong signal can make the policy choose
-  badly, but "badly" is not guaranteed to mean "worse than reported": the pointwise sign can flip and
-  the magnitude is unmeasured. The *expected* direction is adverse; that is an expectation, not a
-  bound. The run artifact discloses the reliance the same way —
+- Assumes archived realised prices equal the midnight-published day-ahead curve. **RESOLVED by
+  owner assertion 2026-10-24** (`user_assertion`, `asserted_on: "2026-10-24"`,
+  `verified_from_data: false`): the owner stated that prices published between 20:15 and 20:20 on
+  day D−1 for delivery day D are the prices realised. The assumption is now an owner-stated fact,
+  though not verified from data. Its **direction of error is not established** as a data question —
+  because each day's plan is re-scored by the battery kernel against the same archived realised
+  prices every other policy is scored on, a divergent published curve changes *which decisions the
+  policy makes*, not the accounting basis of those decisions — the cost of whatever it decides is
+  still computed on realised prices. A wrong signal can make the policy choose badly, but "badly"
+  is not guaranteed to mean "worse than reported": the pointwise sign can flip and the magnitude is
+  unmeasured. The *expected* direction is adverse; that is an expectation, not a bound. The run
+  artifact discloses the reliance the same way —
   `day_ahead.information_set.assumptions_disclosed` records the assumption, that it is *not measured
-  here*, and the unresolved day-boundary convention; it claims no direction either. Cheap fix is still
-  open: snapshot `sensor.esios_pvpc`'s attribute dict at `00:00:40` daily. See ADR-0003 §*Open
+  here*, and the unresolved day-boundary convention; it claims no direction either. The daily
+  attribute snapshot (snapshot `sensor.esios_pvpc`'s attribute dict at `00:00:40` daily) would
+  convert assertion into measurement, and is now optional rather than blocking. See ADR-0003 §*Open
   validation item: day-ahead publication versus realised archive*.
 - Myopic 28-day load forecast and terminal credit: **reviewed** — the earlier note that the
   implementation was "initially unreviewed" is no longer true. The terminal credit is now *two* values:
@@ -213,8 +219,10 @@ nothing.
 3. **Clarify year boundary** — done: see *Known issues §2* above — UTC-scoped, not a local year
 4. **Review day-ahead assumptions** — **reviewed**: the terminal credit is now a separate planning
    value and the scoring value is threaded from the oracle, and the acceptance review walked the
-   assumptions. What stays open is the assumption itself — published ≡ realised is unverified, its
-   direction of error is not established, and ADR-0003 keeps it as an open validation item
+   assumptions. The publication assumption (published ≡ realised) was **unverified** but is now
+   **resolved by owner assertion 2026-10-24** (`user_assertion`, `verified_from_data: false`): the
+   owner stated that the D−1 evening publication for day D is the realised price curve. ADR-0003
+   keeps the item recorded; the daily attribute snapshot is now optional rather than blocking
 5. **Final test run** — 1120 tests pass on the committed sources; 1122 with the two horizon-scope
    tests added by the documentation pass below
 6. **Commit clean code** — done at `c1569314`
@@ -293,7 +301,40 @@ One additive change; nothing else in the module was touched:
   never *to what*. The recorder `extract` is therefore the only source of appliance phase, and it is
   not re-extractable. Still deferred, and consumed by nothing today; see ADR-0003 §*Appliance enum
   telemetry — resolved*
-- Historical price snapshot verification for day-ahead assumption
+- Historical price snapshot verification for day-ahead assumption — **resolved by owner assertion
+  2026-10-24** (published ≡ realised, `verified_from_data: false`); the daily attribute snapshot is
+  now optional rather than blocking
+- OMIE-based 14:00 price estimate for the two-publication experiment — the owner stated on
+  2026-10-24 that a 14:00 estimate of tomorrow's PVPC is constructible from OMIE day-ahead prices
+  plus adjustments to derive PVPC, with stated accuracy around 80%. No archived 14:00 estimate
+  exists yet; the synthetic-noise grid in [forecast experiments
+  §4](energy-baseline-forecast-experiments.md) remains the only quantitative evidence about how
+  estimate accuracy affects dispatch
+
+### Pending from owner assertions (2026-10-24)
+
+All three are **owner assertions** (`user_assertion`, `asserted_on: "2026-10-24"`,
+`verified_from_data: false`), not measurements made by this pipeline.
+
+1. **Round-trip efficiency 0.80–0.84 (top pending item).** Community-measured RTE for similar
+   batteries is 0.80–0.84, contradicting the shipped 0.88 in `config/tariff.yaml` by 4–8 percentage
+   points. Consequence for the information ladder: the ladder spans roughly **141 → 450 → 526
+   equivalent full cycles per year** (causal → `day_ahead` → `oracle`), so a lower round-trip
+   efficiency does not scale rungs uniformly — it penalises cycling, compresses the ladder, and can
+   reorder rungs. Every figure produced so far is therefore an **upper bound on a frictionless,
+   optimistic battery**, and a corrected re-run is required before any of it informs a purchase or
+   deployment decision. Holdout EFC values: `day_ahead` 114.70 / 111.16 / 110.87 and rolling 116.73
+   / 115.77 / 114.32 for windows 28 / 365 / all over three months. The `config_hash` → `dataset_id`
+   coupling means the RTE correction cannot be applied by editing a value in place without
+   superseding the accepted dataset `da2ac07a…`; a sensitivity run therefore precedes any config
+   change, as documented in [forecast experiments
+   §12.3](energy-baseline-forecast-experiments.md#123-round-trip-efficiency-080-084).
+2. **Published ≡ realised.** Resolved by owner assertion; recorded in *Known issues §3* and
+   *Acceptance condition 4* above. The daily attribute snapshot would convert assertion into
+   measurement and is now optional.
+3. **14:00 OMIE-based price estimate source.** Real source now exists (OMIE day-ahead + PVPC
+   adjustments, ~80% accuracy); no archived estimate yet. The synthetic-noise grid already brackets
+   this accuracy; see [forecast experiments §12.1](energy-baseline-forecast-experiments.md#121-the-1400-next-day-price-estimate-has-a-real-source).
 
 ## Forecast experiments
 
@@ -342,7 +383,11 @@ Protocol and limitations: [forecast experiments](energy-baseline-forecast-experi
 - **Price uncertainty:** without archived 14:00 forecasts, test seeded synthetic relative-error
   scenarios and report measured errors. "80–90% precision" has no unique mathematical definition;
   do not present a chosen noise parameter as empirical forecasting skill. Exact evening publication
-  is a user-specified scenario assumption, not a new measurement of the archive.
+  is a user-specified scenario assumption, not a new measurement of the archive. **Update
+  2026-10-24:** the owner stated that a 14:00 estimate of tomorrow's PVPC is constructible from
+  OMIE day-ahead prices plus adjustments to derive PVPC, with stated accuracy around 80%. A real
+  source now exists; no archived estimate yet. The synthetic-noise grid already brackets this
+  accuracy ([forecast experiments §12.1](energy-baseline-forecast-experiments.md#121-the-1400-next-day-price-estimate-has-a-real-source)).
 - **Scope:** isolated offline experiment; canonical benchmark registry stays at four policies until
   a separate adoption decision. No new telemetry extraction, controller deployment or actuation.
 - **Executed 2026-10-24, then re-run the same day:** a slot-positioning defect in the frozen load

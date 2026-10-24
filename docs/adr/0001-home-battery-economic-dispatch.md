@@ -92,7 +92,7 @@ Use walk-forward training/evaluation without future consumption leakage, measure
 
 - Positive: explainable dispatch, local operation, an auditable savings model, reusable battery adapter and a gradual path to more advanced forecasts.
 - Costs: historical data normalization, tariff accounting, command ownership integration and persistent observation/metrics require engineering and calibration.
-- Unresolved: exact main Shelly grid boundary, PVPC billed tariff reconciliation, the real E 3.0/alternative model and firmware, achievable Modbus command contract, measured efficiency vs output power, idle draw, and local electrical protection/certification. These are Phase 0 gates, not assumed away.
+- Unresolved: exact main Shelly grid boundary, PVPC billed tariff reconciliation, the real E 3.0/alternative model and firmware, achievable Modbus command contract, and local electrical protection/certification. **Round-trip efficiency** now has an owner-supplied community-measured range of 0.80–0.84, which contradicts the 0.88 the offline model currently uses (`config/tariff.yaml`, self-described as "Provisional — must be measured"); this is community measurement, not measurement of this household's unit, efficiency versus output power is still unresolved (a single scalar is not a curve), and idle draw remains wholly unmeasured. These are Phase 0 gates, not assumed away (cross-reference [ADR-0003](0003-phase1-measurement-and-baseline.md) *Consequences → Unresolved* for the consequence on every figure produced so far).
 - No hardware purchase or automatic actuation is authorized by accepting this ADR.
 
 ## References

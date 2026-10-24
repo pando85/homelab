@@ -539,7 +539,64 @@ The pattern matches the mechanism: 88 intervals out of 8,820 shifted by two hour
 aggregate metric much. What it *did* do — break a test that had been relying on the shift (§5) — is the
 louder signal, and it is why the matrix was re-run end to end instead of being corrected on paper.
 
-## 12. References
+## 12. Owner assertions of 2026-10-24
+
+Three owner-supplied facts recorded on 2026-10-24. All are **owner assertions, not measurements
+made by this pipeline** (`user_assertion`, `asserted_on: "2026-10-24"`, `verified_from_data: false`).
+
+### 12.1 The 14:00 next-day price estimate has a real source
+
+The 14:00 estimate of tomorrow's PVPC prices is constructible from **OMIE day-ahead prices plus
+adjustments to derive PVPC**, with owner-stated accuracy around **80%**. Previously no source
+existed and the synthetic-noise grid in §4 was a substitute for a source that did not exist. A real
+one now does, which makes the two-publication schedule **implementable rather than hypothetical**.
+
+**Honesty preserved:** there is still **no archived record of any 14:00 estimate**, so nothing in
+the store measures the owner's 80%. The synthetic grid remains the only quantitative evidence about
+how estimate accuracy affects dispatch.
+
+**The tested grid already brackets 80% accuracy.** The two cells nearest a natural "MAPE 0.20"
+reading of "80% accuracy" are:
+
+| per-slot σ | per-day bias σ | MAPE | within 10 % | sign flips |
+|---|---|---|---|---|
+| 0.2 | 0.1 | 0.1820 | 0.332 | 0 |
+| 0.2 | 0.2 | 0.2307 | 0.266 | 11 |
+
+"80% accuracy" has no unique mathematical definition; MAPE 0.20 is the interpretation used here,
+and the bracket means the conclusion does not depend on picking one.
+
+**The sensitivity conclusion survives at the owner's stated accuracy.** Across all 81 configurations
+the rolling horizon was cheaper than `day_ahead`, margin range **−1.6509 to −2.0559** with median
+**−1.9270** (differences between two policies on the same basis, not costs). At the two cells
+bracketing MAPE 0.20 the mean penalty against the perfect-price control was **+0.0296** and
+**+0.0981**, worst single configuration **+0.2096**. The worst observed penalty at the owner's
+stated accuracy is roughly **one eighth of the median policy margin** (0.2096 / 1.9270 ≈ 0.11), and
+the mean penalties are one to two orders of magnitude smaller.
+
+**Decision this licenses:** no investment in price-forecast skill is warranted for this controller.
+The value sits in horizon length and the evening revision, not in estimate accuracy. This is what
+the grid supports; it is an offline conclusion about a simulated controller — nothing is deployed.
+
+### 12.2 Published equals realised, always
+
+The prices published between 20:15 and 20:20 on day D−1 for delivery day D are the prices realised.
+This is the assumption `day_ahead` was recorded as making without evidence
+(§*Known issues §3* in [Progress](./energy-baseline-progress.md); ADR-0003 *Open validation item:
+day-ahead publication versus realised archive*). The owner assertion resolves that open validation
+item: published ≡ realised is now an owner-stated fact, `verified_from_data: false`.
+
+This removes the experiment's **largest unverified input assumption**. The daily attribute snapshot
+would still convert assertion into measurement, and is now optional rather than blocking.
+
+### 12.3 Round-trip efficiency 0.80–0.84
+
+Recorded in `config/tariff.yaml` above the `round_trip_efficiency` value. The shipped 0.88 is
+optimistic by 4–8 percentage points against the only efficiency evidence that now exists; the
+consequence for the information ladder and EFC figures is in
+[Progress §*Pending*](./energy-baseline-progress.md).
+
+## 13. References
 
 - [Progress & Handoff](./energy-baseline-progress.md) — authoritative run, acceptance conditions,
   rolling-history sensitivity
