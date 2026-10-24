@@ -6,6 +6,7 @@
   This replaces the phase-by-phase framing for day-to-day decisions; the phase list
   still lives in the [implementation plan](home-battery-optimizer-implementation.md).
 - **Related:** [ADR-0001 architecture](../docs/adr/0001-home-battery-economic-dispatch.md),
+  [ADR-0004 production architecture](../docs/adr/0004-battery-optimizer-production-architecture.md),
   [ADR-0003 Phase 1 baseline](../docs/adr/0003-phase1-measurement-and-baseline.md),
   [ADR-0002 appliance forecasting](../docs/adr/0002-appliance-aware-load-forecasting.md),
   [progress and handoff](energy-baseline-progress.md),

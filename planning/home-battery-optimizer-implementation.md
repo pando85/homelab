@@ -2,7 +2,7 @@
 
 **Status:** IN PROGRESS — the offline machinery is built and tested (Phase 1 **accepted**; Phases 2–4 partly delivered, including the dispatch-intent contract TODO-4.6, the configurable replan cadence and the five-rung policy ladder). Battery hardware has been bought (owner statement, 2026-10-24), which moots device *selection* but not device *verification*. **No deployment exists and no battery actuation is built or authorized** — the ACT column is entirely unbuilt. Component-level status and iteration plan: [the battery roadmap](energy-battery-roadmap.md).
 
-**Architecture decisions:** [ADR-0001 — Forecast-informed economic dispatch](../docs/adr/0001-home-battery-economic-dispatch.md); [ADR-0002 — Appliance-aware load forecasting](../docs/adr/0002-appliance-aware-load-forecasting.md)
+**Architecture decisions:** [ADR-0001 — Forecast-informed economic dispatch](../docs/adr/0001-home-battery-economic-dispatch.md); [ADR-0002 — Appliance-aware load forecasting](../docs/adr/0002-appliance-aware-load-forecasting.md); [ADR-0004 — Production runtime and independent source repository](../docs/adr/0004-battery-optimizer-production-architecture.md)
 
 **Scope:** AC grid-charged home battery, initially targeting Marstek Venus E 3.0 (~5.12 kWh, ~2.5 kW); preserve vendor neutrality at the planner boundary.
 
@@ -172,7 +172,7 @@ Phases 0–4 can proceed without the physical battery. **Phase 5 requires verifi
 | `planning/home-battery-optimizer-implementation.md` | This phased spec and decision trail | Now |
 | `docs/adr/0001-home-battery-economic-dispatch.md` | Decision, alternatives and boundaries | Now |
 | `docs/adr/0002-appliance-aware-load-forecasting.md` | Optional appliance telemetry/NILM extension to the forecasting pipeline | Documentation |
-| `scripts/battery-optimizer/` or a dedicated standalone project | Ingestion, offline simulation, predictor, optimizer and CLI | 1–4 |
+| `scripts/energy-baseline/` (current), then a dedicated application repository | Preserve existing offline code and tests first; migrate CLI, forecasts, planner, simulation and reproducibility in a separate PR before independent releases | 1–5 |
 | `test/` or project-local tests | Replay fixtures, controller property tests and financial correctness | 1–6 |
 | `apps/home-assistant/` | Optional Omnibattery integration and observability, using existing HACS/runbook processes | 5 |
 | `apps/battery-optimizer/` | Independent GitOps-managed planner, if the integration contract is verified | 5–6 |
@@ -198,3 +198,37 @@ Do not pre-create an application chart before the backtest proves value. Follow 
 The project remains successful even if the result is *do not automate*: an offline backtest may show negligible improvement beyond Omnibattery's native controller. Stop after Phase 2–4 if the incremental net economic gain is too small to justify a permanent system or if no reliable hardware control contract is available. Report annualized savings and sensitivity rather than selecting a complex algorithm by default.
 
 **No production control, hardware purchase, HVAC schedule change, or cluster deployment is part of this documentation PR.**
+
+## 16. Production packaging and runtime rollout
+
+[ADR-0004](../docs/adr/0004-battery-optimizer-production-architecture.md) makes the runtime/repository ownership decisions. This is the **single implementation checklist** for those decisions; do not create a second PDR. The [component roadmap](energy-battery-roadmap.md) remains the progress summary, and the [existing extraction plan](energy-baseline-production-execution.md) remains authoritative for retention and overlapping pulls.
+
+### Runtime to implement (Phase 5, read-only first)
+
+| Unit | Proposed design | Current gate |
+|---|---|---|
+| Python application | One long-running process with HA WebSocket/REST subscription, reconnect and state resynchronization; Prometheus range-query adapter; publication-aware PVPC adapter; snapshot/forecast/HiGHS MPC; typed intent generator; shadow sink by default | No runtime service exists |
+| Internal HTTP endpoint | FastAPI/ASGI, `GET /health/live`, `/health/ready`, `/status`, `/plan`, `/metrics`; ClusterIP only, no public ingress or unauthenticated writable commands | Not built |
+| Extraction and offline jobs | Separate CronJob/Job for `extract → validate → build`, plus on-demand benchmark and optional training; immutable private Parquet manifests/DuckDB on a backed-up ZFS/OpenEBS PVC | Follow existing manual extraction policy until independently scheduled |
+| Actuator integration | High-level HA/Omnibattery intent adapter with explicit exclusive control, bounded command lifetime, acknowledgement **and measured output**; leave the fast Shelly-feedback loop to Omnibattery | Unsupported interface/HA-outage behaviour must be proved; **no live writer** |
+| Observability | prometheus-client, ServiceMonitor, Grafana and alerts on stale sources, forecast/plan age, command reconciliation, import/export anomalies and missed extraction | Plan before live enablement |
+
+Keep physics, optimization and forecast functions importable and pure so CLI, replay and service consume **the same package**. Use Python 3.12+, `asyncio`/`httpx`, SciPy/HiGHS and the existing DuckDB/PyArrow data format; only introduce CatBoost/LightGBM if net held-out EUR savings justify it. Never block the subscription/freshness event loop on solver CPU time; use a bounded executor/worker and discard obsolete plans. Replan every 15 minutes or at significant changes with debounce. Missing source fields and stale entities must degrade safely and be reported; do not manufacture phase/program attributes for appliances.
+
+### Source repository and release ownership
+
+- [ ] **PROD-1 — Extract application source when ready.** Create a **separate** repository (working name `pando85/battery-optimizer`, not yet created) containing the existing `scripts/energy-baseline` CLI, Python package, tests/fixtures, dependency lockfile, Dockerfile and developer docs. Preserve dataset/provenance traceability: current `compute_dataset_id` depends on clean Git HEAD and config hash; migration cannot silently change historical identities or claim equivalence.
+- [ ] **PROD-2 — Build independently.** CI must run Ruff, pytest/unit + property tests, chronological replay/golden tests and HA/Prometheus fake-adapter integration tests (disconnect, duplicate/out-of-order updates, stale SOC/grid, DST, failed acknowledgements, old intents). Hardware-in-the-loop tests require explicit supervision and are never required in public CI.
+- [ ] **PROD-3 — Release artifacts.** Produce a Python wheel and immutable OCI image (e.g. GHCR) with pinned dependencies and recorded digest; add dependency/image scanning and SBOM/provenance where practical. Private energy traces and credentials must never enter CI artifacts or image layers.
+- [ ] **PROD-4 — Deploy through homelab, separately.** Only `pando85/homelab` owns `apps/battery-optimizer/`, ArgoCD/Helm values, `ExternalSecret` references, NetworkPolicy (no optimizer → Modbus access), ServiceMonitor/alerts, HA entity/tariff mappings, private PVC/backup and runbooks. Pin the application **image digest**. Use one replica, no HPA, and initially avoid overlapping rollout pods (e.g. `Recreate`) until ownership is guaranteed at HA/Omnibattery itself.
+- [ ] **PROD-5 — Verify shadow operation.** Start in `shadow` after reconnect/reconciliation; no actuator credentials or writes. Compare current forecast and planned versus native battery actions for at least the Phase 5 two-week window. Expose freshness, plan age, model/config version and rejected/fallback decisions. Metrics must not expose high-cardinality plan IDs or private household activity.
+- [ ] **PROD-6 — Separate live gate (Phase 6).** Introduce the supported sole-writer Omnibattery adapter only after supervised commissioning verifies net-grid Shelly topology, battery firmware, backup wiring, SOC/power limits, HA/optimizer/network failures, command expiry and measured safe-idle transitions. An in-process timer or successful HA API call is **not** a hardware watchdog. If no independent HA-outage-safe fallback can be proved, remain in shadow mode. Live enablement and rollback require a dedicated, explicitly approved PR/runbook.
+
+### Minimal runtime invariants
+
+- On **start, reconnection, leader/ownership uncertainty, model mismatch or stale input**, actuation is disallowed until a fresh, complete snapshot and safe ownership transition are independently verified. A one-replica Deployment is not a device lock.
+- A generated `DispatchIntent` is a **proposal**, not a guarantee of physically delivered power. Track timestamps, sequence/expiry, origin, command acknowledgement, observed power and reasons for refusals separately. Before live, choose durable private decision/command-journal semantics; Prometheus alone is not an audit log.
+- The hardware/BMS/anti-islanding protections remain authoritative, and AppDaemon owns aerothermal/DHW schedules. Never use the 15-minute economic planner as the no-export feedback controller or assume HA can stop an inverter after HA itself fails.
+- Keep the extraction CronJob/retention details in [Energy Baseline — Production Execution Plan](energy-baseline-production-execution.md); do not duplicate its schedule or change it from this document. Promote any new model only after reproducible, like-for-like economic tests.
+
+**No resource described in §16 is deployed, and no live actuation is authorized by this documentation change.**
