@@ -1,0 +1,3623 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../0002-appliance-aware-load-forecasting/">
+      
+      
+        <link rel="next" href="../0004-battery-optimizer-production-architecture/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>ADR-0003: Phase 1 — measurement, reproducible dataset and strategy baseline - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adr-0003-phase-1-measurement-reproducible-dataset-and-strategy-baseline" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ADR-0003: Phase 1 — measurement, reproducible dataset and strategy baseline
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0001-home-battery-economic-dispatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0001: Forecast-informed economic dispatch for a home AC battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0002-appliance-aware-load-forecasting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0002: Appliance-aware household demand forecasting with Home Assistant telemetry and NILM
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    ADR-0003: Phase 1 — measurement, reproducible dataset and strategy baseline
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0003: Phase 1 — measurement, reproducible dataset and strategy baseline
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      Context
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metering-mapping-user-confirmed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Metering mapping (user-confirmed)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-data-characteristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus data characteristics
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost model
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scope boundary
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#development-and-production-deployment-clarification-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development and production deployment clarification (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data contract
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#policy-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      Policy design
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-physical-simulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      Battery physical simulator
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indicative-dashboard-observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Indicative dashboard observations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#appliance-enum-telemetry-resolved" class="md-nav__link">
+    <span class="md-ellipsis">
+      Appliance enum telemetry — resolved
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Strategy comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comparability-rule-one-objective-different-information-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparability rule — one objective, different information (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#open-validation-item-day-ahead-publication-versus-realised-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open validation item: day-ahead publication versus realised archive
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-publication-schedule-1400-estimate-source-2026-10-24" class="md-nav__link">
+    <span class="md-ellipsis">
+      Two-publication schedule: 14:00 estimate source (2026-10-24)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-basis-pre-tax-by-decision-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost basis — pre-tax, by decision (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmark-methodology-clarifications-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Benchmark methodology clarifications (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#definition-of-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      Definition of done
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      Consequences
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rejected-or-deferred-alternatives" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rejected or deferred alternatives
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../0004-battery-optimizer-production-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0004: Production runtime and independent source repository for the battery optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#context" class="md-nav__link">
+    <span class="md-ellipsis">
+      Context
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Context">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metering-mapping-user-confirmed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Metering mapping (user-confirmed)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prometheus-data-characteristics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prometheus data characteristics
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost model
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      Decision
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scope-boundary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scope boundary
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      Architecture
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#development-and-production-deployment-clarification-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Development and production deployment clarification (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-contract" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data contract
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#policy-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      Policy design
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#battery-physical-simulator" class="md-nav__link">
+    <span class="md-ellipsis">
+      Battery physical simulator
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#indicative-dashboard-observations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Indicative dashboard observations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#appliance-enum-telemetry-resolved" class="md-nav__link">
+    <span class="md-ellipsis">
+      Appliance enum telemetry — resolved
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strategy-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      Strategy comparison
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comparability-rule-one-objective-different-information-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comparability rule — one objective, different information (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#open-validation-item-day-ahead-publication-versus-realised-archive" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open validation item: day-ahead publication versus realised archive
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#two-publication-schedule-1400-estimate-source-2026-10-24" class="md-nav__link">
+    <span class="md-ellipsis">
+      Two-publication schedule: 14:00 estimate source (2026-10-24)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cost-basis-pre-tax-by-decision-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cost basis — pre-tax, by decision (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmark-methodology-clarifications-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      Benchmark methodology clarifications (2026-10-23)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#definition-of-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      Definition of done
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#consequences" class="md-nav__link">
+    <span class="md-ellipsis">
+      Consequences
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rejected-or-deferred-alternatives" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rejected or deferred alternatives
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="adr-0003-phase-1-measurement-reproducible-dataset-and-strategy-baseline">ADR-0003: Phase 1 — measurement, reproducible dataset and strategy baseline</h1>
+<ul>
+<li><strong>Status:</strong> Accepted (2026-10-23) — Phase 1 Definition of done is met: the pre-tax cost basis is settled by decision, and the optional <code>mirror</code> command stays deferred</li>
+<li><strong>Date:</strong> 2026-10-23</li>
+<li><strong>Decision owners:</strong> Homelab maintainers</li>
+<li><strong>Extends:</strong> <a href="../0001-home-battery-economic-dispatch/">ADR-0001</a>, <a href="../0002-appliance-aware-load-forecasting/">ADR-0002</a></li>
+<li><strong>Supersedes scope of:</strong> the original Phase 1/2 plan in <a href="../../planning/home-battery-optimizer-implementation.md">implementation plan</a></li>
+</ul>
+<h2 id="context">Context</h2>
+<p>ADR-0001 and ADR-0002 proposed a broad build: a dedicated ingestion service, demand forecasts, an economic planner, appliance-aware NILM. An empirical audit of the existing telemetry showed that several planning premises were wrong and most of the proposed data infrastructure already exists. This ADR records the corrections and narrows scope to what measurement actually requires.</p>
+<p><strong>This phase does NOT select controller architecture</strong> — native Omnibattery, extending it, or bespoke — and does NOT require benchmarking Omnibattery as a completion criterion. No economic stop-threshold is imposed. The goal is: (1) reproducible chronological comparison of no-battery cost, (2) a simple causal price-only policy implementable without future knowledge, (3) a day-ahead policy that plans each local day from that day's published prices with a strictly causal load forecast, and (4) a physically feasible perfect-information optimum computed offline. Four goals were stated at acceptance and four kinds of capability were built; the ladder now carries <strong>five</strong> rungs, because a fifth policy (<code>rolling_horizon</code>, promoted 2026-10-24) sits between goals (3) and (4) — see <em>Strategy comparison</em>.</p>
+<h3 id="metering-mapping-user-confirmed">Metering mapping (user-confirmed)</h3>
+<p>The Grafana dashboard "IoT - Energy" (uid <code>fe5f72fc-46b6-4cb0-adbf-cb08582dfd9e</code>, source <a href="../../apps/home-assistant/dashboards/iot-energy.json"><code>apps/home-assistant/dashboards/iot-energy.json</code></a>) defines "Total Energy" as <code>shellyem-main</code> channel 1 and "Circuit 1" as <code>ch1 − ch2</code>; circuit 2 is ch2 directly. <strong>The physical wiring was confirmed by the user on 2026-10-23: <code>sensor.shellyem_main_channel_1_energy</code> is the whole-home feed, channel 2 is the aerotherm/appliance branch, and the servers are already included in ch1.</strong> Servers are therefore nested within ch1 — and within the dashboard's <code>ch1 − ch2</code> circuit — not additive to it. This is the metering basis shared by the dashboard, this ADR, and the pipeline; it is a confirmed mapping, not an assumption to be validated against installer documentation.</p>
+<p><strong>The export sign is untested.</strong> No PV is installed and no forced-export condition has been created, so ch1's behaviour on export is not established from measurement. Nothing here asserts a reversed-CT wiring or diagnoses one — the available evidence neither supports nor rules it out. Determining the export sign is <strong>not a requirement for this offline phase</strong>: the pipeline treats ch1 as an import-dominant whole-home total and flags negative counter deltas as a data-quality event rather than assigning them a sign interpretation, so the baselines are unaffected while no generation or storage exists. Resolving it is a validation item for the phase that installs hardware.</p>
+<h3 id="prometheus-data-characteristics">Prometheus data characteristics</h3>
+<p><code>prometheus-long-term</code> holds the numeric archive; 1-minute scrape interval is configured. Per-series full history completeness <strong>must be audited</strong> rather than asserted as "2.5 years for all entities" — retention is 9999d but individual series may have started later. At scrape time, numeric series whose value is unchanged may be re-exported as repeated samples by the HA Prometheus integration; enum <code>sensor</code> domain strings are not exported as state-value gauges (only <code>hass_state_change_total</code>, <code>entity_available</code>, <code>last_updated_time_seconds</code> are available — no per-enum gauge for the <code>sensor</code> domain). Pod IP series churn requires identity stitching; overlaps must be investigated rather than unconditionally summed (instant max/sum is semantically different from counter-delta stitching across pod restarts). Prefer manifest-stable entity identity and label precedence over naive cumulative counter summation, which creates artificial resets.</p>
+<p><strong>Counter deltas are the primary energy signal; power is a crosscheck.</strong> <code>query_range</code> lookback fills repeated samples across short gaps, overstating apparent density. For true scraped-sample counts: use <code>timestamp()</code> on source samples, or extract raw range vectors in bounded chunks. <code>count_over_time</code> on a raw window counts ACTUAL samples received in that window — not all PromQL aggregation is unreliable; the issue is specific to <code>query_range</code> step interpolation filling gaps. Device freshness (when the device last reported) is separate from HA-export scrape freshness; <code>timestamp(series)</code> reflects Prom scrape time, not a device event timestamp. Preserve HA <code>last_updated</code> and availability metadata if known; flag explicitly as unknown otherwise.</p>
+<h3 id="cost-model">Cost model</h3>
+<p>The PVPC sensor is a published input. Per ESIOS documentation for indicator 1001 ("PVPC"), the published price <strong>includes</strong> access tolls, charges, and production cost; it <strong>excludes</strong> taxes (Impuesto Especial de Electricidad, IVA). Tax rates are effective-dated and sourced from verified invoices or official tariff documentation; the pipeline reads them from configuration keyed by date, never from hardcoded defaults. The installed sensor is <code>pvpc_updated</code> (HACS custom integration from <a href="https://github.com/oscarrgarciia/HA-PVPC-Updated">oscarrgarciia/HA-PVPC-Updated</a>), which reads from the ESIOS API (<code>api.esios.ree.es</code>). The exact component composition delivered by the installed version <strong>must be verified</strong> against the live sensor output before double-adding tolls or decomposing into OMIE residuals — the upstream integration's behaviour may differ from the built-in <a href="https://www.home-assistant.io/integrations/pvpc/"><code>pvpc</code> integration</a>. See <a href="https://www.esios.ree.es/es/indicadores/1001">ESIOS indicator 1001</a> for the official price definition.</p>
+<p>The existing dashboard cost model has an identifiable defect: a <code>&gt;= 0</code> guard silently discards negative-price intervals, destroying the best charging opportunities. The precise magnitude of this defect is <strong>not claimed</strong> here — the dashboard code shows the filter; its impact must be measured by the pipeline.</p>
+<p>Fixed contracted power and rental charges are outside energy savings under an unchanged contract and are excluded from the energy objective. A constant tax factor scales a pure-energy objective uniformly and preserves argmin. However, an energy-vs-degradation mixed objective must use a coherent monetary basis — uniform scaling of the full objective preserves argmin; otherwise model taxed energy plus independently costed degradation and terminal value. Tax rate changes are date-dependent and invoice-scoped; billed comparisons use rates effective at each time. <strong>The rates are unconfirmed and stay unconfirmed by decision, so the pipeline's monetary basis is pre-tax; this is settled for Phase 1 and is not an open gap</strong> — see <em>Cost basis — pre-tax, by decision</em> under <a href="#decision">Decision</a>.</p>
+<h2 id="decision">Decision</h2>
+<p>Build a narrow, reproducible measurement-and-baseline capability as an offline in-repo Python CLI package. Ingests from Prometheus numeric archive and HA recorder into immutable Parquet, normalizes to 15-minute analysis intervals, and produces DuckDB CLI SQL reports. No deployed service, no live actuation, no controller architecture selection.</p>
+<h3 id="scope-boundary">Scope boundary</h3>
+<table>
+<thead>
+<tr>
+<th>In scope</th>
+<th>Out of scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Reproducible Parquet dataset from Prometheus</td>
+<td>Any cluster deployment <em>in this phase</em> (a scheduled extractor CronJob is planned for a later phase — see <a href="../../planning/energy-baseline-production-execution.md">production execution plan</a>)</td>
+</tr>
+<tr>
+<td>Tariff-verified cost model — pre-tax basis, by decision</td>
+<td>Controller architecture selection</td>
+</tr>
+<tr>
+<td>Five benchmark policies on historical intervals, one per information level (four at acceptance; <code>rolling_horizon</code> promoted 2026-10-24)</td>
+<td>Appliance-aware forecasting / NILM</td>
+</tr>
+<tr>
+<td>Monthly reconciliation report (pre-tax basis)</td>
+<td>Live battery writes or actuation</td>
+</tr>
+<tr>
+<td>Appliance enum extraction into Parquet, and a read-side reader for it (<code>ha-states</code>, 2026-10-24)</td>
+<td>Recorder retention change / dedicated capture service</td>
+</tr>
+<tr>
+<td>In-repo Python package with pytest and pre-commit</td>
+<td>Optimiser deployment</td>
+</tr>
+<tr>
+<td>Provisional battery assumptions (flagged, and pinned by a test since 2026-10-24)</td>
+<td>Hardware measurement or bringup</td>
+</tr>
+</tbody>
+</table>
+<h3 id="architecture">Architecture</h3>
+<pre class="mermaid"><code>flowchart TB
+    subgraph sources
+        PROM[prometheus-long-term numeric archive]
+        REC[HA recorder Postgres]
+    end
+    subgraph ingestion
+        CLI[CLI extract / validate / build]
+    end
+    subgraph canonical
+        RAW[raw immutable Parquet]
+        ANA[analysis 15-min Parquet]
+    end
+    subgraph query
+        DUCK[DuckDB CLI SQL report]
+    end
+    subgraph optional
+        MIRROR[make db-load mirror - deferred]
+    end
+    PROM --&gt; CLI
+    REC --&gt; CLI
+    CLI --&gt; RAW
+    RAW --&gt; ANA
+    ANA --&gt; DUCK
+    ANA -.-&gt; MIRROR</code></pre>
+<p>Price input comes from HA/Prometheus as the <strong>current</strong> input source. ESIOS tomorrow-prices are still not piped in as a separate feed: the <code>day_ahead</code> rung reads each day's curve from the archived hourly prices rather than from an ESIOS pull, which rests on the disclosed published-equals-realised assumption (see <em>Open validation item: day-ahead publication versus realised archive</em>). The optional <code>make db-load</code> mirror is dotted — no deployed DB is mandatory, and this phase deploys nothing. The offline dataset lives in a local output directory (private) or user-selected storage. Durable production storage is a <strong>planned follow-on</strong>: a prusik-backed PVC mounted by a scheduled extractor CronJob, described in the <a href="../../planning/energy-baseline-production-execution.md">production execution plan</a> and deliberately not created by this phase. Concurrent DuckDB processes may read immutable Parquet; Postgres can snapshot for other consumers. TimescaleDB is preloaded in the observed Spilo image, making an optional mirror path plausible, but this is an extension availability observation, not a commitment. <code>openebs-zfspv</code> PVs are node-local and cannot mount on a remote node; scheduling guidance is limited to aligning PV affinity.</p>
+<h3 id="development-and-production-deployment-clarification-2026-10-23">Development and production deployment clarification (2026-10-23)</h3>
+<p>This ADR was committed with status <strong>Proposed</strong>; it was set to <strong>Accepted</strong> on 2026-10-23 when the Definition of done below was met. The following clarification was recorded on 2026-10-23 and changes neither the decision nor its scope:</p>
+<ul>
+<li><strong>Current development</strong>: supervised offline work on a local PC, using <code>/tmp</code> for temporary exports. No cluster deployment, no persistent storage, no live battery/controller/Home Assistant configuration changes.</li>
+<li><strong>Future production</strong>: when the extraction pipeline is mature, it will run as a <strong>scheduled batch extractor CronJob</strong> in the cluster via GitOps, with a persistent PVC on prusik. This is an architecture clarification for future implementation, not a deployment decision made now. The extractor is a batch job, not a deployed service.</li>
+<li><strong>Scope boundary preserved</strong>: no live actuation, no controller architecture selection, no Home Assistant configuration changes. The production CronJob extracts data; it does not control anything.</li>
+</ul>
+<p>See <a href="../../planning/energy-baseline-production-execution.md">planning/energy-baseline-production-execution.md</a> for concrete requirements when the production CronJob is scheduled.</p>
+<h3 id="data-contract">Data contract</h3>
+<p>The analysis grid contains <strong>gross household load only</strong> (ch1), the user-confirmed whole-home feed. With no battery installed, raw ch1 approximates gross household load directly. Once a battery is active, gross load must be reconstructed from ch1 plus AC charge/discharge telemetry, or the interval must be flagged as unusable for gross-load analysis. Nested submetered loads (servers, circuits) are NOT added to avoid double-counting, since they are already inside ch1. The schema carries nullable <code>raw_grid</code> and <code>gross</code> columns with a quality flag and a <code>battery_absent</code> indicator. Raw prices retain hourly or actual cadence with original validity timestamps. The 15-minute load interval is computed from actual energy counter deltas, not interpolated from power. Counter deltas spanning gaps (missing scrapes, device outages) are not attributed to invented intervals — the gap is flagged and the energy total for that span is marked as known total over the full span with allocation-quality separate (unknown where gap). Optional power estimates, when computed, are explicitly labeled as estimates and are distinct from measured energy.</p>
+<p>Each extraction records a reproducible manifest: schema version, code version, config version, extraction timestamp, stable input identity and content hash, units, data-quality flags, UTC start/end with actual duration (half-open intervals <code>[start, start + interval)</code>). <code>source_observed</code> and ingestion timestamps are distinct from any reconstructed series. Historical published-at times are flagged as unknown — this pipeline records extraction time, not as-of availability forecasts. All timestamps are stored in UTC. Europe/Madrid local days are 23 hours on spring-forward (2026-03-29) and 25 hours on fall-back (2025-10-26 or 2024-10-27). Tariff period assignment (P1/P2/P3) is defined in local time and must be applied via timezone-aware conversion. The pipeline must tag DST-transition intervals explicitly.</p>
+<h3 id="policy-design">Policy design</h3>
+<p>The baseline policy uses <strong>only current price and past state</strong> — fixed thresholds derived from a training period of past prices. No day-ahead price array is required or assumed. If a later policy variant uses a day-ahead price array, that assumption is explicitly labelled: the policy requires that prices are published and known ahead of time, and the pipeline verifies that the sensor actually archives them (e.g. <code>price_00h..price_23h</code>) rather than assuming realised prices are available ahead of time. Allowed inputs for the baseline: current price plus past state. No tomorrow needed. Threshold parameters are selected on an earlier train split and frozen for evaluation — this prevents overfitting to the evaluation period. Charge/discharge decisions use current-meter feedback. The policy is a current-price-plus-past-state feedback loop, simple enough to implement without future load knowledge. That variant now exists — <code>day_ahead</code>, rung 3 of the ladder in <em>Strategy comparison</em> — so this condition is live rather than hypothetical, and it is <strong>met on both halves</strong>: the publication half is verified from this household's production automation, and the archival half is resolved by owner assertion (<code>user_assertion</code>, <code>asserted_on: "2026-10-24"</code>, <code>verified_from_data: false</code>), as recorded under <em>Open validation item: day-ahead publication versus realised archive</em> under <a href="#decision">Decision</a>.</p>
+<h3 id="battery-physical-simulator">Battery physical simulator</h3>
+<p>SOC recurrence with signed flows, per-direction efficiencies, per-duration resolution. Net grid flow ≥ 0 (no intentional export). Import ceiling is configured or unknown — not asserted from any sensor reading. Negative-price pathologies are avoided by enforcing one binary mode per interval (charge OR discharge, never both simultaneously). The oracle computes a feasible chronological horizon with SOC bounds at each step; initial and terminal SOC are equal or have an explicit defensible valuation. No arbitrary daily or annual scaling.</p>
+<p><strong>Technology choices:</strong> Python, DuckDB, PyArrow, pytest, uv (chosen for per-package lock reproducibility — each run pins exact dependency versions). Package path: <code>scripts/energy-baseline/</code> (consistent with the repository <code>scripts/</code> directory). Solver: <code>scipy.optimize.milp</code> (bundles HiGHS) for the <strong>offline benchmark oracle only</strong>, not deployed MPC. The solver minimises cost; the incumbent feasible solution provides an upper bound on optimal cost and therefore a lower bound on optimal savings relative to baseline. The dual (lower cost bound) provides an upper bound on savings. When the solver gap exceeds the configured absolute or relative tolerance, the report states the feasible savings and the certified bound separately. A result is treated as proven optimum when the gap is within the configured tolerance, not when it is literally zero. Solver gap and time limit are always reported. A time-limited incumbent is a feasible bound, never a proven optimum, and on a full-year horizon the default time limit does not certify — see <em>Benchmark methodology clarifications</em> under <a href="#decision">Decision</a>.</p>
+<p>Coverage target: ≥ 1 full calendar year if available; audit for missing periods rather than assuming completeness. Full chronological evaluation, not a repeated 90-day window. No guessed realistic ranges or payback periods. Cost/savings, cycle EFC, and throughput boundaries are reported; gap exclusions are identical across all policies. Monthly quality thresholds are configured and declared.</p>
+<p>Synthetic tests cover: negative prices, counter resets, series churn, DST transitions (2026-03-29 spring forward: 23 h → 92 slots at 15 min; 2025-10-26 or 2024-10-27 fall back: 25 h → 100 slots). Spring-forward coverage was strengthened on 2026-10-24 from clock positions only to end-to-end runs over the 92-interval day, which is what a replanning rung actually needs: a fixed-slot horizon cannot be correct on both a 23-hour and a 24-hour day, so the tests now prove an evening solve on the short day still plans <strong>across</strong> midnight into the next one. Efficiency and SOC-window assumptions are distinct from each other (e.g. 80% usable capacity window ≠ 90% one-way efficiency); real values are user-configurable, not hardcoded. Battery nameplate is 5.12 kWh nominal; all else is a measurable assumption. The simulator respects physical constraints: energy conservation per interval, SOC bounds never violated, round-trip losses applied to both charge and discharge paths.</p>
+<h3 id="indicative-dashboard-observations">Indicative dashboard observations</h3>
+<p>The existing dashboard shows whole-house consumption around 14.35 kWh/day over a recent 28-day window. This is indicative only, not a requirement or completion criterion. The main deliverable is the measurement tool, not an economic verdict. Specific savings estimates, oversizing conclusions, or payback ranges are intentionally omitted — they require the time-stepped simulation this phase builds. The dashboard also reveals that servers (submetered, nested within circuit 1) run at a relatively flat ~230-240 W, representing a non-shiftable baseload component. AppDaemon has already shifted some aerotherm consumption to cheaper hours, which reduces the incremental headroom available to a battery — but the magnitude of this prior optimization is not quantified here and must be measured by the pipeline. The mechanism behind that statement is now <strong>verified from source</strong>: two thermal actuators (aerotherm HVAC mode and DHW tank boost) are scheduled once daily at midnight against the full day-ahead PVPC curve, using a 7-day-mean × 2/3 threshold with a minimum-hours rank fallback for climate and a pure per-window argmin for DHW. Both read all 24 hours at decision time, so neither is strictly causal — which is why policy 1, not policy 2, carries the AppDaemon counterfactual. See <a href="../../planning/energy-baseline-appdaemon-baseline-context.md">AppDaemon baseline context</a>.</p>
+<blockquote>
+<p><strong>Note on household figures:</strong> The "14.35 kWh/day" and "~230-240 W" figures above are pre-existing indicative consumption values retained as load-bearing context for why the causal policy's thresholds behave as they do. They predate the repository hygiene rule (no economics in committed files) that applies to everything added from 2026-10-23 onward; they are the only such figures in this ADR and are explicitly not new claims.</p>
+</blockquote>
+<h3 id="appliance-enum-telemetry-resolved">Appliance enum telemetry — resolved</h3>
+<p><code>recorder.purge_keep_days</code> is a single global setting (default 10 days, verified in effect: the <code>states</code> window measures 10.19 days). <code>include</code>/<code>exclude</code> gate whether an entity is recorded at all, never how long it is kept. There is no per-entity retention in Home Assistant.</p>
+<p><strong>Raising global retention was rejected.</strong> The decisive factor: one entity, <code>sensor.rack_controller_fan_speed</code>, accounts for 45.8% of all recorder rows (~83k rows/day) while carrying one constant attribute blob and no value to this project. The appliance enum entities actually needed are a few hundred rows per day — roughly 0.1% of write volume. Raising global retention therefore pays a large amount of write growth, about half of it for that one sensor, to preserve a negligible row count. Secondary: long retention implies very large <code>states</code> tables, where autovacuum and history/API latency, not disk capacity, become the binding constraint.</p>
+<p><strong>Adopted:</strong> recorder configuration is left UNCHANGED — default 10-day retention, no include/exclude filters added, no PVC expansion. Appliance enum telemetry is preserved by periodic extraction into the canonical Parquet store via the CLI's <code>extract</code> command, reading the Home Assistant history API. During development this runs manually on a local PC; when mature, extraction will run as a scheduled CronJob in the cluster (see <a href="../../planning/energy-baseline-production-execution.md">production execution plan</a>). As of 2026-10-23 the manual arrangement is the operating one — a short, deliberate recurring cycle from the development PC — and the CronJob with its prusik PVC stays <strong>deferred, not cancelled</strong>. No new always-running service and no live configuration change is introduced.</p>
+<p>The recorder is the only coverage gap:</p>
+<table>
+<thead>
+<tr>
+<th>Data type</th>
+<th>Source</th>
+<th>Retention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Numeric sensors (power, energy, price)</td>
+<td><code>prometheus-long-term</code></td>
+<td>retention 9999d; per-series start must be audited</td>
+</tr>
+<tr>
+<td>Numeric hourly aggregates</td>
+<td>HA long-term statistics</td>
+<td>indefinite</td>
+</tr>
+<tr>
+<td>Binary sensors</td>
+<td>Prometheus <code>hass_binary_sensor_state</code></td>
+<td>retention 9999d; per-series start must be audited</td>
+</tr>
+<tr>
+<td>Enum state strings (washer/dishwasher status, cycle)</td>
+<td>HA recorder only</td>
+<td>10 days — <strong>the only gap</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>sensor</code>-domain non-numeric states are not exported to Prometheus as value gauges (only <code>state_change</code> counters, availability and last-updated), which is precisely why extraction is required. <strong>Verified against the long-term archive on 2026-10-23, and the finding is stronger than the sentence above:</strong> querying <code>{entity="sensor.lavadora_current_status"}</code> over 2025 returns 88 series spread across only four metric families — <code>hass_entity_available</code>, <code>hass_last_updated_time_seconds</code>, <code>hass_state_change_created</code>, <code>hass_state_change_total</code> — and <strong>none of them carries a <code>state</code> label</strong>; the dishwasher entity is the same. <code>hass_sensor_enum_None</code> exists in the label index but has 0 series in 2025, and <code>hass_sensor_state</code> covers 10 entities — including the numeric <code>sensor.lavadora_cycles</code>, but neither <code>*_current_status</code> — and it too has no <code>state</code> label. The exporter emits state-value series only for <strong>numerically convertible</strong> states, so appliance enum strings are genuinely absent from the durable archive: Prometheus retains <em>that</em> a transition happened and <em>when</em>, never <em>to what</em>. The recorder extraction is therefore the only source of appliance phase, and it is not re-extractable. <strong>Scope correction, recorded the same day and the more important half of the finding:</strong> nothing consumes that data today — <code>build.py</code> has no HA reader (<code>load_raw_inputs</code> walks <code>source == "prometheus"</code> manifests only), and neither the benchmark nor any policy reads it — so it is optionality on <a href="../0002-appliance-aware-load-forecasting/">ADR-0002</a> Phase 3, <strong>not</strong> a dependency or blocker for the Phase 1 backtests. Framing enum preservation as urgently gating overstated it relative to the current goal; the manual cadence remains worthwhile because its cost is one command and the data is unrecoverable, but no Phase 1 result and no rung of the ladder depends on it.</p>
+<p><strong>Update 2026-10-24 — the reader now exists, the dependency picture does not.</strong> <code>src/energy_baseline/ha_states.py</code> (CLI subcommand <code>ha-states</code>) makes the preserved enum history queryable: it reads the recorded parts and <strong>deduplicates at read time</strong> on <code>(entity, last_changed, last_updated, state, attributes_json)</code>, because part files are immutable and 12 known pre-dedup duplicate rows were deliberately left in place rather than rewriting history; as-of queries are inclusive at the transition boundary and structurally cannot leak a later transition into an earlier snapshot, which is <a href="../0002-appliance-aware-load-forecasting/">ADR-0002</a>'s as-of requirement. Verified live against the real store, read-only: <code>parts=12 rows_before_dedup=51 rows_after_dedup=39 duplicates=12 entities=2</code> for <code>sensor.lavadora_current_status</code> and <code>sensor.lavavajillas_current_status</code>. This is a <strong>read-side</strong> module: it does not feed <code>build</code>, does not change <code>dataset_id</code>, and no appliance modelling, NILM or forecasting was built on it. So the scope correction above stands — while the deferred B3 <em>reader</em> item it depended on is closed.</p>
+<p><strong>Risk:</strong> the 10-day recorder window is a hard deadline; enum history not extracted within it is permanently lost, and — unlike the Prometheus archive — it can never be re-extracted. Operating rule as decided on 2026-10-23: <code>extract</code> runs <strong>manually on a short cycle from the development PC</strong>, every 3 days over a window as deep as the declared retention, which keeps a 3× margin against the 10-day <code>purge_keep_days</code> default; the cluster CronJob stays deferred, not scheduled, and daily remains comfortable. Mitigations: the enum store is append-only and records which source window was pulled; re-extraction is now deduplicated per row against what is already stored, so overlapping windows are cheap and idempotent to re-pull because the volume is negligible — <strong>and only while the chunk width stays constant</strong>, because carry-in rows are synthesised at chunk-start anchors; gaps are flagged explicitly rather than silently assumed continuous. See <a href="../../planning/energy-baseline-production-execution.md">production execution plan</a>.</p>
+<p>This decision is additive and reversible: nothing prevents raising recorder retention later for unrelated reasons, and no Home Assistant configuration change is required by this phase.</p>
+<h3 id="strategy-comparison">Strategy comparison</h3>
+<p>Five benchmark policies evaluated on the same historical intervals, as an <strong>information ladder</strong> — what separates the rungs is precisely what each is allowed to know. The ladder was accepted on 2026-10-23 with <strong>four</strong> rungs; the fifth, <code>rolling_horizon</code>, was promoted from an offline experiment on 2026-10-24 and is placed <strong>between <code>day_ahead</code> and <code>oracle</code></strong>, because it is strictly more informed than the rung below it: at 20:30 on day D−1 it already sees day D's exact prices, which <code>day_ahead</code> does not see until D's own midnight, and its horizon spans to the end of D rather than stopping at it (see <em>Two-publication schedule: 14:00 estimate source</em> under <a href="#decision">Decision</a> for the promotion and for what it did not change).</p>
+<ol>
+<li><strong>No battery</strong> — existing AppDaemon scheduling, baseline cost. This is the counterfactual: what we pay today without any battery dispatch.</li>
+<li><strong>Causal simple price-based policy</strong> — a fixed-threshold rule (charge below a percentile, discharge above another) that uses only information causally available at decision time: current price and past state. Parameters are trained on an earlier split and frozen for evaluation. Represents a simple, interpretable dispatch strategy implementable without future knowledge.</li>
+<li><strong>Day-ahead rolling optimiser (<code>day_ahead</code>)</strong> — a rolling MILP solved at each <strong>local (<code>Europe/Madrid</code>) midnight</strong>, over that day's intervals only, reusing the oracle's constraint assembly so the physics cannot drift between the two rungs, with the <strong>actual</strong> end-of-day SOC rolled forward as the next day's initial condition. Its information set is today's published 24-hour curve and nothing beyond it, plus a strictly causal load forecast: a trailing same-slot mean over the previous <code>--day-ahead-forecast-window-days</code> local days (default 28) that may never read the target day. The rung is <strong>myopic by construction</strong> — a daily solve cannot arbitrage across days — and end-of-day SOC valuation is its only cross-day coupling, which implements ADR-0001's instruction to preserve a terminal SOC value rather than emptying the battery at midnight.</li>
+<li><strong>Rolling-horizon replan optimiser (<code>rolling_horizon</code>)</strong> — the day-ahead rung's own MILP machinery re-solved on a <strong>schedule</strong>, executing only up to the next event and carrying the <strong>actually reached</strong> SOC forward. Its information set is a function of the decision instant and of nothing else: prices for local day D+1 become exact at 20:30 on day D, so a 09:00 solve estimates D+1 and a 21:00 solve does not — at any cadence, because a single function derives the information set from the decision instant. Its load knowledge is the same strictly causal profile <code>day_ahead</code> uses, which is why it sits below the oracle rather than beside it. Canonical defaults, verified: <code>sigma = 0.0</code>, <code>bias_sigma = 0.0</code>, <code>seed = 0</code>, cadence <code>None</code> (the legacy two-publication 14:00/20:30 schedule), horizon <code>96</code> slots. <strong>Exact prices by default</strong> because the ladder is about <em>information</em>, not synthetic forecast error — every other rung sees exact prices, so a fifth rung that started from a noisy estimate would not be comparable to them; the noise grid stays an experiment reachable through flags. <strong>Legacy cadence by default</strong> because it is the configuration the golden-value tests pin bit-for-bit and the one validated on real data; ADR-0001's 15-minute cadence is reachable (<code>--rolling-horizon-replan-interval-slots 1 --rolling-horizon-horizon-slots 96</code>) but costs roughly <strong>48× the solves</strong> (8,832 against 185 over a 92-day holdout) — about <strong>37× the wall time</strong>, because a fine cadence solves faster per call (~20 ms against ~25 ms, a legacy event planning ~34 h where a cadence-1 solve plans a fixed 96 slots) — and has not been validated on real data.</li>
+<li><strong>Perfect-information oracle</strong> — an upper bound computed with full chronological knowledge of prices and load over the evaluation horizon, using <code>scipy.optimize.milp</code> to find the cost-minimizing charge/discharge schedule subject to physical SOC and power constraints. Not achievable in practice; a ceiling for comparison only.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Policy</th>
+<th>Prices known</th>
+<th>Load known</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>no_battery</code></td>
+<td>none</td>
+<td>measured history</td>
+</tr>
+<tr>
+<td><code>causal_price</code></td>
+<td>none (frozen percentile thresholds)</td>
+<td>none</td>
+</tr>
+<tr>
+<td><code>day_ahead</code></td>
+<td>today's 24 h, at local midnight</td>
+<td>strictly causal forecast</td>
+</tr>
+<tr>
+<td><code>rolling_horizon</code></td>
+<td>today's 24 h from 20:30 <strong>yesterday</strong> (3.5 h earlier than <code>day_ahead</code> sees it), and tomorrow's from 20:30 today; horizon runs to the end of the next local day</td>
+<td>strictly causal forecast (the same profile mechanism <code>day_ahead</code> uses)</td>
+</tr>
+<tr>
+<td><code>oracle</code></td>
+<td>whole horizon, perfectly</td>
+<td>whole horizon, perfectly</td>
+</tr>
+</tbody>
+</table>
+<p>The day-ahead rung exists because the old gap conflated two things. The causal rule captured a known share of the oracle's optimum, but the oracle also knows future <em>load</em>, so calling the whole remainder "unreachable" mixed together two very different quantities: value reachable from prices that are genuinely published for free, and value that would require load foresight nobody has. <code>day_ahead</code> partially separates them, subject to the publication assumption below: its result combines today's price curve with one particular causal load forecast and a daily optimisation horizon. The remaining gap is <strong>not purely a load-forecasting gap</strong>: it also contains the oracle's cross-day price foresight, longer planning horizon, and differences caused by the daily terminal-value heuristic and execution clipping. No comparison here establishes that all remaining value requires impossible load foresight. The rung was previously recorded as considered and deferred in the <a href="../../planning/energy-baseline-appdaemon-baseline-context.md">AppDaemon baseline context</a>; it is now built — on the archived realised-price basis, with the published-equals-realised assumption resolved by owner assertion on 2026-10-24 (see <em>Open validation item: day-ahead publication versus realised archive</em>).</p>
+<p>The fifth rung exists for the same reason the third one did: a gap that conflates two things cannot be read. <code>day_ahead</code> separates published-price value from load-foresight value only <em>within</em> a single day, because it never sees past its own midnight. <code>rolling_horizon</code> puts the next day's published curve inside the planning window, re-solves on a schedule and executes only what it must, so the distance between it and <code>day_ahead</code> is specifically the value of holding the same information <strong>earlier and for longer</strong>, while the distance between it and the oracle is still future <em>load</em> plus whole-horizon price foresight. The comparison is like-for-like by construction, not a new experiment: same physics, same mask, same scoring objective.</p>
+<p>Report cost on the <strong>pre-tax (untaxed) basis</strong> for each policy, the distribution across intervals, equivalent full cycle count, and headroom versus the oracle bound. Gap exclusions are identical across all policies to ensure fair comparison, and so is the objective they are scored on (see <em>Comparability rule — one objective, different information</em>). The no-battery monthly baseline is a historical counterfactual; savings from the causal, day-ahead, rolling-horizon and oracle rungs are simulated, not realised. The monthly reconciliation reports simulated cost reduction against the no-battery baseline <strong>on the pre-tax basis, and that satisfies the criterion</strong>: it is not a billed figure, it cannot be compared against a utility bill, and by decision no billed comparison is pending or owed. No claim of realised saving is made in this phase.</p>
+<p>These five policies are the complete set for this phase. They establish the data, the cost model, and benchmark references: no-battery cost, a physically constrained perfect-information optimum, and the share of the difference between them that published prices alone can reach — now measured at two information levels, one day at a time (<code>day_ahead</code>) and across a midnight on a replan schedule (<code>rolling_horizon</code>). The set was four at acceptance on 2026-10-23; the fifth was promoted on 2026-10-24 under the same comparability rule rather than added beside it. The causal policy may underperform the no-battery baseline, and the day-ahead policy may underperform the causal rule; report either outcome without clipping losses. No conclusion is drawn about which controller implementation should be used for live dispatch — that is a decision for a later phase with the evidence this phase produces.</p>
+<h3 id="comparability-rule-one-objective-different-information-2026-10-23">Comparability rule — one objective, different information (2026-10-23)</h3>
+<p>The day-ahead rung was built with a defect in its own scoring, caught in review <strong>before any result was accepted</strong> — recorded here because the lesson outlives the bug. The first implementation valued terminal SOC inside each daily solve at the frozen training-window mean price, while the oracle was scored with terminal SOC valued at zero. The two policies therefore reported costs computed on <strong>different objectives</strong>, so the headline comparison between them — and the dominance relation claimed from it — was mathematically false: the day-ahead number carried a credit for its ending inventory that the oracle never received, and that credit could exceed the entire causal→day-ahead difference the rung exists to measure. Planning value and scoring value are now separate parameters (<code>terminal_value_eur_per_kwh</code> inside the daily objective, <code>scoring_terminal_value_eur_per_kwh</code> for the reported cost), and the scoring value is threaded from the oracle's own keyword arguments so the two cannot drift apart again.</p>
+<p>The rule that generalises: <strong>policies may differ in what information they plan with, but must be scored on one common objective.</strong> Information asymmetry is the experiment; accounting asymmetry is a defect dressed up as one. A per-policy terminal valuation, a per-policy cost basis, or per-policy clipping of unfavourable intervals each break comparability the same way, and none of them is visible in the resulting number.</p>
+<p>Dominance is therefore stated honestly rather than optimistically. <code>oracle ≤ day_ahead</code> is guaranteed only when the oracle is <strong>certified</strong> as optimal <strong>and</strong> scored in <code>free</code> terminal mode: a free oracle minimises over exactly the feasible set that contains the day-ahead plan — same SOC floor, same physics, same endpoint freedom, same scoring terminal value — so the inequality is arithmetic. Under <code>fixed</code> terminal mode the oracle pins terminal SOC to the initial value, its feasible set may exclude the day-ahead plan, and <strong>no dominance is provable and none is asserted</strong>, even where the empirical comparison happens to hold. On a time-limited incumbent the oracle reports its own best feasible cost, which again makes the comparison empirical; the run artifact keeps the guaranteed flag separate from the empirical one for exactly that reason. The sign of <code>day_ahead</code> versus <code>causal_price</code> is asserted in <strong>neither</strong> direction: a myopic optimiser with a poor load forecast can lose to a threshold rule, and that would be a legitimate result to publish, not a defect to explain away.</p>
+<p><strong>Extending the rule to the fifth rung (2026-10-24).</strong> A new rung earns its place on the ladder only if it is scored on the same objective, so the extension is by construction rather than by re-derivation. <code>rolling_horizon</code> reaches the physics through the same battery kernel and the same <code>solve_oracle</code> assembly the ceiling uses; its scoring terminal value is the same shared 0.0 threaded from the oracle's own keyword arguments, not a per-policy number; and the cost-consistency check (<code>cost_eur == meter_cost_eur</code>, inventory adjustment 0) is a loop over whichever policies ran, so it was <strong>extended</strong> to the fifth rung rather than duplicated for it.</p>
+<p>What the fifth rung changes about the dominance claims, stated only where it is provable:</p>
+<ul>
+<li><code>oracle ≤ rolling_horizon</code> is guaranteed under exactly the two conditions already required for <code>oracle ≤ day_ahead</code> — the oracle <strong>certified</strong> and scored in <code>free</code> terminal mode — for the same reason: a free oracle minimises over precisely the feasible set that contains the rolling plan, same SOC floor, same physics, same endpoint freedom, same scoring terminal value. The artifact keeps the guaranteed flag (<code>comparison.oracle_dominates_rolling_horizon_guaranteed</code>) separate from the empirical one, and under <code>fixed</code> terminal mode it is <code>False</code> by construction.</li>
+<li><code>rolling_horizon ≤ day_ahead</code> is asserted in <strong>neither</strong> direction. The artifact records <code>rolling_horizon_may_lose_day_ahead: true</code> (and the same for causal and baseline). The relation held in <strong>81 of 81</strong> offline configurations, which is strong empirical evidence <strong>within that configuration</strong> and not a proof — and the grid that produced it was run at the superseded 0.88 efficiency described under <em>Consequences</em>, so the count is recorded as an observation about the experiment, not as a current result of the ladder. All 81 configurations were a Q4 holdout immediately following the training cut; that scope does not transfer to evaluation windows that extrapolate far beyond the cut, and a measured counterexample now exists: on the 2025 full-year ladder the same rung cost MORE than <code>day_ahead</code>. The identified asymmetry sufficient to explain the reversal is the load-forecast basis: this rung's profile is frozen at the training cut while <code>day_ahead</code> re-learns before each dispatch day. Re-running the identical Q4-2025 window on the same dataset reproduced the win, which rules out the efficiency correction as the cause.</li>
+<li>More information is not the same as a better plan. This rung re-solves and executes only up to each event, so its plans are clipped against the measured load interval by interval, and a finer cadence changes how many times an interval is planned before it is executed once. A better-informed rung that still loses is a legitimate result to publish, not a defect to explain away.</li>
+</ul>
+<h3 id="open-validation-item-day-ahead-publication-versus-realised-archive">Open validation item: day-ahead publication versus realised archive</h3>
+<p>The <code>price_00h..price_23h</code> condition in <em>Policy design</em> is <strong>met on both halves</strong>: the publication half by verification from this household's production automation, the archival half by owner assertion.</p>
+<p><strong>What is verified — the publication half.</strong> Read from source on 2026-10-23, from this repository's own production automation: <code>apps/home-assistant/appdaemon/apps/apps.yaml:10</code> maps <code>pvpc_price: sensor.esios_pvpc</code>; <code>climate_control.py:45</code> registers <code>run_daily(..., "00:00:40")</code> and lines 73-91 of the same file read <code>pvpc["attributes"][f"price_{i:02d}h"]</code> for <code>i in range(24)</code>, re-labelling them onto that same local date at line 85; <code>dhw_control.py:48</code> does the same at <code>00:00:30</code>. Production automation consumes a complete 24-hour curve at local midnight — so a day's prices are demonstrably in hand at that moment.</p>
+<p><strong>What was unverified — the archival half — is resolved by owner assertion (2026-10-24).</strong> The archive holds the <em>realised</em> price per hour (established). The owner asserts that the prices published between 20:15 and 20:20 on day D−1 for delivery day D are always realised — published ≡ realised for that curve. Therefore the archived curve <em>is</em> the published curve, and <code>day_ahead</code>'s assumption holds. The same assertion resolves the ESIOS day-boundary convention (previously TODO-0.4 in the <a href="../../planning/home-battery-optimizer-implementation.md">implementation plan</a>): the 20:15–20:20 publication on D−1 describes day <strong>D</strong>, which is consistent with production automation reading a complete 24-hour curve at 00:00:40 on day D (cited above from <code>apps/home-assistant/appdaemon/apps/apps.yaml:10</code> and <code>climate_control.py:45,73-91</code>).</p>
+<p><strong>Epistemic status: <code>user_assertion</code>, <code>asserted_on: "2026-10-24"</code>, <code>verified_from_data: false</code>.</strong> This is an owner assertion about how ESIOS publishes, not a measurement reconstructed from this pipeline's extracts. No artifact in the store verifies it. The pipeline still cannot reconstruct a midnight attribute-dict snapshot from what it extracts. Divergence remains plausible in principle: the 2024 reform of the PVPC active-energy term (Royal Decree 446/2023, effective 2024-01-01) indexes that term to long-term market prices and blends day-ahead, intraday and forward components, with intraday clearing continuing during the delivery day. But it does not follow that a divergent curve inflates the reported result, because the day-ahead plan is <strong>re-scored by the battery kernel against the same archived realised prices every other policy is scored on</strong>: a wrong midnight curve changes <em>which decisions the policy makes</em>, not the accounting basis of those decisions — the cost of whatever it decides is still computed on realised prices. A wrong price signal can therefore make the policy choose badly, yet "badly" is not guaranteed to mean "worse than reported": the pointwise sign of the error can flip, and its magnitude is unmeasured.</p>
+<p><strong>The midnight snapshot is now an optional confirmation, no longer blocking.</strong> Snapshotting the <code>sensor.esios_pvpc</code> attribute dict at <code>00:00:40</code> daily going forward would convert the assertion into a measurement. One scheduled pull, with no backfill possible, makes published-versus-realised error measurable within a few weeks. It is a Home Assistant-side change and is therefore explicitly not made in this phase; nothing here claims the snapshot exists.</p>
+<p>The reliance is disclosed in the run artifact rather than quietly used: <code>day_ahead.information_set.assumptions_disclosed</code> records that the archive stores the price realised in each hour, that the policy therefore treats published-in-advance as equal to realised-and-archived, and that this rests on an owner assertion (<code>user_assertion</code>, <code>verified_from_data: false</code>) rather than a pipeline measurement. The same string calls it "true by construction for day-ahead PVPC" — a claim about how the tariff is <em>designed</em> to publish, now supported by the owner assertion recorded here rather than standing alone as an unverified design claim. The day-boundary convention is resolved by the same assertion (the 20:15–20:20 publication on D−1 describes day D), closing TODO-0.4 in the <a href="../../planning/home-battery-optimizer-implementation.md">implementation plan</a> and the parallel note in the <a href="../../planning/energy-baseline-appdaemon-baseline-context.md">AppDaemon baseline context</a>. <a href="../0002-appliance-aware-load-forecasting/">ADR-0002</a>'s requirement that tariff publications obey the as-of rule is unchanged.</p>
+<h3 id="two-publication-schedule-1400-estimate-source-2026-10-24">Two-publication schedule: 14:00 estimate source (2026-10-24)</h3>
+<p><strong>This section's first sentence has been overtaken by events, and is kept visible rather than deleted.</strong> It recorded on 2026-10-24 that the two-publication rolling-horizon experiment — a 14:00 estimate on D−1 followed by the evening revision at 20:30, the first quarter-hour boundary safely after the stated publication window — lives in <a href="../../planning/energy-baseline-forecast-experiments.md">forecast experiments</a> as an offline experiment, "<strong>not</strong> as a fifth canonical policy; the four-policy ladder above is unchanged". <strong>That is no longer true: the policy has been promoted.</strong> <code>rolling_horizon</code> is rung 4 of <em>Strategy comparison</em>, <code>all</code> includes it, <code>POLICY_NAMES</code> is the five-name tuple, and the ladder is five rungs.</p>
+<p>What the promotion deliberately did <strong>not</strong> change is the epistemic status of the experiment's own numbers. The 81-configuration grid was executed <strong>before</strong> the promotion and <strong>at the superseded 0.88</strong> efficiency (see <em>Round-trip efficiency: 0.88 → 0.80, applied</em> under <a href="#consequences">Consequences</a>), so it is evidence about the shape of the ladder, not a current result; corrected figures have not been re-derived on the rebuilt dataset. The canonical rung is also the <strong>quietest</strong> arm of that grid, not its noisiest: exact prices (<code>sigma = 0.0</code>, <code>bias_sigma = 0.0</code>) on the legacy two-publication cadence, because the ladder compares <em>information</em>, not synthetic forecast error.</p>
+<p>The experiment previously had no identified real source for the 14:00 estimate and used explicitly synthetic noise. The owner stated on 2026-10-24 that a real 14:00 estimate is constructible from <strong>OMIE day-ahead prices plus adjustments to derive PVPC</strong>, with owner-stated accuracy around 0.80. This makes the two-publication schedule implementable in principle rather than hypothetical.</p>
+<p>Three caveats qualify the strength of that statement:</p>
+<ol>
+<li><strong>The accuracy is owner-stated, not measured by this pipeline.</strong> There is still no archived record of any 14:00 estimate; the synthetic-noise sensitivity grid in <a href="../../planning/energy-baseline-forecast-experiments.md">forecast experiments</a> remains the only quantitative evidence about how accuracy affects dispatch.</li>
+<li><strong>That grid already brackets 0.80 accuracy</strong>, and the measured sensitivity is small relative to the policy margin — see <a href="../../planning/energy-baseline-forecast-experiments.md">forecast experiments</a> for the numbers. The corollary: <strong>price-forecast skill is not the lever</strong>; the value of the two-publication schedule sits in horizon length and the evening revision, not in the accuracy of the first estimate. This is stated within what the sensitivity grid supports, not as a measured certainty beyond it. The grid was computed at the superseded 0.88 efficiency on the dataset this ADR now supersedes; the ordering it establishes is an information ordering, which does not depend on the battery's friction, but no figure from it is current.</li>
+<li><strong>No monetary figure is imported here.</strong> The sensitivity grid reports relative policy comparisons; the hygiene rule on committed files is unchanged.</li>
+</ol>
+<h3 id="cost-basis-pre-tax-by-decision-2026-10-23">Cost basis — pre-tax, by decision (2026-10-23)</h3>
+<p>Tax treatment is <strong>decided</strong>, not an open gap. Asked how tax rates should be sourced for Phase 1 — researching statutory rates from BOE/AEAT/CNMC, supplying them from a real invoice, or staying pre-tax — the owner answered on 2026-10-23 that no further data is needed and that what already exists is sufficient. Pre-tax is therefore the final basis for this phase, and the deliverable remains the measurement tool, not an economic verdict.</p>
+<ul>
+<li><strong>Configuration records the decision:</strong> the shipped <code>config/tariff.yaml</code> keeps <code>iee_pct: null</code>, <code>iva_pct: null</code> and <code>source: "unconfirmed"</code>. Those nulls are the intended state of the file for this phase, not a placeholder awaiting a fill-in.</li>
+<li><strong>The code refuses the other basis:</strong> <code>cost.py</code> will not produce a taxed figure from unconfirmed rates. Requesting <code>basis="taxed"</code> raises <code>TaxesUnconfirmedError</code> instead of summing confirmed days with unconfirmed ones, <code>require_tax_multiplier</code> names the reason, and the period accounting reports <code>billed: false</code> with <code>is_full_invoice: false</code>. <code>benchmark.py</code>'s <code>tax_basis</code> correspondingly stamps the run <code>cost_basis: "untaxed"</code> with <code>has_unconfirmed_rate: true</code>. <strong>Every cost this pipeline emits is untaxed energy cost</strong>, and that is a property of the output, not a caveat to be fixed.</li>
+<li><strong>The monthly reconciliation completion criterion is satisfied on the pre-tax basis.</strong> Reporting simulated cost reduction against the no-battery baseline, untaxed, per month, with excluded and missing intervals counted rather than estimated, completes the criterion. Nothing here is pending or owed against a utility bill: the report <strong>cannot</strong> be compared with one, by decision, and it would still not be an invoice total even taxed, because fixed charges, contracted-power terms and the fiscal minimum are outside the energy objective.</li>
+<li><strong>The guard against silently reversing this is a test, not a comment:</strong> <code>scripts/energy-baseline/tests/test_cost.py::TestWithRealConfig::test_shipped_tariff_yaml_stays_unconfirmed</code> pins the shipped <code>tariff.yaml</code> as unconfirmed, asserts <code>taxed_mode_possible</code> is false and that the taxed path raises. Confirming rates in configuration makes that test fail with a message saying why, so a change of basis has to be an explicit, deliberate edit — mirroring the refusal path in the cost module that stops a pre-tax figure ever being labelled billed.</li>
+<li><strong>A later phase may revisit this.</strong> Doing so requires effective-dated rates sourced from a verified invoice or official tariff documentation, read from configuration keyed by date and never hardcoded — the standard this ADR already sets, unchanged and not weakened by recording the pre-tax decision. Amounts themselves belong in the private data directory (<code>$ENERGY_BASELINE_DATA_DIR</code>, default <code>~/data/energy-baseline/</code>), outside git; this repository records method, identity and quality, not household consumption economics.</li>
+</ul>
+<h3 id="benchmark-methodology-clarifications-2026-10-23">Benchmark methodology clarifications (2026-10-23)</h3>
+<p>Two measurement facts from the first real full-horizon runs, recorded because they change what may be claimed. Neither is an economic statement: the figures below are solver telemetry and interval counts, and every monetary value stays in the private data directory.</p>
+<p><strong>The oracle is a MILP, so its time limit is a claim-integrity constraint.</strong> <code>benchmark.py</code> pins <code>DEFAULT_TIME_LIMIT_S = 120.0</code>, <code>DEFAULT_MIP_REL_GAP = 1e-6</code> and <code>DEFAULT_MIP_ABS_GAP = 1e-9</code>, and <code>oracle.py</code> maps the solver exit onto <code>solver_status</code> / <code>bound_kind</code> / <code>is_certified</code>: only HiGHS reporting optimality <em>with</em> the observed gap inside tolerance becomes <code>"optimal"</code> / <code>"certified"</code> / <code>is_certified=True</code>. Expiry with an incumbent comes back as <code>"time_limit"</code> / <code>"upper"</code> / <code>is_certified=False</code> — a feasible schedule whose cost is an <strong>upper bound</strong> on optimal cost, so any saving it implies is only a <strong>lower bound</strong> and must be reported as such. Observed on a full-year evaluation horizon (2025-02-01 → 2026-01-01, 32064 intervals): at the default 120 s the oracle terminated as a time-limited incumbent with relative gap 4.9e-05 and was correctly reported uncertified with an upper bound; at 600 s on the same horizon it <strong>certified within tolerance</strong> — <code>solver_status="optimal"</code>, <code>bound_kind="certified"</code>, relative gap 1.97e-07 against the 1e-06 tolerance — and was reported as a proven optimum. <strong>Guidance: budget 600 s or more for a full-year horizon; the 120 s default is not sufficient for certification.</strong> The distinction between a feasible incumbent and a certified optimum materially changes what may be claimed, and a gapped result must always be reported as a feasible incumbent with its bound, never as a proven optimum.</p>
+<p><strong><code>estimated_boundary</code> allocation quality is usable by default, alongside <code>exact</code>.</strong> <code>benchmark.py</code> gates interval usability with <code>USABLE_ALLOCATION_QUALITY = frozenset({"exact", "estimated_boundary"})</code>; <code>NEVER_ALLOCABLE = frozenset({"unknown_gap", "gap_total_unknown"})</code> is never benchmarkable, with or without any flag. The opt-in <code>--allow-reconstructed-quality</code> (<code>allow_reconstructed_quality</code>, handed to <code>usable_mask</code> as <code>allow_reconstructed</code>) now gates only the genuinely weaker reconstructions — <code>RECONSTRUCTED_PRICE_QUALITY</code> (<code>forward_filled</code> prices) and <code>RECONSTRUCTED_ENERGY_QUALITY</code> (<code>gap_partial</code> energy) — while <code>MEASURED_ENERGY_QUALITY</code> (<code>measured</code>, <code>counter_reset_bridged</code>) and <code>MEASURED_PRICE_QUALITY</code> (<code>measured</code>) stay default-usable and <code>NEVER_PRICE</code> (<code>missing</code>, <code>ambiguous</code>) stays never-usable. This was forced by real data: at the observed ~60-second scrape cadence essentially every counter span straddles a 15-minute boundary, so an <code>exact</code>-only default gate admitted <strong>zero</strong> usable intervals on the actual dataset — the build manifests record <code>allocation_quality</code> counts of 34744 <code>estimated_boundary</code> plus 296 <code>unknown_gap</code> and no <code>exact</code> rows at all. <code>estimated_boundary</code> is a bounded, telescoping-preserving approximation: the pieces of a span re-sum to its exact counter delta and the per-interval error is bounded by one sample cadence, so admitting it restores usability without removing disclosure. The per-interval exclusion reasons (<code>allocation_quality=unknown_gap</code>, <code>price=null</code>, <code>energy_quality=gap_partial</code>, <code>price_quality=forward_filled</code>) still count every interval a benchmark declines.</p>
+<h3 id="definition-of-done">Definition of done</h3>
+<ul>
+<li>CLI command vocabulary: <code>extract</code>, <code>validate</code>, <code>build</code>, <code>benchmark</code>, <code>report</code>, <code>inspect-sql</code>, <code>mirror</code> (optional).</li>
+<li>End-to-end: one reproducible run from source to report.</li>
+<li>Unit tests for solver invariants.</li>
+<li>Monthly reconciliation report produced on the <strong>pre-tax</strong> basis, with <code>billed: false</code> and <code>is_full_invoice: false</code> as correct output rather than defects; no invoice comparison is required to complete this phase.</li>
+<li>Solver certification status (<code>solver_status</code> / <code>bound_kind</code> / <code>is_certified</code>), gap and time limit recorded in every run artifact, with a time limit long enough to certify a full-year horizon (see <em>Benchmark methodology clarifications</em>).</li>
+<li>Fixture data: committed synthetic only; no private activity in git.</li>
+<li>Hardware measurement is a future follow-up, not a completion criterion.</li>
+<li>No annual economic threshold is imposed; no assumption about controller choices, hardware purchase, or reversibility.</li>
+</ul>
+<p><strong>Met (2026-10-23), and this ADR's status reflects it.</strong> Every item above is satisfied by the committed pipeline. Two need stating precisely because neither is a gap: the pre-tax cost basis is <strong>settled by decision</strong> (see <em>Cost basis — pre-tax, by decision</em>), so <code>billed: false</code> in the reconciliation is correct output rather than unfinished work; and <code>mirror</code> is the single command in the vocabulary that is <strong>optional by design</strong> — deferred, unimplemented, and not a completion criterion, exactly as the <em>Architecture</em> diagram draws it. Note also that this list enumerates capabilities, not policies, so the ladder growing from three rungs to four, and from four to five on 2026-10-24, adds no completion criterion either time. The authoritative four-policy run on the clean-tree dataset has since completed; its numbers and artifact identities live in the private data directory and are tracked in <a href="../../planning/energy-baseline-progress.md">energy-baseline progress</a>, which is why none appear here. It is the run the acceptance verdict was read against, and it is <strong>no longer a current result</strong>: it used four policies at the superseded 0.88 efficiency, and the five-rung equivalents have been measured on the rebuilt dataset at 0.80 (run <code>f816306cb8ad46afbb49a77e73e5ff1a</code>, oracle certified; see <em>Round-trip efficiency: 0.88 → 0.80, applied</em> under <a href="#consequences">Consequences</a> for the efficiency change that necessitated the rebuild); their numbers and artifact identities are likewise in the private data directory and tracked in <a href="../../planning/energy-baseline-progress.md">energy-baseline progress</a>.</p>
+<h2 id="consequences">Consequences</h2>
+<p><strong>Positive:</strong> a reproducible, versioned dataset rebuildable from Prometheus; a user-confirmed metering mapping (ch1 = whole-home feed, ch2 = aerotherm/appliance branch, servers nested within ch1) that matches the existing dashboard's construction and gives the gross-load series a settled physical basis; a tariff-configurable cost model that handles negative prices; five benchmark policies (no-battery, causal price-based, day-ahead rolling, rolling-horizon replan, perfect-information oracle — four of them at acceptance on 2026-10-23, the fifth promoted on 2026-10-24) forming an information ladder that defines a benchmark reference envelope and separates the value of published prices from the value of load foresight; explicit preservation of information assumptions; one comparability rule enforced by construction rather than by review, and extended to the fifth rung on that same basis (see <em>Comparability rule — one objective, different information</em>); provisional battery assumptions flagged for later calibration and now <strong>pinned by a test</strong> rather than only by comments (see <em>What pins the shipped battery block now</em> under <a href="#consequences">Consequences</a>); the canonical store also preserves the one data class Prometheus cannot (enum state strings) without touching live Home Assistant configuration, and that class now has a read-side reader (see <em>Appliance enum telemetry — resolved</em>).</p>
+<p><strong>Costs:</strong> engineering time for the CLI, Parquet pipeline, backtest framework, and reporting.</p>
+<p><strong>Unresolved:</strong> actual battery efficiency, idle draw, SOC mapping, response latency (all provisional assumptions; hardware calibration is a follow-up). Efficiency has now been <em>decided</em> as an assumption at 0.80 round-trip rather than left at 0.88 (see <em>Round-trip efficiency: 0.88 → 0.80, applied</em> below); deciding a conservative value is not measuring one, and the efficiency-versus-power curve and the idle draw stay unresolved. The ch1 export sign is untested, which is explicitly not a blocker for this offline phase and carries no reversed-CT assertion. Controller architecture selection is explicitly deferred. Whether the hourly price the archive stores is the price the sensor <em>published</em> at local midnight is resolved by owner assertion (<code>user_assertion</code>, <code>asserted_on: "2026-10-24"</code>, <code>verified_from_data: false</code>): the 20:15–20:20 publication on D−1 describes day D, so the archived realised curve is the published curve and <code>day_ahead</code>'s assumption holds (see <em>Open validation item: day-ahead publication versus realised archive</em>); divergence would perturb the policy's decisions rather than the accounting they are scored on, so an adverse expectation is all it would be. Appliance enum history is preserved but consumed by nothing in this phase — it is optionality on <a href="../0002-appliance-aware-load-forecasting/">ADR-0002</a> Phase 3, not a Phase 1 dependency or blocker. <strong>Update 2026-10-24:</strong> the deferred B3 <em>reader</em> is no longer missing — <code>src/energy_baseline/ha_states.py</code> and the <code>ha-states</code> CLI subcommand now make the preserved enum history queryable, with read-time deduplication and as-of semantics. That closes the reader gap and changes nothing else: the module does not feed <code>build</code>, does not enter <code>dataset_id</code>, and no policy or benchmark reads it, so the sentence above stays true. No appliance modelling, NILM or forecasting was built on it.</p>
+<p><strong>Round-trip efficiency: 0.88 → 0.80, applied (2026-10-24).</strong> An earlier pass of this section recorded that the owner had reported a community-measured 0.80–0.84 round-trip efficiency for the battery class under evaluation, that "<code>config/tariff.yaml</code> currently ships <code>round_trip_efficiency: 0.88</code>", and that "<strong>the value is not changed here</strong> — <code>config/tariff.yaml</code> is outside the scope of this ADR amendment", pending an explicit sensitivity run. <strong>All three of those statements are now false, and they are kept here rather than deleted because the reason they became false is the point.</strong> On 2026-10-24 the owner decided to adopt <strong>0.80</strong> outright — the <strong>bottom</strong> of the community-measured 0.80–0.84 range — as a simplifying assumption, on the reasoning that at 2.5 kW the unit operates mostly near its power rating, where efficiency is typically worst, so the conservative end of the range is the more plausible single point. That decision <strong>supersedes 0.88</strong>; the sensitivity run that was going to precede any change was not waited for.</p>
+<p><strong>What actually changed in configuration.</strong> One value line inside the <code>battery:</code> block: <code>round_trip_efficiency</code> is now <code>0.80</code>. Every other battery parameter is untouched — <code>capacity_kwh</code> 5.12, <code>power_kw</code> 2.5, <code>soc_window_min</code> 0.20, <code>soc_window_max</code> 0.95, <code>initial_soc_frac</code> 0.20, <code>import_limit_kw</code> 5.0. The kernel maps round-trip to one-way efficiency by a symmetric square root, so the per-direction figure is now <code>sqrt(0.80) = 0.89443</code>, replacing <code>sqrt(0.88) = 0.93808</code>. <code>config_hash</code> — the SHA-256 over the canonical re-dumped YAML of the whole file — moved from <code>41fdc30b926c099be2cbef201db4141244d82faaa80b9907c7530354f64bf182</code> to <code>7a901801b4148233e232fb86d534c4b7f626ec32af8e7279ad2f9e77831687d1</code>.</p>
+<p><strong>It is still an assumption, not a measurement.</strong> 0.80 is community measurement from other installations of similar hardware, not a measurement of this household's unit. Efficiency versus output power remains a curve nobody has measured at any granularity, and a single scalar is not a curve; idle draw is still <strong>assumed zero</strong> and remains wholly unmeasured. These stay Phase 0 gates, not assumed away (cross-reference <a href="../0001-home-battery-economic-dispatch/">ADR-0001</a> <em>Consequences</em>).</p>
+<p><strong>Consequence — every 0.88 figure is now a superseded, optimistic result.</strong> <code>compute_dataset_id</code> in <code>build.py</code> hashes <code>config_hash</code>, so dataset <code>da2ac07a7a39affc43ef9e94523fb6a154ee6213d590086d8c261b265d957140</code> is <strong>superseded</strong> and must be rebuilt from a clean tree. That rebuild <strong>has</strong> happened: the new id is <code>2e01620ba72777ee8c25e5d8967151c095d2d5371450b85aecdbf7a8da69afd9</code> (70,176 rows, same 2-year window, analysis content byte-identical to its 0.88 predecessor — same SHA-256 over the serialised grid columns, making the re-run a clean single-variable experiment). Every benchmark figure computed at 0.88 is therefore an optimistic superseded result, and none is restated here as current. That includes the conditionally accepted four-policy authoritative run <code>b0a9b59aa846487a82d08fc4ba718708</code>, the 81-configuration forecast grid, and the 0.88-era ladder profile of roughly 141 → 450 → 526 equivalent full cycles per year from causal to <code>day_ahead</code> to <code>oracle</code> — quoted here only to show what is being retired. The correction is not a uniform rescaling: a lower round-trip efficiency penalises cycling, so it compresses the ladder and <strong>can reorder rungs</strong>; the reordered ladder at 0.80 (by EFC: <code>causal_price</code> 143.46, <code>rolling_horizon</code> 393.19, <code>day_ahead</code> 405.07, <code>oracle</code> 477.61) compressed relative to the 0.88 era, and on the full-year evaluation <code>rolling_horizon</code> cost more than <code>day_ahead</code> — a load-forecast-basis asymmetry sufficient to explain the reversal (see <em>Round-trip efficiency: 0.88 → 0.80, applied</em> under <a href="#consequences">Consequences</a> and <a href="../../planning/energy-baseline-progress.md">energy-baseline progress</a>). What the earlier framing called "upper bounds computed on a frictionless, optimistic battery" now has a concrete consequence: results computed at 0.88 must not be used for a purchase or deployment decision. The corrected five-rung run has been executed (run <code>f816306cb8ad46afbb49a77e73e5ff1a</code>); its numbers are in the private data directory and tracked in <a href="../../planning/energy-baseline-progress.md">energy-baseline progress</a>.</p>
+<p><strong>Why the rebuild followed the commit.</strong> <code>code_version()</code> is the git HEAD of a clean tree and also feeds <code>dataset_id</code>, so every commit re-mints the identity. Rebuilding before committing this change would have produced an identity the commit immediately invalidated — which is why the rebuild was deferred until after the commit landed, and why the placeholders could not be filled with estimates. The rebuild has since produced dataset <code>2e01620ba727…</code> and the five-rung run <code>f816306cb8ad…</code> recorded above.</p>
+<p><strong>What pins the shipped battery block now.</strong> The gap this change exposed was structural: nothing guarded the shipped battery parameters. <code>test_shipped_tariff_yaml_stays_unconfirmed</code> pins only the <strong>tax rates</strong>, so a silent edit to efficiency, capacity, the SOC window or the import ceiling would have moved every figure this ADR reports while the whole suite stayed green — and, because <code>config_hash</code> feeds <code>compute_dataset_id</code>, would have re-minted the dataset identity in the same breath. The 0.88 → 0.80 change <strong>did</strong> pass silently, which is how the gap was found. <code>tests/test_benchmark.py::TestResolveBatteryAssumptions::test_shipped_tariff_battery_assumptions_are_pinned</code> now pins the block: the three confirmed nameplate figures, the adopted efficiency through the symmetric square root, the SOC window and the horizon floor that follows from it. The test is verified <strong>non-vacuous</strong> — it fails at the old value, because <code>sqrt(0.80) = 0.89443</code> differs from <code>sqrt(0.88) = 0.93808</code>. It also pins that the <em>provisional framing</em> survives a future value change: the symmetric <code>sqrt</code> mapping stays a labelled assumption and <code>idle_losses_measured</code> stays <code>false</code>, so editing the number can never quietly promote an assumption to a measurement. The guard against reversing this decision is therefore the same kind of object as the guard against reversing the pre-tax decision: a test, not a comment.</p>
+<p><strong>What would change this decision:</strong> reconciliation of the confirmed mapping against archived data showing ch1 does not behave as the whole-home parent feed — e.g. ch1 totals that disagree with the loads declared inside it, or negative counter deltas while no generation or storage exists (neither of which implies a reversed CT); confirmation that the tariff sensor excludes components or requires decomposition; a measured round-trip efficiency far below assumptions.</p>
+<h2 id="rejected-or-deferred-alternatives">Rejected or deferred alternatives</h2>
+<table>
+<thead>
+<tr>
+<th>Alternative</th>
+<th>Decision</th>
+<th>Rationale</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Build a dedicated TSDB/ingestion service</td>
+<td>Rejected</td>
+<td>Prometheus archive exists; no need to duplicate</td>
+</tr>
+<tr>
+<td>Timescale as canonical store</td>
+<td>Deferred</td>
+<td>Mutable SQL requires explicit snapshots; simplicity/access decision deferred</td>
+</tr>
+<tr>
+<td>Direct PromQL everywhere, no derived store</td>
+<td>Rejected</td>
+<td>No reproducible snapshot, no backtest</td>
+</tr>
+<tr>
+<td>Appliance-aware forecasting / NILM</td>
+<td>Deferred</td>
+<td>Per ADR-0002, belongs to Phase 3+</td>
+</tr>
+<tr>
+<td>Tomorrow's price plumbing (ESIOS)</td>
+<td>Partially adopted (2026-10-23); publication assumption resolved by owner assertion (2026-10-24)</td>
+<td>The deferred day-ahead variant is now built as the <code>day_ahead</code> rung — on the archived realised price curve, with published ≡ realised resolved by owner assertion (<code>user_assertion</code>, <code>asserted_on: "2026-10-24"</code>, <code>verified_from_data: false</code>); see <em>Open validation item: day-ahead publication versus realised archive</em>. The <code>price_00h..price_23h</code> condition is met on both halves. A midnight snapshot of the <code>sensor.esios_pvpc</code> attribute dict remains an optional confirmation, no longer blocking</td>
+</tr>
+<tr>
+<td>Replace the causal policy with an AppDaemon replica</td>
+<td>Rejected</td>
+<td>AppDaemon is a midnight look-ahead rule over two thermal actuators with no SOC/efficiency/import semantics; its effect is already embedded in measured ch1 load, so re-simulating it double-counts and removes the causal→oracle gap. Unchanged by the new rung: <code>day_ahead</code> shares AppDaemon's <em>information</em> (a full 24-hour curve in hand at local midnight) and none of its actuators or its rule, so AppDaemon is still not a battery policy and policy 1 remains the counterfactual that carries it. See <a href="../../planning/energy-baseline-appdaemon-baseline-context.md">AppDaemon baseline context</a></td>
+</tr>
+<tr>
+<td>Deploy an optimiser service</td>
+<td>Deferred</td>
+<td>No live actuation; CLI backtest first</td>
+</tr>
+<tr>
+<td>Naive dashboard-style cost model</td>
+<td>Rejected</td>
+<td>Drops negative prices, omits tax config</td>
+</tr>
+<tr>
+<td>Select controller architecture</td>
+<td>Deferred</td>
+<td>This phase produces evidence; later phase selects</td>
+</tr>
+<tr>
+<td>Hardware measurement and bringup</td>
+<td>Deferred</td>
+<td>Battery not yet installed; parameters flagged</td>
+</tr>
+<tr>
+<td>Raise recorder retention to preserve enum states</td>
+<td>Rejected</td>
+<td>45.8% of recorder writes are a single fan-speed sensor with no project value; enum extraction into Parquet is ~0.1% of the write volume</td>
+</tr>
+<tr>
+<td>Change HA recorder include/exclude filters</td>
+<td>Rejected</td>
+<td>Not required; recorder config left unchanged</td>
+</tr>
+<tr>
+<td>Production CronJob for enum extraction</td>
+<td>Deferred, not cancelled</td>
+<td>Development runs manually on a short cycle from a local PC (cadence decided 2026-10-23); cluster scheduling waits until the CLI is mature. See <a href="../../planning/energy-baseline-production-execution.md">execution plan</a></td>
+</tr>
+<tr>
+<td>Source tax rates from statute or an invoice to report billed cost</td>
+<td>Rejected for Phase 1 — decided</td>
+<td>Asked on 2026-10-23, the owner declined to supply further data: pre-tax is the final basis. Reopening requires effective-dated rates from a verified invoice or official tariff documentation, and <code>TestWithRealConfig::test_shipped_tariff_yaml_stays_unconfirmed</code> fails if <code>tariff.yaml</code> is confirmed without that</td>
+</tr>
+<tr>
+<td>Accept silent enum history loss between pulls</td>
+<td>Rejected</td>
+<td>Recorder rows are purged on a 10-day default and cannot be re-extracted; the manual cadence plus row-level cross-run dedup is the interim mitigation, with automated scheduling still deferred. See <a href="../../planning/energy-baseline-production-execution.md">execution plan</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="../0001-home-battery-economic-dispatch/">ADR-0001 — Forecast-informed economic dispatch</a></li>
+<li><a href="../0002-appliance-aware-load-forecasting/">ADR-0002 — Appliance-aware load forecasting</a></li>
+<li><a href="../../planning/home-battery-optimizer-implementation.md">Home battery optimizer implementation plan</a></li>
+<li><a href="../../planning/energy-baseline-production-execution.md">Production execution plan</a></li>
+<li><a href="../../apps/home-assistant/dashboards/iot-energy.json">IoT Energy dashboard source</a></li>
+<li><a href="https://www.home-assistant.io/integrations/prometheus/">Home Assistant Prometheus integration</a></li>
+<li><a href="https://www.home-assistant.io/integrations/recorder/">Home Assistant Recorder</a></li>
+<li><a href="https://www.home-assistant.io/integrations/pvpc/">Home Assistant PVPC integration</a></li>
+<li><a href="https://github.com/oscarrgarciia/HA-PVPC-Updated">HA-PVPC-Updated custom integration (oscarrgarciia)</a></li>
+<li><a href="https://www.esios.ree.es/es/indicadores/1001">ESIOS indicator 1001 — PVPC</a></li>
+<li><a href="https://www.esios.ree.es/en/pvpc">ESIOS PVPC — hourly values and active energy term components (RD 446/2023 basis, effective 2024-01-01)</a></li>
+<li><a href="https://prometheus.io/docs/prometheus/latest/querying/api/#range-queries">Prometheus query_range API</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

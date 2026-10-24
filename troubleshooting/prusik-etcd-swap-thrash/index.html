@@ -1,0 +1,4207 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../profiling-collector-rollback/">
+      
+      
+        <link rel="next" href="../prusik-l2arc-ineffective/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>prusik: CI memory bursts swap-thrash the root NVMe and freeze the API - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#prusik-ci-memory-bursts-swap-thrash-the-root-nvme-and-freeze-the-api" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#root-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      Root Cause
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Evidence
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Evidence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#incident-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Incident windows
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-latency-numbers-that-matter" class="md-nav__link">
+    <span class="md-ellipsis">
+      The latency numbers that matter
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-attribution-at-the-incident-peaks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory attribution at the incident peaks
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-observability-blind-spot-why-ci-looked-half-its-real-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      The observability blind spot (why CI looked half its real size)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-snapshots-are-not-the-observed-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why snapshots are not the observed trigger
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-is-not-etcd-raft-leader-loss" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it is NOT etcd raft leader loss
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-zfs-scrub-is-not-the-independent-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why the ZFS scrub is not the independent cause
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-is-not-an-oom-kill" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it is NOT an OOM kill
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#device-names-on-prusik-are-not-stable-read-this-before-writing-any-query" class="md-nav__link">
+    <span class="md-ellipsis">
+      Device names on prusik are NOT stable — read this before writing any query
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      What we changed
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What we changed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-0-bound-ci-so-it-dies-before-the-control-plane-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 0 — bound CI so it dies before the control plane does
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-0-de-collide-the-backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 0 — de-collide the backups
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-protect-the-node-and-the-control-plane" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — protect the node and the control plane
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-detect-it-next-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — detect it next time
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#host-apply-verified-state-2026-10-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      Host apply — verified state (2026-10-13)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation-status-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      Validation status checklist
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deferred — next steps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rejected-approaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rejected approaches
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#if-this-recurs-how-to-keep-investigating" class="md-nav__link">
+    <span class="md-ellipsis">
+      If this recurs — how to keep investigating
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="If this recurs — how to keep investigating">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-confirm-it-is-the-same-mechanism-60-seconds" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Confirm it is the same mechanism (60 seconds)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-on-the-node-ssh-read-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. On the node (SSH, read-only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-prometheus-audited-query-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Prometheus (audited query set)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-attribute-the-memory-to-a-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Attribute the memory to a workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-the-restart-startup-defrag-amplifier" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. The restart + startup-defrag amplifier
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-then-check-the-collateral" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Then check the collateral
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prevention-and-success-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prevention and success criteria
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0001-home-battery-economic-dispatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0001: Forecast-informed economic dispatch for a home AC battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0002-appliance-aware-load-forecasting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0002: Appliance-aware household demand forecasting with Home Assistant telemetry and NILM
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0003-phase1-measurement-and-baseline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0003: Phase 1 — measurement, reproducible dataset and strategy baseline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0004-battery-optimizer-production-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0004: Production runtime and independent source repository for the battery optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      Problem
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#root-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      Root Cause
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#evidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Evidence
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Evidence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#incident-windows" class="md-nav__link">
+    <span class="md-ellipsis">
+      Incident windows
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-latency-numbers-that-matter" class="md-nav__link">
+    <span class="md-ellipsis">
+      The latency numbers that matter
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-attribution-at-the-incident-peaks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory attribution at the incident peaks
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-observability-blind-spot-why-ci-looked-half-its-real-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      The observability blind spot (why CI looked half its real size)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-snapshots-are-not-the-observed-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why snapshots are not the observed trigger
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-is-not-etcd-raft-leader-loss" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it is NOT etcd raft leader loss
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-the-zfs-scrub-is-not-the-independent-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why the ZFS scrub is not the independent cause
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-it-is-not-an-oom-kill" class="md-nav__link">
+    <span class="md-ellipsis">
+      Why it is NOT an OOM kill
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#device-names-on-prusik-are-not-stable-read-this-before-writing-any-query" class="md-nav__link">
+    <span class="md-ellipsis">
+      Device names on prusik are NOT stable — read this before writing any query
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-we-changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      What we changed
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="What we changed">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-0-bound-ci-so-it-dies-before-the-control-plane-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 0 — bound CI so it dies before the control plane does
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-0-de-collide-the-backups" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 0 — de-collide the backups
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-protect-the-node-and-the-control-plane" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — protect the node and the control plane
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-detect-it-next-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      Tier 1 — detect it next time
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#host-apply-verified-state-2026-10-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      Host apply — verified state (2026-10-13)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#validation-status-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      Validation status checklist
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deferred-next-steps" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deferred — next steps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rejected-approaches" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rejected approaches
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#if-this-recurs-how-to-keep-investigating" class="md-nav__link">
+    <span class="md-ellipsis">
+      If this recurs — how to keep investigating
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="If this recurs — how to keep investigating">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-confirm-it-is-the-same-mechanism-60-seconds" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Confirm it is the same mechanism (60 seconds)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-on-the-node-ssh-read-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. On the node (SSH, read-only)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-prometheus-audited-query-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Prometheus (audited query set)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-attribute-the-memory-to-a-workload" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Attribute the memory to a workload
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-the-restart-startup-defrag-amplifier" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. The restart + startup-defrag amplifier
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-then-check-the-collateral" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Then check the collateral
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prevention-and-success-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      Prevention and success criteria
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="prusik-ci-memory-bursts-swap-thrash-the-root-nvme-and-freeze-the-api">prusik: CI memory bursts swap-thrash the root NVMe and freeze the API</h1>
+<p>Two control-plane outages on 2026-10-12 and 2026-10-13, plus the 2026-09-25 incident, share one
+mechanism. Node <code>prusik</code> (single-node k3s control plane, embedded etcd, k3s v1.35.8+k3s1 /
+etcd v3.6.14-k3s1). The first two incidents were attributed to etcd snapshots; they are not.</p>
+<p><strong>TL;DR:</strong> CI memory bursts collapse <code>MemAvailable</code> to ~3 GiB, the kernel's reclaim path (swap-out
++ dirty-page writeback + ZFS ARC shrink) saturates the root NVMe, and that same device holds etcd's
+WAL, its bolt DB, and <code>/swapfile</code>. etcd's durable writes take seconds instead of milliseconds, the
+Kubernetes controller Lease cannot renew, k3s calls <code>logrus.Fatalf</code> and exits, and every restart
+runs an unconditional startup defrag before serving — ~30–75s of API offline per cycle.</p>
+<h2 id="problem">Problem</h2>
+<p>What is visible from outside:</p>
+<ul>
+<li>The Kubernetes API becomes unresponsive for <strong>~30–75 seconds at a time</strong>, periodically, in bursts
+  that recur every few minutes until the memory pressure passes.</li>
+<li><code>kubectl --context=grigri</code> calls hang or return <code>DeadlineExceeded</code>; <code>kube-system</code> components log
+  <code>leaderelection lost</code>; controllers stall.</li>
+<li>Components that were mid-flight when k3s died are left in inconsistent state — e.g. a Velero
+  <code>Backup</code> stuck <code>InProgress</code> with orphaned <code>ZFSBackup</code> CRs
+  (<code>docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md</code>).</li>
+<li><code>k3s.service</code> restarts itself (<code>Restart=always</code>), so <code>NRestarts</code> climbs without anyone acting.</li>
+</ul>
+<p><strong>The misdirection:</strong> the freezes appear to start "at a snapshot". k3s cron backups run on the
+default <code>0 */12 * * *</code> (00:00/12:00 local), and the journal prints <code>Saving etcd snapshot</code> right
+before a stall, so snapshots look guilty. They were not observed triggering the stalls in these
+incidents, but they are not exonerated for all future scenarios — see
+<a href="#why-snapshots-are-not-the-observed-trigger">Why snapshots are not the observed trigger</a>.</p>
+<h2 id="root-cause">Root Cause</h2>
+<div class="highlight"><pre><span></span><code>CI memory burst (ci-runner-0 up to 10.7-15 GiB; calypso gVisor runners 16Gi limits each)
+  -&gt; MemAvailable collapses to ~3 GiB (62 GiB host, non-CI baseline is flat at 30-35 GiB)
+    -&gt; kernel reclaim: swap-out to /swapfile + dirty-page writeback + ZFS ARC shrink 4.9 -&gt; 2.85 GiB
+       (against its 5 GiB cap, metal/inventory/host_vars/prusik.yml)
+      -&gt; ALL of that I/O is on the root NVMe (SanDisk Extreme 500GB), which also holds:
+         - etcd&#39;s WAL and bolt DB (/var/lib/rancher/k3s/server/db/etcd)
+         - /swapfile (16 GiB, metal swap_file_size_mb: 16384)
+        -&gt; etcd durable-write latency spikes: WAL fsync p99 ~1.92s, backend commit p99 ~3.71s
+           at 2026-10-13 03:07:30Z (baseline ~1-3ms)
+          -&gt; kube-apiserver -&gt; etcd DeadlineExceeded on writes and ReadIndex
+            -&gt; the KUBERNETES CONTROLLER Lease cannot renew
+               (kube-system Lease, wrangler&#39;s leader.RunOrDie — not etcd raft)
+              -&gt; logrus.Fatalf -&gt; k3s exits with code 1
+                -&gt; systemd Restart=always starts k3s again
+                  -&gt; k3s runs an UNCONDITIONAL startup defrag (pkg/etcd Test()) before serving,
+                     0.5-4.06s of extra offline time, on the same saturated device
+                    -&gt; API offline ~30-75s. Repeat until the memory burst ends.
+</code></pre></div>
+<p>Three independent amplifiers make a bad latency blip into a full outage:</p>
+<ol>
+<li><strong>Shared device.</strong> etcd's durable write path, the swap device, and the root filesystem are the
+   same NVMe. Reclaim I/O is not "background" — it is queued ahead of the WAL fsync.</li>
+<li><strong>Overcommitted CI.</strong> <code>prusik</code> carried <strong>204.6 GiB of pod limits against 50.7 GiB allocatable
+   (~403%)</strong>. The scheduler is request-driven, so pods without explicit limits can still be scheduled
+   if their requests fit, but the aggregate limit overcommit means any burst is limited only by the
+   kernel reaching <code>MemAvailable</code> first — and the kernel loses that race against etcd's lease.</li>
+<li><strong>Restart cost.</strong> k3s defrags at startup before it serves, so each cycle's downtime is
+   <em>latency stall + defrag</em>, not just the process restart.</li>
+</ol>
+<h2 id="evidence">Evidence</h2>
+<h3 id="incident-windows">Incident windows</h3>
+<table>
+<thead>
+<tr>
+<th>Time (UTC)</th>
+<th>Memory pressure source</th>
+<th>Host state</th>
+<th>etcd / API outcome</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-09-25 02:00–02:21</td>
+<td>CI Rust builds during the weekly Velero backup window</td>
+<td><code>MemAvailable</code> 3.9 GiB (~5.9%), root-NVMe queue depth 218</td>
+<td>k3s lost controller lease, exit(1) at 02:20:54; Backup left <code>InProgress</code></td>
+</tr>
+<tr>
+<td>2026-10-12 07:20</td>
+<td>calypso CI activity + an ArgoCD update + a 16,608-event count query</td>
+<td>memory-PSI "full" elevated, swap active, ARC shrinking toward 2.85 GiB</td>
+<td>API stalls, k3s restart cycle</td>
+</tr>
+<tr>
+<td>2026-10-13 02:06</td>
+<td>CI pressure starts <strong>before</strong> the 02:30Z backup window</td>
+<td>swap used 5.5 -&gt; 8.3 GiB, <code>ci-runner-0</code> at 10.7 GiB (high-water 15 GiB)</td>
+<td>first stall cycle of the incident</td>
+</tr>
+<tr>
+<td>2026-10-13 03:07:30</td>
+<td>after <code>ci-runner-0</code> had dropped, calypso gVisor runners carried the pressure</td>
+<td><code>MemAvailable</code> ~3 GiB, memory-PSI "full" 0.24–0.63, root-NVMe queue in the hundreds</td>
+<td>WAL fsync p99 1.92s, backend commit p99 3.71s, controller lease lost, exit(1)</td>
+</tr>
+</tbody>
+</table>
+<p>CI is the proven memory culprit in all three incidents. Velero serializes weekly and quarterly
+backups (one queued behind the other), so they do not run concurrently on prusik's pool. The backups
+are a possible contributor to I/O load during the 02:30–03:30Z window, but the memory pressure
+started at 02:06Z, before the backup window. RPC names like "calypso lease" describe what was
+running, not proof of causal memory pressure — attribution requires per-pod working-set queries
+(see the runbook).</p>
+<h3 id="the-latency-numbers-that-matter">The latency numbers that matter</h3>
+<div class="highlight"><pre><span></span><code>baseline (healthy):        WAL fsync p99 ~1-3ms      backend commit p99 ~1-3ms
+2026-10-13 03:07:30Z:      WAL fsync p99 1.92s       backend commit p99 3.71s
+restart defrag:            0.5-4.06s per k3s start   (unconditional, before serving)
+</code></pre></div>
+<p>Measured at 30–60s resolution (etcd scrape interval 30s, <code>system/monitoring/resources/etcd-scrape-config.yaml</code>).</p>
+<p><strong>Histogram interpolation caveat:</strong> the <code>1.34s</code>/<code>1.88s</code> p99 figures visible at 03:09Z are from a
+<code>rate(...[5m])</code> window that straddles k3s restarting and exporting fresh zero-based counters.
+<code>rate(...[5m])</code> handles counter resets, but the window mixes pre-restart and post-restart buckets
+from different populations, which can produce interpolated values that do not correspond to either.
+The clean pre-restart peaks with <code>rate(...[1m])</code> are <strong>1.92s / 3.71s</strong>. Avoid windows that straddle
+restarts; use clean pre-restart windows and verify actual bucket counts if precision matters.</p>
+<h3 id="memory-attribution-at-the-incident-peaks">Memory attribution at the incident peaks</h3>
+<p>Non-CI baseline on prusik is flat at <strong>30–35 GiB</strong> — every GiB of the collapse is CI.</p>
+<table>
+<thead>
+<tr>
+<th>Culprit</th>
+<th>Shape</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ci-runner-0</code> / <code>runner</code> (ns <code>ci-runners</code>, runc) — PRIMARY</td>
+<td>request 4Gi, limit was 18Gi</td>
+<td>grew idle → <strong>10.7 GiB</strong> (high-water <strong>15 GiB</strong>), anonymous/unreclaimable. Present identically in both October incidents. Lands on prusik <em>implicitly</em> through the <code>fast-ci-zfspv</code> PVC's <code>allowedTopologies</code> — it has no <code>nodeSelector</code>.</td>
+</tr>
+<tr>
+<td><code>calypso-runners</code> gVisor pods (<code>autonomous-runner-*</code>) — SECONDARY/additive</td>
+<td>request <strong>0.29Gi</strong> vs limit <strong>16Gi</strong> each, 2–5 concurrent</td>
+<td>drove the <em>second</em> 2026-10-13 failure at 03:07Z, after <code>ci-runner-0</code> had already dropped. These manifests are <strong>not in this repo</strong> (owned by <code>multivara/gitops</code> at <code>/home/agil/multivara/gitops/grigri.cloud/apps/calypso/values.yaml</code>; app runner source at <code>/home/agil/multivara/calypso/crates/calypso-control-plane/src/runner_controller/k8s/runner/deployment.rs</code>). Do not assert specific runtime or gVisor configuration changes without checking the other repo — historical values may not match current state.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-observability-blind-spot-why-ci-looked-half-its-real-size">The observability blind spot (why CI looked half its real size)</h3>
+<p>The <code>container!=""</code> filter used nearly everywhere — and the <code>image!=""</code> filter in
+kube-prometheus-stack's recording rule — <strong>cannot see gVisor sandboxes</strong>. A runsc pod exports
+only two series, both with an empty <code>container</code> label: the pod cgroup (no <code>image</code> label, so
+<code>image!=""</code> drops it) and the pause/sandbox child cgroup
+(<code>image="docker.io/rancher/mirrored-pause"</code>, so the chart rule keeps <em>only</em> that child). The
+workload container runs inside the sandbox VM and is never exported as its own cgroup, so there
+is no named series to fall back on.</p>
+<p>Original incident-window measurement (decimal GB, 10^9 bytes; convert to GiB by dividing by
+1.074):</p>
+<div class="highlight"><pre><span></span><code>calypso working set, container!=&quot;POD&quot;:  3.96 GB (decimal, ~3.69 GiB)   (actual)
+calypso working set, container!=&quot;&quot;:     1.97 GB (decimal, ~1.83 GiB)   (what dashboards showed)
+</code></pre></div>
+<p>The second line is the blind spot. Read the first line as an upper bound rather than the true pod
+total: <code>container!="POD"</code> keeps both the pod cgroup <em>and</em> its sandbox child, so it double counts
+(row 3 of the table below).</p>
+<p>Re-measured 2026-10-13 across the incident window (02:00–04:00Z, namespace <code>calypso-runners</code>,
+2 concurrent <code>autonomous-runner-*</code> pods on prusik). For that namespace the blind spot is worse
+than "half":</p>
+<table>
+<thead>
+<tr>
+<th>Query form</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>per-container (<code>container!=""</code>)</td>
+<td><strong>no series at all — 0 B</strong>, while the pod cgroups held 4.20 GB mean / 7.27 GB peak</td>
+</tr>
+<tr>
+<td>chart rule <code>node_namespace_pod_container:container_memory_working_set_bytes</code></td>
+<td>3.65 GB mean, and per sample anywhere from <strong>0.30× to 1.53×</strong> of the pod cgroup (mean 0.86×) — it reports the sandbox <em>child</em> cgroup, read at a different instant than its parent, so it skews both ways under a burst</td>
+</tr>
+<tr>
+<td>naive <code>sum(container_memory_working_set_bytes{container!="POD"})</code></td>
+<td>18.83 GB at 03:07:30Z = pod cgroup + sandbox child added together, <strong>2.3×</strong> the real 8.13 GB</td>
+</tr>
+</tbody>
+</table>
+<p><strong>FIXED (2026-10-13):</strong> recording rule <code>node_namespace_pod:container_memory_working_set_bytes_incl_gvisor</code>
+in <code>system/monitoring/resources/gvisor-memory-recording-rules.yaml</code>. It selects the pod-level
+cgroup series (<code>container=""</code>, <code>id!~".*cri-containerd.*"</code>, <code>job="kubelet"</code>,
+<code>metrics_path="/metrics/cadvisor"</code>) and collapses the duplicates per pod with
+<code>max by (node, namespace, pod)</code>, so gVisor pods are included and a sum over the rule is safe.</p>
+<p>Per-pod memory attribution — dashboards and ad-hoc queries — should use that rule, or the
+equivalent <code>container=""</code> pod-level form in the runbook below, instead of <code>image!=""</code> /
+<code>container!=""</code>.</p>
+<p>Caveat: it is a <strong>pod-level</strong> series, so verify per pod and never add it to a named-container
+sum for the same pod — that is exactly the 2× error above. The two are alternatives, not
+additive: measured pod-level 3,693,756,416 B vs named-container sum 3,690,844,160 B in
+<code>monitoring</code> (1.0008×) and 169,762,816 B vs 167,165,952 B in <code>ci-runners</code> (1.0155×).</p>
+<h2 id="why-snapshots-are-not-the-observed-trigger">Why snapshots are not the observed trigger</h2>
+<p>The original hypothesis, and the reason this took three incidents to root-cause.</p>
+<ul>
+<li><strong>k3s cron snapshots are fast.</strong> They stream <strong>130–276 MB in 0.3–0.7s</strong>
+  (<code>etcd_disk_backend_snapshot_duration_seconds</code> p99 <strong>&lt; 0.64s</strong>). A 0.5s copy cannot produce a
+  multi-second API freeze, and it certainly cannot produce one at 03:07 when the schedule fires
+  00:00/12:00.</li>
+<li><strong>Internal raft snapshots are a different thing entirely.</strong>
+  <code>etcd_debugging_snap_save_total_duration_seconds</code> is the raft-snapshot save (~1.5ms, on a
+  ~10k-entry trigger cadence). It has nothing to do with k3s backups. Confusing the two metric names
+  sends you down the wrong path.</li>
+<li><strong>The timing is wrong.</strong> Slow operations begin <strong>minutes after</strong> a snapshot, and continue when no
+  snapshot is running. Snapshots are correlated with the <em>outbreak</em> only because 12-hour cron and a
+  Tuesday backup window happen to sit near the CI bursts that actually cause it.</li>
+<li><strong>Real but irrelevant inefficiency:</strong> snapshots do copy dead pages — the DB file is <strong>182 MB
+  allocated vs 66 MB in use</strong> (<code>etcd_mvcc_db_total_size_in_bytes</code> vs
+  <code>..._in_use_in_bytes</code>). That is a 2.7x file-size inefficiency, fixed by compaction/defrag, not a
+  freeze. (It is also what makes startup defrag slow when the device is already saturated.)</li>
+</ul>
+<p>Snapshots were not observed triggering the stalls in these incidents, but they are not exonerated
+for all future scenarios — if the DB grows large enough or the device degrades, snapshot I/O could
+become a factor. Monitor <code>etcd_mvcc_db_total_size_in_bytes</code> and the snapshot duration metric.</p>
+<h2 id="why-it-is-not-etcd-raft-leader-loss">Why it is NOT etcd raft leader loss</h2>
+<p><code>etcd_server_has_leader</code> stayed <strong>1</strong> and <code>etcd_server_leader_changes_seen_total</code> stayed <strong>1</strong>
+throughout — as expected for a single-node member. The <code>leaderelection lost</code> line in the journal is
+the <strong>Kubernetes controller Lease</strong> (<code>kube-system</code> Lease, k3s's wrangler <code>leader.RunOrDie</code>), not a
+raft election. Grepping for "leader" without knowing which elector logged it makes this outage look
+like an etcd consensus problem, which it never was. The lease is a <em>victim</em> of etcd latency.</p>
+<h2 id="why-the-zfs-scrub-is-not-the-independent-cause">Why the ZFS scrub is not the independent cause</h2>
+<p>A monthly scrub of the 25.9 TB <code>datasets</code> pool ran for <strong>~65h</strong> and pushed host I/O-PSI to
+<strong>0.5–0.78</strong>. Tempting, but:</p>
+<ul>
+<li>Healthy windows showed <strong>equally high I/O-PSI</strong> with no API stalls.</li>
+<li>The scrub runs on the RAIDZ1 HDDs; etcd's WAL and <code>/swapfile</code> are on the root NVMe. Different
+  physical devices, different queues.</li>
+<li>The differentiator is <strong>memory</strong>, not disk: memory-PSI "full" 0.24–0.63, active swap, and
+  <code>MemAvailable</code> &lt; 3 GiB during stalls — and <strong>zero</strong> when healthy.</li>
+</ul>
+<p>The scrub is a contributor to I/O load, but its role in the outages is unresolved — controls did
+not independently isolate it. Use memory-PSI plus swap as the discriminator for this mechanism.
+I/O-PSI alone on this host tells you nothing.</p>
+<h2 id="why-it-is-not-an-oom-kill">Why it is NOT an OOM kill</h2>
+<p>No <code>node_vmstat_oom_kill</code> and no <code>container_oom_events_total</code> for k3s in any of these windows. The
+sequence was <strong>direct-reclaim stalling + swap thrash</strong> (swap used 5.5 → 8.3 GiB at 02:40Z), and then
+k3s <strong>exited by itself</strong> (code 1) on lost lease. Nothing was killed. An "OOM?" reflex wastes time
+here: look for <code>oom_kill</code>, then look at PSI and swap, then look at <code>NRestarts</code> and the journal.</p>
+<p><strong>Major page faults are not proof of direct reclaim.</strong> <code>node_vmstat_pgmajfault</code> can rise from
+file-backed mmap refaults (e.g. etcd's bolt DB pages evicted from page cache and re-read from disk),
+not just anonymous page swap-in. The <code>pgscan_direct</code> and <code>pgscan_kswapd</code> metrics that would prove
+direct reclaim are absent from prusik's node-exporter. Use PSI (<code>node_pressure_memory_stalled_seconds_total</code>)
+and swap rate (<code>node_vmstat_pswpin</code>/<code>pswpout</code>) as the reclaim indicators.</p>
+<p><strong>k3s swap usage:</strong> k3s's anonymous Go heap swap usage was measured at ~98MB during the incident,
+which proves the control plane <em>currently</em> has some swapped pages, but it is not the whole historical
+picture or the exact mechanism. The file-backed bolt DB mmap pages can be reclaimed and refaulted
+without being swapped — that is page-cache eviction, not anonymous swap. The swap thrash (5.5 → 8.3 GiB)
+is the primary mechanism, but the in-memory index latency (550ms) is not uniquely proof of swap —
+other CPU/GC/query pressure is possible.</p>
+<h2 id="device-names-on-prusik-are-not-stable-read-this-before-writing-any-query">Device names on prusik are NOT stable — read this before writing any query</h2>
+<p><strong>NVMe kernel names on prusik change across reboots.</strong> The two devices are:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Role</th>
+<th>Kernel name 2026-09-25</th>
+<th>Kernel name after the 2026-10-02 reboot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>SanDisk Extreme 500GB</strong></td>
+<td>root <code>/</code> (ext4) — holds the etcd WAL + bolt DB <strong>and</strong> <code>/swapfile</code></td>
+<td><code>nvme1n1</code></td>
+<td><strong><code>nvme0n1</code></strong></td>
+</tr>
+<tr>
+<td><strong>FIKWOT FN960 2TB</strong></td>
+<td>L2ARC / special vdev for the HDD RAIDZ1 <code>datasets</code> pool</td>
+<td><code>nvme0n1</code></td>
+<td><strong><code>nvme1n1</code></strong></td>
+</tr>
+</tbody>
+</table>
+<p>They will flip again at the next reboot. Therefore:</p>
+<ul>
+<li><strong>Always</strong> identify these disks by model, serial, or <code>/dev/disk/by-id</code> — never by <code>nvmeXnY</code> — in
+  queries, alerts, docs, runbooks, and ad-hoc commands.</li>
+<li>Verify the current mapping before trusting any historical figure:
+  <code>node_disk_info{instance="prusik"}</code> (maps device → model → PCI path), or on the host
+  <code>lsblk -o NAME,MODEL,SERIAL,MOUNTPOINT</code>.</li>
+</ul>
+<h2 id="what-we-changed">What we changed</h2>
+<p><strong>Status: DEPLOYED AND VERIFIED APPLIED — NOT YET PROVEN CURED.</strong> GitOps changes committed and
+synced (PriorityClass e61bce19, CI dbb28f62, Velero 78dc33a1, monitoring 48eba216). Metal changes
+committed (85c1c518, b7e1df17) and <strong>applied to prusik</strong> on 2026-10-13 in a maintenance window
+(<code>ANSIBLE_EXTRA_ARGS="-t k3s --limit prusik" make cluster</code>). That apply proves the configuration
+landed and that k3s came back cleanly — it does <strong>not</strong> prove the incident is cured, which needs
+observation across a representative CI burst <strong>and</strong> a backup window. See <em>Host apply — verified
+state</em> and the validation status checklist below.</p>
+<h3 id="tier-0-bound-ci-so-it-dies-before-the-control-plane-does">Tier 0 — bound CI so it dies before the control plane does</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>platform/ci-runners/resources/statefulset.yaml</code></td>
+<td><code>runner</code> limit <strong>18Gi → 12Gi</strong>; added <code>CARGO_BUILD_JOBS=4</code> and <code>MAKEFLAGS=-j4</code> (cargo defaults to one rustc/linker job per core, so peak RSS multiplies with the 14-CPU limit); <code>priorityClassName: low-priority</code></td>
+</tr>
+<tr>
+<td><code>platform/ci-runners/resources/configmap.yaml</code></td>
+<td>runner <code>capacity: 3 → 2</code> (aggregate peak RSS ≈ capacity × per-job peak — the coarsest lever, since a per-container limit cannot bound the total)</td>
+</tr>
+<tr>
+<td><code>platform/ci-runners/resources/statefulset-amd64.yaml</code></td>
+<td><code>high-priority</code> → <code>low-priority</code>; <strong>removed the backwards <code>node.kubernetes.io/memory-pressure</code> toleration</strong> (it kept scheduling a memory-hungry runner onto a node that was already starving); added the parallelism envs</td>
+</tr>
+<tr>
+<td><code>platform/ci-runners/resources/configmap-amd64.yaml</code></td>
+<td><code>capacity: 5 → 2</code> (k8s-amd64-1 has ~12.53 GiB allocatable)</td>
+</tr>
+<tr>
+<td><code>system/kube-system/resources/priority-class-low.yaml</code></td>
+<td>new PriorityClass <code>low-priority</code>: value <strong>-1000</strong>, <code>preemptionPolicy: Never</code> — expendable, but not disruptive; cannot outrank <code>system-critical</code>/<code>node-critical</code></td>
+</tr>
+<tr>
+<td><code>platform/ci-runners/resources/limit-range.yaml</code></td>
+<td>new LimitRange: container max <strong>12Gi</strong>, default 2Gi, defaultRequest 256Mi — turns "someone asks for more" into an admission error</td>
+</tr>
+<tr>
+<td><code>platform/ci-runners/resources/resource-quota.yaml</code></td>
+<td>new ResourceQuota: <code>limits.memory: 48Gi</code>, <code>requests.memory: 16Gi</code> — a backstop against a third unbounded runner, not the primary control</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tier-0-de-collide-the-backups">Tier 0 — de-collide the backups</h3>
+<p><code>platform/velero/templates/schedule-retain-quaterly.yaml</code>: <strong><code>30 2 * * 2</code> → <code>30 3 * * 3</code></strong>. Weekly and
+quarterly were on the same cron, on the same node, so two <code>zfs send</code> streams hit prusik's pool at
+once (2026-10-13 02:40Z). Wed 03:30 also avoids the etcd snapshots (00:00/12:00), the etcd snapshot
+rsync (01:00/13:00), and the daily ZFS snapshot schedule (01:00). Preserves the Thu 02:30 offsite
+copy schedule.</p>
+<h3 id="tier-1-protect-the-node-and-the-control-plane">Tier 1 — protect the node and the control plane</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metal/inventory/host_vars/prusik.yml</code></td>
+<td><code>eviction-hard=memory.available&lt;300Mi</code> → <strong><code>&lt;1Gi</code></strong>, plus <code>eviction-soft=memory.available&lt;4Gi</code> and <code>eviction-soft-grace-period=1m</code>. 300Mi fired far too late on a 62 GiB host: the node stalls near 3 GiB, so by the time kubelet acted the etcd freeze had already happened.</td>
+</tr>
+<tr>
+<td><code>metal/roles/k3s/templates/k3s.service.j2</code></td>
+<td>added <strong><code>MemoryLow=6G</code></strong> to the k3s unit, gated on the <code>kube_control_plane</code> group so agent nodes are unaffected. Value shared via <code>k3s_control_plane_memory_low</code> default.</td>
+</tr>
+<tr>
+<td><code>metal/roles/k3s/templates/memory-protection.conf.j2</code></td>
+<td>new drop-in template for <code>system.slice</code>: <code>[Slice] MemoryLow=6G</code>. Kernel cgroup v2 requires ancestor <code>memory.low</code> ≥ children's effective low; without this parent budget the k3s service <code>MemoryLow</code> is capped at the parent's value (0). Deployed to <code>/etc/systemd/system/system.slice.d/memory-protection.conf</code>, control-plane only.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tier-1-detect-it-next-time">Tier 1 — detect it next time</h3>
+<p><code>system/monitoring/resources/etcd-host-memory-rules.yaml</code> (new, wired in
+<code>system/monitoring/kustomization.yaml</code>): 11 alerts — <code>EtcdTargetDown</code>, <code>K3sEtcdRestarted</code>,
+<code>EtcdWALFsyncSlow</code>/<code>Critical</code>, <code>EtcdBackendCommitSlow</code>/<code>Critical</code>, <code>PrusikMemoryAvailableLow</code>/
+<code>Critical</code>, <code>PrusikMemoryPSIHigh</code>, <code>PrusikSwapThrashing</code>, <code>PrusikRootDiskQueueHigh</code>. They come in
+pairs on purpose: the etcd metrics are the symptom that pages, the node metrics are the cause that
+explains it.</p>
+<p><strong>Alert <code>for:</code> durations:</strong> warning alerts use <code>for: 5m</code>, critical use <code>for: 2m</code>. These can miss
+brief outages if k3s restarts faster than the window. <code>K3sEtcdRestarted</code> uses <code>for: 0m</code> as a fast
+signal — if the restart alert is the first thing you see, the host-side thresholds are too slow:
+tune them down, do not add more etcd rules.</p>
+<p><strong>Why we needed our own etcd rules at all:</strong> kube-prometheus-stack's built-in etcd rules are <strong>inert</strong>
+here. They are gated on <code>kubeEtcd.enabled</code>, which is <code>false</code> in <code>system/monitoring/values.yaml</code>
+(etcd runs as a systemd process, not a mirrored pod), so <code>defaultRules.rules.etcd: true</code> renders
+nothing. Do not re-enable it expecting coverage.</p>
+<p><code>system/monitoring/resources/gvisor-memory-recording-rules.yaml</code> (new, wired in
+<code>system/monitoring/kustomization.yaml</code>) is the other half of detecting it next time: the recording
+rule <code>node_namespace_pod:container_memory_working_set_bytes_incl_gvisor</code> is what makes the gVisor
+runners visible to per-pod attribution at all (see
+<a href="#the-observability-blind-spot-why-ci-looked-half-its-real-size">The observability blind spot</a>).</p>
+<h3 id="host-apply-verified-state-2026-10-13">Host apply — verified state (2026-10-13)</h3>
+<p>Applied on prusik with <code>cd metal &amp;&amp; ANSIBLE_EXTRA_ARGS="-t k3s --limit prusik" make cluster</code>
+(config-only, <code>k3s_version</code> unchanged, so nothing was re-downloaded or re-versioned). k3s restarted
+<strong>once</strong> — ~8s of downtime at ~12:28 UTC, far inside the 30–75s cycles the incident produced — with a
+clean recovery and no crash loop. The startup defrag that restart triggered took <strong>106 MB → 68 MB in
+~297 ms</strong>, where the same step cost 0.5–4.06s on a saturated device during the incident.</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Verified value</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>system.slice</code> <code>memory.low</code></td>
+<td><code>6442450944</code> (6 GiB)</td>
+<td>the ancestor budget exists, so the child's <code>MemoryLow</code> is <strong>effective</strong> instead of capped to the parent's 0</td>
+</tr>
+<tr>
+<td><code>k3s.service</code> <code>memory.low</code></td>
+<td><code>6442450944</code> (6 GiB)</td>
+<td>from <code>MemoryLow=6G</code>; the slice value comes from the drop-in <code>/etc/systemd/system/system.slice.d/memory-protection.conf</code></td>
+</tr>
+<tr>
+<td>kubelet <code>eviction-hard</code></td>
+<td><code>memory.available&lt;1Gi</code>, <code>nodefs.available&lt;10%</code></td>
+<td>live on the node, was <code>300Mi</code></td>
+</tr>
+<tr>
+<td>kubelet <code>eviction-soft</code></td>
+<td><code>memory.available&lt;4Gi</code>, grace <code>memory.available=1m</code></td>
+<td>kubelet acts before the node reaches the ~3 GiB stall point</td>
+</tr>
+<tr>
+<td>kube-reserved / system-reserved</td>
+<td>1 GiB / 10 GiB</td>
+<td>recorded for the eviction arithmetic</td>
+</tr>
+<tr>
+<td>etcd WAL fsync p99</td>
+<td>~2–3 ms</td>
+<td>incident peak 1.92s</td>
+</tr>
+<tr>
+<td>etcd backend commit p99</td>
+<td>~1.9 ms</td>
+<td>incident peak 3.71s</td>
+</tr>
+<tr>
+<td>etcd <code>has_leader</code> / DB size</td>
+<td>1 / ~76 MB</td>
+<td>single member kept leadership across the restart</td>
+</tr>
+<tr>
+<td>Host <code>MemAvailable</code></td>
+<td>~17.7 GiB (29%)</td>
+<td>incident collapse was to ~3 GiB</td>
+</tr>
+<tr>
+<td>Root-NVMe avg queue (SanDisk, resolved by model)</td>
+<td>~0.03</td>
+<td>incident peaks were in the hundreds</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Alerts validated against a real event:</strong> during the restart <code>EtcdTargetDown</code> went pending for
+exactly one scrape — sub-minute, i.e. under its <code>for: 1m</code>, so it did not page — and
+<code>K3sEtcdRestarted</code> fired as designed and stays firing ~1h after any restart before self-clearing. All
+11 rules loaded with valid input series, so none of them is silently empty.</p>
+<p><strong>Two caveats about those readings.</strong> The residual <strong>~4.8 GiB of swap occupancy</strong> alongside
+<code>pswpin</code>/<code>pswpout</code> ≈ 0 and memory-PSI ≈ 0 is <em>left over from the earlier incident</em>, not active
+thrashing — reserved swap only drains as pages are touched or the process restarts. And an
+after-restart, light-load snapshot of etcd latency is not the success criterion: criterion 2 of
+<a href="#prevention-and-success-criteria">Prevention and success criteria</a> is sub-100ms p99 <strong>during a CI
+burst and a backup window</strong>, which this apply did not exercise.</p>
+<h3 id="validation-status-checklist">Validation status checklist</h3>
+<p><strong>GitOps (committed and synced via ArgoCD):</strong></p>
+<ul>
+<li>✅ PriorityClass <code>low-priority</code> (e61bce19) — Synced/Healthy</li>
+<li>✅ CI runners (dbb28f62) — Synced/Healthy, 4/4 pods Running, <code>low-priority</code>, 12Gi runner limit,
+  <code>CARGO_BUILD_JOBS=4</code>, <code>MAKEFLAGS=-j4</code>, both StatefulSets capacity 2, LimitRange 12Gi max,
+  ResourceQuota 48Gi/16Gi live (used 43904Mi/9568Mi), no FailedCreate events</li>
+<li>✅ Velero quarterly schedule (78dc33a1) — Synced/Healthy, Wed 03:30 UTC cron <code>30 3 * * 3</code> enabled</li>
+<li>✅ Monitoring rules (48eba216) — Synced/Healthy, 11 rules loaded in Prometheus, state inactive,
+  etcd target up 1, WAL fsync p99 3.7ms (baseline), MemAvailable 26.5%</li>
+<li>⚠️ Monitoring ArgoCD shows pre-existing OutOfSync on KanidmGroup <code>grafana-mcp-users</code> — unrelated
+  to these rules, does not affect alert functionality</li>
+</ul>
+<p><strong>Metal (committed and APPLIED to prusik, 2026-10-13):</strong></p>
+<ul>
+<li>✅ <code>metal/inventory/host_vars/prusik.yml</code> — eviction-hard <code>memory.available&lt;1Gi,nodefs.available&lt;10%</code>,
+  eviction-soft <code>memory.available&lt;4Gi</code> with grace <code>memory.available=1m</code>, kube-reserved 1Gi /
+  system-reserved 10Gi, all live on kubelet</li>
+<li>✅ <code>metal/roles/k3s/templates/k3s.service.j2</code> — <code>MemoryLow=6G</code> applied: <code>k3s.service</code>
+  <code>memory.low</code> = <code>6442450944</code></li>
+<li>✅ <code>metal/roles/k3s/templates/memory-protection.conf.j2</code> — drop-in present at
+  <code>/etc/systemd/system/system.slice.d/memory-protection.conf</code>: <code>system.slice</code> <code>memory.low</code> =
+  <code>6442450944</code>, so the ancestor budget exists and the protection is <strong>effective</strong>, not capped to 0</li>
+<li>✅ k3s restarted once and recovered cleanly (~8s, ~12:28 UTC), etcd healthy afterwards — values in
+  <em>Host apply — verified state</em> above</li>
+</ul>
+<p>Re-verify the protection chain at any time:</p>
+<div class="highlight"><pre><span></span><code>ssh<span class="w"> </span>prusik<span class="w"> </span><span class="s1">&#39;cat /sys/fs/cgroup/system.slice/memory.low /sys/fs/cgroup/system.slice/k3s.service/memory.low&#39;</span>
+<span class="c1"># Expect 6442450944 on both lines. A 0 on the first line means the ancestor budget is gone and the</span>
+<span class="c1"># service-level MemoryLow is silently capped to 0.</span>
+</code></pre></div>
+<p><strong>Still pending before claiming the incident is cured:</strong></p>
+<ul class="task-list">
+<li class="task-list-item"><input type="checkbox" disabled/> Observe a representative CI burst <strong>and</strong> a Velero backup window: no lease-loss exits, etcd
+      latency &lt;100ms p99, memory-PSI ≈0, swap rate ≈0. The 2026-10-13 apply verified the config landed
+      and k3s recovered cleanly — it did not exercise behaviour under load</li>
+<li class="task-list-item"><input type="checkbox" disabled/> Verify calypso gVisor runner bounds in <code>multivara/gitops</code> repo</li>
+</ul>
+<p><strong>Do not claim "fixed" or "resolved"</strong> until sustained peak test passes. The calypso second-failure
+mode remains unresolved until the other repo is updated.</p>
+<h2 id="deferred-next-steps">Deferred — next steps</h2>
+<p>Ordered by how much of the failure mode each one removes.</p>
+<ol>
+<li><strong>Move CI off prusik</strong> — <code>planning/ci-runner-amd64-1.md</code>. Blocked on k8s-amd64-1 going 16 → 32 GiB
+   RAM (<code>planning/k8s-amd64-1-node-addition.md</code> TODO-9.2): <code>ci-runner-0</code> peaks at 17.4 GiB / 7.68
+   cores and the node has only 16 GiB, so it cannot host the runner today.</li>
+<li><strong>Bound the calypso gVisor runners</strong> — different repo (<code>multivara/gitops</code>). Their
+   0.29Gi-request / 16Gi-limit shape is the actual overcommit: the scheduler places them believing
+   0.29 GiB and they take gigabytes. They drove the second failure of 2026-10-13. The existing
+   ResourceQuota is CI-only; calypso is outside this repo's scope, so the second failure mode
+   remains unresolved until the other repo is updated.</li>
+<li><strong>Validate MemoryLow effectiveness under load</strong> — the 6G <code>MemoryLow</code> on <code>k3s.service</code> and the
+   matching 6G on <code>system.slice</code> (via drop-in) are now <strong>applied and verified</strong> on prusik
+   (<code>6442450944</code> in both cgroups), so the ancestor budget exists and the child's protection is not
+   capped to 0. The cgroup chain is <code>-.slice → system.slice → k3s.service</code>; <code>init.scope</code> is a sibling of
+   <code>system.slice</code> under the root slice, not an ancestor. What is still unvalidated is behaviour:
+   whether this actually prevents the etcd freeze under CI pressure — monitor during the next
+   pressure window. Calypso gVisor runners remain uncovered (see Deferred §2).</li>
+<li><strong>Attribution dashboard on top of the gVisor-aware recording rule</strong> — the rule itself is
+   <strong>done</strong> (2026-10-13): <code>node_namespace_pod:container_memory_working_set_bytes_incl_gvisor</code> in
+   <code>system/monitoring/resources/gvisor-memory-recording-rules.yaml</code>, so CI memory is no longer
+   invisible to per-pod queries. What remains is a dashboard that consumes it, replacing panels
+   built on <code>image!=""</code> / <code>container!=""</code>.</li>
+<li><strong>Raise <code>zfs_arc_max</code> above 5 GiB</strong> (<code>planning/k8s-amd64-1-node-addition.md</code> TODO-6.6) — <strong>only
+   after CI leaves.</strong> Raising the cap while <code>MemAvailable</code> bottoms out at ~3 GiB trades one stall for
+   a worse one. See <code>docs/conventions/prusik-fast-storage-tier.md</code>.</li>
+<li><strong>Dedicated etcd device</strong>, separate from the OS filesystem and swap, so reclaim I/O cannot queue
+   ahead of a WAL fsync.</li>
+<li><strong>3-member etcd HA</strong> — an <em>availability</em> project, explicitly not a fix for this. A second member
+   gives no quorum tolerance, and overcommit breaks any member whose host is starved.</li>
+</ol>
+<h2 id="rejected-approaches">Rejected approaches</h2>
+<p>Do not re-propose these; each was considered and rejected on the evidence.</p>
+<ul>
+<li><strong>Disabling or reducing etcd snapshots</strong> — they are not the observed trigger (0.3–0.7s), and they are the
+  recovery path.</li>
+<li><strong>Raising etcd timeouts / heartbeat intervals</strong> — masks the stall, makes the API slower for
+  everyone, and leaves the memory collapse in place.</li>
+<li><strong>Removing swap before freeing RAM</strong> — with 204.6 GiB of limits on 50.7 GiB allocatable, removing
+  the overflow valve converts thrash into OOM kills of whatever the kernel picks, including the
+  control plane.</li>
+<li><strong>Tuning <code>vm.swappiness</code> alone</strong> — changes the balance between reclaim paths, not the total
+  pressure on the shared device.</li>
+<li><strong><code>ionice</code>/<code>nice</code> on k3s</strong> — one process contains the API server, scheduler, controllers, and
+  etcd; lowering its I/O priority starves exactly what you are protecting.</li>
+</ul>
+<h2 id="if-this-recurs-how-to-keep-investigating">If this recurs — how to keep investigating</h2>
+<p>Everything below is <strong>read-only</strong>. SSH commands on prusik are for inspection only
+(<code>AGENTS.md</code>: no ad-hoc mutation on a remote host); if a command needs root, it is marked <code>[root]</code>
+and it only reads. All <code>kubectl</code> commands use <code>--context=grigri</code> (the kustomize local context can
+include other contexts). Do not escalate to local privileged commands; do not execute mutating
+<code>kubectl</code> commands. The one mutating command this doc names — a <strong>scoped, committed, config-only</strong>
+<code>ANSIBLE_EXTRA_ARGS="-t k3s --limit &lt;node&gt;" make cluster</code> — is agent-allowed per <code>AGENTS.md</code>, and only
+in that form: an unscoped or all-node <code>make cluster</code>, <code>-t k3s</code> <strong>without</strong> <code>--limit</code>, and any
+<code>k3s_version</code> bump remain prohibited. It restarts k3s on the targeted node (brief API downtime on the
+sole control plane), so it is a maintenance action, not part of this read-only investigation path.</p>
+<p>Resolve the root device first — see the device-instability section. Use <code>DEVICE</code> below for
+"whatever <code>node_disk_info</code>/<code>lsblk</code> says the SanDisk Extreme 500GB is today".</p>
+<h3 id="1-confirm-it-is-the-same-mechanism-60-seconds">1. Confirm it is the same mechanism (60 seconds)</h3>
+<p>Five discriminating signals. An outage is this mechanism when all of them move <strong>together</strong>; a
+healthy baseline is flat on all five.</p>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Query</th>
+<th>Healthy</th>
+<th>This incident</th>
+<th>Alert</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MemAvailable</code></td>
+<td><code>node_memory_MemAvailable_bytes{instance="prusik"}</code></td>
+<td>≥ 8 GiB (flat)</td>
+<td><strong>&lt; ~4 GiB</strong> (~3 GiB)</td>
+<td><code>PrusikMemoryAvailableLow</code> / <code>Critical</code></td>
+</tr>
+<tr>
+<td>Memory PSI "full"</td>
+<td><code>rate(node_pressure_memory_stalled_seconds_total{instance="prusik"}[1m])</code></td>
+<td><strong>0</strong></td>
+<td><strong>0.24–0.63</strong></td>
+<td><code>PrusikMemoryPSIHigh</code> (&gt;0.1)</td>
+</tr>
+<tr>
+<td>Swap rate</td>
+<td><code>rate(node_vmstat_pswpout{instance="prusik"}[1m])</code> pages/s</td>
+<td>~0.5 pages/s</td>
+<td><strong>&gt; 1000 pages/s</strong> (storm ~25k)</td>
+<td><code>PrusikSwapThrashing</code></td>
+</tr>
+<tr>
+<td>Root-NVMe queue</td>
+<td><code>rate(node_disk_io_time_weighted_seconds_total{instance="prusik",device="DEVICE"}[1m])</code></td>
+<td>single digits</td>
+<td><strong>&gt; 32</strong> (218 measured, 400+ in a later storm)</td>
+<td><code>PrusikRootDiskQueueHigh</code></td>
+</tr>
+<tr>
+<td>etcd WAL fsync p99</td>
+<td>see <a href="#3-prometheus-audited-query-set">Prometheus</a></td>
+<td>~1–3ms</td>
+<td><strong>&gt; 0.25s</strong>, peaked <strong>1.92s</strong></td>
+<td><code>EtcdWALFsyncSlow</code> / <code>Critical</code></td>
+</tr>
+<tr>
+<td>etcd backend commit p99</td>
+<td>see <a href="#3-prometheus-audited-query-set">Prometheus</a></td>
+<td>~1–3ms</td>
+<td><strong>&gt; 0.25s</strong>, peaked <strong>3.71s</strong></td>
+<td><code>EtcdBackendCommitSlow</code> / <code>Critical</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Memory-thrash vs a pure disk problem — the decision rule:</strong></p>
+<ul>
+<li>Memory signals (PSI full &gt; 0.1, swap, <code>MemAvailable</code> &lt; 4 GiB) <strong>all zero</strong> but root-disk queue and
+  etcd latency are high → it is the <em>device</em>: check SMART, write-cache flush behaviour, thermal
+  throttling, and who else is writing to that NVMe. Do not reach for the CI playbook.</li>
+<li>Memory signals <strong>non-zero</strong> → this mechanism. Go straight to attribution (§4).</li>
+<li>High <strong>I/O-PSI with no memory PSI</strong> is normal on this host during a scrub — 0.5–0.78 was measured
+  with healthy control-plane latency. Never treat <code>node_pressure_io_*</code> as the trigger.</li>
+<li>If etcd latency is high and <code>etcd_server_has_leader</code> is still 1 with
+  <code>etcd_server_leader_changes_seen_total</code> unchanged, that is consistent with this mechanism: the
+  killer is the Kubernetes Lease, not raft.</li>
+</ul>
+<h3 id="2-on-the-node-ssh-read-only">2. On the node (SSH, read-only)</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># The outage signature. Also confirms snapshot duration and the startup defrag. [root]</span>
+<span class="c1"># Use --utc because the host timezone is CEST; explicit --since/--until in UTC avoids ambiguity.</span>
+sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>k3s<span class="w"> </span>--utc<span class="w"> </span>--since<span class="w"> </span><span class="s2">&quot;2026-10-13 02:00:00 UTC&quot;</span><span class="w"> </span>--until<span class="w"> </span><span class="s2">&quot;2026-10-13 04:00:00 UTC&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-iE<span class="w"> </span><span class="s2">&quot;apply request took too long|ReadIndex|leaderelection lost|Saving etcd snapshot|fetched snapshot|Defragmenting|DeadlineExceeded&quot;</span>
+
+<span class="c1"># Did k3s actually die, and how many times? NRestarts is the outage counter. [root]</span>
+systemctl<span class="w"> </span>show<span class="w"> </span>k3s<span class="w"> </span>-p<span class="w"> </span>MemoryLow,MemorySwapMax,MemoryCurrent,MemoryPeak,NRestarts
+sudo<span class="w"> </span>systemctl<span class="w"> </span>status<span class="w"> </span>k3s<span class="w"> </span>--no-pager
+
+<span class="c1"># etcd&#39;s own view: latency, DB size, leadership (metrics are served in-process on :2381, so</span>
+<span class="c1"># target-down here means k3s is down or restarting)</span>
+curl<span class="w"> </span>-s<span class="w"> </span>http://127.0.0.1:2381/metrics<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;db_total_size|has_leader|leader_changes|wal_fsync|backend_commit&quot;</span>
+curl<span class="w"> </span>-s<span class="w"> </span>http://127.0.0.1:2381/metrics<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;^process_start_time_seconds&quot;</span>
+
+<span class="c1"># Snapshot timing — confirms snapshots are 0.3-0.7s, not the freeze</span>
+sudo<span class="w"> </span>k3s<span class="w"> </span>etcd-snapshot<span class="w"> </span>ls
+
+<span class="c1"># Is the swapfile really on the root device, and is it fragmented across it? [root]</span>
+swapon<span class="w"> </span>--show<span class="w"> </span>--bytes<span class="p">;</span><span class="w"> </span>findmnt<span class="w"> </span>-T<span class="w"> </span>/swapfile<span class="p">;</span><span class="w"> </span>sudo<span class="w"> </span>filefrag<span class="w"> </span>-v<span class="w"> </span>/swapfile<span class="w"> </span><span class="p">|</span><span class="w"> </span>head
+
+<span class="c1"># Resolve current NVMe naming BEFORE using any device name in a query. [root]</span>
+lsblk<span class="w"> </span>-o<span class="w"> </span>NAME,MODEL,SERIAL,MOUNTPOINT
+sudo<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/dev/disk/by-id/
+
+<span class="c1"># Pressure per resource, live. memory:full &gt; 0 is the tell; io:full alone is not. [root]</span>
+cat<span class="w"> </span>/proc/pressure/<span class="o">{</span>io,memory,cpu<span class="o">}</span>
+
+<span class="c1"># Device-level view: %util, aqu-sz (queue depth), await on the root NVMe</span>
+iostat<span class="w"> </span>-xz<span class="w"> </span><span class="m">5</span><span class="w"> </span><span class="m">2</span>
+
+<span class="c1"># How much of k3s is actually swapped out right now? Large VmSwap = the control plane is paying</span>
+<span class="c1"># reclaim latency directly. [root]</span>
+pgrep<span class="w"> </span>-af<span class="w"> </span><span class="s2">&quot;k3s server&quot;</span><span class="p">;</span><span class="w"> </span>sudo<span class="w"> </span>grep<span class="w"> </span>VmSwap<span class="w"> </span>/proc/&lt;k3spid&gt;/status
+</code></pre></div>
+<h3 id="3-prometheus-audited-query-set">3. Prometheus (audited query set)</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># --- Host: is the node out of RAM? ---</span>
+<span class="nv">node_memory_MemAvailable_bytes</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}</span>
+<span class="nv">node_memory_MemAvailable_bytes</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}</span>
+<span class="w">  </span><span class="o">/</span><span class="w"> </span><span class="nv">node_memory_MemTotal_bytes</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}</span><span class="w">          </span><span class="c1"># &lt; 0.08 warning, &lt; 0.05 critical</span>
+
+<span class="c1"># --- Host: is anything blocked in reclaim? (the &quot;full&quot; line = *_stalled series) ---</span>
+<span class="kr">rate</span><span class="o">(</span><span class="nv">node_pressure_memory_stalled_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="kr">rate</span><span class="o">(</span><span class="nv">node_pressure_memory_waiting_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+
+<span class="c1"># --- Host: swap traffic, converted to MiB/s (counters are PAGES, not bytes) ---</span>
+<span class="kr">rate</span><span class="o">(</span><span class="nv">node_vmstat_pswpin</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4096</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1048576</span>
+<span class="kr">rate</span><span class="o">(</span><span class="nv">node_vmstat_pswpout</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mi">4096</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">1048576</span>
+
+<span class="c1"># --- Device: resolve DEVICE by model BEFORE using it in queries ---</span>
+<span class="c1"># The SanDisk Extreme 500GB root disk kernel name flips across reboots. Resolve it now:</span>
+<span class="nv">node_disk_info</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}</span>
+<span class="c1"># Look for model=&quot;Extreme_500GB&quot; (or similar) and note the current device name.</span>
+
+<span class="c1"># --- Device: queue depth (weighted time = avg in-flight), mean write await, utilisation ---</span>
+<span class="c1"># DEVICE = resolved from node_disk_info above, NOT a remembered nvmeXnY</span>
+<span class="kr">rate</span><span class="o">(</span><span class="nv">node_disk_io_time_weighted_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">device</span><span class="o">=</span><span class="p">&quot;</span><span class="s">DEVICE</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+
+<span class="c1"># Mean write await in milliseconds (not tail, not weighted time / total IO).</span>
+<span class="c1"># weighted time is useful for queue depth, NOT the standard await numerator; use write_time.</span>
+<span class="c1"># clamp_min prevents division by zero when writes are idle.</span>
+<span class="mi">1000</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="kr">rate</span><span class="o">(</span><span class="nv">node_disk_write_time_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">device</span><span class="o">=</span><span class="p">&quot;</span><span class="s">DEVICE</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="w">  </span><span class="o">/</span><span class="w"> </span><span class="kr">clamp_min</span><span class="o">(</span><span class="kr">rate</span><span class="o">(</span><span class="nv">node_disk_writes_completed_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">device</span><span class="o">=</span><span class="p">&quot;</span><span class="s">DEVICE</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span><span class="p">,</span><span class="w"> </span><span class="mf">0.001</span><span class="o">)</span>
+
+<span class="c1"># Read await analogous (optional, one query enough):</span>
+<span class="mi">1000</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="kr">rate</span><span class="o">(</span><span class="nv">node_disk_read_time_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">device</span><span class="o">=</span><span class="p">&quot;</span><span class="s">DEVICE</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="w">  </span><span class="o">/</span><span class="w"> </span><span class="kr">clamp_min</span><span class="o">(</span><span class="kr">rate</span><span class="o">(</span><span class="nv">node_disk_reads_completed_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">device</span><span class="o">=</span><span class="p">&quot;</span><span class="s">DEVICE</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span><span class="p">,</span><span class="w"> </span><span class="mf">0.001</span><span class="o">)</span>
+
+<span class="kr">rate</span><span class="o">(</span><span class="nv">node_disk_io_time_seconds_total</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">device</span><span class="o">=</span><span class="p">&quot;</span><span class="s">DEVICE</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span><span class="w">   </span><span class="c1"># %util</span>
+
+<span class="c1"># --- etcd: the symptom that pages. Use [1m] around restarts to avoid mixed populations. ---</span>
+<span class="kr">histogram_quantile</span><span class="o">(</span><span class="mf">0.99</span><span class="p">,</span><span class="w"> </span><span class="k">sum</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="nv">job</span><span class="p">,</span><span class="w"> </span><span class="nv">instance</span><span class="p">,</span><span class="w"> </span><span class="nv">le</span><span class="o">)</span><span class="w"> </span><span class="o">(</span>
+<span class="w">  </span><span class="kr">rate</span><span class="o">(</span><span class="nv">etcd_disk_wal_fsync_duration_seconds_bucket</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="o">))</span>
+<span class="kr">histogram_quantile</span><span class="o">(</span><span class="mf">0.99</span><span class="p">,</span><span class="w"> </span><span class="k">sum</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="nv">job</span><span class="p">,</span><span class="w"> </span><span class="nv">instance</span><span class="p">,</span><span class="w"> </span><span class="nv">le</span><span class="o">)</span><span class="w"> </span><span class="o">(</span>
+<span class="w">  </span><span class="kr">rate</span><span class="o">(</span><span class="nv">etcd_disk_backend_commit_duration_seconds_bucket</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="o">))</span>
+
+<span class="c1"># --- etcd: snapshots and DB bloat ---</span>
+<span class="kr">histogram_quantile</span><span class="o">(</span><span class="mf">0.99</span><span class="p">,</span><span class="w"> </span><span class="k">sum</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="o">(</span><span class="nv">job</span><span class="p">,</span><span class="w"> </span><span class="nv">instance</span><span class="p">,</span><span class="w"> </span><span class="nv">le</span><span class="o">)</span><span class="w"> </span><span class="o">(</span>
+<span class="w">  </span><span class="kr">rate</span><span class="o">(</span><span class="nv">etcd_disk_backend_snapshot_duration_seconds_bucket</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="o">))</span>
+<span class="kr">rate</span><span class="o">(</span><span class="nv">etcd_debugging_snap_save_total_duration_seconds_sum</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="w">  </span><span class="o">/</span><span class="w"> </span><span class="kr">rate</span><span class="o">(</span><span class="nv">etcd_debugging_snap_save_total_duration_seconds_count</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}[</span><span class="s">1m</span><span class="p">]</span><span class="o">)</span>
+<span class="nv">etcd_mvcc_db_total_size_in_bytes</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}</span>
+<span class="w">  </span><span class="o">/</span><span class="w"> </span><span class="nv">etcd_mvcc_db_total_size_in_use_in_bytes</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}</span><span class="w">    </span><span class="c1"># ~2.7x = dead pages, not a freeze</span>
+
+<span class="c1"># --- etcd: leadership (expect has_leader=1, leader_changes flat at 1) ---</span>
+<span class="nv">etcd_server_has_leader</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}</span>
+<span class="nv">etcd_server_leader_changes_seen_total</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}</span>
+
+<span class="c1"># --- ZFS ARC: is reclaim eating the cache? (cap is pinned at 5 GiB) ---</span>
+<span class="nv">node_zfs_arc_c_max</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}</span><span class="w">                     </span><span class="c1"># 5 GiB, metal/inventory/host_vars/prusik.yml</span>
+</code></pre></div>
+<p><strong>Metrics that do not exist on this node</strong> — do not write queries or alerts against them, they will
+silently return nothing (empty panels look identical to a healthy system):</p>
+<ul>
+<li><code>node_vmstat_pgscan_direct</code>, <code>node_vmstat_pgscan_kswapd</code> — absent from prusik's node-exporter. Use
+  PSI (<code>node_pressure_memory_stalled_seconds_total</code>) and <code>node_vmstat_pswpin</code>/<code>pswpout</code> instead.</li>
+<li><code>node_memory_page_size_bytes</code> — absent, which is why <code>PrusikSwapThrashing</code> thresholds in <strong>pages/s</strong>
+  (4 KiB pages) rather than bytes.</li>
+</ul>
+<h3 id="4-attribute-the-memory-to-a-workload">4. Attribute the memory to a workload</h3>
+<p>Query at a <strong>point in time</strong> at the peak, not <code>max_over_time</code> across a window. A windowed max
+summarises every short-lived pod at its own moment and reports a total that never existed on the node
+simultaneously — which is exactly how a gVisor burst gets blamed on a runner that already exited, or
+missed entirely.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Prometheus HTTP API: instant query evaluated AT the peak timestamp</span>
+curl<span class="w"> </span>-sG<span class="w"> </span>http://prometheus.internal.grigri.cloud/api/v1/query<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s1">&#39;query=max by(namespace,pod)(container_memory_working_set_bytes{node=&quot;prusik&quot;,pod!=&quot;&quot;,container=&quot;&quot;,id!~&quot;.*cri-containerd.*&quot;})&#39;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--data-urlencode<span class="w"> </span><span class="s2">&quot;time=2026-10-13T03:07:30Z&quot;</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># Verified pod-aggregate form — USE THIS ON PRUSIK.</span>
+<span class="c1"># Excludes the root empty Pod series (container=&quot;&quot;) and excludes named container paths by matching</span>
+<span class="c1"># id!~&quot;.*cri-containerd.*&quot;. max by (namespace,pod) picks the aggregate sandbox series if present,</span>
+<span class="c1"># but this is not a generic guarantee — verify the metadata id filter against your node-exporter</span>
+<span class="c1"># version. Use point-in-time instant queries, not summing max_over_time.</span>
+<span class="k">max</span><span class="w"> </span><span class="k">by</span><span class="o">(</span><span class="nv">namespace</span><span class="p">,</span><span class="nv">pod</span><span class="o">)(</span><span class="nv">container_memory_working_set_bytes</span><span class="p">{</span><span class="nl">node</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">pod</span><span class="o">!=</span><span class="p">&quot;&quot;,</span><span class="nl">container</span><span class="o">=</span><span class="p">&quot;&quot;,</span><span class="nl">id</span><span class="o">!~</span><span class="p">&quot;</span><span class="s">.*cri-containerd.*</span><span class="p">&quot;}</span><span class="o">)</span>
+
+<span class="c1"># Node-total sanity check against the same instant</span>
+<span class="k">sum</span><span class="o">(</span><span class="nv">container_memory_working_set_bytes</span><span class="p">{</span><span class="nl">node</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;,</span><span class="nl">pod</span><span class="o">!=</span><span class="p">&quot;&quot;,</span><span class="nl">container</span><span class="o">=</span><span class="p">&quot;&quot;,</span><span class="nl">id</span><span class="o">!~</span><span class="p">&quot;</span><span class="s">.*cri-containerd.*</span><span class="p">&quot;}</span><span class="o">)</span>
+
+<span class="c1"># Was anything actually OOM-killed? (In these incidents: no. Answer the question, then move on.)</span>
+<span class="kr">increase</span><span class="o">(</span><span class="nv">container_oom_events_total</span><span class="p">{</span><span class="nl">node</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}[</span><span class="s">15m</span><span class="p">]</span><span class="o">)</span>
+<span class="nv">node_vmstat_oom_kill</span><span class="p">{</span><span class="nl">instance</span><span class="o">=</span><span class="p">&quot;</span><span class="s">prusik</span><span class="p">&quot;}</span>
+</code></pre></div>
+<p>Expect: non-CI baseline flat at <strong>30–35 GiB</strong>; anything below that is CI. Check <code>ci-runner-0</code> first,
+then <code>calypso-runners</code>, then any pod that started between the two.</p>
+<h3 id="5-the-restart-startup-defrag-amplifier">5. The restart + startup-defrag amplifier</h3>
+<p>The downtime per cycle is <em>stall + unconditional defrag</em>, so quantify both.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Restart count as an outage counter (also exposed as process_start_time_seconds on job=&quot;etcd&quot;)</span>
+systemctl<span class="w"> </span>show<span class="w"> </span>k3s<span class="w"> </span>-p<span class="w"> </span>NRestarts
+
+<span class="c1"># Each restart: Defragmenting ... before the API comes up (0.5-4.06s measured)</span>
+sudo<span class="w"> </span>journalctl<span class="w"> </span>-u<span class="w"> </span>k3s<span class="w"> </span>--utc<span class="w"> </span>--since<span class="w"> </span><span class="s2">&quot;2 hours ago UTC&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-iE<span class="w"> </span><span class="s2">&quot;Defragmenting|Starting k3s|Main process exited|Failed with result&quot;</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="c1"># Every change in process start time = one k3s restart. &gt; 0 is the outage, not a rate.</span>
+<span class="kr">changes</span><span class="o">(</span><span class="nv">process_start_time_seconds</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}[</span><span class="s">1h</span><span class="p">]</span><span class="o">)</span>
+<span class="nv">up</span><span class="p">{</span><span class="nl">job</span><span class="o">=</span><span class="p">&quot;</span><span class="s">etcd</span><span class="p">&quot;}</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span>
+</code></pre></div>
+<p>If the defrag grows steadily across cycles, the DB is accumulating dead pages
+(<code>etcd_mvcc_db_total_size_in_bytes</code> vs <code>_in_use_...</code>): compact and defrag <strong>during a quiet window</strong>,
+not during a stall — defrag on a saturated device is the worst possible time.</p>
+<h3 id="6-then-check-the-collateral">6. Then check the collateral</h3>
+<p>Every k3s exit mid-backup leaves state behind. Verify it, do not assume a clean recovery:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>get<span class="w"> </span>backups<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;InProgress|Queued|PartiallyFailed|Failed&quot;</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>get<span class="w"> </span>zb<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Done
+</code></pre></div>
+<p>Recovery procedure: <code>docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md</code> and
+<code>docs/troubleshooting/velero-backup-failures.md</code>.</p>
+<h2 id="prevention-and-success-criteria">Prevention and success criteria</h2>
+<p>Fixes are working when, across a CI burst <strong>and</strong> a backup window:</p>
+<ol>
+<li><strong>No k3s lease-loss exits</strong> — <code>changes(process_start_time_seconds{job="etcd"}[1h]) == 0</code> and
+   <code>NRestarts</code> flat; no <code>leaderelection lost</code> in the journal.</li>
+<li><strong>etcd latency stays sub-100ms at p99</strong> for WAL fsync and backend commit during CI/backup windows
+   (incident peak: 1.92s / 3.71s).</li>
+<li><strong>CI dies at its own boundary</strong> — the runner container is OOM-killed or evicted (with
+   <code>low-priority</code> it is first in line) instead of the node thrashing. <code>container_oom_events_total</code>
+   rising on <code>ci-runners</code> while the control plane stays healthy is <strong>success</strong>, not an incident.</li>
+<li><strong>memory-PSI "full" ≈ 0 and swap rate ≈ 0 at the peaks</strong>; <code>MemAvailable</code> never under the
+   <code>eviction-soft</code> 4 GiB for more than the 1m grace period.</li>
+<li><strong>Alerts fire early</strong> — <code>PrusikMemoryAvailableLow</code>, <code>PrusikMemoryPSIHigh</code> and <code>PrusikSwapThrashing</code>
+   precede <code>EtcdWALFsyncSlow</code>, which precedes <code>K3sEtcdRestarted</code>. If the restart alert is the first
+   thing you see, the host-side thresholds are too slow: tune them down, do not add more etcd rules.</li>
+</ol>
+<p><strong>Baseline caveat — read before comparing "before/after".</strong> The pre-incident baseline is
+<strong>metrics-only</strong>, and the metrics were added <em>while</em> a scrub was running: the scrub started
+<strong>2026-10-11 00:24</strong> and the node-exporter/etcd series went live <strong>2026-10-11 ~19:11Z</strong>. There is
+therefore <strong>no clean pre-scrub window</strong> in Prometheus. Treat "healthy" as <em>healthy under I/O-PSI
+0.5–0.78 with memory-PSI at zero</em> — which is precisely the comparison that ruled out the scrub. Do
+not conclude "I/O-PSI is high, so we are still broken" from the scrub overlap, and re-measure the
+memory/swap floors after the Tier 0/1 changes land rather than reusing these numbers as a target.</p>
+<h2 id="references">References</h2>
+<ul>
+<li>Prior incident, same mechanism: <code>docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md</code></li>
+<li>Backup collateral and recovery: <code>docs/troubleshooting/velero-backup-failures.md</code>,
+  <code>docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md</code></li>
+<li>Why the ARC is pinned at 5 GiB and what to do about RAM:
+  <code>docs/conventions/prusik-fast-storage-tier.md</code>,
+  <code>docs/troubleshooting/prusik-l2arc-ineffective.md</code></li>
+<li>Moving CI off prusik (TODO-9.2 gate): <code>planning/ci-runner-amd64-1.md</code>,
+  <code>planning/k8s-amd64-1-node-addition.md</code></li>
+<li>gVisor runner ownership: <code>planning/odroid-decommission.md</code></li>
+<li>Alerts: <code>system/monitoring/resources/etcd-host-memory-rules.yaml</code> (each alert's annotation links
+  here), scrape config <code>system/monitoring/resources/etcd-scrape-config.yaml</code></li>
+<li>gVisor-inclusive per-pod memory: recording rule
+  <code>system/monitoring/resources/gvisor-memory-recording-rules.yaml</code></li>
+<li>Hardware and device mapping: <code>docs/hardware/prusik.md</code></li>
+<li>Writing docs like this one: <code>docs/conventions/documenting-learnings.md</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
