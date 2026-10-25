@@ -65,7 +65,7 @@ app-template:
           image: &image
             # renovate: datasource=docker depName=ghcr.io/pando85/battery-optimizer
             repository: ghcr.io/pando85/battery-optimizer
-            tag: 0.2.0@sha256:abc54c5bd8bf12f7996f790397bccd03b46708bbd1a09d1df7c4ce0899826c39
+            tag: 0.2.1@sha256:6c513ee763e3a7be15f0b376dd3d562f68e4d91a0bf21b8750cd9f72a54d31dc
           env:
             TZ: UTC
             BATTERY_OPTIMIZER_DATA_DIR: /data
@@ -73,9 +73,13 @@ app-template:
             BATTERY_OPTIMIZER_HA_URL: http://home-assistant-hass.home-assistant.svc:8123
             BATTERY_OPTIMIZER_PROMETHEUS_URL: http://prometheus-long-term.monitoring:9090
             # Pipeline knobs (read by the script below).
-            # HA recorder keeps 10 days; re-pull 10 days every run (row-level dedup makes it free).
-            # Chunk width stays at the CLI default (86400 s): never change it on a live store.
-            HA_LOOKBACK_DAYS: "10"
+            # The HA recorder keeps 10 days (purge_keep_days default, nothing overrides it) and
+            # purges nightly, so the oldest day of a 10-day window is partly or wholly gone and
+            # `extract` (exit 3 on a coverage gap) would fail every night. 8 days keeps the oldest
+            # chunk safely inside retention while still healing 7 missed daily runs; row-level dedup
+            # makes the overlap free. Do not opt out with --allow-coverage-gaps: a real gap must fail
+            # the Job (BatteryOptimizerJobFailed). Chunk width stays at the CLI default (86400 s).
+            HA_LOOKBACK_DAYS: "8"
             # Prometheus extraction is NOT deduplicated across runs, so keep the overlap small.
             PROM_LOOKBACK_DAYS: "3"
             # Used only while the store has no finished Prometheus extraction (first run on an empty PVC).
@@ -103,7 +107,9 @@ app-template:
                 battery-optimizer extract --source prometheus --lookback-days "${PROM_LOOKBACK_DAYS}"
               else
                 log "step 2/4: extract prometheus (empty store: bootstrap from ${PROM_BOOTSTRAP_START})"
-                battery-optimizer extract --source prometheus --start "${PROM_BOOTSTRAP_START}"
+                # The 2024 archive has known holes (series started later, outages), which `extract`
+                # reports as coverage gaps (exit 3). Accept them for this one historical backfill only.
+                battery-optimizer extract --source prometheus --start "${PROM_BOOTSTRAP_START}" --allow-coverage-gaps
               fi
 
               log "step 3/4: validate"

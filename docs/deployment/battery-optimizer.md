@@ -21,7 +21,7 @@ deployment.
 | Namespace / ArgoCD app | `battery-optimizer` (ApplicationSet auto-discovery) |
 | CronJob | `battery-optimizer-pipeline`, `30 3 * * *` UTC, `concurrencyPolicy: Forbid` |
 | Image | `ghcr.io/pando85/battery-optimizer`, pinned `tag@sha256`, Renovate-managed |
-| Steps (one container, `sh -ec`, fails fast) | extract `ha-history` (10 d lookback) -> extract `prometheus` (3 d lookback) -> `validate` -> `build` |
+| Steps (one container, `sh -ec`, fails fast) | extract `ha-history` (8 d lookback) -> extract `prometheus` (3 d lookback) -> `validate` -> `build` |
 | Failure handling | `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
 | Node | pinned to `prusik` (node-local `openebs-zfspv`) |
 | Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk) |
@@ -32,9 +32,11 @@ deployment.
 
 ## Design notes and gotchas
 
-- **Why daily with a 10 day HA window.** HA's recorder keeps 10 days (`purge_keep_days` default,
+- **Why daily with an 8 day HA window.** HA's recorder keeps 10 days (`purge_keep_days` default,
   nothing overrides it). Rows older than that are gone for good, so the binding rule is "never more
-  than 10 days between two successful runs". Daily tolerates a week of missed runs. Re-pulling is
+  than 10 days between two successful runs". Daily with an 8 day lookback tolerates 7 missed runs. The window is deliberately shorter than the
+  retention: the recorder purges nightly, so the oldest chunk of a 10 day window is partly or wholly
+  gone and would raise a coverage gap every night (see the next note). Re-pulling is
   free because the HA extractor dedups against rows already in the store. Chunk width stays at the
   CLI default (86400 s); changing it on a live store mints new carry-in anchors.
 - **Prometheus extraction is not deduplicated across runs**, so the lookback is only 3 days
@@ -61,10 +63,13 @@ deployment.
   73 s) reached DNS, Home Assistant and Prometheus.
 - **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
   image carries no config). Update both together; the tariff config hash is part of every dataset id.
-- **Exit codes do not reflect coverage.** `extract` exits 0 even when the manifest carries
-  `empty_chunk:*` or `chunk_accounting_mismatch` quality flags, so the job (and its alerts) only
-  detect hard failures and missed runs, not silent gaps. Read the manifest `quality_flags` in the
-  job logs/store after a bootstrap or an HA outage.
+- **Coverage gaps fail the Job.** From 0.2.1 `extract` exits 3 when the run's manifest records a
+  coverage gap (HA: `empty_chunk`, `empty_chunk_after_window_filter`, `chunk_accounting_mismatch`,
+  `no_rows_for_entity`, `no_rows_extracted:all`; Prometheus: `no_samples_extracted`,
+  `no_series_chunks`, `series_without_samples_chunks`). The data and manifest are kept, but the Job
+  fails and `BatteryOptimizerJobFailed` fires, so a silent gap is no longer silent. The pipeline does
+  **not** pass `--allow-coverage-gaps` (except for the one-off Prometheus bootstrap, whose 2024
+  history has known holes). If a window legitimately has no data, fix the window rather than opting out.
 
 ## Shadow service (Phase C)
 
@@ -104,7 +109,7 @@ kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-serv
 
 Manual Job from the CronJob on an empty PVC: success in 5m46s including the full Prometheus
 bootstrap (1028 parts, 5.84 M rows), peak working set about 1.15 GiB (requests 768 Mi, limit 2 Gi),
-about 0.54 core peak, 41.5 MiB on the volume afterwards. Steady-state runs only re-pull 10 days of
+about 0.54 core peak, 41.5 MiB on the volume afterwards. Steady-state runs only re-pull 8 days of
 HA history and 3 days of Prometheus. The cluster store is separate from the manual
 `~/data/energy-baseline` store, which has not been migrated into the PVC.
 

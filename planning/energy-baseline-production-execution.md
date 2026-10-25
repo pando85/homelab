@@ -26,8 +26,8 @@ Phase B landed in `apps/battery-optimizer/` (docs: [`docs/deployment/battery-opt
 | Item | As deployed |
 |---|---|
 | Workload | CronJob `battery-optimizer-pipeline`, `30 3 * * *` UTC, `Forbid`, `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
-| Pipeline | one container, `sh -ec`: extract `ha-history` (`--lookback-days 10`) -> extract `prometheus` (`--lookback-days 3`, or bootstrap from 2024-01-01 while no finished Prometheus manifest exists) -> `validate` -> `build` (complete calendar months, `2024-01-01` to first of this month) |
-| Image | `ghcr.io/pando85/battery-optimizer:0.1.0@sha256:8c6a4b87...e2a1` (multi-arch index digest), Renovate hint in `values.yaml` |
+| Pipeline | one container, `sh -ec`: extract `ha-history` (`--lookback-days 8`) -> extract `prometheus` (`--lookback-days 3`, or bootstrap from 2024-01-01 while no finished Prometheus manifest exists) -> `validate` -> `build` (complete calendar months, `2024-01-01` to first of this month) |
+| Image | `ghcr.io/pando85/battery-optimizer:0.1.0@sha256:8c6a4b87...e2a1` (multi-arch index digest; now 0.2.1, see Phase C), Renovate hint in `values.yaml` |
 | Vault path | KV v2 `secret/battery-optimizer/home-assistant`, property `token` -> ExternalSecret `battery-optimizer-home-assistant` -> `BATTERY_OPTIMIZER_HA_TOKEN` (env only) |
 | Storage | PVC `battery-optimizer-data`, **5 Gi**, `openebs-zfspv` (Retain), `Prune=false`, labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`, pinned to prusik; SnapshotSchedule daily 06:00 UTC keep 20; volume root chowned to 65532 by an init container (no fsGroup) |
 | Config | `files/tariff.yaml` (vendored copy of the app repo's `config/tariff.yaml`) in ConfigMap `battery-optimizer-config` |
@@ -36,23 +36,23 @@ Phase B landed in `apps/battery-optimizer/` (docs: [`docs/deployment/battery-opt
 
 Superseded or changed relative to the plan above:
 
-- **Cadence:** daily (the plan allowed daily or every 3 days); HA window 10 days deep; Prometheus window 3 days because Prometheus extraction is not deduplicated across runs.
+- **Cadence:** daily (the plan allowed daily or every 3 days); HA window 8 days deep (inside the 10-day retention, because 0.2.1 `extract` exits 3 on a coverage gap and a purged oldest chunk would fail every night); Prometheus window 3 days because Prometheus extraction is not deduplicated across runs.
 - **Alert label:** the PrometheusRule uses `release: monitoring`, not `operator.prometheus.io/instance: prometheus-long-term`. The long-term Prometheus has no kube-state-metrics or kubelet series, so rules labelled for it would never fire. Generic `KubeJobFailed` and `KubePersistentVolumeFillingUp` from kube-prometheus-stack also cover this namespace.
 - **Heartbeat metric:** `kube_cronjob_status_last_successful_time` (plus `kube_cronjob_created` for the never-succeeded case) rather than `kube_job_complete`.
 - **NetworkPolicy:** none, per the repo rule to keep NetworkPolicy isolation off until the Cilium datapath bugs are fixed.
-- **Not delivered:** the per-chunk silent-gap alert. The CLI exits 0 when the manifest carries `empty_chunk:*` / `chunk_accounting_mismatch` flags and exports no metrics, so nothing in Kubernetes can alert on it (CLI gap, reported to the app repo owner).
+- **Silent-gap alerting:** delivered through the exit code. As of 0.2.1 `extract` exits 3 on a coverage gap (the 0.1.0 CLI exited 0), so the Job fails and `BatteryOptimizerJobFailed` fires; the pipeline never passes `--allow-coverage-gaps` except for the one-off Prometheus bootstrap.
 - **Open: the existing private store has not been migrated.** The cluster store started empty and was bootstrapped from Prometheus; its HA part is the 10-day window that was still in the recorder (`parts=11 rows=54`). The local `~/data/energy-baseline` store (including its Prometheus manifests and analysis datasets) was not copied. Nothing is lost as long as the first scheduled runs keep the HA window inside recorder retention, but the manual store remains the only copy of anything already purged from the recorder.
 - **Dataset growth:** `build` is write-once and has no garbage collection; the job builds closed calendar months to keep this to roughly one dataset per month (~20 MB each).
 
 ## Phase C: resident shadow service (2026-10-25)
 
-The same app now also runs the shadow service from `battery-optimizer` 0.2.0 (details in
+The same app now also runs the shadow service from `battery-optimizer` 0.2.1 (0.2.0 was deployed first, 0.2.1 adds the extract exit code and quieter httpx logs) (details in
 [`docs/deployment/battery-optimizer.md`](../docs/deployment/battery-optimizer.md#shadow-service-phase-c)):
 
 - Deployment `battery-optimizer-service` (1 replica, `Recreate`), `battery-optimizer serve` on 8080,
   sharing the image anchor, the PVC `battery-optimizer-data` (it writes only `/data/service/v1/`) and
   the ConfigMap (`tariff.yaml` + vendored `service.yaml`, `soc_source: simulated`) with the CronJob.
-  The CronJob moved to 0.2.0 with it.
+  The CronJob moved to 0.2.1 with it (one image anchor).
 - HA token: the same Vault secret, mounted as a file; read-only, non-admin. No write credential.
 - Egress-only NetworkPolicy `battery-optimizer-egress` for both workloads (DNS, HA 8123, long-term
   Prometheus 9090; no Modbus, no ingress section). Verified with a second manual pipeline Job.
