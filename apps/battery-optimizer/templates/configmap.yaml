@@ -5,3 +5,5 @@ metadata:
 data:
   tariff.yaml: |
 {{ .Files.Get "files/tariff.yaml" | indent 4 }}
+  service.yaml: |
+{{ .Files.Get "files/service.yaml" | indent 4 }}

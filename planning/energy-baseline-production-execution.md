@@ -44,6 +44,24 @@ Superseded or changed relative to the plan above:
 - **Open: the existing private store has not been migrated.** The cluster store started empty and was bootstrapped from Prometheus; its HA part is the 10-day window that was still in the recorder (`parts=11 rows=54`). The local `~/data/energy-baseline` store (including its Prometheus manifests and analysis datasets) was not copied. Nothing is lost as long as the first scheduled runs keep the HA window inside recorder retention, but the manual store remains the only copy of anything already purged from the recorder.
 - **Dataset growth:** `build` is write-once and has no garbage collection; the job builds closed calendar months to keep this to roughly one dataset per month (~20 MB each).
 
+## Phase C: resident shadow service (2026-10-25)
+
+The same app now also runs the shadow service from `battery-optimizer` 0.2.0 (details in
+[`docs/deployment/battery-optimizer.md`](../docs/deployment/battery-optimizer.md#shadow-service-phase-c)):
+
+- Deployment `battery-optimizer-service` (1 replica, `Recreate`), `battery-optimizer serve` on 8080,
+  sharing the image anchor, the PVC `battery-optimizer-data` (it writes only `/data/service/v1/`) and
+  the ConfigMap (`tariff.yaml` + vendored `service.yaml`, `soc_source: simulated`) with the CronJob.
+  The CronJob moved to 0.2.0 with it.
+- HA token: the same Vault secret, mounted as a file; read-only, non-admin. No write credential.
+- Egress-only NetworkPolicy `battery-optimizer-egress` for both workloads (DNS, HA 8123, long-term
+  Prometheus 9090; no Modbus, no ingress section). Verified with a second manual pipeline Job.
+- ServiceMonitor into the long-term Prometheus; `PrometheusRule/battery-optimizer-service` (10
+  alerts) and the Grafana dashboard "Battery optimizer shadow service" (folder `battery-optimizer`).
+- Readiness probe uses `/health/live`; `battery_optimizer_ready` is the alerting signal.
+- Scope: shadow only. Live actuation (Phase D) is neither built nor authorised, and
+  `comparison_basis` stays `no_battery_pre_commissioning` until the battery entities exist in HA.
+
 ## Interim manual extraction cadence
 
 **Decision, 2026-10-23.** Asked how to stop Home Assistant enum history from silently aging out of the recorder, the owner chose **manual extraction on a short cycle from the development PC**. The alternatives were pulling the cluster CronJob forward (declined — the CLI is not mature and the GitOps deployment is a deliberate later step) and accepting the loss (declined — recorder rows are the one data class that cannot be recovered). The GitOps CronJob and its `openebs-zfspv` PVC on prusik therefore remain **deferred, not cancelled**; the requirements in sections 3–7 below still apply when they are scheduled.

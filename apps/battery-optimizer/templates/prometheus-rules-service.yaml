@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: battery-optimizer-service
+  labels:
+    # battery_optimizer_* and the scrape's `up` live in the long-term Prometheus (see the
+    # ServiceMonitor). The kube-state-metrics based rules are in the `battery-optimizer` rule.
+    operator.prometheus.io/instance: prometheus-long-term
+spec:
+  groups:
+    - name: battery-optimizer-service.rules
+      rules:
+{{- range $path, $_ := .Files.Glob "rules-service/*.yaml" }}
+{{ $.Files.Get $path | indent 8 }}
+{{- end }}

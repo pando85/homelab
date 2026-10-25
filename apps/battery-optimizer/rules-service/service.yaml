@@ -1,0 +1,88 @@
+- alert: BatteryOptimizerServiceDown
+  expr: up{namespace="battery-optimizer", job="battery-optimizer"} == 0
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer shadow service scrape is failing
+    description: Prometheus cannot scrape the battery-optimizer service ({{ $labels.instance }}). Check the pod and its logs.
+- alert: BatteryOptimizerServiceAbsent
+  # Covers a missing ServiceMonitor target, a deleted Deployment and a service that never started.
+  expr: absent(battery_optimizer_build_info)
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer shadow service metrics are absent
+    description: No battery_optimizer_build_info series for 10 minutes. The shadow service is not running or not scraped.
+- alert: BatteryOptimizerNotReady
+  # Readiness probes use /health/live on purpose, so this metric is the readiness signal.
+  expr: battery_optimizer_ready == 0
+  for: 30m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer shadow service has not been ready for 30 minutes
+    description: |
+      battery_optimizer_ready has been 0 for 30 minutes. The reasons are the series
+      battery_optimizer_not_ready_reason == 1 (see `/health/ready` or `/status`). No shadow decisions are
+      being recorded meanwhile.
+- alert: BatteryOptimizerHomeAssistantDisconnected
+  expr: battery_optimizer_ha_connected == 0
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer is disconnected from Home Assistant
+    description: The WebSocket session to Home Assistant has been down for 10 minutes (see battery_optimizer_ha_failures_total by stage).
+- alert: BatteryOptimizerGridPowerStale
+  expr: battery_optimizer_input_stale{role="grid_power"} == 1
+  for: 15m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer grid power input is stale
+    description: Grid power entity {{ $labels.entity }} has been stale for 15 minutes; the service cannot plan or record decisions.
+- alert: BatteryOptimizerPlanStale
+  # Plans are made every 15 minutes and expire after two slots; an hour without a fresh one means
+  # the solve loop is not producing (inputs stale, solver stuck or failing).
+  expr: battery_optimizer_plan_age_seconds > 3600
+  for: 15m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer plan is stale
+    description: The newest shadow plan is {{ $value | humanizeDuration }} old (expected every 15 minutes).
+- alert: BatteryOptimizerSolveFailures
+  expr: sum by (result) (increase(battery_optimizer_solves_total{result=~"error|timeout"}[1h])) > 0
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer solves are failing ({{ $labels.result }})
+    description: The shadow solver reported {{ $value | printf "%.0f" }} {{ $labels.result }} result(s) in the last hour.
+- alert: BatteryOptimizerSinkWriteErrors
+  expr: increase(battery_optimizer_sink_write_errors_total[1h]) > 0
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer cannot write its shadow store
+    description: The service failed to append to its store on the PVC {{ $value | printf "%.0f" }} time(s) in the last hour. Shadow records are being lost; check the volume (space, permissions).
+- alert: BatteryOptimizerSolvesSkipped
+  # A solve is requested every 15 minutes, so 7 skips in 2 hours means almost every one was skipped
+  # (worker busy, or an input not ready - the reason label says which).
+  expr: sum by (reason) (increase(battery_optimizer_skipped_solves_total[2h])) >= 7
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer solves are being skipped ({{ $labels.reason }})
+    description: '{{ $value | printf "%.0f" }} solves were skipped with reason {{ $labels.reason }} in the last 2 hours.'
+- alert: BatteryOptimizerHistoryStale
+  # The load history is refreshed once a day; 26 h means a refresh was missed.
+  expr: battery_optimizer_history_age_seconds > 93600
+  for: 30m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer load history is stale
+    description: The Prometheus load history is {{ $value | humanizeDuration }} old (refreshed daily).

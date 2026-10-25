@@ -1,7 +1,8 @@
 app-template:
-  # Batch data pipeline: extract (HA history + Prometheus) -> validate -> build.
-  # The resident `service` controller (Phase C) is added as a second controller in this same
-  # chart; `forceRename` keeps the CronJob name stable when that happens (alerts depend on it).
+  # Two controllers sharing one image, one PVC and one ConfigMap:
+  #   pipeline - batch data pipeline CronJob: extract (HA history + Prometheus) -> validate -> build
+  #   service  - resident Phase C shadow service (no actuation path; read-only HA token)
+  # `forceRename` keeps the CronJob name stable (alerts depend on it).
   controllers:
     pipeline:
       type: cronjob
@@ -28,7 +29,7 @@ app-template:
         # A fresh ZFS dataset mounts root:root 0755 and there is no fsGroup (slow startup on
         # openebs-zfspv), so chown the volume ROOT once. Recursive only if the owner is wrong
         # (e.g. data copied in as root), which keeps the steady-state run O(1).
-        fix-permissions:
+        fix-permissions: &fix-permissions
           image:
             # renovate: datasource=docker depName=busybox
             repository: busybox
@@ -61,10 +62,10 @@ app-template:
               memory: 64Mi
       containers:
         pipeline:
-          image:
+          image: &image
             # renovate: datasource=docker depName=ghcr.io/pando85/battery-optimizer
             repository: ghcr.io/pando85/battery-optimizer
-            tag: 0.1.0@sha256:8c6a4b874246ecb64135e6bf2727bd8d38592a38384ffdc2a46105c49e88e2a1
+            tag: 0.2.0@sha256:abc54c5bd8bf12f7996f790397bccd03b46708bbd1a09d1df7c4ce0899826c39
           env:
             TZ: UTC
             BATTERY_OPTIMIZER_DATA_DIR: /data
@@ -126,6 +127,90 @@ app-template:
             limits:
               memory: 2Gi
 
+    service:
+      type: deployment
+      replicas: 1
+      # One writer on the RWO PVC and on the shadow store: never two pods at once.
+      strategy: Recreate
+      pod:
+        automountServiceAccountToken: false
+      initContainers:
+        fix-permissions: *fix-permissions
+      containers:
+        service:
+          image: *image
+          args:
+            - serve
+          env:
+            TZ: UTC
+            BATTERY_OPTIMIZER_PORT: "8080"
+            BATTERY_OPTIMIZER_DATA_DIR: /data
+            BATTERY_OPTIMIZER_CONFIG: /config/tariff.yaml
+            BATTERY_OPTIMIZER_SERVICE_CONFIG: /config/service.yaml
+            BATTERY_OPTIMIZER_HA_URL: http://home-assistant-hass.home-assistant.svc:8123
+            # The existing read-only, non-admin token, mounted as a file (never an env value).
+            BATTERY_OPTIMIZER_HA_TOKEN_FILE: /secrets/home-assistant/BATTERY_OPTIMIZER_HA_TOKEN
+            BATTERY_OPTIMIZER_PROMETHEUS_URL: http://prometheus-long-term.monitoring:9090
+          probes:
+            # Readiness deliberately uses /health/live too: /health/ready answers 503 whenever an
+            # input is stale, which would drop the pod from the Service endpoints and stop the
+            # scrape exactly when the metrics matter. Alert on battery_optimizer_ready instead.
+            liveness: &probe
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health/live
+                  port: &port 8080
+                periodSeconds: 30
+                timeoutSeconds: 5
+                failureThreshold: 3
+            readiness: *probe
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet:
+                  path: /health/live
+                  port: *port
+                periodSeconds: 5
+                timeoutSeconds: 5
+                failureThreshold: 60
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+
+  service:
+    service:
+      controller: service
+      ports:
+        http:
+          port: *port
+
+  serviceMonitor:
+    service:
+      serviceName: battery-optimizer
+      enabled: true
+      # The battery_optimizer_* series are kept in the long-term Prometheus for the multi-week
+      # shadow-vs-native comparison (same pattern as github-exporter).
+      labels:
+        operator.prometheus.io/instance: prometheus-long-term
+      endpoints:
+        - port: http
+          scheme: http
+          path: /metrics
+          interval: 30s
+          scrapeTimeout: 10s
+
   defaultPodOptions:
     enableServiceLinks: false
     securityContext:
@@ -159,4 +244,17 @@ app-template:
         pipeline:
           pipeline:
             - path: /config
+              readOnly: true
+        service:
+          service:
+            - path: /config
+              readOnly: true
+    home-assistant-token:
+      enabled: true
+      type: secret
+      name: battery-optimizer-home-assistant
+      advancedMounts:
+        service:
+          service:
+            - path: /secrets/home-assistant
               readOnly: true

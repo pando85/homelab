@@ -1,9 +1,14 @@
 # battery-optimizer
 
-Batch data pipeline for [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer):
-extract Home Assistant recorder history and Prometheus samples into an append-only Parquet store,
-validate it, and build the 15-minute analysis dataset. Deployed from `apps/battery-optimizer/` as a
-single CronJob. The production plan and its history live in
+Two workloads of [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer), deployed
+from `apps/battery-optimizer/` with one image, one PVC and one ConfigMap:
+
+- **`pipeline`**: a CronJob that extracts Home Assistant recorder history and Prometheus samples
+  into an append-only Parquet store, validates it, and builds the 15-minute analysis dataset
+  (Phase B).
+- **`service`**: the resident Phase C **shadow service** (`battery-optimizer serve`). It reads Home
+  Assistant and Prometheus, solves the MPC plan every 15 minutes and records shadow intents and a
+  shadow-vs-native comparison. It has no actuation path and no write credentials. The production plan and its history live in
 [`planning/energy-baseline-production-execution.md`](https://github.com/pando85/homelab/blob/master/planning/energy-baseline-production-execution.md).
 
 The application code, ADRs and domain docs live in the app repository; this page covers only the
@@ -20,10 +25,10 @@ deployment.
 | Failure handling | `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
 | Node | pinned to `prusik` (node-local `openebs-zfspv`) |
 | Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk) |
-| Config | ConfigMap `battery-optimizer-config` rendered from `apps/battery-optimizer/files/tariff.yaml` |
+| Config | ConfigMap `battery-optimizer-config` rendered from `apps/battery-optimizer/files/` (`tariff.yaml`, `service.yaml`) |
 | Storage | PVC `battery-optimizer-data`, 5 Gi, `openebs-zfspv`, mounted at `/data` (`BATTERY_OPTIMIZER_DATA_DIR`) |
 | Backup | labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`; SnapshotSchedule `battery-optimizer-zfs-backups` (daily 06:00 UTC, keep 20) |
-| Alerts | `PrometheusRule/battery-optimizer` (label `release: monitoring`) |
+| Alerts | `PrometheusRule/battery-optimizer` (label `release: monitoring`) for the CronJob, `PrometheusRule/battery-optimizer-service` (long-term) for the service |
 
 ## Design notes and gotchas
 
@@ -49,17 +54,51 @@ deployment.
 - **Alerts use `release: monitoring`, not `operator.prometheus.io/instance: prometheus-long-term`.**
   kube-state-metrics and kubelet series exist only in the main Prometheus; a rule labelled for
   `prometheus-long-term` would load but never fire.
-- **No NetworkPolicy.** The repo keeps NetworkPolicy isolation off until the Cilium stale-datapath
-  bugs are fixed (see
-  [`cilium-stale-bpf-egress.md`](../troubleshooting/cilium-stale-bpf-egress.md)). Cilium also
-  matches in-cluster destinations by identity, so the `ipBlock` egress pattern used for coturn does
-  not work for HA/Prometheus Service IPs.
-- **`tariff.yaml` is a vendored copy** of `config/tariff.yaml` in the app repository (the image
-  carries no config). Update both together; the config hash is part of every dataset id.
+- **NetworkPolicy is egress-only.** The repo keeps ingress isolation off because of the Cilium
+  stale-datapath bug (see
+  [`cilium-stale-bpf-egress.md`](../troubleshooting/cilium-stale-bpf-egress.md)); an egress-only
+  policy leaves kubelet probes and scrapes alone. The first run under the policy (manual Job,
+  73 s) reached DNS, Home Assistant and Prometheus.
+- **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
+  image carries no config). Update both together; the tariff config hash is part of every dataset id.
 - **Exit codes do not reflect coverage.** `extract` exits 0 even when the manifest carries
   `empty_chunk:*` or `chunk_accounting_mismatch` quality flags, so the job (and its alerts) only
   detect hard failures and missed runs, not silent gaps. Read the manifest `quality_flags` in the
   job logs/store after a bootstrap or an HA outage.
+
+## Shadow service (Phase C)
+
+| Item | Value |
+|---|---|
+| Workload | Deployment `battery-optimizer-service`, 1 replica, `strategy: Recreate`, same image anchor as the CronJob |
+| Command | `battery-optimizer serve`, port 8080: `/health/live`, `/health/ready`, `/status`, `/plan`, `/metrics` |
+| Config | `files/tariff.yaml` + `files/service.yaml` (vendored from the app repo `config/`) in ConfigMap `battery-optimizer-config`, mounted at `/config`. `service.yaml` uses `soc_source: simulated` because Home Assistant has no battery entities yet |
+| HA token | the same ExternalSecret as the pipeline, **mounted as a file** (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`). Read-only, non-admin; no other credential exists |
+| Storage | the same PVC `battery-optimizer-data` at `/data` (RWO on prusik, `Recreate` avoids two pods). The service writes only `/data/service/v1/`; the pipeline uses `raw/`, `manifests/` and `analysis/`, so the paths never collide |
+| Resources | requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS) |
+| Probes | liveness **and** readiness on `/health/live`; generous startup probe. `/health/ready` returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on `battery_optimizer_ready` instead |
+| Service / scrape | ClusterIP `battery-optimizer:8080` (`http`); ServiceMonitor labelled `operator.prometheus.io/instance: prometheus-long-term` (job `battery-optimizer`, 30 s), so `battery_optimizer_*` lives in the long-term Prometheus for the multi-week comparison |
+| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale` |
+| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term` |
+
+**NetworkPolicy** `battery-optimizer-egress` selects every pod in the namespace (service and CronJob)
+and is **egress-only**: DNS (kube-dns and nodelocaldns pods plus `169.254.25.10/32`), Home Assistant
+pods on 8123 and the long-term Prometheus pods on 9090. Nothing else, in particular no Modbus. There
+is intentionally no Ingress section, so kubelet probes and Prometheus scrapes are not under policy
+(the documented Cilium stale-datapath breakage is dropped ingress probes). Peers are matched with
+pod/namespace selectors because Cilium identifies in-cluster endpoints by identity.
+
+The shadow store (`/data/service/v1/`) is private household data and is covered by the same PVC
+snapshots. Read the comparison with `battery-optimizer shadow-report` from a pod or a copy of the
+store; `comparison_basis` stays `no_battery_pre_commissioning` until battery telemetry is mapped, and
+that basis does not satisfy exit gate C.
+
+Checks without a port-forward:
+
+```bash
+kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-service -- \
+  python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8080/health/ready').read().decode())"
+```
 
 ## First run (2026-10-25)
 

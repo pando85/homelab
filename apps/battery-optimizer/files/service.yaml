@@ -1,0 +1,101 @@
+---
+# Resident shadow service configuration (ADR-0004, plan §16 Phase C).
+#
+# Entity IDs are configuration, not data: committing them is fine, committing their
+# values or history is not.  Endpoints and the token never live here — they come from
+# BATTERY_OPTIMIZER_HA_URL, BATTERY_OPTIMIZER_HA_TOKEN (or ..._HA_TOKEN_FILE) and
+# BATTERY_OPTIMIZER_PROMETHEUS_URL.  Override this whole file with
+# BATTERY_OPTIMIZER_SERVICE_CONFIG.
+#
+# SHADOW ONLY: the service has no actuation path.  Its Home Assistant adapter refuses
+# every WebSocket message type outside a read-only allowlist and every REST method but
+# GET, so nothing in this file can make it write a state or call a service.
+version: 1
+mode: shadow
+timezone: Europe/Madrid
+
+home_assistant:
+  request_timeout_s: 15
+  reconnect:
+    initial_delay_s: 1
+    max_delay_s: 60
+    jitter_frac: 0.2
+  heartbeat:
+    interval_s: 30
+    timeout_s: 10
+  # REST GET refresh of the planning entities.  HA fires no state_changed event while a
+  # sensor keeps reporting the same value, so an idle SOC would look stale without it;
+  # the poll reads last_reported, which HA refreshes on every report.
+  poll_interval_s: 60
+
+prometheus:
+  timeout_s: 60
+  history_days: 28
+
+# Role -> entity ID.  Verified against the live registry with a read-only token on
+# 2026-10-25: the Shelly meter and the PVPC sensor exist; NO battery / Omnibattery
+# entity exists yet (the battery is bought but not integrated in HA).  The battery
+# roles therefore stay null until TODO-5.1; the typical Omnibattery fresh-install IDs
+# are given as comments (upstream: "use the entity picker instead of assuming").
+entities:
+  # Signed net-grid power, positive = import.  Sign/placement is a user assertion
+  # (ADR-0003): the export counter has never moved, so the sign is untested.
+  grid_power: sensor.shellyem_main_channel_1_power
+  # Whole-home import counter (kWh); slot energy comes from its deltas.
+  grid_energy: sensor.shellyem_main_channel_1_energy
+  # PVPC (pvpc_updated): price_HHh today, price_next_day_HHh after publication,
+  # "_d" suffix on the repeated fall-back hour.
+  price: sensor.esios_pvpc
+  battery_soc: null                # sensor.omnibattery_system_soc
+  battery_power: null              # signed, + charge (per-battery *_battery_power)
+  battery_charge_power: null       # sensor.omnibattery_system_charge_power
+  battery_discharge_power: null    # sensor.omnibattery_system_discharge_power
+  battery_charge_energy: null      # sensor.*_total_charging_energy
+  battery_discharge_energy: null   # sensor.*_total_discharging_energy
+  # Read-only context recorded with each slot (never written).  Add the Omnibattery
+  # control surface here once it exists, e.g. number.omnibattery_pd_target_grid_power,
+  # switch.*_battery_allow_charge, switch.*_battery_allow_discharge,
+  # switch.omnibattery_system_power_limits, number.omnibattery_system_max_charge_power,
+  # number.omnibattery_system_max_discharge_power (0 = UNLIMITED, not zero output),
+  # sensor.omnibattery_integration_status.
+  observed:
+    - sensor.shellyem_main_channel_2_power
+
+# Maximum source age (seconds since HA last_reported) before an input is stale.
+freshness_s:
+  grid_power: 300
+  grid_energy: 900
+  battery_soc: 900
+  battery_power: 300
+
+planning:
+  # entity:    plan from the live battery SOC entity (refuses to plan when stale).
+  # simulated: pre-commissioning shadow — a virtual battery whose SOC evolves by
+  #            applying the service's own decisions against the measured load.  The
+  #            only honest choice while no battery entity exists; switch to `entity`
+  #            once battery_soc is mapped.
+  soc_source: simulated
+  interval_seconds: 900
+  # Plans start at the next slot boundary and are solved this long before it.
+  solve_lead_s: 120
+  solve_timeout_s: 60
+  solver_time_limit_s: 20
+  # A plan stays the authority for this many slots after its first one, then expires.
+  plan_ttl_slots: 2
+  min_horizon_slots: 4
+  max_horizon_slots: 192
+  forecast_window_days: 28
+  # EUR/DC-kWh on end-of-horizon SOC: `trailing_mean` = mean PVPC over the history
+  # window (the benchmark's default rule), or an explicit number.
+  terminal_value: trailing_mean
+  throughput_cost_eur_per_kwh: 0.0
+  replan:
+    soc_change_frac: 0.05
+    debounce_s: 30
+    min_interval_s: 120
+
+observation:
+  # How long after a slot ends late events may still land in it.
+  slot_close_grace_s: 20
+  # A counter reading older than this at a slot edge is not used for that edge.
+  counter_max_age_s: 300
