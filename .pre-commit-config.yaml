@@ -47,3 +47,8 @@ repos:
         language: script
         files: apps/readest/(values\.yaml|files/sql/)
         pass_filenames: false
+      - id: no-session-links
+        name: Refuse AI session links and trailers in commit messages
+        language: pygrep
+        entry: '(?i)claude\.ai/code|claude-session'
+        stages: [commit-msg]
