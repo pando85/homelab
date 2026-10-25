@@ -58,11 +58,10 @@ deployment.
 - **Alerts use `release: monitoring`, not `operator.prometheus.io/instance: prometheus-long-term`.**
   kube-state-metrics and kubelet series exist only in the main Prometheus; a rule labelled for
   `prometheus-long-term` would load but never fire.
-- **NetworkPolicy is egress-only.** The repo keeps ingress isolation off because of the Cilium
-  stale-datapath bug (see
-  [`cilium-stale-bpf-egress.md`](../troubleshooting/cilium-stale-bpf-egress.md)); an egress-only
-  policy leaves kubelet probes and scrapes alone. The first run under the policy (manual Job,
-  73 s) reached DNS, Home Assistant and Prometheus.
+- **No NetworkPolicy.** An egress-only policy (DNS, HA 8123, long-term Prometheus 9090) ran from
+  0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
+  from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
+  control (LLM harnesses). Its only credential is the read-only HA token, and it has no actuation path.
 - **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
   image carries no config). Update both together; the tariff config hash is part of every dataset id.
 - **Coverage gaps fail the Job.** From 0.2.1 `extract` exits 3 when the run's manifest records a
@@ -88,12 +87,13 @@ deployment.
 | Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale` |
 | Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term` |
 
-**NetworkPolicy** `battery-optimizer-egress` selects every pod in the namespace (service and CronJob)
-and is **egress-only**: DNS (kube-dns and nodelocaldns pods plus `169.254.25.10/32`), Home Assistant
-pods on 8123 and the long-term Prometheus pods on 9090. Nothing else, in particular no Modbus. There
-is intentionally no Ingress section, so kubelet probes and Prometheus scrapes are not under policy
-(the documented Cilium stale-datapath breakage is dropped ingress probes). Peers are matched with
-pod/namespace selectors because Cilium identifies in-cluster endpoints by identity.
+**Passive archives (0.3.0).** The `archive:` block of `service.yaml` turns on two append-only
+collectors under `/data/service/v1/`: `pvpc_snapshots/` (every state change of the PVPC price sensor,
+to measure when next-day prices really appear) and `weather_forecasts/` (`weather.get_forecasts` for
+`weather.forecast_home`, hourly at HH:05 UTC). The weather query is the single `call_service` frame
+the HA guard lets through; every other service call is still refused in code. Watch
+`battery_optimizer_pvpc_snapshots_total`, `battery_optimizer_weather_forecast_fetches_total{result}`
+and `battery_optimizer_archive_last_success_timestamp_seconds`. There is no retention yet.
 
 The shadow store (`/data/service/v1/`) is private household data and is covered by the same PVC
 snapshots. Read the comparison with `battery-optimizer shadow-report` from a pod or a copy of the

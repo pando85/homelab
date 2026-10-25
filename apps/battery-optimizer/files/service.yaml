@@ -9,7 +9,9 @@
 #
 # SHADOW ONLY: the service has no actuation path.  Its Home Assistant adapter refuses
 # every WebSocket message type outside a read-only allowlist and every REST method but
-# GET, so nothing in this file can make it write a state or call a service.
+# GET, so nothing in this file can make it write a state.  The one service call it can
+# make is the non-mutating `weather.get_forecasts` query (see `archive:` below); every
+# other service call is refused in code, whatever this file says.
 version: 1
 mode: shadow
 timezone: Europe/Madrid
@@ -85,6 +87,9 @@ planning:
   min_horizon_slots: 4
   max_horizon_slots: 192
   forecast_window_days: 28
+  # Registered load forecaster (battery_optimizer.load_forecast). Oracles such as
+  # `perfect` are offline-only and refused here.
+  load_forecaster: trailing_mean
   # EUR/DC-kWh on end-of-horizon SOC: `trailing_mean` = mean PVPC over the history
   # window (the benchmark's default rule), or an explicit number.
   terminal_value: trailing_mean
@@ -99,3 +104,23 @@ observation:
   slot_close_grace_s: 20
   # A counter reading older than this at a slot edge is not used for that edge.
   counter_max_age_s: 300
+
+# Passive, append-only data collection under <data_dir>/service/v1/.  Never read by the
+# planner; a failure is counted (battery_optimizer_*) and never affects readiness.
+# There is no retention yet: the files grow until pruned by hand.  When this section is
+# absent both archives are OFF, so a deployed config must carry it.
+archive:
+  # One record per state change of entities.price (plus the first state after a start):
+  # HA timestamps, state and the raw attributes verbatim, whether price_next_day_* is
+  # present.  Measures when the next day's PVPC prices are really published.
+  pvpc_snapshots:
+    enabled: true
+  # weather.get_forecasts for one weather entity, on a fixed UTC grid
+  # (offset_minutes past every interval_minutes; interval_minutes must divide 1440).
+  # Archives the real forecast HA holds so a forecast temperature can be evaluated later.
+  weather_forecast:
+    enabled: true
+    entity_id: weather.forecast_home
+    type: hourly            # hourly | daily | twice_daily
+    interval_minutes: 60
+    offset_minutes: 5

@@ -56,6 +56,9 @@ The same app now also runs the shadow service from `battery-optimizer` 0.2.1 (0.
 - HA token: the same Vault secret, mounted as a file; read-only, non-admin. No write credential.
 - Egress-only NetworkPolicy `battery-optimizer-egress` for both workloads (DNS, HA 8123, long-term
   Prometheus 9090; no Modbus, no ingress section). Verified with a second manual pipeline Job.
+  Removed with the 0.3.0 upgrade (same day): first-party software does not get a NetworkPolicy.
+- 0.3.0 (2026-10-25) adds the passive PVPC-snapshot and weather-forecast archives (`archive:` in
+  `service.yaml`) for the price-outlook and load-forecaster work.
 - ServiceMonitor into the long-term Prometheus; `PrometheusRule/battery-optimizer-service` (10
   alerts) and the Grafana dashboard "Battery optimizer shadow service" (folder `battery-optimizer`).
 - Readiness probe uses `/health/live`; `battery_optimizer_ready` is the alerting signal.
