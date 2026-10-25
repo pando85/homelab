@@ -1,0 +1,367 @@
+# Troubleshooting Pitfall Index
+
+Full index of common pitfalls encountered in this homelab, grouped by subsystem. Each entry
+retains its original diagnostic detail and links to the full troubleshooting doc where available.
+
+This file is the canonical reference for pitfalls relocated from `AGENTS.md`. Agents should consult
+the subsystem-specific doc for full diagnosis and fix procedures.
+
+## Table of Contents
+
+- [Kubernetes & GitOps](#kubernetes--gitops) (14 entries)
+- [ArgoCD](#argocd) (4 entries)
+- [Monitoring & Observability](#monitoring--observability) (8 entries)
+- [Networking](#networking) (6 entries)
+- [Storage & Backup](#storage--backup) (10 entries)
+- [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
+- [LLM Infrastructure](#llm-infrastructure) (3 entries)
+- [Desktop & Home](#desktop--home) (6 entries)
+- [Applications](#applications) (10 entries)
+
+---
+
+## Kubernetes & GitOps
+
+- Forgetting `helm dependency build` after updating `Chart.yaml`
+
+- Missing Renovate hints causes images to not auto-update
+
+- Introducing CRDs without `--include-crds` in helm template
+
+- Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources
+
+- Forgetting `Prune=false` on PVCs causes data loss on sync
+
+- Kata-deploy 3.31.0+ requires containerd drop-in directory (`config-v3.toml.d`) — see
+  `docs/troubleshooting/kata-containerd-dropin.md`
+
+- A freshly joined node shows `Ready,SchedulingDisabled` for about a minute: the `k3s-agent`
+  system-upgrade Plan has `cordon: true` and selects every non-control-plane node. When the binary
+  already matches, the job compares sha256, logs `Binary already been replaced`, exits 0, and the
+  controller uncordons. Don't uncordon by hand
+
+- Apps with init-container workarounds (JS patching, schema health checks) should log version
+  info and fail loudly (`exit 1`) on mismatch so Renovate bumps surface breakage immediately.
+  Check init container logs after any version bump. See each app's deployment doc for specifics.
+
+- Adding a node: never edit the hardcoded `hosts:` lists in `metal/playbooks/install/prepare.yml`
+  (11-13, 18, 23, 30) or `cluster.yml` (28-31) — they are exactly the ZFS/GPU/backup paths a new node
+  must skip, so a new node gets no `setup` role. `make first-boot` is unusable (forces root +
+  `--ask-pass`) and unscopeable (it appends its own `--limit` last). The node must resolve short names
+  or the k3s agent cannot reach `server: https://prusik:6443` — set `prepare_dns_search_domains` if
+  DHCP does not push the `grigri` search domain. There is no local StorageClass by deliberate
+  decision (a `system/local-path/` chart was considered and dropped — a StorageClass advertises
+  unbacked, unquota'd storage on a weak node). On a no-ZFS node any PVC without `storageClassName`
+  inherits the default `openebs-zfspv` and hangs `Pending` forever instead of failing; guarded by
+  `PersistentVolumeClaimPending` / `PersistentVolumeClaimLost` PrometheusRules. Node-local
+  exceptions use `hostPath` with `type: Directory` (Ansible-created paths in `metal/`). See
+  `docs/user-guide/add-or-remove-nodes.md` and `planning/k8s-amd64-1-node-addition.md`
+
+- Zalando Postgres PVC recreate causes Patroni stale-DCS deadlock: Patroni DCS ConfigMaps
+  (`<cluster>-config`, `<cluster>-leader`) survive PVC deletion and carry the old cluster's
+  `initialize` marker, so Patroni waits forever for a leader on a fresh empty data dir. Fix:
+  delete the stale DCS ConfigMaps before restarting the pod.
+  See `docs/troubleshooting/zalando-patroni-stale-dcs-deadlock.md`
+
+- High pod restart counts don't always mean problems — check `Last State.Reason` (exit 255 =
+  node reboot, not app crash). See `docs/troubleshooting/cluster-hygiene.md`
+
+- Zalando Postgres operator rejects hyphenated database names in the `databases` field — create
+  them manually with `psql`. See `docs/troubleshooting/radarr-sqlite-to-postgres.md`
+
+- app-template ≥ 5.2 runs `tpl` over string values (incl. initContainer `command`), so a literal
+  `{{ ... }}` in `values.yaml` (e.g. a `sed` pattern matching a JS i18n `{{provider}}` token) fails
+  rendering with `function "provider" not defined` → ArgoCD `ComparisonError` blocks ALL syncs for
+  that app. Local `helm template` can miss it if `Chart.lock`/`charts/` (gitignored) are stale at an
+  older app-template than `Chart.yaml`. Escape as `{{ "{{x}}" }}` or match around it. This silently
+  broke readest for ~18 days. See `docs/troubleshooting/app-template-values-tpl-evaluation.md`
+
+- `topologySpreadConstraints` without `matchLabelKeys: [pod-template-hash]` causes rolling updates
+  to stall on multi-replica Deployments: the scheduler counts old+new ReplicaSet pods together, so
+  `maxSkew: 1` + `DoNotSchedule` blocks new pod placement. Always add `matchLabelKeys` for
+  Deployments with `replicas > 1` or HPA. Skip for single-replica, StatefulSets (no `pod-template-hash`),
+  and CRD-managed workloads. See `docs/conventions/topology-spread-constraints.md`
+
+## ArgoCD
+
+- ArgoCD has `selfHeal: true` with real-time cluster watches — `kubectl apply` will be detected
+  and reverted almost instantly. Always commit/push first, let ArgoCD sync, then verify.
+  See `docs/troubleshooting/argocd-gitops-workflow.md`
+
+- ArgoCD repo-server has a probe death-spiral with default chart probes (1s timeout) — the pod
+  is killed during slow cold start before the metrics/health port (8084) binds, causing a restart
+  loop that never converges. Fix: enable `startupProbe` + raise `timeoutSeconds` to 5. See
+  `docs/troubleshooting/argocd-repo-server-probe-death-spiral.md`
+
+- ArgoCD `argo-cd` chart >= 10.0 defaults `networkPolicy.create: true` — keep it `false` because
+  it interacts with Cilium's stale-datapath bug on rebooted nodes (kubelet probes get dropped).
+  See `docs/troubleshooting/argocd-repo-server-probe-death-spiral.md`
+
+- ArgoCD ≥ 3.5.4 overrides `HELM_CONFIG_HOME` during `kustomize build --enable-helm`
+  (GHSA-fw5c-w8rc-j7fx), so private OCI chart pulls go anonymous → 401 and apps stick
+  `Sync=Unknown`. Fix: set `DOCKER_CONFIG` on repo-server to the mounted registry dir.
+  Check env after any ArgoCD version bump. See
+  `docs/troubleshooting/argocd-kustomize-helm-oci-auth.md`
+
+## Monitoring & Observability
+
+- Grafana dashboard sidecar only honors `grafana.grafana.com/dashboards.target-directory`, not
+  `k8s-sidecar-target-directory` — using the latter silently drops the dashboard at the root
+  folder. See `docs/troubleshooting/grafana-sidecar-folder-annotation.md`
+
+- Grafana datasource sidecar writes ConfigMap data keys as filenames — if two ConfigMaps use the
+  same data key (e.g., `datasource.yaml`), they collide (last-writer-wins) and cause continuous
+  reload churn. Use unique keys per ConfigMap (e.g., `loki-datasource.yaml`,
+  `tempo-datasource.yaml`). See `docs/troubleshooting/grafana-datasource-sidecar-collision.md`
+
+- Grafana panels querying node-exporter metrics must collapse the DaemonSet's `pod` label with
+  `max by (instance, ...)` — otherwise every pod restart adds another phantom line over long time
+  ranges, and `sum(rate(...))` panels silently inflate. Use `max`, not `sum`/`avg`. Also verify each
+  metric name actually exists: empty panels look identical to nonexistent metrics. See
+  `docs/troubleshooting/grafana-node-exporter-pod-churn-duplicates.md`
+
+- Grafana 13.1.1 strips the `url` field from Loki `derivedFields` during provisioning, even with
+  `$$` escaping. Workaround: manually set the URL in the Grafana UI. See
+  `docs/troubleshooting/grafana-13-derivedfields-url-stripped.md`
+
+- Grafana MCP server deployment has multiple gotchas: Kaniop `KanidmServiceAccount` requires
+  `idm_admin` in the `entryManagedBy` group and `serviceAccountNamespaceSelector` on the Kanidm CR;
+  `mcp-grafana` image tags lack `v` prefix, binary is at `/app/mcp-grafana`, uses `-address` flag
+  (not `-port`); StatefulSets need manual pod deletion after template changes. See
+  `docs/troubleshooting/grafana-mcp-hermes.md`
+
+- Vector `kubernetes_logs` defaults cause silent log loss: `glob_minimum_cooldown_ms: 60000`
+  misses short-lived pods (<60s), `oldest_first: true` starves new pods behind backlog,
+  `rotate_wait_secs: i64::MAX` exhausts file handles on deleted pods, and `max_read_bytes: 2048`
+  is too slow to clear backlog. Loki sinks also need explicit `buffer.when_full: block` or events
+  are silently dropped under backpressure. Tuned values: 5000 / false / 60 / 16384 / block. See
+  `docs/troubleshooting/vector-log-loss-and-starvation.md`
+
+- Single-binary Tempo (`tempo-1.24.4` chart, v2.9.0): `metrics_generator.traces_storage.path` must
+  never equal `storage.trace.local.path` when `local_blocks` processing is on — the generator's WAL
+  writes `<uuid>+<tenant>+<version>` dirs (e.g. `…+single-tenant+vParquet4`, 60 chars) into the same
+  tenant directory the blocklist poller scans, and `uuid.Parse` fails with `invalid UUID length: 60`,
+  aborting that poll. Compaction/retention can look healthy while the block index silently goes stale
+  between the ~1-in-5 polls that succeed. Fixed by giving the generator its own path
+  (`/var/tempo/generator-traces`) plus a Kustomize-patched init container to migrate the already-written
+  WAL (the chart has no `initContainers` values hook). See
+  `docs/troubleshooting/tempo-metrics-generator-wal-collision.md`
+
+- `pyroscope.ebpf` cannot profile Calypso runners and never will: they run under gVisor, so the
+  container ID it matches on (read from `/proc/*/cgroup`) never corresponds to a host process.
+  Discovery still keeps the target, so `pyroscope_ebpf_active_targets` rising at runner start while
+  `calypso-runner` stays absent from `pyroscope_ebpf_pprofs_total` is expected, not a bug. Runners
+  are deliberately unprofiled — they execute untrusted, agent-generated code. Do not "fix" this by
+  moving runners to runc. See `docs/troubleshooting/profiling-collector-rollback.md`
+
+## Networking
+
+- Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
+  (`24.11.1`). See `docs/troubleshooting/armbian-kernel-bpf-masquerade.md`
+
+- Cilium BPF datapath can go stale on a node — pod egress breaks while host network works. Can
+  manifest as partial breakage (some connections work, others don't) — e.g. Vector buffer filling
+  on one sink while another on the same pod is fine. Also triggered by node reboots (BPF link
+  orphaning, upstream #46065); enabling NetworkPolicy turns the latent staleness into an active
+  probe-failure outage. Fix: delete the Cilium pod.
+  See `docs/troubleshooting/cilium-stale-bpf-egress.md`
+
+- Cilium LRP `skipRedirectFromBackend` is broken in v1.19.4 — nodelocaldns with `serviceMatcher`
+  needs a corefile-watcher sidecar to forward directly to CoreDNS pod IPs, avoiding redirect loop.
+  `addressMatcher` has post-reboot bugs (PR #45522). See
+  `docs/troubleshooting/nodelocaldns-cilium-lrp.md`
+
+- tc-limiter hostPath mounts need `mountPropagation: HostToContainer` — otherwise Cilium socket
+  goes stale after restart and rate limiting silently stops working.
+  See `docs/troubleshooting/bandwidth-limiting.md`
+
+- Unattended-upgrades must blacklist NVIDIA packages — host-level driver upgrades conflict with
+  the GPU Operator's containerized driver management, causing `Driver/library version mismatch`.
+  Fix: `cd metal && ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare`
+  See `docs/troubleshooting/nvidia-driver-version-mismatch.md`
+
+- Never let needrestart restart `k3s.service` or `systemd-networkd` on nodes: needrestart < 3.9
+  re-flags k3s after every package (restart storm), and a networkd restart flushes Cilium's
+  native-routing routes. Both are deferred via `metal/` (`unattended-upgrades`/`networkd` tags).
+  See `docs/troubleshooting/needrestart-k3s-restart-storm.md`
+
+## Storage & Backup
+
+- prusik's L2ARC looks broken (34-39% hit ratio, serves 1.4% of reads) but is load-bearing — avg hit
+  size is 17-28KB, i.e. Jellyfin metadata/thumbnails/SQLite, not video. Hit ratio is misleading
+  because it only covers ARC misses. The real defect is `l2arc_noprefetch=0` wasting 41% of the device
+  on one-shot media prefetch. Fix that; do NOT remove the cache vdev. See
+  `docs/troubleshooting/prusik-l2arc-ineffective.md`
+
+- prusik storage is latency-bound, not throughput-bound, and **the root cause is RAM, not disks**:
+  container limits sum to **210 GiB** (requests 44.7 GiB) on 62 GiB, forcing `zfs_arc_max=5GB` against
+  a 12-14GB hot set; `MemAvailable` bottoms out at 1.97 GiB and 60% of the ARC is metadata. Free
+  RAM (move CI off-node) and raise ARC before buying SSDs — RAM beats SSD by ~1000x. Note
+  `k8s-amd64-1` has only 16 GiB, and `ci-runner-0` peaks at 17.4 GiB / 7.68 cores, so **CI cannot move
+  there until it gets 32 GiB**. A SLOG/ZIL will NOT help (Postgres runs `synchronous_commit=off`).
+  Forgejo web latency is `git-upload-pack` reading git objects, not Postgres. Backup is label-driven
+  (`backup/retain`, `backup`), so a PVC recreated without labels is silently never backed up. See
+  `docs/conventions/prusik-fast-storage-tier.md`
+
+- prusik NVMe kernel names (`nvme0n1`/`nvme1n1`) flip across reboots. Always identify disks by
+  model/serial or `/dev/disk/by-id` via a `node_disk_info` join. See
+  `docs/troubleshooting/prusik-etcd-swap-thrash.md`
+
+- `openebs-zfspv`/`fast-zfspv` use `reclaimPolicy: Retain` — deleting a PV issues no CSI
+  DeleteVolume, so the ZFS dataset **and** its `ZFSVolume` CR both survive with no ownerReference to
+  GC them. Auditing `Released` PVs therefore reports a clean cluster while the space still leaks;
+  the real signal is a `ZFSVolume` CR with no matching PV. 89 volumes / 139.6 GiB accumulated over
+  ~9 months this way. Use `scripts/zfs-orphan-audit.sh` (dry-run by default) and the
+  `ZFSVolumeOrphaned` alert. Do **not** flip the policy to `Delete` — Retain is the only backstop
+  against an ArgoCD prune destroying a database. See `docs/troubleshooting/cluster-hygiene.md`
+
+- `openebs-zfspv` with `fstype: zfs` + `fsGroup` causes slow pod startup (recursive chown on
+  every mount). `fsGroupChangePolicy: OnRootMismatch` doesn't help — kubelet resets setgid bit.
+  If the app manages its own file ownership (runs as volume owner or has init chown), remove
+  `fsGroup` entirely. See `docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md`
+
+- Removing `fsGroup` leaves a non-root container with **no** write access to a freshly provisioned
+  PVC: a new ZFS dataset mounts `root:root 0755`, kubelet creates missing `subPath` dirs root-owned,
+  and `supplementalGroups` changes no ownership. Symptom is `mkdir <path>: permission denied` with a
+  healthy, polling pod and nothing in the container log. Migrating off `emptyDir` (which kubelet
+  creates 0777) is not a like-for-like swap — it needs an explicit ownership plan. Fix with a root
+  init container on the volume **root**, not a subPath. See
+  `docs/troubleshooting/ci-runner-workspace-permission-denied.md`
+
+- OpenEBS ZFS 2.11.x `zfs send | nc` can deadlock if `nc` exits early; killing `zfs send` first risks
+  marking a truncated volume backup `Done`. Chart is on 2.11.1 with `zfsPlugin.image` pinned to
+  `ghcr.io/linkvt/zfs-driver:runpipe-773` (PR #777 fix) pending verification. If the fix fails,
+  revert chart to 2.10.1 and remove the image override.
+  See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`
+
+- Unattended-upgrades can restart k3s during backup windows, causing `PartiallyFailed` Velero backups.
+  Use a broad maintenance window (Mon + Wed–Sun 08:00–18:00) instead of blacklisting systemd packages.
+  See `docs/troubleshooting/velero-backup-failures.md`
+
+- Memory pressure (e.g., CI builds) can crash k3s via etcd timeout, leaving Velero backups stuck
+  `InProgress` with orphaned ZFSBackup CRs. Pod restart is the safe first boundary, but residual
+  CR/S3/ZFS state must be verified. See `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`
+
+- Quarterly backups are `zfspv-incr` chains (one full + incrementals): restorability requires the
+  whole chain — replay full-then-incrementals in order; an incremental alone fails at `zfs recv`.
+  Deleting a chain head orphans its retained children, so prune parents and children together, and
+  audit bucket objects, not just the CR graph. The "clean" 10-06 backups still ran 2.10.1 — check
+  `kube_pod_container_info` at the backup start time, not the current image, when attributing
+  versions. See `docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md`
+
+## Ansible & Infrastructure
+
+- Galaxy roles under `metal/roles/` are gitignored — never patch them, wrap them in a repo role and
+  override via `include_role` params (static `roles:` params lose to the inner role's `include_vars`).
+  Ubuntu 26.04 nodes also need `ansible-core>=2.20`, `ansible_become_exe: /usr/bin/sudo.ws` (sudo-rs
+  rejects `-H`) and chrony, since the `ntp` package is gone. See
+  `docs/troubleshooting/ansible-ubuntu-2604-compat.md`
+
+- Scoped `metal/` runs (`--limit`) break on templates that read another host's **gathered** facts —
+  the control plane is in no play and `delegate_to` does not gather delegate facts, so
+  `hostvars[x].ansible_hostname` dies with `object of type 'HostVarsVars' has no attribute ...`. Use
+  the inventory name instead. The second symptom is silent: a play that fails discards its pending
+  handlers, and the next run sees an unchanged config file so the daemon never reloads. See
+  `docs/troubleshooting/ansible-limit-cross-host-facts.md`
+
+## LLM Infrastructure
+
+- Hermes instance config overwrite: when deploying a new Hermes instance, never copy `config.yaml`,
+  `memories/`, or `skills/` from another instance — this overwrites the target's unique identity.
+  Only copy `auth.json` if needed. Recovery requires ZFS snapshot rollback.
+  See `docs/troubleshooting/hermes-config-overwrite-recovery.md`
+
+- Hermes standalone tools and their configuration must live under the `/opt/data` PVC; installs in
+  the container root filesystem or `/root` disappear on pod recreation. For `fj`, use a persistent
+  XDG data wrapper. See `docs/troubleshooting/hermes-persistent-cli-tools.md`
+
+- Hermes auth failures (401 errors) after config edits: manual `config.yaml` edits drop required
+  fields, `auth.json` may have empty `base_url`, and `state.db` caches stale credentials. Fix:
+  copy working config from another instance, ensure `base_url` is set in auth.json, delete
+  `state.db`, and **delete the pod** (don't just pkill). See
+  `docs/troubleshooting/hermes-authentication-credential-issues.md`
+
+## Desktop & Home
+
+- `home-operations/home-assistant` uses a venv at `/config/.venv` with `--system-site-packages`.
+  System packages are read-only; install user packages with `/config/.venv/bin/uv pip install`.
+  See `docs/troubleshooting/home-assistant-python-packages.md`
+
+- `home-operations/home-assistant:2026.7.1` ships with aiohttp 3.14.1 (system) which removed
+  `decode_text` parameter, breaking WebSocket API. Fix: install `aiohttp==3.14.0` in venv.
+  See `docs/troubleshooting/home-assistant-aiohttp-incompatibility.md`
+
+- Home Assistant 2026.x removed the light mired API (only `color_temp_kelvin`) and raises on an
+  unsupported `color_mode`, so outdated custom light integrations silently ignore temperature or
+  never turn on. localtuya is HACS-installed from `pando85/localtuya` master: deploy via HACS
+  websocket + restart, never by copying into the pod. Agents use the HA API with a login-flow token
+  (`pass web/hass.grigri.cloud`), no browser needed. Never change thermostat/fan settings for a
+  live test without the user asking for it — they verify heating behaviour themselves. See
+  `docs/troubleshooting/home-assistant-localtuya.md` and
+  `docs/troubleshooting/home-assistant-api-hacs-deploy.md`
+
+- ESIOS API (`api.esios.ree.es`) returns ZIP archives with `Content-Type: text/html` instead of
+  JSON for `/archives/70/download_json`, breaking the `pvpc_updated` integration. Workaround: patch
+  `pvpc_data.py` to handle ZIP format. See `docs/troubleshooting/pvpc-updated-esios-api-zip-response.md`
+
+- Negative PVPC prices are normal with high solar generation. AppDaemon climate/DHW control used to
+  reject them with a bare `ValueError` (empty `Error getting prices:` log), halting aerotherm
+  scheduling. Apps now accept negative prices and use a fallback schedule when price fetching fails.
+  See `docs/troubleshooting/appdaemon-pvpc-negative-prices.md`
+
+- qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
+  in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)
+  and increase startup probe timeout. See `docs/troubleshooting/qbittorrent-hdd-io-saturation.md`
+
+## Applications
+
+- Apps with Supabase dependencies (auth schema, GoTrue, PostgREST) can use Zalando Postgres +
+  init container for bootstrap SQL. Don't deploy separate Supabase Postgres container unless
+  the app requires Supabase-specific extensions not in the Spilo image. See
+  `docs/deployment/readest.md` and `docs/conventions/deploying-new-apps.md`
+
+- Supabase apps on Zalando Postgres: the `db-migrate` init container automates supporting
+  schema/role setup, but upstream `schema.sql` needs GoTrue's `auth` schema (`auth.users`,
+  `auth.uid()`) — on a fresh database start GoTrue before the client. See `docs/deployment/readest.md`
+
+- Apps with upstream SQL installed through `docker-entrypoint-initdb.d` need a Zalando-compatible
+  init-container bootstrap. For versioned SQL, vendor at the app image tag, regenerate via Renovate,
+  review before merge, and guard image/SQL version in CI and at startup. Readest uses a migration
+  ledger; Firecrawl replays an idempotent snapshot. See `docs/conventions/deploying-new-apps.md`.
+
+- Changing `spec.resources` on a single-instance (`numberOfInstances: 1`) Zalando `postgresql` CR
+  forces a master-pod recreate; the StatefulSet reuses the same pod name, the operator's deletion
+  wait times out, and it latches `status: UpdateFailed` / ArgoCD `Degraded` even though the pod is
+  healthy and the change applied. Fix: `kubectl -n postgres-operator rollout restart
+  deploy/postgres-operator`. See `docs/troubleshooting/zalando-single-instance-updatefailed.md`
+
+- GoTrue's CORS allow-list omits the `apikey` header that supabase-js sends on every request. Web
+  clients are same-origin (no preflight), but cross-origin Tauri/mobile WebViews fail silently at
+  preflight and session establishment dies ("go to login"). Fix: `GOTRUE_CORS_ALLOWED_HEADERS: apikey`.
+  Android login also needs `readest://auth-callback` in `GOTRUE_URI_ALLOW_LIST` and an nginx
+  provider rewrite that preserves `redirect_to`. See `docs/troubleshooting/readest-android-oauth.md`
+
+- Firecrawl's `nuq` queue schema is NOT created by the app — upstream provisions it via a custom
+  Postgres image (`docker-entrypoint-initdb.d`). On Zalando/Spilo nobody runs it, so an idempotent
+  `nuq-schema-init` init container applies `files/nuq.sql`. On version bump, Renovate runs
+  `apps/firecrawl/hack/update-nuq-sql.sh` automatically; pre-commit and deploy-time guards verify
+  sync. `cron.database_name` is a restart-required GUC — delete the postgres pod
+  once after setting it. See `docs/troubleshooting/firecrawl-selfhost-deployment.md`
+
+- vault-operator chart template doesn't support `failureThreshold` in probe config — only
+  `timeoutSeconds`, `periodSeconds`, `successThreshold`, `initialDelaySeconds` are rendered.
+  See `docs/troubleshooting/vault-operator-probe-timeout.md`
+
+- Kaniop `KanidmBackupSchedule.spec.schedule` is immutable — changing schedule requires
+  delete/recreate. Discovery controller runs every 5 min and creates CRs for ALL S3 manifests
+  (1000 limit). Retention only deletes CRs, not orphaned S3 data. To clean up: delete schedule,
+  delete CRs, clean S3 with `mc rm --recursive --force --versions`, then recreate schedule.
+  See `docs/troubleshooting/kaniop-backup-system.md`
+
+- Kanidm restore requires `KanidmRestore` CR with matching `targetRef.uid`, pinned `restoreImage`,
+  and safety backup (or break-glass annotations). Restore job permission bug (#1005) causes failures.
+  See `docs/troubleshooting/kanidm-restore-procedure.md`
+
+- Stump v0.1.5+ migration `m20260519_192218_reading_sessions_v2` can fail mid-way, leaving legacy
+  tables. Restore from snapshot and complete migration manually.
+  See `docs/troubleshooting/stump-migration-failure.md`
