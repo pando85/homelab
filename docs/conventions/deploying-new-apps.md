@@ -308,6 +308,15 @@ image:
 - This enables automatic PR updates when new versions are released
 - For non-standard registries, add `registryUrl=https://ghcr.io`
 
+### 2.7 NetworkPolicy: Only for Software We Do Not Control
+
+Do not add a NetworkPolicy to first-party apps that we build and publish ourselves (for example
+`battery-optimizer`): their behaviour is reviewed in code, and their safety guarantees (read-only
+adapters, no write credentials) live there. Use NetworkPolicies to contain software whose actions
+we do not control, such as LLM agent harnesses. Remember that ingress isolation stays off cluster-wide
+because of the Cilium stale-datapath bug (`docs/troubleshooting/cilium-stale-bpf-egress.md`).
+Decided by the owner on 2026-10-25, when the battery-optimizer egress policy was removed.
+
 ## Phase 3: File Structure
 
 ### 3.1 Standard Directory Layout
