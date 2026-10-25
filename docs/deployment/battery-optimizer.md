@@ -61,6 +61,17 @@ deployment.
   detect hard failures and missed runs, not silent gaps. Read the manifest `quality_flags` in the
   job logs/store after a bootstrap or an HA outage.
 
+## First run (2026-10-25)
+
+Manual Job from the CronJob on an empty PVC: success in 5m46s including the full Prometheus
+bootstrap (1028 parts, 5.84 M rows), peak working set about 1.15 GiB (requests 768 Mi, limit 2 Gi),
+about 0.54 core peak, 41.5 MiB on the volume afterwards. Steady-state runs only re-pull 10 days of
+HA history and 3 days of Prometheus. The cluster store is separate from the manual
+`~/data/energy-baseline` store, which has not been migrated into the PVC.
+
+Container logs carry one `httpx` INFO line per request (roughly 1000 for the bootstrap), so
+kubelet log rotation can drop the early `step N/4` lines of a long run; Loki keeps the full stream.
+
 ## Operate
 
 ```bash

@@ -1,7 +1,7 @@
 # Energy Baseline — Production Execution Plan
 
-- **Status:** NOT YET SCHEDULED (automated) — interim manual extraction cadence in force since 2026-10-23
-- **Date:** 2026-10-23
+- **Status:** DEPLOYED 2026-10-25 — CronJob `battery-optimizer-pipeline` in `apps/battery-optimizer/` (daily 03:30 UTC); the interim manual cadence is superseded once the migration caveat below is resolved
+- **Date:** 2026-10-23 (deployed 2026-10-25)
 - **Extends:** [ADR-0003](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
 - **Related:** [Deploying new apps](../docs/conventions/deploying-new-apps.md)
 
@@ -14,10 +14,35 @@ It also records the **interim manual extraction cadence** adopted on 2026-10-23,
 ## Current State
 
 - **Development**: supervised offline work on a local PC. Temporary exports go to `/tmp`; the durable store is the private data directory (`$BATTERY_OPTIMIZER_DATA_DIR`, default `~/data/energy-baseline/`), which `paths.py` (legacy `ENERGY_BASELINE_DATA_DIR` is still accepted as a fallback) refuses to place inside a git worktree. No cluster deployment, no cluster storage.
-- **Production**: automated scheduling is **still not implemented**. The GitOps CronJob and its `openebs-zfspv` PVC on prusik remain **deferred, not cancelled**, and the requirements below still stand for when they are created. What changed on 2026-10-23 is that extraction is no longer ad-hoc: a short manual cycle from the development PC is now the operating arrangement. The application code, ADRs and domain plans now live in [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer) (moved from this repository; history preserved), so the interim manual extraction runs from a local clone of that repository (e.g. `~/battery-optimizer`). When the CronJob is created, its image will come from `ghcr.io/pando85/battery-optimizer`, pinned by digest.
+- **Production** (historical text, superseded by [Deployed state](#deployed-state-2026-10-25)): automated scheduling was **not implemented** at the time of writing. The GitOps CronJob and its `openebs-zfspv` PVC on prusik remain **deferred, not cancelled**, and the requirements below still stand for when they are created. What changed on 2026-10-23 is that extraction is no longer ad-hoc: a short manual cycle from the development PC is now the operating arrangement. The application code, ADRs and domain plans now live in [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer) (moved from this repository; history preserved), so the interim manual extraction runs from a local clone of that repository (e.g. `~/battery-optimizer`). When the CronJob is created, its image will come from `ghcr.io/pando85/battery-optimizer`, pinned by digest.
 - **Canonical store**: the HA enum parts are preserved but **not yet consumed by the dataset build** — `build.py` has no HA reader. A read-side reader now exists: `src/battery_optimizer/ha_states.py` with a `battery-optimizer ha-states` CLI subcommand, which deduplicates at read time and answers as-of queries; it does not feed `build` and does not change `dataset_id`. See [Known state of the private store](#known-state-of-the-private-store).
 
 Temporary development exports in `/tmp` are **not durable** and do not meet production preservation requirements. The production path requires persistent storage with backup. The interim store — the private data directory on the development PC — is durable across runs but is outside the cluster's backup path entirely, which is one more reason the CronJob plus PVC remains the end state.
+
+## Deployed state (2026-10-25)
+
+Phase B landed in `apps/battery-optimizer/` (docs: [`docs/deployment/battery-optimizer.md`](../docs/deployment/battery-optimizer.md)).
+
+| Item | As deployed |
+|---|---|
+| Workload | CronJob `battery-optimizer-pipeline`, `30 3 * * *` UTC, `Forbid`, `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
+| Pipeline | one container, `sh -ec`: extract `ha-history` (`--lookback-days 10`) -> extract `prometheus` (`--lookback-days 3`, or bootstrap from 2024-01-01 while no finished Prometheus manifest exists) -> `validate` -> `build` (complete calendar months, `2024-01-01` to first of this month) |
+| Image | `ghcr.io/pando85/battery-optimizer:0.1.0@sha256:8c6a4b87...e2a1` (multi-arch index digest), Renovate hint in `values.yaml` |
+| Vault path | KV v2 `secret/battery-optimizer/home-assistant`, property `token` -> ExternalSecret `battery-optimizer-home-assistant` -> `BATTERY_OPTIMIZER_HA_TOKEN` (env only) |
+| Storage | PVC `battery-optimizer-data`, **5 Gi**, `openebs-zfspv` (Retain), `Prune=false`, labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`, pinned to prusik; SnapshotSchedule daily 06:00 UTC keep 20; volume root chowned to 65532 by an init container (no fsGroup) |
+| Config | `files/tariff.yaml` (vendored copy of the app repo's `config/tariff.yaml`) in ConfigMap `battery-optimizer-config` |
+| Alerts | `BatteryOptimizerPipelineStale` (> 2 d), `BatteryOptimizerPipelineStaleCritical` (> 5 d), `BatteryOptimizerPipelineNeverSucceeded`, `BatteryOptimizerPipelineSuspended`, `BatteryOptimizerJobFailed`, `BatteryOptimizerDataVolumeFilling` (> 80 %); PrometheusRule label `release: monitoring` |
+| First run (manual Job, 2026-10-25) | success in 5m46s including the full Prometheus bootstrap (1028 parts, 5.84 M rows); peak working set ~1.15 GiB, ~0.54 core peak; store 41.5 MiB after the run; `validate` OK; one dataset built |
+
+Superseded or changed relative to the plan above:
+
+- **Cadence:** daily (the plan allowed daily or every 3 days); HA window 10 days deep; Prometheus window 3 days because Prometheus extraction is not deduplicated across runs.
+- **Alert label:** the PrometheusRule uses `release: monitoring`, not `operator.prometheus.io/instance: prometheus-long-term`. The long-term Prometheus has no kube-state-metrics or kubelet series, so rules labelled for it would never fire. Generic `KubeJobFailed` and `KubePersistentVolumeFillingUp` from kube-prometheus-stack also cover this namespace.
+- **Heartbeat metric:** `kube_cronjob_status_last_successful_time` (plus `kube_cronjob_created` for the never-succeeded case) rather than `kube_job_complete`.
+- **NetworkPolicy:** none, per the repo rule to keep NetworkPolicy isolation off until the Cilium datapath bugs are fixed.
+- **Not delivered:** the per-chunk silent-gap alert. The CLI exits 0 when the manifest carries `empty_chunk:*` / `chunk_accounting_mismatch` flags and exports no metrics, so nothing in Kubernetes can alert on it (CLI gap, reported to the app repo owner).
+- **Open: the existing private store has not been migrated.** The cluster store started empty and was bootstrapped from Prometheus; its HA part is the 10-day window that was still in the recorder (`parts=11 rows=54`). The local `~/data/energy-baseline` store (including its Prometheus manifests and analysis datasets) was not copied. Nothing is lost as long as the first scheduled runs keep the HA window inside recorder retention, but the manual store remains the only copy of anything already purged from the recorder.
+- **Dataset growth:** `build` is write-once and has no garbage collection; the job builds closed calendar months to keep this to roughly one dataset per month (~20 MB each).
 
 ## Interim manual extraction cadence
 
@@ -193,23 +218,23 @@ the reason the CronJob is deferred rather than cancelled.
 
 When the CLI is mature and this plan is approved, the implementation commit must:
 
-- [ ] Decide the container image build, registry and tagging strategy (new work — the repo publishes no Python images today)
-- [ ] Create the CronJob manifest under `apps/` (Kubernetes workloads live there; `scripts/` is host-local utilities only)
-- [ ] Create the PVC with `openebs-zfspv` StorageClass, `Retain` reclaim policy, prusik node affinity
-- [ ] Annotate PVC with `argocd.argoproj.io/sync-options: Prune=false`
-- [ ] Add backup labels (`backup/retain`, `backup`) per cluster conventions
-- [ ] Create ExternalSecret for HA API token from Vault
-- [ ] Reference the ExternalSecret via `envSecret` in the CronJob pod spec (never copy to files)
-- [ ] Set `concurrencyPolicy: Forbid`, `backoffLimit`, `activeDeadlineSeconds`
-- [ ] Create PrometheusRule for scheduler heartbeat alert
+- [x] Decide the container image build, registry and tagging strategy (new work — the repo publishes no Python images today)
+- [x] Create the CronJob manifest under `apps/` (Kubernetes workloads live there; `scripts/` is host-local utilities only)
+- [x] Create the PVC with `openebs-zfspv` StorageClass, `Retain` reclaim policy, prusik node affinity
+- [x] Annotate PVC with `argocd.argoproj.io/sync-options: Prune=false`
+- [x] Add backup labels (`backup/retain`, `backup`) per cluster conventions
+- [x] Create ExternalSecret for HA API token from Vault
+- [x] Reference the ExternalSecret via `envSecret` in the CronJob pod spec (never copy to files)
+- [x] Set `concurrencyPolicy: Forbid`, `backoffLimit`, `activeDeadlineSeconds`
+- [x] Create PrometheusRule for scheduler heartbeat alert
 - [ ] Alert on per-chunk accounting flags (`chunk_accounting_mismatch`, `empty_chunk:*`), not only on job failure
-- [ ] Verify extraction covers a window inside the declared retention (10 days per `recorder` config, no override) with margin on first run
-- [ ] Keep `chunk_seconds` at 86400 on the first scheduled runs — the schedule inherits the manual store, and a width change would mint new carry-in anchors over already-stored windows
+- [x] Verify extraction covers a window inside the declared retention (10 days per `recorder` config, no override) with margin on first run
+- [x] Keep `chunk_seconds` at 86400 on the first scheduled runs — the schedule inherits the manual store, and a width change would mint new carry-in anchors over already-stored windows
 - [ ] Alert on `duplicate_rows_already_stored` and `carry_in_classification_disagreement` as chunk-width/store-hygiene signals, not as coverage failures
 - [ ] Implement the HA reader with row-identity dedup (`build.py` has none today): collapse `(entity, last_changed, last_updated, state, attributes_json)` at read time instead of rewriting parts to remove the 12 pre-dedup duplicates — **the reader half is done (2026-10-24)**: `src/battery_optimizer/ha_states.py` plus the `battery-optimizer ha-states` subcommand collapse that identity at read time and leave the parts untouched (verified read-only against the real store: `parts=12 rows_before_dedup=51 rows_after_dedup=39 duplicates=12 entities=2`). This box stays unticked because the checklist tracks what the *pipeline consumes*: `build.py` still walks only `source == "prometheus"` manifests, so those states reach no dataset, no forecast and no policy — see [Known state of the private store](#known-state-of-the-private-store)
 - [ ] If a tighter bound is needed, establish the effective retention boundary from a **read-only** recorder database query — do not infer it from the earliest extracted row
-- [ ] Document the Vault path and PVC size in this file (update from "to be determined")
-- [ ] Record in this file that the interim manual cadence has been superseded by the schedule (update the Status line and the cadence section)
+- [x] Document the Vault path and PVC size in this file (update from "to be determined")
+- [x] Record in this file that the interim manual cadence has been superseded by the schedule (update the Status line and the cadence section)
 
 ## References
 
