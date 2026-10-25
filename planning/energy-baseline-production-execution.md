@@ -26,7 +26,7 @@ Phase B landed in `apps/battery-optimizer/` (docs: [`docs/deployment/battery-opt
 | Item | As deployed |
 |---|---|
 | Workload | CronJob `battery-optimizer-pipeline`, `30 3 * * *` UTC, `Forbid`, `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
-| Pipeline | one container, `sh -ec`: extract `ha-history` (`--lookback-days 8`) -> extract `prometheus` (`--lookback-days 3`, or bootstrap from 2024-01-01 while no finished Prometheus manifest exists) -> `validate` -> `build` (complete calendar months, `2024-01-01` to first of this month) |
+| Pipeline | one container, `sh -ec`: extract `ha-history` (`--lookback-days 8`) -> extract `prometheus` (`--lookback-days 3`, or bootstrap from 2024-01-01 while no finished Prometheus manifest exists) -> `validate` -> `build` (complete calendar months, `2024-01-01` to first of this month; only on UTC days 01-02 of the month) |
 | Image | `ghcr.io/pando85/battery-optimizer:0.1.0@sha256:8c6a4b87...e2a1` (multi-arch index digest; now 0.2.1, see Phase C), Renovate hint in `values.yaml` |
 | Vault path | KV v2 `secret/battery-optimizer/home-assistant`, property `token` -> ExternalSecret `battery-optimizer-home-assistant` -> `BATTERY_OPTIMIZER_HA_TOKEN` (env only) |
 | Storage | PVC `battery-optimizer-data`, **5 Gi**, `openebs-zfspv` (Retain), `Prune=false`, labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`, pinned to prusik; SnapshotSchedule daily 06:00 UTC keep 20; volume root chowned to 65532 by an init container (no fsGroup) |
@@ -42,7 +42,7 @@ Superseded or changed relative to the plan above:
 - **NetworkPolicy:** none, per the repo rule to keep NetworkPolicy isolation off until the Cilium datapath bugs are fixed.
 - **Silent-gap alerting:** delivered through the exit code. As of 0.2.1 `extract` exits 3 on a coverage gap (the 0.1.0 CLI exited 0), so the Job fails and `BatteryOptimizerJobFailed` fires; the pipeline never passes `--allow-coverage-gaps` except for the one-off Prometheus bootstrap.
 - **Open: the existing private store has not been migrated.** The cluster store started empty and was bootstrapped from Prometheus; its HA part is the 10-day window that was still in the recorder (`parts=11 rows=54`). The local `~/data/energy-baseline` store (including its Prometheus manifests and analysis datasets) was not copied. Nothing is lost as long as the first scheduled runs keep the HA window inside recorder retention, but the manual store remains the only copy of anything already purged from the recorder.
-- **Dataset growth:** `build` is write-once and has no garbage collection; the job builds closed calendar months to keep this to roughly one dataset per month (~20 MB each).
+- **Dataset growth:** `build` is write-once, has no garbage collection, and every new extraction changes the dataset id (measured +4.2 MB per daily build), so the job builds only on UTC days 01-02 of each month (closed calendar months). The first three manual runs left three ~4.2 MB datasets.
 
 ## Phase C: resident shadow service (2026-10-25)
 

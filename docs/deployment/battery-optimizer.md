@@ -44,11 +44,13 @@ deployment.
 - **Bootstrap.** If `/data/manifests` holds no finished Prometheus extraction (empty PVC), the run
   extracts Prometheus from `PROM_BOOTSTRAP_START` (2024-01-01) instead of the 3 day lookback. A
   manifest is written only by a finished run, so an interrupted bootstrap retries from scratch.
-- **Build window.** `build` is content-addressed and write-once, and its dataset id covers every
-  source part, so a rolling window would add one full dataset (~20 MB) per run. The job builds the
-  complete calendar months `[BUILD_START, first of this month)` so the id only changes when parts
-  inside that window change. The newest partial month is therefore not in the dataset until the
-  month closes. There is no CLI-side garbage collection of superseded datasets.
+- **Build cadence and window.** `build` is content-addressed and write-once, and measured on the
+  cluster **every new extraction changes the dataset id** (the part list changes), adding about
+  4.2 MB per run (~1.5 GB a year if built daily) while nothing consumes the dataset yet. The job
+  therefore builds only on UTC days 01 and 02 of the month (`BUILD_ON_DAYS`), over the complete
+  months `[BUILD_START, first of this month)`; other days log `build skipped`. The newest partial
+  month is not in the dataset until the month closes. There is no CLI-side garbage collection of
+  superseded datasets. Run a manual build job if you need one off-cycle (steps 1-3 still run).
 - **Permissions.** No `fsGroup` (slow startup on `openebs-zfspv`). A fresh ZFS dataset is
   `root:root 0755`, so the `fix-permissions` init container chowns the volume **root** to 65532
   (recursively only if the root is not already owned by 65532). See

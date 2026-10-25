@@ -84,9 +84,10 @@ app-template:
             PROM_LOOKBACK_DAYS: "3"
             # Used only while the store has no finished Prometheus extraction (first run on an empty PVC).
             PROM_BOOTSTRAP_START: "2024-01-01T00:00:00+00:00"
-            # build covers complete calendar months [BUILD_START, first of this month): a stable
-            # window keeps the content-addressed analysis store from gaining a dataset per run.
+            # build covers complete calendar months [BUILD_START, first of this month), and only on
+            # these UTC days of the month (see the script).
             BUILD_START: "2024-01-01T00:00:00+00:00"
+            BUILD_ON_DAYS: "01 02"
           envFrom:
             - secretRef:
                 name: battery-optimizer-home-assistant
@@ -115,9 +116,20 @@ app-template:
               log "step 3/4: validate"
               battery-optimizer validate --source all
 
+              # The analysis store is write-once and every new extraction changes the dataset id
+              # (measured: +4.2 MB per run, ~1.5 GB/yr when built daily) while nothing consumes it
+              # yet, so build only on the first days of the month (two chances in case a run is
+              # missed). The window is the complete months up to the first of this month.
               BUILD_END="$(date -u +%Y-%m-01T00:00:00+00:00)"
-              log "step 4/4: build ${BUILD_START} -> ${BUILD_END}"
-              battery-optimizer build --start "${BUILD_START}" --end "${BUILD_END}"
+              case " ${BUILD_ON_DAYS} " in
+                *" $(date -u +%d) "*)
+                  log "step 4/4: build ${BUILD_START} -> ${BUILD_END}"
+                  battery-optimizer build --start "${BUILD_START}" --end "${BUILD_END}"
+                  ;;
+                *)
+                  log "step 4/4: build skipped (runs on UTC days of month: ${BUILD_ON_DAYS})"
+                  ;;
+              esac
 
               log "done"
           securityContext:
