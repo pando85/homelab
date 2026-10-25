@@ -1,0 +1,11 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: battery-optimizer-zfs-backups
+spec:
+  retention:
+    maxCount: 20
+  schedule: "0 6 * * *" # UTC, after the 03:30 pipeline run
+  claimSelector:
+    matchLabels:
+      backup: battery-optimizer-zfs

@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: battery-optimizer
+  labels:
+    # kube-state-metrics / kubelet series live in the main Prometheus (ruleSelector release=monitoring),
+    # NOT in prometheus-long-term, so the operator.prometheus.io/instance label would never fire.
+    release: monitoring
+spec:
+  groups:
+    - name: battery-optimizer.rules
+      rules:
+{{- range $path, $_ := .Files.Glob "rules/*.yaml" }}
+{{ $.Files.Get $path | indent 8 }}
+{{- end }}

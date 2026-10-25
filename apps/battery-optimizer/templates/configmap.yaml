@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: battery-optimizer-config
+data:
+  tariff.yaml: |
+{{ .Files.Get "files/tariff.yaml" | indent 4 }}

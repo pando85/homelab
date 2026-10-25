@@ -1,0 +1,100 @@
+- alert: BatteryOptimizerPipelineStale
+  # The HA recorder keeps 10 days (purge_keep_days default) and enum history cannot be re-extracted
+  # once purged. Daily schedule: 2 days without a success means a run was missed; this leaves 8
+  # days of recovery window.
+  expr: |
+    time() - max by (namespace, cronjob) (
+      kube_cronjob_status_last_successful_time{namespace="battery-optimizer", cronjob="battery-optimizer-pipeline"}
+    ) > 2 * 86400
+  for: 30m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer pipeline has not succeeded for over 2 days
+    description: |
+      The battery-optimizer-pipeline CronJob last succeeded {{ $value | humanizeDuration }} ago.
+      Home Assistant recorder history is purged after 10 days and is unrecoverable afterwards.
+      See docs/deployment/battery-optimizer.md.
+- alert: BatteryOptimizerPipelineStaleCritical
+  # Half of the 10-day recorder retention is gone: data loss is imminent.
+  expr: |
+    time() - max by (namespace, cronjob) (
+      kube_cronjob_status_last_successful_time{namespace="battery-optimizer", cronjob="battery-optimizer-pipeline"}
+    ) > 5 * 86400
+  for: 30m
+  labels:
+    severity: critical
+  annotations:
+    summary: battery-optimizer pipeline has not succeeded for over 5 days
+    description: |
+      The battery-optimizer-pipeline CronJob last succeeded {{ $value | humanizeDuration }} ago.
+      Half of the 10-day Home Assistant recorder retention has elapsed; enum history older than
+      10 days is permanently lost. Run the extraction manually if the CronJob cannot be fixed
+      in time (see planning/energy-baseline-production-execution.md).
+- alert: BatteryOptimizerPipelineNeverSucceeded
+  # last_successful_time does not exist until the first success, so the stale alerts cannot fire.
+  expr: |
+    (time() - kube_cronjob_created{namespace="battery-optimizer", cronjob="battery-optimizer-pipeline"} > 2 * 86400)
+    unless on (namespace, cronjob)
+    kube_cronjob_status_last_successful_time{namespace="battery-optimizer", cronjob="battery-optimizer-pipeline"}
+  for: 30m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer pipeline has never succeeded
+    description: The battery-optimizer-pipeline CronJob has existed for over 2 days without a single successful run.
+- alert: BatteryOptimizerPipelineSuspended
+  expr: kube_cronjob_spec_suspend{namespace="battery-optimizer", cronjob="battery-optimizer-pipeline"} == 1
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer pipeline CronJob is suspended
+    description: The battery-optimizer-pipeline CronJob is suspended, so no extraction is happening.
+- alert: BatteryOptimizerJobFailed
+  # A Job that exhausted its backoffLimit (or hit activeDeadlineSeconds) and is newer than the last
+  # success. Comparing with last_successful_time stops the alert lingering after recovery while the
+  # failed Job is still retained in failedJobsHistory.
+  expr: |
+    (
+      max by (namespace, job_name) (
+        kube_job_status_start_time{namespace="battery-optimizer"}
+        and on (namespace, job_name)
+        (kube_job_failed{namespace="battery-optimizer", condition="true"} == 1)
+      )
+      > on (namespace) group_left ()
+      max by (namespace) (kube_cronjob_status_last_successful_time{namespace="battery-optimizer"})
+    )
+    or
+    (
+      max by (namespace, job_name) (
+        kube_job_status_start_time{namespace="battery-optimizer"}
+        and on (namespace, job_name)
+        (kube_job_failed{namespace="battery-optimizer", condition="true"} == 1)
+      )
+      unless on (namespace)
+      kube_cronjob_status_last_successful_time{namespace="battery-optimizer"}
+    )
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer Job {{ $labels.job_name }} failed
+    description: |
+      Job {{ $labels.namespace }}/{{ $labels.job_name }} failed and no later run has succeeded.
+      Check the pod logs (extract/validate/build step) with
+      `kubectl --context=grigri -n battery-optimizer logs job/{{ $labels.job_name }}`.
+- alert: BatteryOptimizerDataVolumeFilling
+  expr: |
+    kubelet_volume_stats_used_bytes{job="kubelet", metrics_path="/metrics", namespace="battery-optimizer", persistentvolumeclaim="battery-optimizer-data"}
+      /
+    kubelet_volume_stats_capacity_bytes{job="kubelet", metrics_path="/metrics", namespace="battery-optimizer", persistentvolumeclaim="battery-optimizer-data"}
+      > 0.8
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer data volume is over 80% full
+    description: |
+      PVC battery-optimizer-data is {{ $value | humanizePercentage }} full. The raw and analysis
+      stores are append-only; grow the PVC (storage request, allowVolumeExpansion is on) before it fills.

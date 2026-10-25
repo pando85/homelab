@@ -1,0 +1,162 @@
+app-template:
+  # Batch data pipeline: extract (HA history + Prometheus) -> validate -> build.
+  # The resident `service` controller (Phase C) is added as a second controller in this same
+  # chart; `forceRename` keeps the CronJob name stable when that happens (alerts depend on it).
+  controllers:
+    pipeline:
+      type: cronjob
+      forceRename: battery-optimizer-pipeline
+      cronjob:
+        # Daily at 03:30 UTC. The binding constraint is "no more than the 10 days of HA recorder
+        # retention between two successful runs"; daily tolerates a week of missed runs.
+        schedule: "30 3 * * *"
+        timeZone: UTC
+        concurrencyPolicy: Forbid
+        # Late starts are still useful (the extraction window is 10 days deep): allow 6 h.
+        startingDeadlineSeconds: 21600
+        successfulJobsHistory: 3
+        failedJobsHistory: 3
+        # Three attempts (transient HA/Prometheus errors); the pipeline is idempotent.
+        backoffLimit: 2
+        # Bound hangs. The first run backfills ~2.8 years of Prometheus history.
+        activeDeadlineSeconds: 3600
+        ttlSecondsAfterFinished: 604800
+      pod:
+        restartPolicy: Never
+        automountServiceAccountToken: false
+      initContainers:
+        # A fresh ZFS dataset mounts root:root 0755 and there is no fsGroup (slow startup on
+        # openebs-zfspv), so chown the volume ROOT once. Recursive only if the owner is wrong
+        # (e.g. data copied in as root), which keeps the steady-state run O(1).
+        fix-permissions:
+          image:
+            # renovate: datasource=docker depName=busybox
+            repository: busybox
+            tag: 1.38
+          command:
+            - sh
+            - -ec
+            - |
+              if [ "$(stat -c %u /data)" != "65532" ]; then
+                chown -R 65532:65532 /data
+              fi
+              chmod 0700 /data
+          securityContext:
+            runAsNonRoot: false
+            runAsUser: 0
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+      containers:
+        pipeline:
+          image:
+            # renovate: datasource=docker depName=ghcr.io/pando85/battery-optimizer
+            repository: ghcr.io/pando85/battery-optimizer
+            tag: 0.1.0@sha256:8c6a4b874246ecb64135e6bf2727bd8d38592a38384ffdc2a46105c49e88e2a1
+          env:
+            TZ: UTC
+            BATTERY_OPTIMIZER_DATA_DIR: /data
+            BATTERY_OPTIMIZER_CONFIG: /config/tariff.yaml
+            BATTERY_OPTIMIZER_HA_URL: http://home-assistant-hass.home-assistant.svc:8123
+            BATTERY_OPTIMIZER_PROMETHEUS_URL: http://prometheus-long-term.monitoring:9090
+            # Pipeline knobs (read by the script below).
+            # HA recorder keeps 10 days; re-pull 10 days every run (row-level dedup makes it free).
+            # Chunk width stays at the CLI default (86400 s): never change it on a live store.
+            HA_LOOKBACK_DAYS: "10"
+            # Prometheus extraction is NOT deduplicated across runs, so keep the overlap small.
+            PROM_LOOKBACK_DAYS: "3"
+            # Used only while the store has no finished Prometheus extraction (first run on an empty PVC).
+            PROM_BOOTSTRAP_START: "2024-01-01T00:00:00+00:00"
+            # build covers complete calendar months [BUILD_START, first of this month): a stable
+            # window keeps the content-addressed analysis store from gaining a dataset per run.
+            BUILD_START: "2024-01-01T00:00:00+00:00"
+          envFrom:
+            - secretRef:
+                name: battery-optimizer-home-assistant
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
+
+              log "step 1/4: extract ha-history (lookback ${HA_LOOKBACK_DAYS}d)"
+              battery-optimizer extract --source ha-history --lookback-days "${HA_LOOKBACK_DAYS}"
+
+              # A manifest is written only by a finished run, so orphaned parts from an interrupted
+              # bootstrap do not count as coverage and the retry bootstraps again.
+              if grep -qs '"source": "prometheus"' /data/manifests/*.json; then
+                log "step 2/4: extract prometheus (lookback ${PROM_LOOKBACK_DAYS}d)"
+                battery-optimizer extract --source prometheus --lookback-days "${PROM_LOOKBACK_DAYS}"
+              else
+                log "step 2/4: extract prometheus (empty store: bootstrap from ${PROM_BOOTSTRAP_START})"
+                battery-optimizer extract --source prometheus --start "${PROM_BOOTSTRAP_START}"
+              fi
+
+              log "step 3/4: validate"
+              battery-optimizer validate --source all
+
+              BUILD_END="$(date -u +%Y-%m-01T00:00:00+00:00)"
+              log "step 4/4: build ${BUILD_START} -> ${BUILD_END}"
+              battery-optimizer build --start "${BUILD_START}" --end "${BUILD_END}"
+
+              log "done"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+
+  defaultPodOptions:
+    enableServiceLinks: false
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      seccompProfile:
+        type: RuntimeDefault
+    # openebs-zfspv volumes are node-local.
+    nodeSelector:
+      kubernetes.io/hostname: prusik
+
+  persistence:
+    data:
+      enabled: true
+      existingClaim: battery-optimizer-data
+      globalMounts:
+        - path: /data
+    tmp:
+      enabled: true
+      type: emptyDir
+      advancedMounts:
+        pipeline:
+          pipeline:
+            - path: /tmp
+    config:
+      enabled: true
+      type: configMap
+      name: battery-optimizer-config
+      advancedMounts:
+        pipeline:
+          pipeline:
+            - path: /config
+              readOnly: true
