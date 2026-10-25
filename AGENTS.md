@@ -422,6 +422,8 @@ matters there.
   `planning/k8s-amd64-1-node-addition.md` for a worked example with measured numbers
 - **Topology spread constraints:** See `docs/conventions/topology-spread-constraints.md` for
   `matchLabelKeys` usage and when to apply it
+- **Battery optimizer:** application code, ADRs and plans live in `pando85/battery-optimizer`;
+  homelab owns its deployment and the extraction plan `planning/energy-baseline-production-execution.md`
 
 ## Licensing
 

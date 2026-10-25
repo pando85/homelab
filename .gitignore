@@ -15,12 +15,3 @@ Chart.lock
 charts
 .playwright-mcp
 apps/readest/files/.sql-*
-
-# energy-baseline package
-scripts/energy-baseline/.venv/
-scripts/energy-baseline/**/__pycache__/
-scripts/energy-baseline/**/*.pyc
-scripts/energy-baseline/*.egg-info/
-scripts/energy-baseline/dist/
-scripts/energy-baseline/.pytest_cache/
-scripts/energy-baseline/.ruff_cache/
