@@ -112,8 +112,10 @@ kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-serv
 Manual Job from the CronJob on an empty PVC: success in 5m46s including the full Prometheus
 bootstrap (1028 parts, 5.84 M rows), peak working set about 1.15 GiB (requests 768 Mi, limit 2 Gi),
 about 0.54 core peak, 41.5 MiB on the volume afterwards. Steady-state runs only re-pull 8 days of
-HA history and 3 days of Prometheus. The cluster store is separate from the manual
-`~/data/energy-baseline` store, which has not been migrated into the PVC.
+HA history and 3 days of Prometheus. The PVC is the store of record. A migration of the manual
+`~/data/energy-baseline` store was checked on 2026-10-25 and is **not needed**: every HA row in it
+(39 distinct) is already in the PVC (54), Prometheus is re-extractable, and the OMIE backfill is
+public. The local store stays frozen as the record behind the offline evaluation runs.
 
 Container logs carry one `httpx` INFO line per request (roughly 1000 for the bootstrap), so
 kubelet log rotation can drop the early `step N/4` lines of a long run; Loki keeps the full stream.
@@ -127,6 +129,13 @@ kubectl --context=grigri -n battery-optimizer logs job/<job-name> -c pipeline
 
 # Run one pipeline outside the schedule (e.g. after fixing a failure)
 kubectl --context=grigri -n battery-optimizer create job --from=cronjob/battery-optimizer-pipeline battery-optimizer-pipeline-manual-<n>
+```
+
+Local analysis copy (read-only on the cluster; streams the PVC out of the service pod, validates it,
+and syncs it into a separate directory — never into the frozen `~/data/energy-baseline`):
+
+```bash
+cd ~/battery-optimizer && KUBE_CONTEXT=grigri just pull-store   # ~/data/battery-optimizer-cluster
 ```
 
 Bumping the image is a Renovate PR changing `tag` in `apps/battery-optimizer/values.yaml`. A new

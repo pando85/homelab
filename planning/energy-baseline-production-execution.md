@@ -1,6 +1,6 @@
 # Energy Baseline — Production Execution Plan
 
-- **Status:** DEPLOYED 2026-10-25 — CronJob `battery-optimizer-pipeline` in `apps/battery-optimizer/` (daily 03:30 UTC); the interim manual cadence is superseded once the migration caveat below is resolved
+- **Status:** DEPLOYED 2026-10-25 — CronJob `battery-optimizer-pipeline` in `apps/battery-optimizer/` (daily 03:30 UTC); the interim manual cadence is superseded (migration checked 2026-10-25: not needed)
 - **Date:** 2026-10-23 (deployed 2026-10-25)
 - **Extends:** [ADR-0003](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
 - **Related:** [Deploying new apps](../docs/conventions/deploying-new-apps.md)
@@ -41,7 +41,7 @@ Superseded or changed relative to the plan above:
 - **Heartbeat metric:** `kube_cronjob_status_last_successful_time` (plus `kube_cronjob_created` for the never-succeeded case) rather than `kube_job_complete`.
 - **NetworkPolicy:** none, per the repo rule to keep NetworkPolicy isolation off until the Cilium datapath bugs are fixed.
 - **Silent-gap alerting:** delivered through the exit code. As of 0.2.1 `extract` exits 3 on a coverage gap (the 0.1.0 CLI exited 0), so the Job fails and `BatteryOptimizerJobFailed` fires; the pipeline never passes `--allow-coverage-gaps` except for the one-off Prometheus bootstrap.
-- **Open: the existing private store has not been migrated.** The cluster store started empty and was bootstrapped from Prometheus; its HA part is the 10-day window that was still in the recorder (`parts=11 rows=54`). The local `~/data/energy-baseline` store (including its Prometheus manifests and analysis datasets) was not copied. Nothing is lost as long as the first scheduled runs keep the HA window inside recorder retention, but the manual store remains the only copy of anything already purged from the recorder.
+- **Store migration: checked 2026-10-25, not needed.** The cluster store started empty and was bootstrapped from Prometheus; its HA part is the window still in the recorder (`parts=11 rows=54`). Comparing row identities showed every one of the 39 distinct HA rows in the local `~/data/energy-baseline` store is already in the PVC, Prometheus is re-extractable and the OMIE backfill is public, so nothing was copied. The PVC is the store of record; the local store stays frozen as the record behind the offline evaluation runs, and new local analysis uses `just pull-store` in the app repo (a separate directory, so dataset ids of past runs never change).
 - **Dataset growth:** `build` is write-once, has no garbage collection, and every new extraction changes the dataset id (measured +4.2 MB per daily build), so the job builds only on UTC days 01-02 of each month (closed calendar months). The first three manual runs left three ~4.2 MB datasets.
 
 ## Phase C: resident shadow service (2026-10-25)
