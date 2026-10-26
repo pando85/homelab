@@ -84,7 +84,7 @@ spec:
               mountPath: /sock
         - name: daemon
           # renovate: datasource=docker
-          image: docker:29.9.1
+          image: docker:29.9.2
           env:
             - name: TINI_SUBREAPER
               value: "1"
@@ -193,7 +193,7 @@ spec:
                   - "pkill -TERM dockerd 2>/dev/null || true; sleep 2"
         - name: docker-gc
           # renovate: datasource=docker
-          image: docker:29.9.1
+          image: docker:29.9.2
           env:
             - name: HOME
               value: /tmp
