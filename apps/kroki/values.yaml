@@ -7,7 +7,7 @@ app-template:
         kroki:
           image:
             repository: yuzutech/kroki
-            tag: 0.33.0
+            tag: 0.34.0
           env:
             KROKI_SAFE_MODE: SECURE
             KROKI_MAX_URI_LENGTH: 8192
