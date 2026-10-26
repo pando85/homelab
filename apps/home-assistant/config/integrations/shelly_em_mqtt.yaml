@@ -1,0 +1,31 @@
+# Shelly EM (Gen1) high-frequency telemetry over MQTT — PROBE STAGE.
+#
+# Temporary validation entities. They are replaced by the canonical
+# `shellyem-main Channel N Power` sensors once the native `shelly` integration's
+# power entities have been renamed out of the way (see
+# planning/shelly-em-mqtt-implementation.md, TODO-2 / TODO-3).
+#
+# Device publishes the full emeter block on change (sub-second on load
+# transients) plus a guaranteed periodic refresh every mqtt_update_period (5 s).
+mqtt:
+  sensor:
+    - name: ShellyEM Grid Power MQTT
+      unique_id: shellyem_main_grid_power_probe
+      state_topic: shellies/shellyem-244CAB417668/emeter/0/power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      value_template: "{{ value | round(2) }}"
+      availability_topic: shellies/shellyem-244CAB417668/online
+      payload_available: "true"
+      payload_not_available: "false"
+    - name: ShellyEM Aerotherm Power MQTT
+      unique_id: shellyem_main_aerotherm_power_probe
+      state_topic: shellies/shellyem-244CAB417668/emeter/1/power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      value_template: "{{ value | round(2) }}"
+      availability_topic: shellies/shellyem-244CAB417668/online
+      payload_available: "true"
+      payload_not_available: "false"
