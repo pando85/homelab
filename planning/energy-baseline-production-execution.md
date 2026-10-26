@@ -65,37 +65,31 @@ The same app now also runs the shadow service from `battery-optimizer` 0.2.1 (0.
 - Scope: shadow only. Live actuation (Phase D) is neither built nor authorised, and
   `comparison_basis` stays `no_battery_pre_commissioning` until the battery entities exist in HA.
 
-## Input-signal TODO: Shelly EM CoIoT unicast push (not blocking)
+## Input signal: Shelly EM high-frequency telemetry (closed as superseded)
 
-**Raised 2026-10-26** after a read-only investigation of how the grid signals reach HA. The Shelly EM
-behind `grid_power` / `grid_energy` / `observed` (`shellyem-main`, `192.168.86.130`, Gen1) has CoIoT
-**enabled with `update_period: 15` but an empty `peer`**, so it only multicasts to `224.0.1.187:5683`
-and nothing forwards that multicast to the HA pod (no IGMP proxy, no route to `10.0.0.0/8`, and no
-Service exposing UDP 5683). HA therefore **polls** the device over CoAP every `2.2 × 15 s = 33 s` and
-carries a permanent error-level repair (`push_update_244CAB417668`, re-created ~3 min after every HA
-restart).
+**Raised 2026-10-26, closed the same day.** The grid signals behind `grid_power` / `grid_energy` /
+`observed` (`shellyem-main`, `192.168.86.130`, Gen1) reached HA only by **CoAP polling at
+`2.2 × 15 s = 33 s`**, because CoIoT was in multicast mode and nothing forwarded it — full evidence
+in [`docs/troubleshooting/home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md).
 
-**Why this is not a Phase C blocker:** `service.yaml` sets `freshness_s.grid_power: 300` and
-`poll_interval_s: 60`, so a 33 s source stays fresh with an order of magnitude of margin, and slot
-energy comes from the `grid_energy` counter deltas, which polling captures.
+The original TODO here was to fix that with **unicast CoIoT** (a UDP 5683 LoadBalancer Service on
+`192.168.193.12`, an IoT-VLAN UDP pass rule on pfSense, and a device peer change). It is **closed as
+superseded**: Gen1 `coiot_update_period` is documented as `15..65535 s`, so that route could never
+beat 15 s, and it needed a pfSense change plus a new Service and VIP.
 
-**Why it is still worth doing:** 15 s native resolution in the recorder instead of 33 s samples
-(better load-forecast training data, tighter attribution inside a 900 s slot), one fewer standing
-error-level repair so a *real* future push failure is still signal, and fewer CoAP requests to the
-device.
+The replacement is **MQTT**, which needs neither: the IoT VLAN already passes TCP to the mosquitto
+VIP (`192.168.193.9:1883`), pfSense unbound already resolves
+`mosquitto.internal.grigri.cloud`, and the EM publishes on change (sub-second on load transients)
+with a configurable periodic floor. It takes over the two power entities **with their existing
+entity IDs, friendly names and Prometheus label sets**, so nothing in this plan, in
+`extract_prom.py` or in the dashboards has to change.
 
-**The change is three steps and two of them are human-only** (pfSense and the device are outside
-GitOps): a UDP 5683 LoadBalancer Service for HA (`192.168.193.12`, `externalTrafficPolicy` left at
-`Cluster`), an IoT-VLAN pass rule for UDP 5683 (device-initiated UDP from the IoT VLAN is blocked
-today — the opt6 catch-all is TCP-only because of `flags S/SA`), and setting the device's CoIoT peer
-to that VIP plus a device reboot. Full evidence, exact YAML, commands and rollback:
-[`docs/troubleshooting/home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md).
+Spec, decisions, measurements and execution:
+[`planning/shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md).
 
-- [ ] Deploy the `hass-coiot` UDP 5683 LoadBalancer Service and verify the VIP is BGP-learned
-- [ ] (human) pfSense alias `k8s_ha_coiot` + IoT-VLAN UDP 5683 pass rule above the reject rules
-- [ ] (human) Set the Shelly EM CoIoT peer to `192.168.193.12:5683` and reboot the device
-- [ ] Verify push: ~15 s cadence in HA, repair gone, push packets with no preceding HA request
-- [ ] Record the measured before/after resolution here (do **not** commit energy values or history)
+**Why this was never a Phase C blocker:** `service.yaml` sets `freshness_s.grid_power: 300` and
+`poll_interval_s: 60`, so even the 33 s polling source stayed fresh with an order of magnitude of
+margin, and slot energy comes from the `grid_energy` counter deltas.
 
 ## Interim manual extraction cadence
 
@@ -286,7 +280,7 @@ When the CLI is mature and this plan is approved, the implementation commit must
 - [ ] Alert on `duplicate_rows_already_stored` and `carry_in_classification_disagreement` as chunk-width/store-hygiene signals, not as coverage failures
 - [ ] Implement the HA reader with row-identity dedup (`build.py` has none today): collapse `(entity, last_changed, last_updated, state, attributes_json)` at read time instead of rewriting parts to remove the 12 pre-dedup duplicates — **the reader half is done (2026-10-24)**: `src/battery_optimizer/ha_states.py` plus the `battery-optimizer ha-states` subcommand collapse that identity at read time and leave the parts untouched (verified read-only against the real store: `parts=12 rows_before_dedup=51 rows_after_dedup=39 duplicates=12 entities=2`). This box stays unticked because the checklist tracks what the *pipeline consumes*: `build.py` still walks only `source == "prometheus"` manifests, so those states reach no dataset, no forecast and no policy — see [Known state of the private store](#known-state-of-the-private-store)
 - [ ] If a tighter bound is needed, establish the effective retention boundary from a **read-only** recorder database query — do not infer it from the earliest extracted row
-- [ ] Improve the grid-power input signal: switch the Shelly EM from CoIoT multicast to unicast push (15 s instead of 33 s polling) — see [Input-signal TODO: Shelly EM CoIoT unicast push](#input-signal-todo-shelly-em-coiot-unicast-push-not-blocking). Not a blocker; two of the three steps are human-only (pfSense, device)
+- [ ] Improve the grid-power input signal: move the Shelly EM's two power entities to MQTT (sub-second on load transients, 5 s guaranteed refresh, versus 33 s CoAP polling) while keeping their entity IDs, friendly names and Prometheus series identical — see [Input signal: Shelly EM high-frequency telemetry](#input-signal-shelly-em-high-frequency-telemetry-closed-as-superseded) and [`shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md). The original CoIoT-unicast variant is closed as superseded (15 s floor, needs a pfSense change). Not a blocker
 - [x] Document the Vault path and PVC size in this file (update from "to be determined")
 - [x] Record in this file that the interim manual cadence has been superseded by the schedule (update the Status line and the cadence section)
 
@@ -301,3 +295,4 @@ When the CLI is mature and this plan is approved, the implementation commit must
 - [HA history extractor source](https://github.com/pando85/battery-optimizer/blob/main/src/battery_optimizer/extract_ha.py)
 - [Home Assistant Recorder integration](https://www.home-assistant.io/integrations/recorder/)
 - [Shelly CoIoT push updates (Gen1)](../docs/troubleshooting/home-assistant-shelly-coiot-push.md)
+- [Shelly EM MQTT high-frequency telemetry — implementation spec](shelly-em-mqtt-implementation.md)

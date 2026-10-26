@@ -62,13 +62,22 @@ deployment.
   0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
   from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
   control (LLM harnesses). Its only credential is the read-only HA token, and it has no actuation path.
-- **The grid signals come from a Gen1 Shelly EM that is polled, not pushed.** `shellyem-main` has
-  CoIoT enabled with an empty `peer` (multicast, which nothing forwards to the HA pod), so Home
-  Assistant polls it over CoAP every `2.2 × 15 s = 33 s` and shows a permanent error-level repair.
-  That is well inside `freshness_s.grid_power: 300`, so it is **not** a Phase C blocker — but it caps
-  grid-power resolution at 33 s. Switching the device to unicast CoIoT (needs a UDP 5683 LoadBalancer
-  Service, a pfSense IoT-VLAN rule and a device change) is a tracked TODO:
-  [`home-assistant-shelly-coiot-push.md`](../troubleshooting/home-assistant-shelly-coiot-push.md).
+- **The grid signals are MQTT-backed but keep their original entity IDs.** `shellyem-main` (Gen1)
+  publishes to mosquitto on change (sub-second on load transients) plus a 5 s periodic floor, and two
+  YAML `mqtt` sensors in `apps/home-assistant/config/integrations/shelly_em_mqtt.yaml` **took over**
+  `sensor.shellyem_main_channel_{1,2}_power` from the native `shelly` integration, whose copies were
+  renamed `*_coiot` and disabled. Entity IDs and friendly names — and therefore
+  `hass_sensor_power_w{entity,friendly_name,…}` — are unchanged, so `extract_prom.py`, `service.yaml`
+  and the dashboards needed no edit, and because the recorder's `states_meta` is keyed by entity_id
+  the history is continuous across the cutover. Everything else on that device (energy counters, the
+  Energy Dashboard cost entity, voltage, power factor, relay, reboot button) is **still native** and
+  still polled over CoAP at `2.2 × 15 s = 33 s`: Gen1 MQTT publishes no power factor, no overpower
+  boolean and no reboot command. Do not rename those entities or the device — `friendly_name` is a
+  Prometheus label and part of the archive's `series_key`. The device's `push_update_*` repair is
+  **ignored on purpose**: it fires on every CoAP poll reply whatever the transport
+  ([`home-assistant-shelly-coiot-push.md`](../troubleshooting/home-assistant-shelly-coiot-push.md)).
+  Plan and measurements:
+  [`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md).
 - **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
   image carries no config). Update both together; the tariff config hash is part of every dataset id.
 - **Coverage gaps fail the Job.** From 0.2.1 `extract` exits 3 when the run's manifest records a

@@ -1,7 +1,20 @@
 # Home Assistant Shelly CoIoT push updates (Gen1 devices)
 
-**Status:** diagnosed 2026-10-26, **fix not implemented** (tracked as a TODO in
-[`planning/energy-baseline-production-execution.md`](../../planning/energy-baseline-production-execution.md)).
+**Status:** diagnosed 2026-10-26. **Superseded as a resolution fix — will not be implemented.**
+Gen1 `coiot_update_period` is documented as `15..65535 s`, so CoIoT can never beat 15 s and HA can
+never beat `2.2 × 15 s = 33 s`. MQTT reaches the device's own change-detection rate (sub-second on
+load transients) with a 5 s guaranteed refresh, needs **no** pfSense change (IoT-VLAN TCP to the
+mosquitto VIP already passes) and **no** new Service or VIP. See
+[`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md).
+
+What remains valid here: the diagnosis, the evidence, and the pitfall list. The unicast CoIoT
+procedure below is kept as a reference for any *other* Gen1 device where 15 s is enough — and as the
+only way to clear the standing `push_update_*` repair, which **MQTT does not fix** (see
+[Pitfalls](#pitfalls)).
+
+**Device drift, 2026-10-26 (later the same day):** `shellyem-main` now reports
+`coiot: {"enabled": false, ...}`, and MQTT is enabled. HA still polls over CoAP at 33 s, so the
+table below describes the state *before* that change.
 
 Generation-1 Shelly devices (`shellyem-main`, a Shelly EM) talk to Home Assistant over **CoIoT**
 (CoAP on UDP 5683). CoIoT is enabled on the device, but its **peer is empty**, so the device only
@@ -272,6 +285,17 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://hass.grigri.cloud/api/repairs
 
 ## Pitfalls
 
+- **The `push_update_*` repair survives both "disable CoIoT" and "switch to MQTT".**
+  `check_coiot_config()` returns `True` when the device reports `coiot.enabled: false`
+  (`components/shelly/utils.py:1070`), which makes `async_manage_coiot_issues_task()` take the
+  *push-update-failure* branch and raise the **error**-severity issue rather than the
+  `coiot_unconfigured` warning. And `ShellyBlockCoordinator._handle_update()` increments
+  `_push_update_failures` on every `COAP_REPLY` **unconditionally** (`coordinator.py:456-462`),
+  regardless of the device's CoIoT setting. HA keeps polling over CoAP whether or not the device has
+  CoIoT or MQTT enabled, so the only ways to clear it are a genuine CoAP `PERIODIC` push (unicast
+  CoIoT, Step 1-3 below), removing the `shelly` config entry, or **ignoring the issue in the UI**.
+  Ignoring is persisted (`helpers/issue_registry.py`, storage key `repairs.issue_registry`) even
+  though the issue itself is `is_persistent: false`, so it survives restarts.
 - **Never click "Configure CoIoT" in HA repairs.** `CoiotConfigureFlow`
   (`homeassistant/components/shelly/repairs.py:262-288`) writes
   `get_coiot_address(hass):get_coiot_port(hass)` straight onto the device via
@@ -313,16 +337,20 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://hass.grigri.cloud/api/repairs
 `home_assistant.poll_interval_s: 60`, a 33 s source is comfortably fresh, and the slot-energy
 accounting uses the `grid_energy` counter deltas, which polling captures fine.
 
-What implementing it buys:
+What a faster transport buys:
 
-- **15 s native resolution** in the recorder instead of 33 s samples — better training data for the
-  load forecaster and tighter attribution of grid power inside a 900 s planning slot.
-- **One less standing error-level repair** in HA, so a *genuine* future push failure is still
-  signal instead of noise.
-- Fewer CoAP requests from HA to the device (one poll per 33 s per Gen1 device disappears).
+- **Sub-second response to load transients** in the recorder instead of 33 s samples — better
+  training data for the load forecaster, and a fast enough grid signal for a future battery
+  zero-export / power-limiting control loop.
+- **One less standing error-level repair** in HA *only if* the transport is CoIoT push; MQTT does
+  not clear it (see Pitfalls).
+- Fewer CoAP requests from HA to the device.
 
-Tracked as a TODO in
-[`planning/energy-baseline-production-execution.md`](../../planning/energy-baseline-production-execution.md).
+CoIoT caps the first of these at 15 s, so the work is tracked as MQTT instead:
+[`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md).
+The original CoIoT TODO in
+[`planning/energy-baseline-production-execution.md`](../../planning/energy-baseline-production-execution.md)
+is closed as superseded.
 
 ## References
 
