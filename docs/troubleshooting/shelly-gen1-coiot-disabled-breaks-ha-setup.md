@@ -1,12 +1,19 @@
 # Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
 
 **Status:** diagnosed and fixed 2026-10-26 on `shellyem-main`. Device restored, HA entry `loaded`.
+Extended the same day: the same root cause also explains a **device reboot loop** that had been
+mis-attributed to MQTT — see
+[Second consequence](#second-consequence-the-retry-storm-can-fault-the-device-itself).
 
 Disabling CoIoT on a Gen1 Shelly looks harmless — HA keeps polling and data keeps flowing. It is
 **not** harmless: it removes the one endpoint HA needs to *initialize* the device, so the next HA
 restart silently drops every entity of that config entry. The failure can surface hours or days
 later, triggered by something unrelated (a ConfigMap change and the Reloader restart it causes, an
 image bump, a node drain), which makes it very hard to attribute.
+
+It has a second face: while HA retries, the requests it makes to the dead endpoint **hang inside the
+device**, consuming its heap and HTTP connection slots. That alone is survivable, but combined with an
+MQTT client it faults the firmware into a reboot loop.
 
 ## Symptom
 
@@ -20,6 +27,10 @@ image bump, a node drain), which makes it very hard to attribute.
   does not use `/cit/*` at all. Only Gen1 is affected.
 - Nothing in the HA log: the failure is raised as `ConfigEntryNotReady` and only surfaces as the
   entry's `reason` string.
+- *If MQTT is also enabled:* the device **spontaneously reboots** every ~1–5 min (`uptime` resets with
+  no request from you), and `ram_free` sits ~8 KB lower than normal. This reads like an MQTT fault and
+  is not one.
+
 
 ## Environment
 
@@ -71,6 +82,33 @@ except (DeviceConnectionError, MacAddressMismatchError) as err:
 An already-initialized HA is unaffected: `ShellyBlockCoordinator` polls `/status` over REST every
 `2.2 × coiot_update_period` (33 s here), which does not touch `/cit/*`. That is exactly why the
 breakage stays invisible until the next restart.
+
+## Second consequence: the retry storm can fault the device itself
+
+The hanging `/cit/d` is not only a HA-side problem. Each stuck request **pins a mongoose HTTP
+connection slot and its buffers on the device for as long as HA keeps retrying**, and HA retries with a
+backoff that grows to `SETUP_RETRY_MAX_WAIT = 600 s` — so the consumption is standing, not transient.
+
+Measured on `shellyem-main` (fw 1.14.0, `ram_total` 51 064 B):
+
+| | CoIoT off + HA retrying | CoIoT on |
+|---|---|---|
+| `ram_free` | **27 224 B** | **35 368 B** |
+| `GET /status` while 6 `/cit/d` are hanging | **no response** (2 of 3 rounds) | answers normally |
+| device log heap floor | `New heap free LWM: 25960` → `25888` | `31408` |
+
+On its own the device survives this — ~20 min stable with MQTT off while HA hammered it. But with an
+**MQTT client also running**, the remaining heap margin disappears and the firmware faults: spontaneous
+reboots every 71–280 s, which look exactly like "MQTT reboot-loops this device" and are very easy to
+mis-diagnose that way. The per-request leak is tiny (18 hanging requests cost ~280 B of unrecovered
+heap), which is why replaying hanging `/cit/d` calls by hand does **not** reproduce the fault — it takes
+HA's full `initialize()` sequence under retry backoff.
+
+Isolation matrix, ruled-out hypotheses and the full mechanism:
+[`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md#root-cause-a-three-way-interaction-not-mqtt-alone).
+
+**Practical consequence:** re-enabling CoIoT fixes both failures at once — HA's setup *and* the reboot
+loop. If a Gen1 Shelly is spontaneously rebooting, check `coiot.enabled` **before** suspecting MQTT.
 
 ## Diagnosis (read-only)
 
@@ -185,12 +223,22 @@ repair remain; that part is
   would have been banned.
 - **Never disable CoIoT on a Gen1 device that HA owns** — not even "to clean up", and not even
   temporarily. It arms a time bomb whose trigger is the next unrelated HA restart.
+- **A spontaneous reboot loop is also a symptom of this**, not only of MQTT. The stuck `/cit/d`
+  handlers eat ~8 KB of heap and every HTTP slot; add an MQTT client and the device faults. Check
+  `coiot.enabled` before blaming MQTT — and note the loop *stops* as soon as CoIoT is re-enabled.
+- **`/debug/log` cannot catch the crash on fw 1.14.0.** `debug_enable=true` is accepted by
+  `POST /settings` and reads back `false`, so the endpoint keeps serving a frozen tail from an older
+  boot. Don't build a diagnosis on it looking "live".
+- **`broker_clients_connected` will not show you these reboots.** The device reconnects with the same
+  client id, mosquitto replaces the stale session, and the count stays flat (it held at 7 straight
+  through two confirmed reboots). It also flaps from your own `mosquitto_sub` sessions. Subscribe to
+  `shellies/<id>/online` instead — it fires on every MQTT connect.
 
 ## Related
 
 - [`home-assistant-shelly-coiot-push.md`](home-assistant-shelly-coiot-push.md) — why CoIoT push never
   reaches HA, the 33 s polling fallback and the standing `push_update_*` repair
 - [`../../planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md) —
-  the MQTT attempt that surfaced this (abandoned: MQTT reboot-loops this device)
+  the MQTT work that surfaced this, and the reboot-loop root cause (MQTT is a co-factor, not the trigger)
 - [`home-assistant-api-hacs-deploy.md`](home-assistant-api-hacs-deploy.md) — HA login-flow token recipe
 - [`../deployment/battery-optimizer.md`](../deployment/battery-optimizer.md) — downstream consumer of these entities

@@ -1,8 +1,10 @@
 # Home Assistant Shelly CoIoT push updates (Gen1 devices)
 
-**Status:** diagnosed 2026-10-26, **fix still not implemented** — and it is now the *only* remaining
-route to faster-than-33 s grid telemetry. The MQTT alternative was attempted the same day and
-**abandoned**: enabling MQTT makes this device reboot-loop. Evidence and options:
+**Status:** diagnosed 2026-10-26, **fix still not implemented** — and it is now the *fallback* route to
+faster-than-33 s grid telemetry. The MQTT alternative looked dead the same day (the device reboot-looped)
+but was **root-caused**: the loop needs MQTT *and* CoIoT disabled *and* an HA `setup_retry` storm
+hammering the `/cit/d` endpoint that hangs. With CoIoT enabled — which is mandatory anyway — MQTT is
+stable and beats this at **0.37 s on transients vs a 15 s floor**. Evidence and options:
 [`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md).
 
 Unicast CoIoT is capped at **15 s** (`coiot_update_period` is documented as `15..65535 s`, and
@@ -349,9 +351,10 @@ What unicast CoIoT push (this page's procedure) buys:
 - **One less standing error-level repair** in HA, so a *genuine* future push failure is signal again.
 - Fewer HTTP polls from HA to the device.
 
-Sub-second response was only ever available over MQTT, and that route is closed: enabling MQTT makes
-this device reboot-loop. The experiment log, the measurements and the remaining options (accept 33 s,
-implement CoIoT unicast for 15 s, diagnose the reboots, or replace the meter with a Gen2/RPC device)
+Sub-second response is only available over MQTT. That route looked closed after the device reboot-looped,
+but the loop was root-caused to CoIoT being disabled while HA retried setup — MQTT itself is stable with
+CoIoT enabled. The experiment log, the isolation matrix and the remaining options (finish the MQTT
+cutover, implement CoIoT unicast for 15 s, accept 33 s, or replace the meter with a Gen2/RPC device)
 are in [`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md);
 the tracking item lives in
 [`planning/energy-baseline-production-execution.md`](../../planning/energy-baseline-production-execution.md).

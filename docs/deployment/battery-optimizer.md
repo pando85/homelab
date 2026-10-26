@@ -67,10 +67,12 @@ deployment.
   nothing forwards that to the HA pod: Home Assistant polls `/status` over REST every
   `2.2 × 15 s = 33 s` and carries a permanent error-level `push_update_*` repair. That is well inside
   `freshness_s.grid_power: 300`, so it is **not** a Phase C blocker, and the dataset builds its 900 s
-  slots from `grid_energy` counter deltas rather than instantaneous power. A faster transport was
-  attempted and abandoned — enabling MQTT on this device makes it **reboot-loop**
+  slots from `grid_energy` counter deltas rather than instantaneous power. A faster transport (MQTT)
+  initially looked unusable — the device reboot-looped — but that was **mis-diagnosed**: the loop needs
+  MQTT *and* `coiot.enabled: false` *and* an HA `setup_retry` storm, so MQTT is viable as long as CoIoT
+  stays enabled
   ([`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md)).
-  Unicast CoIoT (15 s, needs a pfSense change) is the only remaining option
+  Unicast CoIoT (15 s, needs a pfSense change) is the fallback
   ([`home-assistant-shelly-coiot-push.md`](../troubleshooting/home-assistant-shelly-coiot-push.md)).
   Do **not** rename these entities or the device: `friendly_name` is a Prometheus label and part of
   the archive's `series_key`.

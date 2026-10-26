@@ -315,8 +315,9 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   raises a permanent error-level `push_update_*` repair. Tell-tale: entity updates at exactly 2.2× the
   device period. Fix is unicast CoIoT to a Cilium LB VIP — and note the IoT VLAN blocks
   device-initiated UDP (opt6 catch-all has `flags S/SA` = TCP-only), plus never use HA's
-  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). MQTT is
-  **not** an alternative on this unit: enabling it makes the device reboot-loop. See
+  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). MQTT *is* an
+  alternative here (0.37 s on transients) — an early "MQTT reboot-loops this device" conclusion was
+  traced to CoIoT being disabled while HA retried setup, not to MQTT. See
   `docs/troubleshooting/home-assistant-shelly-coiot-push.md` and
   `planning/shelly-em-mqtt-implementation.md`
 
@@ -330,6 +331,9 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   then `/reboot` — note `POST /settings/coiot` with `enabled=true` is **silently ignored** on fw
   1.14.0 — followed by the `homeassistant.reload_config_entry` service (the websocket command
   `config_entries/reload` does not exist). Cost of the 2026-10-26 incident: ~48 min of grid telemetry.
+  **Second face:** while HA retries, those requests hang *inside the device*, pinning its HTTP slots and
+  ~8 KB of a 51 KB heap; with an MQTT client also running, the firmware faults into a reboot loop every
+  1–5 min that reads exactly like an MQTT bug and is not one. Re-enabling CoIoT stops both failures.
   See `docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md`
 
 - qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
