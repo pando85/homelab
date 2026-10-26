@@ -346,8 +346,17 @@ That reorders the remaining choices:
 
 ### Cutover sequence for A′ (not yet executed)
 
-1. **Soak** the current state (MQTT on, `update_period: 30`, CoIoT on) overnight. Success criterion: no
-   `shellies/shellyem-244CAB417668/online` event that I did not command, and no recorder gap >40 s.
+1. **Soak** the current state (MQTT on, `update_period: 30`, CoIoT on) overnight. Baseline: boot
+   19:54:38Z, `uptime: 1263` at 20:15:41Z. Success criterion, in order of strength:
+   - device `uptime` at the next check ≈ elapsed wall time (a reboot resets it — this is the primary
+     signal, because nothing records the `online` topic);
+   - no recorder gap >40 s on `sensor.shellyem_main_channel_1_power` (`metadata_id` 182). Note this is
+     a *weak* detector: at 33 s polling a ~30 s outage can hide between polls, so it corroborates
+     `uptime`, it does not replace it;
+   - no `shelly` disconnect/`unavailable` lines in the HA log overnight.
+   To watch reconnects directly, subscribe to `shellies/shellyem-244CAB417668/online` + `/announce` —
+   they fire on every MQTT connect. Do **not** use `broker_clients_connected`.
+
 2. Set `mqtt_update_period=5` + `/reboot`, re-verify stability for a further window.
 3. Deploy the parallel MQTT sensors under **temporary** entity ids (the YAML in
    [Reference](#reference-the-ha-side-yaml-that-was-never-deployed)) and confirm the cadence in HA —
