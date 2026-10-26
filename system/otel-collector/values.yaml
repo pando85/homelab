@@ -3,7 +3,7 @@ replicaCount: 1
 
 image:
   repository: otel/opentelemetry-collector-contrib
-  tag: 0.163.1
+  tag: 0.163.2
   pullPolicy: IfNotPresent
 
 resources:
