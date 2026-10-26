@@ -1,5 +1,5 @@
--- Source: https://raw.githubusercontent.com/firecrawl/firecrawl/v2.11.547/apps/nuq-postgres/nuq.sql
--- Git ref: v2.11.547
+-- Source: https://raw.githubusercontent.com/firecrawl/firecrawl/v2.11.609/apps/nuq-postgres/nuq.sql
+-- Git ref: v2.11.609
 -- Adapted: for idempotent re-runs via init container
 -- Changes: removed ALTER SYSTEM statements (set via Zalando CR instead),
 --          removed SELECT pg_reload_conf(), kept pg_cron jobs (pg_cron available),
