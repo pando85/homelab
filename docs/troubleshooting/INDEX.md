@@ -15,7 +15,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Storage & Backup](#storage--backup) (10 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (7 entries)
+- [Desktop & Home](#desktop--home) (8 entries)
 - [Applications](#applications) (10 entries)
 
 ---
@@ -315,8 +315,22 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   raises a permanent error-level `push_update_*` repair. Tell-tale: entity updates at exactly 2.2× the
   device period. Fix is unicast CoIoT to a Cilium LB VIP — and note the IoT VLAN blocks
   device-initiated UDP (opt6 catch-all has `flags S/SA` = TCP-only), plus never use HA's
-  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). See
-  `docs/troubleshooting/home-assistant-shelly-coiot-push.md`
+  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). MQTT is
+  **not** an alternative on this unit: enabling it makes the device reboot-loop. See
+  `docs/troubleshooting/home-assistant-shelly-coiot-push.md` and
+  `planning/shelly-em-mqtt-implementation.md`
+
+- **Never disable CoIoT on a Gen1 Shelly that HA owns.** With `coiot.enabled: false` the firmware
+  stops serving `/cit/*`: HTTP `GET /cit/d` **hangs** (no 404) and CoAP on UDP 5683 goes silent. HA's
+  `BlockDevice.initialize()` requires `/cit/d`, so the *next* HA restart drops every entity of that
+  config entry into `setup_retry` with "Device communication error occurred for …" — while the device
+  keeps answering `/shelly`, `/settings` and `/status` normally, which misleads the diagnosis. An
+  already-initialized HA is unaffected (it polls `/status` over REST), so the breakage stays latent
+  for hours or days. Fix: `POST /settings/advanced?coiot_enable=true&coiot_update_period=15&coiot_peer=`
+  then `/reboot` — note `POST /settings/coiot` with `enabled=true` is **silently ignored** on fw
+  1.14.0 — followed by the `homeassistant.reload_config_entry` service (the websocket command
+  `config_entries/reload` does not exist). Cost of the 2026-10-26 incident: ~48 min of grid telemetry.
+  See `docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md`
 
 - qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
   in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)

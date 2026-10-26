@@ -62,22 +62,26 @@ deployment.
   0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
   from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
   control (LLM harnesses). Its only credential is the read-only HA token, and it has no actuation path.
-- **The grid signals are MQTT-backed but keep their original entity IDs.** `shellyem-main` (Gen1)
-  publishes to mosquitto on change (sub-second on load transients) plus a 5 s periodic floor, and two
-  YAML `mqtt` sensors in `apps/home-assistant/config/integrations/shelly_em_mqtt.yaml` **took over**
-  `sensor.shellyem_main_channel_{1,2}_power` from the native `shelly` integration, whose copies were
-  renamed `*_coiot` and disabled. Entity IDs and friendly names — and therefore
-  `hass_sensor_power_w{entity,friendly_name,…}` — are unchanged, so `extract_prom.py`, `service.yaml`
-  and the dashboards needed no edit, and because the recorder's `states_meta` is keyed by entity_id
-  the history is continuous across the cutover. Everything else on that device (energy counters, the
-  Energy Dashboard cost entity, voltage, power factor, relay, reboot button) is **still native** and
-  still polled over CoAP at `2.2 × 15 s = 33 s`: Gen1 MQTT publishes no power factor, no overpower
-  boolean and no reboot command. Do not rename those entities or the device — `friendly_name` is a
-  Prometheus label and part of the archive's `series_key`. The device's `push_update_*` repair is
-  **ignored on purpose**: it fires on every CoAP poll reply whatever the transport
+- **The grid signals come from a Gen1 Shelly EM that is polled, not pushed.** `shellyem-main`
+  (`192.168.86.130`) has CoIoT enabled with an empty `peer`, so the device only multicasts and
+  nothing forwards that to the HA pod: Home Assistant polls `/status` over REST every
+  `2.2 × 15 s = 33 s` and carries a permanent error-level `push_update_*` repair. That is well inside
+  `freshness_s.grid_power: 300`, so it is **not** a Phase C blocker, and the dataset builds its 900 s
+  slots from `grid_energy` counter deltas rather than instantaneous power. A faster transport was
+  attempted and abandoned — enabling MQTT on this device makes it **reboot-loop**
+  ([`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md)).
+  Unicast CoIoT (15 s, needs a pfSense change) is the only remaining option
   ([`home-assistant-shelly-coiot-push.md`](../troubleshooting/home-assistant-shelly-coiot-push.md)).
-  Plan and measurements:
-  [`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md).
+  Do **not** rename these entities or the device: `friendly_name` is a Prometheus label and part of
+  the archive's `series_key`.
+- **Never disable CoIoT on that device, and treat HA restarts as a checked operation.** With
+  `coiot.enabled: false` the firmware stops serving `/cit/*`, HA's `initialize()` hangs on
+  `GET /cit/d`, and the *next* HA restart drops all 14 `shellyem-main` entities into `setup_retry` —
+  taking `grid_power`, `grid_energy` and `observed` away from this service at once. That happened on
+  2026-10-26 and cost ~48 min of history (18:02:35Z-18:50:34Z). Before any HA ConfigMap change
+  (Reloader restarts the pod), verify `GET /cit/d` still answers `200`. Recovery, correct endpoint
+  and pitfalls:
+  [`shelly-gen1-coiot-disabled-breaks-ha-setup.md`](../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md).
 - **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
   image carries no config). Update both together; the tariff config hash is part of every dataset id.
 - **Coverage gaps fail the Job.** From 0.2.1 `extract` exits 3 when the run's manifest records a
