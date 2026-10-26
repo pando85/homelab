@@ -15,7 +15,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Storage & Backup](#storage--backup) (10 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (6 entries)
+- [Desktop & Home](#desktop--home) (7 entries)
 - [Applications](#applications) (10 entries)
 
 ---
@@ -308,6 +308,15 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   reject them with a bare `ValueError` (empty `Error getting prices:` log), halting aerotherm
   scheduling. Apps now accept negative prices and use a fallback schedule when price fetching fails.
   See `docs/troubleshooting/appdaemon-pvpc-negative-prices.md`
+
+- Gen1 Shelly (`shellyem-main`) with CoIoT enabled but an **empty peer** only multicasts to
+  `224.0.1.187:5683`, which nothing forwards to the HA pod (no IGMP proxy, no route to `10.0.0.0/8`,
+  no UDP 5683 Service). HA silently falls back to CoAP polling at `2.2 × update_period` (33 s) and
+  raises a permanent error-level `push_update_*` repair. Tell-tale: entity updates at exactly 2.2× the
+  device period. Fix is unicast CoIoT to a Cilium LB VIP — and note the IoT VLAN blocks
+  device-initiated UDP (opt6 catch-all has `flags S/SA` = TCP-only), plus never use HA's
+  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). See
+  `docs/troubleshooting/home-assistant-shelly-coiot-push.md`
 
 - qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
   in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)

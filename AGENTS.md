@@ -106,7 +106,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (63 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (64 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -131,7 +131,7 @@ Full pitfall index (63 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **Storage & Backup** (10): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
-- **Desktop & Home** (6): Home Assistant venv/aiohttp/localtuya, PVPC negative prices
+- **Desktop & Home** (7): Home Assistant venv/aiohttp/localtuya, PVPC negative prices, Shelly CoIoT push
 - **Applications** (10): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema
 
 ## Subsystem Docs
