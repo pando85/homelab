@@ -65,42 +65,55 @@ The same app now also runs the shadow service from `battery-optimizer` 0.2.1 (0.
 - Scope: shadow only. Live actuation (Phase D) is neither built nor authorised, and
   `comparison_basis` stays `no_battery_pre_commissioning` until the battery entities exist in HA.
 
-## Input signal: Shelly EM high-frequency telemetry (MQTT root-caused, viable)
+## Input signal: Shelly EM high-frequency telemetry (delivered at 2 s over MQTT)
 
-**Raised 2026-10-26, diagnosed the same day, MQTT soak in progress.** The grid
-signals behind `grid_power` / `grid_energy` / `observed` (`shellyem-main`, `192.168.86.130`, Gen1)
-reach HA only by **REST polling at `2.2 × 15 s = 33 s`**, because CoIoT is in multicast mode and
-nothing forwards it — full evidence in
+**Raised 2026-10-26, diagnosed the same day, implemented 2026-10-27.** The grid signals behind
+`grid_power` / `grid_energy` / `observed` (`shellyem-main`, `192.168.86.130`, Gen1) used to reach HA
+only by **REST polling at `2.2 × 15 s = 33 s`**, because CoIoT is in multicast mode and nothing
+forwards it — full evidence in
 [`docs/troubleshooting/home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md).
+
+**Now resolved:** both power sensors are fed by **MQTT at a measured 2.01 s median** — 16.5× faster —
+with entity IDs, friendly names, Prometheus label sets, recorder `metadata_id`s and long-term statistic
+ids all unchanged. `battery_optimizer_input_age_seconds{role="grid_power"}` went from **31.9 s to 2.3 s**
+against a `freshness_s` budget of 300, so a real-time zero-export control loop now has the input
+resolution it needs. `grid_energy` deliberately stays a native 33 s counter: slot energy is consumed as
+900 s deltas, so a faster transport would add ~43 k recorder rows/day per channel for no information.
 
 Two routes were on the table:
 
-- **Unicast CoIoT** — the original TODO here, now the **fallback**. Hard floor of **15 s**
-  (`coiot_update_period` is `15..65535`), and it needs a UDP 5683 LoadBalancer Service on
-  `192.168.193.12`, an IoT-VLAN UDP pass rule on pfSense (device-initiated UDP is blocked today: the
-  opt6 catch-all is TCP-only) and a device peer change.
-- **MQTT** — the sub-second route, needing no pfSense change (IoT-VLAN TCP to the mosquitto VIP
+- **MQTT** — chosen and implemented. Needs no pfSense change (IoT-VLAN TCP to the mosquitto VIP
   `192.168.193.9:1883` already passes, and pfSense unbound already resolves the broker name).
   **Attempted 2026-10-26: the device reboot-looped and the route was first written off. That was a
   mis-diagnosis.** The loop needs three conditions at once — MQTT enabled, `coiot.enabled: false`, and
   HA in a `setup_retry` storm hammering the `/cit/d` endpoint that hangs while CoIoT is off. Each
   stuck request pins an HTTP slot and ~8 KB of the device's 51 KB heap; MQTT takes the remaining
   margin and the firmware faults. Isolated: MQTT **off** + CoIoT off + the same retry storm ran ~20 min
-  stable, and MQTT **on** + CoIoT **on** ran 20 min with continuous publishing and zero unscheduled
+  stable, and MQTT **on** + CoIoT **on** ran 11 h 14 m with continuous publishing and zero unscheduled
   reconnects. Since CoIoT must stay enabled anyway (it is HA's setup dependency), the production
-  configuration is the safe one. **MQTT is now enabled and soaking.**
+  configuration is the safe one.
+- **Unicast CoIoT** — the original TODO, now **moot for frequency**: it has a hard floor of **15 s**
+  (`coiot_update_period` is `15..65535`), i.e. slower than what is running. It still needs a UDP 5683
+  LoadBalancer Service on `192.168.193.12`, an IoT-VLAN UDP pass rule on pfSense (device-initiated UDP
+  is blocked today: the opt6 catch-all is TCP-only) and a device peer change. Its only remaining value
+  is clearing the standing `push_update_*` repair.
 
-So the input signal stays at **33 s** until the cutover completes. The isolation matrix, the MQTT
-measurements and the five-step cutover sequence are in
-[`planning/shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md). If the soak fails, the
-remaining options are CoIoT unicast (15 s), accept 33 s, or replace the meter with a Gen2/RPC device.
-Firmware `1.14.1-rc1` was **explicitly ruled out** for the main grid meter.
+The isolation matrix, the cadence measurements, the recorder/statistics impact and the rollback are in
+[`planning/shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md). The entity-ID handover
+needed a non-obvious technique — a registry *rename* makes HA's recorder migrate history away from the
+canonical ID — documented in
+[`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md).
+Firmware `1.14.1-rc1` was **explicitly ruled out** for the main grid meter and never flashed.
 
 
-**Why this is not a Phase C blocker:** `service.yaml` sets `freshness_s.grid_power: 300` and
-`poll_interval_s: 60`, so a 33 s source stays fresh with an order of magnitude of margin, and slot
-energy comes from the `grid_energy` counter deltas, which polling captures fine. It only blocks a
-future real-time zero-export control loop.
+**Why this was never a Phase C blocker:** `service.yaml` sets `freshness_s.grid_power: 300` and
+`poll_interval_s: 60`, so even the old 33 s source stayed fresh with an order of magnitude of margin, and
+slot energy comes from the `grid_energy` counter deltas. What the 2 s upgrade unblocks is a future
+real-time zero-export control loop, which needs to react between planning slots.
+
+**Cost, measured:** +81 435 recorder rows/day (+40 %), ≈ +520 MB steady state at the observed 628 B/row
+over 10.17-day retention — DB 1.69 → ~2.2 GB of a 6 Gi PVC. Long-term statistics are unaffected (still
+5-minute buckets).
 
 > ⚠️ **Incident caused by the attempt, 2026-10-26:** the device had drifted to `coiot.enabled: false`,
 > which stops the firmware serving `/cit/*`. HA's `initialize()` needs `GET /cit/d`, so the HA
@@ -299,7 +312,7 @@ When the CLI is mature and this plan is approved, the implementation commit must
 - [ ] Alert on `duplicate_rows_already_stored` and `carry_in_classification_disagreement` as chunk-width/store-hygiene signals, not as coverage failures
 - [ ] Implement the HA reader with row-identity dedup (`build.py` has none today): collapse `(entity, last_changed, last_updated, state, attributes_json)` at read time instead of rewriting parts to remove the 12 pre-dedup duplicates — **the reader half is done (2026-10-24)**: `src/battery_optimizer/ha_states.py` plus the `battery-optimizer ha-states` subcommand collapse that identity at read time and leave the parts untouched (verified read-only against the real store: `parts=12 rows_before_dedup=51 rows_after_dedup=39 duplicates=12 entities=2`). This box stays unticked because the checklist tracks what the *pipeline consumes*: `build.py` still walks only `source == "prometheus"` manifests, so those states reach no dataset, no forecast and no policy — see [Known state of the private store](#known-state-of-the-private-store)
 - [ ] If a tighter bound is needed, establish the effective retention boundary from a **read-only** recorder database query — do not infer it from the earliest extracted row
-- [ ] Improve the grid-power input signal (**MQTT root-caused and viable, soak in progress**): the reboot loop that killed the first attempt needed MQTT *and* CoIoT disabled *and* an HA `setup_retry` storm — not MQTT alone. The signal stays at 33 s REST polling until the cutover completes; fallbacks are CoIoT unicast (15 s floor, needs a pfSense UDP rule + a Service), accept 33 s, or replace the meter with a Gen2/RPC device. See [Input signal: Shelly EM high-frequency telemetry](#input-signal-shelly-em-high-frequency-telemetry-mqtt-root-caused-viable) and [`shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md). Not a blocker
+- [x] **Improve the grid-power input signal — done 2026-10-27.** Both power sensors now arrive over MQTT at a measured **2.01 s** (was 33 s REST polling, 16.5× faster), with entity IDs, friendly names, Prometheus labels, recorder `metadata_id`s and long-term statistic ids unchanged; `battery_optimizer_input_age_seconds{role="grid_power"}` dropped 31.9 s → 2.3 s. Cost: +40 % recorder rows (+~520 MB steady state of a 6 Gi PVC); long-term statistics unaffected. The reboot loop that killed the first attempt needed MQTT *and* CoIoT disabled *and* an HA `setup_retry` storm — not MQTT alone, and CoIoT stays enabled. CoIoT unicast (15 s floor) is now moot for frequency and only worth doing to clear the `push_update_*` repair. See [Input signal: Shelly EM high-frequency telemetry](#input-signal-shelly-em-high-frequency-telemetry-delivered-at-2-s-over-mqtt), [`shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md) and [`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md)
 - [x] Document the Vault path and PVC size in this file (update from "to be determined")
 - [x] Record in this file that the interim manual cadence has been superseded by the schedule (update the Status line and the cadence section)
 

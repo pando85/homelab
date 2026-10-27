@@ -1,15 +1,20 @@
 # Home Assistant Shelly CoIoT push updates (Gen1 devices)
 
-**Status:** diagnosed 2026-10-26, **fix still not implemented** — and it is now the *fallback* route to
-faster-than-33 s grid telemetry. The MQTT alternative looked dead the same day (the device reboot-looped)
-but was **root-caused**: the loop needs MQTT *and* CoIoT disabled *and* an HA `setup_retry` storm
-hammering the `/cit/d` endpoint that hangs. With CoIoT enabled — which is mandatory anyway — MQTT is
-stable and beats this at **0.37 s on transients vs a 15 s floor**. Evidence and options:
+**Status:** diagnosed 2026-10-26. The repair is **still not fixed**, and it is now *only* a hygiene
+item: the frequency problem it was the fallback for is **solved**. Since 2026-10-27 07:34Z the two
+power sensors are fed by **MQTT at a measured 2.01 s** (was 33 s polling), with entity IDs, friendly
+names, Prometheus labels and recorder history preserved. See
 [`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md).
 
+The reboot loop that made MQTT look dead on 2026-10-26 was **root-caused**, not fixed around: it needs
+MQTT *and* CoIoT disabled *and* an HA `setup_retry` storm hammering the `/cit/d` endpoint that hangs.
+With CoIoT enabled — which is mandatory anyway — MQTT is stable (11 h 14 m soak, then the cutover).
+
 Unicast CoIoT is capped at **15 s** (`coiot_update_period` is documented as `15..65535 s`, and
-without push HA polls at `2.2 × 15 s = 33 s`), so implementing the procedure below buys 33 s → 15 s
-and clears the standing repair — nothing more.
+without push HA polls at `2.2 × 15 s = 33 s`), so it is now *slower* than the production path. The
+procedure below remains worth doing for exactly one reason: it **clears the standing `push_update_*`
+repair**, so a genuine future push failure becomes signal again. It costs a pfSense UDP rule (human
+step) and a Service, and it no longer buys any telemetry improvement.
 
 > ⚠️ **Do not "clean up" by disabling CoIoT on a Gen1 device that HA owns.** With
 > `coiot.enabled: false` the firmware stops serving `/cit/*` entirely: HTTP `GET /cit/d` hangs
@@ -39,8 +44,9 @@ Symptoms, all observed on 2026-10-26:
   `push_update_244CAB417668` ("Shelly device shellyem-main push update failure"), created
   2026-10-25T01:03:58Z. It is re-created about 3 minutes after **every** HA restart
   (`is_persistent: false`, and it takes `MAX_PUSH_UPDATE_FAILURES = 5` poll replies to trip).
-- `sensor.shellyem_main_channel_1_power` changes state every **33 s** — not every 15 s, the
-  device's configured `coiot.update_period`.
+- `sensor.shellyem_main_channel_1_power` changed state every **33 s** — not every 15 s, the
+  device's configured `coiot.update_period`. *(Historical: as of 2026-10-27 this entity comes from
+  MQTT at 2 s, so the CoIoT polling path no longer sets its cadence. The repair itself is unchanged.)*
 - The device's own CoIoT multicast announcements are visible on the wire but never arrive at HA.
 
 Data is **not** missing: both emeter channels report sane values. This is a resolution/latency and
@@ -54,7 +60,7 @@ hygiene problem, not an outage.
 | MAC / IP | `24:4c:ab:41:76:68` / `192.168.86.130` (DHCP with a pfSense static mapping) | HA registry, pfSense ARP/DHCP |
 | Network | IoT VLAN 501 (`igb1.501`, pfSense `opt6`, 192.168.86.254/24) | pfSense config |
 | `coiot` | `{"enabled": true, "update_period": 15, "peer": ""}` — **empty peer = multicast** | HA diagnostics + device `/settings` |
-| Cloud / MQTT | both **disabled** — CoIoT + HTTP polling is the only data path | device `/settings` |
+| Cloud / MQTT | Cloud **disabled**; MQTT **enabled** since 2026-10-27 (`mosquitto.internal.grigri.cloud:1883`, `update_period: 2`) and now feeds both power sensors. Everything else still arrives over CoIoT + HTTP polling | device `/settings` |
 | Device clock | skew 0 s vs. UTC, uptime ~3.8 d, RSSI −56 dBm, both emeters `is_valid: true` | device `/status` |
 | HA | 2026.10.4, `aioshelly==13.34.1`, pod `home-assistant-hass-0` = `10.0.4.218` on `prusik` | `/api/config`, manifest, `kubectl` |
 | HA `internal_url` / `external_url` | **both null** | `/api/config` |
@@ -340,24 +346,29 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://hass.grigri.cloud/api/repairs
 `observed: [sensor.shellyem_main_channel_2_power]`.
 
 **This is not a blocker for Phase C.** With `freshness_s.grid_power: 300` and
-`home_assistant.poll_interval_s: 60`, a 33 s source is comfortably fresh, and the slot-energy
+`home_assistant.poll_interval_s: 60`, a 2 s source is ~150× inside budget, and the slot-energy
 accounting uses the `grid_energy` counter deltas, which polling captures fine.
 
-What unicast CoIoT push (this page's procedure) buys:
+Since the 2026-10-27 cutover, `grid_power` and `observed` arrive over MQTT at **2.01 s** — measured as
+`battery_optimizer_input_age_seconds{role="grid_power"} = 2.3 s`, down from 31.9 s. The remaining
+entity, `grid_energy`, is still a native Shelly counter at 33 s, which is correct for it: it is a
+monotonic total consumed as 900 s deltas, so a faster transport would add recorder rows without adding
+information.
 
-- **15 s resolution** in the recorder instead of 33 s samples — better training data for the load
-  forecaster, and tighter attribution of grid power inside a 900 s planning slot. It does **not**
-  give the sub-second response a real-time zero-export control loop would want.
+What unicast CoIoT push (this page's procedure) now buys:
+
 - **One less standing error-level repair** in HA, so a *genuine* future push failure is signal again.
+  This is the only remaining reason to do it.
 - Fewer HTTP polls from HA to the device.
 
-Sub-second response is only available over MQTT. That route looked closed after the device reboot-looped,
-but the loop was root-caused to CoIoT being disabled while HA retried setup — MQTT itself is stable with
-CoIoT enabled. The experiment log, the isolation matrix and the remaining options (finish the MQTT
-cutover, implement CoIoT unicast for 15 s, accept 33 s, or replace the meter with a Gen2/RPC device)
-are in [`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md);
-the tracking item lives in
-[`planning/energy-baseline-production-execution.md`](../../planning/energy-baseline-production-execution.md).
+What it no longer buys: resolution. It is capped at 15 s and the production path is already at 2 s, so
+implementing it would make *nothing* faster. Do not touch `coiot.update_period` expecting a cadence
+change on the power sensors — they do not come from CoIoT any more.
+
+Full record of the MQTT cutover, its measurements, the entity-ID handover technique and the rollback:
+[`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md) and
+[`home-assistant-entity-id-handover.md`](home-assistant-entity-id-handover.md). The tracking item lives
+in [`planning/energy-baseline-production-execution.md`](../../planning/energy-baseline-production-execution.md).
 
 ## References
 

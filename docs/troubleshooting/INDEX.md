@@ -15,7 +15,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Storage & Backup](#storage--backup) (10 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (8 entries)
+- [Desktop & Home](#desktop--home) (9 entries)
 - [Applications](#applications) (10 entries)
 
 ---
@@ -339,6 +339,19 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
   in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)
   and increase startup probe timeout. See `docs/troubleshooting/qbittorrent-hdd-io-saturation.md`
+
+- **Renaming an HA entity moves its recorder history with it** — so handing a canonical `entity_id`
+  to another platform by "rename the old one away, rename the new one in" silently leaves the
+  canonical ID with zero history (blank dashboards, a broken Parquet archive, no error). The recorder
+  migrates `states_meta`/`statistics_meta` in place on any registry *rename*
+  (`action == "update"` + `old_entity_id`), but ignores *removals*. Correct sequence: deploy the new
+  entity under a temporary ID and verify it, **remove** the old registry entry, **promote** the new one
+  onto the canonical ID (the collision guard then refuses to migrate, which is what preserves history),
+  reload the old config entry and disable the suffixed entity it recreates — found by `unique_id`, never
+  by an assumed `_2`. The `Cannot rename statistic_id ... already exists` ERROR lines are the guard
+  working; their absence means history moved. Also: a *disabled* entity still reserves its ID, so it
+  must be removed, not disabled, before promotion. See
+  `docs/troubleshooting/home-assistant-entity-id-handover.md`
 
 ## Applications
 

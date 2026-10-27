@@ -1,28 +1,32 @@
-# Shelly EM MQTT high-frequency telemetry — reboot loop root-caused
+# Shelly EM MQTT high-frequency telemetry — implemented at 2 s
 
-**Status:** **root-caused 2026-10-26, MQTT is viable.** The reboot loop that made this look
-"abandoned" is *not* caused by MQTT on its own. It needs three things at once: **MQTT enabled** +
-**`coiot.enabled: false`** + **HA in a `setup_retry` storm** against the `/cit/d` endpoint that hangs
-while CoIoT is off. Since CoIoT must stay enabled anyway (see below), the production configuration is
-the one combination that does *not* fault: **MQTT on + CoIoT on ran 20 min clean** with continuous
-publishing and zero unscheduled reconnects.
+**Status:** **in production since 2026-10-27 07:34Z.** Both `sensor.shellyem_main_channel_{1,2}_power`
+are now fed by MQTT at a measured **2.01 s median** (was 33 s REST polling — **16.5× faster**), with
+entity IDs, friendly names, Prometheus label sets, recorder `metadata_id`s (182/186) and long-term
+statistic ids (30/34) all unchanged. Verified end state in
+[Device state now](#device-state-now-verified) and [Cutover result](#cutover-result-2026-10-27).
 
-**Device state right now:** `mqtt.enable: true` (`update_period: 30`), CoIoT enabled, HA entry
-`loaded`, 14 entities live, recorder continuous. MQTT is left **enabled as an overnight soak** on the
-exact target configuration; nothing subscribes to it yet, so it cannot affect grid telemetry.
-Rollback is one line — see [Device state now](#device-state-now-verified).
+The reboot loop that first made this look impossible is *not* caused by MQTT on its own: it needs
+**MQTT enabled** + **`coiot.enabled: false`** + **HA in a `setup_retry` storm** against the `/cit/d`
+endpoint that hangs while CoIoT is off. Since CoIoT must stay enabled anyway, the production
+configuration is the one combination that does not fault. An 11 h 14 m soak (MQTT on + CoIoT on)
+followed by a 2 s soak confirmed it. See [Root cause](#root-cause-a-three-way-interaction-not-mqtt-alone).
 
 **Correction to the earlier conclusion:** the first pass blamed MQTT because every spontaneous reboot
 landed in an MQTT-on window. That was a confound — CoIoT had been disabled during the same window, and
 HA had just restarted into a retry storm. Isolating the variables (matrix below) shows MQTT is a
 *co-factor that removes heap margin*, not the trigger.
 
-**Second, more important outcome:** the attempt exposed a latent landmine — `coiot.enabled: false`
-on a Gen1 Shelly breaks HA's *setup* path, so the next HA restart drops every entity of that config
-entry. It cost ~48 min of grid telemetry. Full write-up:
+**Second outcome, and the reason for a new doc:** the obvious way to hand a canonical entity ID to
+another platform — rename the old entity away, rename the new one in — silently **moves the recorder
+history** with the old name. The cutover therefore uses remove-then-promote. Full write-up:
+[`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md).
+
+**Third outcome:** `coiot.enabled: false` on a Gen1 Shelly breaks HA's *setup* path, so the next HA
+restart drops every entity of that config entry. It cost ~48 min of grid telemetry. Full write-up:
 [`shelly-gen1-coiot-disabled-breaks-ha-setup.md`](../docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md).
 
-**Goal (unchanged):** get `shellyem-main`'s grid telemetry into Home Assistant at the highest
+**Goal (met):** get `shellyem-main`'s grid telemetry into Home Assistant at the highest
 frequency the device can produce so a future battery integration (omnibattery) can run a zero-export
 / power-limiting control loop on it — **without changing a single entity ID, friendly name or
 Prometheus label set**.
@@ -46,7 +50,7 @@ while CoIoT is disabled.
 MQTT and CoIoT-disabled are each individually survivable. Only the pair, with HA hammering the hanging
 endpoint, faults the device.
 
-### Mechanism (measured, not inferred)
+### Mechanism (measurements are direct; the causal chain is inferred)
 
 | Measurement | CoIoT **off** + HA retrying | CoIoT **on** |
 |---|---|---|
@@ -55,13 +59,20 @@ endpoint, faults the device.
 | `GET /status` during 6 concurrent hanging `/cit/d` | **no response** (2 of 3 rounds) | n/a |
 | Heap low-water marks in the device log | `New heap free LWM: 25960`, `25888` | `31408` |
 
-So each stuck `/cit/d` handler pins a mongoose HTTP connection slot *and* its buffers — roughly **8 KB
-of heap and all the connection slots** for the duration of HA's retry storm. The per-request leak is
-small (18 hanging requests cost ~280 B of *unrecovered* heap: 27 224 → 26 944), which is why the
-device survives my synthetic replay; what kills it is the **standing** consumption plus MQTT's own
-footprint leaving no margin for a large allocation (WiFi TX / MQTT publish buffer) → fault → reset.
-This also explains the irregular reboot spacing: HA's backoff grows toward `SETUP_RETRY_MAX_WAIT = 600 s`,
-and each reboot resets the heap, so the interval depends on when the next retry burst lands.
+Every number above was observed. What is *inferred* is the step from "heap and slots are consumed" to
+"the firmware resets": each stuck `/cit/d` handler appears to pin a mongoose HTTP connection slot *and*
+its buffers — roughly **8 KB of heap and all the connection slots** for the duration of HA's retry
+storm — leaving no margin for a large allocation (WiFi TX / MQTT publish buffer) → fault → reset. The
+per-request leak is small (18 hanging requests cost ~280 B of *unrecovered* heap: 27 224 → 26 944),
+which is why the device survives synthetic replay. **This mechanism was never directly proven**: no
+exception dump was captured, and replaying the hanging calls by hand does not crash the device (see
+[What I could not capture](#what-i-could-not-capture)). What *is* established by the isolation matrix is
+the trigger condition — CoIoT off + HA retrying + MQTT on — and that re-enabling CoIoT stops the loop.
+That is enough to operate safely without knowing the exact fault path.
+
+The same inference explains the irregular reboot spacing: HA's backoff grows toward
+`SETUP_RETRY_MAX_WAIT = 600 s`, and each reboot resets the heap, so the interval depends on when the
+next retry burst lands.
 
 ### What I could not capture
 
@@ -143,23 +154,25 @@ and never touches `/cit/*`.
 
 ## Device state now (verified)
 
-Checked at 20:04:08Z, 2026-10-26:
+Checked at 07:41Z, 2026-10-27, after the cutover:
 
 | Setting | Value | Note |
 |---|---|---|
-| `mqtt.enable` | **`true`** | soaking on the target configuration; `server: mosquitto.internal.grigri.cloud:1883`, `update_period: 30`, `keep_alive: 60`, `max_qos: 0`, `clean_session: true`, `retain: false` |
-| `mqtt.connected` | `true` | client id `shellyem-244CAB417668`; `broker_clients_connected` 6 → 7 |
+| `mqtt.enable` | **`true`** | `server: mosquitto.internal.grigri.cloud:1883`, **`update_period: 2`**, `keep_alive: 60`, `max_qos: 0`, `clean_session: true`, `retain: false` |
+| `mqtt.connected` | `true` | client id `shellyem-244CAB417668` |
 | `coiot` | `{"enabled": true, "update_period": 15, "peer": ""}` | **must stay enabled** — it is both the HA setup dependency and what keeps MQTT safe |
 | `cloud` | `false` | untouched |
-| `GET /cit/d` | `200`, 922 bytes in 36 ms | HA setup dependency satisfied |
-| `ram_free` | 35 288 B of 51 064 B | healthy; ~8 KB lower while stuck `/cit/d` handlers are in flight |
-| `uptime` | 570 s (boot 19:54:38Z, commanded) | no spontaneous reboot since |
-| HA `shelly` entry | `loaded`, 14 entities live | recovered on its own once CoIoT was back; no reload needed |
-| Recorder | ch1 power ~2 rows/min, continuous 19:26 → 20:01Z | no gap >40 s |
-| Entity registry | 19 `*shellyem*` entities, all platform `shelly` (+1 derived `energy`) | **no MQTT-discovered duplicates** — Gen1 publishes no `homeassistant/#` discovery configs |
+| `fw` | `1.14.0-gcb84623` | unchanged — the beta was never flashed |
+| `GET /cit/d` | `200`, 922 bytes in 33 ms | HA setup dependency satisfied; re-checked immediately before every HA restart |
+| `ram_free` | 35 848 B of 51 064 B | healthy at `update_period: 2`; ~8 KB lower only while stuck `/cit/d` handlers are in flight |
+| `uptime` | 1 347 s (boot 07:18:22Z, the commanded reboot that activated `update_period: 2`) | no spontaneous reboot |
+| HA `shelly` entry | `loaded`, 14 entities live, 0 unavailable | survived the ConfigMap-driven restart at 07:32:56Z |
+| Power entities | platform **`mqtt`**, canonical IDs | native ones recreated as `..._power_2` and disabled |
+| Recorder | `metadata_id` 182/186, median **2.01 s** | 26 470 pre-cutover rows still under the same id |
+| Long-term statistics | statistic ids **30**/34, unit W | 2 918 short-term buckets before, and the 07:35 bucket compiled from MQTT |
+| Prometheus | 6 series, label sets **byte-identical** to the pre-cutover baseline | `instance` excluded per `VOLATILE_IDENTITY_LABELS` |
 
-**Rollback** (if the soak shows any spontaneous reboot — check the `online` topic, not
-`broker_clients_connected`):
+**Rollback** has two independent layers. To stop MQTT publishing only (device side):
 
 ```bash
 SUSER=$(pass show iot/shellyem-main | sed -n 's/^login: //p'); SPASS=$(pass show iot/shellyem-main | head -1)
@@ -167,6 +180,13 @@ curl -s -u "$SUSER:$SPASS" -X POST -G http://shellyem-main.iot.grigri/settings \
   --data-urlencode mqtt_enable=false -o /dev/null          # never answers: expect curl (28)
 curl -s -u "$SUSER:$SPASS" http://shellyem-main.iot.grigri/reboot >/dev/null
 ```
+
+To restore the native entities as the canonical power sensors, revert
+`apps/home-assistant/config/integrations/shelly_em_mqtt.yaml`, let HA restart, then run
+`ansible-playbook playbooks/shelly-em.yaml -i localhost, --limit localhost --tags registry \
+-e shelly_em_registry_action=rollback`. Do **not** rename the MQTT entities off the canonical IDs —
+that would drag the history with them
+([why](../docs/troubleshooting/home-assistant-entity-id-handover.md#rollback)).
 
 ⚠️ **Do not disable CoIoT on this device again** — it breaks HA's setup path *and* it is the co-factor
 in the reboot loop. Do not restart HA without first checking `GET /cit/d` answers.
@@ -180,15 +200,16 @@ D4, D6, D7, D8 remain valid regardless of transport.
 
 | # | Decision | Choice | Status |
 |---|---|---|---|
-| D1 | Transport | **MQTT** — the device republishes the whole emeter block on change (measured **0.37 s** apart under load) plus a periodic floor | **Reinstated** — the reboot loop was the CoIoT-off/retry-storm interaction, not MQTT. Gated on a clean soak |
-| D9 | `mqtt_update_period` | **5 s** — bounds idle staleness at 5 s (60× margin under `freshness_s.grid_power: 300`) while transients still arrive on change | **Valid** — the soak runs at the 30 s default; set 5 at cutover |
-| D2 | Broker credential | Reuse the shared mosquitto user (Vault `/mosquitto/user`) | **Valid** — confirmed working end to end |
-| D3 | Scope | Partial takeover — only `channel_{1,2}_power` move to MQTT; energy counters, cost entity, voltage, power factor, relay and reboot button stay native | **Valid** |
-| D4 | Naming | Identical `entity_id` and `friendly_name`, so `hass_sensor_power_w{...}` stays byte-identical | **Valid** — see [Series identity contract](#series-identity-contract-why-d4-works) |
-| D5 | Recorder | Record both channels (upper bound ~+34.5 k rows/day, +18 % on 188 733/day) | **Valid** |
+| D1 | Transport | **MQTT** — the device republishes the whole emeter block on change (measured **0.37 s** apart under load) plus a periodic floor | **Implemented** — the reboot loop was the CoIoT-off/retry-storm interaction, not MQTT |
+| D9 | `mqtt_update_period` | ~~5 s~~ → **2 s** — the owner asked for the 2 s goal; measured **median 2.009 s, p95 2.012 s, max 2.128 s over 180 s** with zero gaps >3 s, and heap unchanged (35 848 B) | **Implemented** |
+| D2 | Broker credential | Reuse the shared mosquitto user (Vault `/mosquitto/user`) | **Implemented** — confirmed working end to end |
+| D3 | Scope | Partial takeover — only `channel_{1,2}_power` move to MQTT; energy counters, cost entity, voltage, power factor, relay and reboot button stay native | **Implemented** |
+| D4 | Naming | Identical `entity_id` and `friendly_name`, so `hass_sensor_power_w{...}` stays byte-identical | **Implemented and diffed** — see [Series identity contract](#series-identity-contract-why-d4-works) |
+| D5 | Recorder | Record both channels | **Implemented, cost re-measured**: +81 435 rows/day (**+40 %** on 202 240/day), ≈ +520 MB at the observed 628 B/row over 10.17-day retention → DB 1.69 → ~2.2 GB of a 6 Gi PVC. Long-term statistics are unaffected (still 5-min buckets). Lever if it ever hurts: drop channel 2 from the recorder, or shorten `purge_keep_days` |
 | D6 | Prometheus scrape | Unchanged at 60 s — the dataset builds 900 s slots from counter deltas and `build.py` never uses instantaneous power | **Valid** |
 | D7 | CoIoT / repair | ~~Leave `coiot` disabled~~ → **CoIoT must stay enabled** — doubly mandatory now: it is HA's setup dependency *and* the reboot loop's co-factor. The `push_update_244CAB417668` repair was **not** ignored — it is left visible as a genuine signal | **Revised** |
 | D8 | pfSense | No change — IoT-VLAN TCP to the mosquitto VIP already passes | **Valid** (and confirmed: the device connected through the VIP) |
+| D10 | Entity handover | ~~Rename native away, rename MQTT in~~ → **remove-then-promote**, so the recorder's rename migration never runs and the collision guard preserves canonical history | **Revised during implementation** — see [`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md) |
 
 
 ## Measured MQTT behaviour (still valid)
@@ -203,6 +224,7 @@ overturned the "~1 Hz" assumption the plan started from.
 | `mqtt_update_period=30` (default) | 7 publishes/topic in 60 s; intervals 0.40 … 16.41 s, mean ≈ 5.6 s |
 | `mqtt_update_period=5` | 14 intervals in 55 s: **10 at 5.01 s** (the floor) and **4 below it — 0.37, 0.41, 4.40, 4.60, 4.64 s** (on change) |
 | `mqtt_update_period=3` | 12 intervals, all 3.00-3.01 s (periodic dominates) |
+| `mqtt_update_period=2` (**production**) | 96 messages/channel in 180 s: median **2.009 s**, p95 2.012 s, max 2.128 s, min 0.005 s (on change), **zero gaps >3 s**. In HA's recorder: median 2.01 s, max 2.83 s (ch1) / 4.01 s (ch2) |
 | Topics published | `emeter/{0,1}/{power,pf,reactive_power,voltage,total,total_returned}`, `relay/0`, and `energy`/`returned_energy` once per connect |
 | Payload format | 2 decimals (`589.80`, `-0.70`, `243.93`); `total` in **Wh** with 1 decimal (`17260032.2`) |
 | Channel mapping | `emeter/0` = channel 1, `emeter/1` = channel 2 — confirmed twice: native unique_ids are `244CAB417668-emeter_{0,1}-power`, and HTTP `/status` totals match the MQTT `total` payloads |
@@ -288,86 +310,128 @@ device) must satisfy to avoid touching the consumers.
 - `apps/home-assistant/dashboards/iot-energy.json` — 11 refs to ch1 energy, 2 to ch1 power
 - ADR-0003 in the app repo — ch1 = whole-home feed, ch2 = aerotherm branch (owner-confirmed wiring)
 
-With D4, **none of them needs a change** — and since the cutover never happened, none was touched.
+With D4, **none of them needed a change** — and none was touched. The cutover preserved every ID,
+label and statistic, so all four consumers kept working through it.
 
 ## What was executed
 
 | TODO | Outcome |
 |---|---|
-| **1** Enable MQTT + measure | ✅ Done. Measurements above. Then **rolled back** (`mqtt_enable=false`) because of the reboot loop |
-| **2** Probe entities | ✅ Executed, then **reverted**. `apps/home-assistant/config/integrations/shelly_em_mqtt.yaml` deployed at 18:01, sensors `sensor.shellyem_grid_power_mqtt` / `sensor.shellyem_aerotherm_power_mqtt` came up and tracked the device (33 rows / 3 min). File **deleted** — MQTT is off, so they would sit `unavailable` forever |
-| **3** Cutover (rename + disable native, deploy final YAML) | ⛔ **Never executed** — blocked by the reboot loop. The native entities were never renamed, so the canonical IDs are untouched |
-| **4** Post-cutover verification | ⛔ N/A. Replaced by incident verification: entry `loaded`, 14 entities live, energy counters monotonic, Prometheus label sets unchanged |
-| **5** Docs | ✅ This file, the new CoIoT-disabled troubleshooting doc, and corrections to the CoIoT push doc, `energy-baseline-production-execution.md` and `battery-optimizer.md`. 5.1 (`docs/deployment/shelly-em-mqtt.md`) and 5.5 (mosquitto alert bump) are moot |
-| **6** Deferred | Unchanged: dedicated mosquitto user + ACL, 15 s scrape, CoIoT unicast for repair hygiene |
+| **1** Enable MQTT + measure | ✅ Done 2026-10-26, rolled back once over the (mis-diagnosed) reboot loop, then re-enabled and soaked 11 h 14 m clean |
+| **2** Probe entities | ✅ Done 2026-10-27 07:33Z. `apps/home-assistant/config/integrations/shelly_em_mqtt.yaml` deployed under temporary IDs `sensor.shellyem_main_channel_{1,2}_power_mqtt_probe`; recorder confirmed median **2.01 s** on both before anything production was touched |
+| **3** Cutover | ✅ Done 07:34:30Z via `scripts/shelly-em-registry.py promote` — **remove-then-promote**, not rename (D10). Native entries removed, MQTT promoted onto the canonical IDs, shelly entry reloaded, recreated `..._power_2` natives disabled |
+| **4** Post-cutover verification | ✅ See [Cutover result](#cutover-result-2026-10-27) |
+| **5** Docs | ✅ This file, [`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md) (new), the CoIoT-disabled doc, the CoIoT push doc, `INDEX.md`, `AGENTS.md`, `energy-baseline-production-execution.md`, `battery-optimizer.md`. 5.5 (mosquitto alert bump) still moot |
+| **6** Deferred | Unchanged: dedicated mosquitto user + ACL (and rotating the shared user, whose username leaked into two transcripts), 15 s Prometheus scrape, CoIoT unicast for `push_update_*` repair hygiene |
 
-### Reference: the HA-side YAML that was never deployed
+### Deployed HA-side YAML
 
-Kept in case MQTT becomes viable. It depends on TODO-3.1 (renaming the native entities out of the
-way **first** — a disabled entity still blocks its ID, see `helpers/entity_registry.py:1382-1384`,
-and an MQTT entity created while the ID is taken keeps its `_2` suffix forever).
+`apps/home-assistant/config/integrations/shelly_em_mqtt.yaml` (GitOps: any change restarts HA, so
+check `GET /cit/d` first). Differences from the original sketch:
+
+- `default_entity_id` instead of relying on `name` slugification — the temporary probe ID applies only
+  at first creation, so the promoted canonical ID survives restarts.
+- `expire_after: 15` instead of `availability_topic` — with a 2 s stream, no payload for 15 s means
+  seven missed publishes, so the sensor goes `unavailable` rather than serving a stale grid value to a
+  control loop. The device's `online` LWT is still the right thing to watch for reboots.
+- No `force_update`: at 2 s the values genuinely change, so the recorder writes anyway.
 
 ```yaml
 mqtt:
   sensor:
-    - name: "shellyem-main Channel 1 Power"   # -> sensor.shellyem_main_channel_1_power
+    - name: "shellyem-main Channel 1 Power"   # friendly_name must match the native one exactly
+      default_entity_id: sensor.shellyem_main_channel_1_power_mqtt_probe
       unique_id: shellyem_main_channel_1_power_mqtt
       state_topic: shellies/shellyem-244CAB417668/emeter/0/power
       unit_of_measurement: W
       device_class: power
       state_class: measurement
       value_template: "{{ value | round(2) }}"
-      availability_topic: shellies/shellyem-244CAB417668/online
-      payload_available: "true"
-      payload_not_available: "false"
-    - name: "shellyem-main Channel 2 Power"   # -> sensor.shellyem_main_channel_2_power
+      expire_after: 15
+    - name: "shellyem-main Channel 2 Power"
+      default_entity_id: sensor.shellyem_main_channel_2_power_mqtt_probe
       unique_id: shellyem_main_channel_2_power_mqtt
       state_topic: shellies/shellyem-244CAB417668/emeter/1/power
       unit_of_measurement: W
       device_class: power
       state_class: measurement
       value_template: "{{ value | round(2) }}"
-      availability_topic: shellies/shellyem-244CAB417668/online
-      payload_available: "true"
-      payload_not_available: "false"
+      expire_after: 15
 ```
 
-## Options going forward
+## Options — resolved
 
-Option **C (diagnose the reboot loop) is done** — see [Root cause](#root-cause-a-three-way-interaction-not-mqtt-alone).
-That reorders the remaining choices:
+Option **A′ (finish the MQTT cutover) was implemented on 2026-10-27**, after an 11 h 14 m clean soak
+at `update_period: 30` and a 2 s cadence measurement. The others are no longer needed for frequency:
 
-| Option | Frequency | Risk / cost |
+| Option | Frequency | Status |
 |---|---|---|
-| **A′. Finish the MQTT cutover** *(now the front-runner)* | **0.37 s** on transients, 5 s idle floor | Requires only that CoIoT stays enabled — already mandatory. Residual risk: the clean-soak evidence is 20 min, not hours, so soak overnight first. Each device fault costs ~40 s of telemetry and HA recovers by itself while CoIoT is on |
-| **B. CoIoT unicast push** | 15 s (hard floor: `coiot_update_period` is `15..65535`) | A UDP 5683 LoadBalancer Service (`192.168.193.12`), a pfSense IoT-VLAN UDP rule (**human step**), and `coiot_peer` on the device. Clears the `push_update_*` repair as a side effect. Procedure: [`home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md). Strictly worse than A′ on frequency, and it is the natural *fallback* if the soak fails |
-| **A. Accept 33 s** (status quo) | 33 s | Zero. Already inside `freshness_s.grid_power: 300` with ~9× margin; the dataset uses 900 s slots from counter deltas, so 33 s is not a modelling constraint. **It only blocks a future real-time zero-export loop** |
-| **D. Replace the meter** | device-dependent | A Gen2/RPC Shelly EM (or a `shellyplus2pm` on the CT circuits) speaks RPC over HTTP+WebSocket with no CoAP/CoIoT dependency at all, and its MQTT is Gen2 (different topic tree, would need a new `EntitySpec`) |
+| **A′. MQTT cutover** | **2.01 s** periodic, 0.37 s on transients | ✅ **Implemented** — the production path |
+| **B. CoIoT unicast push** | 15 s (hard floor) | Not needed for frequency. Still the only way to clear the `push_update_244CAB417668` repair, and it needs a pfSense UDP rule (**human step**). Procedure: [`home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md) |
+| **A. Accept 33 s** | 33 s | Superseded |
+| **D. Replace the meter** | device-dependent | Not needed. Note the unit reports `hw_revision: "dev-prototype"`, so a retail Gen2/RPC replacement remains the escape hatch if this one misbehaves |
+| **C. Diagnose the reboot loop** | — | ✅ Done first, and it is what made A′ safe — see [Root cause](#root-cause-a-three-way-interaction-not-mqtt-alone). Firmware was **never** upgraded, per the owner's constraint |
 
-### Cutover sequence for A′ (not yet executed)
+### Cutover result (2026-10-27)
 
-1. **Soak** the current state (MQTT on, `update_period: 30`, CoIoT on) overnight. Baseline: boot
-   19:54:38Z, `uptime: 1263` at 20:15:41Z. Success criterion, in order of strength:
-   - device `uptime` at the next check ≈ elapsed wall time (a reboot resets it — this is the primary
-     signal, because nothing records the `online` topic);
-   - no recorder gap >40 s on `sensor.shellyem_main_channel_1_power` (`metadata_id` 182). Note this is
-     a *weak* detector: at 33 s polling a ~30 s outage can hide between polls, so it corroborates
-     `uptime`, it does not replace it;
-   - no `shelly` disconnect/`unavailable` lines in the HA log overnight.
-   To watch reconnects directly, subscribe to `shellies/shellyem-244CAB417668/online` + `/announce` —
-   they fire on every MQTT connect. Do **not** use `broker_clients_connected`.
+| Time (UTC) | Step | Evidence |
+|---|---|---|
+| 07:18:22 | `mqtt_update_period=2` applied by the scoped Ansible playbook + one commanded reboot | `/settings` reads `update_period: 2`; playbook refuses to run unless CoIoT and MQTT are already enabled, and waits for `/cit/d` 200 after the reboot |
+| 07:19–07:22 | Broker-side cadence capture, 180 s | 96 messages/channel: median **2.009 s**, p95 2.012 s, max 2.128 s, **zero gaps >3 s** |
+| 07:32:56 | HA restarted by Reloader after the ConfigMap sync (probe YAML) | Pre-flight `GET /cit/d` = **200**, `coiot.enabled` = true; entry came back `loaded`, no shelly/MQTT errors in the log |
+| 07:33:29 | Probes live under temporary IDs | `friendly_name` already exactly `shellyem-main Channel N Power`, unit W, `state_class: measurement`; recorder median **2.01 s** (min 1.27, max 2.75) |
+| 07:34:30 | `promote` — remove native, promote MQTT, reload shelly, disable recreated `..._power_2` | Preflight asserted both probes numeric, in W, at the exact friendly_name, and **0.6 s** stale |
+| 07:35 → 07:41 | Post-cutover verification | Table below |
 
-2. Set `mqtt_update_period=5` + `/reboot`, re-verify stability for a further window.
-3. Deploy the parallel MQTT sensors under **temporary** entity ids (the YAML in
-   [Reference](#reference-the-ha-side-yaml-that-was-never-deployed)) and confirm the cadence in HA —
-   this restarts HA, so check `GET /cit/d` answers `200` **immediately before** the sync.
-4. Swap the native `shelly` sensors out and the MQTT sensors onto the production entity ids in a
-   **single** commit, so `entity_id` / `friendly_name` / Prometheus labels never change (D4).
-5. Re-verify the series identity contract byte-for-byte, then remove the temporary sensors from the
-   entity registry (`config/entity_registry/remove`).
+| Check | Result |
+|---|---|
+| Recorder `metadata_id` | Still **182** / **186**; 26 470 pre-cutover rows intact, post-cutover rows appending to the same id |
+| Recorder cadence | median **2.01 s**, max 2.83 s (ch1) / 4.01 s (ch2) over 6 min; the only >30 s interval is the handover instant itself |
+| Long-term statistics | statistic ids **30** / **34** unchanged, unit W; the **07:35** bucket (mean 476.9 W) compiled from MQTT, continuous with 07:20/07:25/07:30 |
+| Prometheus | 6 series before and after; label sets **byte-identical** (diffed with `instance` excluded per `VOLATILE_IDENTITY_LABELS`) |
+| Entity set | 14 live `shellyem_main` entities, **0 unavailable** — same set as before; disabled `..._power_2` natives are absent from the state machine, so they are neither recorded nor exported |
+| HA repairs | Only the pre-existing `push_update_244CAB417668`; no unit-change or statistics repairs |
+| battery-optimizer | `battery_optimizer_ready=1`; **`input_age_seconds{role="grid_power"} = 2.3 s`**, down from 31.9 s — a 14× fresher control input, against a `freshness_s` budget of 300 |
+| All 12 `not_ready_reason` gauges | 0 |
+| Device | uptime monotonic from the 07:18:22Z boot (no spontaneous reboot), `ram_free` 35 848 B at `update_period: 2` |
+| Expected log noise | Two `Cannot rename statistic_id ... already exists` ERRORs — the collision guard preserving history. Their *absence* would mean history moved |
 
-⚠️ Step 3 is the one that bit us last time: any HA restart while `coiot.enabled: false` drops all 14
-entities for as long as it takes to notice. Verify `/cit/d` first, every time.
+**Reboot detector going forward:** device `uptime` versus elapsed wall time. `broker_clients_connected`
+cannot see a same-client-id reconnect, and nothing records the `online` topic.
+
+⚠️ Any future HA restart on this device re-runs Gen1 `initialize()`. Verify `GET /cit/d` returns `200`
+**immediately before** the sync — that is the failure that cost 48 min of telemetry on 2026-10-26.
+
+### The old 43–66 s recorder gaps: attributed, and now gone
+
+An unresolved question from the soak was four ch1 gaps >40 s (43, 43, 66, 43 s) that `uptime` proved
+were **not** reboots. They are now explained, and they were the strongest argument for moving off
+polling:
+
+- **The 43 s gaps are REST poll timeouts.** At each one, *all* five ch1 native entities
+  (`power`, `energy`, `energy_returned`, `voltage`, `power_factor`) flip to `unavailable` at the **same
+  timestamp**, i.e. a coordinator-wide `/status` failure — not an entity glitch. 43 s is exactly
+  `33 s` poll interval + `DEVICE_IO_TIMEOUT = 10 s`: the poll at `T+33` starts, times out after 10 s, and
+  the whole block is marked unavailable at `T+43`.
+- **It is chronic and pre-existing, not caused by MQTT.** `metadata_id` 182 accumulated **198
+  `unavailable` rows over 10.1 days ≈ 19.7/day** (daily range 13–40), with counts from 2026-10-19
+  onward — before MQTT existed on this device. ~1 % of the day, ~14 min/day, on the signal a control
+  loop would read.
+- **The 66 s gap at 04:31:26** is two poll intervals with a changed value: one poll produced no state
+  change (identical float), or was deduped by the recorder. Benign.
+
+**After the cutover this failure mode no longer touches the grid signal.** In the first 27 min the
+MQTT-fed `metadata_id` 182/186 recorded **843/834 rows with zero `unavailable` and zero gaps >10 s**
+(max 2.83 s / 4.33 s). MQTT is a persistent broker connection rather than a per-request HTTP poll to
+the device, so a slow `/status` no longer costs a sample — this is a **reliability** gain independent of
+the 16.5× frequency gain.
+
+**Residual weakness:** the energy counters are still native, so they still take ~20 poll timeouts/day.
+Those appear in the Prometheus archive as missing 60 s samples (the 2026-10-27 03:30Z run over a 3-day
+window: 4420 of ~4526 expected samples, i.e. 106 min including the 48 min incident) and the run still
+reported `violations=0` / `Completed`. If that ever starts failing the coverage check, the fix is to
+push the counters over MQTT too — but they are consumed as 900 s deltas, so it has not been worth the
+recorder cost yet.
 
 
 ## Troubleshooting
@@ -381,6 +445,8 @@ entities for as long as it takes to notice. Verify `/cit/d` first, every time.
 | Settings change has no effect | Every `mqtt_*` / `coiot_*` change needs `/reboot`; the POST itself never answers (`http=000`) |
 | `coiot_enable=true` won't stick | Use `POST /settings/advanced`, **not** `/settings/coiot` (silently ignored on fw 1.14.0) |
 | `push_update_244CAB417668` repair present | Expected with `peer: ""` — HA never receives the multicast push. `check_coiot_config()` (`components/shelly/utils.py:1070`) and the unconditional `COAP_REPLY` counter (`coordinator.py:456-462`) keep it alive. Cleared only by real unicast push (option B) or by ignoring it in the UI |
+| A few `unavailable` rows per hour on the *native* Shelly entities, ~20/day | `/status` REST poll timeout — the whole block flips together at `T + 33 s + DEVICE_IO_TIMEOUT (10 s)`. Chronic device/WiFi behaviour (rssi −61 dBm) that predates MQTT. The two power sensors are now immune because they come over MQTT. See [the old 43–66 s recorder gaps](#the-old-4366-s-recorder-gaps-attributed-and-now-gone) |
+| `Cannot rename statistic_id ... because the new statistic_id already exists` ERROR during the handover | **The collision guard working** — it is what keeps long-term statistics under the canonical ID. Its absence would mean history moved. [`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md) |
 | HA token loop spamming `http.ban` warnings | Expired token. Refresh before long monitoring loops |
 
 ## Reference information
@@ -399,9 +465,12 @@ entities for as long as it takes to notice. Verify `/cit/d` first, every time.
 
 ## Related
 
-- [`docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md`](../docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md) — **the important finding of this attempt**
-- [`docs/troubleshooting/home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md) — why CoIoT push never worked, and its 15 s floor (option B)
+- [`docs/troubleshooting/home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md) — **the reusable technique this cutover needed**: renaming an entity moves its recorder history, so hand IDs over with remove-then-promote
+- [`docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md`](../docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md) — the landmine that caused the 48 min outage and the reboot loop
+- [`docs/troubleshooting/home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md) — why CoIoT push never worked, its 15 s floor, and why it is now moot for frequency
 - [`energy-baseline-production-execution.md`](energy-baseline-production-execution.md) — the plan whose input-signal TODO this was
 - [`docs/deployment/battery-optimizer.md`](../docs/deployment/battery-optimizer.md) — consumer of these entities
+- Automation: `scripts/shelly-em-registry.py` (inspect / promote / rollback) driven by
+  `metal/playbooks/shelly-em.yaml` (`--tags device` for `mqtt_update_period`, `--tags registry` for the handover)
 - [Shelly Gen1 API — MQTT support](https://shelly-api-docs.shelly.cloud/gen1/#mqtt-support), [Shelly EM: MQTT](https://shelly-api-docs.shelly.cloud/gen1/#shelly-em-mqtt)
 - [HA MQTT sensor](https://www.home-assistant.io/integrations/sensor.mqtt/), [HA Prometheus integration](https://www.home-assistant.io/integrations/prometheus/)

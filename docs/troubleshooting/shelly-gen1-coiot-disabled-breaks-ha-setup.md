@@ -5,6 +5,14 @@ Extended the same day: the same root cause also explains a **device reboot loop*
 mis-attributed to MQTT — see
 [Second consequence](#second-consequence-the-retry-storm-can-fault-the-device-itself).
 
+> ⚠️ **The stakes went up on 2026-10-27.** MQTT is now *permanently enabled* on `shellyem-main` —
+> it feeds both power sensors at 2 s. That means the reboot loop's co-factor is always present, so
+> disabling CoIoT and restarting HA now produces **both** failures reliably rather than by chance.
+> The blast radius also shifted: the two power entities come from MQTT and would survive a
+> `setup_retry` storm, but the **energy counters, voltage, power factor and the relay switch would
+> not** — and `grid_energy` is what the battery-optimizer dataset is built from. CoIoT is not optional
+> on this device.
+
 Disabling CoIoT on a Gen1 Shelly looks harmless — HA keeps polling and data keeps flowing. It is
 **not** harmless: it removes the one endpoint HA needs to *initialize* the device, so the next HA
 restart silently drops every entity of that config entry. The failure can surface hours or days
@@ -104,7 +112,9 @@ mis-diagnose that way. The per-request leak is tiny (18 hanging requests cost ~2
 heap), which is why replaying hanging `/cit/d` calls by hand does **not** reproduce the fault — it takes
 HA's full `initialize()` sequence under retry backoff.
 
-Isolation matrix, ruled-out hypotheses and the full mechanism:
+Isolation matrix, ruled-out hypotheses and the inferred mechanism (measurements are direct; the step
+from "heap and slots consumed" to "firmware resets" was never proven — no exception dump, and synthetic
+replay does not crash it):
 [`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md#root-cause-a-three-way-interaction-not-mqtt-alone).
 
 **Practical consequence:** re-enabling CoIoT fixes both failures at once — HA's setup *and* the reboot

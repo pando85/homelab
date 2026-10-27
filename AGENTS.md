@@ -106,7 +106,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (65 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (66 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -131,7 +131,7 @@ Full pitfall index (65 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **Storage & Backup** (10): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
-- **Desktop & Home** (8): Home Assistant venv/aiohttp/localtuya, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on)
+- **Desktop & Home** (9): Home Assistant venv/aiohttp/localtuya, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote)
 - **Applications** (10): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema
 
 ## Subsystem Docs
