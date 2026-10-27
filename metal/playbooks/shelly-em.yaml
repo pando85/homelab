@@ -1,0 +1,82 @@
+---
+# Run from metal/: ansible-playbook playbooks/shelly-em.yaml -i localhost, \
+#   --limit localhost --tags device
+# Registry handover is managed separately after parallel MQTT sensors are verified.
+- name: Configure the main Shelly EM telemetry without changing firmware or CoIoT
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    shelly_em_url: http://shellyem-main.iot.grigri
+    shelly_em_period: 2
+    shelly_em_credential: "{{ lookup('ansible.builtin.pipe', 'pass show iot/shellyem-main') }}"
+    shelly_em_password: "{{ shelly_em_credential.splitlines()[0] }}"
+    shelly_em_user: "{{ shelly_em_credential | regex_search('(?m)^login: (.+)$', '\\1') | first }}"
+  tasks:
+    - name: Read the current device settings
+      ansible.builtin.uri:
+        url: "{{ shelly_em_url }}/settings"
+        url_username: "{{ shelly_em_user }}"
+        url_password: "{{ shelly_em_password }}"
+        force_basic_auth: true
+      register: shelly_em_before
+      no_log: true
+      tags: [device]
+
+    - name: Refuse to configure a device without CoIoT and MQTT enabled
+      ansible.builtin.assert:
+        that:
+          - shelly_em_before.json.coiot.enabled
+          - shelly_em_before.json.mqtt.enable
+          - shelly_em_period | int >= 1
+      no_log: true
+      tags: [device]
+
+    - name: Apply and activate the periodic MQTT interval when needed
+      when: shelly_em_before.json.mqtt.update_period | int != shelly_em_period | int
+      tags: [device]
+      block:
+        - name: Store the periodic MQTT interval (firmware may time out after saving)
+          ansible.builtin.uri:
+            url: "{{ shelly_em_url }}/settings?mqtt_update_period={{ shelly_em_period }}"
+            method: POST
+            url_username: "{{ shelly_em_user }}"
+            url_password: "{{ shelly_em_password }}"
+            force_basic_auth: true
+            timeout: 12
+            status_code: [200, -1]
+          no_log: true
+
+        - name: Read back the stored MQTT interval before rebooting
+          ansible.builtin.uri:
+            url: "{{ shelly_em_url }}/settings"
+            url_username: "{{ shelly_em_user }}"
+            url_password: "{{ shelly_em_password }}"
+            force_basic_auth: true
+          register: shelly_em_saved
+          failed_when: shelly_em_saved.json.mqtt.update_period | int != shelly_em_period | int
+          no_log: true
+
+        - name: Reboot once to activate the saved MQTT interval
+          ansible.builtin.uri:
+            url: "{{ shelly_em_url }}/reboot"
+            url_username: "{{ shelly_em_user }}"
+            url_password: "{{ shelly_em_password }}"
+            force_basic_auth: true
+            timeout: 5
+            status_code: [200, -1]
+          no_log: true
+
+        - name: Wait for the HA setup dependency to answer after reboot
+          ansible.builtin.uri:
+            url: "{{ shelly_em_url }}/cit/d"
+            url_username: "{{ shelly_em_user }}"
+            url_password: "{{ shelly_em_password }}"
+            force_basic_auth: true
+            timeout: 4
+          register: shelly_em_cit
+          until: shelly_em_cit.status == 200
+          retries: 20
+          delay: 3
+          no_log: true
