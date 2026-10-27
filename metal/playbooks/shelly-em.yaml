@@ -10,6 +10,7 @@
   vars:
     shelly_em_url: http://shellyem-main.iot.grigri
     shelly_em_period: 2
+    shelly_em_registry_action: inspect
     shelly_em_credential: "{{ lookup('ansible.builtin.pipe', 'pass show iot/shellyem-main') }}"
     shelly_em_password: "{{ shelly_em_credential.splitlines()[0] }}"
     shelly_em_user: "{{ shelly_em_credential | regex_search('(?m)^login: (.+)$', '\\1') | first }}"
@@ -46,6 +47,7 @@
             force_basic_auth: true
             timeout: 12
             status_code: [200, -1]
+          changed_when: true
           no_log: true
 
         - name: Read back the stored MQTT interval before rebooting
@@ -66,6 +68,7 @@
             force_basic_auth: true
             timeout: 5
             status_code: [200, -1]
+          changed_when: true
           no_log: true
 
         - name: Wait for the HA setup dependency to answer after reboot
@@ -80,3 +83,18 @@
           retries: 20
           delay: 3
           no_log: true
+
+    - name: Manage the two power entity registry assignments
+      ansible.builtin.command:
+        argv:
+          - python3
+          - "{{ playbook_dir }}/../../scripts/shelly-em-registry.py"
+          - "{{ shelly_em_registry_action }}"
+      register: shelly_em_registry
+      changed_when: "'CHANGED' in shelly_em_registry.stdout"
+      tags: [registry]
+
+    - name: Report the power entity registry assignments
+      ansible.builtin.debug:
+        var: shelly_em_registry.stdout_lines
+      tags: [registry]
