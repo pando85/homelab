@@ -446,7 +446,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_target_temperature)\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_set_temperature)\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -1342,7 +1342,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Aquarea Heat COP"
+              "options": "Aquarea Cool COP"
             },
             "properties": [
               {

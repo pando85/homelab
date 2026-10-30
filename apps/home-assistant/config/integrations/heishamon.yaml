@@ -902,7 +902,7 @@ template:
             states('sensor.aquarea_cool_power_produced') | float
           }}
         availability: >-
-          {%- if is_number(states('sensor.aquarea_dhw_power_consumed')) and is_number(states('sensor.aquarea_heat_power_consumed')) and is_number(states('sensor.aquarea_heat_power_consumed')) %}
+          {%- if is_number(states('sensor.aquarea_dhw_power_produced')) and is_number(states('sensor.aquarea_heat_power_produced')) and is_number(states('sensor.aquarea_cool_power_produced')) %}
             true
           {%- else %}
             false
@@ -917,7 +917,7 @@ template:
             states('sensor.aquarea_cool_power_consumed') | float
           }}
         availability: >-
-          {%- if is_number(states('sensor.aquarea_dhw_power_consumed')) and is_number(states('sensor.aquarea_heat_power_consumed')) and is_number(states('sensor.aquarea_heat_power_consumed')) %}
+          {%- if is_number(states('sensor.aquarea_dhw_power_consumed')) and is_number(states('sensor.aquarea_heat_power_consumed')) and is_number(states('sensor.aquarea_cool_power_consumed')) %}
             true
           {%- else %}
             false
