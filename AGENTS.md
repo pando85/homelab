@@ -158,7 +158,7 @@ Full pitfall index (66 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **prusik storage:** `docs/conventions/prusik-fast-storage-tier.md` — ZFS pool sizing, SSD selection, PVC migration. Hardware: `docs/hardware/prusik.md`, `docs/hardware/k8s-amd64-1.md`
 - **Adding a node:** `docs/user-guide/add-or-remove-nodes.md` (runbook), `planning/k8s-amd64-1-node-addition.md` (worked example)
 - **Topology spread:** `docs/conventions/topology-spread-constraints.md` — `matchLabelKeys`
-- **Battery optimizer:** app code in `pando85/battery-optimizer`; deployment + extraction plan `planning/energy-baseline-production-execution.md`
+- **Battery optimizer:** app code in `pando85/home-energy-optimizer`; deployment + extraction plan `planning/energy-baseline-production-execution.md`
 
 ## Licensing
 

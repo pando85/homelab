@@ -1,6 +1,6 @@
 # battery-optimizer
 
-Two workloads of [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer), deployed
+Two workloads of [pando85/home-energy-optimizer](https://github.com/pando85/home-energy-optimizer), deployed
 from `apps/battery-optimizer/` with one image, one PVC and one ConfigMap:
 
 - **`pipeline`**: a CronJob that extracts Home Assistant recorder history and Prometheus samples
@@ -20,7 +20,7 @@ deployment.
 |---|---|
 | Namespace / ArgoCD app | `battery-optimizer` (ApplicationSet auto-discovery) |
 | CronJob | `battery-optimizer-pipeline`, `30 3 * * *` UTC, `concurrencyPolicy: Forbid` |
-| Image | `ghcr.io/pando85/battery-optimizer`, pinned `tag@sha256`, Renovate-managed |
+| Image | `ghcr.io/pando85/battery-optimizer` (keeps its name after the repo rename until the staged OCI rename), pinned `tag@sha256`, Renovate-managed |
 | Steps (one container, `sh -ec`, fails fast) | extract `ha-history` (8 d lookback) -> extract `prometheus` (3 d lookback) -> `validate` -> `build` |
 | Failure handling | `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
 | Node | pinned to `prusik` (node-local `openebs-zfspv`) |
@@ -171,7 +171,7 @@ Local analysis copy (read-only on the cluster; streams the PVC out of the servic
 and syncs it into a separate directory — never into the frozen `~/data/energy-baseline`):
 
 ```bash
-cd ~/battery-optimizer && KUBE_CONTEXT=grigri just pull-store   # ~/data/battery-optimizer-cluster
+cd ~/home-energy-optimizer && KUBE_CONTEXT=grigri just pull-store   # ~/data/battery-optimizer-cluster
 ```
 
 Bumping the image is a Renovate PR changing `tag` in `apps/battery-optimizer/values.yaml`. A new
@@ -182,7 +182,7 @@ Growing the volume: raise `spec.resources.requests.storage` in `templates/pvc.ya
 
 ## App Repository Notes
 
-- Code lives in `pando85/battery-optimizer` (moved history-preserving from `scripts/energy-baseline`
+- Code lives in `pando85/home-energy-optimizer` (moved history-preserving from `scripts/energy-baseline`
   on 2026-10-24/25). Releases are cut with `just release`; the `auto-tag` workflow uses the repo
   secrets `PAT` and `GPG_PRIVATE_KEY` (both set). Renovate (Mend app) automerges.
 - Local analysis env: a gitignored `.envrc` (direnv) sets `UV`, `KUBE_CONTEXT=grigri` and

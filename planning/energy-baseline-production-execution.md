@@ -2,7 +2,7 @@
 
 - **Status:** DEPLOYED 2026-10-25 — CronJob `battery-optimizer-pipeline` in `apps/battery-optimizer/` (daily 03:30 UTC); the interim manual cadence is superseded (migration checked 2026-10-25: not needed)
 - **Date:** 2026-10-23 (deployed 2026-10-25)
-- **Extends:** [ADR-0003](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
+- **Extends:** [ADR-0003](https://github.com/pando85/home-energy-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
 - **Related:** [Deploying new apps](../docs/conventions/deploying-new-apps.md)
 
 ## Purpose
@@ -14,7 +14,7 @@ It also records the **interim manual extraction cadence** adopted on 2026-10-23,
 ## Current State
 
 - **Development**: supervised offline work on a local PC. Temporary exports go to `/tmp`; the durable store is the private data directory (`$BATTERY_OPTIMIZER_DATA_DIR`, default `~/data/energy-baseline/`), which `paths.py` (legacy `ENERGY_BASELINE_DATA_DIR` is still accepted as a fallback) refuses to place inside a git worktree. No cluster deployment, no cluster storage.
-- **Production** (historical text, superseded by [Deployed state](#deployed-state-2026-10-25)): automated scheduling was **not implemented** at the time of writing. The GitOps CronJob and its `openebs-zfspv` PVC on prusik remain **deferred, not cancelled**, and the requirements below still stand for when they are created. What changed on 2026-10-23 is that extraction is no longer ad-hoc: a short manual cycle from the development PC is now the operating arrangement. The application code, ADRs and domain plans now live in [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer) (moved from this repository; history preserved), so the interim manual extraction runs from a local clone of that repository (e.g. `~/battery-optimizer`). When the CronJob is created, its image will come from `ghcr.io/pando85/battery-optimizer`, pinned by digest.
+- **Production** (historical text, superseded by [Deployed state](#deployed-state-2026-10-25)): automated scheduling was **not implemented** at the time of writing. The GitOps CronJob and its `openebs-zfspv` PVC on prusik remain **deferred, not cancelled**, and the requirements below still stand for when they are created. What changed on 2026-10-23 is that extraction is no longer ad-hoc: a short manual cycle from the development PC is now the operating arrangement. The application code, ADRs and domain plans now live in [pando85/home-energy-optimizer](https://github.com/pando85/home-energy-optimizer) (moved from this repository; history preserved), so the interim manual extraction runs from a local clone of that repository (e.g. `~/home-energy-optimizer`). When the CronJob is created, its image will come from `ghcr.io/pando85/battery-optimizer`, pinned by digest.
 - **Canonical store**: the HA enum parts are preserved but **not yet consumed by the dataset build** — `build.py` has no HA reader. A read-side reader now exists: `src/battery_optimizer/ha_states.py` with a `battery-optimizer ha-states` CLI subcommand, which deduplicates at read time and answers as-of queries; it does not feed `build` and does not change `dataset_id`. See [Known state of the private store](#known-state-of-the-private-store).
 
 Temporary development exports in `/tmp` are **not durable** and do not meet production preservation requirements. The production path requires persistent storage with backup. The interim store — the private data directory on the development PC — is durable across runs but is outside the cluster's backup path entirely, which is one more reason the CronJob plus PVC remains the end state.
@@ -132,7 +132,7 @@ over 10.17-day retention — DB 1.69 → ~2.2 GB of a 6 Gi PVC. Long-term statis
 - **Declared retention is 10 days.** [`apps/home-assistant/config/configuration.yaml`](../apps/home-assistant/config/configuration.yaml) gives the `recorder:` block **only** a `db_url` (lines 13-14): there is no `purge_keep_days`, no `auto_purge`, no `commit_interval` and no `exclude`/`include` in that file or in the packages it includes (`apps/home-assistant/config/integrations/`), so Home Assistant's documented default applies — `purge_keep_days: 10` ([HA recorder integration reference](https://www.home-assistant.io/integrations/recorder/)). That declared figure, not an inference from extracted rows, is what the cadence is sized against.
 - **Re-extract every 3 days, pulling a window 10 days deep.** The cadence is 3 days; the window depth is what makes a missed run heal. Binding constraint: **no more than the declared 10 days may elapse between two successful runs**, because a row purged from `states` is gone for good. Two consecutive missed runs still leave a 9-day gap — inside the boundary, and the next pull's 10-day window re-covers everything the recorder still holds, so nothing is lost. Three consecutive missed runs (12 days) is where the declared retention starts eating rows nobody pulled, which is the failure mode automation exists to catch. Daily also satisfies the rule (ADR-0003 calls it comfortable); 3 days is chosen as the loosest cadence that still tolerates a forgotten week plus one, and with a few hundred rows a day the cost of overlapping pulls is not the constraint.
 - **Overlap deliberately.** Each pull re-requests windows already pulled. That is safe only because of row-level dedup (next bullet) and only while the chunk width does not change (see [Chunk width must stay constant between runs](#chunk-width-must-stay-constant-between-runs)).
-- **Overlapping re-extraction does not duplicate rows.** `extract_ha.py` matches every candidate row against what is **already stored** on the key `ROW_IDENTITY_FIELDS = (entity, last_changed, last_updated, state, attributes_json)`, deliberately excluding the run-specific provenance columns `extraction_id`, `carry_in` and `source_window_start`. Prior coverage is discovered by scanning the **part files already on disk** (`load_stored_row_index`), not by window arithmetic — so a partially failed earlier run cannot open a gap, because its surviving parts still count as covered. Suppression is disclosed per chunk and in `quality_flags` (`duplicate_rows_suppressed`, with counts in `params.row_accounting`) as an **expected, benign accounting note, not an alarm**, kept distinct in prefix and wording from the genuine-problem flags (`empty_chunk:`, `chunk_accounting_mismatch`, `no_rows_for_entity:`). A third run over an already fully stored window writes **zero new parts and zero rows**. Parts stay append-only: dedup means *not writing*, never rewriting or deleting. Full detail in [README.md](https://github.com/pando85/battery-optimizer/blob/main/README.md).
+- **Overlapping re-extraction does not duplicate rows.** `extract_ha.py` matches every candidate row against what is **already stored** on the key `ROW_IDENTITY_FIELDS = (entity, last_changed, last_updated, state, attributes_json)`, deliberately excluding the run-specific provenance columns `extraction_id`, `carry_in` and `source_window_start`. Prior coverage is discovered by scanning the **part files already on disk** (`load_stored_row_index`), not by window arithmetic — so a partially failed earlier run cannot open a gap, because its surviving parts still count as covered. Suppression is disclosed per chunk and in `quality_flags` (`duplicate_rows_suppressed`, with counts in `params.row_accounting`) as an **expected, benign accounting note, not an alarm**, kept distinct in prefix and wording from the genuine-problem flags (`empty_chunk:`, `chunk_accounting_mismatch`, `no_rows_for_entity:`). A third run over an already fully stored window writes **zero new parts and zero rows**. Parts stay append-only: dedup means *not writing*, never rewriting or deleting. Full detail in [README.md](https://github.com/pando85/home-energy-optimizer/blob/main/README.md).
 
 ### Chunk width must stay constant between runs
 
@@ -194,7 +194,7 @@ off extracted rows:
   ([HA recorder integration reference](https://www.home-assistant.io/integrations/recorder/)).
   No filter gates the appliance enum entities, so they are recorded. That declared 10 days is
   the only retention figure this plan treats as fact.
-  [ADR-0003 §"Appliance enum telemetry — resolved"](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
+  [ADR-0003 §"Appliance enum telemetry — resolved"](https://github.com/pando85/home-energy-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
   separately records an audit in which the recorder's `states` window measured 10.19 days; that
   is a table-wide observation from a different audit, not a measured coverage boundary for these
   entities, and this plan does not rely on it.
@@ -318,13 +318,13 @@ When the CLI is mature and this plan is approved, the implementation commit must
 
 ## References
 
-- [ADR-0003 — Phase 1 measurement and baseline](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
-- [AppDaemon baseline context](https://github.com/pando85/battery-optimizer/blob/main/docs/planning/energy-baseline-appdaemon-baseline-context.md)
+- [ADR-0003 — Phase 1 measurement and baseline](https://github.com/pando85/home-energy-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
+- [AppDaemon baseline context](https://github.com/pando85/home-energy-optimizer/blob/main/docs/planning/energy-baseline-appdaemon-baseline-context.md)
 - [Deploying new apps](../docs/conventions/deploying-new-apps.md)
 - [Cluster hygiene — backup labels](../docs/troubleshooting/cluster-hygiene.md)
 - [OpenEBS ZFS slow startup with fsGroup](../docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md)
-- [battery-optimizer CLI README](https://github.com/pando85/battery-optimizer/blob/main/README.md)
-- [HA history extractor source](https://github.com/pando85/battery-optimizer/blob/main/src/battery_optimizer/extract_ha.py)
+- [battery-optimizer CLI README](https://github.com/pando85/home-energy-optimizer/blob/main/README.md)
+- [HA history extractor source](https://github.com/pando85/home-energy-optimizer/blob/main/src/battery_optimizer/extract_ha.py)
 - [Home Assistant Recorder integration](https://www.home-assistant.io/integrations/recorder/)
 - [Shelly CoIoT push updates (Gen1)](../docs/troubleshooting/home-assistant-shelly-coiot-push.md)
 - [Shelly EM MQTT high-frequency telemetry — implementation spec](shelly-em-mqtt-implementation.md)

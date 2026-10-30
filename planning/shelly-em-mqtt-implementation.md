@@ -289,7 +289,7 @@ hass_sensor_power_w{domain="sensor", entity="sensor.shellyem_main_channel_1_powe
 | metric name | `{namespace}_sensor_{device_class}_{unit}` | `components/prometheus/__init__.py:1109-1113`, `_sanitize_metric_name:568` |
 | `entity`, `domain`, `friendly_name` | the only labels HA emits | `components/prometheus/__init__.py:597-601` |
 | `job/namespace/service/endpoint/instance/pod` | ServiceMonitor relabeling, same target | unchanged |
-| `series_key` | sha256 of the label set minus `VOLATILE_IDENTITY_LABELS = {instance, pod_ip}` | `battery-optimizer/src/battery_optimizer/extract_prom.py:147` |
+| `series_key` | sha256 of the label set minus `VOLATILE_IDENTITY_LABELS = {instance, pod_ip}` | `home-energy-optimizer/src/battery_optimizer/extract_prom.py:147` |
 
 `pod` is stable (StatefulSet), `instance` is stripped → **the Parquet archive continues unbroken**.
 The recorder's `states_meta` is keyed by the `entity_id` string (ch1 power = `metadata_id` 182,
@@ -303,7 +303,7 @@ device) must satisfy to avoid touching the consumers.
 
 ### Consumers that must not break
 
-- `battery-optimizer/src/.../extract_prom.py` — `ENTITY_SPECS` / `DEFAULT_ENTITY_IDS` hardcode
+- `home-energy-optimizer/src/.../extract_prom.py` — `ENTITY_SPECS` / `DEFAULT_ENTITY_IDS` hardcode
   `sensor.shellyem_main_channel_1_{power,energy,energy_returned}`
 - `apps/battery-optimizer/files/service.yaml` + the app repo's `config/service.yaml` — `grid_power`,
   `grid_energy`, `observed`
