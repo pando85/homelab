@@ -474,6 +474,20 @@ mqtt:
       availability_topic: "panasonic_heat_pump/main/Status"
       payload_available: online
       payload_not_available: offline
+    # Binary copies of string sensors: the Prometheus exporter drops string states, so these keep
+    # the long-term history of defrost and the 3-way valve.
+    #TOP26 - Defrost state (sensor.aquarea_defrost_state)
+    - name: Aquarea Defrost Active
+      unique_id: aquarea_defrost_active
+      state_topic: "panasonic_heat_pump/main/Defrosting_State"
+      payload_on: "1"
+      payload_off: "0"
+    #TOP20 - 3-way valve state (sensor.aquarea_3_way_valve): on = Tank, off = Room
+    - name: Aquarea 3-way Valve Tank
+      unique_id: aquarea_3_way_valve_tank
+      state_topic: "panasonic_heat_pump/main/ThreeWay_Valve_State"
+      payload_on: "1"
+      payload_off: "0"
   sensor:
     #TOP1 - Pumpflow
     - name: Aquarea Pump Flow
@@ -514,6 +528,14 @@ mqtt:
         {%- elif value == "8" -%}
           Auto(Cool)+DHW
         {%- endif -%}
+
+    #TOP4 - Heat mode as a number for long-term history (the Prometheus exporter drops strings).
+    # Codes as in "Set heatmode selector": 0 Heat, 1 Cool, 2 Auto, 3 DHW, 4 Heat+DHW, 5 Cool+DHW,
+    # 6 Auto(Heat)+DHW, 7 Auto(Cool), 8 Auto(Cool)+DHW.
+    - name: Aquarea Mode Code
+      unique_id: aquarea_mode_code
+      state_topic: "panasonic_heat_pump/main/Operating_Mode_State"
+      state_class: "measurement"
 
     #TOP5 - Water inlet temp
     - name: Aquarea Inlet Temperature
