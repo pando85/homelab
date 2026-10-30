@@ -1,0 +1,15 @@
+# Shelly EM main: channel 1 is the whole house, channel 2 is circuit 2 (aerotherm, dishwasher,
+# washer and extractor). Circuit 1 (cooker, power sockets, humid areas, thermostats and lighting)
+# is the difference, as in the IoT Energy Grafana dashboard.
+template:
+  - sensor:
+      - name: "Circuit 1 Power"
+        unique_id: shellyem_main_circuit_1_power
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        # Both channels are sampled independently, so clamp the transient negative difference.
+        state: >-
+          {{ [states('sensor.shellyem_main_channel_1_power') | float - states('sensor.shellyem_main_channel_2_power') | float, 0] | max | round(2) }}
+        availability: >-
+          {{ is_number(states('sensor.shellyem_main_channel_1_power')) and is_number(states('sensor.shellyem_main_channel_2_power')) }}

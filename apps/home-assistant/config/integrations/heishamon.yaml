@@ -681,17 +681,8 @@ mqtt:
       unit_of_measurement: "°C"
       state_class: "measurement"
 
-    #TOP36 - Z1 water temperature
-    - name: Aquarea Z1 Water Temperature
-      state_topic: "panasonic_heat_pump/main/Z1_Water_Temp"
-      unit_of_measurement: "°C"
-      state_class: "measurement"
-
-    #TOP37 - Z2 water temperature
-    - name: Aquarea Z2 Water Temperature
-      state_topic: "panasonic_heat_pump/main/Z2_Water_Temp"
-      unit_of_measurement: "°C"
-      state_class: "measurement"
+    # TOP36/TOP37 (Z1/Z2 water temperature) omitted: no zone water probes are fitted and HeishaMon
+    # reports -78.
 
     #TOP38 - Cool power produced
     - name: Aquarea Cool Power Produced

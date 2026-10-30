@@ -1,0 +1,35 @@
+# Room temperatures as sensors, so they get long-term statistics and can be set as each area's
+# temperature sensor. The localtuya thermostats only expose them as a climate attribute.
+template:
+  - sensor:
+      - name: "Living room temperature"
+        unique_id: room_temperature_living_room
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "{{ state_attr('climate.thermostat_hall_kitchen', 'current_temperature') }}"
+        availability: "{{ is_number(state_attr('climate.thermostat_hall_kitchen', 'current_temperature')) }}"
+
+      - name: "Office A temperature"
+        unique_id: room_temperature_office_a
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "{{ state_attr('climate.thermostat_office_a', 'current_temperature') }}"
+        availability: "{{ is_number(state_attr('climate.thermostat_office_a', 'current_temperature')) }}"
+
+      - name: "Office T temperature"
+        unique_id: room_temperature_office_t
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "{{ state_attr('climate.thermostat_office_t', 'current_temperature') }}"
+        availability: "{{ is_number(state_attr('climate.thermostat_office_t', 'current_temperature')) }}"
+
+      - name: "Bedroom temperature"
+        unique_id: room_temperature_bedroom
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        state: "{{ state_attr('climate.thermostat_bedroom', 'current_temperature') }}"
+        availability: "{{ is_number(state_attr('climate.thermostat_bedroom', 'current_temperature')) }}"
