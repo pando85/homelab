@@ -16,3 +16,56 @@ input_select:
     options:
       - Heat+DHW
       - Cool+DHW
+
+automation:
+  # Watchdog: AppDaemon refreshes sensor.last_appdaemon_connection every minute. If it stops for
+  # 15 minutes while climate control has the pump in DHW (space heating off), nothing would switch
+  # heating back on, so restore the configured heat mode through the usual selector path.
+  - alias: AppDaemon climate watchdog
+    id: appdaemon_climate_watchdog
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    condition:
+      - condition: state
+        entity_id: input_boolean.appdaemon_climate_enable
+        state: "on"
+      - condition: state
+        entity_id: sensor.aquarea_mode
+        state: DHW
+      - alias: Home Assistant up for 15 minutes
+        # The heartbeat entity is not restored: it is missing until AppDaemon writes it after an
+        # HA restart. This automation's last_changed is its start (or last enable/reload) time.
+        condition: template
+        value_template: "{{ now() - this.last_changed >= timedelta(minutes=15) }}"
+      - alias: AppDaemon heartbeat missing or older than 15 minutes
+        condition: template
+        value_template: >-
+          {% set heartbeat = states.sensor.last_appdaemon_connection %}
+          {{ heartbeat is none
+             or heartbeat.state in ['unknown', 'unavailable']
+             or now() - heartbeat.last_updated >= timedelta(minutes=15) }}
+      - alias: Configured heat mode is a valid selector option
+        condition: template
+        value_template: >-
+          {{ states('input_select.appdaemon_climate_heat_mode')
+             in (state_attr('input_select.heishamon_heatmode', 'options') or []) }}
+      - alias: At most once every 30 minutes
+        condition: template
+        value_template: >-
+          {{ as_timestamp(now()) - as_timestamp(this.attributes.last_triggered, 0) >= 1800 }}
+    action:
+      - variables:
+          heat_mode: "{{ states('input_select.appdaemon_climate_heat_mode') }}"
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heishamon_heatmode
+        data:
+          option: "{{ heat_mode }}"
+      - action: notify.send_message
+        data:
+          entity_id: notify.agil
+          message: |
+            AppDaemon has not reported for 15 minutes and the heat pump is in `DHW`\.
+            Heating restored to `{{ heat_mode | replace('+', '\\+') | replace('(', '\\(') | replace(')', '\\)') }}`\.
