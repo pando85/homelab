@@ -131,7 +131,7 @@ Full pitfall index (66 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **Storage & Backup** (10): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
-- **Desktop & Home** (9): Home Assistant venv/aiohttp/localtuya, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote)
+- **Desktop & Home** (11): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote)
 - **Applications** (10): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema
 
 ## Subsystem Docs

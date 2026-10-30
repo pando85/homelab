@@ -20,7 +20,7 @@ One config entry, 5 devices, 22 entities (HA 2026.9.4):
 
 | Device | Protocol | Entities and DPs |
 |---|---|---|
-| Thermostat bedroom / hall-kitchen / office A / office T | 3.3 | climate DP 1 (hvac mode DP 2, target temp 16, current temp 24, valve 36 `open/close`, heat/cool flag 104 bool `True`=heat, `False`=cool), switch Frost DP 10, switch Child lock DP 40, number Backlight DP 105 (0–100), sensor Control mode DP 101 |
+| Thermostat bedroom / hall-kitchen / office A / office T | 3.3 | climate DP 1 (hvac mode DP 2, target temp 16, current temp 24, action 36 `open/close` — follows the mode, not demand, so `heuristic_action: true` [see below](#hvac_action-dp-36-follows-the-mode-not-the-demand), heat/cool flag 104 bool `True`=heat, `False`=cool), switch Frost DP 10, switch Child lock DP 40, number Backlight DP 105 (0–100), sensor Control mode DP 101 |
 | Fan and light office A | 3.2 | fan DP 1 (speed DP 3 int 1–6, direction DP 8); light DP 15 (brightness 16 0–100, color temp 17 0–100 → 3000–6000 K) |
 
 Device config lives in `/config/.storage/core.config_entries` (contains `local_key` secrets — never
@@ -84,6 +84,8 @@ from history; the PR keeps that mapping):
 - `heat`/`cool` from `auto` now really writes `manual` to DP 2 (then waits `MODE_WAIT`, then DP 104).
 - Selecting `auto` now writes `auto` to DP 2 (previously a no-op).
 - A missing DP 104 displays `heat` instead of `cool`; cool mode with an open valve shows `cooling`.
+  (Later found misleading: DP 36 is `open` for the whole cool season regardless of demand — see
+  [below](#hvac_action-dp-36-follows-the-mode-not-the-demand).)
 - Configs without a cooling DP behave exactly as before.
 
 ### Live verification (2026-10-10, `e239364`)
@@ -101,6 +103,60 @@ each restored afterwards:
 Not tested live: `cool` mode (and the new `cooling` action), and whether the fan+light device
 stopped requesting DPs `-1`/`2` (needs DEBUG logging to observe). Test cool only with the user,
 when cooling is wanted.
+
+## hvac_action: DP 36 Follows the Mode, Not the Demand
+
+### Problem
+
+All four thermostats showed `hvac_action: idle` permanently in heat mode — including Bedroom and
+Hall/Kitchen sitting 1–5 °C below target for days — so dashboards could not show which rooms were
+heating, and climate history graphs had no heating shading.
+
+### Root Cause
+
+Not a localtuya bug: the devices report DP 36 = `"close"` and localtuya maps it correctly. Over 60
+days of `prometheus-long-term` history, DP 36 tracked **DP 104 (the heat/cool flag), never the
+temperatures**: `open` (→ `heating`/`cooling`) for the whole cool season 2026-08-31 → 10-08 — including
+85–233 h per room when the room was already below target — and `close` for the whole heat season
+since, including 166–257 h below target. A direct one-off, read-only local status query to each device
+confirmed `"close"` on all four while two rooms were below target. DPs 102 (floor temperature
+limit, 50) and 103 (floor sensor, 0 = none) carry nothing either. These units match tuya-local's
+"Essentials Smart Home Wall thermostat" profile, which maps DP 36 the same way — the firmware simply
+does not report relay demand.
+
+Office A sitting up to ~6 °C above target is expected: it is heated by the servers and its occupant.
+
+### How to Diagnose
+
+```bash
+P=https://prometheus-long-term.internal.grigri.cloud
+curl -s -G $P/api/v1/query_range --data-urlencode 'query=hass_climate_action{entity=~"climate.thermostat_.*"} == 1' \
+  --data-urlencode start=$(date -d '-60 days' +%s) --data-urlencode end=$(date +%s) --data-urlencode step=1800
+# join with hass_climate_mode, hass_climate_current_temperature_celsius and
+# hass_climate_target_temperature_celsius: action only ever changes when the mode changes
+```
+
+The HA recorder keeps only 10 days, so use `prometheus-long-term` for season-long checks.
+
+### Fix
+
+`heuristic_action` was reworked in [`876b229`](https://github.com/pando85/localtuya/commit/876b229)
+(deployed 2026-10-30) and enabled on the four thermostat climate entities:
+
+- Computed in `status_updated` (the old code mutated state inside the `hvac_action` property).
+- Heating starts when the room is more than half a `temperature_step` (0.25 °C) below target, stops at
+  the target, and keeps the previous action in between, so sensor noise does not toggle it.
+- Mirrored for cool mode, and for `auto` when DP 104 selects cooling; `off` when the thermostat is off.
+- DP 36 is still configured but its value is overridden whenever `heuristic_action` is on.
+
+The result is room *demand*, not proof that water is flowing: whether the heat pump is actually
+heating the floors is on the Climate dashboard (`sensor.aquarea_3_way_valve`, compressor frequency),
+and AppDaemon may hold it off until cheap hours.
+
+Enabling it: localtuya options flow → edit device → re-submit every entity with its stored values plus
+`heuristic_action: true`. Each completed flow **reloads the whole config entry** (all five devices
+drop for a few seconds and log "Disconnected - waiting for discovery broadcast"); the entity registry
+is preserved.
 
 ## Pending Options-UI Cleanup
 

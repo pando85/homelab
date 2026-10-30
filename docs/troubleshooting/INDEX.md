@@ -15,7 +15,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Storage & Backup](#storage--backup) (10 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (9 entries)
+- [Desktop & Home](#desktop--home) (11 entries)
 - [Applications](#applications) (10 entries)
 
 ---
@@ -352,6 +352,21 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   working; their absence means history moved. Also: a *disabled* entity still reserves its ID, so it
   must be removed, not disabled, before promotion. See
   `docs/troubleshooting/home-assistant-entity-id-handover.md`
+
+- The localtuya thermostats' `hvac_action` DP 36 follows the heat/cool mode, not the demand (`open`
+  all cool season, `close` all heat season, verified over 60 days of `prometheus-long-term` history),
+  so they showed `idle` while rooms sat below target. Not a mapping bug — the firmware does not report
+  relay demand. Fix: the reworked `heuristic_action` in `pando85/localtuya` `876b229` (half-step
+  hysteresis, cool/auto, off), enabled per climate entity through the options flow — which reloads the
+  whole localtuya entry. See `docs/troubleshooting/home-assistant-localtuya.md`
+
+- Lovelace dashboards are UI-storage (`/config/.storage/lovelace.*`), not git, and break silently when
+  an entity is renamed (the Climate dashboard pointed at non-existent `sensor.heishamon_*` for months).
+  Edit them over the websocket API (`lovelace/config/save`; the default dashboard is `url_path: null`)
+  with an admin token, back up first, validate entities with `get_states`, and refuse to save if the
+  live config changed. Shelly EM channel 2 is circuit 2 (aerotherm + appliances), not the heat pump;
+  `hass_*` history older than 10 days is only in `prometheus-long-term`. See
+  `docs/troubleshooting/home-assistant-dashboards.md`
 
 ## Applications
 

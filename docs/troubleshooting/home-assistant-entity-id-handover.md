@@ -97,6 +97,9 @@ entity still owns a canonical ID.
 
 ## Gotchas
 
+- **The disabled suffixed native entries are rollback anchors, not leftovers.** For the Shelly EM
+  they are `sensor.shellyem_main_channel_{1,2}_power_2`; a cleanup pass must not delete them, or
+  `scripts/shelly-em-registry.py rollback` has nothing to rename back.
 - **A disabled entity still reserves its `entity_id`.** You cannot promote onto an ID held by a
   disabled entry — remove that entry instead.
 - **`friendly_name` is part of the Prometheus label set** (`hass_sensor_power_w{friendly_name=...}`).
