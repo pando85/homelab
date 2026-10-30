@@ -228,6 +228,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   init container on the volume **root**, not a subPath. See
   `docs/troubleshooting/ci-runner-workspace-permission-denied.md`
 
+- The `workspace-gc` sidecar's online loop deleted an active job's `/workspace/<16-hex>` directory
+  while the runner was executing it, because `stat -c %Y` (mtime) cannot distinguish a stale orphan
+  from an active workspace. The script now operates in non-destructive monitor-only mode (report + alert
+  only); orphan reclamation is deferred to a future maintenance procedure. See
+  `docs/troubleshooting/ci-runner-workspace-gc-active-workspace-deletion.md`
+
 - OpenEBS ZFS 2.11.x `zfs send | nc` can deadlock if `nc` exits early; killing `zfs send` first risks
   marking a truncated volume backup `Done`. Chart is on 2.11.1 with `zfsPlugin.image` pinned to
   `ghcr.io/linkvt/zfs-driver:runpipe-773` (PR #777 fix) pending verification. If the fix fails,
