@@ -13,3 +13,13 @@ template:
           {{ [states('sensor.shellyem_main_channel_1_power') | float - states('sensor.shellyem_main_channel_2_power') | float, 0] | max | round(2) }}
         availability: >-
           {{ is_number(states('sensor.shellyem_main_channel_1_power')) and is_number(states('sensor.shellyem_main_channel_2_power')) }}
+
+sensor:
+  # Energy for circuit 1, so the Energy dashboard can nest the devices it feeds (servers, Snapmaker).
+  - platform: integration
+    source: sensor.circuit_1_power
+    name: Circuit 1 Energy
+    unique_id: shellyem_main_circuit_1_energy
+    unit_prefix: k
+    method: left
+    round: 3
