@@ -341,7 +341,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cop\"} > 0)[$__range:])",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_cop\"} > 0)[$__range:])",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -696,7 +696,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_dhw_cop\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_dhw_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -1052,7 +1052,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_heat_cop\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_heat_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -1408,7 +1408,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cool_cop\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_cool_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -2106,7 +2106,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(sum(hass_sensor_unit_x{entity=\"sensor.heishamon_cop\"})[$__interval:])",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{entity=\"sensor.aquarea_cop\"})[$__interval:])",
           "instant": false,
           "legendFormat": "COP",
           "range": true,
@@ -2250,7 +2250,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cop\"})[$__interval:])",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_cop\"})[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "COP",
