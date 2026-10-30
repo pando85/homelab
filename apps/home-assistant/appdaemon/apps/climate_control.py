@@ -68,7 +68,16 @@ Retrying in 10 minutes"""
                     self.log(f"Error sending notification: {notify_error}", level="ERROR")
                 self.log("Retrying in 10 minutes")
                 await asyncio.sleep(600)
+                if not await self._still_enabled_after_retry_wait():
+                    return
                 await self._daily_register_schedulers()
+
+    async def _still_enabled_after_retry_wait(self) -> bool:
+        # The toggle can be switched off during the 10-minute wait: stop retrying then.
+        if await self.get_state(self.args["input_boolean"]["enable"], attribute="state") == "on":
+            return True
+        self.log("Climate control was disabled while waiting to retry: stopping retries")
+        return False
 
     async def _get_prices(self) -> List[Price]:
         pvpc = await retry_with_backoff(
@@ -163,6 +172,8 @@ Retrying in 10 minutes"""
             )
             await self._register_fallback_schedule()
             await asyncio.sleep(600)
+            if not await self._still_enabled_after_retry_wait():
+                return
             return await self._register_schedulers()
 
         self.log(f"{prices=}", level="DEBUG")
@@ -221,6 +232,8 @@ Retrying in 10 minutes"""
             )
             await self._start_hvac()
             await asyncio.sleep(600)
+            if not await self._still_enabled_after_retry_wait():
+                return
             return await self._register_schedulers()
 
         is_cheap = len(cheapest_prices) >= min_hours
