@@ -54,6 +54,16 @@
   ],
   packageRules: [
     {
+      description: 'AppDaemon tests run on the Python of the acockburn/appdaemon image: update by hand',
+      matchFileNames: [
+        '.github/workflows/appdaemon-tests.yaml',
+      ],
+      matchDepNames: [
+        'python',
+      ],
+      enabled: false,
+    },
+    {
       additionalBranchPrefix: '{{parentDir}}-',
       addLabels: [
         'renovate/{{parentDir}}',
