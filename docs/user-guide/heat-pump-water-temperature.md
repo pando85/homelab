@@ -78,6 +78,10 @@ target and `SetZ1HeatRequestTemperature` does not set it. The fork does not publ
 | Heat pump power | `switch.aquarea_main_power` | `commands/SetHeatpump`, `main/Heatpump_State` | |
 | Force DHW | `switch.aquarea_force_dhw_mode` | `commands/SetForceDHW`, `main/Force_DHW_State` | Used by AppDaemon `dhw_control` |
 | Tank target | `input_number.heishamon_tank_temp` | `commands/SetDHWTemp` | 40 to 75 |
+| Heating mode (read) | `sensor.aquarea_heating_mode` | `main/Heating_Mode` | `0` curve, `1` direct. Read only; any water-temperature write must check it first |
+| Sterilization (read) | `binary_sensor.aquarea_sterilization_state`, `sensor.aquarea_sterilization_temperature`, `sensor.aquarea_sterilization_max_time` | `main/Sterilization_State`, `main/Sterilization_Temp`, `main/Sterilization_Max_Time` | State `0`/`1`, target in degC, maximum time in min |
+| Heater (read) | `binary_sensor.aquarea_force_heater_state`, `sensor.aquarea_tank_heater_enabled`, `sensor.aquarea_room_heater_enabled`, `sensor.aquarea_internal_heater_state`, `sensor.aquarea_external_heater_state` | `main/Force_Heater_State`, `main/DHW_Heater_State`, `main/Room_Heater_State`, `main/Internal_Heater_State`, `main/External_Heater_State` | The four `sensor.*` ones are `Off`/`On` strings, so the Prometheus exporter drops them (the binary_sensor is exported) |
+| Heater hours and limit (read) | `sensor.aquarea_room_heater_operating_hours`, `sensor.aquarea_dhw_heater_operating_hours`, `sensor.aquarea_heater_on_outdoor_temperature` | `main/Room_Heater_Operations_Hours`, `main/DHW_Heater_Operations_Hours`, `main/Heater_On_Outdoor_Temp` | Hours are `total_increasing`; the outdoor limit is in degC |
 | Pump speed (read) | `sensor.aquarea_pump_speed`, `sensor.aquarea_pump_flow` | `main/Pump_Speed`, `main/Pump_Flow` | |
 
 The helpers are not on the dashboards in `apps/home-assistant/dashboards/`; they are only reachable
@@ -87,10 +91,10 @@ from the HA UI (entities, scripts, dev tools).
 
 | Topic | Kind | What it is |
 |---|---|---|
-| `main/Heating_Mode`, `main/Cooling_Mode` | state | `0` curve, `1` direct. **Not in HA**, so HA cannot tell which mode the request is written into |
+| `main/Cooling_Mode` | state | `0` curve, `1` direct for cooling. **Not in HA** (`Heating_Mode` now is, as `sensor.aquarea_heating_mode`) |
 | `main/Zones_State` | state | `0` zone 1, `1` zone 2, `2` both |
 | `main/Heat_Delta`, `main/Cool_Delta` | state | Floor heating / cooling delta (K) |
-| `main/Heating_Off_Outdoor_Temp`, `main/Heater_On_Outdoor_Temp` | state | Heating cut-off and backup heater outdoor limits |
+| `main/Heating_Off_Outdoor_Temp` | state | Heating cut-off outdoor limit (`Heater_On_Outdoor_Temp` is in HA now) |
 | `main/Pump_Duty` | state | Pump duty (the fork has no max pump duty setting) |
 | `main/Z1_Temp`, `main/Z2_Temp`, `main/Room_Thermostat_Temp` | state | Zone actual temperatures. `Z1_Water_Temp` and `Z2_Water_Temp` read `-78` (not fitted), `Z2_Temp` reads `-128` |
 | `main/Z1_Cool_Curve_*`, `main/Z2_*_Curve_*` | state | Cooling curve and zone 2 curves |
@@ -317,4 +321,14 @@ kubectl -n mosquitto exec mosquitto-0 -c mosquitto -- \
 ```
 
 Prometheus has the HA entities (`hass_sensor_unit_celsius{entity="sensor.aquarea_z1_heat_request_temperature"}`),
-but not `Heating_Mode`, because HA does not expose it.
+including `Heating_Mode` as `sensor.aquarea_heating_mode` since 2026-10-30. The exporter has no entity filter
+(`prometheus:` in `configuration.yaml`), so new numeric sensors and binary sensors appear without further config.
+
+## Observation 2026-10-30 (read-only MQTT sensors added)
+
+| Topic | Value | Meaning |
+|---|---|---|
+| `Sterilization_State` | `0` | Legionella function off. From history, the tank was never above 51 degC from 2023-11 to 2026-10, so no sterilization cycle (65 degC) has run |
+| `DHW_Heater_Operations_Hours` | `0` | The heater has never run for hot water |
+| `Room_Heater_Operations_Hours` | `29` | Lifetime hours of the heater for space heating |
+| `Heater_On_Outdoor_Temp` | `0` degC | Outdoor limit below which the backup heater may start |
