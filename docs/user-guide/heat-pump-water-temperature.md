@@ -9,6 +9,9 @@ code or observed live on that date) or **believed** (taken from the upstream Hei
 inferred, not tested on the unit). The ones that matter for a write experiment are marked
 *believed*.
 
+Menu paths, ranges and the heater facts were later confirmed from the Panasonic service manual and
+are cited as "service manual p.N".
+
 ## Data path
 
 ```text
@@ -34,7 +37,7 @@ The unit decides how it derives the heating water target for a zone from the set
 | `Heating_Mode` | Mode | `Z1_Heat_Request_Temp` means | Water target |
 |---|---|---|---|
 | `0` | Compensation curve | A **shift** in K, -5 to +5 | Read from the curve at the outside temperature, plus the shift |
-| `1` | Direct | The **absolute** water temperature, 20 to the unit's maximum | The request itself |
+| `1` | Direct | The **absolute** water temperature, 20 to 55 degC (60 degC above -10 degC outdoor; service manual p.26, 131) | The request itself |
 
 The curve is four points per zone and mode, published as state topics:
 
@@ -141,15 +144,24 @@ publishes up to `TOP143` plus the `extra/` and `optional/` groups; the fork has 
 ## Switching between curve and direct mode
 
 There is no MQTT or HA command for this. It is an installer setting of the heat pump, made on the
-unit's own controller (CZ-TAW1 remote or the indoor unit panel), in the installer or service menu
-under the zone and sensor settings, "Heating: water temperature setting" with the choices
-compensation curve or direct (*believed*; confirm the exact menu names on the unit before
-changing it). After the change, `main/Heating_Mode` flips to the new value.
+unit's own controller (CZ-TAW1 remote or the indoor unit panel). Per the service manual (p.99, 105):
+Menu > Installer setup > Operation setup > Heat > "Water temp. for heating ON", with the choices
+"Compensation curve" (default) or "Direct". After the change, `main/Heating_Mode` flips to the new
+value.
+
+Manual-confirmed ranges (service manual p.26, 105, 131, 149):
+
+- Curve: four points, with a user shift of +/-5 degC.
+- Direct: 20 to 55 degC (60 degC above -10 degC outdoor).
+- Powerful mode does not apply in direct mode.
+
+The manual covers the indoor unit WH-ADC0309J3E5 with the outdoor unit WH-UD09JE5. The owner's units
+are WH-ADC0309JE5C and WH-UD09JE5-1, assumed equivalent.
 
 ## Changing the curve
 
 - **From the controller:** the same installer menu, per zone: the water target at two outside
-  temperatures (the four points above). This is the supported way with this fork.
+  temperatures (the four points above; service manual p.105, 131). This is the supported way with this fork.
 - **From HA/MQTT with the fork:** not supported. `SetCurves` does not exist in the fork.
 - **Upstream HeishaMon:** `commands/SetCurves` takes a JSON document with `zone1`/`zone2`,
   `heat`/`cool`, `target`/`outside`, `high`/`low`. For Z1 heating it writes bytes 75 to 78 as
@@ -183,6 +195,59 @@ Home Assistant Prometheus metrics.
 History from the Prometheus metrics (90 days): the Z1 request stayed at 26 and the four Z1 curve
 points never changed. The Z1 and Z2 requests equal their curve "high" target (26 and 28); whether
 the two are linked in the unit is not known (see the experiment note below).
+
+## Electric heater and power limits
+
+From the Panasonic service manual for this unit family (cited as "service manual p.N"). The manual
+covers WH-ADC0309J3E5 with WH-UD09JE5; the owner's WH-ADC0309JE5C with WH-UD09JE5-1 is assumed
+equivalent. The manual states no other heater steps for this model.
+
+### The heater
+
+- One 3.00 kW electric heater (13.0 A) on a separate supply (Power Supply 2, its own 16 A breaker);
+  p.25-26. It is both the space-heating backup and, when the tank heater is set to Internal, the
+  hot-water booster; p.138, 146.
+- The heat pump alone draws at most 3.47 kW / 15.9 A (about 2.0 kW rated at A7W35); p.25. Heat pump
+  plus heater is about 6.5 kW, which **exceeds the 5.0 kW contracted limit on its own**.
+- The 5.0 kW limit is enforced by a smart meter that cuts the supply. The owner confirmed that cuts
+  have happened. A trip is a safety and availability failure, so the heater must be treated as a
+  load that can trip the house, not as a cost.
+
+### What starts the heater automatically
+
+| Trigger | Condition | Page |
+|---|---|---|
+| Space heating | Outdoor temperature below "O/D temp for heater ON" (default 0 degC; the live `Heater_On_Outdoor_Temp` reads 0 degC), plus outlet and delay conditions | 144 |
+| Defrost | Only if the backup heater is enabled: outlet below 10 degC, outdoor below -10 degC or inlet below 27 degC | 145 |
+| Hot water | Tank target above what the heat pump reaches alone | 138, 146 |
+| Sterilization | Default 65 degC for 10 min, weekly; uses the heater | 150 |
+| Anti-freeze | Water below 6 degC | 152 |
+| Heat pump error | Only if "Force Heater" = Auto (default Manual) | 144, 147-148 |
+
+Consequences for control:
+
+- **Hot water above about 51 degC starts the 3 kW heater.** The heat pump alone practically reaches
+  51 to 55 degC (control reference 51 degC; "above 55 degC only possible with backup heater"; p.26,
+  107, 137). The tank range is 40 to 65 degC with the internal heater. The tank target of 49 degC in
+  the current configuration is within the heat pump range.
+- **A sterilization cycle starts the heater** (65 degC target), a scheduled 3 kW load every week.
+- With the heater on, the heat pump plus the heater can exceed 5.0 kW before any other house load
+  is counted.
+- SMART DHW (default 20:00 to 05:00) can suppress hot-water reheat; p.152.
+
+### Inputs that limit power
+
+All of these need the optional PCB CZ-NS4P, except CN-THERMO; p.92-93, 98, 103, 159-163.
+
+| Input | Effect | Note |
+|---|---|---|
+| Demand control, 0-10 V | Outdoor-unit current limited to 10-100% | The manual does not say it limits the heater |
+| External compressor switch | A DIP pin selects "heaters only off" or everything off | |
+| SG-ready | Grid-signal operating states | |
+| CN-THERMO external switch | Whole system off | No PCB needed |
+
+Whether any of them is fitted is not known. They are the candidates for an import-limit interlock;
+the demand control input alone cannot be relied on to keep the heater off.
 
 ## Acknowledgement and latency
 
