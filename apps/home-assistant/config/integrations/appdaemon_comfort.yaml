@@ -1,0 +1,185 @@
+# Helpers of the AppDaemon comfort controller (apps/home-assistant/appdaemon/apps/comfort_control.py).
+# See docs/user-guide/heat-pump-comfort-controller.md. No `initial:` values: HA would reset owner
+# edits at every restart. The app writes its defaults once while comfort_helpers_seeded is off
+# (turn it off to reset every helper below to the defaults). Machine limits stay in the code.
+input_boolean:
+  comfort_control_enable:
+    name: Comfort control enable
+    icon: mdi:thermostat-auto
+  comfort_away:
+    name: Comfort away
+    icon: mdi:home-export-outline
+  comfort_helpers_seeded:
+    name: Comfort helpers seeded (off resets them to defaults)
+    icon: mdi:restore
+
+input_datetime:
+  comfort_weekday_start:
+    name: Comfort day window start (weekdays)
+    has_date: false
+    has_time: true
+  comfort_weekend_start:
+    name: Comfort day window start (weekends)
+    has_date: false
+    has_time: true
+  comfort_window_end:
+    name: Comfort day window end
+    has_date: false
+    has_time: true
+
+input_number:
+  comfort_day_minimum:
+    name: Comfort hall/kitchen day minimum
+    min: 18
+    max: 26
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_night_floor:
+    name: Comfort floor (every room, always)
+    min: 16
+    max: 23
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_margin:
+    name: Comfort setpoint margin over the minimum
+    min: 0
+    max: 2
+    step: 0.5
+    unit_of_measurement: "K"
+  comfort_hysteresis:
+    name: Comfort heating-on hysteresis
+    min: 0.1
+    max: 1.5
+    step: 0.1
+    unit_of_measurement: "K"
+  # Optimum-start lead times (minutes before the window start), by day type and outdoor band:
+  # cold < 8 degC <= mid < 12 degC <= mild (band edges in the code). Defaults: B0 warm-up analysis,
+  # 2026-10-31, p75.
+  comfort_lead_weekday_cold:
+    name: Comfort lead time weekday below 8 °C
+    min: 0
+    max: 840
+    step: 5
+    unit_of_measurement: "min"
+  comfort_lead_weekday_mid:
+    name: Comfort lead time weekday 8-12 °C
+    min: 0
+    max: 840
+    step: 5
+    unit_of_measurement: "min"
+  comfort_lead_weekday_mild:
+    name: Comfort lead time weekday 12 °C and above
+    min: 0
+    max: 840
+    step: 5
+    unit_of_measurement: "min"
+  comfort_lead_weekend_cold:
+    name: Comfort lead time weekend below 8 °C
+    min: 0
+    max: 840
+    step: 5
+    unit_of_measurement: "min"
+  comfort_lead_weekend_mid:
+    name: Comfort lead time weekend 8-12 °C
+    min: 0
+    max: 840
+    step: 5
+    unit_of_measurement: "min"
+  comfort_lead_weekend_mild:
+    name: Comfort lead time weekend 12 °C and above
+    min: 0
+    max: 840
+    step: 5
+    unit_of_measurement: "min"
+  # Software heating curve: two points, linear between them, clamped outside; the request is an
+  # integer clamped to 20-35 degC in the code.
+  comfort_curve_cold_outdoor:
+    name: Comfort curve cold point outdoor
+    min: -20
+    max: 10
+    step: 1
+    unit_of_measurement: "°C"
+  comfort_curve_cold_water:
+    name: Comfort curve cold point water
+    min: 20
+    max: 35
+    step: 1
+    unit_of_measurement: "°C"
+  comfort_curve_mild_outdoor:
+    name: Comfort curve mild point outdoor
+    min: 0
+    max: 25
+    step: 1
+    unit_of_measurement: "°C"
+  comfort_curve_mild_water:
+    name: Comfort curve mild point water
+    min: 20
+    max: 35
+    step: 1
+    unit_of_measurement: "°C"
+  comfort_early_start_raise:
+    name: Comfort water raise during optimum start
+    min: 0
+    max: 5
+    step: 1
+    unit_of_measurement: "K"
+  comfort_outdoor_offset:
+    name: Comfort outdoor sensor offset
+    min: -5
+    max: 5
+    step: 0.1
+    unit_of_measurement: "K"
+  comfort_dhw_target:
+    name: Comfort DHW tank target (capped at 50 °C in the code)
+    min: 40
+    max: 50
+    step: 1
+    unit_of_measurement: "°C"
+
+automation:
+  # Watchdog: AppDaemon refreshes sensor.last_appdaemon_connection every minute. If it stops for
+  # 15 minutes while the comfort controller has the pump in DHW (space heating off), nothing would
+  # switch heating back on, so select Heat+DHW through the usual selector path. The unit keeps the
+  # last water temperature request and the thermostats keep the floor valves closed in warm rooms:
+  # the worst case is extra kWh, never no heating.
+  - alias: AppDaemon comfort watchdog
+    id: appdaemon_comfort_watchdog
+    mode: single
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    condition:
+      - condition: state
+        entity_id: input_boolean.comfort_control_enable
+        state: "on"
+      - condition: state
+        entity_id: sensor.aquarea_mode
+        state: DHW
+      - alias: Home Assistant up for 15 minutes
+        # The heartbeat entity is not restored: it is missing until AppDaemon writes it after an
+        # HA restart. This automation's last_changed is its start (or last enable/reload) time.
+        condition: template
+        value_template: "{{ now() - this.last_changed >= timedelta(minutes=15) }}"
+      - alias: AppDaemon heartbeat missing or older than 15 minutes
+        condition: template
+        value_template: >-
+          {% set heartbeat = states.sensor.last_appdaemon_connection %}
+          {{ heartbeat is none
+             or heartbeat.state in ['unknown', 'unavailable']
+             or now() - heartbeat.last_updated >= timedelta(minutes=15) }}
+      - alias: At most once every 30 minutes
+        condition: template
+        value_template: >-
+          {{ as_timestamp(now()) - as_timestamp(this.attributes.last_triggered, 0) >= 1800 }}
+    action:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heishamon_heatmode
+        data:
+          option: Heat+DHW
+      - action: notify.send_message
+        data:
+          entity_id: notify.agil
+          message: |
+            AppDaemon has not reported for 15 minutes and the heat pump is in `DHW`\.
+            Heating restored to `Heat\+DHW` at the last water temperature\.
