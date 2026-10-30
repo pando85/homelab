@@ -50,6 +50,11 @@ Procedure that kept every change reversible:
 
 Dashboard edits are not GitOps; agree each change with the user before applying it.
 
+**Do not run heavy commands inside the HA container.** It has a 1 GiB memory limit: a
+`grep -o '.{0,1500}pattern.{0,1500}'` over the minified frontend bundles in `hass_frontend/` got the
+container OOM-killed (HA restarted, 2026-10-30). Copy the files out with `kubectl exec ... cat` and
+search locally; `grep -l -F` to find the file is fine.
+
 ## Pitfalls
 
 ### Entity references silently break
@@ -98,29 +103,49 @@ grep the dashboards (`/config/.storage/lovelace.*`) as well as the repo.
 ### Energy dashboard
 
 The built-in Energy dashboard is configured in `/config/.storage/energy` (API: `energy/get_prefs`,
-`energy/save_prefs`, `energy/validate`). Since 2026-10-30 it is a hierarchy with `included_in_stat`,
-`name` and live power (`stat_rate`):
+`energy/save_prefs`, `energy/validate`). It is a hierarchy with `included_in_stat`, `name` and live
+power (`stat_rate`):
 
 ```
 Grid: Shelly EM channel 1 (PVPC price)
-├─ Circuit 1: cooker, sockets & lighting (sensor.circuit_1_energy)
+├─ Circuit 1 (sensor.circuit_1_energy): cooker, sockets, humid areas, thermostats, lighting
 │   ├─ Servers (Shelly PM mini)
 │   └─ Snapmaker (plug)
-└─ Circuit 2: heat pump & appliances (Shelly EM channel 2)
-    ├─ Heat pump · hot water / heating / cooling (sensor.aquarea_{dhw,heat,cool}_energy_consumed)
+└─ Circuit 2 (Shelly EM channel 2): aerotherm, dishwasher, washer, extractor
+    ├─ Heat pump (sensor.aquarea_energy_consumed)
+    │   └─ Hot water / Heating / Cooling (sensor.aquarea_{dhw,heat,cool}_energy_consumed)
     └─ Washing machine (sensor.lavadora_energy_this_month)
 ```
 
-HA shows the remainder of each parent as untracked (dishwasher, extractor and standby on circuit 2).
+HA shows each parent's remainder as `<name> (untracked)` in the device charts and as untracked
+consumption in the flows (dishwasher, extractor and standby on circuit 2).
 
-- **Do not use `sensor.aquarea_energy_consumed`** for history: it integrates
-  `sensor.aquarea_power_consumed`, whose availability check was wrong until `bdfdc5825`, so it
-  recorded 0 kWh until 2026-10-30. The three per-mode sensors are correct back to 2024-04.
-- `sensor.circuit_1_energy` starts on 2026-10-30, so earlier periods show Servers larger than
-  circuit 1.
+- Only devices drawing at least 0.1% of the total power are drawn in the "Now" power flow; an idle
+  circuit 2 (~35 W) is a thin strip.
 - `sensor.lavadora_energy_yesterday` has negative statistics; use `..._this_month` (monthly reset is
-  handled as a meter reset).
-- The Shelly 2PM shutter energy sensors are left out (~0.1 kWh/month together).
+  handled as a meter reset). The Shelly 2PM shutter energy sensors are left out (~0.1 kWh/month).
+
+#### Statistics backfill (2026-10-30)
+
+Two energy series were repaired with the websocket API rather than re-deployed sensors:
+
+- `sensor.aquarea_energy_consumed` stopped counting on 2025-12-10 18:00 because its source
+  `sensor.aquarea_power_consumed` had a wrong availability check (fixed in `bdfdc5825`); 1560.6 kWh
+  were missing. The gap hours were rebuilt from the sum of the three per-mode sensors with
+  `recorder/import_statistics`, continuing from the last good sum, and every later row was shifted with
+  `recorder/adjust_sum_statistics` (it shifts hourly and 5-minute rows, so live counting continues).
+  Monthly totals now equal the per-mode sum since 2024-04.
+- `sensor.circuit_1_energy` (created 2026-10-30) got history back to 2024-04 from channel 1 − channel 2
+  hourly deltas (negatives clamped), imported with sums anchored so the first live hour counts in full.
+  Its old sums are negative by design; only differences are ever displayed.
+
+Rules that made this safe: export the rows first (`\copy ... TO STDOUT WITH CSV` on `statistics`,
+`statistics_short_term` and `statistics_meta`); only import hours older than the sensor's first live
+row, or shift live rows with `adjust_sum_statistics` — never import over live rows, because new
+statistics are compiled from the last 5-minute row; wait for the hour's compile (`HH:00:10`) when the
+anchor hour is the current one; check monthly totals against the source series afterwards. The import
+is queued in the recorder, so re-check after a few seconds. Login-flow access tokens expire after 30
+minutes.
 
 ### Where history lives
 

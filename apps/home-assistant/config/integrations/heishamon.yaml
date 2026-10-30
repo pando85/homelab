@@ -916,6 +916,9 @@ template:
   - sensor:
       - name: "Aquarea Power Produced"
         unit_of_measurement: "W"
+        # device_class makes the Riemann integration sensors report device_class energy.
+        device_class: power
+        state_class: measurement
         state: >-
           {{
             states('sensor.aquarea_dhw_power_produced') | float +
@@ -931,6 +934,8 @@ template:
 
       - name: "Aquarea Power Consumed"
         unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
         state: >-
           {{
             states('sensor.aquarea_dhw_power_consumed') | float +
