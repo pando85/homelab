@@ -595,3 +595,94 @@ class TestNegativePriceNotification:
         messages = [c.kwargs.get("message", c.args[1] if len(c.args) > 1 else "") for c in calls]
         assert any("Programming the climate control" in m and "Negative PVPC prices" not in m for m in messages)
         assert any(m.startswith("Negative PVPC prices") for m in messages)
+
+
+def fake_ha(climate_control, states):
+    """Back get_state/set_state with a dict so mode changes are observable."""
+
+    # Plain functions: the local AsyncMock returns the side_effect result without awaiting it.
+    def get_state(entity_id, attribute=None, **kwargs):
+        return states.get(entity_id)
+
+    def set_state(entity_id, state=None, **kwargs):
+        states[entity_id] = state
+
+    climate_control.get_state = AsyncMock(side_effect=get_state)
+    climate_control.set_state = AsyncMock(side_effect=set_state)
+    climate_control.sleep = AsyncMock()
+    climate_control.call_service = AsyncMock()
+    climate_control._unregister_schedulers = AsyncMock()
+    return states
+
+
+def sent_messages(climate_control):
+    return [c.kwargs.get("message", "") for c in climate_control.call_service.call_args_list]
+
+
+class TestOnDisable:
+    @pytest.mark.asyncio
+    async def test_disable_during_off_window_restores_heat_mode(self, climate_control):
+        states = fake_ha(
+            climate_control,
+            {
+                "input_select.appdaemon_climate_heat_mode": "Heat+DHW",
+                "input_select.heishamon_heatmode": "DHW",
+            },
+        )
+
+        await climate_control._on_disable()
+
+        climate_control._unregister_schedulers.assert_called_once()
+        climate_control.set_state.assert_called_once_with("input_select.heishamon_heatmode", state="Heat+DHW")
+        assert states["input_select.heishamon_heatmode"] == "Heat+DHW"
+        assert any("Climate control disabled" in m and "Heat\\+DHW" in m for m in sent_messages(climate_control))
+
+    @pytest.mark.asyncio
+    async def test_disable_during_on_window_keeps_heating_and_notifies(self, climate_control):
+        states = fake_ha(
+            climate_control,
+            {
+                "input_select.appdaemon_climate_heat_mode": "Heat+DHW",
+                "input_select.heishamon_heatmode": "Heat+DHW",
+            },
+        )
+
+        await climate_control._on_disable()
+
+        assert states["input_select.heishamon_heatmode"] == "Heat+DHW"
+        climate_control.sleep.assert_not_called()
+        assert any("the mode is now manual" in m for m in sent_messages(climate_control))
+
+    @pytest.mark.asyncio
+    async def test_disable_dry_run_does_not_change_mode(self, climate_control):
+        climate_control.args["climate"]["enabled"] = False
+        states = fake_ha(
+            climate_control,
+            {
+                "input_select.appdaemon_climate_heat_mode": "Heat+DHW",
+                "input_select.heishamon_heatmode": "DHW",
+            },
+        )
+
+        await climate_control._on_disable()
+
+        climate_control.set_state.assert_not_called()
+        assert states["input_select.heishamon_heatmode"] == "DHW"
+        assert any("dry run mode" in m and "Climate control disabled" in m for m in sent_messages(climate_control))
+
+    @pytest.mark.asyncio
+    async def test_terminate_does_not_change_mode(self, climate_control):
+        states = fake_ha(
+            climate_control,
+            {
+                "input_select.appdaemon_climate_heat_mode": "Heat+DHW",
+                "input_select.heishamon_heatmode": "DHW",
+            },
+        )
+
+        await climate_control.terminate()
+
+        climate_control._unregister_schedulers.assert_called_once()
+        climate_control.set_state.assert_not_called()
+        climate_control.call_service.assert_not_called()
+        assert states["input_select.heishamon_heatmode"] == "DHW"

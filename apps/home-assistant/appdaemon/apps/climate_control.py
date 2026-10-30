@@ -37,8 +37,8 @@ class ClimateControl(hass.Hass):
         input_boolean_enable = self.args["input_boolean"]["enable"]
         # Register schedulers if climate control is enabled
         await self.listen_state(self._register_schedulers, input_boolean_enable, new="on", old="off")
-        # Unregister schedulers if climate control is enabled
-        await self.listen_state(self._unregister_schedulers, input_boolean_enable, new="off", old="on")
+        # Unregister schedulers and restore heating if climate control is disabled
+        await self.listen_state(self._on_disable, input_boolean_enable, new="off", old="on")
 
         # Register schedulers every day
         # delay to avoid midnight busy period and give time for new data
@@ -102,7 +102,9 @@ Retrying in 10 minutes"""
                 await self.sleep(1)
 
     async def _start_hvac(self, kwargs={}):
-        await self._change_hvac_mode(await self.get_state(self.args["input_select_heat_mode"]))
+        mode = await self.get_state(self.args["input_select_heat_mode"])
+        await self._change_hvac_mode(mode)
+        return mode
 
     async def _stop_hvac(self, kwargs={}):
         await self._change_hvac_mode(self.args["climate"]["off_mode"])
@@ -298,5 +300,16 @@ Retrying in 10 minutes"""
         self.log(f"{ids_to_disable=}", level="DEBUG")
         [await self.cancel_timer(_id) for _id in ids_to_disable]
 
+    async def _on_disable(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
+        # Without schedulers nobody leaves the off mode, so restore heating and hand over to manual.
+        await self._unregister_schedulers()
+        mode = await self._start_hvac()
+        dry_run_msg = "" if self.args["climate"]["enabled"] else " (dry run mode)"
+        msg = f"Climate control disabled: heating restored to `{mode}`; the mode is now manual{dry_run_msg}"
+        self.log(msg)
+        if self.args["notify"]["enabled"]:
+            await send_notification(self, escape_markdownv2(msg), self.args["notify"]["entity_id"])
+
     async def terminate(self):
+        # AppDaemon shutdown or reload: cancel timers only, never change the mode.
         await self._unregister_schedulers()
