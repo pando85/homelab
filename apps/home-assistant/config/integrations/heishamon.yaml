@@ -488,6 +488,30 @@ mqtt:
       state_topic: "panasonic_heat_pump/main/ThreeWay_Valve_State"
       payload_on: "1"
       payload_off: "0"
+    #TOP58 - Tank electric heater allowed state (sensor.aquarea_tank_heater_enabled)
+    - name: Aquarea Tank Heater Enabled
+      unique_id: aquarea_tank_heater_enabled
+      state_topic: "panasonic_heat_pump/main/DHW_Heater_State"
+      payload_on: "1"
+      payload_off: "0"
+    #TOP59 - Water electric heater allowed state (sensor.aquarea_room_heater_enabled)
+    - name: Aquarea Room Heater Enabled
+      unique_id: aquarea_room_heater_enabled
+      state_topic: "panasonic_heat_pump/main/Room_Heater_State"
+      payload_on: "1"
+      payload_off: "0"
+    #TOP60 - Internal heater state (sensor.aquarea_internal_heater_state)
+    - name: Aquarea Internal Heater State
+      unique_id: aquarea_internal_heater_state
+      state_topic: "panasonic_heat_pump/main/Internal_Heater_State"
+      payload_on: "1"
+      payload_off: "0"
+    #TOP61 - External heater state (sensor.aquarea_external_heater_state)
+    - name: Aquarea External Heater State
+      unique_id: aquarea_external_heater_state
+      state_topic: "panasonic_heat_pump/main/External_Heater_State"
+      payload_on: "1"
+      payload_off: "0"
     # Read-only 0/1 states of the heater and the legionella function (no command is published).
     - name: Aquarea Sterilization State
       unique_id: aquarea_sterilization_state
