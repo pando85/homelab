@@ -89,6 +89,33 @@ grep the dashboards (`/config/.storage/lovelace.*`) as well as the repo.
   harmless and cannot be removed. See
   [home-assistant-entity-id-handover.md](home-assistant-entity-id-handover.md).
 
+### Energy dashboard
+
+The built-in Energy dashboard is configured in `/config/.storage/energy` (API: `energy/get_prefs`,
+`energy/save_prefs`, `energy/validate`). Since 2026-10-30 it is a hierarchy with `included_in_stat`,
+`name` and live power (`stat_rate`):
+
+```
+Grid: Shelly EM channel 1 (PVPC price)
+├─ Circuit 1: cooker, sockets & lighting (sensor.circuit_1_energy)
+│   ├─ Servers (Shelly PM mini)
+│   └─ Snapmaker (plug)
+└─ Circuit 2: heat pump & appliances (Shelly EM channel 2)
+    ├─ Heat pump · hot water / heating / cooling (sensor.aquarea_{dhw,heat,cool}_energy_consumed)
+    └─ Washing machine (sensor.lavadora_energy_this_month)
+```
+
+HA shows the remainder of each parent as untracked (dishwasher, extractor and standby on circuit 2).
+
+- **Do not use `sensor.aquarea_energy_consumed`** for history: it integrates
+  `sensor.aquarea_power_consumed`, whose availability check was wrong until `bdfdc5825`, so it
+  recorded 0 kWh until 2026-10-30. The three per-mode sensors are correct back to 2024-04.
+- `sensor.circuit_1_energy` starts on 2026-10-30, so earlier periods show Servers larger than
+  circuit 1.
+- `sensor.lavadora_energy_yesterday` has negative statistics; use `..._this_month` (monthly reset is
+  handled as a meter reset).
+- The Shelly 2PM shutter energy sensors are left out (~0.1 kWh/month together).
+
 ### Where history lives
 
 - The recorder keeps **10 days**.
