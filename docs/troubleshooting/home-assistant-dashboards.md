@@ -84,6 +84,12 @@ grep the dashboards (`/config/.storage/lovelace.*`) as well as the repo.
   Areas dashboard shows them. The terrace uses the Higrow 1 DHT sensor.
 - **Aquarea Z1/Z2 water temperature** is not fitted (HeishaMon reported `-78` for a year); the
   sensors were removed from `heishamon.yaml`.
+- **HeishaMon firmware:** the heat pump's CZ-TAW1 runs the owner's
+  [`pando85/GoHeishaMon`](https://github.com/pando85/GoHeishaMon) fork. `SetOperationMode` accepts
+  0–10 and sends mode byte 0 for any other payload (`HandleSetOperationMode` in
+  [`src/taw2mqtt.go`](https://github.com/pando85/GoHeishaMon/blob/561bcc81f33e/src/taw2mqtt.go)), so
+  the "Set heatmode" automation in `heishamon.yaml` maps every `input_select.heishamon_heatmode`
+  option to 0–8, mirroring "Set heatmode selector".
 - **Disabled `sensor.shellyem_main_channel_*_power_2`** entities look stale but are the rollback
   anchors of the MQTT handover — do not delete them. Orphan `*_mqtt_probe` rows in `states_meta` are
   harmless and cannot be removed. See

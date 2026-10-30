@@ -184,6 +184,10 @@ automation:
         data_template:
           topic: panasonic_heat_pump/commands/SetOperationMode
           retain: false #IMPORTANT! ALWAYS set retain flag false for commands!
+          # Mirrors "Set heatmode selector": every option maps to 0-8. The CZ-TAW1 runs the owner's
+          # GoHeishaMon fork; HandleSetOperationMode accepts 0-10 and sends mode byte 0 for anything
+          # else (an empty payload included). See
+          # https://github.com/pando85/GoHeishaMon/blob/561bcc81f33e/src/taw2mqtt.go
           payload: >-
             {%- if states('input_select.heishamon_heatmode') == "Heat" -%}
               0
@@ -197,8 +201,12 @@ automation:
               4
             {%- elif states('input_select.heishamon_heatmode') == "Cool+DHW" -%}
               5
-            {%- elif states('input_select.heishamon_heatmode') == "Auto+DHW" -%}
+            {%- elif states('input_select.heishamon_heatmode') == "Auto(Heat)+DHW" -%}
               6
+            {%- elif states('input_select.heishamon_heatmode') == "Auto(Cool)" -%}
+              7
+            {%- elif states('input_select.heishamon_heatmode') == "Auto(Cool)+DHW" -%}
+              8
             {%- endif -%}
       - delay:
           hours: 0
