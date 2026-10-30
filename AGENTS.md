@@ -49,6 +49,12 @@ helm lint apps/<name>/
 - **Renovate:** Add hints above image refs — `docs/conventions/helm.md#renovate-integration`
 - **Docs:** Troubleshooting in `docs/troubleshooting/`; `AGENTS.md` for links/reminders. See `docs/conventions/documenting-learnings.md`
 - **Security:** No hardcoded secrets. ExternalSecret → Vault. Public repo hygiene
+- **Personal information:** never commit people's names (household members, children, guests),
+  addresses, locations, phone or person details, or which account/token holds which privileges.
+  Use roles or rooms instead ("owner", "Office T"). Applies to code, docs, commit messages and PRs
+- **Vault CLI:** `export VAULT_ADDR=https://vault.internal.grigri.cloud`; reuses the owner's OIDC login.
+  KV v2 mount `secret`: ExternalSecret `remoteRef.key: /<app>/<path>` ↔ `vault kv put secret/<app>/<path>`.
+  Never print secret values; load them from a `0600` file and shred it afterwards
 
 ## Commit Messages
 
@@ -60,10 +66,17 @@ vault: Change to svg logo
 monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 ```
 
+No attribution lines, AI session links or session trailers in commits, PR bodies or comments — the
+repos are public (the `no-session-links` commit-msg hook enforces it). Keep GPG signing.
+
 ## Deployment Rules
 
 **Commit first, then apply.** Git must contain the change before it is applied anywhere. Never apply
 an uncommitted or partially edited tree.
+
+**Owner approval for live changes.** Propose Home Assistant changes made outside git (dashboards,
+entity/area registry, integration options) and pushes, then wait for an explicit yes per item.
+Analysis and read-only checks need no approval.
 
 ### Agents may run
 
@@ -103,6 +116,9 @@ command.
 - `debug` skill: live cluster investigation with read-only `kubectl` and Grafana observability only
 - Do not copy runbook steps into agent instructions — link to docs instead
 - Prefer focused, path-specific docs over broad always-loaded guidance
+- Keep durable knowledge in this repo (docs, `AGENTS.md`), not in agent-local memory
+- Subagents default to a mid-tier model; use the top model only for genuinely hard tasks, and do not
+  spawn agents for work that can be done inline
 
 ## Common Pitfalls
 

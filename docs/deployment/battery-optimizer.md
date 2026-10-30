@@ -179,3 +179,16 @@ code version changes every dataset id, so expect one extra dataset on the next b
 
 Growing the volume: raise `spec.resources.requests.storage` in `templates/pvc.yaml`
 (`allowVolumeExpansion` is on). Never delete the PVC; `Prune=false` and `Retain` protect it.
+
+## App Repository Notes
+
+- Code lives in `pando85/battery-optimizer` (moved history-preserving from `scripts/energy-baseline`
+  on 2026-10-24/25). Releases are cut with `just release`; the `auto-tag` workflow uses the repo
+  secrets `PAT` and `GPG_PRIVATE_KEY` (both set). Renovate (Mend app) automerges.
+- Local analysis env: a gitignored `.envrc` (direnv) sets `UV`, `KUBE_CONTEXT=grigri` and
+  `BATTERY_OPTIMIZER_DATA_DIR=~/data/battery-optimizer-cluster`.
+- The load-forecaster and price-outlook improvement plans (app repo `docs/planning/`) are **parked
+  since 2026-10-25**; resume triggers are in the load plan §6 (spring 2027 cooling season, battery
+  commissioning, household or rule change). Evaluation results stay in the private data directory.
+- Owner decisions, do not re-raise: taxes in `tariff.yaml` (PVPC, not important); license, DCO and
+  GHCR bootstrap are done or not needed.
