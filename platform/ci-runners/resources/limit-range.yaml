@@ -11,10 +11,9 @@ spec:
     # admission error rather than a node-wide reclaim storm on prusik's root NVMe,
     # which also holds etcd's WAL and /swapfile.
     #
-    # The defaults are what keep the resource-less nightly cache-cleanup Jobs
-    # (resources/cronjob.yaml, resources/cronjob-amd64.yaml) admissible at all once
-    # resources/resource-quota.yaml exists: a quota that constrains
-    # `requests.memory` rejects pods with no computed request. 2Gi is also the
+    # The defaults keep containers without explicit resources admissible under
+    # resources/resource-quota.yaml: a quota that constrains `requests.memory`
+    # rejects pods with no computed request. 2Gi is also the
     # default ceiling for anything that forgets to declare a limit, so a forgotten
     # `resources:` block degrades to small rather than unbounded.
     - type: Container
