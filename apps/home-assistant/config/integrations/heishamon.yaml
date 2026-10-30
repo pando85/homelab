@@ -927,13 +927,13 @@ template:
       - name: "Aquarea COP"
         unit_of_measurement: "x"
         state: >-
-          {%- if states('sensor.heishamon_power_consumed') | float(0) > 0 -%}
-            {{ '%0.1f' % ((states('sensor.heishamon_power_produced') | float ) / (states('sensor.heishamon_power_consumed') | float )) }}
+          {%- if states('sensor.aquarea_power_consumed') | float(0) > 0 -%}
+            {{ '%0.1f' % ((states('sensor.aquarea_power_produced') | float ) / (states('sensor.aquarea_power_consumed') | float )) }}
           {%- else -%}
             0.0
           {%- endif -%}
         availability: >-
-          {%- if is_number(states('sensor.heishamon_power_consumed')) and is_number(states('sensor.heishamon_power_produced')) %}
+          {%- if is_number(states('sensor.aquarea_power_consumed')) and is_number(states('sensor.aquarea_power_produced')) %}
             true
           {%- else %}
             false
@@ -1006,7 +1006,7 @@ sensor:
     method: left
   #Calculation Energy produced (kWh) - Total
   - platform: integration
-    source: sensor.heishamon_power_produced
+    source: sensor.aquarea_power_produced
     name: Aquarea Energy Produced
     unit_prefix: k
     method: left
@@ -1031,7 +1031,7 @@ sensor:
     method: left
   #Calculation Energy consumed (kWh) - Total
   - platform: integration
-    source: sensor.heishamon_power_consumed
+    source: sensor.aquarea_power_consumed
     name: Aquarea Energy Consumed
     unit_prefix: k
     method: left
