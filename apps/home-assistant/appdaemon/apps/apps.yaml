@@ -1,40 +1,71 @@
-climate_control:
-  module: climate_control
-  class: ClimateControl
-  input_boolean:
-    enable: input_boolean.appdaemon_climate_enable
-  input_number:
-    min_hours_per_day: input_number.appdaemon_climate_min_hours_per_day
-  input_select_heat_mode: input_select.appdaemon_climate_heat_mode
-  sensor:
+comfort_control:
+  module: comfort_control
+  class: ComfortControl
+  # Thermostat rooms; day_room gets the day-window setpoint, every room the floor.
+  rooms:
+    hall_kitchen: climate.thermostat_hall_kitchen
+    bedroom: climate.thermostat_bedroom
+    office_a: climate.thermostat_office_a
+    office_t: climate.thermostat_office_t
+  day_room: hall_kitchen
+  helpers:
+    enable: input_boolean.comfort_control_enable
+    away: input_boolean.comfort_away
+    seeded: input_boolean.comfort_helpers_seeded
+    # Seeded on: water requests are only logged until the owner turns it off (go-live checklist).
+    water_dry_run: input_boolean.comfort_water_dry_run
+    # Written by the app: today's DHW plan, restored by HA after a restart (one window per day).
+    dhw_plan: input_text.comfort_dhw_plan
+    day_minimum: input_number.comfort_day_minimum
+    night_floor: input_number.comfort_night_floor
+    margin: input_number.comfort_margin
+    weekday_start: input_datetime.comfort_weekday_start
+    weekend_start: input_datetime.comfort_weekend_start
+    window_end: input_datetime.comfort_window_end
+    hysteresis: input_number.comfort_hysteresis
+    lead_weekday_cold: input_number.comfort_lead_weekday_cold
+    lead_weekday_mid: input_number.comfort_lead_weekday_mid
+    lead_weekday_mild: input_number.comfort_lead_weekday_mild
+    lead_weekend_cold: input_number.comfort_lead_weekend_cold
+    lead_weekend_mid: input_number.comfort_lead_weekend_mid
+    lead_weekend_mild: input_number.comfort_lead_weekend_mild
+    curve_cold_outdoor: input_number.comfort_curve_cold_outdoor
+    curve_cold_water: input_number.comfort_curve_cold_water
+    curve_mild_outdoor: input_number.comfort_curve_mild_outdoor
+    curve_mild_water: input_number.comfort_curve_mild_water
+    early_start_raise: input_number.comfort_early_start_raise
+    outdoor_offset: input_number.comfort_outdoor_offset
+    dhw_target: input_number.comfort_dhw_target
+  sensors:
+    # Outdoor input of the curve and the lead-time band: the unit sensor plus the offset helper.
+    outdoor: sensor.aquarea_outside_ambient_temperature
+    heating_mode: sensor.aquarea_heating_mode
+    z1_request: sensor.aquarea_z1_heat_request_temperature
+    tank_target: sensor.aquarea_tank_set_temperature
+    compressor_starts: sensor.aquarea_compressor_start_stop_counter
+    sterilization: binary_sensor.aquarea_sterilization_state
+    force_heater: binary_sensor.aquarea_force_heater_state
     pvpc_price: sensor.esios_pvpc
-  notify:
-    enabled: true
-    entity_id: notify.agil
-  climate:
-    enabled: true
+  heat_mode:
     entity: input_select.heishamon_heatmode
     on_mode: Heat+DHW
     off_mode: DHW
-  fallback_cheap_electricity_price: 0.09
-  log_level: INFO
-
-dhw_control:
-  module: dhw_control
-  class: DHWControl
-  input_boolean:
-    enable: input_boolean.appdaemon_dhw_enable
-  sensor:
-    pvpc_price: sensor.esios_pvpc
+  commands:
+    water_request: input_number.heishamon_heatshift_z1
+    tank_target: input_number.heishamon_tank_temp
+    force_dhw: switch.aquarea_force_dhw_mode
+  # false = dry run for that area: log the decision, write nothing.
+  actuate:
+    mode: true
+    setpoints: true
+    water_temperature: true
+    dhw: true
+  status_entity: sensor.comfort_control_status
+  # Written at the end of every control tick; the HA watchdog restores Heat+DHW when it goes stale.
+  heartbeat_entity: sensor.comfort_control_heartbeat
   notify:
     enabled: true
     entity_id: notify.agil
-  dhw:
-    enabled: true
-    entity: switch.aquarea_force_dhw_mode
-  # interval_hours: How often to trigger DHW (hours). Must be a divisor of 24.
-  # 24 = once per day (default), 12 = twice, 8 = 3 times, 6 = 4 times, etc.
-  interval_hours: 12
   log_level: INFO
 
 last_connection_sensor:
