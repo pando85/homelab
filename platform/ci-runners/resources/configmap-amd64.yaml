@@ -68,6 +68,11 @@ data:
       fetch_interval: 2s
       # The interval for reporting the job status and logs to the Forgejo instance.
       report_interval: 1s
+      # Native host scratch GC runs only when no tasks are active. Old cache
+      # directories and .pnpm-store are retained; this is not a disk-pressure
+      # controller and does not replace nodefs capacity alerts.
+      workdir_cleanup_age: 24h
+      idle_cleanup_interval: 10m
       # At the end of a job, retry configuration for sending logs to remote.
       # report_retry:
       #   # Maximum number of retry attempts.
