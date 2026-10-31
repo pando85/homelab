@@ -4,25 +4,6 @@ metadata:
   name: workspace-gc-script
 data:
   cleanup.sh: |
-    # Non-destructive online monitor after the active-workspace deletion incident
-    # (docs/troubleshooting/ci-runner-workspace-gc-active-workspace-deletion.md).
-    #
-    # The previous version deleted any /workspace/* directory older than a
-    # usage-scaled retention while the runner daemon was actively running jobs.
-    # mtime cannot distinguish an orphan from an in-use workspace (a long Rust
-    # build leaves its workspace dir untouched for over an hour), and the broad
-    # sweep also targeted non-job entries such as the 2-hex actions-cache
-    # buckets. An active job's workspace was destroyed at 78% usage.
-    #
-    # This script NO LONGER DELETES ANYTHING. It reports disk usage, emits
-    # rate-limited pressure alerts, and exits when the runner goes away (same
-    # lifecycle as before). Orphan reclamation is a documented, independently
-    # gated maintenance procedure - see the runbook above. Do not add an
-    # age-based deletion back to this loop: there is no safe online signal for
-    # workspace activity here (pgrep proves only that the daemon exists, never
-    # that it is idle, and shareProcessNamespace does not extend to other pods).
-
-    WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
     CHECK_INTERVAL="${CHECK_INTERVAL:-15}"
     THRESHOLD_MIN="${THRESHOLD_MIN:-30}"
     THRESHOLD_LOW="${THRESHOLD_LOW:-50}"
@@ -30,8 +11,8 @@ data:
     THRESHOLD_HIGH="${THRESHOLD_HIGH:-80}"
     THRESHOLD_CRITICAL="${THRESHOLD_CRITICAL:-90}"
     THRESHOLD_EMERGENCY="${THRESHOLD_EMERGENCY:-95}"
-    ALERT_INTERVAL="${ALERT_INTERVAL:-900}"
-    RUNBOOK="docs/troubleshooting/ci-runner-workspace-gc-active-workspace-deletion.md"
+    PRESERVE_DIRS=".pnpm-store tool_cache"
+    runner_started=false
 
     cleanup() {
       exit 0
@@ -39,27 +20,11 @@ data:
     trap cleanup TERM INT
 
     get_workspace_usage() {
-      df -P "$WORKSPACE_DIR" | tail -1 | sed 's/.*[[:space:]]\([0-9]*\)%.*/\1/'
+      df -P /workspace | tail -1 | sed 's/.*[[:space:]]\([0-9]*\)%.*/\1/'
     }
-
-    # Retention the old destructive loop would have picked at this usage level.
-    # Kept purely so pressure alerts carry the same tier language operators saw
-    # in logs before; nothing here deletes anything.
-    retention_for() {
-      usage=$1
-      if [ "$usage" -ge "$THRESHOLD_EMERGENCY" ]; then echo 5
-      elif [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then echo 10
-      elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then echo 30
-      elif [ "$usage" -ge "$THRESHOLD_MED" ]; then echo 60
-      elif [ "$usage" -ge "$THRESHOLD_LOW" ]; then echo 1440
-      else echo 10080; fi
-    }
-
-    runner_started=false
-    last_alert=0
 
     while true; do
-      if pgrep forgejo-runner >/dev/null 2>&1; then
+      if pgrep forgejo-runner >/dev/null; then
         runner_started=true
       elif [ "$runner_started" = true ]; then
         echo "forgejo-runner exited, stopping workspace-gc"
@@ -70,12 +35,45 @@ data:
       echo "workspace disk usage: ${usage}%"
 
       if [ "$usage" -ge "$THRESHOLD_MIN" ]; then
-        now=$(date +%s)
-        if [ $((now - last_alert)) -ge "$ALERT_INTERVAL" ]; then
-          echo "workspace-gc: ALERT disk usage ${usage}% (old destructive tier: $(retention_for "$usage")m retention): online deletion is DISABLED; reclaim orphans only via the runner-stopped maintenance path in ${RUNBOOK}"
-          last_alert=$now
+        if [ "$usage" -ge "$THRESHOLD_EMERGENCY" ]; then
+          retention_minutes=5
+        elif [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then
+          retention_minutes=10
+        elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
+          retention_minutes=30
+        elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
+          retention_minutes=60
+        elif [ "$usage" -ge "$THRESHOLD_LOW" ]; then
+          retention_minutes=1440  # 1 day
+        else
+          retention_minutes=10080  # 1 week
         fi
+
+        echo "cleanup starting (${usage}%), retention: ${retention_minutes}m"
+
+        for dir in /workspace/*; do
+          [ -d "$dir" ] || continue
+          dirname=$(basename "$dir")
+          skip=false
+          for preserve in $PRESERVE_DIRS; do
+            if [ "$dirname" = "$preserve" ]; then
+              skip=true
+              break
+            fi
+          done
+          if [ "$skip" = true ]; then
+            continue
+          fi
+          age_minutes=$(( ($(date +%s) - $(stat -c %Y "$dir" 2>/dev/null || echo 0)) / 60 ))
+          if [ "$age_minutes" -gt "$retention_minutes" ]; then
+            echo "removing $dir (age: ${age_minutes}m)"
+            rm -rf "$dir" || true
+          fi
+        done
+
+        new_usage=$(get_workspace_usage)
+        echo "cleanup complete, new usage: ${new_usage}%"
       fi
 
-      sleep "$CHECK_INTERVAL"
+      sleep $CHECK_INTERVAL
     done
