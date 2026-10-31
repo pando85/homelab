@@ -12,6 +12,8 @@ comfort_control:
     enable: input_boolean.comfort_control_enable
     away: input_boolean.comfort_away
     seeded: input_boolean.comfort_helpers_seeded
+    # Seeded on: water requests are only logged until the owner turns it off (go-live checklist).
+    water_dry_run: input_boolean.comfort_water_dry_run
     day_minimum: input_number.comfort_day_minimum
     night_floor: input_number.comfort_night_floor
     margin: input_number.comfort_margin
@@ -57,6 +59,8 @@ comfort_control:
     water_temperature: true
     dhw: true
   status_entity: sensor.comfort_control_status
+  # Written at the end of every control tick; the HA watchdog restores Heat+DHW when it goes stale.
+  heartbeat_entity: sensor.comfort_control_heartbeat
   notify:
     enabled: true
     entity_id: notify.agil

@@ -12,6 +12,10 @@ input_boolean:
   comfort_helpers_seeded:
     name: Comfort helpers seeded (off resets them to defaults)
     icon: mdi:restore
+  # Seeded on. While on, the app only logs the water requests it would write (go-live checklist).
+  comfort_water_dry_run:
+    name: Comfort water temperature dry run
+    icon: mdi:water-thermometer-outline
 
 input_datetime:
   comfort_weekday_start:
@@ -137,11 +141,12 @@ input_number:
     unit_of_measurement: "°C"
 
 automation:
-  # Watchdog: AppDaemon refreshes sensor.last_appdaemon_connection every minute. If it stops for
-  # 15 minutes while the comfort controller has the pump in DHW (space heating off), nothing would
-  # switch heating back on, so select Heat+DHW through the usual selector path. The unit keeps the
-  # last water temperature request and the thermostats keep the floor valves closed in warm rooms:
-  # the worst case is extra kWh, never no heating.
+  # Watchdog: the comfort app writes sensor.comfort_control_heartbeat at the end of every control
+  # tick. If it stops for 15 minutes (AppDaemon down, the app crashed in initialize, a tick hangs or
+  # fails, helpers not seeded) while the pump is in DHW (space heating off), nothing would switch
+  # heating back on, so select Heat+DHW through the usual selector path. The unit keeps the last
+  # water temperature request and the thermostats keep the floor valves closed in warm rooms: the
+  # worst case is extra kWh, never no heating.
   - alias: AppDaemon comfort watchdog
     id: appdaemon_comfort_watchdog
     mode: single
@@ -160,10 +165,10 @@ automation:
         # HA restart. This automation's last_changed is its start (or last enable/reload) time.
         condition: template
         value_template: "{{ now() - this.last_changed >= timedelta(minutes=15) }}"
-      - alias: AppDaemon heartbeat missing or older than 15 minutes
+      - alias: Comfort control heartbeat missing or older than 15 minutes
         condition: template
         value_template: >-
-          {% set heartbeat = states.sensor.last_appdaemon_connection %}
+          {% set heartbeat = states.sensor.comfort_control_heartbeat %}
           {{ heartbeat is none
              or heartbeat.state in ['unknown', 'unavailable']
              or now() - heartbeat.last_updated >= timedelta(minutes=15) }}
@@ -181,5 +186,5 @@ automation:
         data:
           entity_id: notify.agil
           message: |
-            AppDaemon has not reported for 15 minutes and the heat pump is in `DHW`\.
+            Comfort control has not run for 15 minutes and the heat pump is in `DHW`\.
             Heating restored to `Heat\+DHW` at the last water temperature\.

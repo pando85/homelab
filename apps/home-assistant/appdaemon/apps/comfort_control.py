@@ -47,6 +47,7 @@ BAND_OUTDOOR_MEAN = timedelta(hours=1)
 # DHW scheduler. Expected COP is a linear proxy in the outdoor temperature (degC), only used to
 # rank hours: about 1.9 at -5, 2.6 at 7 and 3.4 at 20 degC for a 50 degC tank.
 DHW_WINDOW_HOURS = 2
+DHW_LATEST_END = time(23)  # local: a window never runs into the next day (day rollover, restart)
 COP_AT_0C = 2.2
 COP_PER_K = 0.06
 COP_MIN = 1.5
@@ -94,6 +95,26 @@ HELPER_DEFAULTS = {
     "dhw_target": 49,
 }
 TIME_HELPERS = ("weekday_start", "weekend_start", "window_end")
+# Sane range of each numeric helper. A value outside it (for example a helper that HA re-created at
+# its minimum) is treated as garbage and the default is used, with a warning.
+HELPER_RANGES = {
+    "day_minimum": (20.0, 26.0),
+    "night_floor": (18.0, 23.0),
+    "margin": (0.0, 2.0),
+    "hysteresis": (0.1, 1.5),
+    **{f"lead_{day}_{band}": (0.0, 840.0) for day in ("weekday", "weekend") for band in ("cold", "mid", "mild")},
+    "curve_cold_outdoor": (-20.0, 10.0),
+    "curve_cold_water": (20.0, 35.0),
+    "curve_mild_outdoor": (0.0, 25.0),
+    "curve_mild_water": (20.0, 35.0),
+    "early_start_raise": (0.0, 5.0),
+    "outdoor_offset": (-5.0, 5.0),
+    "dhw_target": (40.0, 50.0),
+}
+# Boolean helpers written while seeding: the water dry run starts on, so the first deployment only
+# logs the water writes until the owner has done the first-write test of the go-live checklist.
+BOOLEAN_DEFAULTS = {"water_dry_run": True}
+BOUNDARY_RETRY = timedelta(minutes=5)  # an unconfirmed boundary setpoint write is repeated after this
 BANDS = ("cold", "mid", "mild")
 
 
@@ -193,18 +214,38 @@ def expected_cop(outdoor):
 def choose_dhw_window(prices, temperatures, allowed_starts):
     """Cheapest DHW window by mean price / expected COP over its hours.
 
-    prices and temperatures map the local hour (0-23) to a value; allowed_starts is an iterable of
-    start hours. A window needs a price for each of its hours. Ties keep the earliest start.
+    prices and temperatures map an hour index of the day (the local hour on a 24 h day, the slot
+    index of day_hour_slots on DST days) to a value; allowed_starts is an iterable of start
+    indexes. A window needs a price for each of its hours. Ties keep the earliest start.
     """
     best = None
     for start in sorted(allowed_starts):
         hours = range(start, start + DHW_WINDOW_HOURS)
-        if hours[-1] > 23 or any(prices.get(h) is None or temperatures.get(h) is None for h in hours):
+        if any(prices.get(h) is None or temperatures.get(h) is None for h in hours):
             continue
         score = sum(prices[h] / expected_cop(temperatures[h]) for h in hours) / DHW_WINDOW_HOURS
         if best is None or score < best[1]:
             best = (start, score)
     return best
+
+
+def day_hour_slots(tz, day):
+    """The hours of a local day in elapsed time, as (start, local hour, PVPC attribute key).
+
+    23 slots on the spring-forward day, 25 on the fall-back day. The keys follow the PVPC
+    integration: `price_HHh` by local hour, and `price_HHh_d` for the second occurrence of the
+    repeated hour.
+    """
+    start = localize(tz, datetime.combine(day, time(0))).astimezone(timezone.utc)
+    end = localize(tz, datetime.combine(day + timedelta(days=1), time(0))).astimezone(timezone.utc)
+    slots, seen = [], set()
+    while start < end:
+        local_start = start.astimezone(tz)
+        key = f"price_{local_start.hour:02d}h" + ("_d" if local_start.hour in seen else "")
+        seen.add(local_start.hour)
+        slots.append((local_start, local_start.hour, key))
+        start += timedelta(hours=1)
+    return slots
 
 
 def similar_overrides(history, room, direction, at):
@@ -297,18 +338,21 @@ class ComfortControl(hass.Hass):
         if isinstance(mode_state, dict):
             self.last_mode_change = parse_datetime(mode_state.get("last_changed"))
         await self._startup_checks()
+        await self._release_force_dhw_safely(self._now())
         await self.run_every(self._tick, "now", TICK_SECONDS)
         await self.create_task(self._tick({}))
 
     def _init_state(self):
         self.busy = False
         self.last_phase_key = None
+        self.boundary = None  # dict: key, phase, targets {room: value}, written (room -> at)
         self.raise_active = False
         self.pending_writes = {}  # room -> (value, written at)
         self.overrides = []  # dicts: room, at, old, new, direction
         self.suggested = set()
         self.last_mode_change = None
         self.mode_warning = None
+        self.missing_warning = []
         self.last_water_write = None
         self.water_block_reason = None
         self.outdoor_samples = deque()
@@ -340,6 +384,9 @@ class ComfortControl(hass.Hass):
         """Helper value, or its default (with a warning) when the helper is missing or garbage."""
         raw = await self.get_state(self.args["helpers"][role])
         value = parse_time(raw) if role in TIME_HELPERS else parse_number(raw)
+        low, high = HELPER_RANGES.get(role, (-math.inf, math.inf))
+        if value is not None and role not in TIME_HELPERS and not low <= value <= high:
+            value = None  # outside its sane range, for example re-created at its HA minimum
         if value is None:
             default = HELPER_DEFAULTS[role]
             self.log(f"Helper {role} is {raw!r}: using the default {default}", level="WARNING")
@@ -369,6 +416,9 @@ class ComfortControl(hass.Hass):
                 await self.call_service("input_datetime/set_datetime", entity_id=entity, time=default)
             else:
                 await self.call_service("input_number/set_value", entity_id=entity, value=default)
+        for role, default in BOOLEAN_DEFAULTS.items():
+            service = "input_boolean/turn_on" if default else "input_boolean/turn_off"
+            await self.call_service(service, entity_id=self.args["helpers"][role])
         await self.call_service("input_boolean/turn_on", entity_id=self.args["helpers"]["seeded"])
         await self._notify("Comfort control: helpers set to their defaults")
 
@@ -404,6 +454,28 @@ class ComfortControl(hass.Hass):
             at = parse_datetime(item.get("at")) if isinstance(item, dict) else None
             if at is not None:
                 self.overrides.append({**item, "at": at})
+        self.dhw_plan = self._restore_dhw_plan(attributes.get("dhw_plan"))
+
+    def _restore_dhw_plan(self, stored):
+        """Today's DHW plan from the status sensor, so an AppDaemon restart in the window keeps it
+        (one window per day, force DHW released at its end)."""
+        if not isinstance(stored, dict):
+            return None
+        try:
+            day = date.fromisoformat(stored["day"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        start, end = parse_datetime(stored.get("start")), parse_datetime(stored.get("end"))
+        if day != self._now().date() or (start is None) != (end is None):
+            return None
+        tz = self._tz()
+        return {
+            "day": day,
+            "start": start.astimezone(tz) if start else None,
+            "end": end.astimezone(tz) if end else None,
+            "forced": bool(stored.get("forced")),
+            "target_written": bool(stored.get("target_written")),
+        }
 
     async def _publish_status(self, state, attributes):
         if (state, attributes) == self.status_published:
@@ -481,7 +553,9 @@ class ComfortControl(hass.Hass):
         return setpoints
 
     async def _write_setpoints(self, setpoints, reason):
+        """Write the setpoints that differ from the thermostat targets; return the written ones."""
         now = self._now()
+        written = {}
         for room, value in setpoints.items():
             entity = self.args["rooms"][room]
             old = await self.get_state(entity, attribute="temperature")
@@ -491,34 +565,63 @@ class ComfortControl(hass.Hass):
             self.log(f"Setpoint {room}: {old} -> {value} ({reason}){dry_run}")
             if self._actuate("setpoints"):
                 self.pending_writes[room] = (value, now)
+                written[room] = value
                 await self.call_service("climate/set_temperature", entity_id=entity, temperature=value)
+        return written
 
     async def _apply_phase(self, phase, reason):
-        self.last_phase_key = phase.key
+        """Write a boundary. The boundary counts as applied (last_phase_key) only once every written
+        thermostat reports its new target; until then _confirm_boundary retries the writes."""
         self.raise_active = phase.kind == "day"
+        self.boundary = None
         if await self._is_on("away"):
             self.raise_active = False
+            self.last_phase_key = phase.key
             self.log(f"Boundary {phase.kind} {phase.day} ({reason}) while away: setpoints unchanged")
             return
-        await self._write_setpoints(await self._schedule_setpoints(phase.kind), f"{phase.kind} {reason}")
+        written = await self._write_setpoints(await self._schedule_setpoints(phase.kind), f"{phase.kind} {reason}")
+        if written:
+            self.boundary = {"key": phase.key, "kind": phase.kind, "targets": written, "at": self._now()}
+        else:
+            self.last_phase_key = phase.key
+
+    async def _confirm_boundary(self):
+        boundary, now = self.boundary, self._now()
+        for room, value in list(boundary["targets"].items()):
+            target = parse_number(await self.get_state(self.args["rooms"][room], attribute="temperature"))
+            if target is not None and abs(target - value) < 0.01:
+                del boundary["targets"][room]
+        if not boundary["targets"]:
+            self.last_phase_key, self.boundary = boundary["key"], None
+            return
+        if now - boundary["at"] >= BOUNDARY_RETRY:
+            rooms = ", ".join(boundary["targets"])
+            self.log(f"Boundary setpoints not confirmed after {BOUNDARY_RETRY}: {rooms}; writing again", level="WARNING")
+            boundary["at"] = now
+            await self._write_setpoints(dict(boundary["targets"]), f"{boundary['kind']} retry")
 
     # --- Event handlers -----------------------------------------------------------------------
 
     async def _on_enable(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         self.log("Comfort control enabled: writing the current schedule")
         self.last_phase_key = None
+        self.boundary = None
         await self._tick({})
 
     async def _on_disable(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         # As the C0 fix: nobody leaves the off mode without the controller, so restore heating.
         on_mode = self.args["heat_mode"]["on_mode"]
         await self._set_mode(on_mode, "controller disabled")
+        if self.dhw_plan is not None:
+            self.dhw_plan = {**self.dhw_plan, "forced": False}
+        await self._release_force_dhw(self._now(), "controller disabled")
         await self._notify(f"Comfort control disabled: heating restored to {on_mode}; the mode is now manual")
 
     async def _on_away(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
         if not await self._is_on("enable"):
             return
         self.raise_active = False
+        self.boundary = None  # a pending boundary retry must not undo the away setpoints
         await self._write_setpoints(await self._schedule_setpoints("night"), "away on")
 
     async def _on_away_off(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
@@ -528,6 +631,7 @@ class ComfortControl(hass.Hass):
         now = self._now()
         phase, _ = await self._current_phase(schedule, now, await self._corrected_outdoor())
         self.last_phase_key = phase.key
+        self.boundary = None
         self.raise_active = phase.kind == "day"
         await self._write_setpoints(await self._schedule_setpoints(phase.kind), f"away off ({phase.kind})")
 
@@ -543,6 +647,8 @@ class ComfortControl(hass.Hass):
             return
         direction = "raise" if new_value > old_value else "lower"
         self.log(f"Manual override {room} at {now.isoformat()}: {old_value} -> {new_value}")
+        if self.boundary is not None:
+            self.boundary["targets"].pop(room, None)  # the manual change wins over a pending retry
         self.overrides = [o for o in self.overrides if now - o["at"] <= OVERRIDE_WINDOW]
         self.overrides.append({"room": room, "at": now, "old": old_value, "new": new_value, "direction": direction})
         self.overrides = self.overrides[-OVERRIDE_HISTORY_MAX:]
@@ -579,30 +685,59 @@ class ComfortControl(hass.Hass):
             return
         self.busy = True
         try:
+            now = self._now()
             if not await self._is_on("enable"):
+                await self._release_force_dhw_safely(now)
                 await self._publish_status("disabled", {})
                 return
-            now = self._now()
+            if not await self._is_on("seeded"):
+                # Helpers at their HA minimums would give 16-18 degC setpoints: no control until the
+                # defaults are written. No heartbeat either, so the HA watchdog restores heating.
+                try:
+                    await self._seed_helpers()
+                except Exception as error:
+                    self.log(f"Seeding the helpers failed: {error!r}", level="ERROR")
+                if not await self._is_on("seeded"):
+                    self.log("Helpers not seeded: control skipped this tick", level="WARNING")
+                    await self._release_force_dhw_safely(now)
+                    await self._publish_status("seeding", {})
+                    return
             outdoor = await self._corrected_outdoor()
             self._sample_outdoor(now, outdoor)
             schedule = await self._schedule()
             self._freeze_band_outdoor(schedule, now, outdoor)
             phase, leads = await self._current_phase(schedule, now, outdoor)
-            for step in (
-                lambda: self._update_setpoints(phase),
-                lambda: self._update_raise(),
-                lambda: self._update_water(now, outdoor),
-                lambda: self._update_run(now),
-                lambda: self._update_dhw(now, schedule, leads),
-                lambda: self._check_starts(now),
+            run_ok = False
+            for name, step in (
+                ("setpoints", lambda: self._update_setpoints(phase)),
+                ("raise", lambda: self._update_raise()),
+                ("water", lambda: self._update_water(now, outdoor)),
+                ("run", lambda: self._update_run(now)),
+                ("dhw", lambda: self._update_dhw(now, schedule, leads)),
+                ("starts", lambda: self._check_starts(now)),
             ):
                 try:
                     await step()
+                    run_ok = run_ok or name == "run"
                 except Exception as error:  # one failing part must not stop the others
-                    self.log(f"Tick step failed: {error!r}", level="ERROR")
+                    self.log(f"Tick step {name} failed: {error!r}", level="ERROR")
+            await self._release_force_dhw_safely(now)
             await self._publish_status(await self._status_state(), self._status_attributes(phase, schedule, leads))
+            if run_ok:  # the HA watchdog restores heating when this goes stale
+                await self.set_state(
+                    self.args["heartbeat_entity"],
+                    state=now.isoformat(),
+                    attributes={"friendly_name": "Comfort control heartbeat", "device_class": "timestamp"},
+                )
         finally:
             self.busy = False
+
+    async def _release_force_dhw_safely(self, now):
+        # Every tick, enabled or not: force DHW is never left on outside a forced window.
+        try:
+            await self._release_force_dhw(now, "no forced DHW window active")
+        except Exception as error:
+            self.log(f"Force DHW release failed: {error!r}", level="ERROR")
 
     async def _status_state(self):
         if await self._is_on("away"):
@@ -618,9 +753,20 @@ class ComfortControl(hass.Hass):
             if day in leads
         }
         plan = self.dhw_plan or {}
+        stored_plan = None
+        if self.dhw_plan is not None:
+            stored_plan = {
+                "day": plan["day"].isoformat(),
+                "start": plan["start"].isoformat() if plan.get("start") else None,
+                "end": plan["end"].isoformat() if plan.get("end") else None,
+                "forced": bool(plan.get("forced")),
+                "target_written": bool(plan.get("target_written")),
+            }
         return {
             "phase": phase.kind,
             "phase_key": self.last_phase_key,
+            "boundary_pending": sorted(self.boundary["targets"]) if self.boundary else [],
+            "dhw_plan": stored_plan,
             "early_starts": upcoming,
             "raise_active": self.raise_active,
             "band_outdoor": dict(self.band_outdoor),
@@ -630,12 +776,19 @@ class ComfortControl(hass.Hass):
         }
 
     async def _update_setpoints(self, phase):
-        if self.last_phase_key is None or phase.key > self.last_phase_key:
+        if self.last_phase_key is not None and phase.key <= self.last_phase_key:
+            return
+        if self.boundary is not None and self.boundary["key"] == phase.key:
+            await self._confirm_boundary()
+        else:
             await self._apply_phase(phase, f"boundary at {phase.at:%Y-%m-%d %H:%M}")
 
     async def _room_state(self, entity):
+        """(current, target), "off" for a thermostat switched off, or None when it reports nothing usable."""
         state = await self.get_state(entity, attribute="all")
-        if not isinstance(state, dict) or state.get("state") in (None, "off", "unknown", "unavailable"):
+        if isinstance(state, dict) and state.get("state") == "off":
+            return "off"
+        if not isinstance(state, dict) or state.get("state") in (None, "unknown", "unavailable"):
             return None
         attributes = state.get("attributes", {})
         current = parse_number(attributes.get("current_temperature"))
@@ -646,7 +799,7 @@ class ComfortControl(hass.Hass):
         if not self.raise_active:
             return
         room = await self._room_state(self.args["rooms"][self.args["day_room"]])
-        if room is not None and room[0] >= room[1]:
+        if isinstance(room, tuple) and room[0] >= room[1]:
             self.raise_active = False
             self.log(f"{self.args['day_room']} reached its setpoint ({room[0]} >= {room[1]}): early-start raise ends")
 
@@ -677,13 +830,16 @@ class ComfortControl(hass.Hass):
         if not water_write_due(target, request, current, self.last_water_write, now):
             return
         reason = f"curve {curve:.1f}" + (f" + raise {raise_k:g} K" if raise_k else "")
-        dry_run = "" if self._actuate("water_temperature") else " (dry run)"
+        # The water dry-run helper is on until the owner has checked the first write on the unit;
+        # anything but "off" (unknown, unavailable) keeps it a dry run.
+        actuate = self._actuate("water_temperature") and await self.get_state(self.args["helpers"]["water_dry_run"]) == "off"
+        dry_run = "" if actuate else " (dry run)"
         self.log(
             f"Water request write at {now.isoformat()}: {current:g} -> {request} degC "
             f"(outdoor {outdoor:.1f} degC, {reason}){dry_run}"
         )
         self.last_water_write = now
-        if self._actuate("water_temperature"):
+        if actuate:
             await self.call_service(
                 "input_number/set_value", entity_id=self.args["commands"]["water_request"], value=request
             )
@@ -715,22 +871,27 @@ class ComfortControl(hass.Hass):
             return
         self.mode_warning = None
         hysteresis = await self._helper("hysteresis")
-        rooms = {}
+        rooms, missing = {}, []
         for room, entity in self.args["rooms"].items():
             state = await self._room_state(entity)
-            if state is not None:
+            if state is None:
+                missing.append(room)
+            elif state != "off":  # switched off by hand: its valve stays closed, no demand
                 rooms[room] = state
-        if not rooms:
-            self.log("No thermostat reports a usable temperature: heat mode unchanged", level="WARNING")
-            return
         cold = [room for room, (current, target) in rooms.items() if current < target - hysteresis]
-        satisfied = all(current >= target for current, target in rooms.values())
+        # A room that reports nothing may be cold: never switch off without every room, and
+        # switch on (fail safe: extra kWh, never no heating) when one is missing.
+        satisfied = not missing and all(current >= target for current, target in rooms.values())
+        if missing and missing != self.missing_warning:
+            self.log(f"No usable temperature or setpoint from {', '.join(missing)}: heating kept on", level="WARNING")
+        self.missing_warning = missing
         elapsed = None if self.last_mode_change is None else now - self.last_mode_change
         detail = ", ".join(f"{room} {current}/{target}" for room, (current, target) in rooms.items())
-        if mode == modes["off_mode"] and cold:
+        if mode == modes["off_mode"] and (cold or missing):
             if elapsed is not None and elapsed < MIN_OFF:
                 return
-            await self._set_mode(modes["on_mode"], f"below setpoint: {', '.join(cold)} ({detail})")
+            reason = f"below setpoint: {', '.join(cold)}" if cold else f"no reading from {', '.join(missing)}"
+            await self._set_mode(modes["on_mode"], f"{reason} ({detail})")
         elif mode == modes["on_mode"] and satisfied:
             if elapsed is not None and elapsed < MIN_ON:
                 return
@@ -751,11 +912,17 @@ class ComfortControl(hass.Hass):
 
     # --- DHW ----------------------------------------------------------------------------------
 
-    async def _prices(self):
+    async def _prices(self, slots):
+        """(day of the prices, {slot index: price}). The PVPC attributes are today's prices from
+        the hourly update after midnight on: their day is the local date of last_updated."""
         state = await self.get_state(self.args["sensors"]["pvpc_price"], attribute="all")
-        attributes = state.get("attributes", {}) if isinstance(state, dict) else {}
-        prices = {hour: parse_number(attributes.get(f"price_{hour:02d}h")) for hour in range(24)}
-        return {hour: price for hour, price in prices.items() if price is not None}
+        if not isinstance(state, dict):
+            return None, {}
+        updated = parse_datetime(state.get("last_updated"))
+        day = updated.astimezone(self._tz()).date() if updated else None
+        attributes = state.get("attributes") or {}
+        prices = {index: parse_number(attributes.get(key)) for index, (_, _, key) in enumerate(slots)}
+        return day, {index: price for index, price in prices.items() if price is not None}
 
     async def _hourly_outdoor(self, live_outdoor):
         """Expected outdoor temperature per local hour: yesterday's hourly means (persistence) plus
@@ -783,35 +950,44 @@ class ComfortControl(hass.Hass):
 
     async def _plan_dhw(self, now, schedule, leads):
         today = now.date()
+        tz = self._tz()
         self.dhw_last_attempt = now
-        first = now.hour + (1 if now.minute >= 5 else 0)
+        slots = day_hour_slots(tz, today)  # 23, 24 or 25 hours
         early = schedule.early_start(today, leads[today])
         start_of_window, _ = schedule.window(today)
+        latest_end = localize(tz, datetime.combine(today, DHW_LATEST_END))
         allowed = []
-        for hour in range(first, 24 - DHW_WINDOW_HOURS + 1):
-            begin = localize(self._tz(), datetime.combine(today, time(hour)))
+        for index, (begin, _, _) in enumerate(slots):
             end = begin + timedelta(hours=DHW_WINDOW_HOURS)
+            if now - begin >= timedelta(minutes=5) or end > latest_end:
+                continue  # already started, or would run into the next day
             if begin < start_of_window and end > early:
                 continue  # overlaps the optimum-start warm-up
-            allowed.append(hour)
-        prices = await self._prices()
-        if len(prices) < 24:
-            self.log(f"Only {len(prices)} PVPC prices for today: retrying in {PLAN_RETRY}", level="WARNING")
-            if self.dhw_warning != today:
+            allowed.append(index)
+        price_day, prices = await self._prices(slots)
+        if price_day != today or len(prices) < len(slots):
+            self.log(
+                f"PVPC prices not usable for {today} (day {price_day}, {len(prices)}/{len(slots)} hours): "
+                f"retrying in {PLAN_RETRY}",
+                level="WARNING",
+            )
+            # The integration rolls the prices over on the hour: only warn when it is late.
+            if self.dhw_warning != today and now.hour >= 1:
                 self.dhw_warning = today
                 await self._notify("Comfort control: no full PVPC price curve for today; DHW window not planned yet")
             return
-        temperatures = await self._hourly_outdoor(await self._corrected_outdoor())
+        hourly = await self._hourly_outdoor(await self._corrected_outdoor())
+        temperatures = {index: hourly.get(hour) for index, (_, hour, _) in enumerate(slots)}
         best = choose_dhw_window(prices, temperatures, allowed)
         if best is None:
             self.log("No DHW window left today", level="WARNING")
             self.dhw_plan = {"day": today, "start": None, "end": None, "forced": False}
             return
-        begin = localize(self._tz(), datetime.combine(today, time(best[0])))
+        begin = slots[best[0]][0]
         self.dhw_plan = {
             "day": today,
             "start": begin,
-            "end": begin + timedelta(hours=DHW_WINDOW_HOURS),
+            "end": (begin + timedelta(hours=DHW_WINDOW_HOURS)).astimezone(tz),
             "forced": False,
         }
         await self._notify(
@@ -821,8 +997,11 @@ class ComfortControl(hass.Hass):
 
     async def _update_dhw(self, now, schedule, leads):
         today = now.date()
-        if self.dhw_plan is None or self.dhw_plan["day"] != today:
+        if self.dhw_plan is not None and self.dhw_plan["day"] != today:
+            if self.dhw_plan.get("start") is not None:
+                await self._finish_dhw(self.dhw_plan)  # a window left over from a previous day
             self.dhw_plan = None
+        if self.dhw_plan is None:
             if self.dhw_done == today.isoformat():
                 return
             if self.dhw_last_attempt is None or now - self.dhw_last_attempt >= PLAN_RETRY:
@@ -836,6 +1015,19 @@ class ComfortControl(hass.Hass):
             await self._finish_dhw(plan)
         elif now >= plan["start"] and not plan["forced"]:
             await self._start_dhw(plan)
+
+    def _forced_window_active(self, now):
+        plan = self.dhw_plan
+        return bool(plan and plan.get("forced") and plan.get("start") and plan["start"] <= now < plan["end"])
+
+    async def _release_force_dhw(self, now, reason):
+        """Force DHW off whenever it is on outside an active forced window: after a restart, a
+        disable, a day rollover or a manual force. The unit's own reheat is not affected."""
+        entity = self.args["commands"]["force_dhw"]
+        if not self._actuate("dhw") or self._forced_window_active(now) or await self.get_state(entity) != "on":
+            return
+        self.log(f"Force DHW is on outside a forced window ({reason}): force DHW off", level="WARNING")
+        await self.call_service("switch/turn_off", entity_id=entity)
 
     async def _start_dhw(self, plan):
         sensors, commands = self.args["sensors"], self.args["commands"]
@@ -871,7 +1063,7 @@ class ComfortControl(hass.Hass):
             self.log("DHW window over: force DHW off")
             await self.call_service("switch/turn_off", entity_id=self.args["commands"]["force_dhw"])
         self.dhw_done = plan["day"].isoformat()
-        self.dhw_plan = {**plan, "start": None}
+        self.dhw_plan = {**plan, "start": None, "end": None}
 
     async def terminate(self):
         # AppDaemon shutdown or reload: never change the mode. The HA watchdog restores heating

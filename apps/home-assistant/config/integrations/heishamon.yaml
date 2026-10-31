@@ -236,8 +236,15 @@ automation:
       entity_id: input_number.heishamon_heatshift_z1
     condition:
       # The GoHeishaMon fork writes 0 degC for an empty or non-numeric payload: never publish one.
+      # The value must also fit the heating mode: an absolute 20-35 degC in direct mode (1), a
+      # -5 to 5 K shift in curve mode (0); anything else (an unknown mode included) is dropped.
       - condition: template
-        value_template: "{{ is_number(trigger.to_state.state) }}"
+        value_template: >-
+          {% set value = trigger.to_state.state %}
+          {% set heating_mode = states('sensor.aquarea_heating_mode') %}
+          {{ is_number(value) and is_number(heating_mode)
+             and ((heating_mode | float == 1 and 20 <= value | float <= 35)
+                  or (heating_mode | float == 0 and -5 <= value | float <= 5)) }}
     action:
       - service: automation.turn_off
         entity_id: automation.set_Z1_heat_selector
@@ -380,8 +387,11 @@ automation:
       entity_id: input_number.heishamon_tank_temp
     condition:
       # The GoHeishaMon fork writes 0 degC for an empty or non-numeric payload: never publish one.
+      # 40-50 degC only: above about 51 degC the unit needs the 3 kW heater (comfort controller cap).
       - condition: template
-        value_template: "{{ is_number(trigger.to_state.state) }}"
+        value_template: >-
+          {% set value = trigger.to_state.state %}
+          {{ is_number(value) and 40 <= value | float <= 50 }}
     action:
       - service: automation.turn_off
         entity_id: automation.set_tank_target_temperature_selector
