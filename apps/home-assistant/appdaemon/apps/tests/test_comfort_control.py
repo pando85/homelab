@@ -108,6 +108,8 @@ class FakeHA:
             self.attr(entity, "temperature", data["temperature"])
         elif service == "input_number/set_value":
             self.put(entity, str(data["value"]))
+        elif service == "input_text/set_value":
+            self.put(entity, data["value"])
         elif service in ("input_boolean/turn_on", "switch/turn_on"):
             self.put(entity, "on")
         elif service in ("input_boolean/turn_off", "switch/turn_off"):
@@ -895,7 +897,7 @@ class TestFailureBehaviour:
 
     def test_every_configured_helper_exists_in_the_package(self, app):
         package = yaml.safe_load(HA_PACKAGE.read_text())
-        defined = {f"{domain}.{name}" for domain in ("input_boolean", "input_number", "input_datetime") for name in package[domain]}
+        defined = {f"{domain}.{name}" for domain in ("input_boolean", "input_number", "input_datetime", "input_text") for name in package[domain]}
         assert set(app.args["helpers"].values()) == defined
         assert set(HELPER_DEFAULTS) <= set(app.args["helpers"])
 
@@ -980,7 +982,7 @@ class TestForceDhwRelease:
         restarted = make_app(app.ha)
         restarted.clock[0] = local(2026, 11, 4, 14, 30)
         await restarted._load_status()
-        await restarted._release_force_dhw_safely(restarted._now())  # startup
+        await restarted._release_force_dhw_safely(restarted._now(), startup=True)
         assert force_dhw_on(restarted)  # still inside the forced window
         await tick_at(restarted, 2026, 11, 4, 15, 0)
         assert force_dhw_on(restarted)
@@ -996,8 +998,8 @@ class TestForceDhwRelease:
         app.ha.put(app.args["commands"]["force_dhw"], "on")
         app.clock[0] = local(2026, 11, 4, 14, 30)
         await app._load_status()
-        await app._release_force_dhw_safely(app._now())
-        assert not force_dhw_on(app)
+        await app._release_force_dhw_safely(app._now(), startup=True)
+        assert not force_dhw_on(app)  # owner unknown, no forced window: released and logged
 
     @pytest.mark.asyncio
     async def test_disable_releases_force_dhw(self, app):
@@ -1009,23 +1011,87 @@ class TestForceDhwRelease:
         assert not force_dhw_on(app)
 
     @pytest.mark.asyncio
-    async def test_disabled_ticks_release_a_manual_force(self, app):
-        app.ha.put(app.args["helpers"]["enable"], "off")
+    async def test_manual_force_is_held_like_a_manual_setpoint(self, app):
+        set_prices(app, {14: 0.1, 15: 0.1})
+        await tick_at(app, 2026, 11, 4, 0, 1)
+        app.ha.put(app.args["commands"]["force_dhw"], "on")  # by hand
+        await tick_at(app, 2026, 11, 4, 9, 0)
+        assert force_dhw_on(app)
+        await tick_at(app, 2026, 11, 4, 10, 59)
+        assert force_dhw_on(app)
+        assert not app.ha.calls("switch/turn_off")
+
+    @pytest.mark.asyncio
+    async def test_manual_force_is_capped_at_two_hours(self, app, capsys):
+        set_prices(app, {14: 0.1, 15: 0.1})
+        await tick_at(app, 2026, 11, 4, 0, 1)
         app.ha.put(app.args["commands"]["force_dhw"], "on")
-        await tick_at(app, 2026, 11, 4, 10, 0)
+        await tick_at(app, 2026, 11, 4, 9, 0)  # first seen
+        await tick_at(app, 2026, 11, 4, 11, 0)
+        assert not force_dhw_on(app)
+        assert "manual force DHW held since 2026-11-04T09:00:00+01:00" in capsys.readouterr().out
+        # The day's own window still runs and is released at its end.
+        await tick_at(app, 2026, 11, 4, 14, 0)
+        assert force_dhw_on(app)
+        await tick_at(app, 2026, 11, 4, 16, 0)
         assert not force_dhw_on(app)
 
     @pytest.mark.asyncio
-    async def test_force_outside_the_window_is_released_but_not_inside(self, app):
+    async def test_manual_force_while_disabled_is_capped_too(self, app):
+        app.ha.put(app.args["helpers"]["enable"], "off")
+        app.ha.put(app.args["commands"]["force_dhw"], "on")
+        await tick_at(app, 2026, 11, 4, 10, 0)
+        assert force_dhw_on(app)
+        await tick_at(app, 2026, 11, 4, 12, 0)
+        assert not force_dhw_on(app)
+
+    @pytest.mark.asyncio
+    async def test_app_set_force_is_released_at_the_window_end_even_if_the_unit_keeps_it(self, app):
         set_prices(app, {14: 0.1, 15: 0.1})
         await tick_at(app, 2026, 11, 4, 0, 1)
-        app.ha.put(app.args["commands"]["force_dhw"], "on")  # by hand, or left over
-        await tick_at(app, 2026, 11, 4, 9, 0)
+        await tick_at(app, 2026, 11, 4, 14, 0)
+        assert app.force_owned and force_dhw_on(app)
+        real_call = app.call_service
+        lost = {"count": 2}
+
+        async def call_service(service, **data):
+            if service == "switch/turn_off" and lost["count"]:
+                lost["count"] -= 1  # the window-end turn-off and the same-tick retry are lost
+                return None
+            return await real_call(service, **data)
+
+        app.call_service = call_service
+        await tick_at(app, 2026, 11, 4, 16, 0)
+        assert force_dhw_on(app)
+        await tick_at(app, 2026, 11, 4, 16, 1)  # its own force: released at once, not held 2 h
         assert not force_dhw_on(app)
+
+    @pytest.mark.asyncio
+    async def test_plan_survives_a_home_assistant_restart(self, app):
+        set_prices(app, {14: 0.1, 15: 0.1})
+        await tick_at(app, 2026, 11, 4, 0, 1)
         await tick_at(app, 2026, 11, 4, 14, 0)
         assert force_dhw_on(app)
-        await tick_at(app, 2026, 11, 4, 15, 30)
-        assert force_dhw_on(app)
+        stored = app.ha.states[app.args["helpers"]["dhw_plan"]]["state"]
+        assert len(stored) <= 255 and '"forced":true' in stored
+        del app.ha.states[app.args["status_entity"]]  # not restored by HA
+        restarted = make_app(app.ha)
+        restarted.clock[0] = local(2026, 11, 4, 14, 30)
+        await restarted._load_status()
+        await restarted._release_force_dhw_safely(restarted._now(), startup=True)
+        assert force_dhw_on(restarted)
+        await tick_at(restarted, 2026, 11, 4, 16, 0)
+        assert not force_dhw_on(restarted)
+        assert '"done":"2026-11-04"' in restarted.ha.states[app.args["helpers"]["dhw_plan"]]["state"]
+        again = make_app(app.ha)
+        again.clock[0] = local(2026, 11, 4, 18, 0)
+        del app.ha.states[app.args["status_entity"]]
+        await again._load_status()
+        assert again.dhw_done == "2026-11-04"
+        again.ha.services.clear()
+        for hour in (18, 20, 21, 22):
+            await tick_at(again, 2026, 11, 4, hour, 0)
+        assert not again.ha.calls("switch/turn_on")  # no second window that day
 
     @pytest.mark.asyncio
     async def test_dry_run_dhw_never_touches_the_switch(self, app):

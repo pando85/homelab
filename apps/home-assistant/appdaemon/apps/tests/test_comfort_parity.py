@@ -82,6 +82,7 @@ def test_mode_command_path_is_the_same_and_extra_entities_are_justified(name):
         ("set_state", "sensor.comfort_control_status"),
         ("set_state", "sensor.comfort_control_heartbeat"),
         ("notify/send_message", "notify.agil"),  # as legacy
+        ("input_text/set_value", "input_text.comfort_dhw_plan"),  # DHW plan across HA restarts
         *{("climate/set_temperature", f"climate.thermostat_{room}") for room in ("hall_kitchen", "bedroom", "office_a", "office_t")},
     }
     assert new_writes <= justified, new_writes - justified

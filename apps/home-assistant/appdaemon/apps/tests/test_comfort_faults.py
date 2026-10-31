@@ -173,6 +173,17 @@ def test_appdaemon_restart_mid_dhw_window_keeps_one_window_and_releases_it():
         assert windows and all(off is not None and off - on <= timedelta(hours=2, minutes=2) for on, off in windows), windows
 
 
+def test_ha_restart_mid_dhw_window_restores_the_plan():
+    # The status sensor is lost; the input_text plan helper is restored by HA: one window that day.
+    sim = scenario("faults_restarts")
+    day = date(2027, 1, 22)
+    ons = [at for at, _ in checks.calls(sim, "switch/turn_on", FORCE_DHW) if at.astimezone(TZ).date() == day]
+    assert len(ons) == 1 and ons[0] < local(2027, 1, 22, 15, 30), ons
+    (window,) = [(on, off) for on, off in checks.forced_windows(sim) if on.astimezone(TZ).date() == day]
+    assert window[1] - window[0] <= timedelta(hours=2, minutes=2), window
+    assert not [line for line in sim.logs if "startup" in line[3] and line[0].astimezone(TZ).date() == day]
+
+
 def test_restart_at_a_boundary_does_not_skip_it():
     sim = scenario("faults_restarts")
     # AppDaemon restarts at 00:44 on 01-13 for two minutes, over the 00:45 early start.
