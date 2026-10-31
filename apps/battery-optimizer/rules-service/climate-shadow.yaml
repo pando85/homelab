@@ -1,0 +1,49 @@
+# Climate shadow (track B2), hourly at HH:10. Read-only: none of these can affect the battery
+# planner, which keeps running when the climate job is down. The gauges only exist while
+# climate_shadow.enabled is true; the counters are pre-labelled at 0, so nothing fires when it is off.
+- alert: BatteryOptimizerClimateShadowDown
+  # 0 until the job has loaded its configs, prior and site file, and after a failed run. A missing
+  # prior or climate/site.yaml on the PVC keeps it at 0 (retried every hour).
+  expr: battery_optimizer_climate_shadow_up == 0
+  for: 2h
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer climate shadow is not running
+    description: |
+      battery_optimizer_climate_shadow_up has been 0 for 2 hours. The error is in `/status`
+      (climate_shadow.error) and in the climate_shadow_error events; usually the prior directory or
+      climate/site.yaml is missing on the PVC. The battery planner is not affected.
+- alert: BatteryOptimizerClimateShadowNoRun
+  # A run is due every hour; the gauge is absent until the first run after a start.
+  expr: time() - battery_optimizer_climate_shadow_last_run_timestamp_seconds > 7200
+  for: 5m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer climate shadow has not run for 2 hours
+    description: The last climate shadow decision run was {{ $value | humanizeDuration }} ago (expected hourly at HH:10). The worker may be stuck on a Prometheus read or a solve.
+- alert: BatteryOptimizerClimateShadowRunErrors
+  expr: increase(battery_optimizer_climate_shadow_runs_total{result="error"}[6h]) > 2
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer climate shadow runs are failing
+    description: '{{ $value | printf "%.0f" }} climate shadow runs ended in error in the last 6 hours (load failure, Prometheus read or data error). See the pod logs and `/status`.'
+- alert: BatteryOptimizerClimateShadowSolveFailures
+  # time_limit and gap still return a usable plan; infeasible and error do not.
+  expr: sum by (status) (increase(battery_optimizer_climate_shadow_solves_total{status=~"infeasible|error"}[6h])) > 2
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer comfort MPC solves are failing ({{ $labels.status }})
+    description: The comfort MPC reported {{ $value | printf "%.0f" }} {{ $labels.status }} solve(s) in the last 6 hours; those runs record `plan_failed` and have no plan.
+- alert: BatteryOptimizerClimateShadowNoState
+  # no_state / no_inputs: the observer has no valid origin or the horizon inputs are missing, which
+  # means the climate series in Prometheus have gaps (thermostats, Aquarea sensors, PVPC).
+  expr: sum(increase(battery_optimizer_climate_shadow_runs_total{result=~"no_state|no_inputs"}[6h])) >= 5
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer climate shadow has no usable state
+    description: '{{ $value | printf "%.0f" }} of the last 6 hourly climate runs had no observer state or no horizon inputs. Check the thermostat and Aquarea series in the long-term Prometheus.'

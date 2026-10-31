@@ -1,0 +1,98 @@
+# Price-blind comfort MPC (track B, step B1): offline receding-horizon replay, shadow later (B2).
+# Design: docs/planning/comfort-controller-design.md (sections 2, 3, 7.1 and 13) and
+# docs/components/climate-mpc.md. The MPC never actuates anything.
+#
+# Validated strictly by battery_optimizer.climate.mpc_config: an unknown, missing, duplicated or
+# out-of-range key is an error. A change is a new config hash in every result it touches.
+# config/climate.yaml stays untouched (its hash is part of recorded C2 results); this file only
+# refers to it.
+#
+# Everything here is degC, K, minutes, kWh or a count: no price and no site coordinate.
+
+config_version: 1
+timezone: Europe/Madrid # must equal config/climate.yaml's (checked by the replay)
+
+horizon_hours: 24 # needed for the long warm-up leads; beyond about 12 h predictions are weak
+replan_every_minutes: 60 # replay decision interval (the grid stays 15 min)
+
+# --- comfort schedule (ADR-0006 decision 2, design section 3): minimums, soft ---------------------
+comfort:
+  day_room: hall_kitchen
+  day_min_c: 23.5
+  day_start_weekday_hour: 12
+  day_start_weekend_hour: 9
+  day_end_hour: 22 # assumption of the design (open item), editable
+  floor_c: 21.0 # every modelled room (the comfort rooms of config/climate.yaml), all the time
+  # Soft constraints: kWh-equivalent per degree-hour below a minimum. Large against the electricity
+  # of one heating slot, so comfort dominates and the MILP stays feasible.
+  penalty_kwh_per_kh: 20.0
+  # Thermostat setpoints the plan assumes for the valve cap: minimum + margin (design section 3).
+  setpoint_margin_k: 0.5
+
+# --- optimum start (design section 6) -------------------------------------------------------------
+# The hall/kitchen day setpoint (day_min_c + setpoint_margin_k) is written at the window start minus
+# the lead of the outdoor band, never before 22:00 the evening before; the valves (and so the run
+# logic) follow it. Leads are B0's measured p75 by day type (run b0-20261031). The band reads the
+# mean outdoor temperature from 22:00 the evening before to the window start, as B0 measured it.
+optimum_start:
+  band_edges_c: [8.0, 12.0] # below 8, 8 to 12, 12 and above
+  lead_weekday_minutes: [675, 545, 275]
+  lead_weekend_minutes: [530, 430, 215]
+
+# --- machine limits (in code in the controller, design section 2 and 7.1) -------------------------
+machine:
+  min_on_minutes: 30
+  min_off_minutes: 20 # rounded up to whole 15-minute slots: 2 slots, so effectively 30 min
+  water_min_c: 20
+  water_max_c: 35
+  start_penalty_kwh: 0.1 # kWh-equivalent per compressor start (cycling losses, see cop-model)
+
+# --- water temperature: software curve plus a discrete offset ------------------------------------
+water:
+  # (outdoor degC, water degC), linear between the points and clamped outside them
+  curve: [[-5.0, 32.0], [15.0, 25.0]]
+  # decision per slot; target = clamp(round(curve + offset), min, max). 0 to +3 K bound in 75 to 95%
+  # of planned heating slots once the optimum-start valves were modelled, so the range is +6 K
+  offsets_k: [0, 1, 2, 3, 4, 5, 6]
+
+# --- the model behind the MPC (battery_optimizer.climate.mpc_model) -----------------------------
+model:
+  # b2d: B0's room-air 2-state model with a weekday/weekend diurnal gain, fitted on room air only
+  #      on the other season, ua and q0 re-estimated weekly on a trailing window (causal).
+  # c2:  the C2 model B (record in <data_dir>/analysis/v1/climate-models/<c2_model_id>/),
+  #      static S2 prior, kept for comparison only.
+  kind: b2d
+  c2_model_id: c1794f600291
+  diurnal_harmonics: 2 # 24 h and 12 h harmonics, separate for weekdays and weekends
+  reestimate:
+    window_days: 28
+    every_days: 7
+    params: [ua, q0]
+
+# --- terminal value ------------------------------------------------------------------------------
+# Heat content below the initial one at the end of the horizon is charged at the mean electricity
+# per heat unit of the horizon at offset 0, so a 24 h plan cannot "spend" the stored heat for free.
+terminal:
+  value_stored_heat: true
+
+# --- solver (scipy.optimize.milp / HiGHS, as the battery oracle) ---------------------------------
+solver:
+  time_limit_s: 20.0
+  mip_rel_gap: 0.001
+  # re-evaluate the heat table and the valve demand along the plan's own simulated trajectory and
+  # solve again (first reference: the free-running house); the iterate with the best simulated
+  # objective is kept
+  relinearize_iterations: 3
+
+# --- offline replay ------------------------------------------------------------------------------
+replay:
+  seasons: [S2, S3]
+  months: [11, 12, 1, 2, 3]
+  # perfect: the debiased outdoor series over the horizon (perfect foresight of weather, declared)
+  # persistence: the last valid outdoor reading before the decision, held flat (causal)
+  weather: perfect
+  accuracy_horizons_hours: [1, 6, 12, 24]
+  hdd_base_c: 15.0
+  material: # a day's plan differs materially from the legacy actual when either holds
+    kwh_rel: 0.20 # |planned - actual| / actual electricity of the day
+    on_overlap_min: 0.50 # Jaccard overlap of planned and legacy heating slots below this
