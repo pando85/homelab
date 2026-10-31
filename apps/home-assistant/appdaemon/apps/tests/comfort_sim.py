@@ -339,6 +339,20 @@ class SimHA:
                 raise ValueError(f"unexpected switch {entity}")
         elif service == "input_select/select_option":
             self.set(entity, data["option"], source=caller)
+        elif service == "automation/trigger":
+            # Emulate an explicit re-send through the existing HeishaMon automations:
+            # setting an unchanged helper alone would not generate a state event.
+            if entity == "automation.set_heatmode":
+                chosen = self.get(HEAT_MODE)
+                self.mqtt.append((self.sim.now, "SetOperationMode", chosen))
+                self.sim.unit.mode = chosen
+            elif entity == "automation.set_tank_target_temperature":
+                chosen = self.get(TANK_HELPER)
+                if chosen is not None and 40 <= float(chosen) <= 50:
+                    self.mqtt.append((self.sim.now, "SetDHWTemp", chosen))
+                    self.sim.unit.tank_target = float(chosen)
+            else:
+                raise ValueError(f"unexpected automation trigger {entity}")
         elif service in ("notify/send_message", "persistent_notification/create"):
             self.notifications.append((self.sim.now, caller, data.get("message", "")))
         else:
