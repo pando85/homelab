@@ -321,6 +321,10 @@ class SimHA:
             if not low <= value <= high:
                 raise ValueError(f"{entity}: {value} outside {low}-{high}")
             self.set(entity, str(value))
+        elif service == "input_text/set_value":
+            if len(data["value"]) > 255:
+                raise ValueError(f"{entity}: longer than 255")
+            self.set(entity, data["value"])
         elif service == "input_datetime/set_datetime":
             self.set(entity, data["time"])
         elif service in ("input_boolean/turn_on", "input_boolean/turn_off"):
@@ -987,6 +991,8 @@ class Simulation:
                     ha.set(f"input_datetime.{name}", "00:00:00")
                 for name in package["input_boolean"]:
                     ha.set(f"input_boolean.{name}", "off")
+                for name in package["input_text"]:
+                    ha.set(f"input_text.{name}", "")
                 ha.set(self.comfort_args["helpers"]["enable"], "on")  # the owner turns it back on
             self._report_unit()
             self.at(self.now + timedelta(seconds=30), self.start_appdaemon)
@@ -1008,6 +1014,10 @@ class Simulation:
 
     async def ev_drop_thermostat_writes(self, room, count):
         self.drop_writes[self.comfort_args["rooms"][room]] += count
+
+    async def ev_force_dhw(self):
+        """The owner switches force DHW on by hand."""
+        await self.ha.call_service("owner", "switch/turn_on", entity_id=FORCE_DHW)
 
     async def ev_disable(self):
         self.ha.set(self.comfort_args["helpers"]["enable"], "off", source="owner")
@@ -1230,7 +1240,17 @@ def comfort_scenarios():
             events=[((2027, 1, 10, 0, 5), "helper", {"entity": "input_number.comfort_lead_weekend_cold", "value": "840.0"})],
         ),
         # The worst case for force DHW: the unit never clears it, only the app does.
-        Scenario("no_auto_clear", date(2026, 11, 23), 14, "typical", "weekend_negative", seed=25, force_auto_clear=False),
+        # The owner forces DHW by hand on Thursday 07:45: held for at most 2 h.
+        Scenario(
+            "no_auto_clear",
+            date(2026, 11, 23),
+            14,
+            "typical",
+            "weekend_negative",
+            seed=25,
+            force_auto_clear=False,
+            events=[((2026, 11, 26, 7, 45), "force_dhw", {})],
+        ),
     ]
 
 
@@ -1307,6 +1327,7 @@ def fault_scenarios():
                 ((2027, 1, 19, 14, 0), "ha_restart", {"down_minutes": 5, "reset_helpers": True}),
                 ((2027, 1, 20, 21, 59), "appdaemon_restart", {"down_minutes": 0}),
                 ((2027, 1, 21, 16, 30), "appdaemon_restart", {"down_minutes": 30}),
+                ((2027, 1, 22, 15, 30), "ha_restart", {"down_minutes": 3}),
             ],
         ),
         Scenario(

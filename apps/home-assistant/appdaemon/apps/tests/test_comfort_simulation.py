@@ -257,8 +257,20 @@ def test_force_dhw_released_by_the_app_when_the_unit_keeps_it():
     offs = checks.calls(sim, "switch/turn_off", sim_module.FORCE_DHW)
     ons = checks.calls(sim, "switch/turn_on", sim_module.FORCE_DHW)
     assert len(offs) >= len(ons) - 1
-    for (on, _), (off, _) in zip(ons, offs):
+    for on, _ in ons[:-1]:
+        off = min(at for at, _ in offs if at > on)  # its own force: released at the window end
         assert timedelta(hours=1, minutes=59) <= off - on <= timedelta(hours=2, minutes=1)
+
+
+def test_manual_force_dhw_is_held_for_at_most_two_hours():
+    sim = scenario("no_auto_clear")
+    on = local(2026, 11, 26, 7, 45)
+    (period,) = [(start, end) for start, end in checks.forced_windows(sim) if start.date() == on.date() and start.hour < 12]
+    held = period[1] - period[0]
+    assert timedelta(hours=1, minutes=59) <= held <= timedelta(hours=2, minutes=2), period
+    assert any("manual force DHW held since" in line[3] for line in sim.logs if line[0].date() == on.date())
+    # The day's own window is still forced once and released at its end.
+    assert len([c for c in checks.calls(sim, "switch/turn_on", sim_module.FORCE_DHW) if c[0].date() == on.date()]) == 1
 
 
 @pytest.mark.parametrize("name", ["typical", "cold", "mild", "front", "no_auto_clear"])

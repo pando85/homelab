@@ -16,6 +16,7 @@ Everything is evaluated on a one-minute tick:
 Boost (design section 8) is phase 2 and deliberately not implemented, see BOOST_ENABLED.
 """
 
+import json
 import math
 from collections import deque
 from dataclasses import dataclass
@@ -53,6 +54,7 @@ COP_PER_K = 0.06
 COP_MIN = 1.5
 COP_MAX = 4.5
 PLAN_RETRY = timedelta(minutes=10)
+MANUAL_FORCE_MAX = timedelta(hours=2)  # a force DHW the app did not set is held this long, then released
 
 # Manual overrides: a suggestion when OVERRIDE_REPEAT similar ones fall within OVERRIDE_WINDOW.
 OVERRIDE_WINDOW = timedelta(days=14)
@@ -338,7 +340,7 @@ class ComfortControl(hass.Hass):
         if isinstance(mode_state, dict):
             self.last_mode_change = parse_datetime(mode_state.get("last_changed"))
         await self._startup_checks()
-        await self._release_force_dhw_safely(self._now())
+        await self._release_force_dhw_safely(self._now(), startup=True)
         await self.run_every(self._tick, "now", TICK_SECONDS)
         await self.create_task(self._tick({}))
 
@@ -361,6 +363,9 @@ class ComfortControl(hass.Hass):
         self.dhw_done = None  # ISO date of the last finished DHW window
         self.dhw_last_attempt = None
         self.dhw_warning = None
+        self.force_owned = False  # the app switched force DHW on and has not seen it off since
+        self.manual_force_since = None  # when the app first saw a force DHW it did not set
+        self.dhw_plan_written = None  # last value written to the DHW plan helper
         self.starts_day = None
         self.starts_baseline = None
         self.starts_alarmed = False
@@ -455,6 +460,24 @@ class ComfortControl(hass.Hass):
             if at is not None:
                 self.overrides.append({**item, "at": at})
         self.dhw_plan = self._restore_dhw_plan(attributes.get("dhw_plan"))
+        if not attributes:
+            # Home Assistant restarted (the status sensor is not restored): the plan helper is.
+            await self._load_dhw_plan_helper()
+
+    async def _load_dhw_plan_helper(self):
+        entity = self.args["helpers"].get("dhw_plan")
+        raw = await self.get_state(entity) if entity else None
+        try:
+            stored = json.loads(raw) if isinstance(raw, str) else None
+        except ValueError:
+            stored = None
+        if not isinstance(stored, dict):
+            return
+        self.dhw_plan_written = raw
+        self.dhw_plan = self._restore_dhw_plan(stored)
+        done = stored.get("done")
+        if isinstance(done, str) and done == self._now().date().isoformat():
+            self.dhw_done = done
 
     def _restore_dhw_plan(self, stored):
         """Today's DHW plan from the status sensor, so an AppDaemon restart in the window keeps it
@@ -614,7 +637,7 @@ class ComfortControl(hass.Hass):
         await self._set_mode(on_mode, "controller disabled")
         if self.dhw_plan is not None:
             self.dhw_plan = {**self.dhw_plan, "forced": False}
-        await self._release_force_dhw(self._now(), "controller disabled")
+        await self._release_force_dhw(self._now())  # its own force at once, a manual one at the cap
         await self._notify(f"Comfort control disabled: heating restored to {on_mode}; the mode is now manual")
 
     async def _on_away(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
@@ -715,6 +738,7 @@ class ComfortControl(hass.Hass):
                 ("run", lambda: self._update_run(now)),
                 ("dhw", lambda: self._update_dhw(now, schedule, leads)),
                 ("starts", lambda: self._check_starts(now)),
+                ("dhw plan", lambda: self._persist_dhw_plan()),
             ):
                 try:
                     await step()
@@ -732,10 +756,10 @@ class ComfortControl(hass.Hass):
         finally:
             self.busy = False
 
-    async def _release_force_dhw_safely(self, now):
-        # Every tick, enabled or not: force DHW is never left on outside a forced window.
+    async def _release_force_dhw_safely(self, now, startup=False):
+        # Every tick, enabled or not: force DHW is never left on beyond its window or the cap.
         try:
-            await self._release_force_dhw(now, "no forced DHW window active")
+            await self._release_force_dhw(now, startup)
         except Exception as error:
             self.log(f"Force DHW release failed: {error!r}", level="ERROR")
 
@@ -753,15 +777,7 @@ class ComfortControl(hass.Hass):
             if day in leads
         }
         plan = self.dhw_plan or {}
-        stored_plan = None
-        if self.dhw_plan is not None:
-            stored_plan = {
-                "day": plan["day"].isoformat(),
-                "start": plan["start"].isoformat() if plan.get("start") else None,
-                "end": plan["end"].isoformat() if plan.get("end") else None,
-                "forced": bool(plan.get("forced")),
-                "target_written": bool(plan.get("target_written")),
-            }
+        stored_plan = self._stored_dhw_plan()
         return {
             "phase": phase.kind,
             "phase_key": self.last_phase_key,
@@ -774,6 +790,31 @@ class ComfortControl(hass.Hass):
             "dhw_done": self.dhw_done,
             "overrides_14d": len(self.overrides),
         }
+
+    def _stored_dhw_plan(self):
+        plan = self.dhw_plan
+        if plan is None:
+            return None
+        return {
+            "day": plan["day"].isoformat(),
+            "start": plan["start"].isoformat() if plan.get("start") else None,
+            "end": plan["end"].isoformat() if plan.get("end") else None,
+            "forced": bool(plan.get("forced")),
+            "target_written": bool(plan.get("target_written")),
+        }
+
+    async def _persist_dhw_plan(self):
+        """Today's DHW plan and the last finished day in an input_text helper, which Home Assistant
+        restores after a restart (the status sensor is not restored): one window per day."""
+        entity = self.args["helpers"].get("dhw_plan")
+        stored = self._stored_dhw_plan()
+        if not entity or (stored is None and self.dhw_done is None):
+            return
+        value = json.dumps({**(stored or {}), "done": self.dhw_done}, separators=(",", ":"))
+        if value == self.dhw_plan_written:
+            return
+        self.dhw_plan_written = value
+        await self.call_service("input_text/set_value", entity_id=entity, value=value)
 
     async def _update_setpoints(self, phase):
         if self.last_phase_key is not None and phase.key <= self.last_phase_key:
@@ -1020,14 +1061,40 @@ class ComfortControl(hass.Hass):
         plan = self.dhw_plan
         return bool(plan and plan.get("forced") and plan.get("start") and plan["start"] <= now < plan["end"])
 
-    async def _release_force_dhw(self, now, reason):
-        """Force DHW off whenever it is on outside an active forced window: after a restart, a
-        disable, a day rollover or a manual force. The unit's own reheat is not affected."""
+    async def _release_force_dhw(self, now, startup=False):
+        """Force DHW is released when it is on outside an active forced window and:
+
+        - the app set it (its window is over: day rollover, disable, a lost turn-off);
+        - the app did not set it (manual): it is held like a manual setpoint, for at most
+          MANUAL_FORCE_MAX from when the app first sees it;
+        - at startup the owner is unknown: released unless a stored forced window is active.
+        The unit's own reheat is not affected."""
         entity = self.args["commands"]["force_dhw"]
-        if not self._actuate("dhw") or self._forced_window_active(now) or await self.get_state(entity) != "on":
+        if not self._actuate("dhw"):
             return
-        self.log(f"Force DHW is on outside a forced window ({reason}): force DHW off", level="WARNING")
+        if await self.get_state(entity) != "on":
+            self.force_owned, self.manual_force_since = False, None
+            return
+        if self._forced_window_active(now):
+            return
+        if startup:
+            reason = "startup: owner unknown and no forced DHW window active"
+        elif self.force_owned:
+            reason = "set by the controller and its window is over"
+        else:
+            if self.manual_force_since is None:
+                self.manual_force_since = now
+                self.log(
+                    f"Force DHW on outside the controller at {now.isoformat()}: held for at most {MANUAL_FORCE_MAX}",
+                    level="WARNING",
+                )
+                return
+            if now - self.manual_force_since < MANUAL_FORCE_MAX:
+                return
+            reason = f"manual force DHW held since {self.manual_force_since.isoformat()}"
+        self.log(f"Force DHW off ({reason})", level="WARNING")
         await self.call_service("switch/turn_off", entity_id=entity)
+        self.manual_force_since = None
 
     async def _start_dhw(self, plan):
         sensors, commands = self.args["sensors"], self.args["commands"]
@@ -1051,6 +1118,7 @@ class ComfortControl(hass.Hass):
         plan["forced"] = True
         self.log(f"Force DHW until {plan['end']:%H:%M} (tank target {tank_target:g} degC){dry_run}")
         if actuate:
+            self.force_owned = True
             await self.call_service("switch/turn_on", entity_id=commands["force_dhw"])
 
     async def _block_dhw(self, plan, reason):

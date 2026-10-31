@@ -14,6 +14,8 @@ comfort_control:
     seeded: input_boolean.comfort_helpers_seeded
     # Seeded on: water requests are only logged until the owner turns it off (go-live checklist).
     water_dry_run: input_boolean.comfort_water_dry_run
+    # Written by the app: today's DHW plan, restored by HA after a restart (one window per day).
+    dhw_plan: input_text.comfort_dhw_plan
     day_minimum: input_number.comfort_day_minimum
     night_floor: input_number.comfort_night_floor
     margin: input_number.comfort_margin

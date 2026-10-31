@@ -17,6 +17,13 @@ input_boolean:
     name: Comfort water temperature dry run
     icon: mdi:water-thermometer-outline
 
+input_text:
+  # Written by the app (JSON: today's DHW window, whether it was forced, the last finished day).
+  # HA restores it after a restart, unlike sensor.comfort_control_status: one window per day.
+  comfort_dhw_plan:
+    name: Comfort DHW plan (written by the app)
+    max: 255
+
 input_datetime:
   comfort_weekday_start:
     name: Comfort day window start (weekdays)
