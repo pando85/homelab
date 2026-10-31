@@ -340,6 +340,10 @@ value. The persisted plan distinguishes a `force_requested` intent from confirme
 `forced`, and the controller releases an outstanding force request when its window
 expires. No new MQTT writer or physical control path was introduced.
 
+The watchdog also re-triggers `automation.set_heatmode` when its selector is already
+`Heat+DHW` but the unit remains in `DHW`; selecting the same value again would
+otherwise have no effect.
+
 The hardware commissioning checklist must include **lost-command simulations**:
 verify actual status sensors change after each mode and tank request, and that a
 disconnected HeishaMon leaves commands pending rather than falsely confirmed.

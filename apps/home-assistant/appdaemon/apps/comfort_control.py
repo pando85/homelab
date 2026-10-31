@@ -916,13 +916,13 @@ class ComfortControl(hass.Hass):
             return False
         # Re-selecting an unchanged helper does not fire the state-triggered MQTT automation.
         # A dropped command therefore needs an explicit retry through the same HA automation.
+        self.pending_mode = {"target": mode, "at": self._now()}
         if await self.get_state(entity) == mode and actual != mode:
             await self.call_service(
                 "automation/trigger", entity_id="automation.set_heatmode", skip_condition=True
             )
         else:
             await self.set_state(entity, state=mode)
-        self.pending_mode = {"target": mode, "at": self._now()}
         return await self._confirm_mode()
 
     async def _update_run(self, now):
@@ -1184,9 +1184,9 @@ class ComfortControl(hass.Hass):
         if self.dhw_force_attempt is not None and now - self.dhw_force_attempt < DHW_COMMAND_RETRY:
             return
         self.log(f"Request force DHW until {plan['end']:%H:%M} (tank target {tank_target:g} degC)")
-        await self.call_service("switch/turn_on", entity_id=commands["force_dhw"])
-        plan["force_requested"] = True  # intent, not an acknowledgement
+        plan["force_requested"] = True  # intent, not an acknowledgement; survive lost replies
         self.dhw_force_attempt = now
+        await self.call_service("switch/turn_on", entity_id=commands["force_dhw"])
 
     async def _block_dhw(self, plan, reason):
         if not plan.get("blocked"):

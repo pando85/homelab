@@ -881,8 +881,13 @@ class TestFailureBehaviour:
         assert stale({entity: {"state": "x", "last_updated": now - timedelta(minutes=15)}})
         assert not stale({entity: {"state": "x", "last_updated": now - timedelta(minutes=14)}})
         actions = watchdog["action"]
-        assert actions[0]["target"]["entity_id"] == "input_select.heishamon_heatmode"
-        assert actions[0]["data"]["option"] == "Heat+DHW"
+        (recovery,) = actions[0]["choose"]
+        assert recovery["conditions"] == [
+            {"condition": "state", "entity_id": "input_select.heishamon_heatmode", "state": "Heat+DHW"}
+        ]
+        assert recovery["sequence"][0]["target"]["entity_id"] == "automation.set_heatmode"
+        assert actions[0]["default"][0]["target"]["entity_id"] == "input_select.heishamon_heatmode"
+        assert actions[0]["default"][0]["data"]["option"] == "Heat+DHW"
         # The watchdog never touches the water temperature: the unit keeps the last request.
         assert "heatshift" not in HA_PACKAGE.read_text().split("automation:")[1]
 
@@ -1321,9 +1326,13 @@ class TestPhysicalAcknowledgements:
         await app._start_dhw(plan)
         # FakeHA acknowledges the switch immediately, but the flag is an intent until the next tick.
         assert plan["force_requested"] and not plan["forced"]
-        assert app._restore_dhw_plan(app._stored_dhw_plan() if app.dhw_plan else
-            {**plan, "day": plan["day"].isoformat(),
-             "start": plan["start"].isoformat(), "end": plan["end"].isoformat()})["force_requested"]
+        stored = {
+            **plan,
+            "day": plan["day"].isoformat(),
+            "start": plan["start"].isoformat(),
+            "end": plan["end"].isoformat(),
+        }
+        assert app._restore_dhw_plan(stored)["force_requested"]
         await app._start_dhw(plan)
         assert plan["forced"] is True
         assert app.force_owned is True

@@ -400,7 +400,27 @@ class SimHA:
         action = automation["action"]
         variables = {}
         for step in action:
-            if "variables" in step:
+            if "choose" in step:
+                # Mirror the HA watchdog's state-based recovery branch.
+                for choice in step["choose"]:
+                    if all(
+                        test["condition"] == "state"
+                        and self.get(test["entity_id"]) == test["state"]
+                        for test in choice["conditions"]
+                    ):
+                        steps = choice["sequence"]
+                        break
+                else:
+                    steps = step.get("default", [])
+                for operation in steps:
+                    if operation["action"] == "automation.trigger":
+                        # A manual automation trigger publishes even when the helper did not change.
+                        selected = self.get(HEAT_MODE)
+                        self.mqtt.append((now, "SetOperationMode", selected))
+                        self.sim.unit.mode = selected
+                    elif operation["action"] == "input_select.select_option":
+                        self.set(operation["target"]["entity_id"], operation["data"]["option"], source="watchdog")
+            elif "variables" in step:
                 for name, template in step["variables"].items():
                     variables[name] = render(template, self.states, now, this=this)
             elif step.get("action") == "input_select.select_option":
