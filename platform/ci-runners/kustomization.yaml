@@ -14,5 +14,4 @@ resources:
   - resources/resource-quota.yaml
   - resources/statefulset.yaml
   - resources/statefulset-amd64.yaml
-  - resources/workspace-gc-script.yaml
   - resources/trigger-authentication.yaml
