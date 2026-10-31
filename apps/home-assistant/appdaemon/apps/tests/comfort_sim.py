@@ -339,6 +339,20 @@ class SimHA:
                 raise ValueError(f"unexpected switch {entity}")
         elif service == "input_select/select_option":
             self.set(entity, data["option"], source=caller)
+        elif service == "automation/trigger":
+            # Emulate an explicit re-send through the existing HeishaMon automations:
+            # setting an unchanged helper alone would not generate a state event.
+            if entity == "automation.set_heatmode":
+                chosen = self.get(HEAT_MODE)
+                self.mqtt.append((self.sim.now, "SetOperationMode", chosen))
+                self.sim.unit.mode = chosen
+            elif entity == "automation.set_tank_target_temperature":
+                chosen = self.get(TANK_HELPER)
+                if chosen is not None and 40 <= float(chosen) <= 50:
+                    self.mqtt.append((self.sim.now, "SetDHWTemp", chosen))
+                    self.sim.unit.tank_target = float(chosen)
+            else:
+                raise ValueError(f"unexpected automation trigger {entity}")
         elif service in ("notify/send_message", "persistent_notification/create"):
             self.notifications.append((self.sim.now, caller, data.get("message", "")))
         else:
@@ -400,7 +414,27 @@ class SimHA:
         action = automation["action"]
         variables = {}
         for step in action:
-            if "variables" in step:
+            if "choose" in step:
+                # Mirror the HA watchdog's state-based recovery branch.
+                for choice in step["choose"]:
+                    if all(
+                        test["condition"] == "state"
+                        and self.get(test["entity_id"]) == test["state"]
+                        for test in choice["conditions"]
+                    ):
+                        steps = choice["sequence"]
+                        break
+                else:
+                    steps = step.get("default", [])
+                for operation in steps:
+                    if operation["action"] == "automation.trigger":
+                        # A manual automation trigger publishes even when the helper did not change.
+                        selected = self.get(HEAT_MODE)
+                        self.mqtt.append((now, "SetOperationMode", selected))
+                        self.sim.unit.mode = selected
+                    elif operation["action"] == "input_select.select_option":
+                        self.set(operation["target"]["entity_id"], operation["data"]["option"], source="watchdog")
+            elif "variables" in step:
                 for name, template in step["variables"].items():
                     variables[name] = render(template, self.states, now, this=this)
             elif step.get("action") == "input_select.select_option":

@@ -86,6 +86,10 @@ class FakeHA:
 
     async def get_state(self, entity, attribute=None, **kwargs):
         item = self.states.get(entity)
+        if item is None and entity == self.app.args["sensors"]["operating_mode"]:
+            # Legacy test harness has synchronous successful mode commands by default;
+            # error tests set the sensor explicitly to simulate missing MQTT acknowledgements.
+            item = self.states.get(self.app.args["heat_mode"]["entity"])
         if item is None:
             return None
         if attribute is None:
@@ -877,8 +881,13 @@ class TestFailureBehaviour:
         assert stale({entity: {"state": "x", "last_updated": now - timedelta(minutes=15)}})
         assert not stale({entity: {"state": "x", "last_updated": now - timedelta(minutes=14)}})
         actions = watchdog["action"]
-        assert actions[0]["target"]["entity_id"] == "input_select.heishamon_heatmode"
-        assert actions[0]["data"]["option"] == "Heat+DHW"
+        (recovery,) = actions[0]["choose"]
+        assert recovery["conditions"] == [
+            {"condition": "state", "entity_id": "input_select.heishamon_heatmode", "state": "Heat+DHW"}
+        ]
+        assert recovery["sequence"][0]["target"]["entity_id"] == "automation.set_heatmode"
+        assert actions[0]["default"][0]["target"]["entity_id"] == "input_select.heishamon_heatmode"
+        assert actions[0]["default"][0]["data"]["option"] == "Heat+DHW"
         # The watchdog never touches the water temperature: the unit keeps the last request.
         assert "heatshift" not in HA_PACKAGE.read_text().split("automation:")[1]
 
@@ -1262,3 +1271,69 @@ class TestDhwPricesAndDst:
         start = app.dhw_plan["start"]
         assert start.utcoffset() == timedelta(hours=1) and start.hour == 2  # 02:00 CET
         assert app.dhw_plan["end"] - start == timedelta(hours=2)
+
+class TestPhysicalAcknowledgements:
+    @pytest.mark.asyncio
+    async def test_unconfirmed_mode_cannot_keep_the_watchdog_heartbeat_healthy(self, app):
+        feedback = app.args["sensors"]["operating_mode"]
+        app.ha.put(feedback, "DHW")
+        room(app, "bedroom", current=21.0)
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        assert app.pending_mode["target"] == "Heat+DHW"
+        assert not app.ha.calls("set_state", app.args["heartbeat_entity"])
+        # The helper was updated optimistically, but actual feedback is still DHW.
+        assert app.ha.states["input_select.heishamon_heatmode"]["state"] == "Heat+DHW"
+        await tick_at(app, 2026, 11, 4, 0, 31)
+        assert not app.ha.calls("automation/trigger", "automation.set_heatmode")
+        await tick_at(app, 2026, 11, 4, 0, 32)
+        assert app.ha.calls("automation/trigger", "automation.set_heatmode")
+        assert not app.ha.calls("set_state", app.args["heartbeat_entity"])
+        # The sensor finally confirms the command.
+        app.ha.put(feedback, "Heat+DHW")
+        await tick_at(app, 2026, 11, 4, 0, 33)
+        assert app.pending_mode is None
+        assert app.ha.calls("set_state", app.args["heartbeat_entity"])
+
+    @pytest.mark.asyncio
+    async def test_dhw_target_is_not_assumed_from_ha_helper_and_is_resent(self, app):
+        app.clock[0] = local(2026, 11, 4, 1, 0)
+        plan = {"day": WED, "start": local(2026, 11, 4, 1), "end": local(2026, 11, 4, 3),
+                "forced": False}
+        app.ha.put(app.args["sensors"]["tank_target"], "45")
+        app.ha.put(app.args["commands"]["tank_target"], "49")  # already desired, physical target stale
+        await app._start_dhw(plan)
+        assert not plan.get("target_written") and not plan.get("forced")
+        assert app.ha.calls("automation/trigger", "automation.set_tank_target_temperature")
+        assert not app.ha.calls("switch/turn_on")
+        app.clock[0] = local(2026, 11, 4, 1, 1)
+        await app._start_dhw(plan)
+        assert len(app.ha.calls("automation/trigger", "automation.set_tank_target_temperature")) == 1
+        app.clock[0] = local(2026, 11, 4, 1, 2)
+        await app._start_dhw(plan)
+        assert len(app.ha.calls("automation/trigger", "automation.set_tank_target_temperature")) == 2
+        # No water heating commanded until the unit reports the safe target.
+        app.ha.put(app.args["sensors"]["tank_target"], "49")
+        await app._start_dhw(plan)
+        assert plan["target_written"] is True
+        assert plan["force_requested"] is True
+        assert plan.get("forced") is False
+
+    @pytest.mark.asyncio
+    async def test_force_dhw_waits_for_feedback_retries_and_restores_intent(self, app):
+        app.clock[0] = local(2026, 11, 4, 1, 0)
+        plan = {"day": WED, "start": local(2026, 11, 4, 1), "end": local(2026, 11, 4, 3),
+                "forced": False}
+        await app._start_dhw(plan)
+        # FakeHA acknowledges the switch immediately, but the flag is an intent until the next tick.
+        assert plan["force_requested"] and not plan["forced"]
+        stored = {
+            **plan,
+            "day": plan["day"].isoformat(),
+            "start": plan["start"].isoformat(),
+            "end": plan["end"].isoformat(),
+        }
+        assert app._restore_dhw_plan(stored)["force_requested"]
+        await app._start_dhw(plan)
+        assert plan["forced"] is True
+        assert app.force_owned is True
+

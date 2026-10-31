@@ -321,3 +321,29 @@ lead times are measured at 26 degC water, so they stay conservative.
 
 The model is a test bench, not a forecast: it checks decisions and safety properties, not the real
 house's kWh.
+
+
+### Command acknowledgement and retries
+
+Mode changes are sent through the existing HeishaMon selector automation but are **only
+acknowledged when `sensor.aquarea_mode` reports the requested physical mode**. An unchanged
+selector helper is not evidence of delivery: after two minutes without feedback, the
+controller calls `automation.set_heatmode` to re-publish the command. While confirmation
+is pending the controller withholds its heartbeat, enabling the Home Assistant watchdog
+to intervene. A manual mode outside Heat+DHW/DHW remains untouched.
+
+DHW first confirms `sensor.aquarea_tank_set_temperature` equals the requested
+40–50 °C target; it cannot force DHW based on a helper update alone. Unacknowledged
+target writes are retried every two minutes, re-triggering
+`automation.set_tank_target_temperature` when the helper is already at the desired
+value. The persisted plan distinguishes a `force_requested` intent from confirmed
+`forced`, and the controller releases an outstanding force request when its window
+expires. No new MQTT writer or physical control path was introduced.
+
+The watchdog also re-triggers `automation.set_heatmode` when its selector is already
+`Heat+DHW` but the unit remains in `DHW`; selecting the same value again would
+otherwise have no effect.
+
+The hardware commissioning checklist must include **lost-command simulations**:
+verify actual status sensors change after each mode and tank request, and that a
+disconnected HeishaMon leaves commands pending rather than falsely confirmed.

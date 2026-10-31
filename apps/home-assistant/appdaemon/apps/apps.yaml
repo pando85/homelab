@@ -40,6 +40,7 @@ comfort_control:
     # Outdoor input of the curve and the lead-time band: the unit sensor plus the offset helper.
     outdoor: sensor.aquarea_outside_ambient_temperature
     heating_mode: sensor.aquarea_heating_mode
+    operating_mode: sensor.aquarea_mode  # physical feedback, not the HA selector helper
     z1_request: sensor.aquarea_z1_heat_request_temperature
     tank_target: sensor.aquarea_tank_set_temperature
     compressor_starts: sensor.aquarea_compressor_start_stop_counter

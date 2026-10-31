@@ -64,7 +64,8 @@ OVERRIDE_HISTORY_MAX = 200
 OWN_WRITE_TTL = timedelta(minutes=5)  # a target change matching our write within this is ours
 
 TICK_SECONDS = 60
-MODE_CONFIRM_SECONDS = 30
+MODE_RETRY = timedelta(minutes=2)  # re-send when the Aquarea status has not confirmed the command
+DHW_COMMAND_RETRY = timedelta(minutes=2)  # actuator retries, never just helper-state retries
 
 # TODO(phase 2): boost for very cheap hours (design section 8). Built only after normal mode has
 # run in production: space-heating soak (room ceiling ~25.5 degC, water ~30-32 degC) started on
@@ -353,6 +354,7 @@ class ComfortControl(hass.Hass):
         self.overrides = []  # dicts: room, at, old, new, direction
         self.suggested = set()
         self.last_mode_change = None
+        self.pending_mode = None  # target / at; a helper update is not physical confirmation
         self.mode_warning = None
         self.missing_warning = []
         self.last_water_write = None
@@ -362,6 +364,8 @@ class ComfortControl(hass.Hass):
         self.dhw_plan = None  # dict: day, start, end, target_written, forced, blocked
         self.dhw_done = None  # ISO date of the last finished DHW window
         self.dhw_last_attempt = None
+        self.dhw_target_attempt = None
+        self.dhw_force_attempt = None
         self.dhw_warning = None
         self.force_owned = False  # the app switched force DHW on and has not seen it off since
         self.manual_force_since = None  # when the app first saw a force DHW it did not set
@@ -497,6 +501,7 @@ class ComfortControl(hass.Hass):
             "start": start.astimezone(tz) if start else None,
             "end": end.astimezone(tz) if end else None,
             "forced": bool(stored.get("forced")),
+            "force_requested": bool(stored.get("force_requested")),
             "target_written": bool(stored.get("target_written")),
         }
 
@@ -741,8 +746,8 @@ class ComfortControl(hass.Hass):
                 ("dhw plan", lambda: self._persist_dhw_plan()),
             ):
                 try:
-                    await step()
-                    run_ok = run_ok or name == "run"
+                    result = await step()
+                    run_ok = run_ok or (name == "run" and result is True)
                 except Exception as error:  # one failing part must not stop the others
                     self.log(f"Tick step {name} failed: {error!r}", level="ERROR")
             await self._release_force_dhw_safely(now)
@@ -782,6 +787,7 @@ class ComfortControl(hass.Hass):
             "phase": phase.kind,
             "phase_key": self.last_phase_key,
             "boundary_pending": sorted(self.boundary["targets"]) if self.boundary else [],
+            "mode_pending": self.pending_mode["target"] if self.pending_mode else None,
             "dhw_plan": stored_plan,
             "early_starts": upcoming,
             "raise_active": self.raise_active,
@@ -800,6 +806,7 @@ class ComfortControl(hass.Hass):
             "start": plan["start"].isoformat() if plan.get("start") else None,
             "end": plan["end"].isoformat() if plan.get("end") else None,
             "forced": bool(plan.get("forced")),
+            "force_requested": bool(plan.get("force_requested")),
             "target_written": bool(plan.get("target_written")),
         }
 
@@ -887,29 +894,60 @@ class ComfortControl(hass.Hass):
 
     # --- Run logic ----------------------------------------------------------------------------
 
+    async def _confirm_mode(self):
+        """Only the read-only Aquarea operating-mode sensor can acknowledge a mode write."""
+        pending = self.pending_mode
+        if pending is None:
+            return True
+        actual = await self.get_state(self.args["sensors"]["operating_mode"])
+        if actual != pending["target"]:
+            return False
+        self.last_mode_change = self._now()  # conservative minimum on/off start
+        self.pending_mode = None
+        self.log(f"Heat mode confirmed by Aquarea: {actual}")
+        return True
+
     async def _set_mode(self, mode, reason):
         entity = self.args["heat_mode"]["entity"]
+        actual = await self.get_state(self.args["sensors"]["operating_mode"])
         dry_run = "" if self._actuate("mode") else " (dry run)"
         self.log(f"Heat mode -> {mode} ({reason}){dry_run}")
-        self.last_mode_change = self._now()
         if not self._actuate("mode"):
-            return
-        # The proven C0 path: the selector state triggers the "Set heatmode" automation.
-        await self.set_state(entity, state=mode)
-        for _ in range(MODE_CONFIRM_SECONDS):
-            if await self.get_state(entity) == mode:
-                return
-            await self.sleep(1)
-        self.log(f"Heat mode {mode} not confirmed after {MODE_CONFIRM_SECONDS} s", level="WARNING")
+            return False
+        # Re-selecting an unchanged helper does not fire the state-triggered MQTT automation.
+        # A dropped command therefore needs an explicit retry through the same HA automation.
+        self.pending_mode = {"target": mode, "at": self._now()}
+        if await self.get_state(entity) == mode and actual != mode:
+            await self.call_service(
+                "automation/trigger", entity_id="automation.set_heatmode", skip_condition=True
+            )
+        else:
+            await self.set_state(entity, state=mode)
+        return await self._confirm_mode()
 
     async def _update_run(self, now):
         modes = self.args["heat_mode"]
-        mode = await self.get_state(modes["entity"])
+        if self.pending_mode is not None:
+            if await self._confirm_mode():
+                return True
+            pending = self.pending_mode
+            if now - pending["at"] < MODE_RETRY:
+                return False  # withhold heartbeat; let HA watchdog restore heating if necessary
+            self.log(
+                f"Aquarea did not confirm {pending['target']} for {MODE_RETRY}: retrying",
+                level="WARNING",
+            )
+            self.pending_mode = None
+        mode = await self.get_state(self.args["sensors"]["operating_mode"])
         if mode not in (modes["on_mode"], modes["off_mode"]):
             if mode != self.mode_warning:
-                self.log(f"Heat mode is {mode}, not {modes['on_mode']}/{modes['off_mode']}: left as is", level="WARNING")
+                self.log(
+                    f"Aquarea mode is {mode}, not {modes['on_mode']}/{modes['off_mode']}: left as is",
+                    level="WARNING",
+                )
             self.mode_warning = mode
-            return
+            # Manual cooling/other known mode is intentional; an absent reading is not healthy.
+            return mode not in (None, "unknown", "unavailable")
         self.mode_warning = None
         hysteresis = await self._helper("hysteresis")
         rooms, missing = {}, []
@@ -917,11 +955,9 @@ class ComfortControl(hass.Hass):
             state = await self._room_state(entity)
             if state is None:
                 missing.append(room)
-            elif state != "off":  # switched off by hand: its valve stays closed, no demand
+            elif state != "off":
                 rooms[room] = state
         cold = [room for room, (current, target) in rooms.items() if current < target - hysteresis]
-        # A room that reports nothing may be cold: never switch off without every room, and
-        # switch on (fail safe: extra kWh, never no heating) when one is missing.
         satisfied = not missing and all(current >= target for current, target in rooms.values())
         if missing and missing != self.missing_warning:
             self.log(f"No usable temperature or setpoint from {', '.join(missing)}: heating kept on", level="WARNING")
@@ -930,13 +966,14 @@ class ComfortControl(hass.Hass):
         detail = ", ".join(f"{room} {current}/{target}" for room, (current, target) in rooms.items())
         if mode == modes["off_mode"] and (cold or missing):
             if elapsed is not None and elapsed < MIN_OFF:
-                return
+                return True
             reason = f"below setpoint: {', '.join(cold)}" if cold else f"no reading from {', '.join(missing)}"
-            await self._set_mode(modes["on_mode"], f"{reason} ({detail})")
-        elif mode == modes["on_mode"] and satisfied:
+            return await self._set_mode(modes["on_mode"], f"{reason} ({detail})")
+        if mode == modes["on_mode"] and satisfied:
             if elapsed is not None and elapsed < MIN_ON:
-                return
-            await self._set_mode(modes["off_mode"], f"every room at setpoint ({detail})")
+                return True
+            return await self._set_mode(modes["off_mode"], f"every room at setpoint ({detail})")
+        return True
 
     async def _check_starts(self, now):
         counter = await self._number(self.args["sensors"]["compressor_starts"])
@@ -1059,7 +1096,7 @@ class ComfortControl(hass.Hass):
 
     def _forced_window_active(self, now):
         plan = self.dhw_plan
-        return bool(plan and plan.get("forced") and plan.get("start") and plan["start"] <= now < plan["end"])
+        return bool(plan and (plan.get("forced") or plan.get("force_requested")) and plan.get("start") and plan["start"] <= now < plan["end"])
 
     async def _release_force_dhw(self, now, startup=False):
         """Force DHW is released when it is on outside an active forced window and:
@@ -1079,7 +1116,7 @@ class ComfortControl(hass.Hass):
             return
         if startup:
             reason = "startup: owner unknown and no forced DHW window active"
-        elif self.force_owned:
+        elif self.force_owned or (self.dhw_plan and (self.dhw_plan.get("forced") or self.dhw_plan.get("force_requested"))):
             reason = "set by the controller and its window is over"
         else:
             if self.manual_force_since is None:
@@ -1098,6 +1135,7 @@ class ComfortControl(hass.Hass):
 
     async def _start_dhw(self, plan):
         sensors, commands = self.args["sensors"], self.args["commands"]
+        now = self._now()
         actuate = self._actuate("dhw")
         dry_run = "" if actuate else " (dry run)"
         if await self.get_state(sensors["force_heater"]) == "on":
@@ -1105,21 +1143,50 @@ class ComfortControl(hass.Hass):
             return
         desired = int(min(await self._helper("dhw_target"), TANK_MAX))
         tank_target = await self._number(sensors["tank_target"])
-        if tank_target != desired and not plan.get("target_written"):
-            plan["target_written"] = True
-            self.log(f"Tank target {tank_target} -> {desired} degC before forcing DHW{dry_run}")
-            if actuate:
-                await self.call_service("input_number/set_value", entity_id=commands["tank_target"], value=desired)
-                return  # force on a later tick, once the unit reports the new target
-            tank_target = desired
+        if tank_target != desired:
+            plan["target_written"] = False
+            # Never force DHW with the old tank target.  An HA helper write may not
+            # reach the unit; retry against the observed tank target, not a local flag.
+            if self.dhw_target_attempt is None or now - self.dhw_target_attempt >= DHW_COMMAND_RETRY:
+                self.log(f"Tank target {tank_target} -> {desired} degC before forcing DHW{dry_run}")
+                if actuate:
+                    helper = await self._number(commands["tank_target"])
+                    if helper == desired:
+                        # The previous command may have been lost while the helper already
+                        # contains the target: explicitly replay its MQTT automation.
+                        await self.call_service(
+                            "automation/trigger",
+                            entity_id="automation.set_tank_target_temperature",
+                            skip_condition=True,
+                        )
+                    else:
+                        await self.call_service(
+                            "input_number/set_value", entity_id=commands["tank_target"], value=desired
+                        )
+                self.dhw_target_attempt = now
+            return
+        plan["target_written"] = True  # observed on Aquarea, not inferred from the helper
+        self.dhw_target_attempt = None
         if tank_target is None or tank_target > TANK_MAX:
             await self._block_dhw(plan, f"tank target {tank_target} is not <= {TANK_MAX} degC")
             return
-        plan["forced"] = True
-        self.log(f"Force DHW until {plan['end']:%H:%M} (tank target {tank_target:g} degC){dry_run}")
-        if actuate:
-            self.force_owned = True
-            await self.call_service("switch/turn_on", entity_id=commands["force_dhw"])
+        if not actuate:
+            plan["forced"] = True
+            return
+        forced = await self.get_state(commands["force_dhw"])
+        if forced == "on":
+            # A manual force is not ours.  Claim only an explicitly recorded request.
+            if plan.get("force_requested"):
+                plan["forced"] = True
+                self.force_owned = True
+                self.dhw_force_attempt = None
+            return
+        if self.dhw_force_attempt is not None and now - self.dhw_force_attempt < DHW_COMMAND_RETRY:
+            return
+        self.log(f"Request force DHW until {plan['end']:%H:%M} (tank target {tank_target:g} degC)")
+        plan["force_requested"] = True  # intent, not an acknowledgement; survive lost replies
+        self.dhw_force_attempt = now
+        await self.call_service("switch/turn_on", entity_id=commands["force_dhw"])
 
     async def _block_dhw(self, plan, reason):
         if not plan.get("blocked"):
@@ -1127,7 +1194,7 @@ class ComfortControl(hass.Hass):
             await self._notify(f"Comfort control: DHW not forced: {reason}")
 
     async def _finish_dhw(self, plan):
-        if plan["forced"] and self._actuate("dhw") and await self.get_state(self.args["commands"]["force_dhw"]) == "on":
+        if (plan.get("forced") or plan.get("force_requested")) and self._actuate("dhw") and await self.get_state(self.args["commands"]["force_dhw"]) == "on":
             self.log("DHW window over: force DHW off")
             await self.call_service("switch/turn_off", entity_id=self.args["commands"]["force_dhw"])
         self.dhw_done = plan["day"].isoformat()
