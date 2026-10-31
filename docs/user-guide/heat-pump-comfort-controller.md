@@ -129,17 +129,24 @@ the fork turns into 0 degC, never reach the bus.
   local date of its `last_updated`; the integration rolls over on the hour) and retried every
   10 min until the price curve is complete (23 hours on the spring-forward day, 25 with the
   `price_02h_d` hour on the fall-back day); a notification follows if it is still missing after
-  01:00. The plan is stored in the status sensor, so an AppDaemon restart inside the window keeps
-  it; without a stored plan a restart plans from the remaining hours.
+  01:00. The plan (and the last finished day) is stored in `input_text.comfort_dhw_plan`, which HA
+  restores after a restart, and in the status sensor: an AppDaemon or HA restart inside the window
+  keeps it, and a restart after it does not plan a second window. Without a stored plan (helper
+  lost) a restart plans from the remaining hours, which can mean a second window that day; that is
+  harmless (the tank stays at most 50 degC and the heater never runs).
 - **Expected COP** is a linear proxy: `2.2 + 0.06 x outdoor`, bounded to 1.5 to 4.5 (about 1.9 at
   -5 degC, 2.6 at 7 degC, 3.4 at 20 degC). The hourly outdoor temperature is yesterday's hourly mean
   of the outdoor sensor plus the offset (persistence forecast). It only ranks hours, so warmer hours
   win at equal price.
 - Windows that overlap today's optimum-start warm-up (early start to window start) are excluded.
-- **Force DHW is released on every path:** at the window end, at the day rollover, at startup, on
-  disable and on every tick (enabled or disabled) the app turns `switch.aquarea_force_dhw_mode` off
-  when it is on outside an active forced window. A force DHW switched on by hand is therefore
-  turned off within a minute while the app runs (only with `actuate.dhw` true).
+- **Force DHW is always released** (only with `actuate.dhw` true), checked on every tick, enabled
+  or disabled, outside an active forced window:
+  - a force the app set itself is turned off at its window end, at the day rollover or on disable
+    (and again on the next tick if the turn-off was lost);
+  - a force switched on by hand is held like a manual setpoint, for **at most 2 h** from when the
+    app first sees it, then turned off and logged (`Force DHW off (manual force DHW held since ...)`);
+  - at startup the owner is unknown: a force DHW that is on without an active planned window is
+    turned off and logged.
 - In the window the app sets the tank target to `input_number.comfort_dhw_target`, **capped at
   50 degC in the code**, through `input_number.heishamon_tank_temp`, waits for the unit to report
   it, and turns on `switch.aquarea_force_dhw_mode` (the mechanism of the legacy `dhw_control`). At
@@ -165,6 +172,7 @@ off resets every helper to the defaults below.**
 | `input_boolean.comfort_control_enable` | off at creation | Controller on. Off restores `Heat+DHW` once and leaves the mode manual |
 | `input_boolean.comfort_away` | off | Away mode |
 | `input_boolean.comfort_water_dry_run` | **on** | Water requests only logged (go-live checklist) |
+| `input_text.comfort_dhw_plan` | written by the app | Today's DHW plan, kept across HA restarts; do not edit |
 | `input_number.comfort_day_minimum` | 23.5 degC | Hall/kitchen minimum in the day window |
 | `input_number.comfort_night_floor` | 21.0 degC | Every room, always |
 | `input_number.comfort_margin` | 0.5 K | Setpoint = minimum + margin |
@@ -232,6 +240,13 @@ There is no runtime strategy switch.
 2. Check the HA-storage automations, schedules or scheduler cards that call `script.set_heat_mode`,
    and any dashboard that uses the removed helpers (`appdaemon_climate_*`, `appdaemon_dhw_enable`).
 
+**Known behaviour:**
+
+- Re-seeding the helpers (turning `input_boolean.comfort_helpers_seeded` off, or HA re-creating
+  them) turns `input_boolean.comfort_water_dry_run` back on. This is intended: the safe default.
+  The unit keeps its last water request until the owner turns the dry run off again.
+- A force DHW switched on by hand is held for at most 2 h (see Hot water).
+
 **Go-live:**
 
 1. The house battery is working.
@@ -292,6 +307,17 @@ a parity failure run) check:
   mode command path, mode switches per day at most legacy + 1, compressor starts at most
   1.3 x legacy or legacy + 2, no longer gap without heating, one forced DHW window a day (legacy
   two), a tank no warmer, outages handled at least as well.
+
+**Parity finding (cold weather):** the new app heats **fewer hours at warmer water** than the legacy
+rule (cold run: about 8 h a day at 29.5 degC mean water against 11 h at 26 degC). The software curve
+gives 29 to 32 degC at 0 to -5 degC outdoor, while the legacy request stayed at 26 degC and its
+cheap hours ran with the valves open. Strict 1.3 x legacy compressor starts is not met in three of
+five runs (about 5 starts a day against 3.7); the test allows legacy + 2. Whether the warmer water
+costs efficiency is for the preregistered efficiency gate (heat-pump kWh per heating degree-day,
+base 15 degC, at most +20 % against the S3 band-matched baseline; climate preregistration 2026-27
+in `pando85/home-energy-optimizer`) to judge on the real house. If the gate fails, flatten the curve with its
+helpers (`input_number.comfort_curve_cold_water` and `_mild_water`, for example 30 / 25 degC); the
+lead times are measured at 26 degC water, so they stay conservative.
 
 The model is a test bench, not a forecast: it checks decisions and safety properties, not the real
 house's kWh.
