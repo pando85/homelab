@@ -1,0 +1,210 @@
+# Climate optimizer (C2): comfort band, training filters, model envelope, acceptance criteria and gate
+# thresholds. Committed BEFORE any model result exists, as the plan requires; the plan is
+# docs/planning/climate-optimizer-implementation.md ("C2 design and predeclared gate").
+#
+# Everything here is %, K, Kh (degree-hours), kWh or a count: no money threshold and no site
+# coordinate. Site coordinates and the always-open valve share `phi` live in a private YAML in the
+# data dir (see docs/architecture.md). The file is validated strictly by
+# battery_optimizer.climate.config: an unknown, missing, duplicated or out-of-range key is an error.
+# A change is a new `config_version` and a new config hash in every result it touches.
+#
+# Version 2 is the single predeclared model iteration (plan, "C2 model iteration"), written before
+# the rerun on S3: S1 out of training, causal weekly refits with shrinkage, a COP table by lift, the
+# T_out long-gap fill and two acceptance-protocol changes (parameter stability, baseline gain).
+
+config_version: 2
+timezone: Europe/Madrid
+
+# --- comfort band heat-v1 -------------------------------------------------------------------------
+comfort:
+  band: heat-v1
+  low_c: 22.0
+  high_c: 28.0
+  rooms: [bedroom, hall_kitchen, office_t]
+  excluded_rooms: [office_a] # large internal gain (servers): modelled as a heat sink, not comfort
+
+# --- seasons and folds (inclusive local dates) ----------------------------------------------------
+seasons:
+  S1: {start: 2023-11-08, end: 2024-04-30} # excluded from training (see training_excluded)
+  S2: {start: 2024-10-01, end: 2025-04-30} # train, and the shrinkage selection
+  S3: {start: 2025-10-01, end: 2026-04-30} # held-out test and primary gate period
+  fit_months: [10, 11, 12, 1, 2, 3, 4]
+  gate_months: [11, 12, 1, 2, 3] # the gate and headline metrics
+  reserved_from: 2026-10-01 # untouched, reserved for C4
+  # S1 is a different plant regime: flow water about 34 C against 26-28 C later, so the comfort
+  # rooms sat at setpoint with their valves shut about half the heating time while heat went to
+  # the always-open rooms and the slab (apparent UA about three times S2's and S3's). Nothing
+  # physical changed in the house. No thermal, response, starts or COP fit reads it. The outdoor
+  # offset model (signals.t_out_fused.fit_seasons) is about the sensor, not the plant, and keeps it.
+  training_excluded: [S1]
+folds:
+  - {train: [S2], test: S3}
+
+# --- derived signals ------------------------------------------------------------------------------
+signals:
+  step_seconds: 900
+  dhw: # a slot is domestic hot water when the pump drew or delivered it, or force-DHW was on
+    min_electric_kwh: 0.02
+    min_thermal_kwh: 0.05
+    force_share: 0.5
+  cooling: # a slot is cooling when the pump drew or delivered it in cool mode
+    min_electric_kwh: 0.02
+    min_thermal_kwh: 0.05
+  valve:
+    # inferred valve state of a room: open when its temperature < setpoint - margin (data only; the
+    # plant response uses model.response.plant_valve_cap_margin_k)
+    inferred_state_margin_k: 0.0
+  counter_check:
+    min_daily_kwh: 1.0 # a day enters the Q_heat vs counter cross-check above this thermal energy
+  t_out_debias: # the Aquarea outdoor sensor reads 1.5 to 2.5 K low while the compressor runs
+    min_off_minutes: 30 # a slot is a valid reading once the compressor has been off this long
+    max_gap_hours: 6.0 # a longer run is not interpolated: unknown (chosen from the data, see PR)
+  # Which outdoor series the models read: the debiased house sensor, or the station reference fused
+  # with it (needs `reference_station` in the private site file). Switched in a separate commit,
+  # only after the held-out leave-block-out comparison (docs/architecture.md, "Fused outdoor
+  # temperature").
+  t_out_source: debiased
+  # Owner decision before any result of the iteration: where t_out_debiased is unknown (a running
+  # period longer than max_gap_hours, or no reading) the model series takes t_out_fused; every
+  # other slot stays debiased. The filled slots are recorded (ClimateData.t_out_filled).
+  t_out_fill_unknown_from_fused: true
+  t_out_fused: # Kalman-smoothed offset between the house sensor and the station reference
+    max_ref_gap_hours: 3.0 # station gaps up to this long are bridged; longer ones: no reference
+    dark_solar_max: 0.05 # offset observed only where the clear-sky proxy is below this
+    fit_seasons: [S1, S2] # the offset model is fitted on these seasons only, never on S3
+
+# --- training filters -----------------------------------------------------------------------------
+filters:
+  drop_unknown_quality: true # a slot with any required input unknown (NaN) is dropped
+  window_open:
+    drop_k: 0.5 # a comfort room falls by more than this ...
+    slots: 1 # ... within this many 15-minute slots
+  valves_shut:
+    min_rooms_at_setpoint: 2 # at least this many comfort rooms at or above setpoint
+  thermostat_outage: # inclusive local dates whose thermostat data is unusable (Feb 2026, about 3 days)
+    windows:
+      - {start: 2026-02-09, end: 2026-02-12}
+  drop_cooling_slots: true
+  drop_rule_disabled_days: true # a day on which the climate rule was disabled has no replayed u
+
+# --- thermal models -------------------------------------------------------------------------------
+model:
+  step_seconds: 900
+  window_hours: 48 # simulation-error fit windows, from local midnight
+  forecast_origins_local_hours: [0, 6, 12, 18]
+  forecast_horizons_hours: [1, 6, 12, 24]
+  envelope:
+    tau_h: [10.0, 500.0] # C / UA
+    ua_kw_per_k: [0.03, 0.5]
+    c_slab_kwh_per_k: [2.0, 60.0]
+    k_kw_per_k: [0.1, 3.0]
+    q0_kw: [0.0, 3.0]
+  slab_proxy: # return temperature in steady circulation is a second slab measurement
+    min_flow_l_per_min: 5.0
+    min_minutes_into_run: 10
+  response:
+    phi_default: 0.3 # always-open share until floor areas are supplied
+    plant_valve_cap_margin_k: 0.25 # plant cap: open = T_air < setpoint - margin
+  selection:
+    b_min_rmse_gain: 0.10 # use B only if it beats A by this much at 12 h and 24 h
+    horizons_hours: [12, 24]
+  # Causal trailing-window refit: at each weekly origin (local midnight, from the first gate-month
+  # day of the test season) the thermal parameters are refitted on the fit-month days of the
+  # trailing window_days before it, starting from and shrunk toward the prior (the fold's training
+  # fit): penalty shrinkage * sum(((p - p_prior) / search-box width)^2) on every parameter. A window
+  # without a fit segment keeps the prior and counts as a failed refit. Response, valve cap, room
+  # offsets and starts stay the fold's training fit.
+  adaptive:
+    window_days: 28
+    refit_every_days: 7
+    # chosen on S2 only by the selection below (hack/climate_shrinkage.py at commit 924bf92),
+    # committed before any held-out run
+    shrinkage: {A: 1000000.0, B: 10000.0}
+    # Selection on S2 only: prior fit on the S2 fit-month days up to prior_until, weekly refits from
+    # the next day through the S2 gate months; per model, the grid value with the lowest mean
+    # Q-driven RMSE at acceptance.q_driven.gain_horizons_hours among the values whose weekly refits
+    # meet acceptance.parameters.weekly_refit_ok_share (none: the largest value); a tie: the larger.
+    selection:
+      season: S2
+      prior_until: 2024-12-31
+      grid: [0, 1, 10, 100, 1000, 10000, 100000, 1000000]
+
+acceptance:
+  q_driven: # measured Q, season S3
+    rmse_k: {6: 0.30, 12: 0.40, 24: 0.50}
+    abs_bias_24h_k: 0.15
+    # at 12 h and 24 h against the better baseline; 0.15 until version 1, now "not worse" (owner
+    # protocol change before the rerun: a 15% margin over persistence is not needed to plan)
+    min_gain_vs_baseline: 0.0
+    gain_horizons_hours: [12, 24]
+  u_driven: # replayed u through the response model, season S3
+    rmse_24h_k: 0.60
+    daily_energy_mape: 0.15
+    season_energy_bias: 0.05
+    regime_energy_bias: 0.10 # within each min_hours regime of S3
+    regime_min_heating_days: 10 # a regime with fewer heating days in S3 gate months is reported, not tested
+  legacy_replay: # simulated legacy against realized, season S3
+    cost_rel_error: 0.05
+    electricity_rel_error: 0.05
+    kh_below_low_rel_error: 0.25
+    kh_below_low_abs_error: 10.0
+  parameters:
+    # replaces the fold stability of version 1 (one training season leaves no fold pair): at least
+    # this share of the weekly refits has every parameter inside the envelope and none on a bound
+    # (g_s at its 0 bound is legitimate)
+    weekly_refit_ok_share: 0.95
+  max_iterations: 1 # one predeclared model iteration
+
+cop:
+  min_q_kwh: 0.1 # hourly rows below this are excluded
+  cop_range: [1.0, 9.0] # implied COP outside is excluded
+  table_bin_k: 2.0 # reported: COP table binned by T_out
+  # the model: COP table binned by lift (T_flow - T_out), same minimum count and nearest-bin rule;
+  # the T_out table cannot follow flow-temperature changes. The regression is reported.
+  lift_bin_k: 2.0
+  model: lift_table
+  defrost_knee_c: 5.0 # the max(0, 5 - T_out) term
+  daily_mape: 0.08
+  season_error: 0.03
+
+# --- policies and simulator -----------------------------------------------------------------------
+policies:
+  heuristic:
+    decision_minute: 0 # hourly decisions at :00
+    min_on_hours: 1
+    min_off_hours: 1
+    max_horizon_hours: 24
+    never_heat_above_c: 28.0
+  perfect_foresight:
+    max_blocks_per_day: 4
+  setpoint_offset: # reported only, never gated
+    offset_k: 2.0
+    max_setpoint_c: 28.0
+
+# --- gate heat-v1 (permission lever, S3, primary model) -------------------------------------------
+gate:
+  band: heat-v1
+  hard:
+    max_kh_above_high: 0.0
+    starts_per_day_ratio_max: 1.10 # modelled mean starts per day, against simulated legacy
+    max_starts_per_day: 30
+    max_blocks_per_day: 4
+    mismatch_run_keeps_sign: true
+    model_accepted: true
+  cost: # condition C, heuristic variant m_cost
+    min_saving: 0.10
+    bootstrap_lower_bound_above: 0.0
+    saving_exceeds_replay_error: true
+    comfort_kh_tolerance_per_room: 5.0 # Kh below low per comfort room, against legacy
+    worst_excursion_floor_c: 21.5 # worst room excursion at least min(legacy worst, this)
+  comfort: # condition K, heuristic variant m_comfort
+    min_kh_reduction: 0.25 # Kh below low summed over the comfort rooms
+    bootstrap_lower_bound_above: 0.0
+    reduction_exceeds_replay_error: true
+    cost_point_delta_max: 0.0
+    cost_bootstrap_upper_bound_max: 0.03
+  model_error:
+    ood_share_warn: 0.10
+  statistics:
+    block_days: 7
+    confidence: 0.95
