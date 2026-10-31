@@ -189,6 +189,18 @@
       },
     },
     {
+      description: 'Review Forgejo Runner GC image changes before deployment',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'ghcr.io/pando85/forgejo-runner-gc',
+      ],
+      automerge: false,
+      ignoreTests: false,
+      platformAutomerge: false,
+    },
+    {
       matchPackageNames: [
         '/cilium/',
       ],

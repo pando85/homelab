@@ -20,7 +20,7 @@ spec:
       containers:
         - name: runner
           # renovate: sha256: datasource=docker
-          image: ghcr.io/pando85/forgejo-runner:13.2.0
+          image: ghcr.io/pando85/forgejo-runner-gc:rolling@sha256:4cb71736d81dbe71322babc2aa77ae13e3823e972722c35f1ad7f9c311a172f3
           command:
             - sh
             - -c
@@ -309,42 +309,6 @@ spec:
             limits:
               memory: "128Mi"
               cpu: "100m"
-        - name: workspace-gc
-          image: busybox:1.38.0
-          command:
-            - sh
-            - /scripts/cleanup.sh
-          volumeMounts:
-            - name: runner-data
-              mountPath: /workspace
-            - name: workspace-gc-script
-              mountPath: /scripts
-          env:
-            # Same reasoning as docker-gc: `df -P /workspace` now reports the
-            # node's 113.8 GiB root LV rather than a dedicated volume, so prune
-            # ahead of kubelet's nodefs.available<10% eviction trigger instead of
-            # at it. The workspace also lost emptyDir's sizeLimit by moving to
-            # hostPath, which makes this loop its only size guard.
-            - name: THRESHOLD_MIN
-              value: "30"
-            - name: THRESHOLD_LOW
-              value: "50"
-            - name: THRESHOLD_MED
-              value: "70"
-            - name: THRESHOLD_HIGH
-              value: "80"
-            - name: THRESHOLD_CRITICAL
-              value: "90"
-            - name: THRESHOLD_EMERGENCY
-              value: "95"
-          resources:
-            requests:
-              memory: "16Mi"
-              cpu: "10m"
-            limits:
-              memory: "64Mi"
-              cpu: "50m"
-
       securityContext:
         fsGroupChangePolicy: "OnRootMismatch"
         supplementalGroups:
@@ -378,10 +342,11 @@ spec:
         #
         # The workspace moves off `emptyDir: {medium: Memory, sizeLimit: 8Gi}`:
         # an 8 GiB tmpfs would reserve 64% of this node's 12.53 Gi allocatable.
-        # hostPath trades tmpfs speed for that RAM and survives pod restarts
-        # (warm checkouts, persistent .pnpm-store) at the cost of stale data,
-        # which workspace-gc prunes. It also loses `sizeLimit`, so the retuned
-        # workspace-gc thresholds are its only size guard.
+        # hostPath trades tmpfs speed for RAM and survives pod restarts
+        # (warm checkouts, persistent .pnpm-store). The runner's native
+        # workspace GC removes abandoned host scratch directories only when
+        # idle and older than 24h; unlike the old workspace-gc sidecar this
+        # provides no disk-pressure size guard. Monitor nodefs usage separately.
         - name: runner-data
           hostPath:
             path: /srv/ci-runner/workspace
@@ -404,9 +369,6 @@ spec:
           hostPath:
             path: /srv/ci-runner/docker
             type: Directory
-        - name: workspace-gc-script
-          configMap:
-            name: workspace-gc-script
       # No pod-level `resources` block. Limits are per-container and sum to
       # ~16.7Gi, which exceeds this node's 12.53Gi allocatable. The runner's
       # 12Gi limit prioritizes headroom for concurrent jobs over the strict
