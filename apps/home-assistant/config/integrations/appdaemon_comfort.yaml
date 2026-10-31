@@ -184,11 +184,26 @@ automation:
         value_template: >-
           {{ as_timestamp(now()) - as_timestamp(this.attributes.last_triggered, 0) >= 1800 }}
     action:
-      - action: input_select.select_option
-        target:
-          entity_id: input_select.heishamon_heatmode
-        data:
-          option: Heat+DHW
+      # Re-selecting the same helper value produces no state event and hence no MQTT
+      # command. When the selector is already Heat+DHW but the physical mode is DHW,
+      # explicitly replay the existing automation instead of silently doing nothing.
+      - choose:
+          - conditions:
+              - condition: state
+                entity_id: input_select.heishamon_heatmode
+                state: Heat+DHW
+            sequence:
+              - action: automation.trigger
+                target:
+                  entity_id: automation.set_heatmode
+                data:
+                  skip_condition: true
+        default:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.heishamon_heatmode
+            data:
+              option: Heat+DHW
       - action: notify.send_message
         data:
           entity_id: notify.agil
