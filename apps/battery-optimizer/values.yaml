@@ -70,6 +70,10 @@ app-template:
             TZ: UTC
             BATTERY_OPTIMIZER_DATA_DIR: /data
             BATTERY_OPTIMIZER_CONFIG: /config/tariff.yaml
+            # `build` (and `extract`) read battery.commissioned_at and the battery counters from
+            # it. Without this the default is /app/config/service.yaml, absent in the image, which
+            # silently means "no battery"; a path set here that does not exist is an error.
+            BATTERY_OPTIMIZER_SERVICE_CONFIG: /config/service.yaml
             BATTERY_OPTIMIZER_HA_URL: http://home-assistant-hass.home-assistant.svc:8123
             BATTERY_OPTIMIZER_PROMETHEUS_URL: http://prometheus-long-term.monitoring:9090
             # Pipeline knobs (read by the script below).

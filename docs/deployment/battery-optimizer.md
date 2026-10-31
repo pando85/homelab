@@ -100,6 +100,9 @@ deployment.
   too, which has so far not been worth the recorder cost.
 - **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
   image carries no config). Update both together; the tariff config hash is part of every dataset id.
+  The CronJob mounts the same ConfigMap at `/config` and sets `BATTERY_OPTIMIZER_SERVICE_CONFIG=/config/service.yaml`,
+  so `build` and `extract` read `battery.commissioned_at` and the battery counters from the same
+  `service.yaml` as the service; set them there on installation day and nothing else needs changing.
 - **Coverage gaps fail the Job.** From 0.2.1 `extract` exits 3 when the run's manifest records a
   coverage gap (HA: `empty_chunk`, `empty_chunk_after_window_filter`, `chunk_accounting_mismatch`,
   `no_rows_for_entity`, `no_rows_extracted:all`; Prometheus: `no_samples_extracted`,
