@@ -1,0 +1,3955 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../grigri/">
+      
+      
+        <link rel="next" href="../install-pre-commit-hooks/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Heat pump water temperature - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#heat-pump-water-temperature" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Heat pump water temperature
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#data-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data path
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#control-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Control modes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#entities-and-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Entities and topics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Entities and topics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#exposed-in-home-assistant" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exposed in Home Assistant
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#only-at-the-mqtt-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      Only at the MQTT level
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands-supported-by-the-fork" class="md-nav__link">
+    <span class="md-ellipsis">
+      Commands supported by the fork
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switching-between-curve-and-direct-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switching between curve and direct mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changing-the-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changing the curve
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-configuration-2026-10-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current configuration (2026-10-30)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#electric-heater-and-power-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Electric heater and power limits
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Electric heater and power limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-heater" class="md-nav__link">
+    <span class="md-ellipsis">
+      The heater
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-starts-the-heater-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      What starts the heater automatically
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs-that-limit-power" class="md-nav__link">
+    <span class="md-ellipsis">
+      Inputs that limit power
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgement-and-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Acknowledgement and latency
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-if-the-request-is-written-in-the-other-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      What happens if the request is written in the other mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Safety notes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-only-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read-only checks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observation-2026-10-30-read-only-mqtt-sensors-added" class="md-nav__link">
+    <span class="md-ellipsis">
+      Observation 2026-10-30 (read-only MQTT sensors added)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#data-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      Data path
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#control-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Control modes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#entities-and-topics" class="md-nav__link">
+    <span class="md-ellipsis">
+      Entities and topics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Entities and topics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#exposed-in-home-assistant" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exposed in Home Assistant
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#only-at-the-mqtt-level" class="md-nav__link">
+    <span class="md-ellipsis">
+      Only at the MQTT level
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands-supported-by-the-fork" class="md-nav__link">
+    <span class="md-ellipsis">
+      Commands supported by the fork
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#switching-between-curve-and-direct-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      Switching between curve and direct mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changing-the-curve" class="md-nav__link">
+    <span class="md-ellipsis">
+      Changing the curve
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-configuration-2026-10-30" class="md-nav__link">
+    <span class="md-ellipsis">
+      Current configuration (2026-10-30)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#electric-heater-and-power-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      Electric heater and power limits
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Electric heater and power limits">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-heater" class="md-nav__link">
+    <span class="md-ellipsis">
+      The heater
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-starts-the-heater-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      What starts the heater automatically
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inputs-that-limit-power" class="md-nav__link">
+    <span class="md-ellipsis">
+      Inputs that limit power
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgement-and-latency" class="md-nav__link">
+    <span class="md-ellipsis">
+      Acknowledgement and latency
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-if-the-request-is-written-in-the-other-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      What happens if the request is written in the other mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#safety-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      Safety notes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#read-only-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read-only checks
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observation-2026-10-30-read-only-mqtt-sensors-added" class="md-nav__link">
+    <span class="md-ellipsis">
+      Observation 2026-10-30 (read-only MQTT sensors added)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="heat-pump-water-temperature">Heat pump water temperature</h1>
+<p>How the Panasonic Aquarea outlet (heating water) temperature is controlled from Home Assistant and
+HeishaMon, which modes exist, what is exposed today and what is only reachable over MQTT.</p>
+<p>This page was written from a read-only audit on 2026-10-30. Nothing was published to MQTT, no Home
+Assistant service was called and no setting was changed. Statements are either <strong>verified</strong> (read in
+code or observed live on that date) or <strong>believed</strong> (taken from the upstream HeishaMon docs or
+inferred, not tested on the unit). The ones that matter for a write experiment are marked
+<em>believed</em>.</p>
+<p>Menu paths, ranges and the heater facts were later confirmed from the Panasonic service manual and
+are cited as "service manual p.N".</p>
+<h2 id="data-path">Data path</h2>
+<div class="highlight"><pre><span></span><code>Aquarea unit &lt;-serial-&gt; CZ-TAW1 running GoHeishaMon &lt;-MQTT-&gt; mosquitto &lt;-MQTT-&gt; Home Assistant
+                                                                   (apps/mosquitto)
+</code></pre></div>
+<ul>
+<li>The CZ-TAW1 runs the owner's fork
+  <a href="https://github.com/pando85/GoHeishaMon"><code>pando85/GoHeishaMon</code></a> (audited at commit <code>561bcc8</code>, main
+  code <code>src/taw2mqtt.go</code>), not upstream HeishaMon. It speaks to the unit over serial and to the
+  broker over MQTT. The broker is authenticated (<code>mosquitto-user</code> Secret from Vault
+  <code>/mosquitto/user</code>, <code>apps/mosquitto/templates/external-secret.yaml</code>).</li>
+<li>Base topics: state <code>panasonic_heat_pump/main/&lt;Topic&gt;</code>, commands
+  <code>panasonic_heat_pump/commands/&lt;SetTopic&gt;</code>.</li>
+<li>Home Assistant side: <code>apps/home-assistant/config/integrations/heishamon.yaml</code> (MQTT sensors,
+  switches, helpers and the automations that publish the commands).</li>
+</ul>
+<h2 id="control-modes">Control modes</h2>
+<p>The unit decides how it derives the heating water target for a zone from the setting
+"Heating_Mode" (state topic <code>main/Heating_Mode</code>, also <code>Cooling_Mode</code> for cooling).</p>
+<table>
+<thead>
+<tr>
+<th><code>Heating_Mode</code></th>
+<th>Mode</th>
+<th><code>Z1_Heat_Request_Temp</code> means</th>
+<th>Water target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0</code></td>
+<td>Compensation curve</td>
+<td>A <strong>shift</strong> in K, -5 to +5</td>
+<td>Read from the curve at the outside temperature, plus the shift</td>
+</tr>
+<tr>
+<td><code>1</code></td>
+<td>Direct</td>
+<td>The <strong>absolute</strong> water temperature, 20 to 55 degC (60 degC above -10 degC outdoor; service manual p.26, 131)</td>
+<td>The request itself</td>
+</tr>
+</tbody>
+</table>
+<p>The curve is four points per zone and mode, published as state topics:</p>
+<table>
+<thead>
+<tr>
+<th>Topic (Z1 heating)</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Z1_Heat_Curve_Outside_Low_Temp</code></td>
+<td>Coldest outside temperature of the curve</td>
+</tr>
+<tr>
+<td><code>Z1_Heat_Curve_Target_Low_Temp</code></td>
+<td>Water target at the coldest point, so the <em>highest</em> water temperature ("low" follows the outside temperature, not the water)</td>
+</tr>
+<tr>
+<td><code>Z1_Heat_Curve_Outside_High_Temp</code></td>
+<td>Warmest outside temperature of the curve</td>
+</tr>
+<tr>
+<td><code>Z1_Heat_Curve_Target_High_Temp</code></td>
+<td>Water target at the warmest point (the <em>lowest</em> water temperature)</td>
+</tr>
+</tbody>
+</table>
+<p>The unit keeps reporting the curve points while in direct mode; they are simply not used.
+<code>Z1_Water_Target_Temp</code> and <code>Main_Target_Temp</code> show the water target that is actually in force, in
+both modes.</p>
+<p>Caveat (<em>believed</em>, from the upstream docs): when the zone sensor is a room thermostat or a
+thermistor instead of the water temperature, the "direct" temperature is stored in the high curve
+target and <code>SetZ1HeatRequestTemperature</code> does not set it. The fork does not publish
+<code>Z1_Sensor_Settings</code>, so this cannot be checked over MQTT. On 2026-10-30 <code>Z1_Temp</code> equals
+<code>Main_Outlet_Temp</code> (28), which suggests the zone sensor is the water temperature.</p>
+<h2 id="entities-and-topics">Entities and topics</h2>
+<h3 id="exposed-in-home-assistant">Exposed in Home Assistant</h3>
+<table>
+<thead>
+<tr>
+<th>Purpose</th>
+<th>HA entity</th>
+<th>MQTT topic</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Set Z1 heating water request</td>
+<td><code>input_number.heishamon_heatshift_z1</code></td>
+<td><code>commands/SetZ1HeatRequestTemperature</code></td>
+<td>Integer, helper range -5 to 40, step 1. Absolute in direct mode, shift in curve mode. <code>heishamon.yaml:233-253</code>, helper at <code>:404-408</code></td>
+</tr>
+<tr>
+<td>Read Z1 request</td>
+<td><code>sensor.aquarea_z1_heat_request_temperature</code></td>
+<td><code>main/Z1_Heat_Request_Temp</code></td>
+<td>Also mirrored into the helper by the "Set Z1 Heat selector" automation (<code>:221-230</code>)</td>
+</tr>
+<tr>
+<td>Read Z1 water target</td>
+<td><code>sensor.aquarea_z1_water_target_temperature</code></td>
+<td><code>main/Z1_Water_Target_Temp</code></td>
+<td>The effective target (<code>:750</code>)</td>
+</tr>
+<tr>
+<td>Read outlet target / actual</td>
+<td><code>sensor.aquarea_outlet_target_temperature</code>, <code>sensor.aquarea_outlet_temperature</code></td>
+<td><code>main/Main_Target_Temp</code>, <code>main/Main_Outlet_Temp</code></td>
+<td>Main target also follows the tank target in DHW</td>
+</tr>
+<tr>
+<td>Read Z1 curve points</td>
+<td><code>sensor.aquarea_z1_heat_curve_{target_high,target_low,outside_high,outside_low}_temperature</code></td>
+<td><code>main/Z1_Heat_Curve_*</code></td>
+<td>Read only (<code>:679-700</code>)</td>
+</tr>
+<tr>
+<td>Z2 equivalents</td>
+<td><code>input_number.heishamon_heatshift_z2</code>, <code>sensor.aquarea_z2_*</code></td>
+<td><code>commands/SetZ2HeatRequestTemperature</code></td>
+<td>Zone 2 is not active (<code>Zones_State</code> = 0)</td>
+</tr>
+<tr>
+<td>Cooling request</td>
+<td><code>input_number.heishamon_coolshift_z{1,2}</code></td>
+<td><code>commands/SetZ{1,2}CoolRequestTemperature</code></td>
+<td>Same range</td>
+</tr>
+<tr>
+<td>Operating mode</td>
+<td><code>input_select.heishamon_heatmode</code>, <code>sensor.aquarea_mode</code>, <code>sensor.aquarea_mode_code</code></td>
+<td><code>commands/SetOperationMode</code>, <code>main/Operating_Mode_State</code></td>
+<td>Driven by AppDaemon climate control (<code>Heat+DHW</code> / <code>DHW</code>)</td>
+</tr>
+<tr>
+<td>Quiet mode</td>
+<td><code>input_select.heishamon_quietmode</code>, <code>sensor.aquarea_quiet_mode</code></td>
+<td><code>commands/SetQuietMode</code>, <code>main/Quiet_Mode_Level</code></td>
+<td><code>Off</code>, 1, 2, 3</td>
+</tr>
+<tr>
+<td>Powerful mode</td>
+<td><code>input_select.heishamon_powermode</code>, <code>sensor.aquarea_powerful_mode</code></td>
+<td><code>commands/SetPowerfulMode</code>, <code>main/Powerful_Mode_Time</code></td>
+<td><code>Off</code>, 30, 60, 90 min</td>
+</tr>
+<tr>
+<td>Holiday mode</td>
+<td><code>switch.aquarea_holiday_mode</code></td>
+<td><code>commands/SetHolidayMode</code>, <code>main/Holiday_Mode_State</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Heat pump power</td>
+<td><code>switch.aquarea_main_power</code></td>
+<td><code>commands/SetHeatpump</code>, <code>main/Heatpump_State</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Force DHW</td>
+<td><code>switch.aquarea_force_dhw_mode</code></td>
+<td><code>commands/SetForceDHW</code>, <code>main/Force_DHW_State</code></td>
+<td>Used by AppDaemon <code>dhw_control</code></td>
+</tr>
+<tr>
+<td>Tank target</td>
+<td><code>input_number.heishamon_tank_temp</code></td>
+<td><code>commands/SetDHWTemp</code></td>
+<td>40 to 75</td>
+</tr>
+<tr>
+<td>Heating mode (read)</td>
+<td><code>sensor.aquarea_heating_mode</code></td>
+<td><code>main/Heating_Mode</code></td>
+<td><code>0</code> curve, <code>1</code> direct. Read only; any water-temperature write must check it first</td>
+</tr>
+<tr>
+<td>Sterilization (read)</td>
+<td><code>binary_sensor.aquarea_sterilization_state</code>, <code>sensor.aquarea_sterilization_temperature</code>, <code>sensor.aquarea_sterilization_max_time</code></td>
+<td><code>main/Sterilization_State</code>, <code>main/Sterilization_Temp</code>, <code>main/Sterilization_Max_Time</code></td>
+<td>State <code>0</code>/<code>1</code>, target in degC, maximum time in min</td>
+</tr>
+<tr>
+<td>Heater (read)</td>
+<td><code>binary_sensor.aquarea_force_heater_state</code>, <code>sensor.aquarea_tank_heater_enabled</code>, <code>sensor.aquarea_room_heater_enabled</code>, <code>sensor.aquarea_internal_heater_state</code>, <code>sensor.aquarea_external_heater_state</code></td>
+<td><code>main/Force_Heater_State</code>, <code>main/DHW_Heater_State</code>, <code>main/Room_Heater_State</code>, <code>main/Internal_Heater_State</code>, <code>main/External_Heater_State</code></td>
+<td>The four heater state <code>sensor.*</code> ones are <code>Off</code>/<code>On</code> strings, which the Prometheus exporter drops; each has a binary_sensor copy with the same object id (<code>binary_sensor.aquarea_tank_heater_enabled</code>, <code>_room_heater_enabled</code>, <code>_internal_heater_state</code>, <code>_external_heater_state</code>) that is exported</td>
+</tr>
+<tr>
+<td>Heater hours and limit (read)</td>
+<td><code>sensor.aquarea_room_heater_operating_hours</code>, <code>sensor.aquarea_dhw_heater_operating_hours</code>, <code>sensor.aquarea_heater_on_outdoor_temperature</code></td>
+<td><code>main/Room_Heater_Operations_Hours</code>, <code>main/DHW_Heater_Operations_Hours</code>, <code>main/Heater_On_Outdoor_Temp</code></td>
+<td>Hours are <code>total_increasing</code>; the outdoor limit is in degC</td>
+</tr>
+<tr>
+<td>Pump speed (read)</td>
+<td><code>sensor.aquarea_pump_speed</code>, <code>sensor.aquarea_pump_flow</code></td>
+<td><code>main/Pump_Speed</code>, <code>main/Pump_Flow</code></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>The helpers are not on the dashboards in <code>apps/home-assistant/dashboards/</code>; they are only reachable
+from the HA UI (entities, scripts, dev tools).</p>
+<h3 id="only-at-the-mqtt-level">Only at the MQTT level</h3>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Kind</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>main/Cooling_Mode</code></td>
+<td>state</td>
+<td><code>0</code> curve, <code>1</code> direct for cooling. <strong>Not in HA</strong> (<code>Heating_Mode</code> now is, as <code>sensor.aquarea_heating_mode</code>)</td>
+</tr>
+<tr>
+<td><code>main/Zones_State</code></td>
+<td>state</td>
+<td><code>0</code> zone 1, <code>1</code> zone 2, <code>2</code> both</td>
+</tr>
+<tr>
+<td><code>main/Heat_Delta</code>, <code>main/Cool_Delta</code></td>
+<td>state</td>
+<td>Floor heating / cooling delta (K)</td>
+</tr>
+<tr>
+<td><code>main/Heating_Off_Outdoor_Temp</code></td>
+<td>state</td>
+<td>Heating cut-off outdoor limit (<code>Heater_On_Outdoor_Temp</code> is in HA now)</td>
+</tr>
+<tr>
+<td><code>main/Pump_Duty</code></td>
+<td>state</td>
+<td>Pump duty (the fork has no max pump duty setting)</td>
+</tr>
+<tr>
+<td><code>main/Z1_Temp</code>, <code>main/Z2_Temp</code>, <code>main/Room_Thermostat_Temp</code></td>
+<td>state</td>
+<td>Zone actual temperatures. <code>Z1_Water_Temp</code> and <code>Z2_Water_Temp</code> read <code>-78</code> (not fitted), <code>Z2_Temp</code> reads <code>-128</code></td>
+</tr>
+<tr>
+<td><code>main/Z1_Cool_Curve_*</code>, <code>main/Z2_*_Curve_*</code></td>
+<td>state</td>
+<td>Cooling curve and zone 2 curves</td>
+</tr>
+<tr>
+<td><code>commands/SetForceDefrost</code>, <code>commands/SetForceSterilization</code></td>
+<td>command</td>
+<td><code>0</code>/<code>1</code></td>
+</tr>
+<tr>
+<td><code>commands/SendRawValue</code></td>
+<td>command</td>
+<td>A raw hex frame, see below</td>
+</tr>
+<tr>
+<td><code>commands/OSCommand</code></td>
+<td>command</td>
+<td>Runs a shell command on the CZ-TAW1 (<code>EnableCommand</code> is true in the sample config). Treat as root access to the gateway</td>
+</tr>
+</tbody>
+</table>
+<h2 id="commands-supported-by-the-fork">Commands supported by the fork</h2>
+<p>All handlers are in <code>src/taw2mqtt.go</code> (subscriptions at <code>:503-556</code>). Every command is a 110-byte
+frame that starts <code>f1 6c 01 10</code> with all other bytes zero (zero means "no change"), then the
+checksum is added on send. Byte offsets are 0-based.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Payload</th>
+<th>Byte</th>
+<th>Value written</th>
+<th>Line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SetHeatpump</code></td>
+<td><code>0</code> off, <code>1</code> on</td>
+<td>4</td>
+<td><code>1</code> (off) or <code>2</code> (on); any non-<code>1</code> payload turns it off</td>
+<td><code>:839</code></td>
+</tr>
+<tr>
+<td><code>SetForceDHW</code></td>
+<td><code>0</code>, <code>1</code></td>
+<td>4</td>
+<td><code>64</code> / <code>128</code>; any non-<code>1</code> payload clears it</td>
+<td><code>:736</code></td>
+</tr>
+<tr>
+<td><code>SetHolidayMode</code></td>
+<td><code>0</code>, <code>1</code></td>
+<td>5</td>
+<td><code>16</code> / <code>32</code></td>
+<td><code>:676</code></td>
+</tr>
+<tr>
+<td><code>SetOperationMode</code></td>
+<td><code>0</code>-<code>10</code></td>
+<td>6</td>
+<td><code>18</code>, <code>19</code>, <code>24</code>, <code>33</code>, <code>34</code>, <code>35</code>, <code>40</code>, <code>24</code>, <code>40</code>, <code>24</code>, <code>40</code> for payload 0 to 10 (7 and 8, Auto(Cool), are written as Auto); other payloads write <code>0</code> (no change)</td>
+<td><code>:602</code></td>
+</tr>
+<tr>
+<td><code>SetPowerfulMode</code></td>
+<td><code>0</code>-<code>3</code></td>
+<td>7</td>
+<td><code>(n+1) &amp; 7</code></td>
+<td><code>:658</code></td>
+</tr>
+<tr>
+<td><code>SetQuietMode</code></td>
+<td><code>0</code>-<code>3</code></td>
+<td>7</td>
+<td><code>(n+1) * 8</code></td>
+<td><code>:821</code></td>
+</tr>
+<tr>
+<td><code>SetForceDefrost</code></td>
+<td><code>0</code>, <code>1</code></td>
+<td>8</td>
+<td><code>0</code> / <code>2</code></td>
+<td><code>:716</code></td>
+</tr>
+<tr>
+<td><code>SetForceSterilization</code></td>
+<td><code>0</code>, <code>1</code></td>
+<td>8</td>
+<td><code>0</code> / <code>4</code></td>
+<td><code>:696</code></td>
+</tr>
+<tr>
+<td><code>SetZ1HeatRequestTemperature</code></td>
+<td>integer</td>
+<td>38</td>
+<td><code>n + 128</code></td>
+<td><code>:756</code></td>
+</tr>
+<tr>
+<td><code>SetZ1CoolRequestTemperature</code></td>
+<td>integer</td>
+<td>39</td>
+<td><code>n + 128</code></td>
+<td><code>:773</code></td>
+</tr>
+<tr>
+<td><code>SetZ2HeatRequestTemperature</code></td>
+<td>integer</td>
+<td>40</td>
+<td><code>n + 128</code></td>
+<td><code>:789</code></td>
+</tr>
+<tr>
+<td><code>SetZ2CoolRequestTemperature</code></td>
+<td>integer</td>
+<td>41</td>
+<td><code>n + 128</code></td>
+<td><code>:805</code></td>
+</tr>
+<tr>
+<td><code>SetDHWTemp</code></td>
+<td>integer</td>
+<td>42</td>
+<td><code>n + 128</code></td>
+<td><code>:640</code></td>
+</tr>
+<tr>
+<td><code>SendRawValue</code></td>
+<td>hex of a full frame</td>
+<td>any</td>
+<td>as given</td>
+<td><code>:591</code></td>
+</tr>
+</tbody>
+</table>
+<p>Behaviour that matters for safety (verified in the code):</p>
+<ul>
+<li>There is <strong>no range check</strong> in any handler. The value is parsed with <code>Atoi</code>, falling back to
+  <code>ParseFloat</code>, and a payload that does not parse (including an empty one) becomes <code>0</code>, which is
+  written as byte <code>128</code>, that is <strong>0 degC</strong>, not "no change". The byte is truncated to 8 bits, so
+  out of range values wrap.</li>
+<li>Commands are queued FIFO (max 256) and sent one per loop with <code>SleepAfterCommand</code> (1 s) between
+  them. A queued command expires after 2 minutes (<code>commandTTL</code>, <code>:38-48</code>), so a stale command is
+  never replayed hours later.</li>
+<li>There is no acknowledgement frame. The fork does not report whether the unit accepted a value.</li>
+</ul>
+<p>Not in the fork (upstream has them): <code>SetCurves</code>, <code>SetZones</code>, <code>SetMaxPumpDuty</code>, <code>SetPump</code>,
+<code>SetFloorHeatDelta</code>/<code>SetFloorCoolDelta</code>, <code>SetHeatingOffOutdoorTemp</code>, zone sensor settings,
+heater and bivalent settings, <code>SetReset</code> and the rest of upstream SET15 to SET50. There is also no
+command (upstream or fork) that switches between curve and direct mode.</p>
+<p>State topics published by the fork: <code>TOP0</code> to <code>TOP94</code> (<code>ParseTopicList3</code>, from <code>:1178</code>). Upstream
+publishes up to <code>TOP143</code> plus the <code>extra/</code> and <code>optional/</code> groups; the fork has none of those.
+<code>Heating_Mode</code> is <code>TOP76</code> (<code>:1771</code>, byte 28, low two bits minus one), <code>Cooling_Mode</code> is <code>TOP81</code>.</p>
+<h2 id="switching-between-curve-and-direct-mode">Switching between curve and direct mode</h2>
+<p>There is no MQTT or HA command for this. It is an installer setting of the heat pump, made on the
+unit's own controller (CZ-TAW1 remote or the indoor unit panel). Per the service manual (p.99, 105):
+Menu &gt; Installer setup &gt; Operation setup &gt; Heat &gt; "Water temp. for heating ON", with the choices
+"Compensation curve" (default) or "Direct". After the change, <code>main/Heating_Mode</code> flips to the new
+value.</p>
+<p>Manual-confirmed ranges (service manual p.26, 105, 131, 149):</p>
+<ul>
+<li>Curve: four points, with a user shift of +/-5 degC.</li>
+<li>Direct: 20 to 55 degC (60 degC above -10 degC outdoor).</li>
+<li>Powerful mode does not apply in direct mode.</li>
+</ul>
+<p>The manual covers the indoor unit WH-ADC0309J3E5 with the outdoor unit WH-UD09JE5. The owner's units
+are WH-ADC0309JE5C and WH-UD09JE5-1, assumed equivalent.</p>
+<h2 id="changing-the-curve">Changing the curve</h2>
+<ul>
+<li><strong>From the controller:</strong> the same installer menu, per zone: the water target at two outside
+  temperatures (the four points above; service manual p.105, 131). This is the supported way with this fork.</li>
+<li><strong>From HA/MQTT with the fork:</strong> not supported. <code>SetCurves</code> does not exist in the fork.</li>
+<li><strong>Upstream HeishaMon:</strong> <code>commands/SetCurves</code> takes a JSON document with <code>zone1</code>/<code>zone2</code>,
+  <code>heat</code>/<code>cool</code>, <code>target</code>/<code>outside</code>, <code>high</code>/<code>low</code>. For Z1 heating it writes bytes 75 to 78 as
+  <code>value + 128</code> (upstream <code>commands.cpp</code>, <code>set_curves</code>).</li>
+<li><strong>Raw workaround (<em>believed</em>, untested):</strong> <code>SendRawValue</code> with a hand-built frame that sets bytes
+  75 to 78 to <code>value + 128</code> would write the same bytes. It bypasses every check and a wrong frame
+  goes straight to the unit; do not use it on the live system without a test plan.</li>
+</ul>
+<h2 id="current-configuration-2026-10-30">Current configuration (2026-10-30)</h2>
+<p>Read-only snapshot from the broker (full refresh at the fork's 300 s <code>ForceRefreshTime</code>) and the
+Home Assistant Prometheus metrics.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Heating mode (<code>Heating_Mode</code>)</td>
+<td><code>1</code>, <strong>direct</strong>; <code>Cooling_Mode</code> also <code>1</code> (direct)</td>
+</tr>
+<tr>
+<td>Operating mode (<code>Operating_Mode_State</code>)</td>
+<td><code>3</code>, DHW only (AppDaemon climate control currently has space heating off)</td>
+</tr>
+<tr>
+<td>Z1 heat request (<code>Z1_Heat_Request_Temp</code>)</td>
+<td>26 degC (absolute, direct mode)</td>
+</tr>
+<tr>
+<td>Z1 water target (<code>Z1_Water_Target_Temp</code>) / <code>Main_Target_Temp</code></td>
+<td>26 / 26 degC</td>
+</tr>
+<tr>
+<td>Z1 heat curve (stored, not in use)</td>
+<td>-5 degC outside -&gt; 35 degC, 15 degC outside -&gt; 26 degC</td>
+</tr>
+<tr>
+<td>Z1 cool request / cool curve</td>
+<td>15 degC; 20 degC outside -&gt; 15, 30 degC outside -&gt; 10</td>
+</tr>
+<tr>
+<td>Z2 heat request / water target</td>
+<td>28 / 28 degC (zone 2 inactive: <code>Zones_State</code> 0)</td>
+</tr>
+<tr>
+<td>Quiet / powerful / holiday / force DHW</td>
+<td>off / off / off / off</td>
+</tr>
+<tr>
+<td>Heat pump power</td>
+<td>on, no error</td>
+</tr>
+<tr>
+<td>Pump</td>
+<td><code>Pump_Duty</code> 0, <code>Pump_Speed</code> 0, <code>Pump_Flow</code> 0.13 L/min (not heating)</td>
+</tr>
+<tr>
+<td>Tank</td>
+<td>target 49 degC, actual 49 degC (<code>DHW_Heat_Delta</code> -4, sterilization 65 degC / 10 min)</td>
+</tr>
+<tr>
+<td>Outlet / inlet</td>
+<td>28 / 38 degC; outside 18 degC</td>
+</tr>
+<tr>
+<td>Deltas and limits</td>
+<td><code>Heat_Delta</code> 5 K, <code>Heating_Off_Outdoor_Temp</code> 35 degC, <code>Heater_On_Outdoor_Temp</code> 0 degC</td>
+</tr>
+<tr>
+<td><code>Heat_Pump_Model</code></td>
+<td><code>-1</code> (the fork does not decode it)</td>
+</tr>
+</tbody>
+</table>
+<p>History from the Prometheus metrics (90 days): the Z1 request stayed at 26 and the four Z1 curve
+points never changed. The Z1 and Z2 requests equal their curve "high" target (26 and 28); whether
+the two are linked in the unit is not known (see the experiment note below).</p>
+<h2 id="electric-heater-and-power-limits">Electric heater and power limits</h2>
+<p>From the Panasonic service manual for this unit family (cited as "service manual p.N"). The manual
+covers WH-ADC0309J3E5 with WH-UD09JE5; the owner's WH-ADC0309JE5C with WH-UD09JE5-1 is assumed
+equivalent. The manual states no other heater steps for this model.</p>
+<h3 id="the-heater">The heater</h3>
+<ul>
+<li>One 3.00 kW electric heater (13.0 A) on a separate supply (Power Supply 2, its own 16 A breaker);
+  p.25-26. It is both the space-heating backup and, when the tank heater is set to Internal, the
+  hot-water booster; p.138, 146.</li>
+<li>The heat pump alone draws at most 3.47 kW / 15.9 A (about 2.0 kW rated at A7W35); p.25. Heat pump
+  plus heater is about 6.5 kW, which <strong>exceeds the 5.0 kW contracted limit on its own</strong>.</li>
+<li>The 5.0 kW limit is enforced by a smart meter that cuts the supply. The owner confirmed that cuts
+  have happened. A trip is a safety and availability failure, so the heater must be treated as a
+  load that can trip the house, not as a cost.</li>
+</ul>
+<h3 id="what-starts-the-heater-automatically">What starts the heater automatically</h3>
+<table>
+<thead>
+<tr>
+<th>Trigger</th>
+<th>Condition</th>
+<th>Page</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Space heating</td>
+<td>Outdoor temperature below "O/D temp for heater ON" (default 0 degC; the live <code>Heater_On_Outdoor_Temp</code> reads 0 degC), plus outlet and delay conditions</td>
+<td>144</td>
+</tr>
+<tr>
+<td>Defrost</td>
+<td>Only if the backup heater is enabled: outlet below 10 degC, outdoor below -10 degC or inlet below 27 degC</td>
+<td>145</td>
+</tr>
+<tr>
+<td>Hot water</td>
+<td>Tank target above what the heat pump reaches alone</td>
+<td>138, 146</td>
+</tr>
+<tr>
+<td>Sterilization</td>
+<td>Default 65 degC for 10 min, weekly; uses the heater</td>
+<td>150</td>
+</tr>
+<tr>
+<td>Anti-freeze</td>
+<td>Water below 6 degC</td>
+<td>152</td>
+</tr>
+<tr>
+<td>Heat pump error</td>
+<td>Only if "Force Heater" = Auto (default Manual)</td>
+<td>144, 147-148</td>
+</tr>
+</tbody>
+</table>
+<p>Consequences for control:</p>
+<ul>
+<li><strong>Hot water above about 51 degC starts the 3 kW heater.</strong> The heat pump alone practically reaches
+  51 to 55 degC (control reference 51 degC; "above 55 degC only possible with backup heater"; p.26,
+  107, 137). The tank range is 40 to 65 degC with the internal heater. The tank target of 49 degC in
+  the current configuration is within the heat pump range.</li>
+<li><strong>A sterilization cycle starts the heater</strong> (65 degC target), a scheduled 3 kW load every week.</li>
+<li>With the heater on, the heat pump plus the heater can exceed 5.0 kW before any other house load
+  is counted.</li>
+<li>SMART DHW (default 20:00 to 05:00) can suppress hot-water reheat; p.152.</li>
+</ul>
+<h3 id="inputs-that-limit-power">Inputs that limit power</h3>
+<p>All of these need the optional PCB CZ-NS4P, except CN-THERMO; p.92-93, 98, 103, 159-163.</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Effect</th>
+<th>Note</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Demand control, 0-10 V</td>
+<td>Outdoor-unit current limited to 10-100%</td>
+<td>The manual does not say it limits the heater</td>
+</tr>
+<tr>
+<td>External compressor switch</td>
+<td>A DIP pin selects "heaters only off" or everything off</td>
+<td></td>
+</tr>
+<tr>
+<td>SG-ready</td>
+<td>Grid-signal operating states</td>
+<td></td>
+</tr>
+<tr>
+<td>CN-THERMO external switch</td>
+<td>Whole system off</td>
+<td>No PCB needed</td>
+</tr>
+</tbody>
+</table>
+<p>Whether any of them is fitted is not known. They are the candidates for an import-limit interlock;
+the demand control input alone cannot be relied on to keep the heater off.</p>
+<h2 id="acknowledgement-and-latency">Acknowledgement and latency</h2>
+<ul>
+<li>Command path: HA <code>mqtt.publish</code> (QoS 0, retain false) -&gt; fork queue -&gt; serial frame at the next
+  loop (about 1 to 3 s).</li>
+<li>Confirmation: the unit answers every poll with a full data frame. The fork publishes a state topic
+  only <strong>when its value changed</strong> (<code>:1148</code>), so the state topic itself is the acknowledgement:
+  <code>main/Z1_Heat_Request_Temp</code> for the request and <code>main/Z1_Water_Target_Temp</code> /
+  <code>main/Main_Target_Temp</code> for the effect. Expect the request to change within a few seconds
+  (<em>believed</em>; not measured, nothing was written). The outlet itself follows the new target over
+  minutes (compressor ramp), not seconds.</li>
+<li>No change after about 10 s means the command was rejected or lost: there is no error topic.</li>
+<li>A fresh subscriber only sees changed topics until the next full refresh (up to 300 s), so wait
+  for the refresh to read a static value such as <code>Heating_Mode</code>.</li>
+<li>HA mirrors the confirmed value back into the helper and mutes the command automation for 5 s
+  (<code>delay</code> in <code>heishamon.yaml:246-253</code>).</li>
+</ul>
+<h2 id="what-happens-if-the-request-is-written-in-the-other-mode">What happens if the request is written in the other mode</h2>
+<p>Not tested (writing is out of scope for the audit). Believed from the upstream ranges
+("-5 to 5 or 20 to max"):</p>
+<ul>
+<li><strong>Direct mode, shift-sized value (for example 3):</strong> below the 20 degC minimum; the unit is expected
+  to ignore or clamp it, but a clamp to 20 degC would still heat the floor with a target far below
+  the desired one.</li>
+<li><strong>Curve mode, absolute value (for example 26):</strong> far above the -5 to 5 shift range; the unit is
+  expected to ignore or clamp it. If it were accepted as a +26 K shift the water target would hit
+  the unit's maximum.</li>
+</ul>
+<p>Neither the fork nor the HA helper (range -5 to 40) prevents either case. Before any write, read
+<code>main/Heating_Mode</code> first.</p>
+<h2 id="safety-notes">Safety notes</h2>
+<ul>
+<li>Strictly shadow phase for the battery optimizer: nothing here authorises writing. Any experiment
+  is a separate, owner-approved step.</li>
+<li>The HA helper accepts -5 to 40 for every zone. It cannot reach direct temperatures above 40 degC
+  and it accepts shift-sized values in direct mode. A dedicated helper or script with a narrower
+  range (for example 20 to a chosen maximum in direct mode) and a check on <code>Heating_Mode</code> should
+  sit in front of the command.</li>
+<li>The firmware clamp is unknown. The fork clamps nothing; upstream <code>set_z1_heat_request_temperature</code>
+  clamps nothing either. The unit's own limits on the direct value are not documented (the upstream
+  docs say "20 to max"); the highest target seen on <code>Main_Target_Temp</code> is 59 degC, during DHW.</li>
+<li>Garbage or empty payloads write 0 degC (see above). Always publish a validated integer with
+  <code>retain: false</code>; a retained command would be replayed by the broker to every reconnecting
+  subscriber.</li>
+<li>Echo (<em>believed</em>): when the unit reports a different request (for example after a change on the
+  controller), the "Set Z1 Heat selector" automation updates the helper and the "Set Z1 Heat
+  Temperature" automation then publishes the same value back. It is harmless for an identical value
+  but it means every device-side change is re-written once.</li>
+<li>Writes are persistent in the unit; there is no automatic fallback if Home Assistant or the
+  optimizer stops. A control loop needs a watchdog that restores a safe request (the existing
+  AppDaemon watchdog does this for the operating mode only, see <code>appdaemon_climate.yaml</code>).</li>
+<li><code>OSCommand</code> and <code>SendRawValue</code> are unrestricted over MQTT. Anyone with broker credentials can
+  change unit settings; keep the broker credentials and <code>mosquitto</code> network exposure as they are.</li>
+<li>First write experiment, when approved: write a value equal to the current one, check that
+  <code>Z1_Heat_Request_Temp</code> and <code>Z1_Heat_Curve_Target_High_Temp</code> behave as expected, then step by
+  1 K, one change at a time, watching <code>Heating_Mode</code>, <code>Z1_Water_Target_Temp</code> and <code>Error</code>.</li>
+</ul>
+<h2 id="read-only-checks">Read-only checks</h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># state, from the broker pod; the secret is read from the mosquitto-user Secret, never printed</span>
+kubectl<span class="w"> </span>-n<span class="w"> </span>mosquitto<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>mosquitto-0<span class="w"> </span>-c<span class="w"> </span>mosquitto<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>mosquitto_sub<span class="w"> </span>-h<span class="w"> </span><span class="m">127</span>.0.0.1<span class="w"> </span>-u<span class="w"> </span>&lt;user&gt;<span class="w"> </span>-P<span class="w"> </span>&lt;password&gt;<span class="w"> </span>-W<span class="w"> </span><span class="m">330</span><span class="w"> </span>-C<span class="w"> </span><span class="m">1</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-t<span class="w"> </span><span class="s1">&#39;panasonic_heat_pump/main/Heating_Mode&#39;</span>
+</code></pre></div>
+<p>Prometheus has the HA entities (<code>hass_sensor_unit_celsius{entity="sensor.aquarea_z1_heat_request_temperature"}</code>),
+including <code>Heating_Mode</code> as <code>sensor.aquarea_heating_mode</code> since 2026-10-30. The exporter has no entity filter
+(<code>prometheus:</code> in <code>configuration.yaml</code>), so new numeric sensors and binary sensors appear without further config.</p>
+<h2 id="observation-2026-10-30-read-only-mqtt-sensors-added">Observation 2026-10-30 (read-only MQTT sensors added)</h2>
+<table>
+<thead>
+<tr>
+<th>Topic</th>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Sterilization_State</code></td>
+<td><code>0</code></td>
+<td>Legionella function off. From history, the tank was never above 51 degC from 2023-11 to 2026-10, so no sterilization cycle (65 degC) has run</td>
+</tr>
+<tr>
+<td><code>DHW_Heater_Operations_Hours</code></td>
+<td><code>0</code></td>
+<td>The heater has never run for hot water</td>
+</tr>
+<tr>
+<td><code>Room_Heater_Operations_Hours</code></td>
+<td><code>29</code></td>
+<td>Lifetime hours of the heater for space heating</td>
+</tr>
+<tr>
+<td><code>Heater_On_Outdoor_Temp</code></td>
+<td><code>0</code> degC</td>
+<td>Outdoor limit below which the backup heater may start</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

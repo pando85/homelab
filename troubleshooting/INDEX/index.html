@@ -1,0 +1,3573 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../../user-guide/wan-phone-failover/">
+      
+      
+        <link rel="next" href="../ansible-limit-cross-host-facts/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Troubleshooting Pitfall Index - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting-pitfall-index" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Troubleshooting Pitfall Index
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Table of Contents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#kubernetes-gitops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kubernetes &amp; GitOps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#argocd" class="md-nav__link">
+    <span class="md-ellipsis">
+      ArgoCD
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monitoring-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Monitoring &amp; Observability
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networking" class="md-nav__link">
+    <span class="md-ellipsis">
+      Networking
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage &amp; Backup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ansible-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ansible &amp; Infrastructure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      LLM Infrastructure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#desktop-home" class="md-nav__link">
+    <span class="md-ellipsis">
+      Desktop &amp; Home
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#applications" class="md-nav__link">
+    <span class="md-ellipsis">
+      Applications
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Table of Contents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#kubernetes-gitops" class="md-nav__link">
+    <span class="md-ellipsis">
+      Kubernetes &amp; GitOps
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#argocd" class="md-nav__link">
+    <span class="md-ellipsis">
+      ArgoCD
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#monitoring-observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      Monitoring &amp; Observability
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networking" class="md-nav__link">
+    <span class="md-ellipsis">
+      Networking
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage-backup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Storage &amp; Backup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ansible-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ansible &amp; Infrastructure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#llm-infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      LLM Infrastructure
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#desktop-home" class="md-nav__link">
+    <span class="md-ellipsis">
+      Desktop &amp; Home
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#applications" class="md-nav__link">
+    <span class="md-ellipsis">
+      Applications
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="troubleshooting-pitfall-index">Troubleshooting Pitfall Index</h1>
+<p>Full index of common pitfalls encountered in this homelab, grouped by subsystem. Each entry
+retains its original diagnostic detail and links to the full troubleshooting doc where available.</p>
+<p>This file is the canonical reference for pitfalls relocated from <code>AGENTS.md</code>. Agents should consult
+the subsystem-specific doc for full diagnosis and fix procedures.</p>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ul>
+<li><a href="#kubernetes--gitops">Kubernetes &amp; GitOps</a> (14 entries)</li>
+<li><a href="#argocd">ArgoCD</a> (4 entries)</li>
+<li><a href="#monitoring--observability">Monitoring &amp; Observability</a> (8 entries)</li>
+<li><a href="#networking">Networking</a> (6 entries)</li>
+<li><a href="#storage--backup">Storage &amp; Backup</a> (10 entries)</li>
+<li><a href="#ansible--infrastructure">Ansible &amp; Infrastructure</a> (2 entries)</li>
+<li><a href="#llm-infrastructure">LLM Infrastructure</a> (3 entries)</li>
+<li><a href="#desktop--home">Desktop &amp; Home</a> (11 entries)</li>
+<li><a href="#applications">Applications</a> (10 entries)</li>
+</ul>
+<hr />
+<h2 id="kubernetes-gitops">Kubernetes &amp; GitOps</h2>
+<ul>
+<li>
+<p>Forgetting <code>helm dependency build</code> after updating <code>Chart.yaml</code></p>
+</li>
+<li>
+<p>Missing Renovate hints causes images to not auto-update</p>
+</li>
+<li>
+<p>Introducing CRDs without <code>--include-crds</code> in helm template</p>
+</li>
+<li>
+<p>Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources</p>
+</li>
+<li>
+<p>Forgetting <code>Prune=false</code> on PVCs causes data loss on sync</p>
+</li>
+<li>
+<p>Kata-deploy 3.31.0+ requires containerd drop-in directory (<code>config-v3.toml.d</code>) — see
+  <code>docs/troubleshooting/kata-containerd-dropin.md</code></p>
+</li>
+<li>
+<p>A freshly joined node shows <code>Ready,SchedulingDisabled</code> for about a minute: the <code>k3s-agent</code>
+  system-upgrade Plan has <code>cordon: true</code> and selects every non-control-plane node. When the binary
+  already matches, the job compares sha256, logs <code>Binary already been replaced</code>, exits 0, and the
+  controller uncordons. Don't uncordon by hand</p>
+</li>
+<li>
+<p>Apps with init-container workarounds (JS patching, schema health checks) should log version
+  info and fail loudly (<code>exit 1</code>) on mismatch so Renovate bumps surface breakage immediately.
+  Check init container logs after any version bump. See each app's deployment doc for specifics.</p>
+</li>
+<li>
+<p>Adding a node: never edit the hardcoded <code>hosts:</code> lists in <code>metal/playbooks/install/prepare.yml</code>
+  (11-13, 18, 23, 30) or <code>cluster.yml</code> (28-31) — they are exactly the ZFS/GPU/backup paths a new node
+  must skip, so a new node gets no <code>setup</code> role. <code>make first-boot</code> is unusable (forces root +
+  <code>--ask-pass</code>) and unscopeable (it appends its own <code>--limit</code> last). The node must resolve short names
+  or the k3s agent cannot reach <code>server: https://prusik:6443</code> — set <code>prepare_dns_search_domains</code> if
+  DHCP does not push the <code>grigri</code> search domain. There is no local StorageClass by deliberate
+  decision (a <code>system/local-path/</code> chart was considered and dropped — a StorageClass advertises
+  unbacked, unquota'd storage on a weak node). On a no-ZFS node any PVC without <code>storageClassName</code>
+  inherits the default <code>openebs-zfspv</code> and hangs <code>Pending</code> forever instead of failing; guarded by
+  <code>PersistentVolumeClaimPending</code> / <code>PersistentVolumeClaimLost</code> PrometheusRules. Node-local
+  exceptions use <code>hostPath</code> with <code>type: Directory</code> (Ansible-created paths in <code>metal/</code>). See
+  <code>docs/user-guide/add-or-remove-nodes.md</code> and <code>planning/k8s-amd64-1-node-addition.md</code></p>
+</li>
+<li>
+<p>Zalando Postgres PVC recreate causes Patroni stale-DCS deadlock: Patroni DCS ConfigMaps
+  (<code>&lt;cluster&gt;-config</code>, <code>&lt;cluster&gt;-leader</code>) survive PVC deletion and carry the old cluster's
+  <code>initialize</code> marker, so Patroni waits forever for a leader on a fresh empty data dir. Fix:
+  delete the stale DCS ConfigMaps before restarting the pod.
+  See <code>docs/troubleshooting/zalando-patroni-stale-dcs-deadlock.md</code></p>
+</li>
+<li>
+<p>High pod restart counts don't always mean problems — check <code>Last State.Reason</code> (exit 255 =
+  node reboot, not app crash). See <code>docs/troubleshooting/cluster-hygiene.md</code></p>
+</li>
+<li>
+<p>Zalando Postgres operator rejects hyphenated database names in the <code>databases</code> field — create
+  them manually with <code>psql</code>. See <code>docs/troubleshooting/radarr-sqlite-to-postgres.md</code></p>
+</li>
+<li>
+<p>app-template ≥ 5.2 runs <code>tpl</code> over string values (incl. initContainer <code>command</code>), so a literal
+  <code>{{ ... }}</code> in <code>values.yaml</code> (e.g. a <code>sed</code> pattern matching a JS i18n <code>{{provider}}</code> token) fails
+  rendering with <code>function "provider" not defined</code> → ArgoCD <code>ComparisonError</code> blocks ALL syncs for
+  that app. Local <code>helm template</code> can miss it if <code>Chart.lock</code>/<code>charts/</code> (gitignored) are stale at an
+  older app-template than <code>Chart.yaml</code>. Escape as <code>{{ "{{x}}" }}</code> or match around it. This silently
+  broke readest for ~18 days. See <code>docs/troubleshooting/app-template-values-tpl-evaluation.md</code></p>
+</li>
+<li>
+<p><code>topologySpreadConstraints</code> without <code>matchLabelKeys: [pod-template-hash]</code> causes rolling updates
+  to stall on multi-replica Deployments: the scheduler counts old+new ReplicaSet pods together, so
+  <code>maxSkew: 1</code> + <code>DoNotSchedule</code> blocks new pod placement. Always add <code>matchLabelKeys</code> for
+  Deployments with <code>replicas &gt; 1</code> or HPA. Skip for single-replica, StatefulSets (no <code>pod-template-hash</code>),
+  and CRD-managed workloads. See <code>docs/conventions/topology-spread-constraints.md</code></p>
+</li>
+</ul>
+<h2 id="argocd">ArgoCD</h2>
+<ul>
+<li>
+<p>ArgoCD has <code>selfHeal: true</code> with real-time cluster watches — <code>kubectl apply</code> will be detected
+  and reverted almost instantly. Always commit/push first, let ArgoCD sync, then verify.
+  See <code>docs/troubleshooting/argocd-gitops-workflow.md</code></p>
+</li>
+<li>
+<p>ArgoCD repo-server has a probe death-spiral with default chart probes (1s timeout) — the pod
+  is killed during slow cold start before the metrics/health port (8084) binds, causing a restart
+  loop that never converges. Fix: enable <code>startupProbe</code> + raise <code>timeoutSeconds</code> to 5. See
+  <code>docs/troubleshooting/argocd-repo-server-probe-death-spiral.md</code></p>
+</li>
+<li>
+<p>ArgoCD <code>argo-cd</code> chart &gt;= 10.0 defaults <code>networkPolicy.create: true</code> — keep it <code>false</code> because
+  it interacts with Cilium's stale-datapath bug on rebooted nodes (kubelet probes get dropped).
+  See <code>docs/troubleshooting/argocd-repo-server-probe-death-spiral.md</code></p>
+</li>
+<li>
+<p>ArgoCD ≥ 3.5.4 overrides <code>HELM_CONFIG_HOME</code> during <code>kustomize build --enable-helm</code>
+  (GHSA-fw5c-w8rc-j7fx), so private OCI chart pulls go anonymous → 401 and apps stick
+  <code>Sync=Unknown</code>. Fix: set <code>DOCKER_CONFIG</code> on repo-server to the mounted registry dir.
+  Check env after any ArgoCD version bump. See
+  <code>docs/troubleshooting/argocd-kustomize-helm-oci-auth.md</code></p>
+</li>
+</ul>
+<h2 id="monitoring-observability">Monitoring &amp; Observability</h2>
+<ul>
+<li>
+<p>Grafana dashboard sidecar only honors <code>grafana.grafana.com/dashboards.target-directory</code>, not
+  <code>k8s-sidecar-target-directory</code> — using the latter silently drops the dashboard at the root
+  folder. See <code>docs/troubleshooting/grafana-sidecar-folder-annotation.md</code></p>
+</li>
+<li>
+<p>Grafana datasource sidecar writes ConfigMap data keys as filenames — if two ConfigMaps use the
+  same data key (e.g., <code>datasource.yaml</code>), they collide (last-writer-wins) and cause continuous
+  reload churn. Use unique keys per ConfigMap (e.g., <code>loki-datasource.yaml</code>,
+  <code>tempo-datasource.yaml</code>). See <code>docs/troubleshooting/grafana-datasource-sidecar-collision.md</code></p>
+</li>
+<li>
+<p>Grafana panels querying node-exporter metrics must collapse the DaemonSet's <code>pod</code> label with
+  <code>max by (instance, ...)</code> — otherwise every pod restart adds another phantom line over long time
+  ranges, and <code>sum(rate(...))</code> panels silently inflate. Use <code>max</code>, not <code>sum</code>/<code>avg</code>. Also verify each
+  metric name actually exists: empty panels look identical to nonexistent metrics. See
+  <code>docs/troubleshooting/grafana-node-exporter-pod-churn-duplicates.md</code></p>
+</li>
+<li>
+<p>Grafana 13.1.1 strips the <code>url</code> field from Loki <code>derivedFields</code> during provisioning, even with
+  <code>$$</code> escaping. Workaround: manually set the URL in the Grafana UI. See
+  <code>docs/troubleshooting/grafana-13-derivedfields-url-stripped.md</code></p>
+</li>
+<li>
+<p>Grafana MCP server deployment has multiple gotchas: Kaniop <code>KanidmServiceAccount</code> requires
+  <code>idm_admin</code> in the <code>entryManagedBy</code> group and <code>serviceAccountNamespaceSelector</code> on the Kanidm CR;
+  <code>mcp-grafana</code> image tags lack <code>v</code> prefix, binary is at <code>/app/mcp-grafana</code>, uses <code>-address</code> flag
+  (not <code>-port</code>); StatefulSets need manual pod deletion after template changes. See
+  <code>docs/troubleshooting/grafana-mcp-hermes.md</code></p>
+</li>
+<li>
+<p>Vector <code>kubernetes_logs</code> defaults cause silent log loss: <code>glob_minimum_cooldown_ms: 60000</code>
+  misses short-lived pods (&lt;60s), <code>oldest_first: true</code> starves new pods behind backlog,
+  <code>rotate_wait_secs: i64::MAX</code> exhausts file handles on deleted pods, and <code>max_read_bytes: 2048</code>
+  is too slow to clear backlog. Loki sinks also need explicit <code>buffer.when_full: block</code> or events
+  are silently dropped under backpressure. Tuned values: 5000 / false / 60 / 16384 / block. See
+  <code>docs/troubleshooting/vector-log-loss-and-starvation.md</code></p>
+</li>
+<li>
+<p>Single-binary Tempo (<code>tempo-1.24.4</code> chart, v2.9.0): <code>metrics_generator.traces_storage.path</code> must
+  never equal <code>storage.trace.local.path</code> when <code>local_blocks</code> processing is on — the generator's WAL
+  writes <code>&lt;uuid&gt;+&lt;tenant&gt;+&lt;version&gt;</code> dirs (e.g. <code>…+single-tenant+vParquet4</code>, 60 chars) into the same
+  tenant directory the blocklist poller scans, and <code>uuid.Parse</code> fails with <code>invalid UUID length: 60</code>,
+  aborting that poll. Compaction/retention can look healthy while the block index silently goes stale
+  between the ~1-in-5 polls that succeed. Fixed by giving the generator its own path
+  (<code>/var/tempo/generator-traces</code>) plus a Kustomize-patched init container to migrate the already-written
+  WAL (the chart has no <code>initContainers</code> values hook). See
+  <code>docs/troubleshooting/tempo-metrics-generator-wal-collision.md</code></p>
+</li>
+<li>
+<p><code>pyroscope.ebpf</code> cannot profile Calypso runners and never will: they run under gVisor, so the
+  container ID it matches on (read from <code>/proc/*/cgroup</code>) never corresponds to a host process.
+  Discovery still keeps the target, so <code>pyroscope_ebpf_active_targets</code> rising at runner start while
+  <code>calypso-runner</code> stays absent from <code>pyroscope_ebpf_pprofs_total</code> is expected, not a bug. Runners
+  are deliberately unprofiled — they execute untrusted, agent-generated code. Do not "fix" this by
+  moving runners to runc. See <code>docs/troubleshooting/profiling-collector-rollback.md</code></p>
+</li>
+</ul>
+<h2 id="networking">Networking</h2>
+<ul>
+<li>
+<p>Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
+  (<code>24.11.1</code>). See <code>docs/troubleshooting/armbian-kernel-bpf-masquerade.md</code></p>
+</li>
+<li>
+<p>Cilium BPF datapath can go stale on a node — pod egress breaks while host network works. Can
+  manifest as partial breakage (some connections work, others don't) — e.g. Vector buffer filling
+  on one sink while another on the same pod is fine. Also triggered by node reboots (BPF link
+  orphaning, upstream #46065); enabling NetworkPolicy turns the latent staleness into an active
+  probe-failure outage. Fix: delete the Cilium pod.
+  See <code>docs/troubleshooting/cilium-stale-bpf-egress.md</code></p>
+</li>
+<li>
+<p>Cilium LRP <code>skipRedirectFromBackend</code> is broken in v1.19.4 — nodelocaldns with <code>serviceMatcher</code>
+  needs a corefile-watcher sidecar to forward directly to CoreDNS pod IPs, avoiding redirect loop.
+  <code>addressMatcher</code> has post-reboot bugs (PR #45522). See
+  <code>docs/troubleshooting/nodelocaldns-cilium-lrp.md</code></p>
+</li>
+<li>
+<p>tc-limiter hostPath mounts need <code>mountPropagation: HostToContainer</code> — otherwise Cilium socket
+  goes stale after restart and rate limiting silently stops working.
+  See <code>docs/troubleshooting/bandwidth-limiting.md</code></p>
+</li>
+<li>
+<p>Unattended-upgrades must blacklist NVIDIA packages — host-level driver upgrades conflict with
+  the GPU Operator's containerized driver management, causing <code>Driver/library version mismatch</code>.
+  Fix: <code>cd metal &amp;&amp; ANSIBLE_EXTRA_ARGS="-t unattended-upgrades" make prepare</code>
+  See <code>docs/troubleshooting/nvidia-driver-version-mismatch.md</code></p>
+</li>
+<li>
+<p>Never let needrestart restart <code>k3s.service</code> or <code>systemd-networkd</code> on nodes: needrestart &lt; 3.9
+  re-flags k3s after every package (restart storm), and a networkd restart flushes Cilium's
+  native-routing routes. Both are deferred via <code>metal/</code> (<code>unattended-upgrades</code>/<code>networkd</code> tags).
+  See <code>docs/troubleshooting/needrestart-k3s-restart-storm.md</code></p>
+</li>
+</ul>
+<h2 id="storage-backup">Storage &amp; Backup</h2>
+<ul>
+<li>
+<p>prusik's L2ARC looks broken (34-39% hit ratio, serves 1.4% of reads) but is load-bearing — avg hit
+  size is 17-28KB, i.e. Jellyfin metadata/thumbnails/SQLite, not video. Hit ratio is misleading
+  because it only covers ARC misses. The real defect is <code>l2arc_noprefetch=0</code> wasting 41% of the device
+  on one-shot media prefetch. Fix that; do NOT remove the cache vdev. See
+  <code>docs/troubleshooting/prusik-l2arc-ineffective.md</code></p>
+</li>
+<li>
+<p>prusik storage is latency-bound, not throughput-bound, and <strong>the root cause is RAM, not disks</strong>:
+  container limits sum to <strong>210 GiB</strong> (requests 44.7 GiB) on 62 GiB, forcing <code>zfs_arc_max=5GB</code> against
+  a 12-14GB hot set; <code>MemAvailable</code> bottoms out at 1.97 GiB and 60% of the ARC is metadata. Free
+  RAM (move CI off-node) and raise ARC before buying SSDs — RAM beats SSD by ~1000x. Note
+  <code>k8s-amd64-1</code> has only 16 GiB, and <code>ci-runner-0</code> peaks at 17.4 GiB / 7.68 cores, so <strong>CI cannot move
+  there until it gets 32 GiB</strong>. A SLOG/ZIL will NOT help (Postgres runs <code>synchronous_commit=off</code>).
+  Forgejo web latency is <code>git-upload-pack</code> reading git objects, not Postgres. Backup is label-driven
+  (<code>backup/retain</code>, <code>backup</code>), so a PVC recreated without labels is silently never backed up. See
+  <code>docs/conventions/prusik-fast-storage-tier.md</code></p>
+</li>
+<li>
+<p>prusik NVMe kernel names (<code>nvme0n1</code>/<code>nvme1n1</code>) flip across reboots. Always identify disks by
+  model/serial or <code>/dev/disk/by-id</code> via a <code>node_disk_info</code> join. See
+  <code>docs/troubleshooting/prusik-etcd-swap-thrash.md</code></p>
+</li>
+<li>
+<p><code>openebs-zfspv</code>/<code>fast-zfspv</code> use <code>reclaimPolicy: Retain</code> — deleting a PV issues no CSI
+  DeleteVolume, so the ZFS dataset <strong>and</strong> its <code>ZFSVolume</code> CR both survive with no ownerReference to
+  GC them. Auditing <code>Released</code> PVs therefore reports a clean cluster while the space still leaks;
+  the real signal is a <code>ZFSVolume</code> CR with no matching PV. 89 volumes / 139.6 GiB accumulated over
+  ~9 months this way. Use <code>scripts/zfs-orphan-audit.sh</code> (dry-run by default) and the
+  <code>ZFSVolumeOrphaned</code> alert. Do <strong>not</strong> flip the policy to <code>Delete</code> — Retain is the only backstop
+  against an ArgoCD prune destroying a database. See <code>docs/troubleshooting/cluster-hygiene.md</code></p>
+</li>
+<li>
+<p><code>openebs-zfspv</code> with <code>fstype: zfs</code> + <code>fsGroup</code> causes slow pod startup (recursive chown on
+  every mount). <code>fsGroupChangePolicy: OnRootMismatch</code> doesn't help — kubelet resets setgid bit.
+  If the app manages its own file ownership (runs as volume owner or has init chown), remove
+  <code>fsGroup</code> entirely. See <code>docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md</code></p>
+</li>
+<li>
+<p>Removing <code>fsGroup</code> leaves a non-root container with <strong>no</strong> write access to a freshly provisioned
+  PVC: a new ZFS dataset mounts <code>root:root 0755</code>, kubelet creates missing <code>subPath</code> dirs root-owned,
+  and <code>supplementalGroups</code> changes no ownership. Symptom is <code>mkdir &lt;path&gt;: permission denied</code> with a
+  healthy, polling pod and nothing in the container log. Migrating off <code>emptyDir</code> (which kubelet
+  creates 0777) is not a like-for-like swap — it needs an explicit ownership plan. Fix with a root
+  init container on the volume <strong>root</strong>, not a subPath. See
+  <code>docs/troubleshooting/ci-runner-workspace-permission-denied.md</code></p>
+</li>
+<li>
+<p>OpenEBS ZFS 2.11.x <code>zfs send | nc</code> can deadlock if <code>nc</code> exits early; killing <code>zfs send</code> first risks
+  marking a truncated volume backup <code>Done</code>. Chart is on 2.11.1 with <code>zfsPlugin.image</code> pinned to
+  <code>ghcr.io/linkvt/zfs-driver:runpipe-773</code> (PR #777 fix) pending verification. If the fix fails,
+  revert chart to 2.10.1 and remove the image override.
+  See <code>docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md</code></p>
+</li>
+<li>
+<p>Unattended-upgrades can restart k3s during backup windows, causing <code>PartiallyFailed</code> Velero backups.
+  Use a broad maintenance window (Mon + Wed–Sun 08:00–18:00) instead of blacklisting systemd packages.
+  See <code>docs/troubleshooting/velero-backup-failures.md</code></p>
+</li>
+<li>
+<p>Memory pressure (e.g., CI builds) can crash k3s via etcd timeout, leaving Velero backups stuck
+  <code>InProgress</code> with orphaned ZFSBackup CRs. Pod restart is the safe first boundary, but residual
+  CR/S3/ZFS state must be verified. See <code>docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md</code></p>
+</li>
+<li>
+<p>Quarterly backups are <code>zfspv-incr</code> chains (one full + incrementals): restorability requires the
+  whole chain — replay full-then-incrementals in order; an incremental alone fails at <code>zfs recv</code>.
+  Deleting a chain head orphans its retained children, so prune parents and children together, and
+  audit bucket objects, not just the CR graph. The "clean" 10-06 backups still ran 2.10.1 — check
+  <code>kube_pod_container_info</code> at the backup start time, not the current image, when attributing
+  versions. See <code>docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md</code></p>
+</li>
+</ul>
+<h2 id="ansible-infrastructure">Ansible &amp; Infrastructure</h2>
+<ul>
+<li>
+<p>Galaxy roles under <code>metal/roles/</code> are gitignored — never patch them, wrap them in a repo role and
+  override via <code>include_role</code> params (static <code>roles:</code> params lose to the inner role's <code>include_vars</code>).
+  Ubuntu 26.04 nodes also need <code>ansible-core&gt;=2.20</code>, <code>ansible_become_exe: /usr/bin/sudo.ws</code> (sudo-rs
+  rejects <code>-H</code>) and chrony, since the <code>ntp</code> package is gone. See
+  <code>docs/troubleshooting/ansible-ubuntu-2604-compat.md</code></p>
+</li>
+<li>
+<p>Scoped <code>metal/</code> runs (<code>--limit</code>) break on templates that read another host's <strong>gathered</strong> facts —
+  the control plane is in no play and <code>delegate_to</code> does not gather delegate facts, so
+  <code>hostvars[x].ansible_hostname</code> dies with <code>object of type 'HostVarsVars' has no attribute ...</code>. Use
+  the inventory name instead. The second symptom is silent: a play that fails discards its pending
+  handlers, and the next run sees an unchanged config file so the daemon never reloads. See
+  <code>docs/troubleshooting/ansible-limit-cross-host-facts.md</code></p>
+</li>
+</ul>
+<h2 id="llm-infrastructure">LLM Infrastructure</h2>
+<ul>
+<li>
+<p>Hermes instance config overwrite: when deploying a new Hermes instance, never copy <code>config.yaml</code>,
+  <code>memories/</code>, or <code>skills/</code> from another instance — this overwrites the target's unique identity.
+  Only copy <code>auth.json</code> if needed. Recovery requires ZFS snapshot rollback.
+  See <code>docs/troubleshooting/hermes-config-overwrite-recovery.md</code></p>
+</li>
+<li>
+<p>Hermes standalone tools and their configuration must live under the <code>/opt/data</code> PVC; installs in
+  the container root filesystem or <code>/root</code> disappear on pod recreation. For <code>fj</code>, use a persistent
+  XDG data wrapper. See <code>docs/troubleshooting/hermes-persistent-cli-tools.md</code></p>
+</li>
+<li>
+<p>Hermes auth failures (401 errors) after config edits: manual <code>config.yaml</code> edits drop required
+  fields, <code>auth.json</code> may have empty <code>base_url</code>, and <code>state.db</code> caches stale credentials. Fix:
+  copy working config from another instance, ensure <code>base_url</code> is set in auth.json, delete
+  <code>state.db</code>, and <strong>delete the pod</strong> (don't just pkill). See
+  <code>docs/troubleshooting/hermes-authentication-credential-issues.md</code></p>
+</li>
+</ul>
+<h2 id="desktop-home">Desktop &amp; Home</h2>
+<ul>
+<li>
+<p><code>home-operations/home-assistant</code> uses a venv at <code>/config/.venv</code> with <code>--system-site-packages</code>.
+  System packages are read-only; install user packages with <code>/config/.venv/bin/uv pip install</code>.
+  See <code>docs/troubleshooting/home-assistant-python-packages.md</code></p>
+</li>
+<li>
+<p><code>home-operations/home-assistant:2026.7.1</code> ships with aiohttp 3.14.1 (system) which removed
+  <code>decode_text</code> parameter, breaking WebSocket API. Fix: install <code>aiohttp==3.14.0</code> in venv.
+  See <code>docs/troubleshooting/home-assistant-aiohttp-incompatibility.md</code></p>
+</li>
+<li>
+<p>Home Assistant 2026.x removed the light mired API (only <code>color_temp_kelvin</code>) and raises on an
+  unsupported <code>color_mode</code>, so outdated custom light integrations silently ignore temperature or
+  never turn on. localtuya is HACS-installed from <code>pando85/localtuya</code> master: deploy via HACS
+  websocket + restart, never by copying into the pod. Agents use the HA API with a login-flow token
+  (<code>pass web/hass.grigri.cloud</code>), no browser needed. Never change thermostat/fan settings for a
+  live test without the user asking for it — they verify heating behaviour themselves. See
+  <code>docs/troubleshooting/home-assistant-localtuya.md</code> and
+  <code>docs/troubleshooting/home-assistant-api-hacs-deploy.md</code></p>
+</li>
+<li>
+<p>ESIOS API (<code>api.esios.ree.es</code>) returns ZIP archives with <code>Content-Type: text/html</code> instead of
+  JSON for <code>/archives/70/download_json</code>, breaking the <code>pvpc_updated</code> integration. Workaround: patch
+  <code>pvpc_data.py</code> to handle ZIP format. See <code>docs/troubleshooting/pvpc-updated-esios-api-zip-response.md</code></p>
+</li>
+<li>
+<p>Negative PVPC prices are normal with high solar generation. AppDaemon climate/DHW control used to
+  reject them with a bare <code>ValueError</code> (empty <code>Error getting prices:</code> log), halting aerotherm
+  scheduling. Apps now accept negative prices and use a fallback schedule when price fetching fails.
+  See <code>docs/troubleshooting/appdaemon-pvpc-negative-prices.md</code></p>
+</li>
+<li>
+<p>Gen1 Shelly (<code>shellyem-main</code>) with CoIoT enabled but an <strong>empty peer</strong> only multicasts to
+  <code>224.0.1.187:5683</code>, which nothing forwards to the HA pod (no IGMP proxy, no route to <code>10.0.0.0/8</code>,
+  no UDP 5683 Service). HA silently falls back to CoAP polling at <code>2.2 × update_period</code> (33 s) and
+  raises a permanent error-level <code>push_update_*</code> repair. Tell-tale: entity updates at exactly 2.2× the
+  device period. Fix is unicast CoIoT to a Cilium LB VIP — and note the IoT VLAN blocks
+  device-initiated UDP (opt6 catch-all has <code>flags S/SA</code> = TCP-only), plus never use HA's
+  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). MQTT <em>is</em> an
+  alternative here (0.37 s on transients) — an early "MQTT reboot-loops this device" conclusion was
+  traced to CoIoT being disabled while HA retried setup, not to MQTT. See
+  <code>docs/troubleshooting/home-assistant-shelly-coiot-push.md</code> and
+  <code>planning/shelly-em-mqtt-implementation.md</code></p>
+</li>
+<li>
+<p><strong>Never disable CoIoT on a Gen1 Shelly that HA owns.</strong> With <code>coiot.enabled: false</code> the firmware
+  stops serving <code>/cit/*</code>: HTTP <code>GET /cit/d</code> <strong>hangs</strong> (no 404) and CoAP on UDP 5683 goes silent. HA's
+  <code>BlockDevice.initialize()</code> requires <code>/cit/d</code>, so the <em>next</em> HA restart drops every entity of that
+  config entry into <code>setup_retry</code> with "Device communication error occurred for …" — while the device
+  keeps answering <code>/shelly</code>, <code>/settings</code> and <code>/status</code> normally, which misleads the diagnosis. An
+  already-initialized HA is unaffected (it polls <code>/status</code> over REST), so the breakage stays latent
+  for hours or days. Fix: <code>POST /settings/advanced?coiot_enable=true&amp;coiot_update_period=15&amp;coiot_peer=</code>
+  then <code>/reboot</code> — note <code>POST /settings/coiot</code> with <code>enabled=true</code> is <strong>silently ignored</strong> on fw
+  1.14.0 — followed by the <code>homeassistant.reload_config_entry</code> service (the websocket command
+  <code>config_entries/reload</code> does not exist). Cost of the 2026-10-26 incident: ~48 min of grid telemetry.
+  <strong>Second face:</strong> while HA retries, those requests hang <em>inside the device</em>, pinning its HTTP slots and
+  ~8 KB of a 51 KB heap; with an MQTT client also running, the firmware faults into a reboot loop every
+  1–5 min that reads exactly like an MQTT bug and is not one. Re-enabling CoIoT stops both failures.
+  See <code>docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md</code></p>
+</li>
+<li>
+<p>qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
+  in other workloads (Forgejo, etc.). Fix: run qBittorrent with <code>ionice -c 3</code> (idle I/O priority)
+  and increase startup probe timeout. See <code>docs/troubleshooting/qbittorrent-hdd-io-saturation.md</code></p>
+</li>
+<li>
+<p><strong>Renaming an HA entity moves its recorder history with it</strong> — so handing a canonical <code>entity_id</code>
+  to another platform by "rename the old one away, rename the new one in" silently leaves the
+  canonical ID with zero history (blank dashboards, a broken Parquet archive, no error). The recorder
+  migrates <code>states_meta</code>/<code>statistics_meta</code> in place on any registry <em>rename</em>
+  (<code>action == "update"</code> + <code>old_entity_id</code>), but ignores <em>removals</em>. Correct sequence: deploy the new
+  entity under a temporary ID and verify it, <strong>remove</strong> the old registry entry, <strong>promote</strong> the new one
+  onto the canonical ID (the collision guard then refuses to migrate, which is what preserves history),
+  reload the old config entry and disable the suffixed entity it recreates — found by <code>unique_id</code>, never
+  by an assumed <code>_2</code>. The <code>Cannot rename statistic_id ... already exists</code> ERROR lines are the guard
+  working; their absence means history moved. Also: a <em>disabled</em> entity still reserves its ID, so it
+  must be removed, not disabled, before promotion. See
+  <code>docs/troubleshooting/home-assistant-entity-id-handover.md</code></p>
+</li>
+<li>
+<p>The localtuya thermostats' <code>hvac_action</code> DP 36 follows the heat/cool mode, not the demand (<code>open</code>
+  all cool season, <code>close</code> all heat season, verified over 60 days of <code>prometheus-long-term</code> history),
+  so they showed <code>idle</code> while rooms sat below target. Not a mapping bug — the firmware does not report
+  relay demand. Fix: the reworked <code>heuristic_action</code> in <code>pando85/localtuya</code> <code>876b229</code> (half-step
+  hysteresis, cool/auto, off), enabled per climate entity through the options flow — which reloads the
+  whole localtuya entry. See <code>docs/troubleshooting/home-assistant-localtuya.md</code></p>
+</li>
+<li>
+<p>Lovelace dashboards are UI-storage (<code>/config/.storage/lovelace.*</code>), not git, and break silently when
+  an entity is renamed (the Climate dashboard pointed at non-existent <code>sensor.heishamon_*</code> for months).
+  Edit them over the websocket API (<code>lovelace/config/save</code>; the default dashboard is <code>url_path: null</code>)
+  with an admin token, back up first, validate entities with <code>get_states</code>, and refuse to save if the
+  live config changed. Shelly EM channel 2 is circuit 2 (aerotherm + appliances), not the heat pump;
+  <code>hass_*</code> history older than 10 days is only in <code>prometheus-long-term</code>. See
+  <code>docs/troubleshooting/home-assistant-dashboards.md</code></p>
+</li>
+</ul>
+<h2 id="applications">Applications</h2>
+<ul>
+<li>
+<p>Apps with Supabase dependencies (auth schema, GoTrue, PostgREST) can use Zalando Postgres +
+  init container for bootstrap SQL. Don't deploy separate Supabase Postgres container unless
+  the app requires Supabase-specific extensions not in the Spilo image. See
+  <code>docs/deployment/readest.md</code> and <code>docs/conventions/deploying-new-apps.md</code></p>
+</li>
+<li>
+<p>Supabase apps on Zalando Postgres: the <code>db-migrate</code> init container automates supporting
+  schema/role setup, but upstream <code>schema.sql</code> needs GoTrue's <code>auth</code> schema (<code>auth.users</code>,
+  <code>auth.uid()</code>) — on a fresh database start GoTrue before the client. See <code>docs/deployment/readest.md</code></p>
+</li>
+<li>
+<p>Apps with upstream SQL installed through <code>docker-entrypoint-initdb.d</code> need a Zalando-compatible
+  init-container bootstrap. For versioned SQL, vendor at the app image tag, regenerate via Renovate,
+  review before merge, and guard image/SQL version in CI and at startup. Readest uses a migration
+  ledger; Firecrawl replays an idempotent snapshot. See <code>docs/conventions/deploying-new-apps.md</code>.</p>
+</li>
+<li>
+<p>Changing <code>spec.resources</code> on a single-instance (<code>numberOfInstances: 1</code>) Zalando <code>postgresql</code> CR
+  forces a master-pod recreate; the StatefulSet reuses the same pod name, the operator's deletion
+  wait times out, and it latches <code>status: UpdateFailed</code> / ArgoCD <code>Degraded</code> even though the pod is
+  healthy and the change applied. Fix: <code>kubectl -n postgres-operator rollout restart
+  deploy/postgres-operator</code>. See <code>docs/troubleshooting/zalando-single-instance-updatefailed.md</code></p>
+</li>
+<li>
+<p>GoTrue's CORS allow-list omits the <code>apikey</code> header that supabase-js sends on every request. Web
+  clients are same-origin (no preflight), but cross-origin Tauri/mobile WebViews fail silently at
+  preflight and session establishment dies ("go to login"). Fix: <code>GOTRUE_CORS_ALLOWED_HEADERS: apikey</code>.
+  Android login also needs <code>readest://auth-callback</code> in <code>GOTRUE_URI_ALLOW_LIST</code> and an nginx
+  provider rewrite that preserves <code>redirect_to</code>. See <code>docs/troubleshooting/readest-android-oauth.md</code></p>
+</li>
+<li>
+<p>Firecrawl's <code>nuq</code> queue schema is NOT created by the app — upstream provisions it via a custom
+  Postgres image (<code>docker-entrypoint-initdb.d</code>). On Zalando/Spilo nobody runs it, so an idempotent
+  <code>nuq-schema-init</code> init container applies <code>files/nuq.sql</code>. On version bump, Renovate runs
+  <code>apps/firecrawl/hack/update-nuq-sql.sh</code> automatically; pre-commit and deploy-time guards verify
+  sync. <code>cron.database_name</code> is a restart-required GUC — delete the postgres pod
+  once after setting it. See <code>docs/troubleshooting/firecrawl-selfhost-deployment.md</code></p>
+</li>
+<li>
+<p>vault-operator chart template doesn't support <code>failureThreshold</code> in probe config — only
+  <code>timeoutSeconds</code>, <code>periodSeconds</code>, <code>successThreshold</code>, <code>initialDelaySeconds</code> are rendered.
+  See <code>docs/troubleshooting/vault-operator-probe-timeout.md</code></p>
+</li>
+<li>
+<p>Kaniop <code>KanidmBackupSchedule.spec.schedule</code> is immutable — changing schedule requires
+  delete/recreate. Discovery controller runs every 5 min and creates CRs for ALL S3 manifests
+  (1000 limit). Retention only deletes CRs, not orphaned S3 data. To clean up: delete schedule,
+  delete CRs, clean S3 with <code>mc rm --recursive --force --versions</code>, then recreate schedule.
+  See <code>docs/troubleshooting/kaniop-backup-system.md</code></p>
+</li>
+<li>
+<p>Kanidm restore requires <code>KanidmRestore</code> CR with matching <code>targetRef.uid</code>, pinned <code>restoreImage</code>,
+  and safety backup (or break-glass annotations). Restore job permission bug (#1005) causes failures.
+  See <code>docs/troubleshooting/kanidm-restore-procedure.md</code></p>
+</li>
+<li>
+<p>Stump v0.1.5+ migration <code>m20260519_192218_reading_sessions_v2</code> can fail mid-way, leaving legacy
+  tables. Restore from snapshot and complete migration manually.
+  See <code>docs/troubleshooting/stump-migration-failure.md</code></p>
+</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

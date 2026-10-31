@@ -1,0 +1,3395 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../../network/configuration/">
+      
+      
+        <link rel="next" href="../cilium-bgp-control-plane/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>battery-optimizer - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#battery-optimizer" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              battery-optimizer
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What runs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-notes-and-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design notes and gotchas
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shadow-service-phase-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shadow service (Phase C)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climate-shadow-track-b2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Climate shadow (track B2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-run-2026-10-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      First run (2026-10-25)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-repository-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      App Repository Notes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What runs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-notes-and-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design notes and gotchas
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shadow-service-phase-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shadow service (Phase C)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climate-shadow-track-b2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Climate shadow (track B2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-run-2026-10-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      First run (2026-10-25)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-repository-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      App Repository Notes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="battery-optimizer">battery-optimizer</h1>
+<p>Two workloads of <a href="https://github.com/pando85/home-energy-optimizer">pando85/home-energy-optimizer</a>, deployed
+from <code>apps/battery-optimizer/</code> with one image, one PVC and one ConfigMap:</p>
+<ul>
+<li><strong><code>pipeline</code></strong>: a CronJob that extracts Home Assistant recorder history and Prometheus samples
+  into an append-only Parquet store, validates it, and builds the 15-minute analysis dataset
+  (Phase B).</li>
+<li><strong><code>service</code></strong>: the resident Phase C <strong>shadow service</strong> (<code>battery-optimizer serve</code>). It reads Home
+  Assistant and Prometheus, solves the MPC plan every 15 minutes and records shadow intents and a
+  shadow-vs-native comparison. It has no actuation path and no write credentials. The production plan and its history live in
+<a href="https://github.com/pando85/homelab/blob/master/planning/energy-baseline-production-execution.md"><code>planning/energy-baseline-production-execution.md</code></a>.</li>
+</ul>
+<p>The application code, ADRs and domain docs live in the app repository; this page covers only the
+deployment.</p>
+<h2 id="what-runs">What runs</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Namespace / ArgoCD app</td>
+<td><code>battery-optimizer</code> (ApplicationSet auto-discovery)</td>
+</tr>
+<tr>
+<td>CronJob</td>
+<td><code>battery-optimizer-pipeline</code>, <code>30 3 * * *</code> UTC, <code>concurrencyPolicy: Forbid</code></td>
+</tr>
+<tr>
+<td>Image</td>
+<td><code>ghcr.io/pando85/battery-optimizer</code> (keeps its name after the repo rename until the staged OCI rename), pinned <code>tag@sha256</code>, Renovate-managed</td>
+</tr>
+<tr>
+<td>Steps (one container, <code>sh -ec</code>, fails fast)</td>
+<td>extract <code>ha-history</code> (8 d lookback) -&gt; extract <code>prometheus</code> (3 d lookback) -&gt; <code>validate</code> -&gt; <code>build</code></td>
+</tr>
+<tr>
+<td>Failure handling</td>
+<td><code>backoffLimit: 2</code>, <code>activeDeadlineSeconds: 3600</code>, <code>startingDeadlineSeconds: 21600</code>, history 3/3</td>
+</tr>
+<tr>
+<td>Node</td>
+<td>pinned to <code>prusik</code> (node-local <code>openebs-zfspv</code>)</td>
+</tr>
+<tr>
+<td>Secret</td>
+<td>ExternalSecret <code>battery-optimizer-home-assistant</code> &lt;- Vault KV <code>secret/battery-optimizer/home-assistant</code>, property <code>token</code> (read-only HA token, env only, never on disk)</td>
+</tr>
+<tr>
+<td>Config</td>
+<td>ConfigMap <code>battery-optimizer-config</code> rendered from <code>apps/battery-optimizer/files/</code> (<code>tariff.yaml</code>, <code>service.yaml</code>, and the climate shadow's <code>climate.yaml</code>, <code>climate-mpc.yaml</code>)</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>PVC <code>battery-optimizer-data</code>, 5 Gi, <code>openebs-zfspv</code>, mounted at <code>/data</code> (<code>BATTERY_OPTIMIZER_DATA_DIR</code>)</td>
+</tr>
+<tr>
+<td>Backup</td>
+<td>labels <code>backup: battery-optimizer-zfs</code>, <code>backup/retain: quaterly</code>; SnapshotSchedule <code>battery-optimizer-zfs-backups</code> (daily 06:00 UTC, keep 20)</td>
+</tr>
+<tr>
+<td>Alerts</td>
+<td><code>PrometheusRule/battery-optimizer</code> (label <code>release: monitoring</code>) for the CronJob, <code>PrometheusRule/battery-optimizer-service</code> (long-term) for the service</td>
+</tr>
+</tbody>
+</table>
+<h2 id="design-notes-and-gotchas">Design notes and gotchas</h2>
+<ul>
+<li><strong>Why daily with an 8 day HA window.</strong> HA's recorder keeps 10 days (<code>purge_keep_days</code> default,
+  nothing overrides it). Rows older than that are gone for good, so the binding rule is "never more
+  than 10 days between two successful runs". Daily with an 8 day lookback tolerates 7 missed runs. The window is deliberately shorter than the
+  retention: the recorder purges nightly, so the oldest chunk of a 10 day window is partly or wholly
+  gone and would raise a coverage gap every night (see the next note). Re-pulling is
+  free because the HA extractor dedups against rows already in the store. Chunk width stays at the
+  CLI default (86400 s); changing it on a live store mints new carry-in anchors.</li>
+<li><strong>Prometheus extraction is not deduplicated across runs</strong>, so the lookback is only 3 days
+  (about 40 KB per day-part). The Prometheus archive has no retention limit, so there is no urgency.</li>
+<li><strong>Bootstrap.</strong> If <code>/data/manifests</code> holds no finished Prometheus extraction (empty PVC), the run
+  extracts Prometheus from <code>PROM_BOOTSTRAP_START</code> (2024-01-01) instead of the 3 day lookback. A
+  manifest is written only by a finished run, so an interrupted bootstrap retries from scratch.</li>
+<li><strong>Build cadence and window.</strong> <code>build</code> is content-addressed and write-once, and measured on the
+  cluster <strong>every new extraction changes the dataset id</strong> (the part list changes), adding about
+  4.2 MB per run (~1.5 GB a year if built daily) while nothing consumes the dataset yet. The job
+  therefore builds only on UTC days 01 and 02 of the month (<code>BUILD_ON_DAYS</code>), over the complete
+  months <code>[BUILD_START, first of this month)</code>; other days log <code>build skipped</code>. The newest partial
+  month is not in the dataset until the month closes. There is no CLI-side garbage collection of
+  superseded datasets. Run a manual build job if you need one off-cycle (steps 1-3 still run).</li>
+<li><strong>Permissions.</strong> No <code>fsGroup</code> (slow startup on <code>openebs-zfspv</code>). A fresh ZFS dataset is
+  <code>root:root 0755</code>, so the <code>fix-permissions</code> init container chowns the volume <strong>root</strong> to 65532
+  (recursively only if the root is not already owned by 65532). See
+  <a href="../../troubleshooting/ci-runner-workspace-permission-denied/"><code>ci-runner-workspace-permission-denied.md</code></a>.</li>
+<li><strong>Alerts use <code>release: monitoring</code>, not <code>operator.prometheus.io/instance: prometheus-long-term</code>.</strong>
+  kube-state-metrics and kubelet series exist only in the main Prometheus; a rule labelled for
+  <code>prometheus-long-term</code> would load but never fire.</li>
+<li><strong>No NetworkPolicy.</strong> An egress-only policy (DNS, HA 8123, long-term Prometheus 9090) ran from
+  0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
+  from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
+  control (LLM harnesses). Its only credential is the read-only HA token, and it has no actuation path.</li>
+<li><strong>The two power signals come from a Gen1 Shelly EM over MQTT at 2 s; the counters still poll.</strong>
+  <code>shellyem-main</code> (<code>192.168.86.130</code>) publishes <code>shellies/shellyem-244CAB417668/emeter/{0,1}/power</code> to
+  mosquitto every <strong>2 s</strong> (<code>mqtt_update_period: 2</code>) and HA consumes them via
+  <code>apps/home-assistant/config/integrations/shelly_em_mqtt.yaml</code>. Since the 2026-10-27 cutover,
+  <code>grid_power</code> and <code>observed</code> carry those IDs from the <strong><code>mqtt</code></strong> platform, measured as
+  <code>battery_optimizer_input_age_seconds{role="grid_power"} = 2.3 s</code> (was 31.9 s). <code>grid_energy</code> and
+  everything else still arrive over the native integration at <code>2.2 × 15 s = 33 s</code>, which is correct for
+  a monotonic counter consumed as 900 s deltas — a faster transport would add recorder rows without
+  adding information. The device still carries a permanent error-level <code>push_update_*</code> repair, because
+  CoIoT is multicast-only (<code>peer: ""</code>) and nothing forwards it to the HA pod; that is a hygiene item,
+  not a data problem.
+  A faster transport initially looked unusable — the device reboot-looped — but that was
+  <strong>mis-diagnosed</strong>: the loop needs MQTT <em>and</em> <code>coiot.enabled: false</code> <em>and</em> an HA <code>setup_retry</code> storm,
+  so MQTT is safe as long as CoIoT stays enabled
+  (<a href="../../planning/shelly-em-mqtt-implementation.md"><code>planning/shelly-em-mqtt-implementation.md</code></a>).
+  Do <strong>not</strong> rename these entities or the device: <code>friendly_name</code> is a Prometheus label and part of
+  the archive's <code>series_key</code>. Renaming also <em>moves</em> recorder history — if an ID must ever change hands
+  again, use remove-then-promote
+  (<a href="../../troubleshooting/home-assistant-entity-id-handover/"><code>home-assistant-entity-id-handover.md</code></a>).</li>
+<li><strong>Never disable CoIoT on that device, and treat HA restarts as a checked operation.</strong> With
+  <code>coiot.enabled: false</code> the firmware stops serving <code>/cit/*</code>, HA's <code>initialize()</code> hangs on
+  <code>GET /cit/d</code>, and the <em>next</em> HA restart drops all 14 <code>shellyem-main</code> entities into <code>setup_retry</code>.
+  That happened on 2026-10-26 and cost ~48 min of history (18:02:35Z-18:50:34Z). Since the MQTT cutover
+  the blast radius is narrower but not gone: <code>grid_power</code> and <code>observed</code> would keep working (they come
+  from the broker), while <strong><code>grid_energy</code> — what the dataset is actually built from — would be lost</strong>,
+  and MQTT being permanently enabled means the reboot-loop co-factor is always present. Before any HA
+  ConfigMap change (Reloader restarts the pod), verify <code>GET /cit/d</code> still answers <code>200</code>. Recovery,
+  correct endpoint and pitfalls:
+  <a href="../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/"><code>shelly-gen1-coiot-disabled-breaks-ha-setup.md</code></a>.</li>
+<li><strong><code>grid_energy</code> still takes ~20 poll timeouts a day; <code>grid_power</code> no longer does.</strong> The native
+  <code>/status</code> REST poll occasionally exceeds <code>DEVICE_IO_TIMEOUT = 10 s</code> (~19.7 <code>unavailable</code> rows/day on
+  <code>metadata_id</code> 182 over a 10-day window, dating back before MQTT existed), which flips the whole block
+  to <code>unavailable</code> at <code>T + 33 s + 10 s</code>. In the Prometheus archive those become missing 60 s samples —
+  the 2026-10-27 03:30Z run saw 4420 of ~4526 expected over 3 days and still reported <code>violations=0</code>.
+  Watch for it if the coverage check below ever starts failing: the fix is to move the counters to MQTT
+  too, which has so far not been worth the recorder cost.</li>
+<li><strong><code>tariff.yaml</code> and <code>service.yaml</code> are vendored copies</strong> of <code>config/</code> in the app repository (the
+  image carries no config). Update both together; the tariff config hash is part of every dataset id.
+  The CronJob mounts the same ConfigMap at <code>/config</code> and sets <code>BATTERY_OPTIMIZER_SERVICE_CONFIG=/config/service.yaml</code>,
+  so <code>build</code> and <code>extract</code> read <code>battery.commissioned_at</code> and the battery counters from the same
+  <code>service.yaml</code> as the service; set them there on installation day and nothing else needs changing.</li>
+<li><strong>Coverage gaps fail the Job.</strong> From 0.2.1 <code>extract</code> exits 3 when the run's manifest records a
+  coverage gap (HA: <code>empty_chunk</code>, <code>empty_chunk_after_window_filter</code>, <code>chunk_accounting_mismatch</code>,
+  <code>no_rows_for_entity</code>, <code>no_rows_extracted:all</code>; Prometheus: <code>no_samples_extracted</code>,
+  <code>no_series_chunks</code>, <code>series_without_samples_chunks</code>). The data and manifest are kept, but the Job
+  fails and <code>BatteryOptimizerJobFailed</code> fires, so a silent gap is no longer silent. The pipeline does
+  <strong>not</strong> pass <code>--allow-coverage-gaps</code> (except for the one-off Prometheus bootstrap, whose 2024
+  history has known holes). If a window legitimately has no data, fix the window rather than opting out.</li>
+</ul>
+<h2 id="shadow-service-phase-c">Shadow service (Phase C)</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workload</td>
+<td>Deployment <code>battery-optimizer-service</code>, 1 replica, <code>strategy: Recreate</code>, same image anchor as the CronJob</td>
+</tr>
+<tr>
+<td>Command</td>
+<td><code>battery-optimizer serve</code>, port 8080: <code>/health/live</code>, <code>/health/ready</code>, <code>/status</code>, <code>/plan</code>, <code>/metrics</code></td>
+</tr>
+<tr>
+<td>Config</td>
+<td><code>files/tariff.yaml</code> + <code>files/service.yaml</code> (vendored from the app repo <code>config/</code>) in ConfigMap <code>battery-optimizer-config</code>, mounted at <code>/config</code>. <code>service.yaml</code> uses <code>soc_source: simulated</code> because Home Assistant has no battery entities yet</td>
+</tr>
+<tr>
+<td>HA token</td>
+<td>the same ExternalSecret as the pipeline, <strong>mounted as a file</strong> (<code>BATTERY_OPTIMIZER_HA_TOKEN_FILE</code>). Read-only, non-admin; no other credential exists</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>the same PVC <code>battery-optimizer-data</code> at <code>/data</code> (RWO on prusik, <code>Recreate</code> avoids two pods). The service writes only <code>/data/service/v1/</code>; the pipeline uses <code>raw/</code>, <code>manifests/</code> and <code>analysis/</code>, so the paths never collide</td>
+</tr>
+<tr>
+<td>Resources</td>
+<td>requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS)</td>
+</tr>
+<tr>
+<td>Probes</td>
+<td>liveness <strong>and</strong> readiness on <code>/health/live</code>; generous startup probe. <code>/health/ready</code> returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on <code>battery_optimizer_ready</code> instead</td>
+</tr>
+<tr>
+<td>Service / scrape</td>
+<td>ClusterIP <code>battery-optimizer:8080</code> (<code>http</code>); ServiceMonitor labelled <code>operator.prometheus.io/instance: prometheus-long-term</code> (job <code>battery-optimizer</code>, 30 s), so <code>battery_optimizer_*</code> lives in the long-term Prometheus for the multi-week comparison</td>
+</tr>
+<tr>
+<td>Alerts</td>
+<td><code>PrometheusRule/battery-optimizer-service</code> (long-term Prometheus): <code>BatteryOptimizerServiceDown</code>, <code>ServiceAbsent</code>, <code>NotReady</code> (30 m), <code>HomeAssistantDisconnected</code> (10 m), <code>GridPowerStale</code> (15 m), <code>PlanStale</code> (1 h), <code>SolveFailures</code>, <code>SinkWriteErrors</code>, <code>SolvesSkipped</code>, <code>HistoryStale</code>, and the <a href="#climate-shadow-track-b2">climate shadow</a> alerts (<code>rules-service/climate-shadow.yaml</code>)</td>
+</tr>
+<tr>
+<td>Dashboard</td>
+<td>ConfigMap <code>dashboards-battery-optimizer</code>, Grafana folder <code>battery-optimizer</code>, datasource <code>prometheus-long-term</code>: <code>Battery optimizer shadow service</code> and <code>Battery optimizer climate shadow</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Passive archives (0.3.0).</strong> The <code>archive:</code> block of <code>service.yaml</code> turns on two append-only
+collectors under <code>/data/service/v1/</code>: <code>pvpc_snapshots/</code> (every state change of the PVPC price sensor,
+to measure when next-day prices really appear) and <code>weather_forecasts/</code> (<code>weather.get_forecasts</code> for
+<code>weather.forecast_home</code>, hourly at HH:05 UTC). The weather query is the single <code>call_service</code> frame
+the HA guard lets through; every other service call is still refused in code. Watch
+<code>battery_optimizer_pvpc_snapshots_total</code>, <code>battery_optimizer_weather_forecast_fetches_total{result}</code>
+and <code>battery_optimizer_archive_last_success_timestamp_seconds</code>. There is no retention yet.</p>
+<p>The shadow store (<code>/data/service/v1/</code>) is private household data and is covered by the same PVC
+snapshots. Read the comparison with <code>battery-optimizer shadow-report</code> from a pod or a copy of the
+store; <code>comparison_basis</code> stays <code>no_battery_pre_commissioning</code> until battery telemetry is mapped, and
+that basis does not satisfy exit gate C.</p>
+<p>Checks without a port-forward:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import urllib.request as u; print(u.urlopen(&#39;http://127.0.0.1:8080/health/ready&#39;).read().decode())&quot;</span>
+</code></pre></div>
+<h2 id="climate-shadow-track-b2">Climate shadow (track B2)</h2>
+<p>From 0.4.0 the service also runs the climate shadow (<code>climate_shadow:</code> in <code>files/service.yaml</code>): the
+thermal model and the price-blind comfort MPC of the app repository on live data. Every hour at HH:10
+UTC, on its own worker thread, it reads, predicts, plans, records and scores. <strong>It is read-only and
+actuates nothing</strong>: the plan is written to the PVC and never sent anywhere, it uses no new credential,
+and the HA guard still refuses every service call but <code>weather.get_forecasts</code>. App-side reference:
+<code>docs/service.md#climate-shadow-track-b2</code> and the preregistration
+<code>docs/planning/climate-preregistration-2026-27.md</code> in the app repository.</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Room temperatures and setpoints (four thermostats), Aquarea outdoor sensor, outlet target, compressor frequency, heat / DHW / cool power consumed and produced, force-DHW switch, legacy AppDaemon enable and minimum hours, PVPC</td>
+<td>long-term Prometheus (<code>hass_*</code> series), 30 days fetched at the first run and then incrementally</td>
+</tr>
+<tr>
+<td><code>input_boolean.comfort_control_enable</code> (regime), <code>input_text.comfort_dhw_plan</code>, <code>input_boolean.comfort_away</code></td>
+<td>Home Assistant, through the existing read-only session; each may be absent. Until the comfort controller is deployed they do not exist and every record is regime <code>legacy</code></td>
+</tr>
+<tr>
+<td>Outdoor forecast</td>
+<td>the service's own weather archive (<code>weather_forecasts/</code>, fetched at HH:05)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Failure isolation.</strong> A missing prior, site file or config, a Prometheus error or a solver failure is
+logged (<code>climate shadow not loaded: ...</code>, <code>climate shadow run failed</code>), counted, written as a
+<code>climate_shadow_error</code> event and retried the next hour. It never changes readiness and never touches
+the battery planner, which keeps solving every 15 minutes. A healthy job logs nothing; check <code>/status</code>.</p>
+<p><strong>Files.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>In git?</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/config/climate.yaml</code>, <code>/config/climate-mpc.yaml</code></td>
+<td>yes, <code>files/</code> (public in the app repo too)</td>
+<td>Comfort rooms, filters, MPC horizon and schedule. Keep them <strong>byte-identical</strong> to the app repository: their sha256 is part of every climate record's lineage</td>
+</tr>
+<tr>
+<td><code>/data/analysis/v1/climate-shadow/priors/&lt;prior&gt;/prior.json</code></td>
+<td><strong>no</strong>, PVC only</td>
+<td>The season prior (model parameters fitted on household data), content-addressed and write-once; <code>climate_shadow.prior</code> names it</td>
+</tr>
+<tr>
+<td><code>/data/climate/site.yaml</code></td>
+<td><strong>no</strong>, PVC only</td>
+<td>Private site file (coordinates, reference station). Never commit it or paste it anywhere</td>
+</tr>
+<tr>
+<td><code>/data/service/v1/climate_{decisions,scores,days,models}/</code></td>
+<td>no</td>
+<td>The shadow's records, written by the service; covered by the PVC snapshots and <code>just pull-store</code></td>
+</tr>
+</tbody>
+</table>
+<p>The prior and the site file stay out of this public repository and out of Vault: they are not
+credentials, and the job reads them from the data directory only. They are copied onto the PVC once
+from the owner's workstation, which keeps them in <code>~/data/battery-optimizer-cluster</code> (the
+<code>just pull-store</code> copy of the PVC).</p>
+<p><strong>Install or refresh the prior.</strong> In the app repository, on a clean checkout of the deployed commit,
+with <code>BATTERY_OPTIMIZER_DATA_DIR=~/data/battery-optimizer-cluster</code>:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>hack/climate_shadow_prior.py<span class="w"> </span>--feature-set<span class="w"> </span>&lt;climate<span class="w"> </span>feature<span class="w"> </span><span class="nb">set</span><span class="w"> </span>id&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dataset<span class="w"> </span>~/data/battery-optimizer-cluster/analysis/v1/&lt;dataset<span class="w"> </span>id&gt;<span class="w"> </span>--season<span class="w"> </span>S3
+<span class="c1"># prints the prior id and writes analysis/v1/climate-shadow/priors/&lt;id&gt;/prior.json</span>
+</code></pre></div>
+<p>Copy it and the site file onto the PVC through the running pod (the image has <code>tar</code>; <code>/data</code> is the
+only writable path):</p>
+<div class="highlight"><pre><span></span><code><span class="nv">PRIOR</span><span class="o">=</span>&lt;id&gt;<span class="p">;</span><span class="w"> </span><span class="nv">SRC</span><span class="o">=</span>~/data/battery-optimizer-cluster
+tar<span class="w"> </span>-C<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$SRC</span><span class="s2">&quot;</span><span class="w"> </span>-cf<span class="w"> </span>-<span class="w"> </span><span class="s2">&quot;analysis/v1/climate-shadow/priors/</span><span class="nv">$PRIOR</span><span class="s2">/prior.json&quot;</span><span class="w"> </span>climate/site.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-i<span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>-c<span class="w"> </span>service<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">      </span>tar<span class="w"> </span>-xf<span class="w"> </span>-<span class="w"> </span>-C<span class="w"> </span>/data<span class="w"> </span>--no-same-owner
+</code></pre></div>
+<p>then set <code>climate_shadow.prior: "&lt;id&gt;"</code> in <code>files/service.yaml</code> and merge. A prior directory can stay on
+the PVC after it is replaced: only the configured one is loaded.</p>
+<p><strong>Go-live of the comfort controller.</strong> On the day the comfort controller takes over, set
+<code>climate_shadow.go_live: "YYYY-MM-DD"</code> (local date) in <code>files/service.yaml</code> and merge. Without it there is
+no new-window verdict (the first <code>comfort</code> record is only reported as a provisional date); the new
+window starts 7 days after <code>go_live</code>. Do not change the prior, the comfort rooms or <code>climate-mpc.yaml</code>
+around go-live: any of them starts a new lineage, which the gates evaluate apart.</p>
+<p><strong>Read the gate report</strong> (from the store on the PVC, no network; it prints private figures, keep the
+output local):</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>-c<span class="w"> </span>service<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>battery-optimizer<span class="w"> </span>climate-shadow-report<span class="w">            </span><span class="c1"># add --format json for the raw report</span>
+</code></pre></div>
+<p>Per window (<code>legacy</code>, <code>new</code>) it shows the valid heating days and weeks (6 weeks are needed, else every
+criterion is UNDETERMINED), each preregistered criterion with its value, threshold and PASS / FAIL /
+UNDETERMINED, RMSE, persistence RMSE, skill and bias at 1, 6, 12 and 24 h, the daily heat MdAPE, solver
+statuses and times and the top-offset share. <code>/status</code> (<code>climate_shadow</code>) shows the prior, model hash,
+last run, scoring queue, error, go-live and the two verdicts.</p>
+<p><strong>When to refit the prior.</strong> The weekly <code>ua</code>/<code>q0</code> re-estimation runs inside the service; the prior stays
+fixed through both preregistered windows. Fit a new one for the next heating season, or earlier only
+when a model input changes: the outdoor sensor or the heat measurement, the comfort rooms or their
+thermostats. A change of the schedule, the water curve or the machine limits is an edit of
+<code>climate-mpc.yaml</code> (vendor it from the app repository), not a refit. Record either in the app
+repository's regime log.</p>
+<p><strong>Expected after a deploy.</strong> The first run happens at the next HH:10 (or at once if the pod starts after
+HH:10). <code>battery_optimizer_climate_shadow_up</code> is 0 until then and 1 afterwards; <code>runs_total{result="planned"}</code>
+and <code>solves_total{status="optimal"}</code> grow every hour; <code>regime{regime="legacy"}</code> is 1; the first
+<code>refits_total</code> is counted at the first run. Accuracy series (<code>rmse_kelvin</code>, <code>skill_ratio</code>, ...) appear
+once the first origins are scored, 24 to 48 h later, and the gates stay UNDETERMINED until 6 valid
+heating weeks are in a window.</p>
+<p><strong>Alerts</strong> (<code>rules-service/climate-shadow.yaml</code>): <code>BatteryOptimizerClimateShadowDown</code> (<code>up == 0</code> for 2 h),
+<code>ClimateShadowNoRun</code> (no run for 2 h), <code>ClimateShadowRunErrors</code> (more than 2 errors in 6 h),
+<code>ClimateShadowSolveFailures</code> (infeasible or error solves) and <code>ClimateShadowNoState</code> (the climate series
+have gaps). <strong>Dashboard</strong>: <code>Battery optimizer climate shadow</code> (runs, solver, accuracy per horizon,
+valid weeks, gates, regime).</p>
+<h2 id="first-run-2026-10-25">First run (2026-10-25)</h2>
+<p>Manual Job from the CronJob on an empty PVC: success in 5m46s including the full Prometheus
+bootstrap (1028 parts, 5.84 M rows), peak working set about 1.15 GiB (requests 768 Mi, limit 2 Gi),
+about 0.54 core peak, 41.5 MiB on the volume afterwards. Steady-state runs only re-pull 8 days of
+HA history and 3 days of Prometheus. The PVC is the store of record. A migration of the manual
+<code>~/data/energy-baseline</code> store was checked on 2026-10-25 and is <strong>not needed</strong>: every HA row in it
+(39 distinct) is already in the PVC (54), Prometheus is re-extractable, and the OMIE backfill is
+public. The local store stays frozen as the record behind the offline evaluation runs.</p>
+<p>Container logs carry one <code>httpx</code> INFO line per request (roughly 1000 for the bootstrap), so
+kubelet log rotation can drop the early <code>step N/4</code> lines of a long run; Loki keeps the full stream.</p>
+<h2 id="operate">Operate</h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># State</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span>get<span class="w"> </span>cronjob,job,pvc,externalsecret
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span>logs<span class="w"> </span>job/&lt;job-name&gt;<span class="w"> </span>-c<span class="w"> </span>pipeline
+
+<span class="c1"># Run one pipeline outside the schedule (e.g. after fixing a failure)</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span>create<span class="w"> </span>job<span class="w"> </span>--from<span class="o">=</span>cronjob/battery-optimizer-pipeline<span class="w"> </span>battery-optimizer-pipeline-manual-&lt;n&gt;
+</code></pre></div>
+<p>Local analysis copy (read-only on the cluster; streams the PVC out of the service pod, validates it,
+and syncs it into a separate directory — never into the frozen <code>~/data/energy-baseline</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/home-energy-optimizer<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">KUBE_CONTEXT</span><span class="o">=</span>grigri<span class="w"> </span>just<span class="w"> </span>pull-store<span class="w">   </span><span class="c1"># ~/data/battery-optimizer-cluster</span>
+</code></pre></div>
+<p>Bumping the image is a Renovate PR changing <code>tag</code> in <code>apps/battery-optimizer/values.yaml</code>. A new
+code version changes every dataset id, so expect one extra dataset on the next build.</p>
+<p>Growing the volume: raise <code>spec.resources.requests.storage</code> in <code>templates/pvc.yaml</code>
+(<code>allowVolumeExpansion</code> is on). Never delete the PVC; <code>Prune=false</code> and <code>Retain</code> protect it.</p>
+<h2 id="app-repository-notes">App Repository Notes</h2>
+<ul>
+<li>Code lives in <code>pando85/home-energy-optimizer</code> (moved history-preserving from <code>scripts/energy-baseline</code>
+  on 2026-10-24/25). Releases are cut with <code>just release</code>; the <code>auto-tag</code> workflow uses the repo
+  secrets <code>PAT</code> and <code>GPG_PRIVATE_KEY</code> (both set). Renovate (Mend app) automerges.</li>
+<li>Local analysis env: a gitignored <code>.envrc</code> (direnv) sets <code>UV</code>, <code>KUBE_CONTEXT=grigri</code> and
+  <code>BATTERY_OPTIMIZER_DATA_DIR=~/data/battery-optimizer-cluster</code>.</li>
+<li>The load-forecaster and price-outlook improvement plans (app repo <code>docs/planning/</code>) are <strong>parked
+  since 2026-10-25</strong>; resume triggers are in the load plan §6 (spring 2027 cooling season, battery
+  commissioning, household or rule change). Evaluation results stay in the private data directory.</li>
+<li>Owner decisions, do not re-raise: taxes in <code>tariff.yaml</code> (PVPC, not important); license, DCO and
+  GHCR bootstrap are done or not needed.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
