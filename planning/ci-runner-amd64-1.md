@@ -1,6 +1,11 @@
 # Plan: add a second Forgejo CI runner on k8s-amd64-1
 
 **Status:** IMPLEMENTED 2026-10-01 — deployed and verified, see §11
+
+> **Superseded in part (2026-11-01).** `workspace-gc` was removed in favor of the runner's native
+> `workdir_cleanup_age` GC, the docker-gc thresholds and interval below were retuned, and kubelet
+> eviction moved to `nodefs.available<5%`. The workspace was never the disk consumer: DinD images
+> were. See `docs/troubleshooting/ci-runner-amd64-disk-full.md`.
 **Scope:** add capacity, **not** migrate `ci-runner-0`. **No kata** (see §2).
 
 ## Decisions

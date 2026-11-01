@@ -122,7 +122,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (67 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (69 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -140,9 +140,9 @@ Full pitfall index (67 entries grouped by subsystem): `docs/troubleshooting/INDE
 
 **Subsystem index** (top pitfalls per group — see `docs/troubleshooting/INDEX.md` for full entries):
 
-- **Kubernetes & GitOps** (14): node addition, app-template `tpl` evaluation, topology spread constraints
+- **Kubernetes & GitOps** (15): node addition, app-template `tpl` evaluation, topology spread constraints, `eviction-hard` replaces k3s defaults
 - **ArgoCD** (4): repo-server probe death-spiral, kustomize OCI auth override
-- **Monitoring** (8): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision
+- **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps
 - **Networking** (6): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP
 - **Storage & Backup** (11): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat

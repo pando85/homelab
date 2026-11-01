@@ -8,9 +8,9 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 ## Table of Contents
 
-- [Kubernetes & GitOps](#kubernetes--gitops) (14 entries)
+- [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
 - [ArgoCD](#argocd) (4 entries)
-- [Monitoring & Observability](#monitoring--observability) (8 entries)
+- [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (6 entries)
 - [Storage & Backup](#storage--backup) (11 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
@@ -81,6 +81,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `maxSkew: 1` + `DoNotSchedule` blocks new pod placement. Always add `matchLabelKeys` for
   Deployments with `replicas > 1` or HPA. Skip for single-replica, StatefulSets (no `pod-template-hash`),
   and CRD-managed workloads. See `docs/conventions/topology-spread-constraints.md`
+
+- `k3s_kubelet_extra_args` `eviction-hard=...` replaces kubelet's whole hard-eviction map, so the k3s
+  defaults (`nodefs.available`/`imagefs.available` 5%) vanish for any signal not listed. A host with
+  `nodefs.available<10%` evicts at 90% used, not 95%. Check the live values with
+  `kubectl get --raw /api/v1/nodes/<node>/proxy/configz | jq .kubeletconfig.evictionHard`. See
+  `docs/troubleshooting/ci-runner-amd64-disk-full.md`
 
 ## ArgoCD
 
@@ -153,6 +159,11 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `calypso-runner` stays absent from `pyroscope_ebpf_pprofs_total` is expected, not a bug. Runners
   are deliberately unprofiled — they execute untrusted, agent-generated code. Do not "fix" this by
   moving runners to runc. See `docs/troubleshooting/profiling-collector-rollback.md`
+
+- A Loki gap on a single node during DiskPressure is not data loss in Loki: kubelet evicts
+  `vector-agent` along with everything else and refuses to re-admit it until the pressure clears.
+  Read the node's journal over SSH (`journalctl --since/--until`) for that window. See
+  `docs/troubleshooting/ci-runner-amd64-disk-full.md`
 
 ## Networking
 
