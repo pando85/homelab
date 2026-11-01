@@ -199,33 +199,38 @@ spec:
               value: /tmp
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
-            # `df -P /var/lib/docker` now measures the node's 113.8 GiB root
-            # filesystem rather than a dedicated 50 GiB volume, so the inherited
-            # thresholds land in the wrong place: HIGH=90 coincides exactly with
-            # kubelet's nodefs.available<10% eviction trigger (11.4 GiB free) and
-            # CRITICAL=95 fires at 5.7 GiB, after the node is already evicting.
-            # These keep the most aggressive tier at ~17 GiB free, and the shorter
-            # interval matters because a shared disk fills faster than a dedicated
-            # one - 30 minutes of a heavy build is a lot of unobserved growth.
+            # `df -P /var/lib/docker` measures the node's 113.8 GiB root
+            # filesystem, shared with k3s itself, so this loop is the only thing
+            # keeping CI below kubelet's DiskPressure eviction line
+            # (host_vars/k8s-amd64-1.yml `nodefs.available`). DinD is the
+            # dominant consumer: calypso builds leave ~7 GiB images per commit
+            # that no container references after the push.
+            #
+            # Retention is NOT age-based above MED: `docker image prune --filter
+            # until=` compares against the image's *creation* time, so freshly
+            # built images are always "too young" exactly when they are what
+            # fills the disk (2026-11-01: the 6h tier reclaimed 0 B at 89% and the
+            # node evicted every pod 1 minute later). HIGH removes every image no
+            # container uses; the cost is re-pulling base images.
+            #
+            # 120s because a CI burst grew usage ~4.5 GiB per 10 minutes, i.e.
+            # 600s could cross a whole tier unobserved.
             - name: CHECK_INTERVAL
-              value: "600"
+              value: "120"
             - name: THRESHOLD_LOW
               value: "60"
             - name: THRESHOLD_MED
               value: "70"
             - name: THRESHOLD_HIGH
               value: "78"
-            - name: THRESHOLD_CRITICAL
-              value: "85"
           command:
             - sh
             - -c
             - |
-              CHECK_INTERVAL="${CHECK_INTERVAL:-1800}"
-              THRESHOLD_LOW="${THRESHOLD_LOW:-80}"
-              THRESHOLD_MED="${THRESHOLD_MED:-85}"
-              THRESHOLD_HIGH="${THRESHOLD_HIGH:-90}"
-              THRESHOLD_CRITICAL="${THRESHOLD_CRITICAL:-95}"
+              CHECK_INTERVAL="${CHECK_INTERVAL:-120}"
+              THRESHOLD_LOW="${THRESHOLD_LOW:-60}"
+              THRESHOLD_MED="${THRESHOLD_MED:-70}"
+              THRESHOLD_HIGH="${THRESHOLD_HIGH:-78}"
               runner_started=false
 
               cleanup() {
@@ -260,17 +265,18 @@ spec:
                 echo "docker disk usage: ${usage}%"
 
                 if [ "$usage" -ge "$THRESHOLD_LOW" ]; then
-                  if [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then
-                    echo "critical disk usage (${usage}%), aggressive cleanup (6h retention)"
-                    docker image prune -af --filter "until=6h" || true
-                    docker builder prune -af --filter "until=6h" || true
+                  if [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
+                    # In-use images, containers and volumes are protected by
+                    # dockerd itself; everything else goes.
+                    echo "high disk usage (${usage}%), pruning all unused images, build cache and volumes"
                     docker container prune -f || true
-                  elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
-                    echo "high disk usage (${usage}%), pruning unused images (24h retention)"
-                    docker image prune -af --filter "until=24h" || true
-                    docker builder prune -af --filter "until=24h" || true
+                    docker image prune -af || true
+                    docker builder prune -af || true
+                    docker volume prune -af || true
                   elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
-                    echo "medium disk usage (${usage}%), pruning build cache (24h retention)"
+                    echo "medium disk usage (${usage}%), pruning build cache and unused images (24h retention)"
+                    docker container prune -f || true
+                    docker image prune -af --filter "until=24h" || true
                     docker builder prune -af --filter "until=24h" || true
                   else
                     echo "low disk usage (${usage}%), pruning dangling images and containers"
