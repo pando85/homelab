@@ -280,6 +280,10 @@ app-template:
         external-dns.kubernetes.io/enabled: "true"
         external-dns.kubernetes.io/target: grigri.cloud
         cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+        nginx.ingress.kubernetes.io/server-snippet: |
+          location = /api/prometheus {
+            deny all;
+          }
       hosts:
         - host: &host hass.grigri.cloud
           paths:
