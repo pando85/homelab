@@ -59,7 +59,7 @@ jobs:
           wifi_ssid: "ci-wifi"
           wifi_password: "ci-not-a-real-password"
           ota_password: "ci-not-a-real-password"
-          home_assistant_api_key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          home_assistant_api_key: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
           domain_devices: ".iot.grigri"
           EOF
           esphome config apps/esphome/config/respeaker-xvf3800-kitchen.yaml
