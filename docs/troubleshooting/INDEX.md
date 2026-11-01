@@ -12,7 +12,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [ArgoCD](#argocd) (4 entries)
 - [Monitoring & Observability](#monitoring--observability) (8 entries)
 - [Networking](#networking) (6 entries)
-- [Storage & Backup](#storage--backup) (10 entries)
+- [Storage & Backup](#storage--backup) (11 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
 - [Desktop & Home](#desktop--home) (11 entries)
@@ -248,6 +248,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   audit bucket objects, not just the CR graph. The "clean" 10-06 backups still ran 2.10.1 — check
   `kube_pod_container_info` at the backup start time, not the current image, when attributing
   versions. See `docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md`
+
+- ci-runner-amd64 fills k8s-amd64-1's root disk via DinD, not the workspace: calypso leaves ~7 GiB
+  images per commit, and `docker image prune --filter until=` measures image *creation* time, so
+  fresh builds are never "old enough" (0 B reclaimed at 89%, node-wide eviction a minute later). The
+  runner's native `workdir_cleanup_age` GC only covers per-job scratch dirs. See
+  `docs/troubleshooting/ci-runner-amd64-disk-full.md`
 
 ## Ansible & Infrastructure
 

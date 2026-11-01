@@ -122,7 +122,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (66 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (67 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -144,7 +144,7 @@ Full pitfall index (66 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **ArgoCD** (4): repo-server probe death-spiral, kustomize OCI auth override
 - **Monitoring** (8): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision
 - **Networking** (6): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP
-- **Storage & Backup** (10): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains
+- **Storage & Backup** (11): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
 - **Desktop & Home** (11): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote)
