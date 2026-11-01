@@ -1,0 +1,44 @@
+---
+name: Voice and Music GitOps
+
+# yamllint disable-line rule:truthy
+on:
+  pull_request:
+    branches:
+      - master
+    paths:
+      - 'apps/music-assistant/**'
+      - 'apps/home-assistant/values.yaml'
+      - 'apps/esphome/config/respeaker-xvf3800-kitchen.yaml'
+      - 'test/voice_music_gitops_test.py'
+      - '.github/workflows/voice-music-gitops.yaml'
+  push:
+    branches:
+      - master
+    paths:
+      - 'apps/music-assistant/**'
+      - 'apps/home-assistant/values.yaml'
+      - 'apps/esphome/config/respeaker-xvf3800-kitchen.yaml'
+      - 'test/voice_music_gitops_test.py'
+      - '.github/workflows/voice-music-gitops.yaml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.19.0
+      - name: Helm lint and render
+        run: |
+          helm dependency build apps/music-assistant
+          helm lint apps/music-assistant
+          helm template music-assistant apps/music-assistant > /tmp/music-assistant-rendered.yaml
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Validate manifest and device invariants
+        run: |
+          pip install PyYAML==6.0.3
+          python test/voice_music_gitops_test.py /tmp/music-assistant-rendered.yaml
