@@ -46,6 +46,7 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | Mini Switch 4 | `mini-switch-4.yaml` | ESP8266 | Light switch | Smart light switch |
 | Mini Switch Office A | `mini-switch-office-a.yaml` | ESP8266 | Light switch | Office smart light switch |
 | Rack Controller | `rack-controller.yaml` | ESP32 | Fan controller | Server rack cooling + OLED display |
+| ReSpeaker Kitchen | `respeaker-xvf3800-kitchen.yaml` | ESP32-S3 / XMOS | Voice satellite + media | Kitchen (planned) |
 | Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | Snapmaker 3D printer plug |
 | Smart Plug Terrace | `smart-plug-v2-terrace.yaml` | ESP8266 | Power meter | Terrace power plug |
 
