@@ -20,10 +20,17 @@ prepare_dns_search_domains:
 # stateless workloads, so eviction is tighter than the kube_node defaults.
 # No zfs_*/l2arc_* keys: the setup role is not run for this host and its
 # zfs.yml asserts would fail.
+#
+# Disk eviction at 95% used (5%, ~5.7 GiB of the 113.8 GiB root, the k3s default)
+# rather than the cluster-wide 10%: the only disk consumer here is the CI runner,
+# whose docker-gc starts pruning everything unused at 78%
+# (platform/ci-runners/resources/statefulset-amd64.yaml). At 10% kubelet evicted
+# every pod on the node while that prune was still catching up. imagefs is the same
+# filesystem and is set explicitly because this flag replaces the whole map.
 k3s_kubelet_extra_args:
   - kube-reserved=cpu=0.5,memory=512Mi,ephemeral-storage=1Gi
   - system-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi
-  - eviction-hard=memory.available<500Mi,nodefs.available<10%
+  - eviction-hard=memory.available<500Mi,nodefs.available<5%,imagefs.available<5%
 
 # 8 GiB swap for memory pressure relief (default 16G is too much for 16G RAM node)
 swap_file_size_mb: 8192
