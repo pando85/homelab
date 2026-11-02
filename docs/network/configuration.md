@@ -177,3 +177,8 @@ pkg-static add https://github.com/pfrest/pfSense-pkg-RESTAPI/releases/latest/dow
   port 22-23: LAN (VLAN 1 - Untagged, VLAN 501 - Tagged, VLAN 502 - Tagged)
   port 24: LAN (VLAN 1 - Untagged, VLAN101 - Tagged, VLAN 501 - Tagged, VLAN 502 - Tagged)
   ```
+
+## Device-specific requirements
+
+- [webOS voice satellite (LG C3)](webos-voice-satellite.md): pending DMZ-to-LAN pfSense pass rule
+  for the ESPHome API on TCP 6053
