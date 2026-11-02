@@ -1,6 +1,6 @@
 image:
   repository: kanidm/server
-  tag: "1.11.2"
+  tag: "1.12.0"
 
 restore:
   enabled: false
