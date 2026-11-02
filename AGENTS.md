@@ -49,6 +49,12 @@ helm lint apps/<name>/
 - **Renovate:** Add hints above image refs — `docs/conventions/helm.md#renovate-integration`
 - **Docs:** Troubleshooting in `docs/troubleshooting/`; `AGENTS.md` for links/reminders. See `docs/conventions/documenting-learnings.md`
 - **Security:** No hardcoded secrets. ExternalSecret → Vault. Public repo hygiene
+- **Personal information:** never commit people's names (household members, children, guests),
+  addresses, locations, phone or person details, or which account/token holds which privileges.
+  Use roles or rooms instead ("owner", "Office T"). Applies to code, docs, commit messages and PRs
+- **Vault CLI:** `export VAULT_ADDR=https://vault.internal.grigri.cloud`; reuses the owner's OIDC login.
+  KV v2 mount `secret`: ExternalSecret `remoteRef.key: /<app>/<path>` ↔ `vault kv put secret/<app>/<path>`.
+  Never print secret values; load them from a `0600` file and shred it afterwards
 
 ## Commit Messages
 
@@ -60,10 +66,17 @@ vault: Change to svg logo
 monitoring: Update Helm release kube-prometheus-stack to v82.10.1
 ```
 
+No attribution lines, AI session links or session trailers in commits, PR bodies or comments — the
+repos are public (the `no-session-links` commit-msg hook enforces it). Keep GPG signing.
+
 ## Deployment Rules
 
 **Commit first, then apply.** Git must contain the change before it is applied anywhere. Never apply
 an uncommitted or partially edited tree.
+
+**Owner approval for live changes.** Propose Home Assistant changes made outside git (dashboards,
+entity/area registry, integration options) and pushes, then wait for an explicit yes per item.
+Analysis and read-only checks need no approval.
 
 ### Agents may run
 
@@ -103,10 +116,13 @@ command.
 - `debug` skill: live cluster investigation with read-only `kubectl` and Grafana observability only
 - Do not copy runbook steps into agent instructions — link to docs instead
 - Prefer focused, path-specific docs over broad always-loaded guidance
+- Keep durable knowledge in this repo (docs, `AGENTS.md`), not in agent-local memory
+- Subagents default to a mid-tier model; use the top model only for genuinely hard tasks, and do not
+  spawn agents for work that can be done inline
 
 ## Common Pitfalls
 
-Full pitfall index (65 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (69 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -124,14 +140,14 @@ Full pitfall index (65 entries grouped by subsystem): `docs/troubleshooting/INDE
 
 **Subsystem index** (top pitfalls per group — see `docs/troubleshooting/INDEX.md` for full entries):
 
-- **Kubernetes & GitOps** (14): node addition, app-template `tpl` evaluation, topology spread constraints
+- **Kubernetes & GitOps** (15): node addition, app-template `tpl` evaluation, topology spread constraints, `eviction-hard` replaces k3s defaults
 - **ArgoCD** (4): repo-server probe death-spiral, kustomize OCI auth override
-- **Monitoring** (8): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision
+- **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps
 - **Networking** (6): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP
-- **Storage & Backup** (10): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains
+- **Storage & Backup** (11): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
-- **Desktop & Home** (8): Home Assistant venv/aiohttp/localtuya, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly
+- **Desktop & Home** (11): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote)
 - **Applications** (10): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema
 
 ## Subsystem Docs
@@ -142,7 +158,7 @@ Full pitfall index (65 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **prusik storage:** `docs/conventions/prusik-fast-storage-tier.md` — ZFS pool sizing, SSD selection, PVC migration. Hardware: `docs/hardware/prusik.md`, `docs/hardware/k8s-amd64-1.md`
 - **Adding a node:** `docs/user-guide/add-or-remove-nodes.md` (runbook), `planning/k8s-amd64-1-node-addition.md` (worked example)
 - **Topology spread:** `docs/conventions/topology-spread-constraints.md` — `matchLabelKeys`
-- **Battery optimizer:** app code in `pando85/battery-optimizer`; deployment + extraction plan `planning/energy-baseline-production-execution.md`
+- **Battery optimizer:** app code in `pando85/home-energy-optimizer`; deployment + extraction plan `planning/energy-baseline-production-execution.md`
 
 ## Licensing
 

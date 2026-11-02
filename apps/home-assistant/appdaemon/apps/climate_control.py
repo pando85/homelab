@@ -37,8 +37,8 @@ class ClimateControl(hass.Hass):
         input_boolean_enable = self.args["input_boolean"]["enable"]
         # Register schedulers if climate control is enabled
         await self.listen_state(self._register_schedulers, input_boolean_enable, new="on", old="off")
-        # Unregister schedulers if climate control is enabled
-        await self.listen_state(self._unregister_schedulers, input_boolean_enable, new="off", old="on")
+        # Unregister schedulers and restore heating if climate control is disabled
+        await self.listen_state(self._on_disable, input_boolean_enable, new="off", old="on")
 
         # Register schedulers every day
         # delay to avoid midnight busy period and give time for new data
@@ -68,7 +68,16 @@ Retrying in 10 minutes"""
                     self.log(f"Error sending notification: {notify_error}", level="ERROR")
                 self.log("Retrying in 10 minutes")
                 await asyncio.sleep(600)
+                if not await self._still_enabled_after_retry_wait():
+                    return
                 await self._daily_register_schedulers()
+
+    async def _still_enabled_after_retry_wait(self) -> bool:
+        # The toggle can be switched off during the 10-minute wait: stop retrying then.
+        if await self.get_state(self.args["input_boolean"]["enable"], attribute="state") == "on":
+            return True
+        self.log("Climate control was disabled while waiting to retry: stopping retries")
+        return False
 
     async def _get_prices(self) -> List[Price]:
         pvpc = await retry_with_backoff(
@@ -102,7 +111,9 @@ Retrying in 10 minutes"""
                 await self.sleep(1)
 
     async def _start_hvac(self, kwargs={}):
-        await self._change_hvac_mode(await self.get_state(self.args["input_select_heat_mode"]))
+        mode = await self.get_state(self.args["input_select_heat_mode"])
+        await self._change_hvac_mode(mode)
+        return mode
 
     async def _stop_hvac(self, kwargs={}):
         await self._change_hvac_mode(self.args["climate"]["off_mode"])
@@ -161,6 +172,8 @@ Retrying in 10 minutes"""
             )
             await self._register_fallback_schedule()
             await asyncio.sleep(600)
+            if not await self._still_enabled_after_retry_wait():
+                return
             return await self._register_schedulers()
 
         self.log(f"{prices=}", level="DEBUG")
@@ -219,6 +232,8 @@ Retrying in 10 minutes"""
             )
             await self._start_hvac()
             await asyncio.sleep(600)
+            if not await self._still_enabled_after_retry_wait():
+                return
             return await self._register_schedulers()
 
         is_cheap = len(cheapest_prices) >= min_hours
@@ -298,5 +313,16 @@ Retrying in 10 minutes"""
         self.log(f"{ids_to_disable=}", level="DEBUG")
         [await self.cancel_timer(_id) for _id in ids_to_disable]
 
+    async def _on_disable(self, _entity="", _attribute="", _old="", _new="", _kwargs={}):
+        # Without schedulers nobody leaves the off mode, so restore heating and hand over to manual.
+        await self._unregister_schedulers()
+        mode = await self._start_hvac()
+        dry_run_msg = "" if self.args["climate"]["enabled"] else " (dry run mode)"
+        msg = f"Climate control disabled: heating restored to `{mode}`; the mode is now manual{dry_run_msg}"
+        self.log(msg)
+        if self.args["notify"]["enabled"]:
+            await send_notification(self, escape_markdownv2(msg), self.args["notify"]["entity_id"])
+
     async def terminate(self):
+        # AppDaemon shutdown or reload: cancel timers only, never change the mode.
         await self._unregister_schedulers()

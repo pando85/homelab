@@ -7,3 +7,9 @@ data:
 {{ .Files.Get "files/tariff.yaml" | indent 4 }}
   service.yaml: |
 {{ .Files.Get "files/service.yaml" | indent 4 }}
+  # The climate shadow's configs, next to service.yaml (its paths are relative to it). Keep them
+  # byte-identical to the app repo: their sha256 is the lineage of every climate record.
+  climate.yaml: |
+{{ .Files.Get "files/climate.yaml" | indent 4 }}
+  climate-mpc.yaml: |
+{{ .Files.Get "files/climate-mpc.yaml" | indent 4 }}

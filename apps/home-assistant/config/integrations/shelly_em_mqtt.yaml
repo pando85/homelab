@@ -1,0 +1,26 @@
+# Power-only MQTT takeover. Energy counters and controls remain native Shelly.
+# CoIoT MUST stay enabled: HA's Gen1 setup requires GET /cit/d.
+# The registry handover is managed by metal/playbooks/shelly-em.yaml --tags registry.
+# default_entity_id applies on first creation; existing assignments survive restarts.
+mqtt:
+  sensor:
+    - name: "shellyem-main Channel 1 Power"
+      default_entity_id: sensor.shellyem_main_channel_1_power_mqtt_probe
+      unique_id: shellyem_main_channel_1_power_mqtt
+      state_topic: shellies/shellyem-244CAB417668/emeter/0/power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      value_template: "{{ value | round(2) }}"
+      # Payloads arrive every 2 s (or faster on change). Do not retain stale power
+      # indefinitely after a device/network failure. State messages are not retained.
+      expire_after: 15
+    - name: "shellyem-main Channel 2 Power"
+      default_entity_id: sensor.shellyem_main_channel_2_power_mqtt_probe
+      unique_id: shellyem_main_channel_2_power_mqtt
+      state_topic: shellies/shellyem-244CAB417668/emeter/1/power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      value_template: "{{ value | round(2) }}"
+      expire_after: 15

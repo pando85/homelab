@@ -1,6 +1,6 @@
 # battery-optimizer
 
-Two workloads of [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer), deployed
+Two workloads of [pando85/home-energy-optimizer](https://github.com/pando85/home-energy-optimizer), deployed
 from `apps/battery-optimizer/` with one image, one PVC and one ConfigMap:
 
 - **`pipeline`**: a CronJob that extracts Home Assistant recorder history and Prometheus samples
@@ -20,12 +20,12 @@ deployment.
 |---|---|
 | Namespace / ArgoCD app | `battery-optimizer` (ApplicationSet auto-discovery) |
 | CronJob | `battery-optimizer-pipeline`, `30 3 * * *` UTC, `concurrencyPolicy: Forbid` |
-| Image | `ghcr.io/pando85/battery-optimizer`, pinned `tag@sha256`, Renovate-managed |
+| Image | `ghcr.io/pando85/battery-optimizer` (keeps its name after the repo rename until the staged OCI rename), pinned `tag@sha256`, Renovate-managed |
 | Steps (one container, `sh -ec`, fails fast) | extract `ha-history` (8 d lookback) -> extract `prometheus` (3 d lookback) -> `validate` -> `build` |
 | Failure handling | `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
 | Node | pinned to `prusik` (node-local `openebs-zfspv`) |
 | Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk) |
-| Config | ConfigMap `battery-optimizer-config` rendered from `apps/battery-optimizer/files/` (`tariff.yaml`, `service.yaml`) |
+| Config | ConfigMap `battery-optimizer-config` rendered from `apps/battery-optimizer/files/` (`tariff.yaml`, `service.yaml`, and the climate shadow's `climate.yaml`, `climate-mpc.yaml`) |
 | Storage | PVC `battery-optimizer-data`, 5 Gi, `openebs-zfspv`, mounted at `/data` (`BATTERY_OPTIMIZER_DATA_DIR`) |
 | Backup | labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`; SnapshotSchedule `battery-optimizer-zfs-backups` (daily 06:00 UTC, keep 20) |
 | Alerts | `PrometheusRule/battery-optimizer` (label `release: monitoring`) for the CronJob, `PrometheusRule/battery-optimizer-service` (long-term) for the service |
@@ -62,28 +62,47 @@ deployment.
   0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
   from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
   control (LLM harnesses). Its only credential is the read-only HA token, and it has no actuation path.
-- **The grid signals come from a Gen1 Shelly EM that is polled, not pushed.** `shellyem-main`
-  (`192.168.86.130`) has CoIoT enabled with an empty `peer`, so the device only multicasts and
-  nothing forwards that to the HA pod: Home Assistant polls `/status` over REST every
-  `2.2 × 15 s = 33 s` and carries a permanent error-level `push_update_*` repair. That is well inside
-  `freshness_s.grid_power: 300`, so it is **not** a Phase C blocker, and the dataset builds its 900 s
-  slots from `grid_energy` counter deltas rather than instantaneous power. A faster transport was
-  attempted and abandoned — enabling MQTT on this device makes it **reboot-loop**
+- **The two power signals come from a Gen1 Shelly EM over MQTT at 2 s; the counters still poll.**
+  `shellyem-main` (`192.168.86.130`) publishes `shellies/shellyem-244CAB417668/emeter/{0,1}/power` to
+  mosquitto every **2 s** (`mqtt_update_period: 2`) and HA consumes them via
+  `apps/home-assistant/config/integrations/shelly_em_mqtt.yaml`. Since the 2026-10-27 cutover,
+  `grid_power` and `observed` carry those IDs from the **`mqtt`** platform, measured as
+  `battery_optimizer_input_age_seconds{role="grid_power"} = 2.3 s` (was 31.9 s). `grid_energy` and
+  everything else still arrive over the native integration at `2.2 × 15 s = 33 s`, which is correct for
+  a monotonic counter consumed as 900 s deltas — a faster transport would add recorder rows without
+  adding information. The device still carries a permanent error-level `push_update_*` repair, because
+  CoIoT is multicast-only (`peer: ""`) and nothing forwards it to the HA pod; that is a hygiene item,
+  not a data problem.
+  A faster transport initially looked unusable — the device reboot-looped — but that was
+  **mis-diagnosed**: the loop needs MQTT *and* `coiot.enabled: false` *and* an HA `setup_retry` storm,
+  so MQTT is safe as long as CoIoT stays enabled
   ([`planning/shelly-em-mqtt-implementation.md`](../../planning/shelly-em-mqtt-implementation.md)).
-  Unicast CoIoT (15 s, needs a pfSense change) is the only remaining option
-  ([`home-assistant-shelly-coiot-push.md`](../troubleshooting/home-assistant-shelly-coiot-push.md)).
   Do **not** rename these entities or the device: `friendly_name` is a Prometheus label and part of
-  the archive's `series_key`.
+  the archive's `series_key`. Renaming also *moves* recorder history — if an ID must ever change hands
+  again, use remove-then-promote
+  ([`home-assistant-entity-id-handover.md`](../troubleshooting/home-assistant-entity-id-handover.md)).
 - **Never disable CoIoT on that device, and treat HA restarts as a checked operation.** With
   `coiot.enabled: false` the firmware stops serving `/cit/*`, HA's `initialize()` hangs on
-  `GET /cit/d`, and the *next* HA restart drops all 14 `shellyem-main` entities into `setup_retry` —
-  taking `grid_power`, `grid_energy` and `observed` away from this service at once. That happened on
-  2026-10-26 and cost ~48 min of history (18:02:35Z-18:50:34Z). Before any HA ConfigMap change
-  (Reloader restarts the pod), verify `GET /cit/d` still answers `200`. Recovery, correct endpoint
-  and pitfalls:
+  `GET /cit/d`, and the *next* HA restart drops all 14 `shellyem-main` entities into `setup_retry`.
+  That happened on 2026-10-26 and cost ~48 min of history (18:02:35Z-18:50:34Z). Since the MQTT cutover
+  the blast radius is narrower but not gone: `grid_power` and `observed` would keep working (they come
+  from the broker), while **`grid_energy` — what the dataset is actually built from — would be lost**,
+  and MQTT being permanently enabled means the reboot-loop co-factor is always present. Before any HA
+  ConfigMap change (Reloader restarts the pod), verify `GET /cit/d` still answers `200`. Recovery,
+  correct endpoint and pitfalls:
   [`shelly-gen1-coiot-disabled-breaks-ha-setup.md`](../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md).
+- **`grid_energy` still takes ~20 poll timeouts a day; `grid_power` no longer does.** The native
+  `/status` REST poll occasionally exceeds `DEVICE_IO_TIMEOUT = 10 s` (~19.7 `unavailable` rows/day on
+  `metadata_id` 182 over a 10-day window, dating back before MQTT existed), which flips the whole block
+  to `unavailable` at `T + 33 s + 10 s`. In the Prometheus archive those become missing 60 s samples —
+  the 2026-10-27 03:30Z run saw 4420 of ~4526 expected over 3 days and still reported `violations=0`.
+  Watch for it if the coverage check below ever starts failing: the fix is to move the counters to MQTT
+  too, which has so far not been worth the recorder cost.
 - **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
   image carries no config). Update both together; the tariff config hash is part of every dataset id.
+  The CronJob mounts the same ConfigMap at `/config` and sets `BATTERY_OPTIMIZER_SERVICE_CONFIG=/config/service.yaml`,
+  so `build` and `extract` read `battery.commissioned_at` and the battery counters from the same
+  `service.yaml` as the service; set them there on installation day and nothing else needs changing.
 - **Coverage gaps fail the Job.** From 0.2.1 `extract` exits 3 when the run's manifest records a
   coverage gap (HA: `empty_chunk`, `empty_chunk_after_window_filter`, `chunk_accounting_mismatch`,
   `no_rows_for_entity`, `no_rows_extracted:all`; Prometheus: `no_samples_extracted`,
@@ -104,8 +123,8 @@ deployment.
 | Resources | requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS) |
 | Probes | liveness **and** readiness on `/health/live`; generous startup probe. `/health/ready` returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on `battery_optimizer_ready` instead |
 | Service / scrape | ClusterIP `battery-optimizer:8080` (`http`); ServiceMonitor labelled `operator.prometheus.io/instance: prometheus-long-term` (job `battery-optimizer`, 30 s), so `battery_optimizer_*` lives in the long-term Prometheus for the multi-week comparison |
-| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale` |
-| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term` |
+| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, and the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) |
+| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer shadow service` and `Battery optimizer climate shadow` |
 
 **Passive archives (0.3.0).** The `archive:` block of `service.yaml` turns on two append-only
 collectors under `/data/service/v1/`: `pvpc_snapshots/` (every state change of the PVPC price sensor,
@@ -126,6 +145,103 @@ Checks without a port-forward:
 kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-service -- \
   python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:8080/health/ready').read().decode())"
 ```
+
+## Climate shadow (track B2)
+
+From 0.4.0 the service also runs the climate shadow (`climate_shadow:` in `files/service.yaml`): the
+thermal model and the price-blind comfort MPC of the app repository on live data. Every hour at HH:10
+UTC, on its own worker thread, it reads, predicts, plans, records and scores. **It is read-only and
+actuates nothing**: the plan is written to the PVC and never sent anywhere, it uses no new credential,
+and the HA guard still refuses every service call but `weather.get_forecasts`. App-side reference:
+`docs/service.md#climate-shadow-track-b2` and the preregistration
+`docs/planning/climate-preregistration-2026-27.md` in the app repository.
+
+| Input | Source |
+|---|---|
+| Room temperatures and setpoints (four thermostats), Aquarea outdoor sensor, outlet target, compressor frequency, heat / DHW / cool power consumed and produced, force-DHW switch, legacy AppDaemon enable and minimum hours, PVPC | long-term Prometheus (`hass_*` series), 30 days fetched at the first run and then incrementally |
+| `input_boolean.comfort_control_enable` (regime), `input_text.comfort_dhw_plan`, `input_boolean.comfort_away` | Home Assistant, through the existing read-only session; each may be absent. Until the comfort controller is deployed they do not exist and every record is regime `legacy` |
+| Outdoor forecast | the service's own weather archive (`weather_forecasts/`, fetched at HH:05) |
+
+**Failure isolation.** A missing prior, site file or config, a Prometheus error or a solver failure is
+logged (`climate shadow not loaded: ...`, `climate shadow run failed`), counted, written as a
+`climate_shadow_error` event and retried the next hour. It never changes readiness and never touches
+the battery planner, which keeps solving every 15 minutes. A healthy job logs nothing; check `/status`.
+
+**Files.**
+
+| Path | In git? | Content |
+|---|---|---|
+| `/config/climate.yaml`, `/config/climate-mpc.yaml` | yes, `files/` (public in the app repo too) | Comfort rooms, filters, MPC horizon and schedule. Keep them **byte-identical** to the app repository: their sha256 is part of every climate record's lineage |
+| `/data/analysis/v1/climate-shadow/priors/<prior>/prior.json` | **no**, PVC only | The season prior (model parameters fitted on household data), content-addressed and write-once; `climate_shadow.prior` names it |
+| `/data/climate/site.yaml` | **no**, PVC only | Private site file (coordinates, reference station). Never commit it or paste it anywhere |
+| `/data/service/v1/climate_{decisions,scores,days,models}/` | no | The shadow's records, written by the service; covered by the PVC snapshots and `just pull-store` |
+
+The prior and the site file stay out of this public repository and out of Vault: they are not
+credentials, and the job reads them from the data directory only. They are copied onto the PVC once
+from the owner's workstation, which keeps them in `~/data/battery-optimizer-cluster` (the
+`just pull-store` copy of the PVC).
+
+**Install or refresh the prior.** In the app repository, on a clean checkout of the deployed commit,
+with `BATTERY_OPTIMIZER_DATA_DIR=~/data/battery-optimizer-cluster`:
+
+```bash
+uv run python hack/climate_shadow_prior.py --feature-set <climate feature set id> \
+  --dataset ~/data/battery-optimizer-cluster/analysis/v1/<dataset id> --season S3
+# prints the prior id and writes analysis/v1/climate-shadow/priors/<id>/prior.json
+```
+
+Copy it and the site file onto the PVC through the running pod (the image has `tar`; `/data` is the
+only writable path):
+
+```bash
+PRIOR=<id>; SRC=~/data/battery-optimizer-cluster
+tar -C "$SRC" -cf - "analysis/v1/climate-shadow/priors/$PRIOR/prior.json" climate/site.yaml \
+  | kubectl --context=grigri -n battery-optimizer exec -i deploy/battery-optimizer-service -c service -- \
+      tar -xf - -C /data --no-same-owner
+```
+
+then set `climate_shadow.prior: "<id>"` in `files/service.yaml` and merge. A prior directory can stay on
+the PVC after it is replaced: only the configured one is loaded.
+
+**Go-live of the comfort controller.** On the day the comfort controller takes over, set
+`climate_shadow.go_live: "YYYY-MM-DD"` (local date) in `files/service.yaml` and merge. Without it there is
+no new-window verdict (the first `comfort` record is only reported as a provisional date); the new
+window starts 7 days after `go_live`. Do not change the prior, the comfort rooms or `climate-mpc.yaml`
+around go-live: any of them starts a new lineage, which the gates evaluate apart.
+
+**Read the gate report** (from the store on the PVC, no network; it prints private figures, keep the
+output local):
+
+```bash
+kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-service -c service -- \
+  battery-optimizer climate-shadow-report            # add --format json for the raw report
+```
+
+Per window (`legacy`, `new`) it shows the valid heating days and weeks (6 weeks are needed, else every
+criterion is UNDETERMINED), each preregistered criterion with its value, threshold and PASS / FAIL /
+UNDETERMINED, RMSE, persistence RMSE, skill and bias at 1, 6, 12 and 24 h, the daily heat MdAPE, solver
+statuses and times and the top-offset share. `/status` (`climate_shadow`) shows the prior, model hash,
+last run, scoring queue, error, go-live and the two verdicts.
+
+**When to refit the prior.** The weekly `ua`/`q0` re-estimation runs inside the service; the prior stays
+fixed through both preregistered windows. Fit a new one for the next heating season, or earlier only
+when a model input changes: the outdoor sensor or the heat measurement, the comfort rooms or their
+thermostats. A change of the schedule, the water curve or the machine limits is an edit of
+`climate-mpc.yaml` (vendor it from the app repository), not a refit. Record either in the app
+repository's regime log.
+
+**Expected after a deploy.** The first run happens at the next HH:10 (or at once if the pod starts after
+HH:10). `battery_optimizer_climate_shadow_up` is 0 until then and 1 afterwards; `runs_total{result="planned"}`
+and `solves_total{status="optimal"}` grow every hour; `regime{regime="legacy"}` is 1; the first
+`refits_total` is counted at the first run. Accuracy series (`rmse_kelvin`, `skill_ratio`, ...) appear
+once the first origins are scored, 24 to 48 h later, and the gates stay UNDETERMINED until 6 valid
+heating weeks are in a window.
+
+**Alerts** (`rules-service/climate-shadow.yaml`): `BatteryOptimizerClimateShadowDown` (`up == 0` for 2 h),
+`ClimateShadowNoRun` (no run for 2 h), `ClimateShadowRunErrors` (more than 2 errors in 6 h),
+`ClimateShadowSolveFailures` (infeasible or error solves) and `ClimateShadowNoState` (the climate series
+have gaps). **Dashboard**: `Battery optimizer climate shadow` (runs, solver, accuracy per horizon,
+valid weeks, gates, regime).
 
 ## First run (2026-10-25)
 
@@ -155,7 +271,7 @@ Local analysis copy (read-only on the cluster; streams the PVC out of the servic
 and syncs it into a separate directory — never into the frozen `~/data/energy-baseline`):
 
 ```bash
-cd ~/battery-optimizer && KUBE_CONTEXT=grigri just pull-store   # ~/data/battery-optimizer-cluster
+cd ~/home-energy-optimizer && KUBE_CONTEXT=grigri just pull-store   # ~/data/battery-optimizer-cluster
 ```
 
 Bumping the image is a Renovate PR changing `tag` in `apps/battery-optimizer/values.yaml`. A new
@@ -163,3 +279,16 @@ code version changes every dataset id, so expect one extra dataset on the next b
 
 Growing the volume: raise `spec.resources.requests.storage` in `templates/pvc.yaml`
 (`allowVolumeExpansion` is on). Never delete the PVC; `Prune=false` and `Retain` protect it.
+
+## App Repository Notes
+
+- Code lives in `pando85/home-energy-optimizer` (moved history-preserving from `scripts/energy-baseline`
+  on 2026-10-24/25). Releases are cut with `just release`; the `auto-tag` workflow uses the repo
+  secrets `PAT` and `GPG_PRIVATE_KEY` (both set). Renovate (Mend app) automerges.
+- Local analysis env: a gitignored `.envrc` (direnv) sets `UV`, `KUBE_CONTEXT=grigri` and
+  `BATTERY_OPTIMIZER_DATA_DIR=~/data/battery-optimizer-cluster`.
+- The load-forecaster and price-outlook improvement plans (app repo `docs/planning/`) are **parked
+  since 2026-10-25**; resume triggers are in the load plan §6 (spring 2027 cooling season, battery
+  commissioning, household or rule change). Evaluation results stay in the private data directory.
+- Owner decisions, do not re-raise: taxes in `tariff.yaml` (PVPC, not important); license, DCO and
+  GHCR bootstrap are done or not needed.

@@ -8,14 +8,14 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 ## Table of Contents
 
-- [Kubernetes & GitOps](#kubernetes--gitops) (14 entries)
+- [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
 - [ArgoCD](#argocd) (4 entries)
-- [Monitoring & Observability](#monitoring--observability) (8 entries)
+- [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (6 entries)
-- [Storage & Backup](#storage--backup) (10 entries)
+- [Storage & Backup](#storage--backup) (11 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (8 entries)
+- [Desktop & Home](#desktop--home) (11 entries)
 - [Applications](#applications) (10 entries)
 
 ---
@@ -81,6 +81,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `maxSkew: 1` + `DoNotSchedule` blocks new pod placement. Always add `matchLabelKeys` for
   Deployments with `replicas > 1` or HPA. Skip for single-replica, StatefulSets (no `pod-template-hash`),
   and CRD-managed workloads. See `docs/conventions/topology-spread-constraints.md`
+
+- `k3s_kubelet_extra_args` `eviction-hard=...` replaces kubelet's whole hard-eviction map, so the k3s
+  defaults (`nodefs.available`/`imagefs.available` 5%) vanish for any signal not listed. A host with
+  `nodefs.available<10%` evicts at 90% used, not 95%. Check the live values with
+  `kubectl get --raw /api/v1/nodes/<node>/proxy/configz | jq .kubeletconfig.evictionHard`. See
+  `docs/troubleshooting/ci-runner-amd64-disk-full.md`
 
 ## ArgoCD
 
@@ -153,6 +159,11 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `calypso-runner` stays absent from `pyroscope_ebpf_pprofs_total` is expected, not a bug. Runners
   are deliberately unprofiled — they execute untrusted, agent-generated code. Do not "fix" this by
   moving runners to runc. See `docs/troubleshooting/profiling-collector-rollback.md`
+
+- A Loki gap on a single node during DiskPressure is not data loss in Loki: kubelet evicts
+  `vector-agent` along with everything else and refuses to re-admit it until the pressure clears.
+  Read the node's journal over SSH (`journalctl --since/--until`) for that window. See
+  `docs/troubleshooting/ci-runner-amd64-disk-full.md`
 
 ## Networking
 
@@ -249,6 +260,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `kube_pod_container_info` at the backup start time, not the current image, when attributing
   versions. See `docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md`
 
+- ci-runner-amd64 fills k8s-amd64-1's root disk via DinD, not the workspace: calypso leaves ~7 GiB
+  images per commit, and `docker image prune --filter until=` measures image *creation* time, so
+  fresh builds are never "old enough" (0 B reclaimed at 89%, node-wide eviction a minute later). The
+  runner's native `workdir_cleanup_age` GC only covers per-job scratch dirs. See
+  `docs/troubleshooting/ci-runner-amd64-disk-full.md`
+
 ## Ansible & Infrastructure
 
 - Galaxy roles under `metal/roles/` are gitignored — never patch them, wrap them in a repo role and
@@ -315,8 +332,9 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   raises a permanent error-level `push_update_*` repair. Tell-tale: entity updates at exactly 2.2× the
   device period. Fix is unicast CoIoT to a Cilium LB VIP — and note the IoT VLAN blocks
   device-initiated UDP (opt6 catch-all has `flags S/SA` = TCP-only), plus never use HA's
-  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). MQTT is
-  **not** an alternative on this unit: enabling it makes the device reboot-loop. See
+  "Configure CoIoT" repair button (it would write the unreachable pod IP onto the device). MQTT *is* an
+  alternative here (0.37 s on transients) — an early "MQTT reboot-loops this device" conclusion was
+  traced to CoIoT being disabled while HA retried setup, not to MQTT. See
   `docs/troubleshooting/home-assistant-shelly-coiot-push.md` and
   `planning/shelly-em-mqtt-implementation.md`
 
@@ -330,11 +348,42 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   then `/reboot` — note `POST /settings/coiot` with `enabled=true` is **silently ignored** on fw
   1.14.0 — followed by the `homeassistant.reload_config_entry` service (the websocket command
   `config_entries/reload` does not exist). Cost of the 2026-10-26 incident: ~48 min of grid telemetry.
+  **Second face:** while HA retries, those requests hang *inside the device*, pinning its HTTP slots and
+  ~8 KB of a 51 KB heap; with an MQTT client also running, the firmware faults into a reboot loop every
+  1–5 min that reads exactly like an MQTT bug and is not one. Re-enabling CoIoT stops both failures.
   See `docs/troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup.md`
 
 - qBittorrent with HostPath volumes to HDDs saturates disks at ~240 IOPS, causing latency spikes
   in other workloads (Forgejo, etc.). Fix: run qBittorrent with `ionice -c 3` (idle I/O priority)
   and increase startup probe timeout. See `docs/troubleshooting/qbittorrent-hdd-io-saturation.md`
+
+- **Renaming an HA entity moves its recorder history with it** — so handing a canonical `entity_id`
+  to another platform by "rename the old one away, rename the new one in" silently leaves the
+  canonical ID with zero history (blank dashboards, a broken Parquet archive, no error). The recorder
+  migrates `states_meta`/`statistics_meta` in place on any registry *rename*
+  (`action == "update"` + `old_entity_id`), but ignores *removals*. Correct sequence: deploy the new
+  entity under a temporary ID and verify it, **remove** the old registry entry, **promote** the new one
+  onto the canonical ID (the collision guard then refuses to migrate, which is what preserves history),
+  reload the old config entry and disable the suffixed entity it recreates — found by `unique_id`, never
+  by an assumed `_2`. The `Cannot rename statistic_id ... already exists` ERROR lines are the guard
+  working; their absence means history moved. Also: a *disabled* entity still reserves its ID, so it
+  must be removed, not disabled, before promotion. See
+  `docs/troubleshooting/home-assistant-entity-id-handover.md`
+
+- The localtuya thermostats' `hvac_action` DP 36 follows the heat/cool mode, not the demand (`open`
+  all cool season, `close` all heat season, verified over 60 days of `prometheus-long-term` history),
+  so they showed `idle` while rooms sat below target. Not a mapping bug — the firmware does not report
+  relay demand. Fix: the reworked `heuristic_action` in `pando85/localtuya` `876b229` (half-step
+  hysteresis, cool/auto, off), enabled per climate entity through the options flow — which reloads the
+  whole localtuya entry. See `docs/troubleshooting/home-assistant-localtuya.md`
+
+- Lovelace dashboards are UI-storage (`/config/.storage/lovelace.*`), not git, and break silently when
+  an entity is renamed (the Climate dashboard pointed at non-existent `sensor.heishamon_*` for months).
+  Edit them over the websocket API (`lovelace/config/save`; the default dashboard is `url_path: null`)
+  with an admin token, back up first, validate entities with `get_states`, and refuse to save if the
+  live config changed. Shelly EM channel 2 is circuit 2 (aerotherm + appliances), not the heat pump;
+  `hass_*` history older than 10 days is only in `prometheus-long-term`. See
+  `docs/troubleshooting/home-assistant-dashboards.md`
 
 ## Applications
 

@@ -2,7 +2,7 @@
 
 - **Status:** DEPLOYED 2026-10-25 — CronJob `battery-optimizer-pipeline` in `apps/battery-optimizer/` (daily 03:30 UTC); the interim manual cadence is superseded (migration checked 2026-10-25: not needed)
 - **Date:** 2026-10-23 (deployed 2026-10-25)
-- **Extends:** [ADR-0003](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
+- **Extends:** [ADR-0003](https://github.com/pando85/home-energy-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
 - **Related:** [Deploying new apps](../docs/conventions/deploying-new-apps.md)
 
 ## Purpose
@@ -14,7 +14,7 @@ It also records the **interim manual extraction cadence** adopted on 2026-10-23,
 ## Current State
 
 - **Development**: supervised offline work on a local PC. Temporary exports go to `/tmp`; the durable store is the private data directory (`$BATTERY_OPTIMIZER_DATA_DIR`, default `~/data/energy-baseline/`), which `paths.py` (legacy `ENERGY_BASELINE_DATA_DIR` is still accepted as a fallback) refuses to place inside a git worktree. No cluster deployment, no cluster storage.
-- **Production** (historical text, superseded by [Deployed state](#deployed-state-2026-10-25)): automated scheduling was **not implemented** at the time of writing. The GitOps CronJob and its `openebs-zfspv` PVC on prusik remain **deferred, not cancelled**, and the requirements below still stand for when they are created. What changed on 2026-10-23 is that extraction is no longer ad-hoc: a short manual cycle from the development PC is now the operating arrangement. The application code, ADRs and domain plans now live in [pando85/battery-optimizer](https://github.com/pando85/battery-optimizer) (moved from this repository; history preserved), so the interim manual extraction runs from a local clone of that repository (e.g. `~/battery-optimizer`). When the CronJob is created, its image will come from `ghcr.io/pando85/battery-optimizer`, pinned by digest.
+- **Production** (historical text, superseded by [Deployed state](#deployed-state-2026-10-25)): automated scheduling was **not implemented** at the time of writing. The GitOps CronJob and its `openebs-zfspv` PVC on prusik remain **deferred, not cancelled**, and the requirements below still stand for when they are created. What changed on 2026-10-23 is that extraction is no longer ad-hoc: a short manual cycle from the development PC is now the operating arrangement. The application code, ADRs and domain plans now live in [pando85/home-energy-optimizer](https://github.com/pando85/home-energy-optimizer) (moved from this repository; history preserved), so the interim manual extraction runs from a local clone of that repository (e.g. `~/home-energy-optimizer`). When the CronJob is created, its image will come from `ghcr.io/pando85/battery-optimizer`, pinned by digest.
 - **Canonical store**: the HA enum parts are preserved but **not yet consumed by the dataset build** — `build.py` has no HA reader. A read-side reader now exists: `src/battery_optimizer/ha_states.py` with a `battery-optimizer ha-states` CLI subcommand, which deduplicates at read time and answers as-of queries; it does not feed `build` and does not change `dataset_id`. See [Known state of the private store](#known-state-of-the-private-store).
 
 Temporary development exports in `/tmp` are **not durable** and do not meet production preservation requirements. The production path requires persistent storage with backup. The interim store — the private data directory on the development PC — is durable across runs but is outside the cluster's backup path entirely, which is one more reason the CronJob plus PVC remains the end state.
@@ -65,36 +65,55 @@ The same app now also runs the shadow service from `battery-optimizer` 0.2.1 (0.
 - Scope: shadow only. Live actuation (Phase D) is neither built nor authorised, and
   `comparison_basis` stays `no_battery_pre_commissioning` until the battery entities exist in HA.
 
-## Input signal: Shelly EM high-frequency telemetry (MQTT attempted and abandoned)
+## Input signal: Shelly EM high-frequency telemetry (delivered at 2 s over MQTT)
 
-**Raised 2026-10-26, attempted the same day, now blocked pending an owner decision.** The grid
-signals behind `grid_power` / `grid_energy` / `observed` (`shellyem-main`, `192.168.86.130`, Gen1)
-reach HA only by **REST polling at `2.2 × 15 s = 33 s`**, because CoIoT is in multicast mode and
-nothing forwards it — full evidence in
+**Raised 2026-10-26, diagnosed the same day, implemented 2026-10-27.** The grid signals behind
+`grid_power` / `grid_energy` / `observed` (`shellyem-main`, `192.168.86.130`, Gen1) used to reach HA
+only by **REST polling at `2.2 × 15 s = 33 s`**, because CoIoT is in multicast mode and nothing
+forwards it — full evidence in
 [`docs/troubleshooting/home-assistant-shelly-coiot-push.md`](../docs/troubleshooting/home-assistant-shelly-coiot-push.md).
+
+**Now resolved:** both power sensors are fed by **MQTT at a measured 2.01 s median** — 16.5× faster —
+with entity IDs, friendly names, Prometheus label sets, recorder `metadata_id`s and long-term statistic
+ids all unchanged. `battery_optimizer_input_age_seconds{role="grid_power"}` went from **31.9 s to 2.3 s**
+against a `freshness_s` budget of 300, so a real-time zero-export control loop now has the input
+resolution it needs. `grid_energy` deliberately stays a native 33 s counter: slot energy is consumed as
+900 s deltas, so a faster transport would add ~43 k recorder rows/day per channel for no information.
 
 Two routes were on the table:
 
-- **Unicast CoIoT** — the original TODO here. Hard floor of **15 s** (`coiot_update_period` is
-  `15..65535`), and it needs a UDP 5683 LoadBalancer Service on `192.168.193.12`, an IoT-VLAN UDP
-  pass rule on pfSense (device-initiated UDP is blocked today: the opt6 catch-all is TCP-only) and a
-  device peer change.
-- **MQTT** — the sub-second route, needing no pfSense change (IoT-VLAN TCP to the mosquitto VIP
+- **MQTT** — chosen and implemented. Needs no pfSense change (IoT-VLAN TCP to the mosquitto VIP
   `192.168.193.9:1883` already passes, and pfSense unbound already resolves the broker name).
-  **Attempted 2026-10-26 and abandoned: enabling MQTT makes this device reboot-loop** — 4 spontaneous
-  reboots across 4 independent MQTT-on windows (`update_period` 5 and 30, broker FQDN and raw VIP),
-  zero reboots across the MQTT-off windows, with the broker connected and publishing normally right
-  up to each reset. Rolled back; the device is stable again.
+  **Attempted 2026-10-26: the device reboot-looped and the route was first written off. That was a
+  mis-diagnosis.** The loop needs three conditions at once — MQTT enabled, `coiot.enabled: false`, and
+  HA in a `setup_retry` storm hammering the `/cit/d` endpoint that hangs while CoIoT is off. Each
+  stuck request pins an HTTP slot and ~8 KB of the device's 51 KB heap; MQTT takes the remaining
+  margin and the firmware faults. Isolated: MQTT **off** + CoIoT off + the same retry storm ran ~20 min
+  stable, and MQTT **on** + CoIoT **on** ran 11 h 14 m with continuous publishing and zero unscheduled
+  reconnects. Since CoIoT must stay enabled anyway (it is HA's setup dependency), the production
+  configuration is the safe one.
+- **Unicast CoIoT** — the original TODO, now **moot for frequency**: it has a hard floor of **15 s**
+  (`coiot_update_period` is `15..65535`), i.e. slower than what is running. It still needs a UDP 5683
+  LoadBalancer Service on `192.168.193.12`, an IoT-VLAN UDP pass rule on pfSense (device-initiated UDP
+  is blocked today: the opt6 catch-all is TCP-only) and a device peer change. Its only remaining value
+  is clearing the standing `push_update_*` repair.
 
-So the input signal stays at **33 s** for now. The experiment log, the MQTT measurements and the
-four remaining options (accept 33 s / implement CoIoT unicast for 15 s / diagnose the reboots,
-e.g. fw `1.14.1-rc1` / replace the meter with a Gen2-RPC device) are in
-[`planning/shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md).
+The isolation matrix, the cadence measurements, the recorder/statistics impact and the rollback are in
+[`planning/shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md). The entity-ID handover
+needed a non-obvious technique — a registry *rename* makes HA's recorder migrate history away from the
+canonical ID — documented in
+[`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md).
+Firmware `1.14.1-rc1` was **explicitly ruled out** for the main grid meter and never flashed.
 
-**Why this is not a Phase C blocker:** `service.yaml` sets `freshness_s.grid_power: 300` and
-`poll_interval_s: 60`, so a 33 s source stays fresh with an order of magnitude of margin, and slot
-energy comes from the `grid_energy` counter deltas, which polling captures fine. It only blocks a
-future real-time zero-export control loop.
+
+**Why this was never a Phase C blocker:** `service.yaml` sets `freshness_s.grid_power: 300` and
+`poll_interval_s: 60`, so even the old 33 s source stayed fresh with an order of magnitude of margin, and
+slot energy comes from the `grid_energy` counter deltas. What the 2 s upgrade unblocks is a future
+real-time zero-export control loop, which needs to react between planning slots.
+
+**Cost, measured:** +81 435 recorder rows/day (+40 %), ≈ +520 MB steady state at the observed 628 B/row
+over 10.17-day retention — DB 1.69 → ~2.2 GB of a 6 Gi PVC. Long-term statistics are unaffected (still
+5-minute buckets).
 
 > ⚠️ **Incident caused by the attempt, 2026-10-26:** the device had drifted to `coiot.enabled: false`,
 > which stops the firmware serving `/cit/*`. HA's `initialize()` needs `GET /cit/d`, so the HA
@@ -113,7 +132,7 @@ future real-time zero-export control loop.
 - **Declared retention is 10 days.** [`apps/home-assistant/config/configuration.yaml`](../apps/home-assistant/config/configuration.yaml) gives the `recorder:` block **only** a `db_url` (lines 13-14): there is no `purge_keep_days`, no `auto_purge`, no `commit_interval` and no `exclude`/`include` in that file or in the packages it includes (`apps/home-assistant/config/integrations/`), so Home Assistant's documented default applies — `purge_keep_days: 10` ([HA recorder integration reference](https://www.home-assistant.io/integrations/recorder/)). That declared figure, not an inference from extracted rows, is what the cadence is sized against.
 - **Re-extract every 3 days, pulling a window 10 days deep.** The cadence is 3 days; the window depth is what makes a missed run heal. Binding constraint: **no more than the declared 10 days may elapse between two successful runs**, because a row purged from `states` is gone for good. Two consecutive missed runs still leave a 9-day gap — inside the boundary, and the next pull's 10-day window re-covers everything the recorder still holds, so nothing is lost. Three consecutive missed runs (12 days) is where the declared retention starts eating rows nobody pulled, which is the failure mode automation exists to catch. Daily also satisfies the rule (ADR-0003 calls it comfortable); 3 days is chosen as the loosest cadence that still tolerates a forgotten week plus one, and with a few hundred rows a day the cost of overlapping pulls is not the constraint.
 - **Overlap deliberately.** Each pull re-requests windows already pulled. That is safe only because of row-level dedup (next bullet) and only while the chunk width does not change (see [Chunk width must stay constant between runs](#chunk-width-must-stay-constant-between-runs)).
-- **Overlapping re-extraction does not duplicate rows.** `extract_ha.py` matches every candidate row against what is **already stored** on the key `ROW_IDENTITY_FIELDS = (entity, last_changed, last_updated, state, attributes_json)`, deliberately excluding the run-specific provenance columns `extraction_id`, `carry_in` and `source_window_start`. Prior coverage is discovered by scanning the **part files already on disk** (`load_stored_row_index`), not by window arithmetic — so a partially failed earlier run cannot open a gap, because its surviving parts still count as covered. Suppression is disclosed per chunk and in `quality_flags` (`duplicate_rows_suppressed`, with counts in `params.row_accounting`) as an **expected, benign accounting note, not an alarm**, kept distinct in prefix and wording from the genuine-problem flags (`empty_chunk:`, `chunk_accounting_mismatch`, `no_rows_for_entity:`). A third run over an already fully stored window writes **zero new parts and zero rows**. Parts stay append-only: dedup means *not writing*, never rewriting or deleting. Full detail in [README.md](https://github.com/pando85/battery-optimizer/blob/main/README.md).
+- **Overlapping re-extraction does not duplicate rows.** `extract_ha.py` matches every candidate row against what is **already stored** on the key `ROW_IDENTITY_FIELDS = (entity, last_changed, last_updated, state, attributes_json)`, deliberately excluding the run-specific provenance columns `extraction_id`, `carry_in` and `source_window_start`. Prior coverage is discovered by scanning the **part files already on disk** (`load_stored_row_index`), not by window arithmetic — so a partially failed earlier run cannot open a gap, because its surviving parts still count as covered. Suppression is disclosed per chunk and in `quality_flags` (`duplicate_rows_suppressed`, with counts in `params.row_accounting`) as an **expected, benign accounting note, not an alarm**, kept distinct in prefix and wording from the genuine-problem flags (`empty_chunk:`, `chunk_accounting_mismatch`, `no_rows_for_entity:`). A third run over an already fully stored window writes **zero new parts and zero rows**. Parts stay append-only: dedup means *not writing*, never rewriting or deleting. Full detail in [README.md](https://github.com/pando85/home-energy-optimizer/blob/main/README.md).
 
 ### Chunk width must stay constant between runs
 
@@ -175,7 +194,7 @@ off extracted rows:
   ([HA recorder integration reference](https://www.home-assistant.io/integrations/recorder/)).
   No filter gates the appliance enum entities, so they are recorded. That declared 10 days is
   the only retention figure this plan treats as fact.
-  [ADR-0003 §"Appliance enum telemetry — resolved"](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
+  [ADR-0003 §"Appliance enum telemetry — resolved"](https://github.com/pando85/home-energy-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
   separately records an audit in which the recorder's `states` window measured 10.19 days; that
   is a table-wide observation from a different audit, not a measured coverage boundary for these
   entities, and this plan does not rely on it.
@@ -293,19 +312,19 @@ When the CLI is mature and this plan is approved, the implementation commit must
 - [ ] Alert on `duplicate_rows_already_stored` and `carry_in_classification_disagreement` as chunk-width/store-hygiene signals, not as coverage failures
 - [ ] Implement the HA reader with row-identity dedup (`build.py` has none today): collapse `(entity, last_changed, last_updated, state, attributes_json)` at read time instead of rewriting parts to remove the 12 pre-dedup duplicates — **the reader half is done (2026-10-24)**: `src/battery_optimizer/ha_states.py` plus the `battery-optimizer ha-states` subcommand collapse that identity at read time and leave the parts untouched (verified read-only against the real store: `parts=12 rows_before_dedup=51 rows_after_dedup=39 duplicates=12 entities=2`). This box stays unticked because the checklist tracks what the *pipeline consumes*: `build.py` still walks only `source == "prometheus"` manifests, so those states reach no dataset, no forecast and no policy — see [Known state of the private store](#known-state-of-the-private-store)
 - [ ] If a tighter bound is needed, establish the effective retention boundary from a **read-only** recorder database query — do not infer it from the earliest extracted row
-- [ ] Improve the grid-power input signal (blocked, needs an owner decision): **MQTT was attempted and abandoned** — enabling it makes the device reboot-loop — so the signal stays at 33 s REST polling. Remaining options are accept 33 s, implement CoIoT unicast (15 s floor, needs a pfSense UDP rule + a Service), diagnose the reboots, or replace the meter with a Gen2/RPC device. See [Input signal: Shelly EM high-frequency telemetry](#input-signal-shelly-em-high-frequency-telemetry-mqtt-attempted-and-abandoned) and [`shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md). Not a blocker
+- [x] **Improve the grid-power input signal — done 2026-10-27.** Both power sensors now arrive over MQTT at a measured **2.01 s** (was 33 s REST polling, 16.5× faster), with entity IDs, friendly names, Prometheus labels, recorder `metadata_id`s and long-term statistic ids unchanged; `battery_optimizer_input_age_seconds{role="grid_power"}` dropped 31.9 s → 2.3 s. Cost: +40 % recorder rows (+~520 MB steady state of a 6 Gi PVC); long-term statistics unaffected. The reboot loop that killed the first attempt needed MQTT *and* CoIoT disabled *and* an HA `setup_retry` storm — not MQTT alone, and CoIoT stays enabled. CoIoT unicast (15 s floor) is now moot for frequency and only worth doing to clear the `push_update_*` repair. See [Input signal: Shelly EM high-frequency telemetry](#input-signal-shelly-em-high-frequency-telemetry-delivered-at-2-s-over-mqtt), [`shelly-em-mqtt-implementation.md`](shelly-em-mqtt-implementation.md) and [`home-assistant-entity-id-handover.md`](../docs/troubleshooting/home-assistant-entity-id-handover.md)
 - [x] Document the Vault path and PVC size in this file (update from "to be determined")
 - [x] Record in this file that the interim manual cadence has been superseded by the schedule (update the Status line and the cadence section)
 
 ## References
 
-- [ADR-0003 — Phase 1 measurement and baseline](https://github.com/pando85/battery-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
-- [AppDaemon baseline context](https://github.com/pando85/battery-optimizer/blob/main/docs/planning/energy-baseline-appdaemon-baseline-context.md)
+- [ADR-0003 — Phase 1 measurement and baseline](https://github.com/pando85/home-energy-optimizer/blob/main/docs/adr/0003-phase1-measurement-and-baseline.md)
+- [AppDaemon baseline context](https://github.com/pando85/home-energy-optimizer/blob/main/docs/planning/energy-baseline-appdaemon-baseline-context.md)
 - [Deploying new apps](../docs/conventions/deploying-new-apps.md)
 - [Cluster hygiene — backup labels](../docs/troubleshooting/cluster-hygiene.md)
 - [OpenEBS ZFS slow startup with fsGroup](../docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md)
-- [battery-optimizer CLI README](https://github.com/pando85/battery-optimizer/blob/main/README.md)
-- [HA history extractor source](https://github.com/pando85/battery-optimizer/blob/main/src/battery_optimizer/extract_ha.py)
+- [battery-optimizer CLI README](https://github.com/pando85/home-energy-optimizer/blob/main/README.md)
+- [HA history extractor source](https://github.com/pando85/home-energy-optimizer/blob/main/src/battery_optimizer/extract_ha.py)
 - [Home Assistant Recorder integration](https://www.home-assistant.io/integrations/recorder/)
 - [Shelly CoIoT push updates (Gen1)](../docs/troubleshooting/home-assistant-shelly-coiot-push.md)
 - [Shelly EM MQTT high-frequency telemetry — implementation spec](shelly-em-mqtt-implementation.md)

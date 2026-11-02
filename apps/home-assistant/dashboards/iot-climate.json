@@ -341,7 +341,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cop\"} > 0)[$__range:])",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_cop\"} > 0)[$__range:])",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -446,7 +446,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_target_temperature)\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_tank_temperature|sensor.aquarea_tank_set_temperature)\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,
@@ -696,7 +696,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_dhw_cop\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_dhw_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -1052,7 +1052,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_heat_cop\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_heat_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -1342,7 +1342,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Aquarea Heat COP"
+              "options": "Aquarea Cool COP"
             },
             "properties": [
               {
@@ -1408,7 +1408,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cool_cop\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_cool_cop\"}) by (entity, friendly_name))[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "{{friendly_name}}",
@@ -2106,7 +2106,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(sum(hass_sensor_unit_x{entity=\"sensor.heishamon_cop\"})[$__interval:])",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{entity=\"sensor.aquarea_cop\"})[$__interval:])",
           "instant": false,
           "legendFormat": "COP",
           "range": true,
@@ -2250,7 +2250,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.heishamon_cop\"})[$__interval:])",
+          "expr": "avg_over_time(sum(hass_sensor_unit_x{domain=\"sensor\", entity=~\"sensor.aquarea_cop\"})[$__interval:])",
           "hide": false,
           "instant": false,
           "legendFormat": "COP",
@@ -2460,7 +2460,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_discharge_temperature|sensor.aquarea_inlet_temperature|sensor.aquarea_outlet_temperature|sensor.aquarea_outlet_target_temperature|sensor.aquarea_tank_set_temperature|sensor.aquarea_actual_tank_temperature|sensor.aquarea_outdoor_ambient|sensor.aquarea_outdoor_pipe_temperature|sensor.aquarea_z1_heat_request_temperature|sensor.aquarea_z1_heat_curve_target_high_temperature|sensor.aquarea_z1_heat_curve_target_low_temperature|sensor.aquarea_z1_heat_curve_outside_high_temperature|sensor.aquarea_z1_heat_curve_outside_low_temperature|sensor.aquarea_z2_heat_request_temperature|sensor.aquarea_z2_cool_request_temperature|sensor.aquarea_z1_water_temperature|sensor.aquarea_z2_water_temperature|sensor.aquarea_z1_water_target_temperature|sensor.aquarea_z1_cool_request_temp|sensor.aquarea_z2_water_target_temperature|sensor.aquarea_main_hex_outlet_temperature|sensor.aquarea_inside_pipe_temperature|sensor.aquarea_defrost_temperature|sensor.aquarea_ipm_temperature|sensor.aquarea_eva_outlet_temperature|sensor.aquarea_bypass_outlet_temperature)\"}) by (entity, friendly_name)",
+          "expr": "sum(hass_sensor_unit_celsius{domain=\"sensor\", entity=~\"(sensor.aquarea_discharge_temperature|sensor.aquarea_inlet_temperature|sensor.aquarea_outlet_temperature|sensor.aquarea_outlet_target_temperature|sensor.aquarea_tank_set_temperature|sensor.aquarea_actual_tank_temperature|sensor.aquarea_outdoor_ambient|sensor.aquarea_outdoor_pipe_temperature|sensor.aquarea_z1_heat_request_temperature|sensor.aquarea_z1_heat_curve_target_high_temperature|sensor.aquarea_z1_heat_curve_target_low_temperature|sensor.aquarea_z1_heat_curve_outside_high_temperature|sensor.aquarea_z1_heat_curve_outside_low_temperature|sensor.aquarea_z2_heat_request_temperature|sensor.aquarea_z2_cool_request_temperature|sensor.aquarea_z1_water_target_temperature|sensor.aquarea_z1_cool_request_temp|sensor.aquarea_z2_water_target_temperature|sensor.aquarea_main_hex_outlet_temperature|sensor.aquarea_inside_pipe_temperature|sensor.aquarea_defrost_temperature|sensor.aquarea_ipm_temperature|sensor.aquarea_eva_outlet_temperature|sensor.aquarea_bypass_outlet_temperature)\"}) by (entity, friendly_name)",
           "instant": false,
           "legendFormat": "{{friendly_name}}",
           "range": true,

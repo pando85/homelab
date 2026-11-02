@@ -40,11 +40,12 @@ chown -R www-data:www-data /var/www/html/apps
 
 ```bash
 POD_NAME=$(KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud get pod -l app.kubernetes.io/component=app --no-headers -o custom-columns=":metadata.name")
-for DIR in $(find /datasets/nextcloud/ -maxdepth 1 -mindepth 1 -not -path '*/teresa' -not -path '*/pando' -not -path '*/billee'); do
+# Skip the user directories that already live on their own ZFS volume (one -not -path per user).
+for DIR in $(find /datasets/nextcloud/ -maxdepth 1 -mindepth 1 -not -path '*/<user-a>' -not -path '*/<user-b>'); do
     echo $DIR;
     KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud cp --retries=5 $DIR $POD_NAME:/var/www/html/data/
 done
-#KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud cp --retries=5 /datasets/fotos $POD_NAME:/var/www/html/data/pando/files/
+#KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud cp --retries=5 /datasets/fotos $POD_NAME:/var/www/html/data/<user>/files/
 KUBECONFIG=/tmp/kubeconfig.yaml kubectl -n nextcloud exec -it $POD_NAME -- bash
 chown -R www-data:www-data /var/www/html/data
 ```

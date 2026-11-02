@@ -64,7 +64,10 @@ prepare_dns_search_domains:
   - grigri
 
 # All three of kube-reserved / system-reserved / eviction-hard must be set because
-# host_vars overrides group_vars/kube_node.yml wholesale.
+# host_vars overrides group_vars/kube_node.yml wholesale. eviction-hard also replaces
+# kubelet's whole threshold map (k3s defaults are nodefs/imagefs 5%), so list every
+# signal you care about. A CI-only node may want nodefs.available<5%: see
+# docs/troubleshooting/ci-runner-amd64-disk-full.md.
 k3s_kubelet_extra_args:
   - kube-reserved=cpu=0.5,memory=512Mi,ephemeral-storage=1Gi
   - system-reserved=cpu=0.5,memory=1Gi,ephemeral-storage=1Gi

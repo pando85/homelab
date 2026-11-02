@@ -52,6 +52,9 @@ entities:
   battery_power: null              # signed, + charge (per-battery *_battery_power)
   battery_charge_power: null       # sensor.omnibattery_system_charge_power
   battery_discharge_power: null    # sensor.omnibattery_system_discharge_power
+  # PLACEHOLDERS, not entity IDs: fill both in at installation from the HA entity picker
+  # (kWh, cumulative, AC side: the same terminals as the Shelly feed).  The live service
+  # history and the offline `build` (gross = grid + charge - discharge) both read these two.
   battery_charge_energy: null      # sensor.*_total_charging_energy
   battery_discharge_energy: null   # sensor.*_total_discharging_energy
   # Read-only context recorded with each slot (never written).  Add the Omnibattery
@@ -62,6 +65,17 @@ entities:
   # sensor.omnibattery_integration_status.
   observed:
     - sensor.shellyem_main_channel_2_power
+
+# Read by the offline dataset build and by `extract --entities` only; `serve` ignores it.
+# Not in config/tariff.yaml: that file's hash is part of every dataset_id (ADR-0006).
+battery:
+  # First instant at which the battery may exchange energy, ISO-8601 WITH a UTC offset,
+  # e.g. "2026-11-05T00:00:00+01:00"; null while no battery is installed.  Set it at
+  # installation together with the two energy counters above and the regime log line in
+  # docs/components/regime-log.md.  From this instant on `build` refuses the no-battery
+  # assumption: gross load = grid + charge - discharge, or the interval is unusable.  A window
+  # that ends before it is built exactly as before.
+  commissioned_at: null
 
 # Maximum source age (seconds since HA last_reported) before an input is stale.
 freshness_s:
@@ -93,7 +107,11 @@ planning:
   # EUR/DC-kWh on end-of-horizon SOC: `trailing_mean` = mean PVPC over the history
   # window (the benchmark's default rule), or an explicit number.
   terminal_value: trailing_mean
-  throughput_cost_eur_per_kwh: 0.0
+  # Wear convention: EUR per AC kWh charged and per AC kWh discharged (planning only, never in
+  # reported cost).  0.01 is the knee of the rolling-horizon sweep (largest value that keeps the
+  # saving within 5% of the 0-cost saving in S2 winter, S3 winter and summer);
+  # see docs/components/battery-model.md.  Re-run hack/throughput_sweep.py on real battery data.
+  throughput_cost_eur_per_kwh: 0.01
   replan:
     soc_change_frac: 0.05
     debounce_s: 30
@@ -124,3 +142,35 @@ archive:
     type: hourly            # hourly | daily | twice_daily
     interval_minutes: 60
     offset_minutes: 5
+
+# Climate shadow (track B2): B0's thermal model and the price-blind comfort MPC on live data,
+# every `replan_every_minutes` of the MPC config (hourly), `offset_minutes` after the boundary.
+# Records decisions, scores and the preregistered gates under <data_dir>/service/v1/climate_*;
+# plans are NEVER sent anywhere.  Needs BATTERY_OPTIMIZER_PROMETHEUS_URL, the prior written by
+# hack/climate_shadow_prior.py in <data_dir>/analysis/v1/climate-shadow/priors/<prior>/ and the
+# private <data_dir>/climate/site.yaml.  The weather forecast is the archive above (hourly).
+climate_shadow:
+  enabled: true
+  climate_config: climate.yaml        # relative to this file's directory
+  mpc_config: climate-mpc.yaml        # horizon, cadence, schedule, refit: as in the B1 replay
+  # S3 prior fitted at 45ce7f4 (hack/climate_shadow_prior.py); it lives on the PVC, not in git.
+  prior: "2311c010392f"               # prior id (hex prefix); required when enabled
+  offset_minutes: 10                  # after the weather fetch at :05
+  forecast_max_age_minutes: 180       # older archive records: the last outdoor reading is held
+  score_lookback_days: 7              # unscored decisions older than this are dropped
+  # Local day of the comfort controller's go-live.  REQUIRED for any new-window verdict: while
+  # null, the first `comfort` record is only reported as a provisional date (preregistration
+  # amendment 2026-10-31).  The new window starts 7 days later.  The gate room-mean is fixed by
+  # the preregistration: comfort.rooms of climate.yaml (bedroom, hall_kitchen, office_t).
+  go_live: null
+  # Read-only Home Assistant helpers of the homelab comfort controller
+  # (config/integrations/appdaemon_comfort.yaml); each may be absent until it is deployed.
+  entities:
+    # on = comfort controller in charge (regime `comfort`); absent = `legacy`.
+    regime: input_boolean.comfort_control_enable
+    # JSON written by comfort_control.py: {"day", "start", "end", "forced", "target_written",
+    # "done"} for today only (start/end null once the window is over), or {"done"} alone.
+    # Today's slots follow it; other slots, a stale or unreadable plan: yesterday's DHW slots.
+    dhw_plan: input_text.comfort_dhw_plan
+    # Away (design section 5): every room at 21.5 degC.
+    away: input_boolean.comfort_away
