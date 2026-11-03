@@ -334,10 +334,60 @@ The plug reboots once (a few seconds) and restores the relay ON. The failsafe fi
 the plug since 2026-11-03 (ESPHome 2026.10.1). Flash while the
 battery is idle (direction switches off), then check `switch.smart_plug_v2_battery` is on.
 
-**Test** (owner, battery idle): disable the plug's ESPHome device in Home Assistant so HA drops the API
-connection, watch `make logs FILE=smart-plug-v2-battery.yaml` (or the dashboard logs) for
-`Battery failsafe: no Home Assistant for 5 min, relay OFF` and the battery switching to backup, then
-re-enable it and check `... relay ON` within 10 s. Repeat with the relay off by hand: it must stay off.
+**Known limit.** A manual relay ON (HA or the plug's button) during a long HA absence is undone within
+10 s: the absence counter is only reset by an HA reconnect or a reboot, not by a manual turn-on. To
+force AC while HA stays down, power-cycle the plug, then press the button (5 more minutes of grace).
+Fix candidate: let a manual turn-on suspend the failsafe until HA reconnects.
+
+**Servers on the backup port.** Since 2026-11-03 the backup port feeds the servers (~250 W) that host
+Home Assistant. A trip makes them run from the battery: at 50 % SOC that is roughly 8 h before the
+battery's own cutoff. An HA outage longer than that drains the battery and stops the servers; the
+plug then has to be switched on by hand (power-cycle + button).
+
+#### Failsafe test (not run yet)
+
+Run it once on the flashed firmware before relying on it. It takes ~10 minutes, HA stays up and only
+the plug's API connection is dropped. The servers switch to battery power for about a minute and
+back, the same switchover the commissioning test passed with the TV (max ping gap 0.22 s).
+
+Preconditions:
+
+- SOC above 30 %, battery in Bypass, Omnibattery `balanced`, backup-port load below the 500 W threshold.
+- Kill switch `input_boolean.battery_optimizer_live` **off** (both direction switches off), so the
+  optimizer does not chase the battery while it is islanded. Note the time; turn it back on at the end.
+- A second way to reach the plug if HA misbehaves: the relay button, and the ESPHome logs from a
+  workstation (`apps/esphome/config`: `KUBE_CONTEXT=grigri make secrets`, then
+  `make logs FILE=smart-plug-v2-battery.yaml`; a log subscription is not a state subscriber, so it does
+  not keep the relay on). Delete `secrets.yaml` afterwards.
+
+Steps (T = the moment the device is disabled):
+
+1. Start the ESPHome logs and note `switch.smart_plug_v2_battery` = on, `sensor.venus_inverter_state`
+   = Bypass, `sensor.venus_ac_offgrid_power` ≈ servers' load.
+2. **T:** Settings → Devices & services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ → **Disable**.
+   HA drops the API connection (the entities go unavailable; the relay stays on).
+3. **T+5:00 … T+5:10:** the log shows `Battery failsafe: no Home Assistant for 5 min, relay OFF`. Within
+   seconds the battery reports `Backup Mode` (Omnibattery keeps polling it over Modbus) and the servers
+   keep running (check one of them, e.g. the Kubernetes API or a ping).
+4. **T+6:** re-**Enable** the device. Within ~10 s the log shows
+   `Battery failsafe: Home Assistant is back, relay ON`; the switch is on in HA and the inverter returns
+   to Bypass within 5–33 s.
+5. Manual-off check: with HA connected, turn `switch.smart_plug_v2_battery` off, wait 30 s: it must
+   stay off (the failsafe only restores what it turned off). Turn it on again; the battery returns to
+   Bypass.
+6. Turn the kill switch back on and check the optimizer takes control at the next 15-minute slot.
+
+Pass: relay off between T+5:00 and T+5:20, back on within 20 s of re-enabling, manual off respected,
+servers never lost power. Fail or abort:
+
+- relay still on at T+6:00: the failsafe does not trip (likely `api.connected` still sees a state
+  subscriber). Re-enable the device and treat the battery as unprotected against HA outages until fixed;
+- relay not back on 1 minute after re-enabling: turn it on from HA; if HA cannot reach the plug, press
+  the button once;
+- any server reboots during the switchover: put the servers back on mains and stop using the backup
+  port until the switchover is understood.
+
+Record the timings in this section and in the regime log of the optimizer repo.
 
 ### Rollout: dry_run, then live
 
