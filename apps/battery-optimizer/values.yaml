@@ -161,6 +161,9 @@ app-template:
               memory: 2Gi
 
     service:
+      # serve reads files/service.yaml and the HA token only at startup: restart on a change.
+      annotations:
+        reloader.stakater.com/auto: "true"
       type: deployment
       replicas: 1
       # One writer on the RWO PVC and on the shadow store: never two pods at once.
