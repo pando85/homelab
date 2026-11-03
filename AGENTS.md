@@ -158,6 +158,7 @@ Full pitfall index (70 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **prusik storage:** `docs/conventions/prusik-fast-storage-tier.md` — ZFS pool sizing, SSD selection, PVC migration. Hardware: `docs/hardware/prusik.md`, `docs/hardware/k8s-amd64-1.md`
 - **Adding a node:** `docs/user-guide/add-or-remove-nodes.md` (runbook), `planning/k8s-amd64-1-node-addition.md` (worked example)
 - **Topology spread:** `docs/conventions/topology-spread-constraints.md` — `matchLabelKeys`
+- **ESPHome devices (flash, logs, rename):** `apps/esphome/config/README.md` ("Agent Runbook"); hardening TODO `planning/esphome-security-hardening-todo.md`
 - **Battery optimizer:** app code in `pando85/home-energy-optimizer`; deployment + extraction plan `planning/energy-baseline-production-execution.md`; live control rollout/rollback `docs/deployment/battery-optimizer.md#live-battery-control`
 
 ## Licensing

@@ -231,6 +231,78 @@ To change actual secret values, update them in Vault at these paths:
 | `/esphome/home-assistant` | `api_key` | ESPHome ↔ Home Assistant API encryption |
 | `/esphome/web-server` | `username`, `password` | Device web server auth |
 
+### Agent Runbook (non-interactive)
+
+Everything an agent needs to flash, rename or debug a device without the dashboard. Worked
+examples: the 2026-11-03 renames (`smart-plug-v2-snapmaker` -> `smart-plug-v2-battery`, the old
+terrace plug -> `smart-plug-v2-snapmaker`).
+
+**Flash (compile + OTA).** Pin the ESPHome version the fleet runs (check the device's
+`sw_version` in Home Assistant, e.g. `1.1 (ESPHome 2026.10.1)`) instead of `make requirements`:
+
+```bash
+cd apps/esphome/config
+umask 077
+kubectl --context=grigri -n esphome get secret esphome-secrets \
+  -o jsonpath='{ .data.secrets\.yaml }' | base64 -d > secrets.yaml
+uvx --from 'esphome==2026.10.1' --with pillow \
+  esphome run <device>.yaml --no-logs --device <device>.iot.grigri
+shred -u secrets.yaml
+```
+
+- `--device` is mandatory when not interactive (otherwise esphome prompts for the target). Use the
+  device's IP when DNS does not resolve its new name yet; `esphome config <device>.yaml` validates
+  without flashing, `esphome compile` builds only.
+- The OTA address is `<device_name>` + the `domain` secret (`.iot.grigri`), **without** the MAC
+  suffix that `name_add_mac_suffix: true` adds to the mDNS/HA name (`...-9d9516`). The pfSense
+  static mapping hostname must therefore equal `device_name`.
+- A flash reboots the device for a few seconds; the relay follows `relay_restore_mode`. Ask the owner
+  before flashing a device that powers something critical (the battery plug feeds the house battery).
+- Pushing a YAML change only updates the ConfigMap the ESPHome dashboard reads; the device keeps its
+  firmware until flashed.
+
+**Logs.** `uvx --from 'esphome==2026.10.1' esphome logs <device>.yaml --device <device>.iot.grigri`
+(needs `secrets.yaml`). A log viewer is a log subscription, not a state subscriber: it does not count
+as Home Assistant for `api.connected: state_subscription_only: true`.
+
+**Rename a device (hostname, YAML, Home Assistant).** Order matters, because Home Assistant reaches
+each ESPHome device by the hostname stored in its config entry (`/config/.storage/core.config_entries`,
+`data.host`), not by mDNS:
+
+1. Owner: rename the pfSense static mapping (hostname = new `device_name`).
+2. Right away, point the HA config entry at the new host, or HA cannot reconnect the next time the
+   connection drops: config-flow `reconfigure` (REST `POST /api/config/config_entries/flow` with
+   `{"handler":"esphome","context":{"source":"reconfigure","entry_id":"<id>"}}`, then
+   `{"host":"<new>.iot.grigri","port":6053}`, then `{"noise_psk":"<home_assistant_api_key>"}` from
+   `secrets.yaml`). The abort reason `already_configured_updates` means the host was updated.
+   For the battery plug this is urgent: its failsafe cuts the battery's AC after 5 minutes without HA.
+3. `git mv` the YAML, change `device_name`, `friendly_name`, `project_name`, then flash (above). HA
+   accepts the new name because it matches the device by MAC (`format_mac`), and updates
+   `device_name` in the entry.
+4. Entity ids: the ESPHome unique_id includes the entity **name** (`<MAC>/0/switch/<friendly_name>`),
+   so a new `friendly_name` creates new entities and HA removes the old ones by itself. The new ones
+   get a device-name prefix (`switch.<new>_<mac>_<new>`): rename them with
+   `config/entity_registry/update` (`new_entity_id`). Reusing an old entity id continues its history.
+5. Update every reference: dashboards (`lovelace/config` and `lovelace/config/save`, per dashboard
+   `url_path`), Energy prefs (`energy/get_prefs`, `energy/save_prefs`), the scheduler component
+   (`scheduler.storage`; delete with `scheduler.remove` on `switch.schedule_<id>`), automations, the
+   blackbox probe (`system/monitoring/blackbox-exporter-values.yaml`), the Grafana dashboards
+   (`apps/home-assistant/dashboards/*.json`, Prometheus label `entity="sensor.<id>"`), this README's
+   catalog and the docs. `grep -rn` the old ids in this repo and in HA `.storage`.
+6. Optional: the config entry title (`config_entries/update` with `title`).
+
+**Gotchas.**
+
+- Files under `apps/home-assistant/config/` restart Home Assistant (Reloader) when pushed, even a
+  comment. `apps/home-assistant/dashboards/` is a Grafana ConfigMap and does not.
+- HA writes `.storage` (dashboards, Energy prefs, entity registry) with a short delay: a change saved
+  seconds before an HA restart can be lost. Re-read it after a restart.
+- Shelly devices (e.g. `shellypmmini-z800`) run stock Shelly firmware, not ESPHome: their name is
+  set over RPC (`/rpc/Sys.SetConfig?config={"device":{"name":"..."}}`, digest auth with the password
+  stored in their HA config entry).
+- Warnings seen with 2026.10.1 that need action before the next major versions:
+  `planning/esphome-security-hardening-todo.md`.
+
 ### Change WiFi or Network Settings
 
 Edit `packages/connection.yaml`. All devices include this package. Changes apply to every device
