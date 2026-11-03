@@ -82,7 +82,8 @@ grep the dashboards (`/config/.storage/lovelace.*`) as well as the repo.
 - **Shelly EM main channels:** channel 1 (`sensor.shellyem_main_channel_1_*`) is the whole house;
   channel 2 is **circuit 2** (aerotherm, dishwasher, washer, extractor), not just the heat pump.
   Circuit 1 (cooker, sockets, humid areas, thermostats, lighting) is `sensor.circuit_1_power` =
-  ch1 − ch2 (`config/integrations/energy_circuits.yaml`). The source of this mapping is the row titles
+  ch1 − ch2 + battery AC power (`config/integrations/energy_circuits.yaml`): the house battery plugs
+  into circuit 1, so ch1 − ch2 alone is net of the battery (see [Energy dashboard](#energy-dashboard)). The source of this mapping is the row titles
   in `apps/home-assistant/dashboards/iot-energy.json`. The heat pump's own reading is
   `sensor.aquarea_power_consumed`.
 - **Room temperatures** come from the thermostats' `current_temperature` attribute via template
@@ -109,8 +110,13 @@ power (`stat_rate`):
 
 ```
 Grid: Shelly EM channel 1 (PVPC price)
-├─ Circuit 1 (sensor.circuit_1_energy): cooker, sockets, humid areas, thermostats, lighting
-│   └─ Z800 (Shelly PM mini)
+Battery: Venus E V3 (from = sensor.venus_total_discharging_energy, to = ..._charging_energy,
+         power sensor.venus_ac_power, SOC sensor.venus_battery_soc, 5.12 kWh)
+├─ Circuit 1 (sensor.circuit_1_energy, gross of the battery): cooker, sockets, humid areas,
+│   thermostats, lighting
+│   ├─ Z800 (Shelly PM mini)
+│   ├─ Snapmaker (smart plug)
+│   └─ Servers (sensor.servers_energy = ∫ sensor.venus_ac_offgrid_power, battery backup port)
 └─ Circuit 2 (Shelly EM channel 2): aerotherm, dishwasher, washer, extractor
     ├─ Heat pump (sensor.aquarea_energy_consumed)
     │   └─ Hot water / Heating / Cooling (sensor.aquarea_{dhw,heat,cool}_energy_consumed)
@@ -124,6 +130,36 @@ consumption in the flows (dishwasher, extractor and standby on circuit 2).
   circuit 2 (~35 W) is a thin strip.
 - `sensor.lavadora_energy_yesterday` has negative statistics; use `..._this_month` (monthly reset is
   handled as a meter reset). The Shelly 2PM shutter energy sensors are left out (~0.1 kWh/month).
+
+#### Battery and circuit 1
+
+The battery's AC plug is on circuit 1 and the servers hang off its backup (EPS) port. HA counts home
+consumption as grid import + battery discharge − battery charge, so circuit 1 has to be **gross** of
+the battery for the devices to add up: `Circuit 1 Power` = ch1 − ch2 + `sensor.venus_ac_power`
+(+ discharging, − charging). `venus_ac_power` and the two counters are the inverter's whole AC side,
+backup-port feed included: on 2026-11-03 a ~300 W discharge with ~250 W of servers on the backup port
+lowered ch1 − ch2 by ~260 W (not ~550 W) and the discharge counter rose ~0.31 kWh/h. The battery's
+grid-port draw is therefore servers − `venus_ac_power`, and the cases are:
+
+| Battery state | ch1 − ch2 (net) | Gross circuit 1 |
+|---|---|---|
+| Bypass / idle (AC power 0) | other loads + servers (passed through) | same; no battery flow |
+| Discharging P W | other loads + servers − P (can be negative) | other loads + servers |
+| Charging C W (AC power −C) | other loads + servers + C | other loads + servers |
+| Grid outage | house meters dark | servers fed by the battery; circuit 1 unavailable, so Servers can exceed Circuit 1 for that window |
+
+- The net difference must **not** be clamped before adding the battery (it goes negative while the
+  battery feeds circuit 2 too); only the gross is clamped at 0 for sampling skew.
+- An unavailable `venus_ac_power` counts as 0 W (idle), so an Omnibattery outage while the battery
+  keeps discharging under-counts circuit 1 for that time.
+- Servers (`sensor.servers_energy`) is the backup-port output whether it comes from the grid (Bypass)
+  or the battery, and is always inside gross circuit 1, so there is no double count.
+- The battery's own standby draw shows as Circuit 1 (untracked); its conversion losses are the
+  charge − discharge difference on the battery flow, not consumption. The gross is integrated from
+  power while HA's total uses the 0.01 kWh counters, so a small residual lands in untracked.
+- Before the gross formula was deployed, `sensor.circuit_1_energy` integrated the net difference: from
+  battery commissioning (2026-11-03) to the HA restart it is low by discharge − charge (a few tenths
+  of a kWh); not backfilled.
 
 #### Statistics backfill (2026-10-30)
 
