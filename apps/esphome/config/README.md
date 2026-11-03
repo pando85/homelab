@@ -46,7 +46,7 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | Mini Switch 4 | `mini-switch-4.yaml` | ESP8266 | Light switch | Smart light switch |
 | Mini Switch Office A | `mini-switch-office-a.yaml` | ESP8266 | Light switch | Office smart light switch |
 | Rack Controller | `rack-controller.yaml` | ESP32 | Fan controller | Server rack cooling + OLED display |
-| Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | Snapmaker 3D printer plug |
+| Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | House battery AC input (temporary); battery AC failsafe |
 | Smart Plug Terrace | `smart-plug-v2-terrace.yaml` | ESP8266 | Power meter | Terrace power plug |
 
 ## Package System
@@ -346,3 +346,10 @@ Athom Smart Plug V2 (ESP8266/esp8285) with CSE7766 power metering IC over UART. 
 voltage, power, energy, apparent power, and power factor. Total energy is accumulated in a global
 variable persisted to flash. Daily energy is tracked via `total_daily_energy`. Readings below 3W /
 60mA are zeroed to suppress standby noise. Relay defaults to off on power loss.
+
+`smart-plug-v2-snapmaker.yaml` feeds the house battery's AC input and adds a device-scoped
+**battery AC failsafe** on top of the package: after 5 minutes without a Home Assistant API client
+(state subscribers only) the relay turns off, and it turns back on when Home Assistant reconnects,
+only if the failsafe turned it off (a `restore_value` global remembers that across reboots). Its
+relay uses `RESTORE_DEFAULT_ON`. Runbook:
+[`docs/deployment/battery-optimizer.md`](../../../docs/deployment/battery-optimizer.md#esphome-ac-failsafe).
