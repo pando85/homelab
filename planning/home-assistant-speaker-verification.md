@@ -246,7 +246,7 @@ the agreed policy.
 - [Home Assistant: local voice assistant / Acts as user](https://www.home-assistant.io/voice_control/voice_remote_local_assistant/)
 - [Home Assistant: Wyoming integration](https://www.home-assistant.io/integrations/wyoming/)
 - [Home Assistant: expose entities to Assist](https://www.home-assistant.io/voice_control/voice_remote_expose_devices)
-- [Home Assistant: permission enforcement internals](https://developers.home-assistant.io/docs/auth/permissions/) (check current docs path before using as implementation contract)
+- [Home Assistant: permission enforcement internals](https://contributors.home-assistant.io/core/internals/permissions/)
 - [Wyoming Voice Match](https://github.com/jxlarrea/wyoming-voice-match)
 - [VoiceBM](https://github.com/cybericebyte/VoiceBM)
 - [Wyoming Transcribe](https://github.com/rvsh2/wyoming-transcribe)
