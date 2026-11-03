@@ -371,14 +371,14 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_servers_energy\"}[$__range])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_z800_energy\"}[$__range])) by (entity, friendly_name)",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Total Servers",
+      "title": "Total Z800",
       "type": "stat"
     },
     {
@@ -1632,7 +1632,7 @@
       },
       "id": 28,
       "panels": [],
-      "title": "Servers",
+      "title": "Z800",
       "type": "row"
     },
     {
@@ -1721,7 +1721,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_servers_energy\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_z800_energy\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1843,7 +1843,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=~\"sensor.shellypmmini_servers_power\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=~\"sensor.shellypmmini_z800_power\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -1952,7 +1952,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_servers_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellypmmini_z800_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
