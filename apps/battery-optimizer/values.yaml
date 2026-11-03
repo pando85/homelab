@@ -7,7 +7,7 @@ global:
   # `battery-optimizer-live` user's token) and mount it at the same path instead. The pipeline
   # always keeps the read-only token. Flip it only together with `mode: live` in
   # files/service.yaml, after the Vault secret exists: docs/deployment/battery-optimizer.md.
-  liveHomeAssistantToken: false
+  liveHomeAssistantToken: true
 
 app-template:
   # Two controllers sharing one image, one PVC and one ConfigMap:

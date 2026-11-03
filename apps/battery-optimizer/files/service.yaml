@@ -20,7 +20,7 @@
 # (ADR-0007).  REST stays GET-only in every mode.  live uses the separate token of the non-admin
 # HA user battery-optimizer-live (own Vault KV path); shadow/dry_run the read-only one.
 version: 1
-mode: dry_run
+mode: live
 timezone: Europe/Madrid
 
 home_assistant:
