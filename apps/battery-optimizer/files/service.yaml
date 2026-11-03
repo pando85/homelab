@@ -96,6 +96,12 @@ freshness_s:
   # A number restores the age test.
   battery_soc: null
   battery_power: 300
+  # The battery's AC energy counters are also reported only on change, so an idle battery's
+  # counters look stale after the grid_energy default (900 s) and every slot opens not ready
+  # (seen at go-live 2026-11-03). One week keeps a sanity bound; battery_liveness catches a
+  # dead Modbus link. Workaround until the code accepts null for these roles.
+  battery_charge_energy: 604800
+  battery_discharge_energy: 604800
 
 planning:
   # entity:    plan from the live battery SOC entity (refuses to plan when it is missing,
