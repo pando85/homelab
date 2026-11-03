@@ -47,7 +47,7 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | Mini Switch Office A | `mini-switch-office-a.yaml` | ESP8266 | Light switch | Office smart light switch |
 | Rack Controller | `rack-controller.yaml` | ESP32 | Fan controller | Server rack cooling + OLED display |
 | Smart Plug Battery | `smart-plug-v2-battery.yaml` | ESP8266 | Power meter | House battery AC input; battery AC failsafe |
-| Smart Plug Terrace | `smart-plug-v2-terrace.yaml` | ESP8266 | Power meter | Terrace power plug |
+| Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | Snapmaker 3D printer plug |
 
 ## Package System
 
@@ -62,7 +62,7 @@ and a list of packages. All logic lives in the packages.
 | irrigation-controller | `packages/irrigation-controller.yaml` | irrigation-controller-{corner,mid} | ESP32 board, relays, sprinkler logic, scheduling, web server |
 | lilygo-higrow | `packages/lilygo-higrow.yaml` | lilygo-higrow-{1,2} | ESP32 board, DHT11, soil moisture ADC, conductivity ADC, BH1750 lux, water pump |
 | mini-switch | `packages/mini-switch.yaml` | mini-switch-{1..4,office-a} | ESP8285 board, relay, status LED, wired switch, power button, multi-click |
-| smart-plug-v2 | `packages/smart-plug-v2.yaml` | smart-plug-v2-{battery,terrace} | ESP8285 board, CSE7766 power meter (UART), relay, energy tracking |
+| smart-plug-v2 | `packages/smart-plug-v2.yaml` | smart-plug-v2-{battery,snapmaker} | ESP8285 board, CSE7766 power meter (UART), relay, energy tracking |
 | cc1101 | `packages/cc1101.yaml` + `packages/cc1101.h` | garage-door-opener | CC1101 RF transceiver driver (SPI), 433.92 MHz, raw TX/RX |
 
 ### How Substitutions Work

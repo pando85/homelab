@@ -440,14 +440,14 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.smart_plug_v2_battery_energy\"}[$__range])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.smart_plug_v2_snapmaker_energy\"}[$__range])) by (entity, friendly_name)",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
           "refId": "A"
         }
       ],
-      "title": "Total Battery plug",
+      "title": "Total Snapmaker",
       "type": "stat"
     },
     {
@@ -1974,7 +1974,7 @@
       },
       "id": 48,
       "panels": [],
-      "title": "Battery plug",
+      "title": "Snapmaker",
       "type": "row"
     },
     {
@@ -2063,7 +2063,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.smart_plug_v2_battery_energy\"}[$__interval])) by (entity, friendly_name)",
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.smart_plug_v2_snapmaker_energy\"}[$__interval])) by (entity, friendly_name)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -2185,7 +2185,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=~\"sensor.smart_plug_v2_battery_power\"}) by (entity, friendly_name))[$__interval:])",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=~\"sensor.smart_plug_v2_snapmaker_power\"}) by (entity, friendly_name))[$__interval:])",
           "instant": false,
           "legendFormat": "Power",
           "range": true,
@@ -2207,6 +2207,104 @@
       ],
       "title": "Power",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 83
+      },
+      "id": 51,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.smart_plug_v2_snapmaker_energy\"}[$__interval])* scalar(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"})) by (entity, friendly_name)",
+          "format": "time_series",
+          "instant": false,
+          "interval": "1h",
+          "legendFormat": "{{entity}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cost",
+      "type": "barchart"
     },
     {
       "collapsed": false,
