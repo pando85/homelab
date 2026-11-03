@@ -8,7 +8,9 @@ from `apps/battery-optimizer/` with one image, one PVC and one ConfigMap:
   (Phase B).
 - **`service`**: the resident Phase C **shadow service** (`battery-optimizer serve`). It reads Home
   Assistant and Prometheus, solves the MPC plan every 15 minutes and records shadow intents and a
-  shadow-vs-native comparison. It has no actuation path and no write credentials. The production plan and its history live in
+  shadow-vs-native comparison. In `shadow` (deployed) it has no actuation path and no write
+  credentials; `dry_run` and `live` add the battery actuator of ADR-0007, see
+  [Live battery control](#live-battery-control). The production plan and its history live in
 [`planning/energy-baseline-production-execution.md`](https://github.com/pando85/homelab/blob/master/planning/energy-baseline-production-execution.md).
 
 The application code, ADRs and domain docs live in the app repository; this page covers only the
@@ -24,7 +26,7 @@ deployment.
 | Steps (one container, `sh -ec`, fails fast) | extract `ha-history` (8 d lookback) -> extract `prometheus` (3 d lookback) -> `validate` -> `build` |
 | Failure handling | `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
 | Node | pinned to `prusik` (node-local `openebs-zfspv`) |
-| Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk) |
+| Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk). Only with `global.liveHomeAssistantToken: true`: ExternalSecret `battery-optimizer-home-assistant-live` <- `secret/battery-optimizer/home-assistant-live` (service only, see [Live battery control](#live-battery-control)) |
 | Config | ConfigMap `battery-optimizer-config` rendered from `apps/battery-optimizer/files/` (`tariff.yaml`, `service.yaml`, and the climate shadow's `climate.yaml`, `climate-mpc.yaml`) |
 | Storage | PVC `battery-optimizer-data`, 5 Gi, `openebs-zfspv`, mounted at `/data` (`BATTERY_OPTIMIZER_DATA_DIR`) |
 | Backup | labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`; SnapshotSchedule `battery-optimizer-zfs-backups` (daily 06:00 UTC, keep 20) |
@@ -61,7 +63,8 @@ deployment.
 - **No NetworkPolicy.** An egress-only policy (DNS, HA 8123, long-term Prometheus 9090) ran from
   0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
   from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
-  control (LLM harnesses). Its only credential is the read-only HA token, and it has no actuation path.
+  control (LLM harnesses). Outside `live` its only credential is the read-only HA token and it has no
+  actuation path; in `live` the HA client can send only the allowlisted Omnibattery writes (ADR-0007).
 - **The two power signals come from a Gen1 Shelly EM over MQTT at 2 s; the counters still poll.**
   `shellyem-main` (`192.168.86.130`) publishes `shellies/shellyem-244CAB417668/emeter/{0,1}/power` to
   mosquitto every **2 s** (`mqtt_update_period: 2`) and HA consumes them via
@@ -118,12 +121,12 @@ deployment.
 | Workload | Deployment `battery-optimizer-service`, 1 replica, `strategy: Recreate`, same image anchor as the CronJob |
 | Command | `battery-optimizer serve`, port 8080: `/health/live`, `/health/ready`, `/status`, `/plan`, `/metrics` |
 | Config | `files/tariff.yaml` + `files/service.yaml` (vendored from the app repo `config/`) in ConfigMap `battery-optimizer-config`, mounted at `/config`. `service.yaml` uses `soc_source: simulated` because Home Assistant has no battery entities yet |
-| HA token | the same ExternalSecret as the pipeline, **mounted as a file** (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`). Read-only, non-admin; no other credential exists |
+| HA token | the same ExternalSecret as the pipeline, **mounted as a file** (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`). Read-only, non-admin. With `global.liveHomeAssistantToken: true` the live user's token is mounted at the same path instead ([Live battery control](#live-battery-control)) |
 | Storage | the same PVC `battery-optimizer-data` at `/data` (RWO on prusik, `Recreate` avoids two pods). The service writes only `/data/service/v1/`; the pipeline uses `raw/`, `manifests/` and `analysis/`, so the paths never collide |
 | Resources | requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS) |
 | Probes | liveness **and** readiness on `/health/live`; generous startup probe. `/health/ready` returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on `battery_optimizer_ready` instead |
 | Service / scrape | ClusterIP `battery-optimizer:8080` (`http`); ServiceMonitor labelled `operator.prometheus.io/instance: prometheus-long-term` (job `battery-optimizer`, 30 s), so `battery_optimizer_*` lives in the long-term Prometheus for the multi-week comparison |
-| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, and the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) |
+| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) and the [live control](#alerts) alerts (`rules-service/actuator.yaml`) |
 | Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer shadow service` and `Battery optimizer climate shadow` |
 
 **Passive archives (0.3.0).** The `archive:` block of `service.yaml` turns on two append-only
@@ -242,6 +245,202 @@ heating weeks are in a window.
 `ClimateShadowSolveFailures` (infeasible or error solves) and `ClimateShadowNoState` (the climate series
 have gaps). **Dashboard**: `Battery optimizer climate shadow` (runs, solver, accuracy per horizon,
 valid weeks, gates, regime).
+
+## Live battery control
+
+ADR-0007 in the app repository (`docs/adr/0007-live-battery-control.md`, operations in
+`docs/service.md#live-control-dry_run-and-live`) adds `mode: dry_run | live` to `files/service.yaml`.
+The service then sets Omnibattery's direction switches, PD grid target and discharge cap through a
+narrow write allowlist; Omnibattery stays the only Modbus writer. The deployed mode is `shadow`
+until the owner changes it. The battery and its Omnibattery setup are in
+[`home-assistant-omnibattery.md`](../troubleshooting/home-assistant-omnibattery.md).
+
+| Piece | Where | State |
+|---|---|---|
+| Kill switch `input_boolean.battery_optimizer_live` | `apps/home-assistant/config/integrations/battery_optimizer.yaml` | Read by the service only. Created off; restores its last state across HA restarts (no `initial:`) |
+| Heartbeat `input_datetime.battery_optimizer_heartbeat` | same file | Written by every reconciled `live` tick (~30 s) |
+| Watchdog automation `battery_optimizer_watchdog` | same file | Every minute: kill switch on and heartbeat older than 5 min -> both direction switches off; also on the kill switch's `off` edge. Persistent notification `battery_optimizer_watchdog` (replaced, not stacked) |
+| Live token | `global.liveHomeAssistantToken` in `values.yaml` (default `false`) | Off: nothing rendered. On: ExternalSecret `battery-optimizer-home-assistant-live`, mounted in the service at `/secrets/home-assistant/BATTERY_OPTIMIZER_HA_TOKEN` instead of the read-only token. The pipeline keeps the read-only token |
+| Alerts | `rules-service/actuator.yaml` | See [Alerts](#alerts) |
+| AC failsafe | `apps/esphome/config/smart-plug-v2-snapmaker.yaml` | See [ESPHome AC failsafe](#esphome-ac-failsafe). Must be flashed by hand |
+
+**Tokens.** `shadow` and `dry_run` use the read-only `battery-optimizer` HA user. `live` uses the
+separate non-admin user `battery-optimizer-live` (group `system-users`, local only), whose long-lived
+token the owner keeps in `pass`. Home Assistant cannot restrict a token to entities, so the service's
+`ha_guard` allowlist is the restriction. Rendering fails when `files/service.yaml` says `mode: live`
+while `global.liveHomeAssistantToken` is `false` (ArgoCD then shows a `ComparisonError` and syncs
+nothing), so `live` never runs on the read-only token.
+
+**Watchdog in `dry_run`.** `dry_run` keeps the kill switch on (rollout step 2) but sends no heartbeat,
+so the watchdog turns both direction switches off every minute and keeps its notification up. That is
+expected: nothing else should be driving the battery during the rehearsal. The heartbeat and
+kill-switch alerts exclude `dry_run` for that reason.
+
+### Live token in Vault
+
+Once, before the first `live` rollout. Load the token from a `0600` file, never from the command line,
+and never print it:
+
+```bash
+export VAULT_ADDR=https://vault.internal.grigri.cloud
+umask 077
+TOKEN_FILE="$(mktemp)"
+# Put only the battery-optimizer-live user's long-lived token in "$TOKEN_FILE", taken from
+# `pass iot/hass-battery-optimizer-live` (no trailing newline).
+vault kv put secret/battery-optimizer/home-assistant-live token=@"$TOKEN_FILE"
+shred -u "$TOKEN_FILE"
+vault kv metadata get secret/battery-optimizer/home-assistant-live   # check it exists, no value shown
+```
+
+The ExternalSecret only exists while the flag is on, so a missing Vault secret shows up at the `live`
+rollout: `SecretSyncedError` on `battery-optimizer-home-assistant-live` and the new service pod stuck
+in `ContainerCreating`. The kill switch is off at that point, so nothing reaches the battery; roll back.
+
+### ESPHome AC failsafe
+
+The battery holds its last charge or discharge command while Home Assistant is down (commissioning
+test: outages of 23 s to 10.5 minutes, no device timeout). The watchdog and the service's safe idle
+both need HA, so the battery's AC plug (Athom Smart Plug V2 "Snapmaker",
+`switch.smart_plug_v2_snapmaker`) carries a failsafe in its own device file. The shared
+`packages/smart-plug-v2.yaml` is unchanged:
+
+- after **5 minutes** without a Home Assistant API client (`api.connected` with
+  `state_subscription_only`, so a log viewer does not count; checked every 10 s), the relay turns
+  **off**. The battery then only powers its backup port and stops charging or discharging to the house;
+- when HA reconnects, the relay turns back **on**, only if the failsafe turned it off. A global with
+  `restore_value` remembers that across reboots; any relay turn-on clears it. A relay the owner switched
+  off stays off;
+- `relay_restore_mode: RESTORE_DEFAULT_ON`: a reboot or OTA restores the last state, and ON when
+  nothing was saved. A failsafe OFF is restored as OFF and switched on again when HA returns;
+- ESPHome's own `api` `reboot_timeout` (default 15 min) reboots the plug during a long HA outage. The
+  relay stays off through it.
+
+It also trips on a Wi-Fi loss of 5 minutes. When the AC comes back the inverter goes back to Bypass,
+and Omnibattery may report `backup_mode` for a few minutes; the optimizer holds safe idle meanwhile.
+
+**Flashing.** Pushing changes only the ConfigMap that the ESPHome dashboard reads (Reloader restarts the
+`esphome` pod); the plug keeps its old firmware until it is flashed over OTA. Either use the dashboard at
+`esphome.internal.grigri.cloud` (`smart-plug-v2-snapmaker` -> Install -> Wirelessly), or flash from
+`apps/esphome/config` (see its `README.md`):
+
+```bash
+cd apps/esphome/config
+make requirements
+KUBE_CONTEXT=grigri make secrets
+make smart-plug-v2-snapmaker.yaml   # esphome run: compile + OTA
+```
+
+The plug reboots once (a few seconds). The new restore mode only applies from that boot: the running
+firmware still has `RESTORE_DEFAULT_OFF`, which restores the saved ON state anyway. Flash while the
+battery is idle (direction switches off), then check `switch.smart_plug_v2_snapmaker` is on.
+
+**Test** (owner, battery idle): disable the plug's ESPHome device in Home Assistant so HA drops the API
+connection, watch `make logs FILE=smart-plug-v2-snapmaker.yaml` (or the dashboard logs) for
+`Battery failsafe: no Home Assistant for 5 min, relay OFF` and the battery switching to backup, then
+re-enable it and check `... relay ON` within 10 s. Repeat with the relay off by hand: it must stay off.
+
+### Rollout: dry_run, then live
+
+Preconditions (owner):
+
+- The HA helpers and the watchdog are deployed. Pushing them restarts Home Assistant through Reloader,
+  so check the Shelly `GET /cit/d` first (see the CoIoT note above). In Developer tools, check that the
+  three entity IDs exist without a `_2` suffix and that the kill switch is **off**.
+- The ESPHome failsafe is flashed and tested.
+- Omnibattery: competing strategies off; `number.omnibattery_pd_controller_max_power_change` raised to
+  2000 W. Note the backup threshold
+  [workaround](../troubleshooting/home-assistant-omnibattery.md#workaround-active-since-2026-11-03).
+- The system caps stay at today's 1000 W charge / 800 W discharge until go-live (steps 1-2 of the live
+  phase). In `dry_run` the charge clamping therefore reflects the 1000 W cap minus the house load,
+  not the go-live 2500 W.
+
+**dry_run (1-2 days):**
+
+1. Update the image to the optimizer release with live control (Renovate PR, or by hand) and vendor
+   its `config/service.yaml` changes (the `actuation:` section). Set `mode: dry_run` in
+   `files/service.yaml`. Merge; ArgoCD rolls the pod.
+2. Check `/status` (`mode: dry_run`, an `actuator` block) and `battery_optimizer_build_info{mode="dry_run"}`.
+3. Turn the kill switch **on**. Nothing is sent; the watchdog keeps the switches off (see above).
+4. Review `/data/service/v1/actuation/` and the `battery_optimizer_actuator_*` metrics: guard reasons,
+   the mapping at every slot, setpoint churn, how often a charge is clamped, and the house-load
+   estimate against the meter.
+
+**live, supervised:**
+
+Go-live steps first, with the battery idle. Above 800 W of discharge the Venus needs Premium mode, and
+with the system power limits on the PD target is bounded by the system caps (ADR-0007 commissioning
+findings):
+
+1. Turn both *Allow* switches (`switch.venus_battery_allow_charge`,
+   `switch.venus_battery_allow_discharge`) **off**, then switch **Premium mode on** in the Marstek app.
+   Change nothing else in the app.
+2. Set `number.omnibattery_system_max_charge_power` and `number.omnibattery_system_max_discharge_power`
+   to **2500 W** (today 1000 / 800 W). The Venus's own `number.venus_max_charge_power` /
+   `_max_discharge_power` are already 2500 W; check them.
+
+Then:
+
+3. Put the live token in Vault ([above](#live-token-in-vault)).
+4. Turn the kill switch **off**.
+5. In one commit: `mode: live` in `files/service.yaml` (the app also requires
+   `planning.soc_source: entity` for `live`) and `global.liveHomeAssistantToken: true` in `values.yaml`.
+   Merge.
+6. Check `kubectl --context=grigri -n battery-optimizer get externalsecret` (both `SecretSynced`), the
+   new pod running, `/status` `mode: live`, and `battery_optimizer_build_info{mode="live"}`.
+7. Turn the kill switch **on** while watching the grid meter. Verify: writes confirmed
+   (`battery_optimizer_actuator_writes_total{result="ok"}`), the heartbeat entity advancing about every
+   30 s, a slot change in each direction, the import staying under 4500 W while charging, and the
+   charge and discharge reaching up to 2500 W (minus the house load for a charge).
+8. Watchdog test: pause ArgoCD auto-sync for the app, scale the Deployment to 0, and within about 6
+   minutes see both direction switches go off, the `battery_optimizer_watchdog` notification and
+   `BatteryOptimizerHeartbeatStale`. Scale back to 1 and resume auto-sync. (Agents must not run these
+   `kubectl` writes; the owner does.)
+9. Graceful stop: delete the pod (ArgoCD recreates it) and check that the actuation records show a
+   safe idle with reason `shutdown` before the restart, and that the new pod holds safe idle until its
+   first fresh plan.
+
+Only then leave it unattended. HA host power loss is still untested (app repo TODO-5.4); the AC
+failsafe is the layer that does not depend on HA.
+
+### Rollback
+
+1. Turn `input_boolean.battery_optimizer_live` **off**. This is immediate: the service sets safe idle
+   once and stops writing, and the watchdog repeats the safe idle in HA. In an emergency, also turn the
+   *Allow* switches off on the Battery dashboard, or the battery's AC plug.
+2. In one commit: `mode: shadow` (or `dry_run`) in `files/service.yaml` and
+   `global.liveHomeAssistantToken: false`. Merge. ArgoCD prunes the live ExternalSecret and its Secret
+   and the pod restarts on the read-only token. The flag cannot go off while the mode is still `live`
+   (rendering fails).
+3. Restore Omnibattery's native configuration by hand: safe idle leaves the PD target and the
+   discharge cap at their last values, so set them back before switching a direction on. Decide whether
+   the 2500 W system caps and Premium mode stay (both *Allow* switches off while changing them).
+4. To retire the live user for good: delete its long-lived token in HA (the user's profile, as an
+   admin) and `vault kv metadata delete secret/battery-optimizer/home-assistant-live`.
+
+### Alerts
+
+`rules-service/actuator.yaml`, long-term Prometheus. The `actuator_*` series exist only in `dry_run`
+and `live`; the HA-side rules read `hass_*` and only fire while the kill switch is on.
+
+| Alert | Fires when |
+|---|---|
+| `BatteryOptimizerActuatorAlert` (critical) | `actuator_alert == 1` for 2 m: a write was not confirmed after its retries |
+| `BatteryOptimizerActuatorSafeIdle` | in control and the guard has held safe idle for 30 m (`actuator_guard_reason` says why) |
+| `BatteryOptimizerImportOverCap` (critical) | guard reason `import_over_cap`: import above 4700 W while charging |
+| `BatteryOptimizerHeartbeatFailures` | a heartbeat write failed in the last 10 m |
+| `BatteryOptimizerHeartbeatStale` (critical) | the heartbeat entity is older than 5 m while the kill switch is on (not in `dry_run`); fires with the service down |
+| `BatteryOptimizerKillSwitchOnNotLive` | the kill switch has been on for 15 m while the service is not `live` or `dry_run` (or is down) |
+| `BatteryOptimizerChargePowerHigh` | measured battery charge above 2600 W for 2 m (the go-live caps are 2500 W): a cap or `battery_ac_power_sign` is wrong |
+| `BatteryOptimizerChargeClamped` | `battery_optimizer_actuator_clamped_watts > 1000` for 30 m (sized for the 2500 W caps). **Unconfirmed metric name** from the unreleased optimizer change; check it against the released `/metrics` |
+
+### Omnibattery backup cooldown workaround
+
+`number.venus_backup_offgrid_threshold` is **500 W** (default 50 W) because of upstream bug
+ffunes/Omnibattery#660 (`backup_mode` latched after the grid returns while the backup port has a load).
+The fix is ffunes/Omnibattery#723. Once a release with #723 is installed, set the threshold back to
+50 W and check that the status returns to `balanced` within 5 minutes with a load on the backup port in
+Bypass. Side effects of the high threshold and the full procedure:
+[`home-assistant-omnibattery.md`](../troubleshooting/home-assistant-omnibattery.md).
 
 ## First run (2026-10-25)
 

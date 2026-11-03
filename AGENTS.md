@@ -122,7 +122,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (69 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (70 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -147,7 +147,7 @@ Full pitfall index (69 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **Storage & Backup** (11): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
-- **Desktop & Home** (11): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote)
+- **Desktop & Home** (12): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote), Omnibattery `backup_mode` latch (backup threshold 500 W workaround)
 - **Applications** (10): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema
 
 ## Subsystem Docs
@@ -158,7 +158,7 @@ Full pitfall index (69 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **prusik storage:** `docs/conventions/prusik-fast-storage-tier.md` — ZFS pool sizing, SSD selection, PVC migration. Hardware: `docs/hardware/prusik.md`, `docs/hardware/k8s-amd64-1.md`
 - **Adding a node:** `docs/user-guide/add-or-remove-nodes.md` (runbook), `planning/k8s-amd64-1-node-addition.md` (worked example)
 - **Topology spread:** `docs/conventions/topology-spread-constraints.md` — `matchLabelKeys`
-- **Battery optimizer:** app code in `pando85/home-energy-optimizer`; deployment + extraction plan `planning/energy-baseline-production-execution.md`
+- **Battery optimizer:** app code in `pando85/home-energy-optimizer`; deployment + extraction plan `planning/energy-baseline-production-execution.md`; live control rollout/rollback `docs/deployment/battery-optimizer.md#live-battery-control`
 
 ## Licensing
 
