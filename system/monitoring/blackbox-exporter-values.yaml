@@ -103,8 +103,8 @@ serviceMonitor:
       name: shellyem-main
       url: shellyem-main.iot.grigri
     - module: ping
-      name: shellypmmini-servers
-      url: shellypmmini-servers.iot.grigri
+      name: shellypmmini-z800
+      url: shellypmmini-z800.iot.grigri
     - module: ping
       name: shellyplus2pm-bedroom
       url: shellyplus2pm-bedroom.iot.grigri
