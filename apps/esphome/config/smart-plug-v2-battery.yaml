@@ -1,7 +1,7 @@
 substitutions:
-  device_name: "smart-plug-v2-snapmaker"
-  friendly_name: "Smart Plug V2 Snapmaker"
-  project_name: "athom.smart-plug-v2-snapmaker"
+  device_name: "smart-plug-v2-battery"
+  friendly_name: "Smart Plug V2 Battery"
+  project_name: "athom.smart-plug-v2-battery"
   project_version: "1.1"
   # This plug feeds the house battery's AC input (see the failsafe below). Restore the last state
   # after a reboot or OTA, and default to ON when nothing was saved, so a reboot never leaves the

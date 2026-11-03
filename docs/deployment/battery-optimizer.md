@@ -262,7 +262,7 @@ until the owner changes it. The battery and its Omnibattery setup are in
 | Watchdog automation `battery_optimizer_watchdog` | same file | Every minute: kill switch on and heartbeat older than 5 min -> both direction switches off; also on the kill switch's `off` edge. Persistent notification `battery_optimizer_watchdog` (replaced, not stacked) |
 | Live token | `global.liveHomeAssistantToken` in `values.yaml` (default `false`) | Off: nothing rendered. On: ExternalSecret `battery-optimizer-home-assistant-live`, mounted in the service at `/secrets/home-assistant/BATTERY_OPTIMIZER_HA_TOKEN` instead of the read-only token. The pipeline keeps the read-only token |
 | Alerts | `rules-service/actuator.yaml` | See [Alerts](#alerts) |
-| AC failsafe | `apps/esphome/config/smart-plug-v2-snapmaker.yaml` | See [ESPHome AC failsafe](#esphome-ac-failsafe). Must be flashed by hand |
+| AC failsafe | `apps/esphome/config/smart-plug-v2-battery.yaml` | See [ESPHome AC failsafe](#esphome-ac-failsafe). Must be flashed by hand |
 
 **Tokens.** `shadow` and `dry_run` use the read-only `battery-optimizer` HA user. `live` uses the
 separate non-admin user `battery-optimizer-live` (group `system-users`, local only), whose long-lived
@@ -300,8 +300,8 @@ in `ContainerCreating`. The kill switch is off at that point, so nothing reaches
 
 The battery holds its last charge or discharge command while Home Assistant is down (commissioning
 test: outages of 23 s to 10.5 minutes, no device timeout). The watchdog and the service's safe idle
-both need HA, so the battery's AC plug (Athom Smart Plug V2 "Snapmaker",
-`switch.smart_plug_v2_snapmaker`) carries a failsafe in its own device file. The shared
+both need HA, so the battery's AC plug (Athom Smart Plug V2 "Battery",
+`switch.smart_plug_v2_battery`) carries a failsafe in its own device file. The shared
 `packages/smart-plug-v2.yaml` is unchanged:
 
 - after **5 minutes** without a Home Assistant API client (`api.connected` with
@@ -320,22 +320,22 @@ and Omnibattery may report `backup_mode` for a few minutes; the optimizer holds 
 
 **Flashing.** Pushing changes only the ConfigMap that the ESPHome dashboard reads (Reloader restarts the
 `esphome` pod); the plug keeps its old firmware until it is flashed over OTA. Either use the dashboard at
-`esphome.internal.grigri.cloud` (`smart-plug-v2-snapmaker` -> Install -> Wirelessly), or flash from
+`esphome.internal.grigri.cloud` (`smart-plug-v2-battery` -> Install -> Wirelessly), or flash from
 `apps/esphome/config` (see its `README.md`):
 
 ```bash
 cd apps/esphome/config
 make requirements
 KUBE_CONTEXT=grigri make secrets
-make smart-plug-v2-snapmaker.yaml   # esphome run: compile + OTA
+make smart-plug-v2-battery.yaml   # esphome run: compile + OTA
 ```
 
-The plug reboots once (a few seconds). The new restore mode only applies from that boot: the running
-firmware still has `RESTORE_DEFAULT_OFF`, which restores the saved ON state anyway. Flash while the
-battery is idle (direction switches off), then check `switch.smart_plug_v2_snapmaker` is on.
+The plug reboots once (a few seconds) and restores the relay ON. The failsafe firmware has been on
+the plug since 2026-11-03 (ESPHome 2026.10.1). Flash while the
+battery is idle (direction switches off), then check `switch.smart_plug_v2_battery` is on.
 
 **Test** (owner, battery idle): disable the plug's ESPHome device in Home Assistant so HA drops the API
-connection, watch `make logs FILE=smart-plug-v2-snapmaker.yaml` (or the dashboard logs) for
+connection, watch `make logs FILE=smart-plug-v2-battery.yaml` (or the dashboard logs) for
 `Battery failsafe: no Home Assistant for 5 min, relay OFF` and the battery switching to backup, then
 re-enable it and check `... relay ON` within 10 s. Repeat with the relay off by hand: it must stay off.
 

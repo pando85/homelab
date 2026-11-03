@@ -15,7 +15,7 @@ template:
           {{ is_number(states('sensor.shellyem_main_channel_1_power')) and is_number(states('sensor.shellyem_main_channel_2_power')) }}
 
 sensor:
-  # Energy for circuit 1, so the Energy dashboard can nest the devices it feeds (servers, Snapmaker).
+  # Energy for circuit 1, so the Energy dashboard can nest the devices it feeds (servers).
   - platform: integration
     source: sensor.circuit_1_power
     name: Circuit 1 Energy

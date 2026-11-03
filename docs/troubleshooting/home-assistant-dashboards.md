@@ -110,8 +110,7 @@ power (`stat_rate`):
 ```
 Grid: Shelly EM channel 1 (PVPC price)
 ├─ Circuit 1 (sensor.circuit_1_energy): cooker, sockets, humid areas, thermostats, lighting
-│   ├─ Servers (Shelly PM mini)
-│   └─ Snapmaker (plug)
+│   └─ Servers (Shelly PM mini)
 └─ Circuit 2 (Shelly EM channel 2): aerotherm, dishwasher, washer, extractor
     ├─ Heat pump (sensor.aquarea_energy_consumed)
     │   └─ Hot water / Heating / Cooling (sensor.aquarea_{dhw,heat,cool}_energy_consumed)

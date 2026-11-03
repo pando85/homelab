@@ -46,7 +46,7 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | Mini Switch 4 | `mini-switch-4.yaml` | ESP8266 | Light switch | Smart light switch |
 | Mini Switch Office A | `mini-switch-office-a.yaml` | ESP8266 | Light switch | Office smart light switch |
 | Rack Controller | `rack-controller.yaml` | ESP32 | Fan controller | Server rack cooling + OLED display |
-| Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | House battery AC input (temporary); battery AC failsafe |
+| Smart Plug Battery | `smart-plug-v2-battery.yaml` | ESP8266 | Power meter | House battery AC input; battery AC failsafe |
 | Smart Plug Terrace | `smart-plug-v2-terrace.yaml` | ESP8266 | Power meter | Terrace power plug |
 
 ## Package System
@@ -62,7 +62,7 @@ and a list of packages. All logic lives in the packages.
 | irrigation-controller | `packages/irrigation-controller.yaml` | irrigation-controller-{corner,mid} | ESP32 board, relays, sprinkler logic, scheduling, web server |
 | lilygo-higrow | `packages/lilygo-higrow.yaml` | lilygo-higrow-{1,2} | ESP32 board, DHT11, soil moisture ADC, conductivity ADC, BH1750 lux, water pump |
 | mini-switch | `packages/mini-switch.yaml` | mini-switch-{1..4,office-a} | ESP8285 board, relay, status LED, wired switch, power button, multi-click |
-| smart-plug-v2 | `packages/smart-plug-v2.yaml` | smart-plug-v2-{snapmaker,terrace} | ESP8285 board, CSE7766 power meter (UART), relay, energy tracking |
+| smart-plug-v2 | `packages/smart-plug-v2.yaml` | smart-plug-v2-{battery,terrace} | ESP8285 board, CSE7766 power meter (UART), relay, energy tracking |
 | cc1101 | `packages/cc1101.yaml` + `packages/cc1101.h` | garage-door-opener | CC1101 RF transceiver driver (SPI), 433.92 MHz, raw TX/RX |
 
 ### How Substitutions Work
@@ -347,7 +347,7 @@ voltage, power, energy, apparent power, and power factor. Total energy is accumu
 variable persisted to flash. Daily energy is tracked via `total_daily_energy`. Readings below 3W /
 60mA are zeroed to suppress standby noise. Relay defaults to off on power loss.
 
-`smart-plug-v2-snapmaker.yaml` feeds the house battery's AC input and adds a device-scoped
+`smart-plug-v2-battery.yaml` feeds the house battery's AC input and adds a device-scoped
 **battery AC failsafe** on top of the package: after 5 minutes without a Home Assistant API client
 (state subscribers only) the relay turns off, and it turns back on when Home Assistant reconnects,
 only if the failsafe turned it off (a `restore_value` global remembers that across reboots). Its
