@@ -15,7 +15,7 @@
       }
     ]
   },
-  "description": "The legacy AppDaemon heat-pump control (climate_control, dhw_control) seen through Home Assistant metrics: tracking, comfort, rule activity, efficiency and heater safety, as in the preregistered section B. KPIs of docs/components/heat-pump-controller.md.",
+  "description": "The AppDaemon comfort controller (comfort_control) seen through Home Assistant metrics: tracking, comfort, rule activity, efficiency and heater safety, as in the preregistered section B. KPIs of docs/components/heat-pump-controller.md.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -49,9 +49,9 @@
     },
     {
       "type": "stat",
-      "title": "Climate rule enabled",
+      "title": "Comfort control enabled",
       "id": 2,
-      "description": "input_boolean.appdaemon_climate_enable (1 = the legacy cheapest-hours rule may run).",
+      "description": "input_boolean.comfort_control_enable (1 = the comfort controller is in charge of heating mode, setpoints and hot water).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -69,7 +69,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "max(hass_input_boolean_state{entity=\"input_boolean.appdaemon_climate_enable\"})",
+          "expr": "max(hass_input_boolean_state{entity=\"input_boolean.comfort_control_enable\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -115,9 +115,9 @@
     },
     {
       "type": "stat",
-      "title": "Minimum hours per day",
+      "title": "Water temperature dry run",
       "id": 3,
-      "description": "input_number.appdaemon_climate_min_hours_per_day, the rule's heating hours per day.",
+      "description": "input_boolean.comfort_water_dry_run (1 = water requests are only logged, 0 = written to the unit). Seeded on; the owner turns it off after the first-write test.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -135,7 +135,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "max(hass_input_number_state{entity=\"input_number.appdaemon_climate_min_hours_per_day\"})",
+          "expr": "max(hass_input_boolean_state{entity=\"input_boolean.comfort_water_dry_run\"})",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
@@ -152,6 +152,10 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
               }
             ]
           },
@@ -243,7 +247,7 @@
       "type": "stat",
       "title": "Hall-kitchen setpoint",
       "id": 5,
-      "description": "Hall-kitchen thermostat setpoint now (manual under the legacy rule).",
+      "description": "Hall-kitchen thermostat setpoint now (written by the comfort controller at schedule boundaries).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -518,7 +522,7 @@
       "type": "timeseries",
       "title": "Thermostat setpoint (degC)",
       "id": 10,
-      "description": "Manual setpoints under the legacy rule; the comfort controller will write them.",
+      "description": "Written by the comfort controller at schedule boundaries (early start, window end, away); a manual change holds until the next boundary.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -919,9 +923,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Heating hours per day against the rule's minimum",
+      "title": "Heating hours per day",
       "id": 17,
-      "description": "Hours with space-heating electricity above 0 (5 min steps, rolling 24 h) against appdaemon_climate_min_hours_per_day. A compressor run also includes defrost.",
+      "description": "Hours with space-heating electricity above 0 (5 min steps, rolling 24 h). A compressor run also includes defrost.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -942,16 +946,6 @@
           "expr": "count_over_time((max(hass_sensor_power_w{entity=\"sensor.aquarea_heat_power_consumed\"}) > 0)[1d:5m]) / 12",
           "legendFormat": "Heating hours",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "max(hass_input_number_state{entity=\"input_number.appdaemon_climate_min_hours_per_day\"})",
-          "legendFormat": "Rule minimum",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -1193,7 +1187,7 @@
       "type": "timeseries",
       "title": "Water target and flow temperature (degC)",
       "id": 20,
-      "description": "The unit's water target (a fixed direct target under the legacy rule) and the measured flow temperature; z1 target is the zone-1 request.",
+      "description": "The unit's water target (the comfort controller writes it from its software curve in direct mode) and the measured flow temperature; z1 target is the zone-1 request.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1345,9 +1339,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Climate watchdog triggers (per day)",
+      "title": "Comfort watchdog triggers (per day)",
       "id": 22,
-      "description": "Triggers of automation.appdaemon_climate_watchdog in the last 24 h (a trigger means the AppDaemon climate app stopped answering).",
+      "description": "Triggers of automation.appdaemon_comfort_watchdog in the last 24 h (a trigger means the comfort controller stopped answering and Heat+DHW was re-selected).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1365,7 +1359,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(hass_automation_triggered_count_total{entity=\"automation.appdaemon_climate_watchdog\"}[1d]))",
+          "expr": "sum(increase(hass_automation_triggered_count_total{entity=\"automation.appdaemon_comfort_watchdog\"}[1d]))",
           "legendFormat": "Triggers",
           "refId": "A"
         }
