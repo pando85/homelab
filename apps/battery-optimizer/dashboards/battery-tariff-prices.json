@@ -441,9 +441,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Publication time per day (hour of day, UTC)",
+      "title": "Publication time of the latest next-day prices (hour of day, UTC)",
       "id": 8,
-      "description": "Hour of day (UTC, decimal) at the flip of prices_tomorrow_published from 0 to 1, one cluster of points per publication. Local time is UTC+1 in winter and UTC+2 in summer. Read the value, not the position.",
+      "description": "Hour of day (UTC, decimal: 19.5 = 19:30) at which prices_tomorrow_published last went from 0 to 1 within the trailing 24 h, to one-minute precision; the line steps when the next publication happens. Local time is UTC+1 in winter and UTC+2 in summer. Measured since 2026-10-27: 19:18 to 19:46 UTC.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -461,7 +461,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "(hour(vector(time())) + minute(vector(time())) / 60) and on() (max(battery_optimizer_prices_tomorrow_published) == 1 and on() max(battery_optimizer_prices_tomorrow_published offset 2m) == 0)",
+          "expr": "min_over_time(((hour(vector(time())) + minute(vector(time())) / 60) and on() (max(battery_optimizer_prices_tomorrow_published) == 1 and on() max(battery_optimizer_prices_tomorrow_published offset 2m) == 0))[1d:1m])",
           "legendFormat": "Published at (UTC hour)",
           "refId": "A"
         }
@@ -470,12 +470,12 @@
         "defaults": {
           "unit": "h",
           "custom": {
-            "drawStyle": "points",
+            "drawStyle": "line",
             "lineWidth": 1,
             "fillOpacity": 0,
             "showPoints": "always",
             "spanNulls": false,
-            "lineInterpolation": "linear",
+            "lineInterpolation": "stepAfter",
             "stacking": {
               "mode": "none",
               "group": "A"
