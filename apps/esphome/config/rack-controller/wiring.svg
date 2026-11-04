@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="950" viewBox="0 0 1500 950" role="img" aria-labelledby="title desc"><title id="title">Rack controller reference electrical wiring</title><desc id="desc">12-volt supply feeds two PWM fans and an LM2596 buck converter. The converter provides 5 volts to an ESP32 DevKit. The ESP32 supplies 3.3 volts to a DHT22 and SSD1306 OLED, controls fan PWM on GPIO16, and reads fan 1 tachometer on GPIO17.</desc><rect width="1500" height="950" fill="#f8fafc"/>
+<text x="60" y="57" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" text-anchor="start" fill="#162334">RACK CONTROLLER · REFERENCE WIRING</text>
+<text x="60" y="85" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#526275">Power distribution and GPIO assignments from rack-controller.yaml (not verified as-built wiring)</text>
+<path d="M315 165 H370 M580 165 H990 V565 M710 165 V300" stroke="#cf3344" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M315 213 H370 M580 213 H1030 V595 M760 213 V300" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M990 365 H1100 M990 565 H1100" stroke="#cf3344" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M1030 395 H1100 M1030 595 H1100" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M785 450 V523" stroke="#d38a21" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M845 450 V523" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M950 742 H1070 V455 H1100 M1070 655 H1100" stroke="#7255ba" stroke-width="4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M1100 425 H1050 V694 H950" stroke="#007f87" stroke-width="4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M640 586 H570 V582 H420 M570 582 V736 H420" stroke="#d38a21" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M640 622 H548 V612 H420 M548 612 V766 H420" stroke="#566171" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M640 673 H520 V642 H420" stroke="#007f87" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M640 728 H495 V792 H420" stroke="#007f87" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M640 762 H475 V823 H420" stroke="#007f87" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="62" y="121" width="252" height="135" rx="12" fill="#ffffff" stroke="#dbe3eb" stroke-width="2"/>
+<rect x="370" y="136" width="210" height="112" rx="12" fill="#ffffff" stroke="#dbe3eb" stroke-width="2"/>
+<text x="85" y="164" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start" fill="#162334">AC/DC adapter</text>
+<text x="85" y="193" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" text-anchor="start" fill="#162334">Regulated 12 V DC</text>
+<text x="85" y="218" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#526275">2 A example rating</text>
+<text x="391" y="174" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" text-anchor="start" fill="#162334">DC barrel jack</text>
+<text x="391" y="200" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">5.5 × 2.1 mm</text>
+<text x="391" y="225" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">Verify center polarity</text>
+<text x="617" y="152" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" text-anchor="start" fill="#cf3344">+12 V bus</text>
+<text x="845" y="202" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" text-anchor="start" fill="#566171">Common ground</text>
+<rect x="639" y="300" width="312" height="150" rx="12" fill="#fff8ea" stroke="#e7c18b" stroke-width="2"/>
+<text x="666" y="336" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start" fill="#162334">LM2596 buck converter</text>
+<text x="665" y="369" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">IN+ / IN−: 12 V / GND</text>
+<text x="665" y="394" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">OUT+ / OUT−: 5.0 V / GND</text>
+<text x="665" y="422" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">Set output before connecting ESP32</text>
+<circle cx="710" cy="300" r="5" fill="#cf3344" stroke="white" stroke-width="2"/>
+<circle cx="760" cy="300" r="5" fill="#566171" stroke="white" stroke-width="2"/>
+<circle cx="785" cy="450" r="5" fill="#d38a21" stroke="white" stroke-width="2"/>
+<circle cx="845" cy="450" r="5" fill="#566171" stroke="white" stroke-width="2"/>
+<rect x="640" y="523" width="310" height="286" rx="12" fill="#f1fcfc" stroke="#8bc9cb" stroke-width="2"/>
+<text x="667" y="558" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" text-anchor="start" fill="#162334">ESP32 DevKit</text>
+<text x="667" y="581" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">ESP-WROOM-32 on 5 V-capable board</text>
+<text x="665" y="612" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" text-anchor="start" fill="#d38a21">3V3 → sensors</text>
+<text x="665" y="648" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" text-anchor="start" fill="#566171">GND → sensors</text>
+<text x="665" y="688" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="600" text-anchor="start" fill="#007f87">GPIO25 → DHT22 DATA</text>
+<text x="665" y="728" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="600" text-anchor="start" fill="#007f87">GPIO19 → OLED SDA</text>
+<text x="665" y="764" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="600" text-anchor="start" fill="#007f87">GPIO18 → OLED SCL</text>
+<text x="938" y="693" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" text-anchor="end" fill="#007f87">GPIO17</text>
+<text x="938" y="742" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" text-anchor="end" fill="#7255ba">GPIO16</text>
+<text x="785" y="508" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#d38a21">5 V</text>
+<text x="845" y="508" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="700" text-anchor="middle" fill="#566171">GND</text>
+<rect x="1100" y="341" width="327" height="147" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
+<rect x="1100" y="541" width="327" height="147" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
+<text x="1125" y="366" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start" fill="#162334">Noctua PWM fan 1</text>
+<text x="1125" y="391" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Pin 2 · +12 V (yellow)</text>
+<text x="1125" y="417" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Pin 1 · GND (black)</text>
+<text x="1125" y="442" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Pin 3 · TACH (green)</text>
+<text x="1125" y="468" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Pin 4 · PWM (blue)</text>
+<text x="1125" y="566" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start" fill="#162334">Noctua PWM fan 2</text>
+<text x="1125" y="591" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Pin 2 · +12 V (yellow)</text>
+<text x="1125" y="617" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Pin 1 · GND (black)</text>
+<text x="1125" y="642" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#162334">Pin 3 · TACH: not connected</text>
+<text x="1125" y="668" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Pin 4 · PWM (blue)</text>
+<rect x="60" y="558" width="360" height="118" rx="12" fill="#f1fcfc" stroke="#8bc9cb" stroke-width="2"/>
+<rect x="60" y="710" width="360" height="150" rx="12" fill="#f1fcfc" stroke="#8bc9cb" stroke-width="2"/>
+<text x="84" y="594" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start" fill="#162334">DHT22 temperature / humidity</text>
+<text x="84" y="621" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">VCC = 3.3 V, GND = GND</text>
+<text x="84" y="648" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="600" text-anchor="start" fill="#007f87">DATA = GPIO25</text>
+<text x="84" y="746" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start" fill="#162334">SSD1306 OLED · 128 × 64</text>
+<text x="84" y="774" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">VCC = 3.3 V, GND = GND</text>
+<text x="84" y="802" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="600" text-anchor="start" fill="#007f87">SDA = GPIO19</text>
+<text x="84" y="830" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="600" text-anchor="start" fill="#007f87">SCL = GPIO18</text>
+<circle cx="990" cy="365" r="5" fill="#cf3344" stroke="white" stroke-width="2"/>
+<circle cx="990" cy="565" r="5" fill="#cf3344" stroke="white" stroke-width="2"/>
+<circle cx="1030" cy="395" r="5" fill="#566171" stroke="white" stroke-width="2"/>
+<circle cx="1030" cy="595" r="5" fill="#566171" stroke="white" stroke-width="2"/>
+<circle cx="570" cy="582" r="5" fill="#d38a21" stroke="white" stroke-width="2"/>
+<circle cx="548" cy="612" r="5" fill="#566171" stroke="white" stroke-width="2"/>
+<circle cx="1070" cy="655" r="5" fill="#7255ba" stroke="white" stroke-width="2"/>
+<rect x="62" y="882" width="1365" height="45" rx="7" fill="#eaf0f6" stroke="#eaf0f6" stroke-width="2"/>
+<text x="84" y="911" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="600" text-anchor="start" fill="#162334">Safety: shared GND; no 12 V to GPIO/PWM; no 5 V to bare ESP-WROOM-32; check connector polarity and module pull-ups.</text>
+</svg>
