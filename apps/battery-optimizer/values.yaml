@@ -76,7 +76,7 @@ app-template:
           image: &image
             # renovate: datasource=docker depName=ghcr.io/pando85/battery-optimizer
             repository: ghcr.io/pando85/battery-optimizer
-            tag: 0.8.0@sha256:eebe27bbabe38e01034f5c49ce7b82a1d7b15b1e0afce68ecc166ab1b12b3ee4
+            tag: 0.9.0@sha256:19a886dbe0ab77f4a08e47e8e688aeb122732d37b94c5317b14abf2fcf5d6d7b
           env:
             TZ: UTC
             BATTERY_OPTIMIZER_DATA_DIR: /data
