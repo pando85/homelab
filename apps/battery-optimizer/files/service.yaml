@@ -96,12 +96,10 @@ freshness_s:
   # A number restores the age test.
   battery_soc: null
   battery_power: 300
-  # The battery's AC energy counters are also reported only on change, so an idle battery's
-  # counters look stale after the grid_energy default (900 s) and every slot opens not ready
-  # (seen at go-live 2026-11-03). One week keeps a sanity bound; battery_liveness catches a
-  # dead Modbus link. Workaround until the code accepts null for these roles.
-  battery_charge_energy: 604800
-  battery_discharge_energy: 604800
+  # The battery's AC energy counters are also reported only on change: null (the default since
+  # 0.6.1) is availability only, as battery_soc; battery_liveness catches a dead Modbus link.
+  battery_charge_energy: null
+  battery_discharge_energy: null
 
 planning:
   # entity:    plan from the live battery SOC entity (refuses to plan when it is missing,
@@ -139,8 +137,6 @@ planning:
 observation:
   # How long after a slot ends late events may still land in it.
   slot_close_grace_s: 20
-  # A counter reading older than this at a slot edge is not used for that edge.
-  counter_max_age_s: 300
 
 # Passive, append-only data collection under <data_dir>/service/v1/.  Never read by the
 # planner; a failure is counted (battery_optimizer_*) and never affects readiness.
