@@ -224,6 +224,28 @@ actuation:
     battery_soc: null
     battery_ac_power: null
 
+# Read-only battery health telemetry (docs/service.md): temperature exposure, charge sessions,
+# cell voltages and Omnibattery's balance monitor, in /status and battery_optimizer_battery_*
+# metrics.  Reads only (the existing GET / state_changed path); every entity is optional and the
+# whole block is off while none is named.  Charge sessions use actuation.entities.battery_ac_power
+# and actuation.battery_ac_power_sign (charge = positive after the sign), so they work in shadow.
+# The balance sensors read `unknown` until the first full charge; that is None, never 0.
+battery_health:
+  entities:
+    temperature: sensor.venus_internal_temperature       # degC
+    cell_voltage_max: sensor.venus_max_cell_voltage      # V
+    cell_voltage_min: sensor.venus_min_cell_voltage      # V
+    cell_delta: sensor.venus_cell_delta                  # mV, last comparable settled top-of-charge
+    balance_status: sensor.venus_balance_status          # green | yellow | orange | red | unknown
+    last_balance_read: sensor.venus_last_balance_read    # timestamp of the last valid measurement
+    delta_trend: sensor.venus_delta_trend
+    delta_avg_4w: sensor.venus_delta_avg_4w              # mV, average of the last four readings
+    balancing_mode: binary_sensor.venus_balancing_mode
+  hot_thresholds_c: [35, 40]      # seconds strictly above each are counted
+  charge_threshold_w: 100         # sign-corrected AC power above this = charging
+  session_end_hold_s: 300         # at or below it this long ends a session (the taper is one)
+  max_gap_s: 300                  # most one clock advance credits to the held temperature
+
 # Climate shadow (track B2): B0's thermal model and the price-blind comfort MPC on live data,
 # every `replan_every_minutes` of the MPC config (hourly), `offset_minutes` after the boundary.
 # Records decisions, scores and the preregistered gates under <data_dir>/service/v1/climate_*;
