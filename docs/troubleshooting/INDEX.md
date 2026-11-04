@@ -12,7 +12,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [ArgoCD](#argocd) (4 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (6 entries)
-- [Storage & Backup](#storage--backup) (11 entries)
+- [Storage & Backup](#storage--backup) (12 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
 - [Desktop & Home](#desktop--home) (12 entries)
@@ -244,6 +244,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `ghcr.io/linkvt/zfs-driver:runpipe-773` (PR #777 fix) pending verification. If the fix fails,
   revert chart to 2.10.1 and remove the image override.
   See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`
+
+- OpenEBS ZFS 2.11.2 `zfs send | nc -w 3` uses netcat's 3s idle timeout: when the receiver pauses
+  during S3 multipart upload, `nc` exits 0, `zfs send` gets SIGPIPE (exit 141), and the velero
+  plugin uploads a truncated object while logging `successfully uploaded object`. Every scheduled
+  backup since 2026-10-13 is `PartiallyFailed`. Fix: fork image with `ZFS_NETCAT_TIMEOUT` env var
+  (default 300s). Do NOT downgrade to 2.10.1 (masks the bug) or lower `multiPartChunkSize` (breaks
+  large fulls). See `docs/troubleshooting/velero-truncated-zfs-backups.md`
 
 - Unattended-upgrades can restart k3s during backup windows, causing `PartiallyFailed` Velero backups.
   Use a broad maintenance window (Mon + Wed–Sun 08:00–18:00) instead of blacklisting systemd packages.
