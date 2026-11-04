@@ -331,7 +331,8 @@ make smart-plug-v2-battery.yaml   # esphome run: compile + OTA
 ```
 
 The plug reboots once (a few seconds) and restores the relay ON. The failsafe firmware has been on
-the plug since 2026-11-03 (ESPHome 2026.10.1). Flash while the
+the plug since 2026-11-03 (ESPHome 2026.10.1) and passed the hardware
+[test](#failsafe-test) on 2026-11-04. Flash while the
 battery is idle (direction switches off), then check `switch.smart_plug_v2_battery` is on.
 
 **Known limit.** A manual relay ON (HA or the plug's button) during a long HA absence is undone within
@@ -344,11 +345,12 @@ Home Assistant. A trip makes them run from the battery: at 50 % SOC that is roug
 battery's own cutoff. An HA outage longer than that drains the battery and stops the servers; the
 plug then has to be switched on by hand (power-cycle + button).
 
-#### Failsafe test (not run yet)
+#### Failsafe test
 
-Run it once on the flashed firmware before relying on it. It takes ~10 minutes, HA stays up and only
-the plug's API connection is dropped. The servers switch to battery power for about a minute and
-back, the same switchover the commissioning test passed with the TV (max ping gap 0.22 s).
+Passed on the flashed firmware on 2026-11-04 (see the result below). Repeat it after any change to the
+failsafe or the plug's firmware. It takes ~15 minutes and Home Assistant is really stopped for ~6
+minutes. The servers switch to battery power for the switchover and back, the same switchover the
+commissioning test passed with the TV (max ping gap 0.22 s).
 
 Preconditions:
 
@@ -359,35 +361,67 @@ Preconditions:
   workstation (`apps/esphome/config`: `KUBE_CONTEXT=grigri make secrets`, then
   `make logs FILE=smart-plug-v2-battery.yaml`; a log subscription is not a state subscriber, so it does
   not keep the relay on). Delete `secrets.yaml` afterwards.
+- The Kubernetes API must stay reachable from the workstation: the servers host HA and the cluster.
+  Do not run it if a server reboot would be a problem.
 
-Steps (T = the moment the device is disabled):
+Steps (T = the moment HA is gone; the owner runs the scaling, agents must not):
 
 1. Start the ESPHome logs and note `switch.smart_plug_v2_battery` = on, `sensor.venus_inverter_state`
    = Bypass, `sensor.venus_ac_offgrid_power` ≈ servers' load.
-2. **T:** Settings → Devices & services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ → **Disable**.
-   HA drops the API connection (the entities go unavailable; the relay stays on).
-3. **T+5:00 … T+5:10:** the log shows `Battery failsafe: no Home Assistant for 5 min, relay OFF`. Within
+2. **Stop HA for real.** The `home-assistant` Application comes from the `apps` ApplicationSet with
+   selfHeal, so scale `argocd/argocd-repo-server` to 0 first (otherwise Argo reverts the scale-down),
+   then `home-assistant/home-assistant-hass` to 0. **T:** the pod is gone and the plug logs the lost
+   API connection (`Reading failed CONNECTION_CLOSED`). Lighter alternative: Settings → Devices &
+   services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ → **Disable** drops only the plug's API
+   connection and leaves HA running.
+3. **~T+5:00:** the log shows `Battery failsafe: no Home Assistant for 5 min, relay OFF`. Within
    seconds the battery reports `Backup Mode` (Omnibattery keeps polling it over Modbus) and the servers
-   keep running (check one of them, e.g. the Kubernetes API or a ping).
-4. **T+6:** re-**Enable** the device. Within ~10 s the log shows
-   `Battery failsafe: Home Assistant is back, relay ON`; the switch is on in HA and the inverter returns
-   to Bypass within 5–33 s.
+   keep running (check the Kubernetes API or a ping).
+4. **T+6:** restore HA (scale `home-assistant-hass` to 1), then `argocd-repo-server` to 1. Within ~10 s
+   of the HA API reconnect the log shows `Battery failsafe: Home Assistant is back, relay ON`; the
+   switch is on in HA and the inverter returns to Bypass within 5–33 s. The `home-assistant` app shows
+   sync Unknown until Argo's next refresh (about 3 min); a hard refresh clears it.
 5. Manual-off check: with HA connected, turn `switch.smart_plug_v2_battery` off, wait 30 s: it must
    stay off (the failsafe only restores what it turned off). Turn it on again; the battery returns to
    Bypass.
 6. Turn the kill switch back on and check the optimizer takes control at the next 15-minute slot.
 
-Pass: relay off between T+5:00 and T+5:20, back on within 20 s of re-enabling, manual off respected,
-servers never lost power. Fail or abort:
+Pass: relay off at about T+5:00 (up to ~10 s early, see the result), back on within 20 s of the HA
+reconnect, manual off respected, servers never lost power. Fail or abort:
 
 - relay still on at T+6:00: the failsafe does not trip (likely `api.connected` still sees a state
-  subscriber). Re-enable the device and treat the battery as unprotected against HA outages until fixed;
-- relay not back on 1 minute after re-enabling: turn it on from HA; if HA cannot reach the plug, press
+  subscriber). Restore HA and treat the battery as unprotected against HA outages until fixed;
+- relay not back on 1 minute after HA is back: turn it on from HA; if HA cannot reach the plug, press
   the button once;
 - any server reboots during the switchover: put the servers back on mains and stop using the backup
   port until the switchover is understood.
 
 Record the timings in this section and in the regime log of the optimizer repo.
+
+**Result 2026-11-04: PASS** (HA really stopped, repo-server scaled to 0 as above; kill switch off
+08:29:35, SOC 45 %, backup-port load ~220 W):
+
+| Event | Time (UTC) | Timing |
+| ----- | ---------- | ------ |
+| HA stopped / pod gone | 08:32:31 / 08:32:34 | T |
+| Plug relay OFF | 08:37:25 | 4:52 after the plug lost the HA API connection, 4:51 after the pod was gone |
+| HA back (API connected) | 08:38:48 | HA down ~6:17 |
+| Plug relay ON | 08:38:56 | 8 s after reconnect (limit 20 s) |
+| Inverter back in Bypass | ~08:39:06 | ~10 s after relay ON |
+| Manual OFF | 08:40:09 | respected for the 46 s observed, no failsafe restore |
+| Manual ON, then Bypass | 08:41:05 | ~7 s |
+| Kill switch ON, optimizer in control | 08:41:44 | `discharging` from 08:42:25 (~40 s) |
+
+- The trip is a few seconds before T+5:00 measured from the pod being gone: the 5-minute counter
+  starts when HA drops its state subscriptions, shortly before the TCP close. Not an early trip.
+- The servers never rebooted: no pod restarts, the Kubernetes API answered `/readyz` throughout. One
+  Modbus sample at the switchover showed the backup output at 0 W for one ~6 s poll interval; that is
+  the inverter's reading during the mode change, not a 6 s outage.
+- SOC 45 % -> 44 % (live discharge resumed, ~254 W).
+- Grid side (Shelly EM per-minute history, averages): ~450 W from the grid with the battery idle (kill
+  switch off). During the trip the servers' ~220 W moved to the battery (grid minute 08:38 averaged
+  241 W), back to ~450 W after the relay came on. No visible import spike at reconnection (minute
+  resolution only).
 
 ### Rollout: dry_run, then live
 
@@ -396,7 +430,7 @@ Preconditions (owner):
 - The HA helpers and the watchdog are deployed. Pushing them restarts Home Assistant through Reloader,
   so check the Shelly `GET /cit/d` first (see the CoIoT note above). In Developer tools, check that the
   three entity IDs exist without a `_2` suffix and that the kill switch is **off**.
-- The ESPHome failsafe is flashed and tested.
+- The ESPHome failsafe is flashed and tested (passed 2026-11-04).
 - Omnibattery: competing strategies off; `number.omnibattery_pd_controller_max_power_change` raised to
   2000 W. Note the backup threshold
   [workaround](../troubleshooting/home-assistant-omnibattery.md#workaround-active-since-2026-11-03).
