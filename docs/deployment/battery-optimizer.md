@@ -127,7 +127,32 @@ deployment.
 | Probes | liveness **and** readiness on `/health/live`; generous startup probe. `/health/ready` returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on `battery_optimizer_ready` instead |
 | Service / scrape | ClusterIP `battery-optimizer:8080` (`http`); ServiceMonitor labelled `operator.prometheus.io/instance: prometheus-long-term` (job `battery-optimizer`, 30 s), so `battery_optimizer_*` lives in the long-term Prometheus for the multi-week comparison |
 | Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) and the [live control](#alerts) alerts (`rules-service/actuator.yaml`) |
-| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer service`, `Battery optimizer climate shadow`, `Battery: plan vs actual` and `Battery: load forecast` (the last two compare the day-ahead plan, the final plan and the actual) |
+| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer service`, `Battery optimizer climate shadow`, `Battery: plan vs actual`, `Battery: load forecast`, `Battery: model and actuation`, `Battery: temperature` and `Tariff prices` (see [Dashboards per component](#dashboards-per-component)) |
+
+### Dashboards per component
+
+One dashboard per component KPI table of the app repository (`docs/components/*.md`, section "KPIs"). They share the
+`${datasource}` variable (default `prometheus-long-term`), the tags `battery-optimizer`, `energy` and `battery`, and a
+dashboard-links block that lists every dashboard tagged `battery`, so the six battery dashboards link to each other (a new
+battery dashboard needs only the tag). Panel descriptions state each sign and every approximation.
+
+| Component | Dashboard (uid) | What it answers |
+|---|---|---|
+| battery-optimizer | `Battery: plan vs actual` (`battery-plan-vs-actual`), `Battery optimizer service` (`battery-optimizer-shadow`) | day-ahead against final plan against actual; readiness, solves, shadow-vs-native cost |
+| battery-load-forecast | `Battery: load forecast` (`battery-load-forecast`) | forecast error of the two plans |
+| battery-model | `Battery: model and actuation` (`battery-model-actuation`) | commanded, planned and actual power (+ charge), clamped power and energy not delivered, SOC tracking error at the slot boundary, daily discharge/charge ratio. The commanded power is derived (charge: PD target - house load, since the PD target is a grid-import setpoint; discharge: - system discharge cap, a ceiling). There is no round-trip-efficiency metric: the panel is a discharge/charge ratio, and an "RTE estimate" line is drawn only while the SOC moved 3 points or less over the 24 h |
+| battery-thermal | `Battery: temperature` (`battery-temperature`) | measured against predicted temperature, derate factor and state, Omnibattery's limit settings, predicted achievable against actual charge power, MAE, RMSE and bias per lead (`final`, `1h`, `3h`), model status, parameters, last fit, refits and predictions by result; the HA sensor `sensor.venus_internal_temperature` and the hours above 35, 40 and 45 degC. Needs `planning.thermal.mode: shadow` (service 0.10.0); the error panels fill as slots close, the last-fit stat and the derate-error panels stay empty until a refit is accepted and a derate slot has closed |
+| tariff-prices | `Tariff prices` (`battery-tariff-prices`) | next-day publication (state, last flip time, hour per day), price and plan horizon, day-ahead lead, the PVPC price from `sensor.esios_pvpc` (current hour only; the forward curve is a sensor attribute, not a metric), daily cost native against counterfactual and their difference |
+
+The cost panels are `delta()` sums over the per-process-run gauges `shadow_native_cost_eur` and
+`shadow_counterfactual_cost_eur` (they restart at 0 with every pod, so a restart makes the day approximate). Since the
+battery is commissioned, *native* is the house with the battery as it ran and *counterfactual* the replayed shadow
+decisions: the pair is **not** a house with and without the battery. `shadow` has no actuator, so the actuator panels
+need `dry_run` or `live`.
+
+**Size.** The ConfigMap holds all seven JSON files (about 270 KB). Client-side apply stores the whole object in the
+`last-applied-configuration` annotation, which is limited to 256 KiB, so the ConfigMap in `templates/dashboards.yaml`
+carries `argocd.argoproj.io/sync-options: ServerSideApply=true` (as `kanidm`, `pyroscope` and `tempo` do).
 
 **Day-ahead and final plan (0.9.0).** The service keeps, per 15-minute slot, the *day-ahead plan* (the first plan that covered the slot, usually made the previous afternoon) next to the *final plan* (the intent frozen when the slot opened) and scores both against what happened. The metrics are `battery_optimizer_slot_*{plan="day_ahead|final"}`, `load_forecast_*_total{plan}`, `plan_revision_kwh_total` and `shadow_day_ahead_energy_kwh_total`; they appear after the first slot opens and closes, and the day-ahead values after a restart are rebuilt from the plan files on the PVC (startup log `day-ahead rebuilt plan_files=N slots=M`). Home Assistant gets four more template sensors from `/plan` `current_slot` in `apps/home-assistant/config/integrations/battery_optimizer_plan.yaml`: `sensor.battery_optimizer_day_ahead_power` and `sensor.battery_optimizer_day_ahead_soc` (next to the planned power and SOC, which the Battery dashboard calls *Final plan*), and `sensor.battery_optimizer_day_ahead_load` / `sensor.battery_optimizer_final_load` (forecast house load in W). They keep the existing sign (+ discharging, - charging), are `unknown` while the slot has no such plan and unavailable when the service does not answer (a service older than 0.9.0 has no `current_slot`, so they stay unknown). The Battery dashboard (`dashboard-battery`, storage mode) charts them as *Day-ahead plan*, *Final plan* and *Actual* (power, SOC and house load).
 

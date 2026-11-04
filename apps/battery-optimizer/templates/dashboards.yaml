@@ -5,6 +5,7 @@ metadata:
   labels:
     grafana_dashboard: "1"
   annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=true
     grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/battery-optimizer
 data:
 {{ (.Files.Glob "dashboards/*").AsConfig | indent 2 }}

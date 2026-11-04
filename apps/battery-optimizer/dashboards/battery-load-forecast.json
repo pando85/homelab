@@ -19,12 +19,26 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "battery"
+      ],
+      "targetBlank": false,
+      "title": "Battery dashboards",
+      "type": "dashboards"
+    }
+  ],
   "refresh": "1m",
   "schemaVersion": 39,
   "tags": [
     "battery-optimizer",
-    "energy"
+    "energy",
+    "battery"
   ],
   "templating": {
     "list": [
