@@ -20,14 +20,19 @@ ZFSBackup CRs stuck in `Init` state with stale `backupDest` addresses. Orphaned 
    leaving `ZFSBackup` in `Init` and blocking Velero. A restarted agent can retry an already-created
    snapshot and hang again. See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`.
 
-3. **Stale zfs send processes**: Failed backups can leave `zfs send` processes running, holding snapshots open and preventing cleanup. These processes appear as:
+3. **Truncated backup objects from netcat idle timeout**: In 2.11.2, `nc -w 3` exits on a 3s idle
+   gap during S3 upload backpressure, the sender gets SIGPIPE, and the receiver uploads a partial
+   object while logging success. Every scheduled backup since 2026-10-13 is `PartiallyFailed`.
+   See `docs/troubleshooting/velero-truncated-zfs-backups.md`.
+
+4. **Stale zfs send processes**: Failed backups can leave `zfs send` processes running, holding snapshots open and preventing cleanup. These processes appear as:
    ```
    /sbin/zfs send datasets/openebs/<pvc>@<backup-name>
    ```
 
-4. **Backup-sync controller loop**: When backup data exists in the bucket but the Backup CR is deleted, the sync controller recreates it every 2 minutes, creating a loop of stuck ZFSBackup CRs.
+5. **Backup-sync controller loop**: When backup data exists in the bucket but the Backup CR is deleted, the sync controller recreates it every 2 minutes, creating a loop of stuck ZFSBackup CRs.
 
-5. **Memory pressure crashes k3s during backup**: Heavy workloads (e.g., CI builds) can drive MemAvailable low enough to saturate NVMe with reclaim I/O, causing embedded etcd to time out on ReadIndex/transactions. k3s loses leader election and exits (code 1). systemd restarts it, but active Velero/OpenEBS operations are left mid-flight — Backup CR stuck `InProgress`, ZFSBackup CRs stuck `Init`. Pod restart is the safest first recovery boundary, but residual CR/S3/ZFS state must be verified. See `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md` for the full incident timeline and recovery procedure.
+6. **Memory pressure crashes k3s during backup**: Heavy workloads (e.g., CI builds) can drive MemAvailable low enough to saturate NVMe with reclaim I/O, causing embedded etcd to time out on ReadIndex/transactions. k3s loses leader election and exits (code 1). systemd restarts it, but active Velero/OpenEBS operations are left mid-flight — Backup CR stuck `InProgress`, ZFSBackup CRs stuck `Init`. Pod restart is the safest first recovery boundary, but residual CR/S3/ZFS state must be verified. See `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md` for the full incident timeline and recovery procedure.
 
 ## How to Diagnose
 
@@ -155,3 +160,4 @@ the same snapshot and reproduce the deadlock.
 - 2026-09-25 memory-pressure incident: `docs/troubleshooting/velero-2026-09-25-oom-etcd-outage.md`
 - 2026-09-26 stuck-queue recovery and incremental-chain audit: `docs/troubleshooting/velero-2026-09-26-stuck-backup-recovery.md`
 - OpenEBS ZFS sender/receiver deadlock and incomplete-stream risk: `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`
+- Truncated backup objects from netcat idle timeout (2.11.2): `docs/troubleshooting/velero-truncated-zfs-backups.md`
