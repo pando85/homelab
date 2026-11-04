@@ -1354,3 +1354,39 @@ class TestPhysicalAcknowledgements:
         await app._start_dhw(plan)
         assert plan["forced"] is True
         assert app.force_owned is True
+
+
+class TestNoBatteryInteraction:
+    """The controller never touches the battery or the battery optimizer (design section 7.3, ADR-0006)."""
+
+    FORBIDDEN = ("venus", "omnibattery", "battery_optimizer", "marstek")
+
+    def test_no_battery_entity_in_the_app_its_config_or_its_helpers(self):
+        files = [
+            APPS_DIR / "comfort_control.py",
+            APPS_DIR / "apps.yaml",
+            APPS_DIR.parents[1] / "config" / "integrations" / "appdaemon_comfort.yaml",
+        ]
+        for path in files:
+            text = path.read_text().lower()
+            for word in self.FORBIDDEN:
+                assert word not in text, f"{word} found in {path.name}"
+
+    @pytest.mark.asyncio
+    async def test_service_calls_stay_on_the_heat_pump_helpers_and_thermostats(self, app):
+        set_prices(app, {14: 0.1, 15: 0.1})
+        for when in ((0, 1), (9, 0), (12, 0), (14, 0), (14, 1), (16, 0), (22, 0)):
+            await tick_at(app, 2026, 11, 4, *when)
+        await app._on_disable()
+        assert app.ha.services
+        for service, entity, _data in app.ha.services:
+            assert not any(word in str(entity).lower() for word in self.FORBIDDEN), (service, entity)
+            if service == "set_state":  # the selector and the app's own status and heartbeat sensors
+                heat_mode = app.args["heat_mode"]["entity"]
+                assert entity == heat_mode or str(entity).startswith("sensor.comfort_control_"), entity
+                continue
+            domain = service.split("/")[0]
+            assert domain in {
+                "climate", "switch", "input_number", "input_boolean", "input_datetime", "input_text",
+                "automation", "notify", "persistent_notification",
+            }, service
