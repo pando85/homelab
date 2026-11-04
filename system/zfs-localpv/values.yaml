@@ -1,4 +1,19 @@
 zfs-localpv:
+  # Pin to fork image with configurable netcat timeout (openebs/zfs-localpv#773).
+  # The fix branch adds ZFS_NETCAT_TIMEOUT env var (default 300s) to prevent truncated
+  # backup objects when nc exits early. Do not add a renovate hint — this is a fork image
+  # not tracked by Renovate. Revert to chart default once upstream ships the fix in a release
+  # and the release image passes verification (full send + forced receiver disconnect).
+  zfsPlugin:
+    image:
+      registry: ghcr.io/
+      repository: pando85/zfs-driver
+      tag: 2.11.2-nc-timeout
+  # NOTE: The chart does not expose an env block for the node plugin container, so
+  # ZFS_NETCAT_TIMEOUT cannot be set explicitly in values.yaml. The fork image uses a
+  # compiled default of 300s (100x the original 3s idle timeout). Making the value visible
+  # in GitOps requires either an upstream chart change to support zfsNode.env or an ArgoCD
+  # server-side patch. For now, the compiled default is sufficient.
   zfsNode:
     resources: {}
     # limits:
