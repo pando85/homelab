@@ -748,8 +748,13 @@ class TestDhw:
         await tick_at(app, 2026, 11, 4, 14, 0)  # writes 49, the unit does not confirm
         await tick_at(app, 2026, 11, 4, 14, 1)
         await tick_at(app, 2026, 11, 4, 14, 2)
+        assert not any("DHW not forced" in m for m in app.ha.messages())  # a retry is not yet news
+        await tick_at(app, 2026, 11, 4, 14, 4)
+        await tick_at(app, 2026, 11, 4, 14, 6)
         assert not app.ha.calls("switch/turn_on")
-        assert sum("DHW not forced" in m for m in app.ha.messages()) == 1
+        assert sum("DHW not forced" in m for m in app.ha.messages()) == 1  # told once, still retrying
+        assert len(app.ha.calls("input_number/set_value", "input_number.heishamon_tank_temp")) == 1
+        assert len(app.ha.calls("automation/trigger", "automation.set_tank_target_temperature")) == 3
 
     @pytest.mark.asyncio
     async def test_force_heater_blocks_forcing(self, app):
@@ -1020,6 +1025,17 @@ class TestForceDhwRelease:
         assert not force_dhw_on(app)
 
     @pytest.mark.asyncio
+    async def test_disable_releases_force_dhw_also_after_the_observed_claim(self, app):
+        set_prices(app, {14: 0.1, 15: 0.1})
+        await tick_at(app, 2026, 11, 4, 14, 0)
+        await tick_at(app, 2026, 11, 4, 14, 1)
+        assert app.dhw_plan["forced"] and force_dhw_on(app)
+        app.ha.put(app.args["helpers"]["enable"], "off")
+        await app._on_disable()
+        assert not force_dhw_on(app)
+        assert not app.dhw_plan["force_requested"] and not app.dhw_plan["forced"]
+
+    @pytest.mark.asyncio
     async def test_manual_force_is_held_like_a_manual_setpoint(self, app):
         set_prices(app, {14: 0.1, 15: 0.1})
         await tick_at(app, 2026, 11, 4, 0, 1)
@@ -1059,6 +1075,7 @@ class TestForceDhwRelease:
         set_prices(app, {14: 0.1, 15: 0.1})
         await tick_at(app, 2026, 11, 4, 0, 1)
         await tick_at(app, 2026, 11, 4, 14, 0)
+        await tick_at(app, 2026, 11, 4, 14, 1)  # the unit's switch is seen on: the force is claimed
         assert app.force_owned and force_dhw_on(app)
         real_call = app.call_service
         lost = {"count": 2}
@@ -1080,6 +1097,7 @@ class TestForceDhwRelease:
         set_prices(app, {14: 0.1, 15: 0.1})
         await tick_at(app, 2026, 11, 4, 0, 1)
         await tick_at(app, 2026, 11, 4, 14, 0)
+        await tick_at(app, 2026, 11, 4, 14, 1)  # the unit's switch is seen on: forced is stored
         assert force_dhw_on(app)
         stored = app.ha.states[app.args["helpers"]["dhw_plan"]]["state"]
         assert len(stored) <= 255 and '"forced":true' in stored
@@ -1336,4 +1354,3 @@ class TestPhysicalAcknowledgements:
         await app._start_dhw(plan)
         assert plan["forced"] is True
         assert app.force_owned is True
-

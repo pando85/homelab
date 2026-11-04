@@ -66,6 +66,7 @@ OWN_WRITE_TTL = timedelta(minutes=5)  # a target change matching our write withi
 TICK_SECONDS = 60
 MODE_RETRY = timedelta(minutes=2)  # re-send when the Aquarea status has not confirmed the command
 DHW_COMMAND_RETRY = timedelta(minutes=2)  # actuator retries, never just helper-state retries
+DHW_TARGET_NOTIFY_ATTEMPTS = 3  # unconfirmed tank-target writes before the owner is told
 
 # TODO(phase 2): boost for very cheap hours (design section 8). Built only after normal mode has
 # run in production: space-heating soak (room ceiling ~25.5 degC, water ~30-32 degC) started on
@@ -365,6 +366,7 @@ class ComfortControl(hass.Hass):
         self.dhw_done = None  # ISO date of the last finished DHW window
         self.dhw_last_attempt = None
         self.dhw_target_attempt = None
+        self.dhw_target_attempts = 0
         self.dhw_force_attempt = None
         self.dhw_warning = None
         self.force_owned = False  # the app switched force DHW on and has not seen it off since
@@ -641,7 +643,9 @@ class ComfortControl(hass.Hass):
         on_mode = self.args["heat_mode"]["on_mode"]
         await self._set_mode(on_mode, "controller disabled")
         if self.dhw_plan is not None:
-            self.dhw_plan = {**self.dhw_plan, "forced": False}
+            if self.dhw_plan.get("forced") or self.dhw_plan.get("force_requested"):
+                self.force_owned = True  # its own force, even if not yet seen on: release it at once
+            self.dhw_plan = {**self.dhw_plan, "forced": False, "force_requested": False}
         await self._release_force_dhw(self._now())  # its own force at once, a manual one at the cap
         await self._notify(f"Comfort control disabled: heating restored to {on_mode}; the mode is now manual")
 
@@ -1148,6 +1152,12 @@ class ComfortControl(hass.Hass):
             # Never force DHW with the old tank target.  An HA helper write may not
             # reach the unit; retry against the observed tank target, not a local flag.
             if self.dhw_target_attempt is None or now - self.dhw_target_attempt >= DHW_COMMAND_RETRY:
+                self.dhw_target_attempts += 1
+                if self.dhw_target_attempts >= DHW_TARGET_NOTIFY_ATTEMPTS:
+                    await self._block_dhw(
+                        plan,
+                        f"the unit did not confirm tank target {desired} degC (reads {tank_target:g})",
+                    )
                 self.log(f"Tank target {tank_target} -> {desired} degC before forcing DHW{dry_run}")
                 if actuate:
                     helper = await self._number(commands["tank_target"])
@@ -1167,6 +1177,7 @@ class ComfortControl(hass.Hass):
             return
         plan["target_written"] = True  # observed on Aquarea, not inferred from the helper
         self.dhw_target_attempt = None
+        self.dhw_target_attempts = 0
         if tank_target is None or tank_target > TANK_MAX:
             await self._block_dhw(plan, f"tank target {tank_target} is not <= {TANK_MAX} degC")
             return
