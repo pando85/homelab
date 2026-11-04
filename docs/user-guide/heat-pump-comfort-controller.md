@@ -239,6 +239,11 @@ There is no runtime strategy switch.
    `Heat+DHW` and hands the mode over to manual. Confirm `sensor.aquarea_mode` reads `Heat+DHW`.
 2. Check the HA-storage automations, schedules or scheduler cards that call `script.set_heat_mode`,
    and any dashboard that uses the removed helpers (`appdaemon_climate_*`, `appdaemon_dhw_enable`).
+   On 2026-11-04 the scheduler card held nine schedules that write the heat mode, the Z1 water request
+   or the thermostat setpoints (`switch.schedule_set_heat_mode_dhw`, `switch.schedule_644a1f`,
+   `switch.schedule_1e73e5`, `switch.schedule_a6da7c`, `switch.schedule_eb37d6`,
+   `switch.schedule_55636c`, `switch.schedule_9249a5` and the two that toggle the legacy enable
+   helper); all were off. They must stay off: a second writer would fight the controller.
 
 **Known behaviour:**
 
@@ -266,6 +271,10 @@ There is no runtime strategy switch.
    `input_number.heishamon_heatshift_z1` to the value the unit reports, then to that value + 1 K, and
    watch `Z1_Heat_Request_Temp` and `Z1_Heat_Curve_Target_High_Temp` follow. Only then turn
    `input_boolean.comfort_water_dry_run` off.
+10. In `apps/battery-optimizer/files/service.yaml` set
+    `climate_shadow.go_live: "YYYY-MM-DD"` (local date of the first controlled day) and merge, so the
+    new-regime window of the preregistration starts 7 days later. The Grafana dashboard
+    `climate-heat-pump-controller` already reads the comfort helpers and the comfort watchdog.
 
 ## Test battery
 
