@@ -1,8 +1,8 @@
 # Live battery control by battery-optimizer (ADR-0007 in pando85/home-energy-optimizer). The
 # service reads the kill switch and writes the heartbeat; it never writes the kill switch. The
-# watchdog switches both Omnibattery direction switches off when the heartbeat is older than 5
-# minutes while the kill switch is on, and repeats the service's safe idle when the owner turns the
-# kill switch off. Runbook: docs/deployment/battery-optimizer.md#live-battery-control.
+# watchdog switches both Omnibattery direction switches and Omnibattery's weekly full charge switch
+# off when the heartbeat is older than 5 minutes while the kill switch is on, and repeats the
+# service's safe idle when the owner turns the kill switch off. Runbook: docs/deployment/battery-optimizer.md#live-battery-control.
 input_boolean:
   battery_optimizer_live:
     name: Battery optimizer live control
@@ -50,10 +50,17 @@ automation:
           entity_id:
             - switch.venus_battery_allow_charge
             - switch.venus_battery_allow_discharge
+      # The optimizer's periodic full charge arms Omnibattery's weekly full charge through this
+      # switch; a dead optimizer must not leave it armed. Separate step so an unavailable entity
+      # does not block the direction switches above or the notification below.
+      - action: switch.turn_off
+        target:
+          entity_id: switch.omnibattery_weekly_full_charge_enabled
+        continue_on_error: true
       - action: persistent_notification.create
         data:
           notification_id: battery_optimizer_watchdog
           title: Battery optimizer watchdog
           message: >-
-            Direction switches turned off ({{ 'kill switch off' if trigger.id == 'kill_switch_off'
+            Direction switches and weekly full charge switch turned off ({{ 'kill switch off' if trigger.id == 'kill_switch_off'
             else 'heartbeat older than 5 min' }}).

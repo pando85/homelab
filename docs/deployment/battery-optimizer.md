@@ -259,7 +259,7 @@ until the owner changes it. The battery and its Omnibattery setup are in
 |---|---|---|
 | Kill switch `input_boolean.battery_optimizer_live` | `apps/home-assistant/config/integrations/battery_optimizer.yaml` | Read by the service only. Created off; restores its last state across HA restarts (no `initial:`) |
 | Heartbeat `input_datetime.battery_optimizer_heartbeat` | same file | Written by every reconciled `live` tick (~30 s) |
-| Watchdog automation `battery_optimizer_watchdog` | same file | Every minute: kill switch on and heartbeat older than 5 min -> both direction switches off; also on the kill switch's `off` edge. Persistent notification `battery_optimizer_watchdog` (replaced, not stacked) |
+| Watchdog automation `battery_optimizer_watchdog` | same file | Every minute: kill switch on and heartbeat older than 5 min -> both direction switches and `switch.omnibattery_weekly_full_charge_enabled` off (the last in its own `continue_on_error` step, so an unavailable entity blocks nothing); also on the kill switch's `off` edge. Persistent notification `battery_optimizer_watchdog` (replaced, not stacked) |
 | Live token | `global.liveHomeAssistantToken` in `values.yaml` (default `false`) | Off: nothing rendered. On: ExternalSecret `battery-optimizer-home-assistant-live`, mounted in the service at `/secrets/home-assistant/BATTERY_OPTIMIZER_HA_TOKEN` instead of the read-only token. The pipeline keeps the read-only token |
 | Alerts | `rules-service/actuator.yaml` | See [Alerts](#alerts) |
 | AC failsafe | `apps/esphome/config/smart-plug-v2-battery.yaml` | See [ESPHome AC failsafe](#esphome-ac-failsafe). Must be flashed by hand |
@@ -275,6 +275,11 @@ nothing), so `live` never runs on the read-only token.
 so the watchdog turns both direction switches off every minute and keeps its notification up. That is
 expected: nothing else should be driving the battery during the rehearsal. The heartbeat and
 kill-switch alerts exclude `dry_run` for that reason.
+
+**Omnibattery weekly full charge.** `switch.omnibattery_weekly_full_charge_enabled` must stay off by
+default, and so must `switch.omnibattery_weekly_full_charge_delay`. When `full_charge.mode: live` the
+optimizer owns the weekly switch (it arms it for the periodic full charge), and the watchdog turns it
+off together with the direction switches, so a dead optimizer never leaves it armed.
 
 ### Live token in Vault
 
@@ -364,7 +369,7 @@ Preconditions:
 - The Kubernetes API must stay reachable from the workstation: the servers host HA and the cluster.
   Do not run it if a server reboot would be a problem.
 
-Steps (T = the moment HA is gone; the owner runs the scaling, agents must not):
+Steps (T = the moment HA is gone; the scaling only with the owner's explicit go):
 
 1. Start the ESPHome logs and note `switch.smart_plug_v2_battery` = on, `sensor.venus_inverter_state`
    = Bypass, `sensor.venus_ac_offgrid_power` ≈ servers' load.
@@ -477,8 +482,8 @@ Then:
    charge and discharge reaching up to 2500 W (minus the house load for a charge).
 8. Watchdog test: pause ArgoCD auto-sync for the app, scale the Deployment to 0, and within about 6
    minutes see both direction switches go off, the `battery_optimizer_watchdog` notification and
-   `BatteryOptimizerHeartbeatStale`. Scale back to 1 and resume auto-sync. (Agents must not run these
-   `kubectl` writes; the owner does.)
+   `BatteryOptimizerHeartbeatStale`. Scale back to 1 and resume auto-sync. (Run these `kubectl` writes only
+   with the owner's explicit go.)
 9. Graceful stop: delete the pod (ArgoCD recreates it) and check that the actuation records show a
    safe idle with reason `shutdown` before the restart, and that the new pod holds safe idle until its
    first fresh plan.
