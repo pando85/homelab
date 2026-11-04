@@ -127,7 +127,7 @@ deployment.
 | Probes | liveness **and** readiness on `/health/live`; generous startup probe. `/health/ready` returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on `battery_optimizer_ready` instead |
 | Service / scrape | ClusterIP `battery-optimizer:8080` (`http`); ServiceMonitor labelled `operator.prometheus.io/instance: prometheus-long-term` (job `battery-optimizer`, 30 s), so `battery_optimizer_*` lives in the long-term Prometheus for the multi-week comparison |
 | Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) and the [live control](#alerts) alerts (`rules-service/actuator.yaml`) |
-| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer service`, `Battery optimizer climate shadow`, `Battery: plan vs actual`, `Battery: load forecast`, `Battery: model and actuation`, `Battery: temperature` and `Tariff prices` (see [Dashboards per component](#dashboards-per-component)) |
+| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer service`, `Battery optimizer climate shadow`, `Battery: plan vs actual`, `Battery: load forecast`, `Battery: model and actuation`, `Battery: temperature`, `Tariff prices` and the six `Climate: ...` dashboards (see [Dashboards per component](#dashboards-per-component)) |
 
 ### Dashboards per component
 
@@ -150,9 +150,43 @@ battery is commissioned, *native* is the house with the battery as it ran and *c
 decisions: the pair is **not** a house with and without the battery. `shadow` has no actuator, so the actuator panels
 need `dry_run` or `live`.
 
-**Size.** The ConfigMap holds all seven JSON files (about 270 KB). Client-side apply stores the whole object in the
+**Size.** The ConfigMap holds all thirteen JSON files (about 460 KB). Client-side apply stores the whole object in the
 `last-applied-configuration` annotation, which is limited to 256 KiB, so the ConfigMap in `templates/dashboards.yaml`
-carries `argocd.argoproj.io/sync-options: ServerSideApply=true` (as `kanidm`, `pyroscope` and `tempo` do).
+carries `argocd.argoproj.io/sync-options: ServerSideApply=true` (as `kanidm`, `pyroscope` and `tempo` do). The object
+limit is 1 MiB, so there is room for roughly the same again; past about 800 KB split the climate files into a second
+ConfigMap `dashboards-climate` (a second template with the same label and `ServerSideApply`, its own file glob and
+`target-directory` annotation).
+
+#### Climate dashboards per component
+
+The climate KPI tables of the app repository (`docs/components/*.md`, section "KPIs") follow the same pattern: one
+dashboard per component that has at least three meaningful KPI panels, shared dashboards with one titled row per
+component where it does not. All carry the tags `battery-optimizer`, `energy` and `climate`, the `${datasource}`
+variable and a dashboard-links block "Climate dashboards" (every dashboard tagged `climate`, so a new climate dashboard
+needs only the tag; `Battery optimizer climate shadow` carries it too and keeps its own panels). A panel description
+states what is approximated. Where the headline KPI has no metric yet, the panel shows the measured side or a baseline and
+the closing text panel "Not yet measured" names the gap.
+
+| Component | Dashboard (uid) | What it answers |
+|---|---|---|
+| climate-mpc | `Climate: comfort MPC` (`climate-mpc`) | plan production (runs by result, planned share), solver health (solves by status, not-optimal share, duration), top-offset share, degree-hours below 21 degC and the hall-kitchen against 23.5 degC as the rule delivered them |
+| thermal-model | `Climate: thermal model` (`climate-thermal-model`) | room-mean RMSE, skill and bias per lead (1, 6, 12, 24 h) and window against the preregistered limits, daily heat MdAPE, scored origins and valid weeks, measured room temperatures, gate status, refits |
+| cop-model | `Climate: COP model` (`climate-cop`) | the measured side: COP from the HeishaMon counters (24 h, 7 d, by mode), reported COP, lift in heat mode, starts and compressor hours (the `d` and `e` terms), heat and electricity per day. The model's own error is offline (`hack/climate_cop.py`) |
+| heat-pump-controller | `Climate: heat-pump controller` (`climate-heat-pump-controller`) | room temperature against setpoint and the section-B comfort criteria, rule activity (heating and hot-water hours against `min_hours`, starts, water target), kWh per heating degree-day, heater safety and tank cap |
+| outdoor-temperature | `Climate: outdoor temperature` (`climate-outdoor-temperature`) | the unit sensor and compressor frequency, trusted, unknown and duty shares from the compressor frequency, weather forecast archive fetches and age |
+| hp-consumption-forecast, boost-mode | `Climate: planned components` (`climate-planned`), one row each | planned, not built: the heat-pump load and a same-slot-yesterday baseline (MAE, bias) the forecast must beat; for boost the grid import against the 5.0 kW limit, battery SOC and charge power, tank maximum against 50 degC and the heater states |
+
+Decisions: the first five have at least three KPI panels with real series (the outdoor-temperature ones are
+compressor-frequency approximations, and its forecast-error KPI is not measured). The two planned components have no
+metric of their own, only preconditions and baselines, so they share one dashboard with a titled row each instead of
+two near-empty ones. The thermal-model dashboard repeats the accuracy panels of `Battery optimizer climate shadow` on
+purpose (that one stays the job-level view) and adds the preregistered limits as dashed lines.
+
+Gaps (no metric exists): the MPC's planned comfort deficit and planned against actual heat-pump energy, the COP model's
+predicted COP and error, the outdoor temperature forecast error, the heat-pump consumption forecast error, boost
+activations and soak energy; the controller's decisions. The weather archive panels expose a real effect: while the
+`weather.forecast_home` entity does not answer, `weather_forecast_fetches_total{result="failed"}` grows and the MPC horizon
+holds the last reading.
 
 **Day-ahead and final plan (0.9.0).** The service keeps, per 15-minute slot, the *day-ahead plan* (the first plan that covered the slot, usually made the previous afternoon) next to the *final plan* (the intent frozen when the slot opened) and scores both against what happened. The metrics are `battery_optimizer_slot_*{plan="day_ahead|final"}`, `load_forecast_*_total{plan}`, `plan_revision_kwh_total` and `shadow_day_ahead_energy_kwh_total`; they appear after the first slot opens and closes, and the day-ahead values after a restart are rebuilt from the plan files on the PVC (startup log `day-ahead rebuilt plan_files=N slots=M`). Home Assistant gets four more template sensors from `/plan` `current_slot` in `apps/home-assistant/config/integrations/battery_optimizer_plan.yaml`: `sensor.battery_optimizer_day_ahead_power` and `sensor.battery_optimizer_day_ahead_soc` (next to the planned power and SOC, which the Battery dashboard calls *Final plan*), and `sensor.battery_optimizer_day_ahead_load` / `sensor.battery_optimizer_final_load` (forecast house load in W). They keep the existing sign (+ discharging, - charging), are `unknown` while the slot has no such plan and unavailable when the service does not answer (a service older than 0.9.0 has no `current_slot`, so they stay unknown). The Battery dashboard (`dashboard-battery`, storage mode) charts them as *Day-ahead plan*, *Final plan* and *Actual* (power, SOC and house load).
 
