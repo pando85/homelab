@@ -135,6 +135,20 @@ planning:
   # Thermal soft cap: EUR per AC kWh charged above charge_soft_cap_kw (planning only).
   charge_soft_cap_kw: 1.5
   charge_soft_cap_eur_per_kwh: 0.005
+  # Read-only thermal state and derate prediction (observability only: no plan, hash or actuation
+  # change, nothing here is ever written).  Needs actuation.entities.battery_ac_power and its sign;
+  # the temperature entity must equal battery_health.entities.temperature.
+  thermal:
+    mode: shadow
+    entities:
+      temperature: sensor.venus_internal_temperature
+      limit_switch: switch.omnibattery_temp_charge_limit
+      discharge_switch: switch.omnibattery_temp_charge_limit_discharge
+      limit_c: number.omnibattery_temp_charge_limit_c
+      band_c: number.omnibattery_temp_charge_limit_band_c
+      floor_pct: number.omnibattery_temp_charge_limit_floor_pct
+      system_max_charge_power: number.omnibattery_system_max_charge_power
+      venus_max_charge_power: number.venus_max_charge_power
   replan:
     soc_change_frac: 0.05
     debounce_s: 30
