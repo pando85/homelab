@@ -558,6 +558,121 @@ The fix is ffunes/Omnibattery#723. Once a release with #723 is installed, set th
 Bypass. Side effects of the high threshold and the full procedure:
 [`home-assistant-omnibattery.md`](../troubleshooting/home-assistant-omnibattery.md).
 
+## Battery settings: where they are and how to read them
+
+The battery is a Marstek Venus E V3 driven by Omnibattery (v1.5.1b1 at the time of writing). Settings sit in
+three places: the device (Marstek app), Omnibattery's own entities in Home Assistant, and the optimizer's
+`files/service.yaml`. All reads below are read-only.
+
+### Entities
+
+| Entity | Value on 2026-11-04 | Set by |
+|---|---|---|
+| `number.venus_max_discharge_power` | 2500 W (range 800-2500) | The device: Marstek app Premium mode. Never written by us |
+| `number.venus_max_charge_power` | 2500 W | The device. Never written by us |
+| `number.omnibattery_system_max_charge_power` | 2500 W | The owner, in the Omnibattery settings |
+| `number.omnibattery_system_max_discharge_power` | varies per slot | **Rewritten by the optimizer every slot**: the per-slot discharge cap (`actuation.entities.max_discharge_power`; 0 = unlimited) |
+| `number.omnibattery_pd_target_grid_power` | varies per slot | **Written by the optimizer**: the grid-import target |
+| `switch.omnibattery_system_power_limits` | on | **Written by the optimizer** |
+| `number.omnibattery_max_contracted_power` | 5000 W | The owner |
+
+Owned by the owner and read-only for the optimizer:
+
+- `select.omnibattery_pd_tuning_profile` (`balanced`) and the PD controller numbers (kp 0.35, kd 0.3, deadband
+  40 W, direction hysteresis 60 W, max power change 800 W).
+- The temperature limit: `switch.omnibattery_temp_charge_limit` and its numbers. The owner toggles it; the
+  optimizer only reads it.
+
+Optimizer-side knobs live in the deployed `apps/battery-optimizer/files/service.yaml`, `actuation:` block:
+
+| Key | Value | Meaning |
+|---|---|---|
+| `import_cap_w` | 4500 | Upper bound of the PD grid-import target (the meter trips at 5 kW) |
+| `import_guard_margin_w` | 200 | Margin the guard keeps below the import cap |
+| `discharge_margin_w` | 200 | Import kept while discharging, never export. Omnibattery's PD loop swings +-150-200 W; 50 W gave brief exports |
+| `min_discharge_cap_w` | 100 | Smallest per-slot discharge cap written |
+| `max_discharge_cap_w` | 2500 | Largest per-slot discharge cap written |
+| `neutral_pd_target_w` | 0 | PD grid target in a planned idle |
+
+### How to read them
+
+1. **Prometheus** (`prometheus-long-term`) exports HA switch states (`hass_switch_state`) and sensors, but
+   **not `number` entities** (only `hass_entity_available` and `hass_last_updated_time_seconds` for them).
+2. **`number` and `select` values**: run a short Python inside the optimizer pod. It uses the pod's own HA token
+   file (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`) and URL (`BATTERY_OPTIMIZER_HA_URL`, a ws URL: the script converts
+   it to http and strips `/api/websocket`) with `GET /api/states`. The token never leaves the pod and is never
+   printed. Use a GET only, never a POST with it. Save the script as `hastates.py` and pipe it on stdin:
+
+   ```bash
+   kubectl --context=grigri -n battery-optimizer exec -i deploy/battery-optimizer-service -c service -- python - < hastates.py
+   ```
+
+   ```python
+   import os,json,urllib.request,re
+   tok=open(os.environ['BATTERY_OPTIMIZER_HA_TOKEN_FILE']).read().strip()
+   base=os.environ['BATTERY_OPTIMIZER_HA_URL'].rstrip('/')
+   base=re.sub(r'^ws',r'http',base); base=re.sub(r'/api/websocket$','',base)
+   req=urllib.request.Request(base+'/api/states',headers={'Authorization':'Bearer '+tok})
+   st=json.load(urllib.request.urlopen(req,timeout=20))
+   pat=re.compile(r'^(number|select|switch|sensor)\.(omnibattery|venus)_.*(discharg|max_charge|power_limit|force_mode|work_mode|user_mode|manual|contracted|pd_|max_power|backup|premium|rs485|allow|set_charge|set_discharge|ac_power|battery_power|status)')
+   for s in sorted(st,key=lambda s:s['entity_id']):
+     if pat.search(s['entity_id']):
+       a=s.get('attributes',{})
+       print(s['entity_id'],'=',s['state'],a.get('unit_of_measurement',''),('min=%s max=%s'%(a.get('min'),a.get('max'))) if 'max' in a else '', a.get('options','') if s['entity_id'].startswith('select') else '')
+   ```
+
+3. **The optimizer's own view**, on port 8080 in the pod: `/status` (the `actuator`, `thermal` and `full_charge`
+   blocks) and `/plan`. `/metrics` has `battery_optimizer_actuator_desired_*`, `battery_optimizer_actuator_observed_*`
+   and `battery_optimizer_actuator_house_load_watts`.
+
+   ```bash
+   kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-service -c service -- \
+     python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/status').read().decode())"
+   ```
+
+4. **Planned against actual discharge, caps, PD target and house load over 24 h**, hourly, as Prometheus
+   `query_range` calls run inside the pod (same `exec -i ... python - < promr.py` pattern):
+
+   ```python
+   import urllib.request,urllib.parse,json,sys,time
+   end=int(time.time()); start=end-24*3600
+   qs={'plan_dis':'sum(increase(battery_optimizer_shadow_planned_energy_kwh_total{direction="discharge"}[1h]))',
+       'act_dis':'sum(increase(battery_optimizer_shadow_actual_battery_energy_kwh_total{direction="discharge"}[1h]))',
+       'plan_w':'avg_over_time(max(battery_optimizer_slot_battery_power_watts{plan="final"})[1h:1m])',
+       'maxdis':'avg_over_time(max(battery_optimizer_actuator_desired_max_discharge_watts)[1h:1m])',
+       'pdt':'avg_over_time(max(battery_optimizer_actuator_desired_pd_target_watts)[1h:1m])',
+       'load':'avg_over_time(max(battery_optimizer_actuator_house_load_watts)[1h:1m])',
+       'obs':'avg_over_time(max(battery_optimizer_actuator_observed_battery_power_watts)[1h:1m])',
+       'soc':'max(hass_sensor_battery_percent{entity="sensor.venus_battery_soc"})',
+       'grid':'avg_over_time(max(hass_sensor_power_w{entity="sensor.shellyem_grid_power"})[1h:1m])'}
+   data={}
+   for k,q in qs.items():
+     u='http://prometheus-long-term.monitoring:9090/api/v1/query_range?'+urllib.parse.urlencode({'query':q,'start':start,'end':end,'step':3600})
+     r=json.load(urllib.request.urlopen(u))['data']['result']
+     data[k]={int(t):float(v) for t,v in r[0]['values']} if r else {}
+   ts=sorted(set().union(*[d.keys() for d in data.values()]))
+   print('hourUTC '+' '.join('%8s'%k for k in qs))
+   for t in ts:
+     print(time.strftime('%d %H:%M',time.gmtime(t)),' '.join('%8.2f'%data[k][t] if t in data[k] else '%8s'%'-' for k in qs))
+   ```
+
+5. **Grafana** (folder `battery-optimizer`), by dashboard uid: `battery-plan-vs-actual`,
+   `battery-load-forecast`, `battery-model-actuation`, `battery-temperature`, `battery-tariff-prices`, and the
+   service dashboard `battery-optimizer-shadow`.
+
+`kubectl exec` into the service pod is read-only use here. Never print or copy the token, and never reuse it
+for a write: writes are the actuator's job, through its allowlist.
+
+### Open issue: planned discharge is not delivered
+
+Status: **waiting for data (from 2026-11-04)**. The "Final plan energy not delivered" panel on
+`battery-model-actuation` shows a discharge shortfall. Part of it is an artefact of the shadow counters that
+ran before live control started (2026-11-03 22:45 UTC) and leaves the 24 h window after the first live day.
+The live part, in the morning discharge window, comes from the no-export rule, the 200 W import margin and a
+load forecast that ran high; the device limits and the per-slot cap are not involved. Diagnosis, candidate fix
+and decision criteria: the app repository's `docs/known-issues.md`, section "Planned discharge is not
+delivered".
+
 ## First run (2026-10-25)
 
 Manual Job from the CronJob on an empty PVC: success in 5m46s including the full Prometheus
