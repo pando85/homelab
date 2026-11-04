@@ -2154,7 +2154,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Battery optimizer shadow service",
+  "title": "Battery optimizer service",
   "uid": "battery-optimizer-shadow",
   "version": 1
 }
