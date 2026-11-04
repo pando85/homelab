@@ -129,6 +129,12 @@ planning:
   # saving within 5% of the 0-cost saving in S2 winter, S3 winter and summer);
   # see docs/components/battery-model.md.  Re-run hack/throughput_sweep.py on real battery data.
   throughput_cost_eur_per_kwh: 0.01
+  # High-SOC dwell cost: EUR per kWh of SOC above the threshold per hour held (planning only).
+  high_soc_threshold_frac: 0.90
+  high_soc_cost_eur_per_kwh_h: 0.01
+  # Thermal soft cap: EUR per AC kWh charged above charge_soft_cap_kw (planning only).
+  charge_soft_cap_kw: 1.5
+  charge_soft_cap_eur_per_kwh: 0.005
   replan:
     soc_change_frac: 0.05
     debounce_s: 30
@@ -223,6 +229,24 @@ actuation:
     # power look hours old while healthy; they turn `unavailable` when Modbus polling fails.
     battery_soc: null
     battery_ac_power: null
+
+# Periodic full charge for cell balancing (docs/planning/periodic-full-charge.md).  mode: shadow
+# decides and records with the simulated writer: nothing about the real control path changes and
+# the guard keeps refusing the two weekly entities.  Never `live` without the owner's decision.
+full_charge:
+  enabled: true
+  mode: shadow
+  entities:
+    enable_switch: switch.omnibattery_weekly_full_charge_enabled
+    day_select: select.omnibattery_weekly_full_charge_day
+    delay_switch: switch.omnibattery_weekly_full_charge_delay
+    charge_delay_switch: switch.omnibattery_charge_delay
+    last_balance_read: sensor.venus_last_balance_read
+    balancing_mode: binary_sensor.venus_balancing_mode
+    cell_delta: sensor.venus_cell_delta
+    balance_status: sensor.venus_balance_status
+    delta_trend: sensor.venus_delta_trend
+    delta_avg_4w: sensor.venus_delta_avg_4w
 
 # Read-only battery health telemetry (docs/service.md): temperature exposure, charge sessions,
 # cell voltages and Omnibattery's balance monitor, in /status and battery_optimizer_battery_*
