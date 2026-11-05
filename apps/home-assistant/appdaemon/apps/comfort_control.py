@@ -14,10 +14,16 @@ Everything is evaluated on a one-minute tick:
 5. the compressor starts-per-day alarm.
 
 Boost (design section 8) is phase 2 and deliberately not implemented, see BOOST_ENABLED.
+
+Climate optimizer plan (ADR-0008, Proposed): the controller reads the optimizer's advisory plan
+(an HTTP GET of its in-cluster service) and compares it with what the rules do. The plan reaches
+the heat pump only if the owner's select says `live` AND `optimizer_live_allowed` is true in
+apps.yaml; that lock is false in git, so today every plan is telemetry only (shadow).
 """
 
 import json
 import math
+import re
 from collections import deque
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -134,6 +140,26 @@ HELPER_RANGES = {
 BOOLEAN_DEFAULTS = {"water_dry_run": True}
 BOUNDARY_RETRY = timedelta(minutes=5)  # an unconfirmed boundary setpoint write is repeated after this
 BANDS = ("cold", "mid", "mild")
+
+# --- Climate optimizer plan (ADR-0008, ClimatePlan contract v1) ------------------------------
+# The plan is advisory. It is read and compared (shadow) and can gate the run decision and replace
+# the water target only when plan control is live, see ComfortControl._live_effective.
+PLAN_MODES = ("off", "shadow", "live")  # input_select.climate_optimizer_mode: Rules / shadow / live
+PLAN_VERSION = 1
+PLAN_STEP = timedelta(minutes=15)
+PLAN_MAX_SLOTS = 192
+PLAN_MAX_BYTES = 256 * 1024  # a plan is about 5 KB: anything much larger is not a plan
+PLAN_FETCH_INTERVAL = timedelta(minutes=2)  # the optimizer replans hourly; expiry is checked every tick
+PLAN_RETRY_INTERVAL = timedelta(minutes=1)  # after any failed or unusable answer
+PLAN_TIMEOUT_S = 5
+PLAN_BURNED_KEEP = 48  # plan ids that were superseded or revoked and are never applied again
+PLAN_REQUIRED_KEYS = (
+    "version", "advisory", "plan_id", "generated_at", "valid_until", "t0", "code_version", "regime",
+    "status", "reason", "model", "inputs", "slots", "requested_mode", "effective_mode", "live_locked",
+    "live_lock_reason", "mode_source", "summary",
+)
+PLAN_ID_RE = re.compile(r"^[0-9a-f]{16}$")
+PLAN_INSTANT_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?\+00:00$")
 
 
 # --- Pure functions -------------------------------------------------------------------------
@@ -282,6 +308,130 @@ def similar_overrides(history, room, direction, at):
     return matches
 
 
+# --- Climate plan: pure functions -------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ClimatePlan:
+    """A ClimatePlan v1 that passed validation (the fields the controller uses)."""
+
+    plan_id: str
+    generated_at: datetime
+    valid_until: datetime
+    start: datetime
+    n: int
+    heating: tuple
+    water_c: tuple
+
+
+@dataclass(frozen=True)
+class PlanSlot:
+    index: int
+    start: datetime
+    heating: bool
+    water_c: object  # integer degC 20..35, or None
+
+
+def _instant(value):
+    """A UTC instant of the contract (`...+00:00`), or None."""
+    if not isinstance(value, str) or not PLAN_INSTANT_RE.match(value):
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _not_served_reason(status, text):
+    """The fallback reason of a non-200 answer; a 404 names the optimizer's own state."""
+    if status == 404:
+        try:
+            state = json.loads(text).get("state")
+        except (TypeError, ValueError, AttributeError):
+            state = None
+        return f"not_served:{state}" if isinstance(state, str) and state else "http_404"
+    return f"http_{status}"
+
+
+def parse_plan(status, text):
+    """Validate an answer of GET /climate/plan: (ClimatePlan, None) or (None, reason).
+
+    Mirrors the contract's consumer rules (docs/climate-plan-contract.md in the optimizer repo): a
+    failed request or 404, JSON that does not parse, a schema violation, version != 1, advisory !=
+    true, status != planned. Unknown fields are ignored. Expiry and slot coverage are checked at
+    every use by plan_current, not here.
+    """
+    if type(status) is not int or status != 200:
+        return None, _not_served_reason(status, text)
+    try:
+        doc = json.loads(text)
+    except (TypeError, ValueError, RecursionError):
+        return None, "bad_json"
+    if not isinstance(doc, dict):
+        return None, "bad_json"
+    if type(doc.get("version")) is not int or doc["version"] != PLAN_VERSION:
+        return None, "version"
+    if doc.get("advisory") is not True:
+        return None, "advisory"
+    if doc.get("status") != "planned":
+        return None, "not_planned"
+    missing = [key for key in PLAN_REQUIRED_KEYS if key not in doc]
+    if missing:
+        return None, f"schema:missing {missing[0]}"
+    plan_id = doc["plan_id"]
+    if not isinstance(plan_id, str) or not PLAN_ID_RE.match(plan_id):
+        return None, "schema:plan_id"
+    generated_at, valid_until = _instant(doc["generated_at"]), _instant(doc["valid_until"])
+    if generated_at is None or valid_until is None:
+        return None, "schema:instant"
+    slots = doc["slots"]
+    if not isinstance(slots, dict):
+        return None, "schema:slots"
+    start, n = _instant(slots.get("start")), slots.get("n")
+    if start is None or slots.get("step_minutes") != 15 or type(slots.get("step_minutes")) is not int:
+        return None, "schema:slots.start"
+    if type(n) is not int or not 1 <= n <= PLAN_MAX_SLOTS:
+        return None, "schema:slots.n"
+    heating, water = slots.get("heating"), slots.get("water_c")
+    if not isinstance(heating, list) or len(heating) != n or any(type(v) is not int or v not in (0, 1) for v in heating):
+        return None, "schema:slots.heating"
+    if not isinstance(water, list) or len(water) != n or any(
+        v is not None and (type(v) is not int or not WATER_MIN <= v <= WATER_MAX) for v in water
+    ):
+        return None, "schema:slots.water_c"
+    return ClimatePlan(plan_id, generated_at, valid_until, start, n, tuple(heating), tuple(water)), None
+
+
+def plan_current(plan, now):
+    """The slot of `now` in a validated plan: (PlanSlot, None) or (None, reason). Called at every use:
+    a plan is absent from valid_until on, and when no slot covers `now` (found by time)."""
+    now_utc = now.astimezone(timezone.utc)
+    if now_utc >= plan.valid_until:
+        return None, "expired"
+    offset = now_utc - plan.start
+    if offset < timedelta(0) or offset // PLAN_STEP >= plan.n:
+        return None, "slot_not_covered"
+    index = offset // PLAN_STEP
+    return PlanSlot(index, plan.start + index * PLAN_STEP, bool(plan.heating[index]), plan.water_c[index]), None
+
+
+def run_want(mode_on, cold, missing, satisfied, plan_heating=None, floor_forced=False):
+    """What the run logic wants: "on", "off" or "hold" (the compressor timers apply afterwards).
+
+    Rules (plan_heating None): on when a room is cold or unreadable while off, off when every room is
+    at its setpoint while on. With a plan, heating 0 holds heating off unless a comfort floor is at
+    stake or a room is unreadable; heating 1 changes nothing (it permits, the thermostats decide);
+    a room below its floor minus the hysteresis forces heating whatever the plan says.
+    """
+    if plan_heating is False and not floor_forced and not missing:
+        return "off"
+    if not mode_on and (cold or missing or floor_forced):
+        return "on"
+    if mode_on and satisfied and not floor_forced:
+        return "off"
+    return "hold"
+
+
 @dataclass(frozen=True)
 class Phase:
     kind: str  # "day" (from the early start) or "night" (from the window end)
@@ -340,6 +490,7 @@ class ComfortControl(hass.Hass):
         self._init_state()
         helpers = self.args["helpers"]
         await self._load_status()
+        await self._load_plan_status()
         try:
             await self._seed_helpers()
         except Exception as error:
@@ -352,6 +503,9 @@ class ComfortControl(hass.Hass):
         await self.listen_state(self._on_seeded_off, helpers["seeded"], new="off", old="on")
         for room, entity in self.args["rooms"].items():
             await self.listen_state(self._on_target_change, entity, attribute="temperature", room=room)
+        plan_args = self.args.get("climate_plan") or {}
+        if plan_args.get("mode_entity"):
+            await self.listen_state(self._on_plan_mode, plan_args["mode_entity"])
 
         mode_state = await self.get_state(self.args["heat_mode"]["entity"], attribute="all")
         if isinstance(mode_state, dict):
@@ -391,6 +545,33 @@ class ComfortControl(hass.Hass):
         self.starts_baseline = None
         self.starts_alarmed = False
         self.status_published = None
+        self._init_plan_state()
+
+    def _init_plan_state(self):
+        self.plan = None  # the ClimatePlan of the last successful fetch (dropped on any failure)
+        self.plan_fetch_error = None  # reason of the last failed or unusable answer
+        self.plan_last_fetch = None
+        self.plan_next_fetch = None
+        self.plan_requested = "off"  # the owner's select: off / shadow / live
+        self.plan_slot = None  # the PlanSlot of now, None when the plan is absent
+        self.plan_reason = None  # why there is no slot (the fallback reason)
+        self.plan_control = False  # live effective and the plan may drive this tick
+        self.plan_blocked = None  # why a live-effective plan does not drive (already applied)
+        self.plan_active_id = None
+        self.plan_burned = deque(maxlen=PLAN_BURNED_KEEP)  # superseded or revoked ids
+        self.plan_live_applied = None  # id applied in live, until revoked or superseded
+        self.plan_run = None  # this tick's run comparison (rules vs plan), set by _update_run
+        self.plan_water = None  # this tick's water comparison, set by _update_water
+        self.plan_today = self._new_plan_counters(None)
+        self.plan_counted_minute = None
+        self.plan_status_published = None
+        self.plan_logged = None
+        self.plan_warned = None
+
+    @staticmethod
+    def _new_plan_counters(day):
+        return {"day": day, "samples": 0, "agree": 0, "heating_disagree": 0, "water_disagree": 0,
+                "would_differ": 0, "unusable": 0, "skipped": 0, "plans": 0}
 
     # --- HA access ------------------------------------------------------------------------
 
@@ -732,6 +913,258 @@ class ComfortControl(hass.Hass):
             notification_id=notification_id,
         )
 
+    # --- Climate optimizer plan (ADR-0008) ----------------------------------------------------
+
+    def _live_effective(self, requested):
+        """THE hard lock. Plan control is live only if the owner's select says live AND
+        optimizer_live_allowed is true in apps.yaml (a reviewed git commit, false by default, never a
+        helper). Everything that lets a plan reach the heat pump goes through _plan_controls, which
+        asks this at the point of use, every tick."""
+        return requested == "live" and self.args.get("optimizer_live_allowed") is True
+
+    def _plan_controls(self):
+        return self.plan_control and self._live_effective(self.plan_requested)
+
+    def _effective_plan_mode(self):
+        if self.plan_requested == "live" and not self._live_effective("live"):
+            return "shadow"
+        return self.plan_requested
+
+    async def _http_get(self, url, timeout):
+        """GET `url`: (status, body text), the body capped at PLAN_MAX_BYTES (a test seam)."""
+        import aiohttp
+
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=timeout)) as session:
+            async with session.get(url, headers={"Accept": "application/json"}) as response:
+                body = await response.content.read(PLAN_MAX_BYTES + 1)
+                if len(body) > PLAN_MAX_BYTES:
+                    return response.status, ""
+                return response.status, body.decode("utf-8", errors="replace")
+
+    async def _plan_requested_mode(self):
+        entity = (self.args.get("climate_plan") or {}).get("mode_entity")
+        raw = await self.get_state(entity) if entity else None
+        return raw if raw in PLAN_MODES else "off"  # missing, unavailable or garbage: Rules
+
+    async def _on_plan_mode(self, _entity="", _attribute="", old="", new="", _kwargs={}):
+        # A change of the owner's select revokes plan-derived control at once, not at the next tick
+        # (the tick then re-reads the select and publishes). Nothing else is done here.
+        self.log(f"Climate optimizer mode select: {old} -> {new}")
+        if not self._live_effective(new if new in PLAN_MODES else "off"):
+            self.plan_control = False
+
+    async def _plan_fetch(self, now):
+        config = self.args.get("climate_plan") or {}
+        self.plan_last_fetch = now
+        self.plan_next_fetch = now + PLAN_RETRY_INTERVAL
+        url = config.get("url")
+        if not url:
+            self.plan, self.plan_fetch_error = None, "not_configured"
+            return
+        try:
+            status, text = await self._http_get(url, config.get("timeout_s", PLAN_TIMEOUT_S))
+        except Exception as error:  # timeout, DNS, refused: the plan is absent, never kept
+            self.plan, self.plan_fetch_error = None, "fetch_failed"
+            self._plan_warn("fetch_failed", f"Climate plan fetch failed: {error!r}")
+            return
+        plan, reason = parse_plan(status, text)
+        if plan is None:
+            self.plan, self.plan_fetch_error = None, reason
+            self._plan_warn(reason, f"Climate plan unusable: {reason}")
+            return
+        self.plan, self.plan_fetch_error = plan, None
+        self.plan_next_fetch = now + PLAN_FETCH_INTERVAL
+        self.plan_warned = None
+        if plan.plan_id != self.plan_active_id:
+            if self.plan_active_id is not None:
+                self.plan_burned.append(self.plan_active_id)  # a replan supersedes the previous plan entirely
+            self.plan_active_id, self.plan_live_applied = plan.plan_id, None
+            self._plan_counters(now)["plans"] += 1
+            self.log(
+                f"Climate plan {plan.plan_id} received: generated {plan.generated_at:%H:%M}Z, valid until "
+                f"{plan.valid_until:%H:%M}Z, {sum(plan.heating)} heating slots of {plan.n}"
+            )
+
+    def _plan_warn(self, reason, message):
+        if reason != self.plan_warned:  # once per reason, not every retry
+            self.log(message, level="WARNING")
+        self.plan_warned = reason
+
+    def _plan_counters(self, now):
+        day = now.astimezone(self._tz()).date().isoformat()
+        if self.plan_today["day"] != day:
+            self.plan_today = self._new_plan_counters(day)
+        return self.plan_today
+
+    async def _plan_cycle(self, now):
+        """Read the select, fetch the plan when due, and resolve the slot of now. Nothing here writes
+        to Home Assistant. Any failure leaves the plan absent: the rules decide."""
+        self.plan_run = self.plan_water = None
+        self.plan_slot, self.plan_reason, self.plan_control, self.plan_blocked = None, None, False, None
+        try:
+            requested = await self._plan_requested_mode()
+            if requested != self.plan_requested:
+                self.log(f"Climate optimizer mode: {self.plan_requested} -> {requested}")
+            self.plan_requested = requested
+            live = self._live_effective(requested)
+            if self.plan_live_applied is not None and not live:
+                self.log(f"Climate plan {self.plan_live_applied} revoked: plan control is no longer live")
+                self.plan_burned.append(self.plan_live_applied)
+                self.plan_live_applied = None
+            if requested == "off":
+                self.plan, self.plan_fetch_error, self.plan_next_fetch = None, None, None
+                self.plan_reason = "mode_off"
+                return
+            if self.plan_next_fetch is None or now >= self.plan_next_fetch:
+                await self._plan_fetch(now)
+            if self.plan is None:
+                self.plan_reason = self.plan_fetch_error or "no_plan"
+                return
+            self.plan_slot, self.plan_reason = plan_current(self.plan, now)
+            if self.plan_slot is None:
+                return
+            if live:
+                if self.plan.plan_id in self.plan_burned:
+                    self.plan_blocked = "plan_id_already_applied"
+                else:
+                    self.plan_control = True
+                    if self.plan_live_applied != self.plan.plan_id:
+                        self.plan_live_applied = self.plan.plan_id
+                        self.log(f"Climate plan {self.plan.plan_id} applied (live)")
+        except Exception as error:
+            self.plan_slot, self.plan_control, self.plan_reason = None, False, "internal_error"
+            self.log(f"Climate plan cycle failed: {error!r}", level="ERROR")
+
+    async def _plan_idle(self, now, reason):
+        """The controller does not run (disabled, seeding): no plan is evaluated or used."""
+        self.plan_slot, self.plan_control, self.plan_run, self.plan_water = None, False, None, None
+        self.plan_reason = reason
+        await self._plan_report(now, idle=True)
+
+    def _plan_compare(self):
+        """(heating agrees, water agrees, both agree) of this tick; None where not comparable."""
+        run, water = self.plan_run, self.plan_water
+        agree_heating = run["plan"] == run["rules"] if run is not None and self.plan_slot is not None else None
+        agree_water = water["plan"] == water["rules"] if water and water["plan"] is not None else None
+        both = None if agree_heating is None else bool(agree_heating and agree_water is not False)
+        return agree_heating, agree_water, both
+
+    def _plan_attributes(self, now, idle):
+        requested, effective = self.plan_requested, self._effective_plan_mode()
+        plan, slot = self.plan, self.plan_slot
+        run, water = self.plan_run, self.plan_water
+        compared = run is not None and slot is not None
+        agree_heating, agree_water, agree = self._plan_compare()
+        today = self.plan_today
+        attributes = {
+            "requested_mode": requested,
+            "effective_mode": effective,
+            "live_allowed_in_git": self.args.get("optimizer_live_allowed") is True,
+            "live_locked": requested == "live" and effective != "live",
+            "plan_controls": self._plan_controls() if not idle else False,
+            "plan_id": plan.plan_id if plan else None,
+            "plan_generated_at": plan.generated_at.isoformat() if plan else None,
+            "plan_valid_until": plan.valid_until.isoformat() if plan else None,
+            "plan_age_min": round((now - plan.generated_at).total_seconds() / 60) if plan else None,
+            "plan_expires_in_min": round((plan.valid_until - now).total_seconds() / 60) if plan else None,
+            "plan_usable": slot is not None,
+            "fallback_reason": None if slot is not None else self.plan_reason,
+            "control_blocked": self.plan_blocked,
+            "slot_start": slot.start.isoformat() if slot else None,
+            "plan_heating_now": slot.heating if slot else None,
+            "plan_water_c_now": slot.water_c if slot else None,
+            "rules_heating_now": run["rules"] if compared else None,
+            "rules_water_c_now": water["rules"] if water else None,
+            "plan_effect_heating_now": run["would"] if compared else None,
+            "floor_forced": list(run["floor_forced"]) if compared else None,
+            "agree_heating": agree_heating,
+            "agree_water": agree_water,
+            "agree": agree,
+            "last_fetch": self.plan_last_fetch.isoformat() if self.plan_last_fetch else None,
+            "today": today["day"],
+            "today_samples": today["samples"],
+            "today_agree": today["agree"],
+            "today_agree_pct": round(100 * today["agree"] / today["samples"]) if today["samples"] else None,
+            "today_heating_disagree": today["heating_disagree"],
+            "today_water_disagree": today["water_disagree"],
+            "today_would_differ": today["would_differ"],
+            "today_unusable": today["unusable"],
+            "today_skipped": today["skipped"],
+            "today_plans": today["plans"],
+        }
+        return attributes
+
+    def _plan_count(self, now):
+        """One sample per minute of the comparison of the plan with the rules (telemetry only)."""
+        minute = now.replace(second=0, microsecond=0)
+        if self.plan_requested == "off" or minute == self.plan_counted_minute:
+            return
+        self.plan_counted_minute = minute
+        today = self._plan_counters(now)
+        if self.plan_slot is None:
+            today["unusable"] += 1
+        elif self.plan_run is None:
+            today["skipped"] += 1  # a usable plan, but the run step did not reach its comparison
+        else:
+            agree_heating, agree_water, agree = self._plan_compare()
+            today["samples"] += 1
+            today["agree"] += bool(agree)
+            today["heating_disagree"] += agree_heating is False
+            today["water_disagree"] += agree_water is False
+            today["would_differ"] += self.plan_run["would"] != self.plan_run["rules"]
+
+    async def _plan_report(self, now, idle=False):
+        """Publish sensor.comfort_climate_plan_status (state: off / shadow / live_locked / live) and log
+        changes. Telemetry: the only thing the plan writes while it is not live is this sensor."""
+        try:
+            if not idle:
+                self._plan_count(now)
+            attributes = self._plan_attributes(now, idle)
+            requested, effective = attributes["requested_mode"], attributes["effective_mode"]
+            state = "live_locked" if attributes["live_locked"] else effective
+            text = {
+                "off": "Rules (optimizer plan off)",
+                "shadow": "Optimizer shadow (plan compared, nothing written from it)",
+                "live_locked": "Live requested, locked in git: behaving as shadow",
+                "live": "Optimizer live (plan drives the run decision and the water target)",
+            }[state]
+            attributes = {**attributes, "status_text": text, "friendly_name": "Comfort climate plan"}
+            logged = (state, attributes["plan_id"], attributes["fallback_reason"], attributes["plan_heating_now"],
+                      attributes["rules_heating_now"], attributes["plan_water_c_now"])
+            if logged != self.plan_logged and requested != "off":
+                self.plan_logged = logged
+                self.log(
+                    f"Climate plan [{state}] plan {attributes['plan_id']}: "
+                    + (
+                        f"plan heating={attributes['plan_heating_now']} water={attributes['plan_water_c_now']}, "
+                        f"rules heating={attributes['rules_heating_now']} water={attributes['rules_water_c_now']}, "
+                        f"agree={attributes['agree']}"
+                        if attributes["plan_usable"]
+                        else f"not usable ({attributes['fallback_reason']}): rules decide"
+                    )
+                )
+            if (state, attributes) == self.plan_status_published:
+                return
+            self.plan_status_published = (state, attributes)
+            await self.set_state(self.args["climate_plan"]["status_entity"], state=state, attributes=attributes)
+        except Exception as error:  # telemetry must never stop the control loop
+            self.log(f"Climate plan status failed: {error!r}", level="ERROR")
+
+    async def _load_plan_status(self):
+        """Restore today's counters after an AppDaemon restart (the sensor survives it)."""
+        entity = (self.args.get("climate_plan") or {}).get("status_entity")
+        state = await self.get_state(entity, attribute="all") if entity else None
+        attributes = (state or {}).get("attributes", {}) if isinstance(state, dict) else {}
+        if attributes.get("today") != self._now().astimezone(self._tz()).date().isoformat():
+            return
+        counters = self._new_plan_counters(attributes["today"])
+        for key, name in (("samples", "samples"), ("agree", "agree"), ("heating_disagree", "heating_disagree"),
+                          ("water_disagree", "water_disagree"), ("would_differ", "would_differ"),
+                          ("unusable", "unusable"), ("skipped", "skipped"), ("plans", "plans")):
+            value = attributes.get(f"today_{name}")
+            counters[key] = value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+        self.plan_today = counters
+
     # --- Tick ---------------------------------------------------------------------------------
 
     async def _tick(self, kwargs=None):
@@ -743,6 +1176,7 @@ class ComfortControl(hass.Hass):
             if not await self._is_on("enable"):
                 await self._release_force_dhw_safely(now)
                 await self._publish_status("disabled", {})
+                await self._plan_idle(now, "controller_disabled")
                 return
             if not await self._is_on("seeded"):
                 # Helpers re-created at their HA minimums would give 18 degC setpoints (the floor
@@ -755,18 +1189,20 @@ class ComfortControl(hass.Hass):
                     self.log("Helpers not seeded: control skipped this tick", level="WARNING")
                     await self._release_force_dhw_safely(now)
                     await self._publish_status("seeding", {})
+                    await self._plan_idle(now, "controller_seeding")
                     return
             outdoor = await self._corrected_outdoor()
             self._sample_outdoor(now, outdoor)
             schedule = await self._schedule()
             self._freeze_band_outdoor(schedule, now, outdoor)
             phase, leads = await self._current_phase(schedule, now, outdoor)
+            await self._plan_cycle(now)
             run_ok = False
             for name, step in (
                 ("setpoints", lambda: self._update_setpoints(phase)),
                 ("raise", lambda: self._update_raise()),
                 ("water", lambda: self._update_water(now, outdoor)),
-                ("run", lambda: self._update_run(now)),
+                ("run", lambda: self._update_run(now, phase)),
                 ("dhw", lambda: self._update_dhw(now, schedule, leads)),
                 ("starts", lambda: self._check_starts(now)),
                 ("dhw plan", lambda: self._persist_dhw_plan()),
@@ -778,6 +1214,7 @@ class ComfortControl(hass.Hass):
                     self.log(f"Tick step {name} failed: {error!r}", level="ERROR")
             await self._release_force_dhw_safely(now)
             await self._publish_status(await self._status_state(), self._status_attributes(phase, schedule, leads))
+            await self._plan_report(now)
             if run_ok:  # the HA watchdog restores heating when this goes stale
                 await self.set_state(
                     self.args["heartbeat_entity"],
@@ -897,13 +1334,21 @@ class ComfortControl(hass.Hass):
             return await self._block_water(f"invalid curve points {points}")
         raise_k = await self._helper("early_start_raise") if self.raise_active else 0.0
         target, request = water_request(curve, raise_k)
+        reason = f"curve {curve:.1f}" + (f" + raise {raise_k:g} K" if raise_k else "")
+        slot = self.plan_slot
+        if slot is not None:
+            # The plan's water target (heating slots only), clamped like the curve's. It is only
+            # compared unless plan control is live (never while locked): then it replaces the curve.
+            plan_target = water_request(slot.water_c) if slot.heating and slot.water_c is not None else None
+            self.plan_water = {"rules": request, "plan": plan_target[1] if plan_target else None}
+            if plan_target is not None and self._plan_controls():
+                (target, request), reason = plan_target, f"plan water_c {slot.water_c} (curve {curve:.1f})"
         current = await self._number(sensors["z1_request"])
         if current is None:
             return await self._block_water("current Z1 request unavailable")
         self.water_block_reason = None
         if not water_write_due(target, request, current, self.last_water_write, now):
             return
-        reason = f"curve {curve:.1f}" + (f" + raise {raise_k:g} K" if raise_k else "")
         # The water dry-run helper is on until the owner has checked the first write on the unit;
         # anything but "off" (unknown, unavailable) keeps it a dry run.
         actuate = self._actuate("water_temperature") and await self.get_state(self.args["helpers"]["water_dry_run"]) == "off"
@@ -951,7 +1396,18 @@ class ComfortControl(hass.Hass):
             await self.set_state(entity, state=mode)
         return await self._confirm_mode()
 
-    async def _update_run(self, now):
+    async def _floor_forced(self, rooms, phase, hysteresis):
+        """Rooms below their own comfort minimum minus the hysteresis: the floor outside the day
+        window (and while away), the higher of floor and day minimum inside it. Comfort wins over
+        the plan (ADR-0008 decision 5)."""
+        kind = "night" if phase is None or await self._is_on("away") else phase.kind
+        forced = []
+        for room, (current, _target) in rooms.items():
+            if current < await self._room_minimum(room, kind) - hysteresis:
+                forced.append(room)
+        return forced
+
+    async def _update_run(self, now, phase=None):
         modes = self.args["heat_mode"]
         if self.pending_mode is not None:
             if await self._confirm_mode():
@@ -990,15 +1446,42 @@ class ComfortControl(hass.Hass):
         self.missing_warning = missing
         elapsed = None if self.last_mode_change is None else now - self.last_mode_change
         detail = ", ".join(f"{room} {current}/{target}" for room, (current, target) in rooms.items())
-        if mode == modes["off_mode"] and (cold or missing):
+        mode_on = mode == modes["on_mode"]
+        want = rules_want = run_want(mode_on, cold, missing, satisfied)
+        slot, floor_forced = self.plan_slot, []
+        controlling = False
+        if slot is not None:
+            # Always computed while a plan is current (telemetry); it decides only under plan control.
+            floor_forced = await self._floor_forced(rooms, phase, hysteresis)
+            plan_want = run_want(mode_on, cold, missing, satisfied, plan_heating=slot.heating, floor_forced=bool(floor_forced))
+            heats = lambda wanted: wanted == "on" or (wanted == "hold" and mode_on)  # noqa: E731
+            self.plan_run = {
+                "rules": heats(rules_want),
+                "plan": slot.heating,
+                "would": heats(plan_want),
+                "floor_forced": floor_forced,
+            }
+            controlling = self._plan_controls()
+            if controlling:
+                want = plan_want
+        if want == "on" and not mode_on:
             if elapsed is not None and elapsed < MIN_OFF:
                 return True
-            reason = f"below setpoint: {', '.join(cold)}" if cold else f"no reading from {', '.join(missing)}"
+            if floor_forced and controlling and not slot.heating:
+                reason = f"comfort floor beats the plan: {', '.join(floor_forced)}"
+            elif cold:
+                reason = f"below setpoint: {', '.join(cold)}"
+            elif floor_forced and controlling:
+                reason = f"below the comfort floor: {', '.join(floor_forced)}"
+            else:
+                reason = f"no reading from {', '.join(missing)}"
             return await self._set_mode(modes["on_mode"], f"{reason} ({detail})")
-        if mode == modes["on_mode"] and satisfied:
+        if want == "off" and mode_on:
             if elapsed is not None and elapsed < MIN_ON:
                 return True
-            return await self._set_mode(modes["off_mode"], f"every room at setpoint ({detail})")
+            plan_denied = controlling and rules_want != "off"
+            reason = f"plan: heating not permitted in the slot of {slot.start:%H:%M} UTC" if plan_denied else "every room at setpoint"
+            return await self._set_mode(modes["off_mode"], f"{reason} ({detail})")
         return True
 
     async def _check_starts(self, now):

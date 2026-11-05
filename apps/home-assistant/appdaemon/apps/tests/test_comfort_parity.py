@@ -81,6 +81,7 @@ def test_mode_command_path_is_the_same_and_extra_entities_are_justified(name):
         ("input_number/set_value", "input_number.heishamon_tank_temp"),  # tank target <= 50
         ("set_state", "sensor.comfort_control_status"),
         ("set_state", "sensor.comfort_control_heartbeat"),
+        ("set_state", "sensor.comfort_climate_plan_status"),  # ADR-0008 telemetry: the plan against the rules
         ("notify/send_message", "notify.agil"),  # as legacy
         ("input_text/set_value", "input_text.comfort_dhw_plan"),  # DHW plan across HA restarts
         *{("climate/set_temperature", f"climate.thermostat_{room}") for room in ("hall_kitchen", "bedroom", "office_a", "office_t")},

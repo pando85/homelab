@@ -227,6 +227,10 @@ column per section, tiles with sliders, standard cards only plus the installed `
   floor and the day minimum of that room.
 - **Shared:** the day window times (`input_datetime.comfort_weekday_start`, `_weekend_start`,
   `_window_end`) and `input_number.comfort_margin`.
+- **Climate optimizer** (second section): `input_select.climate_optimizer_mode`, the plan status and a
+  markdown card with requested and effective mode, the lock, plan age and expiry, plan against rules
+  for now and the agreement of today (see [Climate optimizer plan](#climate-optimizer-plan-adr-0008-shadow)).
+  The select is defined by the battery-optimizer/climate package, not by `appdaemon_comfort.yaml`.
 - **Advanced** (collapsed): the water dry run, the hysteresis, the hot water target and
   `input_boolean.comfort_helpers_seeded`, labelled "turn OFF to reset EVERY helper to its default"
   and asking for confirmation (the reset also turns the water dry run back on).
@@ -242,11 +246,107 @@ dashboard with `lovelace/dashboards/create` (`registration`) and save the config
 `lovelace/config/save` (`url_path: dashboard-comfort`, `config`), read it back, and **revoke the
 token afterwards**. Rollback is `lovelace/dashboards/delete`.
 
+## Climate optimizer plan (ADR-0008, shadow)
+
+The battery-optimizer service plans space heating hourly (the climate MPC) and publishes it as an
+advisory **ClimatePlan v1**: per 15-minute slot, heating on or off and the water target. ADR-0008 of
+`pando85/home-energy-optimizer` (status **Proposed**) lets this controller read it. **Today the plan
+only feeds telemetry: nothing is written from it, and it cannot be made to write by any setting in
+Home Assistant.** The rules above keep driving the heat pump.
+
+**Where the plan comes from.** The app does an HTTP `GET` of the optimizer's own in-cluster service
+(`climate_plan.url` in `apps.yaml`: `/climate/plan`; the service is ClusterIP, read only). Neither the
+`home-assistant` nor the `battery-optimizer` namespace has a NetworkPolicy and no Cilium policy
+applies, so the AppDaemon pod reaches it directly, like Home Assistant already does for the battery plan.
+This avoids a REST sensor in between and the 16 KB attribute limit of a state object. The timeout is
+5 s, the body is capped at 256 KB, nothing is ever sent to the optimizer, and the optimizer has no
+token that could write climate entities.
+
+### Modes
+
+The owner's control is `input_select.climate_optimizer_mode` (options `off`, `shadow`, `live`). The
+app only **reads** it; a missing, `unavailable`, `unknown` or unrecognised state is `off`.
+
+| Select | Controller | Plan |
+|---|---|---|
+| `off` (**Rules**) | its own rules, as always | not fetched |
+| `shadow` (**Optimizer shadow**) | its own rules | fetched and compared, never applied |
+| `live` (**Optimizer live**) | **shadow while the lock is closed** | as shadow; applied only with the lock open |
+
+### The hard lock
+
+`optimizer_live_allowed: false` in `apps.yaml` (and false when the key is missing: only a real
+boolean `true` opens it) is the lock. It is a value in git, not a helper, a dashboard switch or a
+service call, so a mis-tap cannot open it. While it is false a `live` request behaves exactly like
+`shadow` and the status says **"Live requested, locked in git: behaving as shadow"**. The simulation
+tests run whole days with the lock closed and prove that the controller's calls to Home Assistant are
+identical, call for call, to a run with no plan at all, in `shadow`, in `live`, while the owner flips
+the select through every mode, and with the optimizer down or answering garbage.
+
+### What shadow records
+
+`sensor.comfort_climate_plan_status` (written by the app like the other status sensors; state `off`,
+`shadow`, `live_locked` or `live`, plus `status_text`). Attributes: `requested_mode`,
+`effective_mode`, `live_locked`, `live_allowed_in_git`, `plan_controls`, `plan_id`,
+`plan_generated_at`, `plan_valid_until`, `plan_age_min`, `plan_expires_in_min`, `plan_usable`,
+`fallback_reason`, `control_blocked`, `slot_start`, what the plan says now (`plan_heating_now`,
+`plan_water_c_now`), what the rules say now (`rules_heating_now`, `rules_water_c_now`),
+`plan_effect_heating_now` (what the live path would end up commanding), `floor_forced`,
+`agree_heating`, `agree_water`, `agree`, and per local day `today_samples` (one per minute),
+`today_agree`, `today_agree_pct`, `today_heating_disagree`, `today_water_disagree`,
+`today_would_differ` (minutes in which a live plan would have acted differently from the rules),
+`today_unusable`, `today_skipped`, `today_plans`. The counters are restored after an AppDaemon restart
+and reset after a Home Assistant restart (the sensor is not restored). The log shows
+`Climate plan <id> received`, and one `Climate plan [mode] ...` line whenever the plan or the rules
+change what they say. "Rules heating" is the run decision of the rules this tick (on, off, or
+hold); "plan heating" is the slot's `heating`, the permitted-heating lever.
+
+### Validity and fallback
+
+The plan is polled every 2 minutes (1 minute after a failure) and judged again **at every tick**.
+It is absent, and the rules decide, when: the request fails or times out, is a `404` (the status shows
+the optimizer's own state, for example `not_served:mode_off`) or any other status, the body is not
+JSON or is too large, a field the controller needs is missing or malformed (schema), `version` is not
+1, `advisory` is not `true`, `status` is not `planned`, `now >= valid_until`, no slot covers now
+(found by time), or the plan id was already applied (below). Absent is never "off" and never "keep the
+last plan": a failed fetch drops the plan at once. `fallback_reason` and the log say which.
+
+### The live path (built, unreachable while locked)
+
+Only with the select on `live` **and** the lock open, and only for a valid plan:
+
+- the slot's `heating` **gates the run decision**: `0` keeps heating off (and stops it after the
+  compressor's minimum on time) while no comfort floor is at stake; `1` changes nothing (the plan
+  permits, the thermostats and the rules decide);
+- the slot's `water_c` **replaces the curve target** in a heating slot, through the same write
+  rules; a slot without `water_c` uses the curve;
+- **comfort floors win:** a room below its own comfort minimum minus the hysteresis (its floor, and
+  inside the day window the higher of floor and day minimum; the floor only while away) forces
+  heating whatever the plan says, as does a room that reports nothing;
+- all fixed limits stay: water 20 to 35 degC, at least 1 K and at most once per 15 min (and the water
+  dry-run helper), compressor minimum on 30 / off 20 min, tank at most 50 degC, direct mode, **no
+  heater, no boost, no sterilisation**; no other entity is written;
+- **each plan id is applied once:** a replan supersedes the previous plan entirely; a superseded or
+  revoked id is not applied again (`control_blocked: plan_id_already_applied`, the rules decide);
+- changing the select away from `live` revokes plan control at once (the state listener), not at the
+  next tick, and the plan in force at that moment is not re-applied if `live` is chosen again.
+
+### Going live later
+
+Not now. ADR-0008 has to be **accepted** first (a new preregistered gate passed, the owner's explicit
+go, a supervised first day with the rules one switch away). Only then, a **reviewed commit** changes
+`optimizer_live_allowed: false` to `true` in `apps.yaml`, and the owner selects `live`. Rollback is
+the select set to `shadow` or `off` (immediate), or a revert of that commit. The optimizer mirrors the
+lock on its side (it never reports an effective `live` in its current code), so a go-live is two
+reviewed changes, one in each repository.
+
 ## Logs, status and suggestions
 
 - AppDaemon log lines (Loki): `Setpoint <room>: old -> new (<boundary>)`, `Manual override <room> at
   <time>: old -> new`, `Water request write at <time>: old -> new degC (outdoor ..., curve ...)`,
   `Heat mode -> <mode> (<reason>)`, `Lead-time band input for <day>`, `Force DHW until ...`.
+- `sensor.comfort_climate_plan_status`: the optimizer plan against the rules, see the climate
+  optimizer section above.
 - `sensor.comfort_control_status`: state `heating`, `idle`, `away` or `disabled`; attributes with
   the phase, the next early starts, the frozen band inputs, the DHW window and the overrides of the
   last 14 days.

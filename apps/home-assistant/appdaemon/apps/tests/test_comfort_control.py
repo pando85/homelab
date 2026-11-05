@@ -833,7 +833,8 @@ class TestFailureBehaviour:
         app.ha.services.clear()
         room(app, "bedroom", current=18.0)
         await tick_at(app, 2026, 11, 4, 1, 0)
-        assert [c for c in app.ha.services if c[0] != "set_state" or c[1] != app.args["status_entity"]] == []
+        telemetry = {app.args["status_entity"], app.args["climate_plan"]["status_entity"]}
+        assert [c for c in app.ha.services if c[0] != "set_state" or c[1] not in telemetry] == []
 
     @pytest.mark.asyncio
     async def test_terminate_changes_nothing(self, app):
@@ -1387,7 +1388,10 @@ class TestPhysicalAcknowledgements:
 
 
 class TestNoBatteryInteraction:
-    """The controller never touches the battery or the battery optimizer (design section 7.3, ADR-0006)."""
+    """The controller never touches the battery or the battery optimizer (design section 7.3, ADR-0006).
+
+    The one exception is ADR-0008: a read-only GET of the optimizer's climate plan (the test below
+    pins that URL and that nothing is ever written to the optimizer)."""
 
     FORBIDDEN = ("venus", "omnibattery", "battery_optimizer", "marstek")
 
@@ -1413,7 +1417,8 @@ class TestNoBatteryInteraction:
             assert not any(word in str(entity).lower() for word in self.FORBIDDEN), (service, entity)
             if service == "set_state":  # the selector and the app's own status and heartbeat sensors
                 heat_mode = app.args["heat_mode"]["entity"]
-                assert entity == heat_mode or str(entity).startswith("sensor.comfort_control_"), entity
+                plan_status = app.args["climate_plan"]["status_entity"]
+                assert entity in (heat_mode, plan_status) or str(entity).startswith("sensor.comfort_control_"), entity
                 continue
             domain = service.split("/")[0]
             assert domain in {
@@ -1627,7 +1632,9 @@ class TestComfortDashboard:
     def test_every_entity_exists_and_every_comfort_helper_is_on_it_once_where_expected(self, app):
         package = yaml.safe_load(HA_PACKAGE.read_text())
         defined = {f"{domain}.{name}" for domain in ("input_boolean", "input_number", "input_datetime") for name in package[domain]}
-        known = defined | set(app.args["rooms"].values()) | {app.args["status_entity"]}
+        # The optimizer mode select is defined by the battery-optimizer/climate package, not by this one.
+        external = {app.args["climate_plan"]["mode_entity"]}
+        known = defined | external | set(app.args["rooms"].values()) | {app.args["status_entity"], app.args["climate_plan"]["status_entity"]}
         referenced = []
         for card in dashboard_cards():
             referenced += [card["entity"]] if "entity" in card else []
@@ -1639,6 +1646,7 @@ class TestComfortDashboard:
             "input_datetime.comfort_weekday_start", "input_datetime.comfort_weekend_start", "input_datetime.comfort_window_end",
             "input_number.comfort_margin", "input_boolean.comfort_water_dry_run", "input_number.comfort_hysteresis",
             "input_number.comfort_dhw_target", "input_boolean.comfort_helpers_seeded",
+            app.args["climate_plan"]["mode_entity"], app.args["climate_plan"]["status_entity"],
         }
         for name in ROOMS:
             wanted |= {f"climate.thermostat_{name}", f"input_number.comfort_floor_{name}", f"input_number.comfort_day_minimum_{name}"}
