@@ -237,3 +237,14 @@ Differences from the plan above, checked against the image's own `--help` and so
   `ls`/`du` on the 2.4.0 pod): the cache is reused (static evidence; the first start log is the check).
 - The startup probe allows 60 failures x 5 s (was 30) as insurance against a re-download.
 - Log level is the default (INFO, no `--debug`); transcripts are logged only at DEBUG in this image.
+
+### Verification result 2026-11-05
+
+Synced at 15:50Z (ArgoCD about 3 minutes after the push), pod Running after 42 s with 0 restarts, the
+ExternalSecret `SecretSynced`, no model download, no CUDA error. The log at INFO shows only
+`Biasing toward names from <HA API>` and `Ready`, then `Processing audio` lines, no transcript lines (Loki: none;
+Vector `drop_voice_transcripts` stopped increasing). Direct Wyoming round trip with 10 synthetic Spanish
+commands twice: stop-to-transcript p50 0.91 s (max 0.95 s) against 0.86 s on 2.4.0 measured with the same clips
+the same day; the three differing transcripts (digits for number words, one "Con" for "Pon") were identical on
+2.4.0. GPU memory 1141 MiB before, 1101 MiB after. Not verified: the number of names in the hint list (logged at
+DEBUG only) and the 20-command spot check by the owner.
