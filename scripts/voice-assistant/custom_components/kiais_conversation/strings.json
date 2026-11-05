@@ -1,0 +1,35 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "base_url": "Gateway base URL (OpenAI-compatible, ending in /v1)",
+          "api_key": "API key",
+          "model": "Model"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach the gateway",
+      "invalid_auth": "Invalid API key",
+      "unknown_model": "The gateway does not list this model"
+    },
+    "abort": {
+      "already_configured": "This gateway and model are already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "prompt": "Instructions (system prompt)",
+          "llm_hass_api": "Control Home Assistant (LLM APIs)",
+          "temperature": "Temperature",
+          "max_tokens": "Maximum tokens per answer",
+          "timeout": "Timeout in seconds without data from the gateway",
+          "max_history": "User turns of history to keep (0 keeps all)"
+        }
+      }
+    }
+  }
+}

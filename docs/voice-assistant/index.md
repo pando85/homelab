@@ -10,6 +10,9 @@ services.
 - [Conversation agent evaluation](experiments/conversation-agent-eval.md): Kiais gateway metrics,
   the dry-run harness in `scripts/voice-assistant/agent_eval/`, Spanish test phrases, and which
   requests Home Assistant's built-in intents already handle.
+- [Kiais as the conversation agent](kiais-integration.md): core and HACS options compared, the
+  `kiais_conversation` custom component verified on a throwaway Home Assistant 2026.10.4 with
+  `prefer_local_intents`, and the deployment and rollback steps awaiting approval.
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.
