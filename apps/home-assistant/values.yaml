@@ -251,6 +251,86 @@ app-template:
                 periodSeconds: 5
       pod:
         affinity: *affinity
+
+    # 90-day expiry and size guard for the voice audio that Home Assistant writes to the
+    # home-assistant-voice-recordings volume (docs/voice-assistant/data-register.md). The ZFS
+    # volume is pinned to its node and `shared: yes` lets this pod mount it while Home Assistant
+    # runs. Runs as the Home Assistant user (defaultPodOptions), which owns the files.
+    # Logs counts and usage only, never paths or contents.
+    voice-recordings-cleanup:
+      type: cronjob
+      cronjob:
+        schedule: "15 4 * * *"
+        timeZone: Europe/Madrid
+        concurrencyPolicy: Forbid
+        startingDeadlineSeconds: 21600
+        successfulJobsHistory: 1
+        failedJobsHistory: 3
+        backoffLimit: 2
+        activeDeadlineSeconds: 3600
+        ttlSecondsAfterFinished: 604800
+      pod:
+        restartPolicy: Never
+        automountServiceAccountToken: false
+      containers:
+        cleanup:
+          image:
+            # renovate: datasource=docker depName=busybox
+            repository: busybox
+            tag: 1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+          command:
+            - sh
+            - -ec
+            - |
+              ROOT=/recordings
+              RETENTION_DAYS=90
+              HIGH_PCT=90
+              LOW_PCT=85
+              [ -d "$ROOT" ] || { echo "missing $ROOT"; exit 1; }
+              # 1. Age expiry: -mtime +89 matches files last written at least 90 full days ago.
+              n=$(find "$ROOT" -mindepth 1 -type f -mtime +$((RETENTION_DAYS - 1)) -print -delete | wc -l)
+              echo "expired files: $n"
+              # 2. Size guard: above HIGH_PCT used, delete whole run directories (the parent of
+              #    the WAV files), oldest last write first, until usage is back to LOW_PCT.
+              #    Directories written in the last 10 minutes (open runs) are never touched.
+              set -- $(df -Pk "$ROOT" | awk 'NR == 2 { print $2, $3 }')
+              total_k=$1
+              used_k=$2
+              echo "usage: $((used_k * 100 / total_k))% of $((total_k / 1048576)) GiB"
+              if [ $((used_k * 100)) -gt $((total_k * HIGH_PCT)) ]; then
+                excess_k=$((used_k - total_k * LOW_PCT / 100))
+                now=$(date +%s)
+                find "$ROOT" -type f -name '*.wav' -exec stat -c '%Y %s %n' {} + \
+                  | awk -v now="$now" '{
+                      p = $0; sub(/^[0-9]+ [0-9]+ /, "", p)
+                      d = p; sub(/\/[^\/]*$/, "", d)
+                      if ($1 > mt[d]) mt[d] = $1
+                      sz[d] += $2
+                    }
+                    END { for (d in mt) if (now - mt[d] > 600) print mt[d], int(sz[d] / 1024), d }' \
+                  | sort -n \
+                  | {
+                      removed=0
+                      freed_k=0
+                      while read -r mt kb dir; do
+                        [ "$freed_k" -lt "$excess_k" ] || break
+                        rm -rf -- "$dir"
+                        freed_k=$((freed_k + kb))
+                        removed=$((removed + 1))
+                      done
+                      echo "size guard: removed $removed run dirs, $((freed_k / 1024)) MiB"
+                    }
+              fi
+              # 3. Prune empty directories untouched for an hour (Home Assistant recreates the
+              #    parents for every run). Directories emptied by step 1 go on the next run.
+              n=$(find "$ROOT" -mindepth 1 -depth -type d -empty -mmin +60 -print -delete | wc -l)
+              echo "pruned empty dirs: $n"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 128Mi
   defaultPodOptions:
     terminationGracePeriodSeconds: 1
 
@@ -365,6 +445,18 @@ app-template:
         hass:
           hass:
             - path: /config
+    # Voice audio (assist_pipeline debug_recording_dir in config/configuration.yaml). Outside
+    # /config (backed up) and /media (HA media browser). PVC: templates/pvc-voice-recordings.yaml.
+    voice-recordings:
+      enabled: true
+      existingClaim: home-assistant-voice-recordings
+      advancedMounts:
+        hass:
+          hass:
+            - path: /voice-recordings
+        voice-recordings-cleanup:
+          cleanup:
+            - path: /recordings
     configmap:
       enabled: true
       type: configMap

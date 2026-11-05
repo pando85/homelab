@@ -46,7 +46,8 @@ The accuracy rows come from synthetic Spanish audio, not real household use; see
 | No local fallback LLM | Kiais availability is treated as Home Assistant's own ([Decisions 2026-11-05](conversation-agent.md#decisions-2026-11-05)). |
 | No small LLM on the GTX 1060 (router, STT corrector or home agent) | Rejected by measurement ([Small local models](experiments/small-local-models.md)). |
 | Transcripts re-enabled in Loki for the Whisper stream, 180-day retention | Needed to validate against real usage; see section 5. |
-| No audio collection for now | Revisit only with workstream e. |
+| No audio collection for now | Superseded the same day by the next row. |
+| Audio collection on (owner approval 2026-11-05): Home Assistant keeps the audio of every pipeline run for 90 days, including the continuous wake-stage room audio while the satellites listen | Real household audio for wake word, AEC / front-end and speech-to-text work. Cluster storage only, no backup, agents see counts and sizes only; section 5 and the [data register](data-register.md) (datasets 5 and 6). |
 | Local models only for any decision model; no cloud API | Privacy; no household text leaves the cluster or the workstation. |
 
 ## 4. Workstreams
@@ -57,7 +58,7 @@ The accuracy rows come from synthetic Spanish audio, not real household use; see
 | b | Whisper | Done (3.8.1.1 live) | Confirm the hint-list effect on real commands | Owner provides real commands |
 | c | Real-usage validation | Collecting | Offline replay of the collected transcripts | Owner reviews samples |
 | d | Decision model ("Kivi decider") | Validating value | P0 zero-shot baselines and headroom analysis | Headroom meaningful, then owner |
-| e | Whisper fine-tuning | Future, not now | Wait for real data and AEC work | Owner consent, household consent |
+| e | Whisper fine-tuning | Collecting audio (from 2026-11-05) | Fine-tune only after the AEC work, on the collected request audio | Owner (approved the collection 2026-11-05) |
 | f | Later / backlog | Not started | See below | Owner |
 
 ### a. Wake word "Kivi"
@@ -201,11 +202,28 @@ How it changes P4 (proposal, owner decides):
    zero-shot Laya multilingual was near chance on action and area in Spanish; the component adds no
    fine-tuning or Spanish data. The P3 gates stay as they are.
 
-### e. Whisper fine-tuning (future, not now)
+### e. Whisper fine-tuning (audio collection started, fine-tuning later)
 
-Only if real data shows ASR errors dominate, and after the AEC / front-end work. Opt-in audio with
-household consent, kept local for 90 days, LoRA on large-v3-turbo, evaluated on a held-out real set
-against the base model.
+Audio collection started on 2026-11-05 on the owner's approval: Home Assistant's `assist_pipeline`
+debug recording keeps the request audio and the continuous wake-stage room audio of every run for
+90 days, on the cluster volume `home-assistant-voice-recordings` ([data register](data-register.md),
+datasets 5 and 6). Fine-tuning itself still waits: only if real data shows ASR errors dominate, and
+after the AEC / front-end work. Then LoRA on large-v3-turbo, evaluated on a held-out real set against
+the base model. The wake-stage audio also serves the wake word (workstream a) and AEC work.
+
+#### Related project: paulglavin/VoicePipeline (reviewed 2026-11-05)
+
+Not adopted. A server-side Wyoming STT wrapper: offline DTLN noise suppression, Silero VAD,
+WeSpeaker speaker ID and English STT; no AEC and no wake word. MIT, a single-author hobby project
+with no tests. Ideas borrowed into this plan:
+
+1. **Review and labelling loop for the recorded audio**, needed before the recordings can train the
+   wake word, AEC or STT: the stored WAV with its transcript and scores, a Pending queue of
+   low-confidence items, owner confirm or reject, and an append-only labels table.
+2. **Experiment: a blind noise suppressor arm** (DTLN or RNNoise; off, on and a 50 % blend) in the
+   synthetic noise benchmark and the live A/B runner. Expected gain is modest; AEC remains the main
+   fix.
+3. **Parked: speaker ID**, for per-person replies or for rejecting TV voices.
 
 ### f. Later / backlog
 
@@ -222,7 +240,9 @@ Purpose-limited: transcripts are collected only to validate the assistant on rea
 (global 180-day retention, no separate stream rule), and analysed locally; derived replay datasets on the workstation are deleted at the end of the experiment, at most 30 days. Agents see aggregates only (counts, miss rates,
 categories); no transcript text goes to any AI service or cloud. Samples are shown only to the
 owner. Nothing private is committed to git. Transcripts expire with the 180-day retention; stopping means
-reverting the exception commit. No audio is collected. Policy and checked locations:
+reverting the exception commit. Audio of every pipeline run (request audio and the continuous
+wake-stage room audio) is kept for 90 days on a cluster volume from 2026-11-05, on the owner's
+approval; agents never open or listen to it and report counts and sizes only. Policy and checked locations:
 [Log policy](stt-hint-list-and-learning.md#8-log-policy-voice-transcripts-in-loki-temporary-exception);
 [data register](data-register.md).
 
@@ -236,6 +256,6 @@ reverting the exception commit. No audio is collected. Policy and checked locati
    Related: for P4, confirm "own thin agent, borrowing the home-assistant-laya structure" instead of
    installing or forking that component (workstream d).
 5. Approve any live Home Assistant change: shadow-mode conversation agent, entity cleanup.
-6. Decide whether, and when, to open the audio collection for Whisper fine-tuning, with household
-   consent.
+6. Decided 2026-11-05: audio collection is on (90 days, including wake-stage room audio). Household
+   consent is the owner's responsibility.
 7. Confirm whether the 180-day transcript retention stays or is shortened once the validation is done.
