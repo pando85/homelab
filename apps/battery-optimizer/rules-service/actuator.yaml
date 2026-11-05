@@ -114,3 +114,35 @@
       The actuator could not request {{ $value | printf "%.0f" }} W of the planned battery power for
       30 minutes (import cap or the PD target entity max). Check number.omnibattery_system_max_charge_power
       and switch.omnibattery_system_power_limits (see the app repo's known issues).
+- alert: BatteryGridExport
+  # The Shelly's own export counter integrates sub-second, so it catches spikes the 1-minute scrape
+  # of the power sensor misses. max by (entity) collapses the duplicate series the HA exporter
+  # leaves after a pod IP change. Expected at discharge_margin_w 100: about 1 Wh/day.
+  expr: |
+    increase(
+      (max by (entity) (hass_sensor_energy_kwh{entity="sensor.shellyem_main_channel_1_energy_returned"}))[24h:1m]
+    ) > 0.005
+  labels:
+    severity: warning
+  annotations:
+    summary: more than 5 Wh was exported to the grid in the last 24 hours
+    description: |
+      The grid export counter rose by {{ $value | humanize }} kWh in 24 hours; the battery should
+      discharge into the house without exporting. Likely causes: actuation.discharge_margin_w too
+      small, Omnibattery PD loop oscillation, the battery holding a discharge while Home Assistant
+      is down, a sudden load drop. First check the Battery dashboard, actuation.discharge_margin_w in
+      files/service.yaml and the input_boolean.battery_optimizer_live kill switch.
+- alert: BatteryGridExportSustained
+  # More than 10 Wh in 15 minutes is about 40 W of average export: the control loop is not holding.
+  expr: |
+    increase(
+      (max by (entity) (hass_sensor_energy_kwh{entity="sensor.shellyem_main_channel_1_energy_returned"}))[15m:1m]
+    ) > 0.01
+  labels:
+    severity: critical
+  annotations:
+    summary: the battery is exporting to the grid, the control loop is not holding
+    description: |
+      The grid export counter rose by {{ $value | humanize }} kWh in 15 minutes (over 40 W average).
+      Check the Battery dashboard, actuation.discharge_margin_w in files/service.yaml and, if the
+      export continues, turn input_boolean.battery_optimizer_live off to hand control back.
