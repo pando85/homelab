@@ -17,6 +17,10 @@ services.
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.
+- [Building the Whisper STT image on Forgejo](whisper-image-build.md): plan (not executed) to
+  rebuild the owner's CUDA Whisper image on `wyoming-faster-whisper[hass]` 3.8.1 with Forgejo
+  Actions and registry, options compared, Pascal sm_61 and driver checks, GitOps cutover,
+  rollback to 2.4.0.
 
 Results of evaluation runs (per-phrase JSON) are private and never committed; the harness writes
 them outside this repository.
