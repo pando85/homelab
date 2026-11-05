@@ -103,7 +103,9 @@ def chat_stream(base_url, model, messages, tools=None, api_key=None, timeout=90.
                         if tc.get("id"):
                             slot["id"] = tc["id"]
                         fn = tc.get("function") or {}
-                        if fn.get("name"):
+                        # OpenAI sends the name once; some backends behind the gateway repeat the
+                        # whole name in every chunk (seen on Kiais), so only append a different piece.
+                        if fn.get("name") and fn["name"] != slot["name"]:
                             slot["name"] += fn["name"]
                         if fn.get("arguments"):
                             slot["arguments"] += fn["arguments"]

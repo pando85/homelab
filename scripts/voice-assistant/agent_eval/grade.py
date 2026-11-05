@@ -106,7 +106,18 @@ def eval_alt(alt, calls, text, read_only):
             return False, "expected call not found (tool/targets/args)"
         used.add(idx)
     if reqs:
-        extras = [c for i, c in enumerate(calls) if i not in used and c.get("ok") and _is_state_changing(c, read_only)]
+        def tolerated(c):
+            """A repeat of a matched tool whose targets stay inside that request's targets_within
+            (acting device by device instead of one call) is not an extra action."""
+            for req in reqs:
+                tools = req.get("tool")
+                tools = [tools] if isinstance(tools, str) else (tools or [])
+                if "targets_within" in req and (not tools or c["name"] in tools) \
+                        and set(c.get("targets") or []) <= set(req["targets_within"]):
+                    return True
+            return False
+        extras = [c for i, c in enumerate(calls) if i not in used and c.get("ok")
+                  and _is_state_changing(c, read_only) and not tolerated(c)]
         if extras:
             return False, "extra state-changing call: " + extras[0]["name"]
     if alt.get("tools_any") and not any(c["name"] in alt["tools_any"] for c in calls):
@@ -116,12 +127,12 @@ def eval_alt(alt, calls, text, read_only):
             return False, "state-changing call succeeded on a missing target"
         if CLAIM_RE.search(text):
             return False, "claims success"
-    if alt.get("answer_regex") and not re.search(alt["answer_regex"], text):
+    if alt.get("answer_regex") and not re.search(alt["answer_regex"], text, re.I):
         return False, "answer_regex not found"
     for rx in alt.get("answer_regex_all") or []:
-        if not re.search(rx, text):
+        if not re.search(rx, text, re.I):
             return False, "answer_regex_all missing: " + rx
-    if alt.get("must_not_regex") and re.search(alt["must_not_regex"], text):
+    if alt.get("must_not_regex") and re.search(alt["must_not_regex"], text, re.I):
         return False, "forbidden pattern present (invented data)"
     if alt.get("limitation") and not LIMITATION_RE.search(text):
         return False, "does not state it cannot know/consult this"

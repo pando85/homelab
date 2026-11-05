@@ -61,7 +61,7 @@ control:
   - {id: c33, kind: action, text: "Apaga el ventilador del dormitorio", expect: {tool: intent__HassTurnOff, targets: [fan.dormitorio_ventilador]}}
   - {id: c34, kind: action, text: "Pon el ventilador al cincuenta por ciento", expect: {tool: fan__HassFanSetSpeed, targets: [fan.dormitorio_ventilador], args: {percentage: 50}}}
   # ---- state questions (read the live context) ----
-  - {id: c35, kind: state, text: "¿Qué temperatura hace en el salón?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "22[.,]4|22 coma 4|veintidós"}}
+  - {id: c35, kind: state, text: "¿Qué temperatura hace en el salón?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "22[.,]4|22 coma 4|veintidós|22 grados y (4|cuatro) décimas"}}
   - {id: c36, kind: state, text: "¿Está encendida la luz de la cocina?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "(?i)(no está|está apagada|apagada|\\bno\\b)"}}
   - {id: c37, kind: state, text: "¿Está abierta la persiana del dormitorio?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "(?i)(cerrada|no está abierta|\\bno\\b)"}}
   # ---- colloquial and ambiguous ----

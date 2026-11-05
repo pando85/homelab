@@ -327,8 +327,11 @@ class FakeHome:
         except (TypeError, ValueError, KeyError) as exc:
             return self._err(f"value error: {exc}", "Invalid")
 
+    # Domains the on/off tools can act on; sensors, weather and calendars are never targets.
+    ONOFF_DOMAINS = ["light", "switch", "fan", "cover", "valve", "media_player", "climate", "button"]
+
     def _onoff(self, args, on):
-        ids, err = self.resolve(args)
+        ids, err = self.resolve(args, domains=self.ONOFF_DOMAINS)
         if err:
             return self._err(err)
         return self._ok(ids)

@@ -334,6 +334,33 @@ def cmd_run(args):
     print("results:", run_dir)
 
 
+def cmd_regrade(args):
+    """Re-execute the stored tool calls on the current fake home and re-grade every turn offline
+    (no requests). Use after fixing the resolver or an expectation; the model saw the old results."""
+    items = {i["id"]: i for i in load_phrases(args.phrases)}
+    home = ha_fake.FakeHome(args.inventory)
+    n = 0
+    for d in args.dirs:
+        for path in sorted(glob.glob(os.path.join(d, "*_r*.json"))):
+            with open(path, encoding="utf-8") as fh:
+                rec = json.load(fh)
+            item = items.get(rec["id"])
+            if not item:
+                continue
+            for turn, spec in zip(rec["turns"], item["turns"]):
+                for rnd in turn["rounds"]:
+                    for c in rnd["tool_calls"]:
+                        if c["args"] is None:
+                            continue
+                        result, meta = home.execute(c["name"], c["args"])
+                        c.update(ok=meta["ok"], targets=meta["targets"], meta_args=meta["args"], result=result)
+                turn["grade"] = grade.grade_turn(spec["expect"], turn, ha_fake.READ_ONLY_TOOLS)
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(rec, fh, ensure_ascii=False, indent=1)
+            n += 1
+    print(f"re-graded {n} records")
+
+
 def cmd_summarize(args):
     groups = summarize(load_records(args.dirs))
     print(render_table(groups))
@@ -375,6 +402,11 @@ def main(argv=None):
     p.add_argument("--total-budget", type=int, default=600, help="cap across runs per host (ledger); 0 disables")
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_run)
+    p = sub.add_parser("regrade", help="re-execute stored calls and re-grade offline (no requests)")
+    p.add_argument("dirs", nargs="+")
+    p.add_argument("--phrases", default=None)
+    p.add_argument("--inventory", default=None)
+    p.set_defaults(fn=cmd_regrade)
     p = sub.add_parser("summarize", help="summary table from result directories")
     p.add_argument("dirs", nargs="+")
     p.set_defaults(fn=cmd_summarize)

@@ -160,6 +160,11 @@ class FakeHomeTests(unittest.TestCase):
         self.assertIn("22.4", res["result"])
         self.assertNotIn("Cocina", res["result"])
 
+    def test_area_wide_off_skips_sensors(self):
+        _, m = self.h.execute("intent__HassTurnOff", {"area": "Cocina"})
+        self.assertEqual(set(m["targets"]), {"light.cocina_techo", "light.cocina_encimera",
+                                              "media_player.altavoz_cocina", "switch.cafetera"})
+
     def test_unknown_tool(self):
         res, m = self.h.execute("nope__Tool", {})
         self.assertFalse(m["ok"])
@@ -201,6 +206,15 @@ class Grading(unittest.TestCase):
         self.assertEqual(grade.grade_turn(exp, turn([], "¿En qué habitación?"), RO)["status"], "pass")
         self.assertEqual(grade.grade_turn(exp, turn([], "Hecho."), RO)["status"], "fail")
         self.assertEqual(grade.grade_turn(exp, turn([call("intent__HassTurnOn", targets=["x"])], "ok"), RO)["status"], "pass")
+
+    def test_answers_are_case_insensitive_and_device_by_device_is_tolerated(self):
+        self.assertEqual(grade.grade_turn({"no_tool": True, "answer_regex": "29|veintinueve"},
+                                          turn([], "Veintinueve días."), RO)["status"], "pass")
+        exp = {"tool": "intent__HassTurnOff", "targets_include": ["a"], "targets_within": ["a", "b"]}
+        t = turn([call("intent__HassTurnOff", targets=["a"]), call("intent__HassTurnOff", targets=["b"])])
+        self.assertEqual(grade.grade_turn(exp, t, RO)["status"], "pass")
+        t = turn([call("intent__HassTurnOff", targets=["a"]), call("intent__HassTurnOff", targets=["z"])])
+        self.assertEqual(grade.grade_turn(exp, t, RO)["status"], "fail")
 
     def test_comparison_predicates(self):
         self.assertTrue(grade.match_arg(">=26", 30))
@@ -263,6 +277,20 @@ class ClientAndRunner(unittest.TestCase):
         self.assertEqual(r["tool_calls"][0]["name"], "intent__HassTurnOn")
         self.assertEqual(r["tool_calls"][0]["args"], {"area": "Salón", "domain": ["light"]})
         self.assertIsNotNone(r["ttft_s"])
+
+    def test_tool_name_repeated_in_every_chunk(self):
+        chunks = [{"model": "m", "choices": [{"delta": {"tool_calls": [
+                    {"index": 0, "id": "c1", "function": {"name": "intent__HassTurnOn", "arguments": '{"area"'}}]}}]},
+                  {"model": "m", "choices": [{"delta": {"tool_calls": [
+                    {"index": 0, "id": "c1", "function": {"name": "intent__HassTurnOn", "arguments": ': "Salón"}'}}]},
+                    "finish_reason": "tool_calls"}]}]
+        srv = FakeServer([sse(*chunks)])
+        try:
+            r = client.chat_stream(srv.url, "fast", [{"role": "user", "content": "x"}])
+        finally:
+            srv.close()
+        self.assertEqual(r["tool_calls"][0]["name"], "intent__HassTurnOn")
+        self.assertEqual(r["tool_calls"][0]["args"], {"area": "Salón"})
 
     def test_http_error_is_reported_not_raised(self):
         srv = FakeServer([], status=401)
