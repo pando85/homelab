@@ -141,10 +141,13 @@ threshold 0.5 (= raw 0.98).
 - The private repository `agil/kivi-models` builds an image on a version tag
   (`.forgejo/workflows/image.yml`): busybox pinned by digest with the served file at
   `/models/kivi.tflite`, checked against the version's `SHA256SUMS` inside the build, and the label
-  `cloud.grigri.kivi.model.sha256`. It is pushed to the **private organisation** `grigri`:
-  `git.grigri.cloud/grigri/kivi-models:v1-2026-11-05@sha256:11619a832a4c58638ac309600ab0358a7665f431724620bcc932d3de67794f1c`.
-  An anonymous pull is refused (checked). The user `agil` is public, and its packages can be pulled
-  anonymously, so the image must never be published there.
+  `cloud.grigri.kivi.model.sha256`. It is pushed as a package of the user `agil`, linked to the
+  repository:
+  `git.grigri.cloud/agil/kivi-models:v1-2026-11-05@sha256:9e51e0c9dba009480f0706da8f90f178380fd72fceeb05e9e148555bb178b40c`.
+  An anonymous pull is refused (checked). Packages take the visibility of their owner, not of the
+  repository, so this holds only while `agil` stays "limited" (set on 2026-11-05); the image was
+  first published under the private organisation `grigri` for that reason, and moved once `agil`
+  became limited.
 - The init container `01-copy-kivi` of the `openwakeword` controller runs that image and copies the
   file into an `emptyDir` (16Mi), mounted read-only at `/custom` in the server, which runs with
   `--custom-model-dir /custom` (model id = file stem, `kivi`). Its log is the `sha256sum` of the
@@ -188,7 +191,7 @@ config entry reload was needed: `wake_word/info` listed `kivi` right after the p
    fields unchanged (or Settings > Voice assistants > Kiwi > wake word "alexa"). The open satellite
    runs restart on the update. `alexa` stays loaded, so this alone is a full functional rollback.
 2. Optionally remove the init container, the `kivi-model` volume and `--custom-model-dir` in
-   GitOps. The image can stay in the registry (private) or be deleted from the `grigri` packages.
+   GitOps. The image can stay in the registry (private) or be deleted from the `agil` packages.
 
 ## Real-voice test for the owner (written, not run)
 

@@ -30,9 +30,11 @@ Summary of the decisions (details and evidence in that repository):
 - Tags are `<upstream version>.<revision>` (first planned: `3.8.1.1`), created by a human after the canary;
   no `latest`.
 - Pull access: the nodes' containerd already has a read-only credential for `git.grigri.cloud`
-  (`metal/roles/k3s/templates/host.toml.j2`, the owner's own account, pull/resolve only), so a private
-  package owned by that account needs no `imagePullSecret` here. Observed for private `multivara/*`
-  images; a pull of this package is **not yet verified** (no image exists).
+  (`metal/roles/k3s/templates/host.toml.j2`, the owner's own account, pull/resolve only), so a
+  package owned by that account needs no `imagePullSecret` here (verified: the cluster runs this image).
+- Visibility: a package takes the visibility of its **owner**, not of the repository. Until
+  2026-11-05 the user `agil` was public and this image could be pulled anonymously although the
+  repository is private; since `agil` became "limited" that day, anonymous pulls are refused.
 - Fallback if the runners' disks are at risk: build on GitHub and publish to `ghcr.io/pando85/wyoming-whisper`
   (only the image name changes here).
 

@@ -180,16 +180,16 @@ happened, how it was found, what fixed it, and what now guards against a repeat.
   cluster already pulls private images from `git.grigri.cloud` with the nodes' containerd credential
   (`metal/roles/k3s/templates/host.toml.j2`), so an image needs no new credential at all.
 - **Second pitfall found on the way:** a Forgejo package takes the visibility of its **owner**, not
-  of its repository. The user `agil` is public, so `git.grigri.cloud/agil/<name>` images can be pulled
-  anonymously even when the repository is private (checked: an anonymous pull of
-  `agil/wyoming-whisper` resolves). Packages of a private organisation (`grigri`, `multivara`) refuse
-  anonymous pulls.
+  of its repository. While the user `agil` was public, `git.grigri.cloud/agil/<name>` images could be
+  pulled anonymously even when the repository was private (checked: an anonymous pull of
+  `agil/wyoming-whisper` resolved). The owner set `agil` to "limited" on 2026-11-05; since then
+  anonymous pulls of its packages are refused. A detour through a private organisation is not
+  needed.
 - **How detected:** owner review of the first design; the anonymous pull test before publishing the
   model image.
-- **Fix:** the model is published as a private image `git.grigri.cloud/grigri/kivi-models:<version>`
-  (built by the `agil/kivi-models` workflow on a version tag), pinned by tag and digest, and an init
-  container copies it into an `emptyDir`. No token, Vault entry, bot or PVC.
+- **Fix:** the model is published as a private image `git.grigri.cloud/agil/kivi-models:<version>`,
+  linked to the repository and built by its workflow on a version tag, pinned by tag and digest in
+  GitOps; an init container copies it into an `emptyDir`. No token, Vault entry, bot or PVC.
 - **Guard:** prefer a private image pulled with the existing node credential for any
-  licence-restricted file the cluster needs. Publish such images only under a private organisation
-  and check an anonymous pull is refused after every release (the `agil/kivi-models` README says
-  so).
+  licence-restricted file the cluster needs. Keep the owner `agil` limited (or private) and check an
+  anonymous pull is refused after every release (the `agil/kivi-models` README says so).

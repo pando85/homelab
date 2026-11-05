@@ -197,14 +197,15 @@ app-template:
       initContainers:
         # Copies the custom "kivi" wake word (licence-restricted, never committed here) from a
         # private image into the server's --custom-model-dir. The image is built from the private
-        # repository agil/kivi-models and published to the PRIVATE organisation grigri; the nodes
-        # pull it with their containerd credential for git.grigri.cloud, like the whisper image.
+        # repository agil/kivi-models (package owner agil, which must stay "limited": packages take
+        # their owner's visibility); the nodes pull it with their containerd credential for
+        # git.grigri.cloud, like the whisper image.
         # Swap versions by changing the tag and digest (docs/voice-assistant/model-registry.md).
         01-copy-kivi:
           image:
             # No renovate hint: Renovate cannot read the private registry; one tag per model version.
-            repository: git.grigri.cloud/grigri/kivi-models
-            tag: v1-2026-11-05@sha256:11619a832a4c58638ac309600ab0358a7665f431724620bcc932d3de67794f1c
+            repository: git.grigri.cloud/agil/kivi-models
+            tag: v1-2026-11-05@sha256:9e51e0c9dba009480f0706da8f90f178380fd72fceeb05e9e148555bb178b40c
           command:
             - sh
             - -ec
