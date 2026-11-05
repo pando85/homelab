@@ -8,7 +8,7 @@ test shows every violation at once. The oracles recompute the expected behaviour
 from collections import defaultdict
 from datetime import datetime, time, timedelta
 
-from tests.comfort_sim import FORCE_DHW, SENSOR, TZ, Z1_HELPER, day_window, local
+from tests.comfort_sim import FORCE_DHW, ROOMS, SENSOR, TZ, Z1_HELPER, day_window, local
 
 APP = "comfort_control"
 HALL_ENTITY = "climate.thermostat_hall_kitchen"
@@ -94,6 +94,48 @@ def early_start(sim, day):
 def hall_setpoint(sim, at):
     record = record_at(sim, at)
     return None if record is None else record.setpoints[0]
+
+
+def room_setpoints(floors, day_minimums, kind, margin=0.5):
+    """The setpoints the design gives each room (ROOMS order): floor + margin, or inside the day
+    window max(day minimum, floor) + margin. An oracle: plain arithmetic on the helper values."""
+    return tuple(
+        (max(floors[room], day_minimums[room]) if kind == "day" else floors[room]) + margin for room in ROOMS
+    )
+
+
+def room_setpoint_tuple(sim, at):
+    record = record_at(sim, at)
+    return None if record is None else record.setpoints
+
+
+def check_room_boundaries(sim, days, expected, skip=()):
+    """Every room's setpoint after the early start (one early start for all rooms), before the
+    window end and after it. `expected(day, kind, at)` gives the four setpoints (ROOMS order)."""
+    problems = []
+    for day in days:
+        if day in skip:
+            continue
+        early, lead = early_start(sim, day)
+        if early is None:
+            problems.append(f"{day}: no outdoor samples for the band")
+            continue
+        _, previous_end = day_window(day - timedelta(days=1))
+        _, end = day_window(day)
+        checks = [
+            (early + timedelta(minutes=2), "day", "after the early start"),
+            (end - timedelta(minutes=2), "day", "before the window end"),
+        ]
+        if early > previous_end:
+            checks.append((early - timedelta(minutes=1), "night", "just before the early start"))
+        next_early, _ = early_start(sim, day + timedelta(days=1))
+        if next_early is not None and next_early > end:
+            checks.append((end + timedelta(minutes=2), "night", "after the window end"))
+        for at, kind, label in checks:
+            want, got = expected(day, kind, at), room_setpoint_tuple(sim, at)
+            if got != tuple(want):
+                problems.append(f"{day} {label} ({at:%m-%d %H:%M}): setpoints {got}, expected {tuple(want)}")
+    return problems
 
 
 def check_boundaries(sim, days, skip=()):

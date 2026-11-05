@@ -205,7 +205,11 @@ def test_ha_restart_with_helpers_reset_reseeds_and_never_uses_the_minimums():
     restart = local(2027, 1, 19, 14, 0)
     after = [r for r in sim.records if restart <= r.at < restart + timedelta(days=2)]
     assert all(value is None or value >= 21.5 for r in after for value in r.setpoints)
-    assert sim.ha.get("input_number.comfort_day_minimum") == "23.5"
+    # Every per-room helper is back at its default (a floor of 18 would have given 18.5 setpoints).
+    for room in ("hall_kitchen", "bedroom", "office_a", "office_t"):
+        assert sim.ha.get(f"input_number.comfort_floor_{room}") == "21.0"
+    assert sim.ha.get("input_number.comfort_day_minimum_hall_kitchen") == "23.5"
+    assert sim.ha.get("input_number.comfort_day_minimum_bedroom") == "21.0"
     assert sim.ha.get("input_boolean.comfort_helpers_seeded") == "on"
     # Seeding turns the water dry run back on: the unit keeps the last request until the owner
     # turns it off again.
@@ -234,9 +238,13 @@ def test_garbage_helpers_fall_back_to_the_defaults():
     during = [r for r in sim.records if start < r.at < end]
     assert {r.setpoints[0] for r in during} <= {21.5, 24.0}
     assert all(value == 21.5 for r in during for value in r.setpoints[1:])
-    # Window end "25:99" -> 22:00; night floor 16 (out of range) -> 21.
+    # Window end "25:99" -> 22:00; bedroom floor 16 and office A floor "unavailable" (out of range
+    # or garbage) -> 21 each; office T day minimum 30 (above 26) -> 21.
     assert checks.hall_setpoint(sim, local(2027, 1, 14, 22, 2)) == 21.5
-    assert any("Helper day_minimum is 'abc'" in line[3] for line in sim.logs)
+    assert any("Helper day_minimum_hall_kitchen is 'abc'" in line[3] for line in sim.logs)
+    assert any("Helper floor_bedroom is '16.0'" in line[3] for line in sim.logs)
+    assert any("Helper floor_office_a is 'unavailable'" in line[3] for line in sim.logs)
+    assert any("Helper day_minimum_office_t is '30.0'" in line[3] for line in sim.logs)
 
 
 def test_disable_restores_heating_and_releases_force_dhw():

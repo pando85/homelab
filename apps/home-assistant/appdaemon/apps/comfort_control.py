@@ -73,11 +73,22 @@ DHW_TARGET_NOTIFY_ATTEMPTS = 3  # unconfirmed tank-target writes before the owne
 # battery SoC ~90-95 %, falling charge power or window end minus soak time; DHW still <= TANK_MAX.
 BOOST_ENABLED = False
 
+# Per-room comfort helpers: `floor_<room>` (the always-minimum) and `day_minimum_<room>` (the
+# minimum inside the shared day window). Defaults per room; the hall/kitchen is the only room that
+# is warmer than its floor in the day window by default.
+ROOM_FLOOR_DEFAULT = 21.0
+ROOM_DAY_MINIMUM_DEFAULTS = {"hall_kitchen": 23.5, "bedroom": 21.0, "office_a": 21.0, "office_t": 21.0}
+ROOM_HELPER_DEFAULTS = {
+    **{f"floor_{room}": ROOM_FLOOR_DEFAULT for room in ROOM_DAY_MINIMUM_DEFAULTS},
+    **{f"day_minimum_{room}": value for room, value in ROOM_DAY_MINIMUM_DEFAULTS.items()},
+}
+FLOOR_RANGE = (18.0, 23.0)
+DAY_MINIMUM_RANGE = (18.0, 26.0)
+
 # Default helper values, written once when the seeded flag is off (HA creates an input_number at
 # its minimum, and `initial:` would reset owner edits at every HA restart).
 HELPER_DEFAULTS = {
-    "day_minimum": 23.5,
-    "night_floor": 21.0,
+    **ROOM_HELPER_DEFAULTS,
     "margin": 0.5,
     "weekday_start": "12:00:00",
     "weekend_start": "09:00:00",
@@ -99,11 +110,14 @@ HELPER_DEFAULTS = {
     "dhw_target": 49,
 }
 TIME_HELPERS = ("weekday_start", "weekend_start", "window_end")
-# Sane range of each numeric helper. A value outside it (for example a helper that HA re-created at
-# its minimum) is treated as garbage and the default is used, with a warning.
+# Range of each numeric helper. It is IDENTICAL to the min/max of the input_number in
+# config/integrations/appdaemon_comfort.yaml (pinned by a test), so every value HA lets the owner
+# set is accepted and anything else (a hand-edited state, garbage) is replaced by the default with
+# a warning. A helper that HA re-created at its minimum is a valid value: that case is caught by
+# comfort_helpers_seeded going off (see _tick), not by this range.
 HELPER_RANGES = {
-    "day_minimum": (20.0, 26.0),
-    "night_floor": (18.0, 23.0),
+    **{f"floor_{room}": FLOOR_RANGE for room in ROOM_DAY_MINIMUM_DEFAULTS},
+    **{f"day_minimum_{room}": DAY_MINIMUM_RANGE for room in ROOM_DAY_MINIMUM_DEFAULTS},
     "margin": (0.0, 2.0),
     "hysteresis": (0.1, 1.5),
     **{f"lead_{day}_{band}": (0.0, 840.0) for day in ("weekday", "weekend") for band in ("cold", "mid", "mild")},
@@ -297,7 +311,8 @@ class Schedule:
     def early_start(self, day, lead_minutes):
         """The day-window setpoint write: window start minus the lead time (elapsed minutes, so
         DST days are right), never before the previous day's window end. When the lead time is
-        longer than the night, the hall/kitchen stays at its day setpoint overnight."""
+        longer than the night, the rooms stay at their day setpoints overnight. One early start
+        serves every room (the lead times are calibrated for the hall/kitchen)."""
         start, _ = self.window(day)
         _, previous_end = self.window(day - timedelta(days=1))
         early = start.astimezone(timezone.utc) - timedelta(minutes=lead_minutes)
@@ -574,13 +589,17 @@ class ComfortControl(hass.Hass):
         keep = {(today + timedelta(days=offset)).isoformat() for offset in (-1, 0, 1)}
         self.band_outdoor = {k: v for k, v in self.band_outdoor.items() if k in keep}
 
-    async def _schedule_setpoints(self, phase_kind):
-        floor = round_step(await self._helper("night_floor") + await self._helper("margin"))
-        setpoints = {room: floor for room in self.args["rooms"]}
+    async def _room_minimum(self, room, phase_kind):
+        """The comfort minimum of a room: its floor, or inside the day window the higher of its
+        floor and its day minimum (a day minimum below the floor never lowers the floor)."""
+        floor = await self._helper(f"floor_{room}")
         if phase_kind == "day":
-            day = await self._helper("day_minimum") + await self._helper("margin")
-            setpoints[self.args["day_room"]] = round_step(day)
-        return setpoints
+            return max(floor, await self._helper(f"day_minimum_{room}"))
+        return floor
+
+    async def _schedule_setpoints(self, phase_kind):
+        margin = await self._helper("margin")
+        return {room: round_step(await self._room_minimum(room, phase_kind) + margin) for room in self.args["rooms"]}
 
     async def _write_setpoints(self, setpoints, reason):
         """Write the setpoints that differ from the thermostat targets; return the written ones."""
@@ -697,10 +716,13 @@ class ComfortControl(hass.Hass):
         self.suggested.add(notification_id)
         values = ", ".join(f"{m['at']:%a %H:%M} {m['old']}->{m['new']}" for m in matches)
         mean_new = sum(m["new"] for m in matches) / len(matches)
+        floor = await self._helper(f"floor_{room}")
+        day_minimum = await self._helper(f"day_minimum_{room}")
         message = (
             f"{room}: setpoint {'raised' if direction == 'raise' else 'lowered'} by hand {len(matches)} times "
             f"around {hour:02d}:00 in the last 14 days ({values}; mean {mean_new:.1f} degC). Consider "
-            "changing the comfort helpers (day minimum, window times, night floor). Nothing was changed."
+            f"changing the comfort helpers of {room} (floor {floor:g}, day minimum {day_minimum:g} degC) "
+            "or the window times. Nothing was changed."
         )
         self.log(f"Suggestion: {message}")
         await self.call_service(
@@ -723,8 +745,8 @@ class ComfortControl(hass.Hass):
                 await self._publish_status("disabled", {})
                 return
             if not await self._is_on("seeded"):
-                # Helpers at their HA minimums would give 16-18 degC setpoints: no control until the
-                # defaults are written. No heartbeat either, so the HA watchdog restores heating.
+                # Helpers re-created at their HA minimums would give 18 degC setpoints (the floor
+                # minimum is a valid value): no control until the defaults are written. No heartbeat either, so the HA watchdog restores heating.
                 try:
                     await self._seed_helpers()
                 except Exception as error:

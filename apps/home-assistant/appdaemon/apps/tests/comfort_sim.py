@@ -645,6 +645,7 @@ class Scenario:
     legacy_min_hours: int = 12
     warmup_days: int = 2
     exclude: list = field(default_factory=list)  # (start tuple, end tuple): not measured (away)
+    helpers: dict = field(default_factory=dict)  # comfort helper entity -> value set before the start
 
 
 class Simulation:
@@ -745,6 +746,8 @@ class Simulation:
             ha.set(helpers["away"], "off")
             ha.set(helpers["seeded"], "on")
             ha.set(helpers["water_dry_run"], "off")  # the owner did the first-write test
+            for entity, value in scenario.helpers.items():
+                ha.set(entity, str(value))
             ha.watchdog = yaml.safe_load((CONFIG_DIR / "appdaemon_comfort.yaml").read_text())["automation"][0]
         else:
             ha.set("input_boolean.appdaemon_climate_enable", "on")
@@ -1226,6 +1229,14 @@ def parity_scenarios(controller):
 
 
 HALL, BEDROOM = "hall_kitchen", "bedroom"
+# Per-room scenario values: floor / day minimum (the margin stays 0.5 K). The office A day minimum
+# is below its floor, so the floor holds in the window too.
+PER_ROOM_FLOORS = {"hall_kitchen": 21.0, "bedroom": 22.0, "office_a": 20.0, "office_t": 21.0}
+PER_ROOM_DAY_MINIMUMS = {"hall_kitchen": 23.5, "bedroom": 22.5, "office_a": 18.0, "office_t": 22.5}
+PER_ROOM_HELPERS = {
+    **{f"input_number.comfort_floor_{room}": value for room, value in PER_ROOM_FLOORS.items()},
+    **{f"input_number.comfort_day_minimum_{room}": value for room, value in PER_ROOM_DAY_MINIMUMS.items()},
+}
 
 
 def comfort_scenarios():
@@ -1260,6 +1271,28 @@ def comfort_scenarios():
             ],
             # Away (and its recovery) and the night the owner chose 20.5 are not comfort periods.
             exclude=[((2026, 11, 6, 10, 0), (2026, 11, 10, 22, 0)), ((2026, 11, 11, 23, 15), (2026, 11, 12, 10, 0))],
+        ),
+        # Per-room minimums: a different floor and day minimum in every room. Away on a Monday
+        # morning and off on Tuesday afternoon (the day setpoints return per room), a garbage
+        # bedroom day minimum over one night boundary (it falls back to its own default), and a
+        # floor the owner raises on Saturday (it takes effect at the next boundary).
+        Scenario(
+            "per_room",
+            date(2026, 11, 2),
+            14,
+            "typical",
+            "double_peak",
+            seed=27,
+            helpers=PER_ROOM_HELPERS,
+            events=[
+                ((2026, 11, 9, 10, 0), "away", {"on": True}),
+                ((2026, 11, 10, 15, 0), "away", {"on": False}),
+                ((2026, 11, 12, 8, 0), "helper", {"entity": "input_number.comfort_day_minimum_bedroom", "value": "abc"}),
+                ((2026, 11, 13, 9, 0), "helper", {"entity": "input_number.comfort_day_minimum_bedroom", "value": "22.5"}),
+                ((2026, 11, 14, 8, 0), "helper", {"entity": "input_number.comfort_floor_office_t", "value": "22.0"}),
+            ],
+            # Away with its recovery, and the garbage-helper day (its setpoint is the default's).
+            exclude=[((2026, 11, 9, 10, 0), (2026, 11, 11, 22, 0)), ((2026, 11, 13, 0, 0), (2026, 11, 14, 0, 0))],
         ),
         Scenario("dst_spring", date(2027, 3, 20), 14, "dst", "weekend_negative", seed=23),
         Scenario("dst_fall", date(2026, 10, 17), 14, "dst", "double_peak", seed=24),
@@ -1374,18 +1407,23 @@ def fault_scenarios():
             force_auto_clear=False,
             events=[
                 ((2027, 1, 13, 3, 0), "hang_tick", {"minutes": 90, "mode": "DHW"}),
-                ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_day_minimum", "value": "abc"}),
+                # Garbage in the per-room helpers (each room falls back to its own default only).
+                ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_day_minimum_hall_kitchen", "value": "abc"}),
                 ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_hysteresis", "value": "-1"}),
                 ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_curve_cold_water", "value": "99"}),
                 ((2027, 1, 14, 8, 0), "helper", {"entity": "input_datetime.comfort_window_end", "value": "25:99"}),
                 ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_lead_weekday_cold", "value": "unknown"}),
-                ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_night_floor", "value": "16.0"}),
-                ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_day_minimum", "value": "23.5"}),
+                ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_floor_bedroom", "value": "16.0"}),
+                ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_floor_office_a", "value": "unavailable"}),
+                ((2027, 1, 14, 8, 0), "helper", {"entity": "input_number.comfort_day_minimum_office_t", "value": "30.0"}),
+                ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_day_minimum_hall_kitchen", "value": "23.5"}),
                 ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_hysteresis", "value": "0.3"}),
                 ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_curve_cold_water", "value": "32.0"}),
                 ((2027, 1, 15, 8, 0), "helper", {"entity": "input_datetime.comfort_window_end", "value": "22:00:00"}),
                 ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_lead_weekday_cold", "value": "675.0"}),
-                ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_night_floor", "value": "21.0"}),
+                ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_floor_bedroom", "value": "21.0"}),
+                ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_floor_office_a", "value": "21.0"}),
+                ((2027, 1, 15, 8, 0), "helper", {"entity": "input_number.comfort_day_minimum_office_t", "value": "21.0"}),
                 ((2027, 1, 17, 12, 0), "disable", {}),
                 ((2027, 1, 17, 18, 0), "enable", {}),
                 ((2027, 1, 19, 0, 0), "fault", {"key": "short_cycle", "value": True}),

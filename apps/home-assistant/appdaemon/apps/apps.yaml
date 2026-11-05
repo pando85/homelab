@@ -1,7 +1,9 @@
 comfort_control:
   module: comfort_control
   class: ComfortControl
-  # Thermostat rooms; day_room gets the day-window setpoint, every room the floor.
+  # Thermostat rooms. Every room has its own floor and day-minimum helpers (helpers below); the
+  # lead time (one early start for all rooms) is calibrated for day_room, which is also the room
+  # whose setpoint ends the optional early-start water raise.
   rooms:
     hall_kitchen: climate.thermostat_hall_kitchen
     bedroom: climate.thermostat_bedroom
@@ -16,8 +18,16 @@ comfort_control:
     water_dry_run: input_boolean.comfort_water_dry_run
     # Written by the app: today's DHW plan, restored by HA after a restart (one window per day).
     dhw_plan: input_text.comfort_dhw_plan
-    day_minimum: input_number.comfort_day_minimum
-    night_floor: input_number.comfort_night_floor
+    # Per room: floor_<room> always, day_minimum_<room> inside the day window (names are shared with
+    # the battery optimizer; do not rename).
+    floor_hall_kitchen: input_number.comfort_floor_hall_kitchen
+    floor_bedroom: input_number.comfort_floor_bedroom
+    floor_office_a: input_number.comfort_floor_office_a
+    floor_office_t: input_number.comfort_floor_office_t
+    day_minimum_hall_kitchen: input_number.comfort_day_minimum_hall_kitchen
+    day_minimum_bedroom: input_number.comfort_day_minimum_bedroom
+    day_minimum_office_a: input_number.comfort_day_minimum_office_a
+    day_minimum_office_t: input_number.comfort_day_minimum_office_t
     margin: input_number.comfort_margin
     weekday_start: input_datetime.comfort_weekday_start
     weekend_start: input_datetime.comfort_weekend_start

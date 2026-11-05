@@ -10,6 +10,7 @@ from comfort_control import (
     HELPER_DEFAULTS,
     HELPER_RANGES,
     MAX_STARTS_PER_DAY,
+    ROOM_DAY_MINIMUM_DEFAULTS,
     TANK_MAX,
     ComfortControl,
     Schedule,
@@ -136,7 +137,8 @@ def make_app(ha=None):
     with patch.object(ComfortControl, "__init__", lambda self: None):
         app = ComfortControl()
     app.args = yaml.safe_load((APPS_DIR / "apps.yaml").read_text())["comfort_control"]
-    app.log = lambda msg, level=None: print(f"{level or 'INFO'}: {msg}")
+    app.logs = []
+    app.log = lambda msg, level=None: (app.logs.append(msg), print(f"{level or 'INFO'}: {msg}"))
     app.get_timezone = lambda: TZ
     app._init_state()
     ha = ha or FakeHA(app, app.args)
@@ -850,7 +852,7 @@ class TestFailureBehaviour:
 
     @pytest.mark.asyncio
     async def test_helper_garbage_falls_back_to_defaults(self, app):
-        app.ha.put(app.args["helpers"]["day_minimum"], "unknown")
+        app.ha.put(app.args["helpers"]["day_minimum_hall_kitchen"], "unknown")
         await tick_at(app, 2026, 11, 4, 1, 0)
         assert setpoints(app)["hall_kitchen"] == 24.0
 
@@ -1165,25 +1167,52 @@ class TestSeeding:
         assert setpoints(app)["hall_kitchen"] == 24.0 and setpoints(app)["bedroom"] == 21.5
 
     @pytest.mark.asyncio
-    async def test_helpers_at_their_ha_minimum_fall_back_to_the_defaults(self, app):
+    async def test_helpers_lost_with_the_seeded_flag_are_reseeded_and_never_used_at_their_minimum(self, app):
+        # HA re-creates every helper (storage lost, entities renamed): they are at their minimum and
+        # comfort_helpers_seeded is off. Floor 18 and day minimum 18 are VALID values now, so only
+        # this flag protects the rooms: no control until the defaults are written.
         self.minimums(app)
-        app.ha.put(app.args["helpers"]["seeded"], "on")  # seeded, yet the values were lost
-        # Day minimum 18 and floor 16 are out of range (defaults 23.5 / 21); margin 0 and lead 0
-        # are legitimate values, so the day setpoint comes at the window start itself.
-        await tick_at(app, 2026, 11, 4, 1, 0)
-        assert setpoints(app) == dict.fromkeys(app.args["rooms"], 21.0)
+        assert app.ha.states[app.args["helpers"]["floor_bedroom"]]["state"] == "18.0"
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        assert app.ha.states[app.args["helpers"]["seeded"]]["state"] == "on"
+        assert setpoints(app) == dict.fromkeys(app.args["rooms"], 21.5)  # defaults, never 18.5
+        for room_name, minimum in ROOM_DAY_MINIMUM_DEFAULTS.items():
+            assert float(app.ha.states[app.args["helpers"][f"day_minimum_{room_name}"]]["state"]) == minimum
+            assert float(app.ha.states[app.args["helpers"][f"floor_{room_name}"]]["state"]) == 21.0
         await tick_at(app, 2026, 11, 4, 12, 0)
-        assert setpoints(app) == {"hall_kitchen": 23.5, "bedroom": 21.0, "office_a": 21.0, "office_t": 21.0}
+        assert setpoints(app) == {"hall_kitchen": 24.0, "bedroom": 21.5, "office_a": 21.5, "office_t": 21.5}
 
-    @pytest.mark.parametrize("role", sorted(HELPER_DEFAULTS))
-    def test_every_default_is_inside_its_sane_range_and_the_package_range(self, role):
+    @pytest.mark.asyncio
+    async def test_a_floor_at_the_range_minimum_is_a_valid_value_not_garbage(self, app):
+        # The range of the code is the range of the HA helper (18-23): 18.0 is the owner's choice
+        # (or a helper re-created alone while the seeded flag stayed on, see the user guide).
+        app.ha.put(app.args["helpers"]["floor_bedroom"], "18.0")
+        await tick_at(app, 2026, 11, 4, 0, 30)  # night: the floor itself
+        assert setpoints(app)["bedroom"] == 18.5
+        assert not [m for m in app.logs if "floor_bedroom" in m]
+
+    @pytest.mark.parametrize("value", ["17.5", "23.5", "16.0", "abc", "unknown", "unavailable", "", "nan"])
+    @pytest.mark.asyncio
+    async def test_a_floor_outside_the_ha_range_is_garbage(self, app, value):
+        app.ha.put(app.args["helpers"]["floor_office_t"], value)
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        assert setpoints(app)["office_t"] == 21.5
+        assert [m for m in app.logs if "Helper floor_office_t" in m and "using the default 21.0" in m]
+
+    @pytest.mark.parametrize("role", sorted(set(HELPER_DEFAULTS) - {"weekday_start", "weekend_start", "window_end"}))
+    def test_every_numeric_range_is_identical_to_the_ha_helper_range(self, app, role):
         package = yaml.safe_load(HA_PACKAGE.read_text())
-        if role in ("weekday_start", "weekend_start", "window_end"):
-            return
+        entity = app.args["helpers"][role]
+        spec = package["input_number"][entity.split(".", 1)[1]]
         low, high = HELPER_RANGES[role]
-        spec = package["input_number"][f"comfort_{role}"]
+        assert (spec["min"], spec["max"]) == (low, high), role
         assert low <= HELPER_DEFAULTS[role] <= high
-        assert spec["min"] <= low and high <= spec["max"]
+
+    def test_every_numeric_helper_of_the_package_has_a_range(self, app):
+        package = yaml.safe_load(HA_PACKAGE.read_text())
+        by_entity = {entity: role for role, entity in app.args["helpers"].items()}
+        for name in package["input_number"]:
+            assert by_entity[f"input_number.{name}"] in HELPER_RANGES, name
 
 
 class TestBoundaryRetry:
@@ -1390,3 +1419,175 @@ class TestNoBatteryInteraction:
                 "climate", "switch", "input_number", "input_boolean", "input_datetime", "input_text",
                 "automation", "notify", "persistent_notification",
             }, service
+
+
+# --- Per-room temperatures ---------------------------------------------------------------------
+
+ROOMS = ("hall_kitchen", "bedroom", "office_a", "office_t")
+
+
+def set_minimums(app, floors=None, day_minimums=None, margin=None):
+    helpers = app.args["helpers"]
+    for name, value in (floors or {}).items():
+        app.ha.put(helpers[f"floor_{name}"], str(value))
+    for name, value in (day_minimums or {}).items():
+        app.ha.put(helpers[f"day_minimum_{name}"], str(value))
+    if margin is not None:
+        app.ha.put(helpers["margin"], str(margin))
+
+
+def legacy_setpoints(phase_kind, rooms, night_floor=21.0, day_minimum=23.5, margin=0.5, day_room="hall_kitchen"):
+    """The setpoints of the controller before the per-room helpers (two shared helpers): the
+    oracle of the parity test."""
+    from comfort_control import round_step
+
+    floor = round_step(night_floor + margin)
+    setpoints = dict.fromkeys(rooms, floor)
+    if phase_kind == "day":
+        setpoints[day_room] = round_step(day_minimum + margin)
+    return setpoints
+
+
+class TestPerRoom:
+    def test_the_helper_names_are_the_agreed_ones(self, app):
+        helpers = app.args["helpers"]
+        for name in ROOMS:
+            assert helpers[f"floor_{name}"] == f"input_number.comfort_floor_{name}"
+            assert helpers[f"day_minimum_{name}"] == f"input_number.comfort_day_minimum_{name}"
+        assert "day_minimum" not in helpers and "night_floor" not in helpers
+
+    def test_defaults(self):
+        assert {name: HELPER_DEFAULTS[f"floor_{name}"] for name in ROOMS} == dict.fromkeys(ROOMS, 21.0)
+        assert {name: HELPER_DEFAULTS[f"day_minimum_{name}"] for name in ROOMS} == {
+            "hall_kitchen": 23.5,
+            "bedroom": 21.0,
+            "office_a": 21.0,
+            "office_t": 21.0,
+        }
+
+    @pytest.mark.asyncio
+    async def test_parity_with_the_shared_helpers_at_the_defaults(self, app):
+        """With the defaults every setpoint is what the two shared helpers gave: the same writes at
+        the same ticks, through night, early start, window end, away and away off."""
+        rooms = app.args["rooms"]
+
+        async def check(kind, when, note):
+            await tick_at(app, *when)
+            assert setpoints(app) == legacy_setpoints(kind, rooms), (note, setpoints(app))
+
+        await check("night", (2026, 11, 4, 0, 30), "first tick, night")
+        await check("night", (2026, 11, 4, 0, 44), "just before the early start")
+        await check("day", (2026, 11, 4, 0, 45), "early start")
+        await check("day", (2026, 11, 4, 21, 59), "end of the window")
+        await check("night", (2026, 11, 4, 22, 0), "window end")
+        # The same writes and no others, in the same order.
+        writes = [(c[1].split("_", 1)[1], c[2]["temperature"]) for c in app.ha.calls("climate/set_temperature")]
+        assert writes == [("hall_kitchen", 24.0), ("hall_kitchen", 21.5)]
+        app.ha.put(app.args["helpers"]["away"], "on")
+        await app._on_away()
+        assert setpoints(app) == legacy_setpoints("night", rooms)
+        app.ha.put(app.args["helpers"]["away"], "off")
+        app.clock[0] = local(2026, 11, 5, 13, 0)  # a Thursday inside the window
+        await app._on_away_off()
+        assert setpoints(app) == legacy_setpoints("day", rooms)
+
+    @pytest.mark.asyncio
+    async def test_a_different_floor_per_room(self, app):
+        set_minimums(app, floors={"bedroom": 22.0, "office_a": 19.5, "office_t": 20.0})
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        assert setpoints(app) == {"hall_kitchen": 21.5, "bedroom": 22.5, "office_a": 20.0, "office_t": 20.5}
+
+    @pytest.mark.asyncio
+    async def test_a_different_day_minimum_per_room_from_the_one_early_start(self, app):
+        set_minimums(app, day_minimums={"hall_kitchen": 24.0, "bedroom": 22.0, "office_a": 23.0, "office_t": 21.0})
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        await tick_at(app, 2026, 11, 4, 0, 44)
+        assert setpoints(app) == dict.fromkeys(ROOMS, 21.5)
+        # One early start for every room (the hall/kitchen lead time: 675 min before 12:00).
+        await tick_at(app, 2026, 11, 4, 0, 45)
+        assert setpoints(app) == {"hall_kitchen": 24.5, "bedroom": 22.5, "office_a": 23.5, "office_t": 21.5}
+        await tick_at(app, 2026, 11, 4, 22, 0)
+        assert setpoints(app) == dict.fromkeys(ROOMS, 21.5)
+
+    @pytest.mark.asyncio
+    async def test_a_day_minimum_below_the_floor_never_lowers_the_floor(self, app):
+        set_minimums(app, floors={"bedroom": 22.0, "hall_kitchen": 22.5}, day_minimums={"bedroom": 18.0, "hall_kitchen": 20.0})
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        await tick_at(app, 2026, 11, 4, 0, 45)
+        assert setpoints(app)["bedroom"] == 22.5
+        assert setpoints(app)["hall_kitchen"] == 23.0  # the floor, not the lower day minimum
+        await tick_at(app, 2026, 11, 4, 22, 0)
+        assert setpoints(app)["bedroom"] == 22.5 and setpoints(app)["hall_kitchen"] == 23.0
+
+    @pytest.mark.asyncio
+    async def test_the_margin_is_shared(self, app):
+        set_minimums(app, floors={"bedroom": 20.0}, day_minimums={"office_a": 22.0}, margin=1.0)
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        assert setpoints(app) == {"hall_kitchen": 22.0, "bedroom": 21.0, "office_a": 22.0, "office_t": 22.0}
+        await tick_at(app, 2026, 11, 4, 0, 45)
+        # The bedroom floor 20 is below its default day minimum 21: 21 + 1.0 in the window.
+        assert setpoints(app) == {"hall_kitchen": 24.5, "bedroom": 22.0, "office_a": 23.0, "office_t": 22.0}
+
+    @pytest.mark.asyncio
+    async def test_away_is_every_room_floor_plus_margin_whatever_the_day_minimum(self, app):
+        set_minimums(
+            app,
+            floors={"hall_kitchen": 20.0, "bedroom": 22.0, "office_a": 19.0, "office_t": 21.0},
+            day_minimums={"hall_kitchen": 25.0, "bedroom": 24.0, "office_a": 23.0, "office_t": 22.0},
+        )
+        await tick_at(app, 2026, 11, 4, 0, 45)  # day setpoints are on
+        assert setpoints(app)["hall_kitchen"] == 25.5
+        app.ha.put(app.args["helpers"]["away"], "on")
+        await app._on_away()
+        assert setpoints(app) == {"hall_kitchen": 20.5, "bedroom": 22.5, "office_a": 19.5, "office_t": 21.5}
+        app.ha.services.clear()
+        await tick_at(app, 2026, 11, 5, 1, 0)  # a boundary passes while away
+        assert not app.ha.calls("climate/set_temperature")
+        # Away off inside the window: the per-room day setpoints.
+        app.ha.put(app.args["helpers"]["away"], "off")
+        app.clock[0] = local(2026, 11, 5, 13, 0)
+        await app._on_away_off()
+        assert setpoints(app) == {"hall_kitchen": 25.5, "bedroom": 24.5, "office_a": 23.5, "office_t": 22.5}
+
+    @pytest.mark.asyncio
+    async def test_a_garbage_helper_of_one_room_uses_its_own_default_only(self, app):
+        set_minimums(app, floors={"bedroom": 22.0}, day_minimums={"hall_kitchen": 24.0})
+        app.ha.put(app.args["helpers"]["day_minimum_office_a"], "abc")
+        app.ha.put(app.args["helpers"]["floor_office_t"], "16.0")  # below the 18-23 range
+        app.ha.put(app.args["helpers"]["day_minimum_hall_kitchen"], "30")  # above the 18-26 range
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        await tick_at(app, 2026, 11, 4, 0, 45)
+        assert setpoints(app) == {"hall_kitchen": 24.0, "bedroom": 22.5, "office_a": 21.5, "office_t": 21.5}
+        assert [m for m in app.logs if "Helper day_minimum_office_a is 'abc': using the default 21.0" in m]
+        assert [m for m in app.logs if "Helper floor_office_t is '16.0': using the default 21.0" in m]
+        assert [m for m in app.logs if "Helper day_minimum_hall_kitchen is '30': using the default 23.5" in m]
+
+    @pytest.mark.asyncio
+    async def test_reseeding_resets_every_room_to_its_defaults(self, app):
+        set_minimums(
+            app,
+            floors=dict.fromkeys(ROOMS, 19.0),
+            day_minimums={"hall_kitchen": 25.0, "bedroom": 24.0, "office_a": 22.0, "office_t": 23.0},
+        )
+        app.ha.put(app.args["helpers"]["seeded"], "off")
+        await app._on_seeded_off()
+        helpers = app.args["helpers"]
+        for name in ROOMS:
+            assert float(app.ha.states[helpers[f"floor_{name}"]]["state"]) == 21.0
+            assert float(app.ha.states[helpers[f"day_minimum_{name}"]]["state"]) == HELPER_DEFAULTS[f"day_minimum_{name}"]
+        assert app.ha.states[helpers["seeded"]]["state"] == "on"
+        # Seeding writes once: edits made afterwards stay.
+        set_minimums(app, floors={"bedroom": 22.5})
+        await tick_at(app, 2026, 11, 4, 0, 30)
+        assert app.ha.states[helpers["floor_bedroom"]]["state"] == "22.5"
+
+    @pytest.mark.asyncio
+    async def test_the_suggestion_names_the_room_and_its_own_values(self, app):
+        set_minimums(app, floors={"office_a": 20.0}, day_minimums={"office_a": 22.5})
+        for day in (2, 3, 4):
+            app.clock[0] = local(2026, 11, day, 10, 10 + day)
+            await app._on_target_change("", "temperature", 21.5, 23.0, {"room": "office_a"})
+        (note,) = app.ha.calls("persistent_notification/create")
+        message = note[2]["message"]
+        assert "office_a" in message and "floor 20" in message and "day minimum 22.5" in message
+        assert "night floor" not in message and "Nothing was changed" in message

@@ -39,20 +39,59 @@ input_datetime:
     has_time: true
 
 input_number:
-  comfort_day_minimum:
-    name: Comfort hall/kitchen day minimum
+  # Per-room comfort minimums (names are shared with the battery optimizer; do not rename).
+  # min/max here are the HELPER_RANGES of comfort_control.py (pinned by a test): floor 18-23, day
+  # minimum 18-26. A day minimum below the floor is allowed and never lowers the floor.
+  comfort_floor_hall_kitchen:
+    name: Comfort Hall/kitchen floor (always)
+    min: 18
+    max: 23
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_floor_bedroom:
+    name: Comfort Bedroom floor (always)
+    min: 18
+    max: 23
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_floor_office_a:
+    name: Comfort Office A floor (always)
+    min: 18
+    max: 23
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_floor_office_t:
+    name: Comfort Office T floor (always)
+    min: 18
+    max: 23
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_day_minimum_hall_kitchen:
+    name: Comfort Hall/kitchen day minimum (day window)
     min: 18
     max: 26
     step: 0.5
     unit_of_measurement: "°C"
-  comfort_night_floor:
-    name: Comfort floor (every room, always)
-    min: 16
-    max: 23
+  comfort_day_minimum_bedroom:
+    name: Comfort Bedroom day minimum (day window)
+    min: 18
+    max: 26
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_day_minimum_office_a:
+    name: Comfort Office A day minimum (day window)
+    min: 18
+    max: 26
+    step: 0.5
+    unit_of_measurement: "°C"
+  comfort_day_minimum_office_t:
+    name: Comfort Office T day minimum (day window)
+    min: 18
+    max: 26
     step: 0.5
     unit_of_measurement: "°C"
   comfort_margin:
-    name: Comfort setpoint margin over the minimum
+    name: Comfort setpoint margin over the minimum (every room)
     min: 0
     max: 2
     step: 0.5

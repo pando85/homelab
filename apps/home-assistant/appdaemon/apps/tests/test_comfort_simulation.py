@@ -27,6 +27,8 @@ from tests.comfort_sim import (
 pytestmark = pytest.mark.long
 
 COMFORT_RUNS = ["typical", "cold", "mild", "front", "overrides", "away", "dst_spring", "dst_fall", "capped_lead", "no_auto_clear"]
+# The per-room run has its own comfort checks (floors and day minimums differ per room).
+SAFETY_RUNS = [*COMFORT_RUNS, "per_room"]
 DAY_WINDOW_SHARE = 0.95  # hall/kitchen >= 23.5 degC in the day window, after the first 2 days
 FLOOR_SHARE = 0.97  # every room >= 21 degC
 
@@ -214,12 +216,12 @@ def test_away_sets_every_room_to_21_5_and_recovers():
 # --- Machine limits ----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", COMFORT_RUNS)
+@pytest.mark.parametrize("name", SAFETY_RUNS)
 def test_minimum_on_and_off_times_hold(name):
     assert checks.check_machine_limits(scenario(name)) == []
 
 
-@pytest.mark.parametrize("name", COMFORT_RUNS)
+@pytest.mark.parametrize("name", SAFETY_RUNS)
 def test_starts_alarm_silent_on_normal_days(name):
     sim = scenario(name)
     assert metrics(sim)["starts_per_day"] < MAX_STARTS_PER_DAY
@@ -229,7 +231,7 @@ def test_starts_alarm_silent_on_normal_days(name):
 # --- Water temperature -------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", COMFORT_RUNS)
+@pytest.mark.parametrize("name", SAFETY_RUNS)
 def test_water_writes_are_safe(name):
     sim = scenario(name)
     assert checks.calls(sim, "input_number/set_value", sim_module.Z1_HELPER)  # the curve is used
@@ -245,7 +247,7 @@ def test_water_follows_the_curve_colder_is_warmer():
 # --- DHW ---------------------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", COMFORT_RUNS)
+@pytest.mark.parametrize("name", SAFETY_RUNS)
 def test_one_dhw_window_per_day_released_and_capped(name):
     sim = scenario(name)
     assert checks.check_dhw(sim, run_days(sim, 1)) == []
@@ -320,6 +322,93 @@ def test_dst_days(name, dst_day):
 
 
 def test_simulations_log_no_errors():
-    for name in COMFORT_RUNS:
+    for name in SAFETY_RUNS:
         sim = scenario(name)
         assert not [line for line in sim.logs if line[2] in ("ERROR", "CALLBACK_ERROR")], name
+
+
+# --- Per-room temperatures -----------------------------------------------------------------------
+
+DEFAULT_FLOORS = dict.fromkeys(sim_module.ROOMS, 21.0)
+DEFAULT_DAY_MINIMUMS = {"hall_kitchen": 23.5, "bedroom": 21.0, "office_a": 21.0, "office_t": 21.0}
+
+
+@pytest.mark.parametrize("name", ["typical", "cold", "mild", "front", "dst_spring", "dst_fall"])
+def test_default_setpoints_are_the_old_shared_values_in_every_room(name):
+    """Parity: with the seeded defaults every room's setpoint is what the two shared helpers gave
+    (hall/kitchen 24.0 in the window, every other room and the nights 21.5)."""
+    sim = scenario(name)
+
+    def legacy(day, kind, at=None):
+        return (24.0, 21.5, 21.5, 21.5) if kind == "day" else (21.5, 21.5, 21.5, 21.5)
+
+    assert checks.room_setpoints(DEFAULT_FLOORS, DEFAULT_DAY_MINIMUMS, "day") == legacy(None, "day")
+    assert checks.room_setpoints(DEFAULT_FLOORS, DEFAULT_DAY_MINIMUMS, "night") == legacy(None, "night")
+    assert checks.check_room_boundaries(sim, run_days(sim, 1), legacy) == []
+
+
+def per_room_expected(day, kind, at):
+    floors, day_minimums = dict(sim_module.PER_ROOM_FLOORS), dict(sim_module.PER_ROOM_DAY_MINIMUMS)
+    if day == date(2026, 11, 13):
+        # The bedroom day minimum was garbage ("abc") at this early start: its default 21.0, below
+        # the bedroom floor 22.0, so the floor holds in the window.
+        day_minimums["bedroom"] = 21.0
+    if at >= local(2026, 11, 14, 22, 0):
+        floors["office_t"] = 22.0  # raised on 11-14 at 08:00: takes effect at the 22:00 boundary
+    return checks.room_setpoints(floors, day_minimums, kind)
+
+
+def test_each_room_follows_its_own_floor_and_day_minimum():
+    sim = scenario("per_room")
+    # Away and its recovery are not checked here (see the away test).
+    days = [day for day in run_days(sim, 1) if not date(2026, 11, 9) <= day <= date(2026, 11, 11)]
+    assert checks.check_room_boundaries(sim, days, per_room_expected) == []
+    assert checks.room_setpoints(sim_module.PER_ROOM_FLOORS, sim_module.PER_ROOM_DAY_MINIMUMS, "day") == (24.0, 23.0, 20.5, 23.0)
+    assert checks.room_setpoints(sim_module.PER_ROOM_FLOORS, sim_module.PER_ROOM_DAY_MINIMUMS, "night") == (21.5, 22.5, 20.5, 21.5)
+
+
+def test_a_garbage_room_helper_falls_back_to_that_rooms_default_only():
+    sim = scenario("per_room")
+    assert any("Helper day_minimum_bedroom is 'abc': using the default 21.0" in line[3] for line in sim.logs)
+    assert not [line for line in sim.logs if "Helper" in line[3] and "using the default" in line[3] and "day_minimum_bedroom" not in line[3]]
+
+
+def test_a_floor_change_takes_effect_at_the_next_boundary_not_before():
+    sim = scenario("per_room")
+    changed = local(2026, 11, 14, 8, 0)
+    office_t = 3
+    assert checks.record_at(sim, changed + timedelta(minutes=30)).setpoints[office_t] == 23.0  # the day setpoint holds
+    assert checks.record_at(sim, local(2026, 11, 14, 22, 2)).setpoints[office_t] == 22.5
+
+
+def test_away_sets_every_room_to_its_own_floor_plus_margin():
+    sim = scenario("per_room")
+    on, off = local(2026, 11, 9, 10, 0), local(2026, 11, 10, 15, 0)
+    away = (21.5, 22.5, 20.5, 21.5)
+    assert checks.record_at(sim, on + timedelta(minutes=2)).setpoints == away
+    assert checks.room_setpoints(sim_module.PER_ROOM_FLOORS, sim_module.PER_ROOM_DAY_MINIMUMS, "night") == away
+    # Boundaries pass without writing while away.
+    assert [at for at, _ in checks.calls(sim, "climate/set_temperature") if on + timedelta(minutes=1) < at < off] == []
+    assert checks.record_at(sim, local(2026, 11, 10, 3, 0)).setpoints == away
+    # Away off inside the window: the per-room day setpoints at once.
+    assert checks.record_at(sim, off + timedelta(minutes=2)).setpoints == (24.0, 23.0, 20.5, 23.0)
+
+
+def test_per_room_boundaries_are_the_only_setpoint_writes():
+    sim = scenario("per_room")
+    extra = [local(2026, 11, 9, 10, 0), local(2026, 11, 10, 15, 0)]
+    assert checks.check_writes_only_at_boundaries(sim, run_days(sim, 1), extra) == []
+
+
+def test_every_room_keeps_its_own_minimum():
+    sim = scenario("per_room")
+    floors, day_minimums = sim_module.PER_ROOM_FLOORS, sim_module.PER_ROOM_DAY_MINIMUMS
+    records = [r for r in sim.records if sim_module.measured(sim, r)]
+    shares = {}
+    for index, room in enumerate(sim_module.ROOMS):
+        floor_ok = sum(r.rooms[index] >= floors[room] for r in records) / len(records)
+        window = [r for r in records if sim_module.day_window(r.at.astimezone(TZ).date())[0] <= r.at < sim_module.day_window(r.at.astimezone(TZ).date())[1]]
+        day_ok = sum(r.rooms[index] >= max(floors[room], day_minimums[room]) for r in window) / len(window)
+        shares[room] = (floor_ok, day_ok)
+    assert all(floor_ok >= FLOOR_SHARE for floor_ok, _ in shares.values()), shares
+    assert all(day_ok >= DAY_WINDOW_SHARE for _, day_ok in shares.values()), shares
