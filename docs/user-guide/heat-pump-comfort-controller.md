@@ -19,10 +19,20 @@ Everything runs on a one-minute tick.
 
 ### Setpoints and schedule
 
-| Room | Day window | Otherwise |
+Every room has its own two helpers, `input_number.comfort_floor_<room>` (its always-minimum) and
+`input_number.comfort_day_minimum_<room>` (its minimum in the shared day window), for the rooms
+`hall_kitchen`, `bedroom`, `office_a` and `office_t` (the thermostats
+`climate.thermostat_<room>`). The window times and the margin are shared. The table shows the
+defaults.
+
+| Room | Day window (from the early start) | Otherwise |
 |---|---|---|
-| Hall/kitchen (`climate.thermostat_hall_kitchen`) | day minimum + margin = **24.0** | floor + margin = **21.5** |
-| Bedroom, Office A, Office T | 21.5 | 21.5 |
+| Hall/kitchen | max(day minimum 23.5, floor 21.0) + margin = **24.0** | floor + margin = **21.5** |
+| Bedroom, Office A, Office T | max(day minimum 21.0, floor 21.0) + margin = 21.5 | floor + margin = 21.5 |
+
+- A room's target is its floor + margin outside the window and **max(day minimum, floor) + margin**
+  inside it, so a day minimum below the floor never lowers the floor.
+- Comfort criteria per room: see the optimizer preregistration amendment (pending).
 
 - The day window starts at 12:00 on weekdays and 09:00 at weekends and ends at 22:00 (helpers).
   Public holidays are weekdays.
@@ -30,7 +40,7 @@ Everything runs on a one-minute tick.
   end (the night setpoint), plus away on and off and enabling the controller. The window start
   itself writes nothing: optimum start is that boundary moved earlier.
 - **A manual change holds until the next boundary.** A change made before the early start is
-  overwritten by it; a change below the 21 degC floor is not fought.
+  overwritten by it; a change below the room's floor is not fought.
 - A boundary counts as applied only once every written thermostat reports its new target; an
   unconfirmed write (thermostat offline, lost cloud call) is repeated every 5 minutes until it is
   confirmed or a manual change of that room is seen.
@@ -40,9 +50,14 @@ Everything runs on a one-minute tick.
 
 ### Optimum start
 
-The hall/kitchen day setpoint is written at **window start minus the lead time**. The thermostat
-opens its valve, the run logic starts the heat pump, and the room reaches the minimum at the window
-start.
+The day setpoints are written at **window start minus the lead time**, one early start for every
+room. The thermostat opens its valve, the run logic starts the heat pump, and the hall/kitchen
+reaches its minimum at the window start.
+
+**The lead times are calibrated for the hall/kitchen only.** Rooms other than the hall/kitchen with a
+day minimum above their floor use the same lead time (and the same early start), so they may arrive
+early or late until their warm-up is measured. Rooms whose day minimum is at or below their floor
+write the same setpoint as at night and are not affected.
 
 Lead times (minutes, editable helpers). Source: B0 warm-up analysis, 2026-10-31, p75. They are the
 p75 time to bring the hall/kitchen from 23.5 degC at 22:00 back to 23.5 degC at 26 degC water, so
@@ -61,7 +76,7 @@ they are conservative once the curve gives warmer water.
   Without any outdoor reading the longest lead time of the day type is used.
 - The early start may fall before midnight (for example after a helper edit). The lead time is
   **capped at the time since the previous window end**: if it is longer than the night, the
-  hall/kitchen keeps its day setpoint overnight.
+  rooms keep their day setpoints overnight.
 - Lead times count elapsed minutes, so they are right on DST days.
 
 ### Run logic
@@ -83,7 +98,7 @@ switches the operating mode through `input_select.heishamon_heatmode` (the C0 co
 
 ### Away
 
-`input_boolean.comfort_away` on sets every room to floor + margin (21.5). While away, boundaries
+`input_boolean.comfort_away` on sets every room to its own floor + margin (21.5 with the defaults). While away, boundaries
 pass without writing. Off writes the schedule that applies at that moment, including the day
 setpoint if the early start has passed.
 
@@ -173,9 +188,9 @@ off resets every helper to the defaults below.**
 | `input_boolean.comfort_away` | off | Away mode |
 | `input_boolean.comfort_water_dry_run` | **on** | Water requests only logged (go-live checklist) |
 | `input_text.comfort_dhw_plan` | written by the app | Today's DHW plan, kept across HA restarts; do not edit |
-| `input_number.comfort_day_minimum` | 23.5 degC | Hall/kitchen minimum in the day window |
-| `input_number.comfort_night_floor` | 21.0 degC | Every room, always |
-| `input_number.comfort_margin` | 0.5 K | Setpoint = minimum + margin |
+| `input_number.comfort_floor_<room>` | 21.0 degC (all four rooms) | Always-minimum of the room, range 18 to 23 |
+| `input_number.comfort_day_minimum_<room>` | `hall_kitchen` 23.5; `bedroom`, `office_a`, `office_t` 21.0 degC | Minimum of the room in the day window, range 18 to 26; below the floor it has no effect |
+| `input_number.comfort_margin` | 0.5 K | Setpoint = minimum + margin (every room) |
 | `input_datetime.comfort_weekday_start` / `_weekend_start` / `_window_end` | 12:00 / 09:00 / 22:00 | Day window |
 | `input_number.comfort_hysteresis` | 0.3 K | Heating on below target minus this |
 | `input_number.comfort_lead_{weekday,weekend}_{cold,mid,mild}` | see the lead-time table | Optimum start |
@@ -184,9 +199,48 @@ off resets every helper to the defaults below.**
 | `input_number.comfort_outdoor_offset` | 0.0 K | Added to the unit outdoor sensor |
 | `input_number.comfort_dhw_target` | 49 degC | Tank target (capped at 50 in the code) |
 
+Rooms are `hall_kitchen`, `bedroom`, `office_a` and `office_t`. **The range of every numeric helper in
+the code (`HELPER_RANGES`) is identical to the `min` and `max` of its `input_number`** (a test pins this
+for each helper), so HA accepts exactly what the app accepts. A value outside the range (a hand-edited
+state, `unknown`, text) is garbage: the app logs a warning and uses that helper's own default.
+
 Machine limits stay in the code: minimum on/off, water clamp 20 to 35 degC, 1 K / 15 min water write
 rule, tank cap 50 degC, starts alarm 12, lead-time band edges. `actuate` in `apps.yaml` turns any area
 (mode, setpoints, water temperature, DHW) into a dry run that only logs.
+
+## Comfort dashboard
+
+`apps/home-assistant/lovelace/dashboard-comfort.json` is the definition of a Lovelace dashboard for
+the controller. **It is a definition only: nothing creates it in Home Assistant** (dashboards live in
+HA storage, not in git; see [Home Assistant dashboards](../troubleshooting/home-assistant-dashboards.md)).
+It sits in `lovelace/` and not in `dashboards/` because the chart turns every file of `dashboards/`
+into a Grafana dashboard.
+
+The file has two keys: `registration` (the `lovelace/dashboards/create` fields: `url_path`
+`dashboard-comfort`, title "Comfort", icon `mdi:home-thermometer`, shown in the sidebar, not admin
+only) and `config` (the `lovelace/config` payload, a `sections` view that works on a phone: one
+column per section, tiles with sliders, standard cards only plus the installed `custom:expander-card`).
+
+- **Top:** `input_boolean.comfort_control_enable`, `input_boolean.comfort_away`, the status
+  (`sensor.comfort_control_status` state, phase, hot water window) and the next early starts.
+- **One section per room:** the thermostat card of `climate.thermostat_<room>` and two sliders, the
+  floor and the day minimum of that room.
+- **Shared:** the day window times (`input_datetime.comfort_weekday_start`, `_weekend_start`,
+  `_window_end`) and `input_number.comfort_margin`.
+- **Advanced** (collapsed): the water dry run, the hysteresis, the hot water target and
+  `input_boolean.comfort_helpers_seeded`, labelled "turn OFF to reset EVERY helper to its default"
+  and asking for confirmation (the reset also turns the water dry run back on).
+
+Slider edits take effect at the next boundary (early start or window end), like a manual thermostat
+change, not at once.
+
+To create it (go-live step 8): follow the procedure of the dashboards guide. Back up
+`/config/.storage/lovelace*` first, get an admin token with the login flow of
+[API access and HACS deploy](../troubleshooting/home-assistant-api-hacs-deploy.md), check every
+entity of the file with `get_states` and the markdown templates with `render_template`, create the
+dashboard with `lovelace/dashboards/create` (`registration`) and save the config with
+`lovelace/config/save` (`url_path: dashboard-comfort`, `config`), read it back, and **revoke the
+token afterwards**. Rollback is `lovelace/dashboards/delete`.
 
 ## Logs, status and suggestions
 
@@ -218,8 +272,19 @@ rule, tank cap 50 degC, starts alarm 12, lead-time band edges. `actuate` in `app
   and releases force DHW.
 - **Helpers lost** (re-created at their HA minimum, `comfort_helpers_seeded` off): every tick retries
   the seeding and skips all control until it works (no heartbeat meanwhile, so the watchdog keeps
-  heating on). A numeric helper outside its sane range in the code (`HELPER_RANGES`, for example a
-  day minimum below 20 or a floor below 18 degC) is treated as garbage and its default is used.
+  heating on). This is the protection against a helper at its minimum, and it is the only one:
+  the minimum of the floor (18 degC) and of the day minimum (18 degC) are valid values, so the range
+  check no longer catches them. When HA loses its stored helper states (restore state lost, entities
+  renamed or re-created), every helper of the package comes back together: the numbers at their
+  minimum and `comfort_helpers_seeded` off, which is what the app acts on. (The simulation resets all
+  helpers this way and checks that every room is re-seeded at once and never held at 18.5 degC.)
+  - **Residual risk:** a single numeric helper re-created alone while `comfort_helpers_seeded` stays on
+    (for example a helper deleted and re-added in the UI, or a helper added by a later change of
+    `appdaemon_comfort.yaml` on an already-seeded system) is used at its minimum: a floor of 18 gives a
+    setpoint of 18.5 degC. After any change that adds or re-creates helpers, turn
+    `input_boolean.comfort_helpers_seeded` off once (it re-seeds every helper, see Helpers). The
+    same applies to a system that ever ran the earlier helper set (`comfort_night_floor`,
+    `comfort_day_minimum`): turn it off after the sync.
 - Expected unit state: `Heating_Mode` 1 (direct), operating mode `Heat+DHW` or `DHW`.
 - **Verify after stopping AppDaemon:** wait 15 min; `sensor.aquarea_mode` should read `Heat+DHW`,
   `sensor.aquarea_z1_heat_request_temperature` should keep the last value, and the notification
@@ -256,7 +321,11 @@ There is no runtime strategy switch.
 
 1. The house battery is working.
 2. The battery grid-target cap below the 5.0 kW import limit is set (optimizer work-list item 8).
-3. Lead times: the B0 values are the defaults; check them in the helpers after seeding.
+3. Lead times: the B0 values are the defaults; check them in the helpers after seeding. Check the
+   per-room floors and day minimums too (defaults: floor 21.0 everywhere, day minimum 23.5 in the
+   hall/kitchen and 21.0 elsewhere) and set the owner's values per room. The lead times are the
+   hall/kitchen's: a room other than the hall/kitchen with a day minimum above its floor follows
+   the same early start.
 4. Outdoor source chosen: the unit sensor with `input_number.comfort_outdoor_offset` set by the
    owner (default 0 K).
 5. The thermostats' device programs are off (hvac mode `heat`, not `auto`); the app notifies at
@@ -264,14 +333,20 @@ There is no runtime strategy switch.
 6. Legionella decision recorded: sterilization stays off, or a controlled cycle outside the cheap
    hours is scheduled by hand (the app never starts it).
 7. `sensor.aquarea_heating_mode` reads `1`.
-8. After ArgoCD sync: check the seeded helpers, then turn on `input_boolean.comfort_control_enable`.
+8. After ArgoCD sync: check the seeded helpers (if the earlier helper set `comfort_night_floor` /
+   `comfort_day_minimum` ever ran, turn `input_boolean.comfort_helpers_seeded` off once, see Failure
+   mode), then **create the Comfort dashboard in HA from
+   `apps/home-assistant/lovelace/dashboard-comfort.json`**: back up Lovelace first, create it via the
+   admin login-flow token, revoke that token afterwards (see "Comfort dashboard" below). Not done by
+   this PR.
+9. Turn on `input_boolean.comfort_control_enable`.
    Until then the pump keeps whatever mode the legacy app left (the app notifies if that is `DHW`).
-9. **First water write, by hand, with the dry run still on** (see
+10. **First water write, by hand, with the dry run still on** (see
    [heat pump water temperature](heat-pump-water-temperature.md)): set
    `input_number.heishamon_heatshift_z1` to the value the unit reports, then to that value + 1 K, and
    watch `Z1_Heat_Request_Temp` and `Z1_Heat_Curve_Target_High_Temp` follow. Only then turn
    `input_boolean.comfort_water_dry_run` off.
-10. In `apps/battery-optimizer/files/service.yaml` set
+11. In `apps/battery-optimizer/files/service.yaml` set
     `climate_shadow.go_live: "YYYY-MM-DD"` (local date of the first controlled day) and merge, so the
     new-regime window of the preregistration starts 7 days later. The Grafana dashboard
     `climate-heat-pump-controller` already reads the comfort helpers and the comfort watchdog.
@@ -300,17 +375,21 @@ a parity failure run) check:
 
 - **Comfort:** hall/kitchen at least 23.5 degC in at least 95 % of the day-window minutes after the
   first 2 days, every room at least 21 degC at least 97 % of the time (each scenario states whether
-  the plant can hold the setpoint at all);
+  the plant can hold the setpoint at all). A per-room scenario uses a different floor and day minimum in
+  every room (including a day minimum below the floor) and checks each room against its own values,
+  plus away, a garbage room helper and a floor change;
+- **per-room parity:** with the default helper values every room's setpoint equals what the two shared
+  helpers gave before (unit test of the formulas and a simulation check of all four rooms);
 - **boundaries:** setpoints written only at the early start, the window end and away; the early
   start matches the band table (independent oracle) and is capped at the previous 22:00;
 - manual overrides hold until the next boundary, are logged, and three similar ones raise one
-  suggestion; away sets 21.5 everywhere and recovers;
+  suggestion; away sets every room to its own floor + margin (21.5 with the defaults) and recovers;
 - minimum on 30 / off 20 min, the starts alarm only on a short-cycling day;
 - water writes: integers in 20 to 35, direct mode only, at least 1 K, at most one per 15 min, only
   numeric payloads; DHW: one window a day near the cheapest by price/COP, tank target at most 50,
   force DHW always released (including restarts in the window), never with the force heater on;
 - faults: thermostats offline (one, all, lost writes), sensors unavailable, Heating_Mode 0, HA and
-  AppDaemon restarts, AppDaemon down, a hung tick, garbage helpers, helpers reset: never more than
+  AppDaemon restarts, AppDaemon down, a hung tick, garbage helpers (per room), helpers reset: never more than
   the minimum off time plus a tick in `DHW` while a room is below 21 degC, no dangerous write;
 - **parity** with the archived `climate_control` / `dhw_control` under identical inputs: the same
   mode command path, mode switches per day at most legacy + 1, compressor starts at most
