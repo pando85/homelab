@@ -328,7 +328,7 @@ def cmd_run(args):
             fh.write(json.dumps({"ts": time.time(), "host": host, "label": args.label, "requests": budget.count}) + "\n")
     groups = summarize(records)
     text = render_table(groups) + "\n\n" + render_extras(groups)
-    with open(os.path.join(run_dir, "summary.md"), "w", encoding="utf-8") as fh:
+    with open(os.path.join(run_dir, "summary.txt"), "w", encoding="utf-8") as fh:
         fh.write(text + "\n")
     print(text)
     print("results:", run_dir)
