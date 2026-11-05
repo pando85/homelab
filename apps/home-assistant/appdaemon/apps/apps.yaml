@@ -71,6 +71,20 @@ comfort_control:
     setpoints: true
     water_temperature: true
     dhw: true
+  # Climate optimizer plan (ADR-0008, Proposed). The owner's select is read only, never written; it
+  # is defined in the battery-optimizer/climate Home Assistant package. off / missing / unavailable =
+  # the rules; shadow = the plan is fetched and compared, nothing is written from it; live = the same
+  # as shadow UNLESS optimizer_live_allowed is true. That lock is false in git: flipping it is a
+  # reviewed commit after the ADR is accepted (see docs/user-guide/heat-pump-comfort-controller.md),
+  # never a helper or a dashboard switch.
+  optimizer_live_allowed: false
+  climate_plan:
+    # The optimizer's own read-only in-cluster service (GET only, ClusterIP, no network policy in
+    # either namespace): the full plan has no attribute size limit this way.
+    url: http://battery-optimizer.battery-optimizer.svc:8080/climate/plan
+    mode_entity: input_select.climate_optimizer_mode
+    status_entity: sensor.comfort_climate_plan_status
+    timeout_s: 5
   status_entity: sensor.comfort_control_status
   # Written at the end of every control tick; the HA watchdog restores Heat+DHW when it goes stale.
   heartbeat_entity: sensor.comfort_control_heartbeat

@@ -85,6 +85,57 @@
             "cards": [
               {
                 "type": "heading",
+                "heading": "Climate optimizer (shadow)",
+                "heading_style": "title",
+                "icon": "mdi:chart-timeline-variant"
+              },
+              {
+                "type": "tile",
+                "entity": "input_select.climate_optimizer_mode",
+                "name": "Optimizer mode (off = Rules)",
+                "icon": "mdi:robot-outline",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "select-options"
+                  }
+                ],
+                "features_position": "bottom"
+              },
+              {
+                "type": "tile",
+                "entity": "sensor.comfort_climate_plan_status",
+                "name": "Optimizer status",
+                "grid_options": {
+                  "columns": 12
+                },
+                "state_content": [
+                  "status_text"
+                ]
+              },
+              {
+                "type": "markdown",
+                "content": "{% set e = 'sensor.comfort_climate_plan_status' %}{% if state_attr(e, 'requested_mode') is none %}The climate optimizer status is not available yet.{% else %}**Mode:** requested **{{ state_attr(e, 'requested_mode') }}**, effective **{{ state_attr(e, 'effective_mode') }}**.{% if state_attr(e, 'live_locked') %} **Live requested, locked in git: behaving as shadow, nothing is written from the plan.**{% endif %}{% if state_attr(e, 'plan_controls') %} The plan is driving the run decision and the water target.{% endif %}\n\n{% if state_attr(e, 'plan_usable') %}**Plan** {{ state_attr(e, 'plan_id') }}: {{ state_attr(e, 'plan_age_min') }} min old, expires in {{ state_attr(e, 'plan_expires_in_min') }} min.\n\n**Now** (plan vs rules): heating {{ 'on' if state_attr(e, 'plan_heating_now') else 'off' }} vs {{ 'on' if state_attr(e, 'rules_heating_now') else 'off' }}, water {{ state_attr(e, 'plan_water_c_now') | default('-', true) }} vs {{ state_attr(e, 'rules_water_c_now') | default('-', true) }} °C, agree: {{ 'yes' if state_attr(e, 'agree') else 'no' }}.{% if state_attr(e, 'floor_forced') %} A comfort floor overrides the plan in: {{ state_attr(e, 'floor_forced') | join(', ') }}.{% endif %}{% elif state_attr(e, 'requested_mode') == 'off' %}The plan is not read (mode off): the rules decide.{% else %}**No usable plan** ({{ state_attr(e, 'fallback_reason') }}): the rules decide.{% endif %}{% if state_attr(e, 'control_blocked') %} Plan not applied: {{ state_attr(e, 'control_blocked') }}.{% endif %}\n\n**Today:** agreement {{ state_attr(e, 'today_agree_pct') | default('-', true) }} % of {{ state_attr(e, 'today_samples') }} minutes; heating differs {{ state_attr(e, 'today_heating_disagree') }}, water differs {{ state_attr(e, 'today_water_disagree') }}, live would have acted differently {{ state_attr(e, 'today_would_differ') }}; no usable plan {{ state_attr(e, 'today_unusable') }} minutes.{% endif %}",
+                "grid_options": {
+                  "columns": 12
+                }
+              },
+              {
+                "type": "markdown",
+                "content": "**Live is locked in git** (`optimizer_live_allowed: false` of the comfort controller): choosing *live* behaves exactly like *shadow*. The plan is fetched and compared only; the rules keep driving the heat pump. Comfort floors, the water limits and the compressor minimum on and off times always win over any plan.",
+                "grid_options": {
+                  "columns": 12
+                }
+              }
+            ]
+          },
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
                 "heading": "Hall / Kitchen",
                 "heading_style": "title",
                 "icon": "mdi:thermometer"

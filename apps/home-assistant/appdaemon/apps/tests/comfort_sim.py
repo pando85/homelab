@@ -34,6 +34,7 @@ import pytz
 import yaml
 
 import comfort_control
+from tests.climate_plan import CLIMATE_MODE
 from tests.ha_template import condition_true, render
 
 TZ = pytz.timezone("Europe/Madrid")
@@ -519,6 +520,7 @@ class AppHost:
         app.log = self.log
         app.get_timezone = lambda: APP_TZ
         app._now = lambda: sim.now  # the comfort controller's clock seam
+        app._http_get = self.http_get  # the optimizer's climate plan (GET), answered by the scenario
         app.AD = SimpleNamespace(sched=SimpleNamespace(schedule=defaultdict(dict)), logging=None)
         self.schedule = app.AD.sched.schedule
         for method in (
@@ -552,6 +554,13 @@ class AppHost:
 
     async def call_service(self, service, **data):
         return await self.sim.ha.call_service(self.name, service, **data)
+
+    async def http_get(self, url, timeout):
+        self.sim.plan_requests.append((self.sim.now, url))
+        server = self.sim.scenario.climate_plan
+        if server is None:
+            raise ConnectionError("the optimizer does not answer")
+        return server(self.sim.now)
 
     async def get_history(self, entity_id, days=1, **kwargs):
         since = self.sim.now - timedelta(days=days)
@@ -646,6 +655,9 @@ class Scenario:
     warmup_days: int = 2
     exclude: list = field(default_factory=list)  # (start tuple, end tuple): not measured (away)
     helpers: dict = field(default_factory=dict)  # comfort helper entity -> value set before the start
+    climate_mode: str = None  # input_select.climate_optimizer_mode before the start (None: no select)
+    climate_plan: object = None  # function now -> (status, body) answering GET /climate/plan
+    climate_live_allowed: bool = False  # optimizer_live_allowed of apps.yaml (a test only sets it true)
 
 
 class Simulation:
@@ -671,6 +683,7 @@ class Simulation:
         self.hung = False
         self.drop_writes = defaultdict(int)  # thermostat entity -> writes to drop
         self.thermostat_entities = {}
+        self.plan_requests = []  # (time, url) of every GET /climate/plan
         self.device_setpoint = {}
         self.excluded = [(local(*a), local(*b)) for a, b in scenario.exclude]
         self._setup()
@@ -749,6 +762,8 @@ class Simulation:
             for entity, value in scenario.helpers.items():
                 ha.set(entity, str(value))
             ha.watchdog = yaml.safe_load((CONFIG_DIR / "appdaemon_comfort.yaml").read_text())["automation"][0]
+            if scenario.climate_mode is not None:
+                ha.set(CLIMATE_MODE, scenario.climate_mode, {"options": ["off", "shadow", "live"]})
         else:
             ha.set("input_boolean.appdaemon_climate_enable", "on")
             ha.set("input_boolean.appdaemon_dhw_enable", "on")
@@ -805,7 +820,8 @@ class Simulation:
         self.ad_up = True
         scenario = self.scenario
         if scenario.controller == "comfort":
-            host = AppHost(self, comfort_control.ComfortControl, dict(self.comfort_args), "comfort_control")
+            args = {**self.comfort_args, "optimizer_live_allowed": scenario.climate_live_allowed}
+            host = AppHost(self, comfort_control.ComfortControl, args, "comfort_control")
             self.hosts = [host]
         else:
             legacy_apps = yaml.safe_load((LEGACY_DIR / "apps.yaml").read_text())
@@ -1018,7 +1034,8 @@ class Simulation:
             ha = self.ha
             ha.up = True
             ha.started_at = self.now
-            for entity in (self.comfort_args["status_entity"], self.comfort_args["heartbeat_entity"], LAST_CONNECTION):
+            plan_status = self.comfort_args["climate_plan"]["status_entity"]
+            for entity in (self.comfort_args["status_entity"], plan_status, self.comfort_args["heartbeat_entity"], LAST_CONNECTION):
                 ha.remove(entity)
             if reset_helpers:
                 package = yaml.safe_load((CONFIG_DIR / "appdaemon_comfort.yaml").read_text())
@@ -1055,6 +1072,9 @@ class Simulation:
     async def ev_force_dhw(self):
         """The owner switches force DHW on by hand."""
         await self.ha.call_service("owner", "switch/turn_on", entity_id=FORCE_DHW)
+
+    async def ev_climate_mode(self, value):
+        self.ha.set(CLIMATE_MODE, value, {"options": ["off", "shadow", "live"]}, source="owner")
 
     async def ev_disable(self):
         self.ha.set(self.comfort_args["helpers"]["enable"], "off", source="owner")
