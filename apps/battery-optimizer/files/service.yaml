@@ -218,7 +218,11 @@ actuation:
   neutral_pd_target_w: 0          # PD grid target in a planned idle
   # > 0: small import while discharging, never export.  Omnibattery's PD loop swings about
   # +-150..200 W on a ~2 s period; 50 W gave brief exports (-10..-94 W) on 2026-11-03.
-  discharge_margin_w: 200
+  # 200 W (2026-11-04/05, 2 s grid samples over ~17 h of discharge): median import 192-195 W,
+  # 1st percentile 131-151 W, below 0 W in 0-0.04% of samples.  Replaying 100 W on that data:
+  # ~0.2% of the time below 0 W, ~1 Wh/day exported, 0.5-1.2 kWh/day more discharge in low-load
+  # hours.  BatteryGridExport alerts above 5 Wh/day.
+  discharge_margin_w: 100
   min_discharge_cap_w: 100        # the discharge cap is never written below this (0 = unlimited)
   # Venus E V3 limit: its own max charge/discharge is 2500 W (number.venus_max_charge_power /
   # number.venus_max_discharge_power, min 800, never written here).  Separate from import_cap_w.
