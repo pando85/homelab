@@ -448,11 +448,30 @@ fine-tune of the Whisper model on consented audio.
 ## 6. Needs from the owner
 
 - Approval to rebuild and push the whisper image in `pando85/wyoming-addons`.
-- A Home Assistant long-lived token from an administrator account (required by
-  `expose_entity/list`), written to Vault by the owner.
+- Done (2026-11-05): a Home Assistant long-lived token from an administrator account (required by
+  `expose_entity/list`), now in Vault (see "The Home Assistant token" below).
 - Decision on the transcripts already in Loki (180 days): drop or keep.
 - Phase 2: approval to keep transcripts for 30 days in the cluster, the store choice, and the
   review flow; each proposed alias is approved one by one.
+
+### The Home Assistant token
+
+Created on 2026-11-05 for `--hass-token` (not yet wired into the whisper deployment).
+
+- Belongs to the owner's admin user. Home Assistant tokens have no scopes, so it can do anything
+  that admin can; treat it as a full-access secret.
+- Name: `wyoming-whisper Kivi STT hint list`; lifespan 3650 days (to about 2036-11).
+- Vault: `secret/home-assistant/wyoming-whisper`, key `hass_token` (KV v2 version 1). ExternalSecret
+  form: `remoteRef.key: /home-assistant/wyoming-whisper`, `property: hass_token`.
+- Verified: the Vault value authenticates against `GET /api/` (HTTP 200) and matches the value
+  created, by hash.
+- Revoke: Home Assistant profile, Security, Long-lived access tokens, delete the entry by name.
+  Anything using it then gets 401 and the hint list falls back to the static prefix.
+- Rotate: create a new token with the same name pattern over the websocket
+  (`auth/long_lived_access_token`) or in the profile, `vault kv put` it from a `0600` file to the
+  same path (new KV version), let the ExternalSecret and Reloader roll the pod, then delete the old
+  token. See [Home Assistant API access for agents](../troubleshooting/home-assistant-api-hacs-deploy.md)
+  for the headless login.
 
 ## 7. Open questions
 
