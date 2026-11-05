@@ -27,6 +27,10 @@ services.
   (Laya, Quyet) or an embedding and fuzzy-matching baseline can execute, offline and without wrong
   actions, the home commands the built-in intents miss, before they go to Kiais; zero-shot on the
   synthetic corpus, the `kivi-fake-v1` fake homes and the real names (counts only).
+- [Whisper GPU benchmark](experiments/whisper-gpu-benchmark.md): compute type and beam size of the live
+  Whisper on the GTX 1060 with synthetic Spanish commands (partial: no setting beats the current one on a
+  quiet GPU, beam 1 saves 26 ms; the benchmark pod disturbed the live service, see the incident section;
+  `--vad-clip` not measured).
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.
