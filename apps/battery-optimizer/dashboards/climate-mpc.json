@@ -435,6 +435,918 @@
     },
     {
       "type": "row",
+      "title": "Shadow plan: what the optimizer would do (advisory, it never acts on the heat pump)",
+      "id": 100,
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 5
+      },
+      "panels": []
+    },
+    {
+      "type": "stat",
+      "title": "Heating planned now",
+      "id": 101,
+      "description": "climate_plan_heating_planned_now: the plan's current slot permits space heating. Absent (no data) when the mode is off or no plan is current; absent is not off.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 0,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "battery_optimizer_climate_plan_heating_planned_now",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "heat",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "off",
+                  "color": "blue",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no plan"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Water target now",
+      "id": 102,
+      "description": "climate_plan_water_target_celsius: absolute water target of the current slot, only while heating is planned.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 3,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "battery_optimizer_climate_plan_water_target_celsius",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "fixed"
+          },
+          "noValue": "not heating"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Plan state",
+      "id": 103,
+      "description": "climate_plan_state: planned, skipped, error, mode_off, no_plan or expired (what /climate/plan serves).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 6,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max by (state) (battery_optimizer_climate_plan_state == 1)",
+          "legendFormat": "{{state}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "planned": {
+                  "text": "planned",
+                  "color": "green",
+                  "index": 0
+                },
+                "skipped": {
+                  "text": "skipped",
+                  "color": "orange",
+                  "index": 1
+                },
+                "error": {
+                  "text": "error",
+                  "color": "red",
+                  "index": 2
+                },
+                "mode_off": {
+                  "text": "mode off",
+                  "color": "orange",
+                  "index": 3
+                },
+                "no_plan": {
+                  "text": "no plan",
+                  "color": "orange",
+                  "index": 4
+                },
+                "expired": {
+                  "text": "expired",
+                  "color": "red",
+                  "index": 5
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Plan age",
+      "id": 104,
+      "description": "Time since the latest plan was generated. Plans are hourly at HH:10 UTC and valid for 90 minutes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 9,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "battery_optimizer_climate_plan_age_seconds",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 4200
+              },
+              {
+                "color": "red",
+                "value": 5400
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no plan"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Plan valid",
+      "id": 105,
+      "description": "climate_plan_valid: the latest plan is inside its valid_until. Alert: 0 for 2 h.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 12,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "battery_optimizer_climate_plan_valid",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "valid",
+                  "color": "green",
+                  "index": 0
+                },
+                "0": {
+                  "text": "not valid",
+                  "color": "red",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Mode requested",
+      "id": 106,
+      "description": "The owner's choice, input_select.climate_optimizer_mode (else the optimizer's config).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 15,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max by (mode) (battery_optimizer_climate_plan_mode_requested == 1)",
+          "legendFormat": "{{mode}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "off": {
+                  "text": "off",
+                  "color": "orange",
+                  "index": 0
+                },
+                "shadow": {
+                  "text": "shadow",
+                  "color": "green",
+                  "index": 1
+                },
+                "live": {
+                  "text": "live (locked)",
+                  "color": "orange",
+                  "index": 2
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Mode effective",
+      "id": 107,
+      "description": "What the optimizer does; never live in this version.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 18,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max by (mode) (battery_optimizer_climate_plan_mode_effective == 1)",
+          "legendFormat": "{{mode}}",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "off": {
+                  "text": "off",
+                  "color": "orange",
+                  "index": 0
+                },
+                "shadow": {
+                  "text": "shadow",
+                  "color": "green",
+                  "index": 1
+                },
+                "live": {
+                  "text": "LIVE",
+                  "color": "red",
+                  "index": 2
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Live locked",
+      "id": 108,
+      "description": "climate_plan_live_locked: live requested and refused (ADR-0008 proposed, not accepted). Expected 0 unless the owner selected live.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 3,
+        "x": 21,
+        "y": 6
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "battery_optimizer_climate_plan_live_locked",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "no",
+                  "color": "green",
+                  "index": 0
+                },
+                "1": {
+                  "text": "LOCKED",
+                  "color": "orange",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "color": {
+            "mode": "thresholds"
+          },
+          "noValue": "no data"
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Planned heating against heat pump power",
+      "id": 109,
+      "description": "Bars: the plan permits heating in the slot (right axis, 0/1, advisory: the heat pump follows its thermostats and the rule). Line: sensor.aquarea_heat_power_consumed (W, space heating). Not a control loop; the plan is not executed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "battery_optimizer_climate_plan_heating_planned_now",
+          "legendFormat": "planned heating",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max(hass_sensor_power_w{entity=\"sensor.aquarea_heat_power_consumed\"})",
+          "legendFormat": "heat pump power",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "lineInterpolation": "linear"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "planned heating"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "custom.drawStyle",
+                "value": "bars"
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 25
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 0
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "heat pump power"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Planned water target against the heat pump outlet",
+      "id": 110,
+      "description": "Plan: the absolute water target of the heating slots (null while off). Actual: sensor.aquarea_outlet_temperature and sensor.aquarea_outlet_target_temperature (degC). The legacy rule sets the real target.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "battery_optimizer_climate_plan_water_target_celsius",
+          "legendFormat": "planned water target",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max(hass_sensor_unit_celsius{entity=\"sensor.aquarea_outlet_target_temperature\"})",
+          "legendFormat": "heat pump target",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max(hass_sensor_unit_celsius{entity=\"sensor.aquarea_outlet_temperature\"})",
+          "legendFormat": "heat pump outlet",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "lineInterpolation": "linear"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "planned water target"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "blue"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "heat pump target"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "purple"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "heat pump outlet"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "type": "row",
       "title": "Plan production",
       "id": 8,
       "collapsed": false,
@@ -442,7 +1354,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 5
+        "y": 18
       },
       "panels": []
     },
@@ -459,7 +1371,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 6
+        "y": 19
       },
       "targets": [
         {
@@ -516,7 +1428,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 6
+        "y": 19
       },
       "targets": [
         {
@@ -575,7 +1487,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 6
+        "y": 19
       },
       "targets": [
         {
@@ -628,7 +1540,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 14
+        "y": 27
       },
       "panels": []
     },
@@ -645,7 +1557,7 @@
         "h": 8,
         "w": 8,
         "x": 0,
-        "y": 15
+        "y": 28
       },
       "targets": [
         {
@@ -702,7 +1614,7 @@
         "h": 8,
         "w": 8,
         "x": 8,
-        "y": 15
+        "y": 28
       },
       "targets": [
         {
@@ -770,7 +1682,7 @@
         "h": 8,
         "w": 8,
         "x": 16,
-        "y": 15
+        "y": 28
       },
       "targets": [
         {
@@ -859,7 +1771,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 23
+        "y": 36
       },
       "panels": []
     },
@@ -876,7 +1788,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 24
+        "y": 37
       },
       "targets": [
         {
@@ -944,7 +1856,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 24
+        "y": 37
       },
       "targets": [
         {
@@ -1007,7 +1919,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 32
+        "y": 45
       },
       "panels": []
     },
@@ -1024,7 +1936,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 33
+        "y": 46
       },
       "targets": [
         {
@@ -1082,7 +1994,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 33
+        "y": 46
       },
       "targets": [
         {
@@ -1218,7 +2130,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 41
+        "y": 54
       },
       "options": {
         "mode": "markdown",
