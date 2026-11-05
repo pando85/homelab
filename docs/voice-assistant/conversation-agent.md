@@ -79,6 +79,26 @@ section 5).
 3. **Do not add a small model on the 1060** as router, corrector or agent (rows 4 and 5), and keep
    Whisper `large-v3-turbo` on the GPU (rows 6 and 7).
 
+## Decisions 2026-11-05
+
+1. **The verbs prompt ships with the custom image rollout, not before.** The Whisper prompt (static
+   `--initial-prompt`, verbs first, then the names via `--hass-token`) goes live with
+   `agil/wyoming-whisper` 3.8.1 ([image build](whisper-image-build.md),
+   [hint list](stt-hint-list-and-learning.md)). `apps/home-assistant/values.yaml` stays on
+   `pando85/wyoming-whisper:2.4.0` without the prompt for now.
+2. **Fallback if the custom image canary fails:** apply the verbs-only prompt on 2.4.0 with the diff
+   below, unchanged. Checked on 2026-11-05 against the image itself (pulled, then removed):
+   `pando85/wyoming-whisper:2.4.0` contains `wyoming-faster-whisper 2.4.0`, whose `--help` lists
+   `--initial-prompt INITIAL_PROMPT` ("Optional text to provide as a prompt for the first window").
+   The entrypoint is `bash /run.sh`, which forwards the container args as a quoted `"$@"`, and
+   `helm template` renders the prompt as one list item (10 args in total: the existing 8 plus
+   `--initial-prompt` and the quoted text; the text has commas and spaces but no quotes or accents), so it arrives as a
+   single argument. Rollback: remove the two lines (or revert the commit).
+3. **The local fallback agent (option B: `qwen3:4b-instruct` on the `prusik` CPU with an embedding
+   router) is rejected by the owner.** Kiais availability is considered the same as Home Assistant's,
+   so there is no separate local fallback. Option 3 stays unchosen as well; the idle in-cluster
+   Ollama question (open question 4) is unaffected by this decision.
+
 ## Proposed GitOps change for approval
 
 **For the first addition (Whisper prompt): no Ollama change.** The pipeline settings and the
