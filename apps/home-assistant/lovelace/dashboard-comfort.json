@@ -1,0 +1,383 @@
+{
+  "registration": {
+    "url_path": "dashboard-comfort",
+    "title": "Comfort",
+    "icon": "mdi:home-thermometer",
+    "show_in_sidebar": true,
+    "require_admin": false,
+    "mode": "storage"
+  },
+  "config": {
+    "title": "Comfort",
+    "views": [
+      {
+        "type": "sections",
+        "title": "Comfort",
+        "path": "comfort",
+        "icon": "mdi:home-thermometer",
+        "max_columns": 4,
+        "sections": [
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
+                "heading": "Comfort control",
+                "heading_style": "title",
+                "icon": "mdi:home-thermometer"
+              },
+              {
+                "type": "tile",
+                "entity": "input_boolean.comfort_control_enable",
+                "name": "Comfort control",
+                "icon": "mdi:thermostat-auto",
+                "grid_options": {
+                  "columns": 12
+                },
+                "tap_action": {
+                  "action": "toggle"
+                },
+                "icon_tap_action": {
+                  "action": "toggle"
+                },
+                "hide_state": false
+              },
+              {
+                "type": "tile",
+                "entity": "input_boolean.comfort_away",
+                "name": "Away (every room at its floor)",
+                "icon": "mdi:home-export-outline",
+                "grid_options": {
+                  "columns": 12
+                },
+                "tap_action": {
+                  "action": "toggle"
+                },
+                "icon_tap_action": {
+                  "action": "toggle"
+                },
+                "hide_state": false
+              },
+              {
+                "type": "tile",
+                "entity": "sensor.comfort_control_status",
+                "name": "Status",
+                "grid_options": {
+                  "columns": 12
+                },
+                "state_content": [
+                  "state",
+                  "phase",
+                  "dhw_window"
+                ]
+              },
+              {
+                "type": "markdown",
+                "content": "**Early start** (the day setpoints are written then; one early start for every room):\n\n{% set es = state_attr('sensor.comfort_control_status', 'early_starts') or {} %}{% for day in es | sort %}- {{ day }}: {{ as_local(as_datetime(es[day])).strftime('%H:%M') }}\n{% else %}- not available{% endfor %}\n\n**Manual thermostat changes, last 14 days:** {{ state_attr('sensor.comfort_control_status', 'overrides_14d') | default('-', true) }}",
+                "grid_options": {
+                  "columns": 12
+                }
+              }
+            ]
+          },
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
+                "heading": "Hall / Kitchen",
+                "heading_style": "title",
+                "icon": "mdi:thermometer"
+              },
+              {
+                "type": "thermostat",
+                "entity": "climate.thermostat_hall_kitchen",
+                "name": "Hall / Kitchen",
+                "grid_options": {
+                  "columns": 12
+                }
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_floor_hall_kitchen",
+                "name": "Floor (always)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_day_minimum_hall_kitchen",
+                "name": "Day minimum (day window)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              }
+            ]
+          },
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
+                "heading": "Bedroom",
+                "heading_style": "title",
+                "icon": "mdi:thermometer"
+              },
+              {
+                "type": "thermostat",
+                "entity": "climate.thermostat_bedroom",
+                "name": "Bedroom",
+                "grid_options": {
+                  "columns": 12
+                }
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_floor_bedroom",
+                "name": "Floor (always)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_day_minimum_bedroom",
+                "name": "Day minimum (day window)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              }
+            ]
+          },
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
+                "heading": "Office A",
+                "heading_style": "title",
+                "icon": "mdi:thermometer"
+              },
+              {
+                "type": "thermostat",
+                "entity": "climate.thermostat_office_a",
+                "name": "Office A",
+                "grid_options": {
+                  "columns": 12
+                }
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_floor_office_a",
+                "name": "Floor (always)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_day_minimum_office_a",
+                "name": "Day minimum (day window)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              }
+            ]
+          },
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
+                "heading": "Office T",
+                "heading_style": "title",
+                "icon": "mdi:thermometer"
+              },
+              {
+                "type": "thermostat",
+                "entity": "climate.thermostat_office_t",
+                "name": "Office T",
+                "grid_options": {
+                  "columns": 12
+                }
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_floor_office_t",
+                "name": "Floor (always)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              },
+              {
+                "type": "tile",
+                "entity": "input_number.comfort_day_minimum_office_t",
+                "name": "Day minimum (day window)",
+                "grid_options": {
+                  "columns": 12
+                },
+                "features": [
+                  {
+                    "type": "numeric-input",
+                    "style": "slider"
+                  }
+                ],
+                "features_position": "bottom"
+              }
+            ]
+          },
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
+                "heading": "Day window and margin (every room)",
+                "heading_style": "title",
+                "icon": "mdi:clock-outline"
+              },
+              {
+                "type": "entities",
+                "show_header_toggle": false,
+                "grid_options": {
+                  "columns": 12
+                },
+                "entities": [
+                  {
+                    "entity": "input_datetime.comfort_weekday_start",
+                    "name": "Day window starts (weekdays)"
+                  },
+                  {
+                    "entity": "input_datetime.comfort_weekend_start",
+                    "name": "Day window starts (weekends)"
+                  },
+                  {
+                    "entity": "input_datetime.comfort_window_end",
+                    "name": "Day window ends"
+                  },
+                  {
+                    "entity": "input_number.comfort_margin",
+                    "name": "Margin over the minimum"
+                  }
+                ]
+              },
+              {
+                "type": "markdown",
+                "content": "Setpoints are written **only at boundaries**: the early start (day setpoints) and the window end (night setpoints), plus away on/off and enabling the controller. A change to a slider below, or to a thermostat by hand, holds until the next boundary.\n\nRoom target = floor + margin outside the window, and max(day minimum, floor) + margin inside it. A day minimum below the floor never lowers the floor.",
+                "grid_options": {
+                  "columns": 12
+                }
+              }
+            ]
+          },
+          {
+            "type": "grid",
+            "cards": [
+              {
+                "type": "heading",
+                "heading": "Advanced",
+                "heading_style": "title",
+                "icon": "mdi:cog-outline"
+              },
+              {
+                "type": "custom:expander-card",
+                "title": "Advanced settings",
+                "expanded": false,
+                "grid_options": {
+                  "columns": 12
+                },
+                "cards": [
+                  {
+                    "type": "entities",
+                    "show_header_toggle": false,
+                    "entities": [
+                      {
+                        "entity": "input_boolean.comfort_water_dry_run",
+                        "name": "Water temperature dry run (on = only logged)"
+                      },
+                      {
+                        "entity": "input_number.comfort_hysteresis",
+                        "name": "Heating-on hysteresis"
+                      },
+                      {
+                        "entity": "input_number.comfort_dhw_target",
+                        "name": "Hot water tank target (capped at 50 °C)"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "tile",
+                    "entity": "input_boolean.comfort_helpers_seeded",
+                    "name": "Helpers seeded: turn OFF to reset EVERY helper to its default",
+                    "icon": "mdi:restore",
+                    "tap_action": {
+                      "action": "toggle",
+                      "confirmation": {
+                        "text": "Turning this off resets every comfort helper to its default (floors, day minimums, window, margin, lead times, curve) and turns the water dry run back on. Continue?"
+                      }
+                    },
+                    "icon_tap_action": {
+                      "action": "toggle",
+                      "confirmation": {
+                        "text": "Turning this off resets every comfort helper to its default and turns the water dry run back on. Continue?"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

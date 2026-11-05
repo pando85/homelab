@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -25,7 +26,7 @@ from comfort_control import (
     water_write_due,
 )
 
-from tests.ha_template import condition_true
+from tests.ha_template import condition_true, render
 
 TZ = pytz.timezone("Europe/Madrid")
 APPS_DIR = Path(__file__).resolve().parents[1]
@@ -1591,3 +1592,82 @@ class TestPerRoom:
         message = note[2]["message"]
         assert "office_a" in message and "floor 20" in message and "day minimum 22.5" in message
         assert "night floor" not in message and "Nothing was changed" in message
+
+
+# --- The Comfort dashboard definition ------------------------------------------------------------
+
+DASHBOARD = APPS_DIR.parents[1] / "lovelace" / "dashboard-comfort.json"
+
+
+def dashboard_cards():
+    config = json.loads(DASHBOARD.read_text())["config"]
+    stack = list(config["views"])
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            if "type" in item and "cards" not in item and "sections" not in item and item["type"] != "sections":
+                yield item
+            stack.extend(item.get("sections", []) + item.get("cards", []))
+
+
+class TestComfortDashboard:
+    """apps/home-assistant/lovelace/dashboard-comfort.json: a definition only, created by hand in HA."""
+
+    def test_registration_fields(self):
+        registration = json.loads(DASHBOARD.read_text())["registration"]
+        assert registration == {
+            "url_path": "dashboard-comfort",
+            "title": "Comfort",
+            "icon": "mdi:home-thermometer",
+            "show_in_sidebar": True,
+            "require_admin": False,
+            "mode": "storage",
+        }
+
+    def test_every_entity_exists_and_every_comfort_helper_is_on_it_once_where_expected(self, app):
+        package = yaml.safe_load(HA_PACKAGE.read_text())
+        defined = {f"{domain}.{name}" for domain in ("input_boolean", "input_number", "input_datetime") for name in package[domain]}
+        known = defined | set(app.args["rooms"].values()) | {app.args["status_entity"]}
+        referenced = []
+        for card in dashboard_cards():
+            referenced += [card["entity"]] if "entity" in card else []
+            referenced += [row["entity"] for row in card.get("entities", []) if isinstance(row, dict) and "entity" in row]
+        assert set(referenced) <= known, sorted(set(referenced) - known)
+        # The top, the four rooms (thermostat and both sliders), the shared window and the advanced area.
+        wanted = {
+            "input_boolean.comfort_control_enable", "input_boolean.comfort_away", app.args["status_entity"],
+            "input_datetime.comfort_weekday_start", "input_datetime.comfort_weekend_start", "input_datetime.comfort_window_end",
+            "input_number.comfort_margin", "input_boolean.comfort_water_dry_run", "input_number.comfort_hysteresis",
+            "input_number.comfort_dhw_target", "input_boolean.comfort_helpers_seeded",
+        }
+        for name in ROOMS:
+            wanted |= {f"climate.thermostat_{name}", f"input_number.comfort_floor_{name}", f"input_number.comfort_day_minimum_{name}"}
+        assert wanted <= set(referenced), sorted(wanted - set(referenced))
+
+    def test_only_standard_cards_and_the_installed_expander(self):
+        standard = {"heading", "tile", "thermostat", "markdown", "entities"}
+        for card in dashboard_cards():
+            assert card["type"] in standard | {"custom:expander-card"}, card["type"]
+
+    def test_the_reset_switch_says_what_it_does_and_asks_first(self):
+        (card,) = [c for c in dashboard_cards() if c.get("entity") == "input_boolean.comfort_helpers_seeded"]
+        assert "reset" in card["name"].lower() and "every helper" in card["name"].lower()
+        assert card["tap_action"]["confirmation"]["text"]
+
+    def test_the_status_markdown_renders(self):
+        (card,) = [c for c in dashboard_cards() if c["type"] == "markdown" and "early_starts" in c["content"]]
+        now = local(2026, 11, 4, 10, 0)
+
+        def as_datetime(value):
+            return datetime.fromisoformat(value)
+
+        variables = {"as_datetime": as_datetime, "as_local": lambda value: value.astimezone(TZ)}
+        store = {
+            "sensor.comfort_control_status": {
+                "state": "heating",
+                "attributes": {"early_starts": {"2026-11-05": local(2026, 11, 5, 0, 45).isoformat(), "2026-11-04": local(2026, 11, 4, 0, 45).isoformat()}, "overrides_14d": 2},
+            }
+        }
+        text = render(card["content"], store, now, variables=variables)
+        assert "2026-11-04: 00:45" in text and "2026-11-05: 00:45" in text and "last 14 days:** 2" in text
+        assert "not available" in render(card["content"], {}, now, variables=variables)
