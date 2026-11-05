@@ -1,0 +1,63 @@
+# yamllint disable rule:colons rule:commas rule:braces
+# FAKE Spanish smart-home inventory for the conversation-agent evaluation.
+# Written by hand for tests only. It is NOT the owner's Home Assistant and
+# contains no real names, addresses or identifiers.
+# Shape follows what Home Assistant's Assist LLM API exposes (names, domain,
+# areas, a few attributes); see docs/voice-assistant/experiments/conversation-agent-eval.md.
+
+now: "2026-11-05T18:42:00+01:00"   # fixed "current time" given to the model
+timezone: Europe/Madrid
+satellite_area: salon             # the voice satellite sits in this area
+
+floors:
+  planta_baja: {name: "Planta baja"}
+  planta_alta: {name: "Planta alta"}
+
+areas:
+  salon:      {name: "Salón",      floor: planta_baja, aliases: ["sala", "salón comedor"]}
+  cocina:     {name: "Cocina",     floor: planta_baja, aliases: []}
+  terraza:    {name: "Terraza",    floor: planta_baja, aliases: ["balcón"]}
+  dormitorio: {name: "Dormitorio", floor: planta_alta, aliases: ["habitación", "cuarto"]}
+  bano:       {name: "Baño",       floor: planta_alta, aliases: ["aseo"]}
+
+entities:
+  light.salon_techo:        {name: "Luz del techo",   area: salon,      state: "on",  attributes: {brightness: 204}}
+  light.salon_lampara:      {name: "Lámpara de pie",  area: salon,      aliases: ["lámpara"], state: "off"}
+  light.cocina_techo:       {name: "Luz del techo", area: cocina,    state: "off"}
+  light.cocina_encimera:    {name: "Luz de la encimera", area: cocina,  state: "off"}
+  light.dormitorio_techo:   {name: "Luz del techo",   area: dormitorio, state: "off"}
+  light.dormitorio_noche:   {name: "Lamparita de noche", area: dormitorio, aliases: ["mesilla"], state: "off"}
+  light.bano:               {name: "Luz del baño",    area: bano,       state: "off"}
+
+  cover.salon_persiana:     {name: "Persiana",        area: salon,      device_class: blind,   state: "open",   attributes: {current_position: 100}}
+  cover.dormitorio_persiana: {name: "Persiana",       area: dormitorio, device_class: blind,   state: "closed", attributes: {current_position: 0}}
+  cover.terraza_toldo:      {name: "Toldo",           area: terraza,    device_class: awning,  state: "closed", attributes: {current_position: 0}}
+
+  climate.salon_aire:       {name: "Aire acondicionado", area: salon,   aliases: ["aire", "split"], state: "cool", attributes: {temperature: 21, current_temperature: 22.4, temperature_unit: "°C"}}
+  climate.dormitorio_aire:  {name: "Aire acondicionado", area: dormitorio, aliases: ["aire"], state: "off", attributes: {temperature: 24, current_temperature: 19.8, temperature_unit: "°C"}}
+
+  media_player.tele_salon:  {name: "Tele",            area: salon,      aliases: ["televisión", "la tele"], device_class: tv,      state: "playing", attributes: {volume_level: 0.25, media_title: "Telediario"}}
+  media_player.altavoz_cocina: {name: "Altavoz",      area: cocina,     device_class: speaker, state: "playing",   attributes: {volume_level: 0.4}}
+
+  switch.cafetera:          {name: "Cafetera",        area: cocina,     device_class: outlet,  state: "off"}
+  fan.dormitorio_ventilador: {name: "Ventilador",     area: dormitorio, state: "off", attributes: {percentage: 0}}
+
+  sensor.salon_temperatura:      {name: "Temperatura", area: salon,      state: "22.4", attributes: {device_class: temperature, unit_of_measurement: "°C"}}
+  sensor.cocina_temperatura:     {name: "Temperatura", area: cocina,     state: "24.1", attributes: {device_class: temperature, unit_of_measurement: "°C"}}
+  sensor.dormitorio_temperatura: {name: "Temperatura", area: dormitorio, state: "19.8", attributes: {device_class: temperature, unit_of_measurement: "°C"}}
+  sensor.salon_humedad:          {name: "Humedad",     area: salon,      state: "48",   attributes: {device_class: humidity, unit_of_measurement: "%"}}
+
+  weather.casa:             {name: "Tiempo", aliases: ["tiempo fuera", "el tiempo"], state: "cloudy", attributes: {temperature: 14, temperature_unit: "°C", humidity: 71}}
+  calendar.familia:         {name: "Calendario familiar", aliases: ["calendario"], state: "on"}
+
+# Fake events returned by calendar__get_events (RFC 5545 style, as in HA).
+calendar_events:
+  today:
+    - {summary: "Reunión del colegio", start: "2026-11-05T19:30:00+01:00", end: "2026-11-05T20:30:00+01:00"}
+  week:
+    - {summary: "Reunión del colegio", start: "2026-11-05T19:30:00+01:00", end: "2026-11-05T20:30:00+01:00"}
+    - {summary: "Dentista", start: "2026-11-07T10:00:00+01:00", end: "2026-11-07T11:00:00+01:00"}
+    - {summary: "Cumpleaños de la abuela", start: "2026-11-08", end: "2026-11-09"}
+
+# Running timer used for "how much is left" follow-ups after a StartTimer call.
+timer_status_seconds_left: 420
