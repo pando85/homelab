@@ -7,6 +7,8 @@ software are developed in
 keeps the homelab side: which conversation agent ("brain") answers, measured against the cluster
 services.
 
+- [Kivi plan](plan.md): goal, live architecture, decisions, workstreams (wake word, Whisper, real-usage
+  validation, decision model, fine-tuning) and the open decisions for the owner.
 - [Conversation agent evaluation](experiments/conversation-agent-eval.md): Kiais gateway metrics,
   the dry-run harness in `scripts/voice-assistant/agent_eval/`, Spanish test phrases, and which
   requests Home Assistant's built-in intents already handle.
