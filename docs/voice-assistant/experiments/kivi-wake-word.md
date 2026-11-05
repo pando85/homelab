@@ -1,12 +1,12 @@
 # Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
 
-**Status:** DONE offline (model trained and measured on synthetic voices and public recordings); **not deployed**. Real-voice recall is unknown until the owner test below is run.
+**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run.
 **Date:** 2026-11-05
 **Device alias / model / firmware / webOS / architecture:** none. PC only (x86_64, RTX 4060 Ti 16 GB, 32 threads). No TV, no microphone, no speaker, no change in Home Assistant, the cluster or the GitOps tree.
 **Power and playback state:** not applicable
 **Related research / requirements / issue:** satellite-side [ADR 0003, server-side wake word for the MVP](https://github.com/pando85/webos-voice-satellite/blob/main/docs/decisions/0003-server-side-wake-word-for-mvp.md); the Phase 2 corpus and TV content set of that repository ([P2 corpus](https://github.com/pando85/webos-voice-satellite/blob/main/docs/experiments/P2-corpus.md)); [conversation agent evaluation](conversation-agent-eval.md) for the same pipeline
-**Risk:** none for the household (offline). The model is not deployed; deployment needs the owner's approval of the numbers below and a GitOps change.
-**Approval needed / obtained:** none for this offline run. Deployment, the threshold change and the owner's real-voice test need the owner.
+**Risk:** the offline run had none. The deployment changes which word wakes both TV satellites; `alexa` stays loaded as the rollback.
+**Approval needed / obtained:** none for the offline run. The owner approved the deployment on 2026-11-05 and accepted the weaker noisy-TV recall, with AEC and noise suppression coming. The real-voice test still needs the owner.
 
 Evidence labels: **documented** (read in a source or a model card), **observed-offline** (measured on the PC with synthetic or public recordings, not in the room), **inferred**, **hypothesis**. Nothing here is a measurement with a real voice or the TV microphone.
 
@@ -104,7 +104,9 @@ Both are recorded with symptom, cause, detection, fix and guard in [lessons lear
 2. **Augmentation SNR over the whole window buries a short word.** openWakeWord's `augment_clips` mixes background at -10 to +15 dB SNR computed over the whole 2 s padded window. For a 0.45 s word, many positives end up at or below 0 dB on the word itself (the measured word-to-background amplitude ratio was 1.0 to 2.4). With `auto_train`'s negative weight rising to 1500x (doubled when the false-positive target is missed), every run collapsed to 2-9 % recall. **Fix:** augment with the SNR measured against the word (5 to 30 dB), and train with a fixed small negative weight plus mined hard negatives. **Guard:** `augment_set.py --mode simple` documents the choice, and the training history shows validation recall at fixed false accepts (`train_simple.py`).
 
 
-## Deployment notes (not done; for when the owner approves)
+## Deployment notes (written before the deployment)
+
+The deployment that was made is in [Deployment](#deployment); it uses neither option below but a private image (see [lessons learned](../lessons-learned.md#wake-word-fetching-a-licence-restricted-model-with-an-ad-hoc-token-and-bot-user)).
 
 **How the cluster's server loads models (documented, read-only check of `apps/home-assistant/values.yaml` and the `wyoming-openwakeword` 2.1.0 source):** the `openwakeword` controller runs `rhasspy/wyoming-openwakeword:2.1.0` with `--preload-model alexa`, an option that 2.x still accepts but ignores (deprecated). Custom models are read from `--custom-model-dir <DIR>` (repeatable): every `*.tflite` in it becomes a model whose id is the file stem, with a `_vX.Y` suffix removed (`kivi.tflite` and `kivi_v0.1.tflite` both give `kivi`). The model must be TFLite (`pyopen-wakeword` runs it through the TFLite C API); the ONNX file is not used. `--threshold` (default 0.5), `--trigger-level` (1) and `--refractory-seconds` (2) are **global**, for all models of the server.
 
@@ -127,6 +129,66 @@ Both are recorded with symptom, cause, detection, fix and guard in [lessons lear
 
 3. After Argo CD rolls the pod, reload the Wyoming openWakeWord integration in Home Assistant so that it reads the new model list (`kivi` next to `alexa`, `hey_jarvis`, ...).
 4. Pipeline: in the "Kiwi" Assist pipeline set the wake word to `kivi` (stored as `wake_word_id: kivi` in `.storage/assist_pipeline.pipelines`; today `alexa`). This is a Home Assistant change made outside git, so it needs the owner's explicit yes per AGENTS.md. **Rollback:** set `wake_word_id` back to `alexa` (the stock model stays loaded either way), then revert the GitOps commit if wanted. The satellite needs no change: the wake word runs on the server (satellite ADR 0003).
+
+## Deployment
+
+Deployed on 2026-11-05: model `v1-2026-11-05`, `kivi.tflite`, sha256
+`5e20c8ee46428a4b6692efe19309d8ca4d02c2cf73679704d891c316297778cb`, served at the server default
+threshold 0.5 (= raw 0.98).
+
+**Delivery (no binary in git, no ConfigMap, no extra credential):**
+
+- The private repository `agil/kivi-models` builds an image on a version tag
+  (`.forgejo/workflows/image.yml`): busybox pinned by digest with the served file at
+  `/models/kivi.tflite`, checked against the version's `SHA256SUMS` inside the build, and the label
+  `cloud.grigri.kivi.model.sha256`. It is pushed to the **private organisation** `grigri`:
+  `git.grigri.cloud/grigri/kivi-models:v1-2026-11-05@sha256:11619a832a4c58638ac309600ab0358a7665f431724620bcc932d3de67794f1c`.
+  An anonymous pull is refused (checked). The user `agil` is public, and its packages can be pulled
+  anonymously, so the image must never be published there.
+- The init container `01-copy-kivi` of the `openwakeword` controller runs that image and copies the
+  file into an `emptyDir` (16Mi), mounted read-only at `/custom` in the server, which runs with
+  `--custom-model-dir /custom` (model id = file stem, `kivi`). Its log is the `sha256sum` of the
+  copy. The nodes pull the image with their existing containerd credential for `git.grigri.cloud`,
+  like the Whisper image, so there is no `imagePullSecret`, token or Vault entry.
+- **Version swap:** push the version tag in `agil/kivi-models`, then change the image tag and
+  digest in `apps/home-assistant/values.yaml` and update the registry row. The deployment uses the
+  `Recreate` strategy, so the wake word is down for a few seconds while the pod restarts; open
+  satellite runs reconnect by themselves.
+- History: the first rollout (commit `63045e4aa`) downloaded the file with `curl`, a bot token from
+  Vault and a PVC cache. It worked but was replaced the same evening; see
+  [lessons learned](../lessons-learned.md#wake-word-fetching-a-licence-restricted-model-with-an-ad-hoc-token-and-bot-user).
+
+**Home Assistant change (outside git):** pipeline "Kiwi" (the preferred one), `wake_word_id` from
+`alexa` to `kivi` through the websocket command `assist_pipeline/pipeline/update`, every other field
+unchanged (checked by a diff of `assist_pipeline/pipeline/list` before and after). The two TV
+satellites follow it without a per-satellite change: their pipeline selects are `preferred`, and
+their wake word selects are unavailable (`no_wake_word`) because the wake word runs on the server.
+Updating the pipeline aborts the open wake word runs (`wake_word_detection_aborted`) and the
+satellites start new ones with the new wake word within about 15 s (observed-on-cluster). No Wyoming
+config entry reload was needed: `wake_word/info` listed `kivi` right after the pod restart.
+
+**Verification (observed-on-cluster, 2026-11-05, no sound on the TVs):**
+
+- First rollout (`63045e4aa`): Argo CD Synced and Healthy; init log `downloaded, sha256 OK`; the
+  server `Ready`; Wyoming `describe` lists `kivi` next to the stock models. The same file (same
+  sha256) is served by the image-based rollout. Before that rollout, a temporary pod on the
+  openwakeword node pulled the image without any pull secret and copied the file as uid 568 with
+  the expected sha256.
+- Synthetic check from a temporary in-cluster pod with a Wyoming client (no TV involved), on
+  held-out Piper clips (never used in training): "kivi" by three native Spanish held-out voices,
+  3 of 3 detected as `kivi`; a held-out "alexa" clip sent to `kivi` not detected, and sent to `alexa`
+  detected; a "kivi" clip sent to `alexa` not detected.
+- Both satellites `idle`, each with an open Wyoming connection to the server; the server's CPU use
+  shows the streams being processed. The Home Assistant log has only `ConnectionRefusedError` from
+  the 8 s pod restart window and nothing after it.
+
+**Rollback:**
+
+1. Pipeline: `assist_pipeline/pipeline/update` on "Kiwi" with `wake_word_id: alexa` and the other
+   fields unchanged (or Settings > Voice assistants > Kiwi > wake word "alexa"). The open satellite
+   runs restart on the update. `alexa` stays loaded, so this alone is a full functional rollback.
+2. Optionally remove the init container, the `kivi-model` volume and `--custom-model-dir` in
+   GitOps. The image can stay in the registry (private) or be deleted from the `grigri` packages.
 
 ## Real-voice test for the owner (written, not run)
 

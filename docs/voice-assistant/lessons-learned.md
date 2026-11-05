@@ -168,3 +168,28 @@ happened, how it was found, what fixed it, and what now guards against a repeat.
 - **Guard:** never run a second GPU model on the 1060 while the live service runs. Benchmark on the
   workstation GPU for accuracy, or schedule a short announced outage (live Whisper scaled to 0) for
   1060 latency numbers, and check that no live experiment is using voice at the time.
+
+## Wake word: fetching a licence-restricted model with an ad-hoc token and bot user
+
+- **Symptom:** the first kivi deployment (2026-11-05) fetched `kivi.tflite` from the private
+  repository with `curl` in an init container. It needed a dedicated Forgejo bot user, a
+  `read:repository` token, a Vault entry, an ExternalSecret and a PVC cache so that restarts did not
+  depend on Forgejo. The owner called it a workaround; the bot and the Vault entry were removed the
+  same evening.
+- **Root cause:** the model was treated as a file to download, not as an artifact to ship. The
+  cluster already pulls private images from `git.grigri.cloud` with the nodes' containerd credential
+  (`metal/roles/k3s/templates/host.toml.j2`), so an image needs no new credential at all.
+- **Second pitfall found on the way:** a Forgejo package takes the visibility of its **owner**, not
+  of its repository. The user `agil` is public, so `git.grigri.cloud/agil/<name>` images can be pulled
+  anonymously even when the repository is private (checked: an anonymous pull of
+  `agil/wyoming-whisper` resolves). Packages of a private organisation (`grigri`, `multivara`) refuse
+  anonymous pulls.
+- **How detected:** owner review of the first design; the anonymous pull test before publishing the
+  model image.
+- **Fix:** the model is published as a private image `git.grigri.cloud/grigri/kivi-models:<version>`
+  (built by the `agil/kivi-models` workflow on a version tag), pinned by tag and digest, and an init
+  container copies it into an `emptyDir`. No token, Vault entry, bot or PVC.
+- **Guard:** prefer a private image pulled with the existing node credential for any
+  licence-restricted file the cluster needs. Publish such images only under a private organisation
+  and check an anonymous pull is refused after every release (the `agil/kivi-models` README says
+  so).
