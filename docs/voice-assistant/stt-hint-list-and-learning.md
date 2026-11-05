@@ -486,42 +486,66 @@ Created on 2026-11-05 for `--hass-token` (not yet wired into the whisper deploym
 - Does the context id of an LLM tool call reach the recorder's state changes, so they can be joined
   to the run?
 
-## 8. Log policy: no voice transcripts in logs or Loki
+## 8. Log policy: voice transcripts in Loki (temporary exception)
 
-Owner decision, 2026-11-05: what people say to the assistant must not be kept in logs or Loki.
+Two owner decisions on 2026-11-05, in this order:
 
-- **Source.** The Whisper container (`pando85/wyoming-whisper:2.4.0`, namespace `home-assistant`,
-  container `whisper`) logs every transcript to stdout as `INFO:wyoming_faster_whisper.handler:<text>`.
-  Vector ships all pod logs to Loki (180 days retention), so each utterance was stored there.
-- **Drop rule.** The `drop_voice_transcripts` filter in `system/loki/vector-agent.yaml` sits between
-  the `kubernetes_logs` source and the `truncate` transform and discards events from
-  `home-assistant/whisper` whose message starts with `INFO:` or `DEBUG:` followed by
-  `wyoming_faster_whisper.handler:`. Other lines still ship: startup, model loading, errors (any
-  other level of that logger) and the `faster_whisper` "Processing audio with duration" lines.
-  It is covered by `vector test` cases with synthetic lines (dropped: INFO and DEBUG transcript
-  lines; kept: duration, startup and error lines, and the same pattern from another container or
-  namespace). Run them on the rendered config:
-  `kustomize build --enable-helm system/loki`, extract `vector.yaml` from the `vector-agent`
-  ConfigMap, then `vector test vector.yaml`.
-- **Not dropped, by design.** The line is also kept on the node in the container log files until
-  Kubernetes rotates them; the rule only stops it reaching Loki. A new image that logs transcripts
-  only at DEBUG (separate work) makes the rule a safety net; keep it.
-- **Other places checked on 2026-11-05 (counts and shapes only, no text read).**
-  - Home Assistant (`hass`): default log level (no `logger:` config), so only warnings and errors
-    reach Loki. None of the 2,212 voice-related lines in 7 days carries input text (the common one is
-    an `ollama` "model not found" traceback). Do not enable debug for `conversation`,
-    `assist_pipeline` or `homeassistant.components.llama_cpp`: that would log request text.
-  - Home Assistant recorder (PostgreSQL): the `assist_satellite`, `conversation`, `stt`, `tts` and
-    `wake_word` entities only keep a state (idle, listening, processing, responding) and
-    `friendly_name`; no events carry speech text.
-  - Piper (`rhasspy/wyoming-piper:2.5.2`): only startup lines at INFO. It logs the synthesized text
-    only with `--debug`; never add that flag.
-  - openWakeWord: startup line only.
-  - Kiais gateway (namespace `isidoro`, `RUST_LOG=kiais=debug`): logs events and timings, no
-    request or response bodies seen. The `chat_messages` table in its database is empty. Re-check
-    after Kiais upgrades because it runs at debug level.
-- **Old transcripts already in Loki.** Not purged: owner decision 2026-11-05 is to stop collecting
-  them, not to delete the history. They age out with the 180-day retention (the oldest are gone by
-  about 2027-05). Loki's compactor has `retention_enabled: true` and `delete_request_store:
-  filesystem`; deletion mode is the default (`filter-and-delete`), so a purge by log selector and
-  line filter through the delete API remains possible if the owner changes the decision.
+1. Morning: what people say to the assistant must not be kept in logs or Loki. A Vector filter and a
+   Whisper image that logs transcripts only at DEBUG implemented it.
+2. Later the same day: a time-limited **exception**. To collect real usage for offline replay
+   against Home Assistant's built-in sentences (the decision-model idea in
+   [the plan](plan.md)), transcripts are kept in Loki for **180 days**, on the owner's explicit
+   request ("we can get all the data that we need"). What is collected, why, and how to stop is in
+   the [data register](data-register.md).
+
+**Current state (from 2026-11-05, effective once the change is synced).**
+
+- **Source.** The Whisper container (`git.grigri.cloud/agil/wyoming-whisper:3.8.1.1`, namespace
+  `home-assistant`, container `whisper`) logs each transcript as
+  `DEBUG:wyoming_faster_whisper.dispatch_handler:<text>` (the 2.x image used
+  `INFO:wyoming_faster_whisper.handler:<text>`). The image patch moved that line from INFO to DEBUG.
+- **How DEBUG is enabled for that one logger.** Not with `--debug`: at DEBUG the server prints its
+  whole argument namespace, which includes the Home Assistant token read from
+  `WYO_WHISPER_HASS_TOKEN_FILE`, and it enables DEBUG for every library. Instead
+  `apps/home-assistant/config/whisper-logging/sitecustomize.py` (a ConfigMap mounted at
+  `/opt/whisper-logging`, loaded through `PYTHONPATH`) sets the root logger to INFO and only
+  `wyoming_faster_whisper.dispatch_handler` to DEBUG. Besides the transcript, that logger's other
+  DEBUG lines are now logged too: audio stopped, VAD end of voice command, completed request time,
+  and the **initial prompt with the Home Assistant names**. The names are accepted in logs; the
+  token is not logged.
+- **Vector.** The `drop_voice_transcripts` filter in `system/loki/vector-agent.yaml` is kept but not
+  wired in: the `truncate` transform reads `kubernetes_logs` directly. `vector validate` warns
+  "has no consumers", which is expected. Its regex now also matches `dispatch_handler` (the old one
+  matched only `handler`, which no longer matches the 3.8.1 logger name), and the tests cover both.
+- **Loki.** No per-stream rule. The global `retention_period: 180d` applies (the compactor has
+  `retention_enabled: true` and `delete_request_store: filesystem`), so the whisper stream is kept
+  180 days like everything else. If the global value is ever lowered, the transcript retention
+  changes with it. The stream labels are `namespace="home-assistant"`, `container="whisper"`.
+- **False wakes are captured too.** Wake word detection runs on the server (openWakeWord), so a false
+  wake streams whatever was being said to Whisper and its transcript lands in Loki like any
+  command. People in the room are recorded in text without having said the wake word.
+- **How to turn it off.** Revert the commit that made this exception (restores the Vector wiring and
+  removes the sitecustomize ConfigMap, `PYTHONPATH` and the mount). Whisper then logs no transcript
+  (DEBUG is off for that logger again). Transcripts already in Loki stay until they age out at 180
+  days; to remove them earlier, use Loki's delete API (see the data register).
+
+**Original policy, still valid outside the exception.** The other places checked on 2026-11-05
+(counts and shapes only, no text read):
+
+- Home Assistant (`hass`): default log level (no `logger:` config), so only warnings and errors
+  reach Loki. None of the 2,212 voice-related lines in 7 days carries input text (the common one is
+  an `ollama` "model not found" traceback). Do not enable debug for `conversation`,
+  `assist_pipeline` or `homeassistant.components.llama_cpp`: that would log request text.
+- Home Assistant recorder (PostgreSQL): the `assist_satellite`, `conversation`, `stt`, `tts` and
+  `wake_word` entities only keep a state (idle, listening, processing, responding) and
+  `friendly_name`; no events carry speech text.
+- Piper (`rhasspy/wyoming-piper:2.5.2`): only startup lines at INFO. It logs the synthesized text
+  only with `--debug`; never add that flag.
+- openWakeWord: startup line only.
+- Kiais gateway (namespace `isidoro`, `RUST_LOG=kiais=debug`): logs events and timings, no
+  request or response bodies seen. The `chat_messages` table in its database is empty. Re-check
+  after Kiais upgrades because it runs at debug level.
+- **Old transcripts already in Loki.** Not purged: the morning decision was to stop collecting them,
+  not to delete the history, and the exception now keeps new ones as well. They age out with the
+  180-day retention. Loki's deletion mode is the default (`filter-and-delete`), so a purge by log
+  selector and line filter through the delete API remains possible.

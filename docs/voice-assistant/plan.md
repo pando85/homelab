@@ -88,8 +88,8 @@ datasets that are deleted at the end of the experiment, at most 30 days. Plan:
 2. Measure the miss rate and classify each miss: misheard (STT), phrasing gap, other.
 3. Turn the classes into fixes: aliases, custom sentences, hint-list changes.
 
-Log policy and the data register: [Log policy](stt-hint-list-and-learning.md#8-log-policy-no-voice-transcripts-in-logs-or-loki)
-(the data register is in progress and will be linked from there).
+Log policy and the data register: [Log policy](stt-hint-list-and-learning.md#8-log-policy-voice-transcripts-in-loki-temporary-exception),
+[data register](data-register.md).
 
 ### d. Decision model ("Kivi decider")
 
@@ -132,12 +132,12 @@ against the base model.
 ## 5. Data handling
 
 Purpose-limited: transcripts are collected only to validate the assistant on real usage, in Loki
-with 180-day stream retention, and analysed locally; derived replay datasets on the workstation are deleted at the end of the experiment, at most 30 days. Agents see aggregates only (counts, miss rates,
+(global 180-day retention, no separate stream rule), and analysed locally; derived replay datasets on the workstation are deleted at the end of the experiment, at most 30 days. Agents see aggregates only (counts, miss rates,
 categories); no transcript text goes to any AI service or cloud. Samples are shown only to the
 owner. Nothing private is committed to git. Transcripts expire with the 180-day retention; stopping means
-reverting the Loki rule and retention change. No audio is collected. Policy and checked locations:
-[Log policy](stt-hint-list-and-learning.md#8-log-policy-no-voice-transcripts-in-logs-or-loki);
-the data register is in progress.
+reverting the exception commit. No audio is collected. Policy and checked locations:
+[Log policy](stt-hint-list-and-learning.md#8-log-policy-voice-transcripts-in-loki-temporary-exception);
+[data register](data-register.md).
 
 ## 6. Open decisions for the owner
 

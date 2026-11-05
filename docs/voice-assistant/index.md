@@ -22,6 +22,9 @@ services.
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.
+- [Data register](data-register.md): what the assistant collects (Whisper transcripts in Loki for 180
+  days under a temporary exception, derived replay datasets, names list, Kiais requests, no audio),
+  where it lives, who reads it, how to stop or delete it, and the usage rules.
 - [Building the Whisper STT image on Forgejo](whisper-image-build.md): summary and the cluster side
   (canary, ExternalSecret, prompt ConfigMap, values.yaml cutover, rollback to 2.4.0). The build
   itself (Dockerfile, Forgejo workflow, Pascal sm_61 checks, runner disk, risks) lives in
