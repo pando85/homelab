@@ -152,3 +152,19 @@ happened, how it was found, what fixed it, and what now guards against a repeat.
 - **Fix:** cap the worker count of every evaluation, and stop jobs by PID or process group only.
 - **Guard:** rule for all sessions: never use a generic `pkill`/`killall` pattern. Start long jobs in
   their own process group and record the PID, so cleanup targets only that group.
+
+## Whisper: the GTX 1060 cannot host a second Whisper instance
+
+- **Symptom:** during a Whisper settings benchmark (2026-11-05, 18:45-18:53 UTC), live STT requests
+  failed with CUDA out of memory and then "invalid device ordinal"; 67 of about 190 live requests took
+  more than 5 s (up to 47 s) instead of about 0.9 s. A live AEC experiment on a TV was running at the
+  same time and its transcript-based results were contaminated.
+- **Root cause:** the benchmark assumed the live Whisper was idle and that a second large-v3-turbo
+  int8 instance (peak about 1.8 GiB) fits next to the live one (about 1.1 GiB) on the 3 GiB card. The
+  card reached 2967 of 3072 MiB, and the live service was not idle.
+- **How detected:** the live Whisper log showed the CUDA errors; request latencies were split by
+  overlap with the benchmark using log timestamps only (`whisper_bench/live_overlap.py`).
+- **Fix:** the benchmark pod was deleted; the live service recovered without a restart.
+- **Guard:** never run a second GPU model on the 1060 while the live service runs. Benchmark on the
+  workstation GPU for accuracy, or schedule a short announced outage (live Whisper scaled to 0) for
+  1060 latency numbers, and check that no live experiment is using voice at the time.
