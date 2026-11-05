@@ -35,23 +35,28 @@ def main():
     ap.add_argument("--pos-suffix", default="_simple")
     ap.add_argument("--neg-suffix", default="_simple")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--acav", help="ACAV100M windows (default data/acav/acav_part.npy; a smaller random "
+                                    "subset keeps it in the page cache on a busy machine)")
+    ap.add_argument("--mls", help="Spanish speech negative windows (default data/feat_mls_es.npy)")
     ap.add_argument("--extra-neg", action="append", default=[], help="FILE.npy:N extra negatives per step")
     a = ap.parse_args()
     from openwakeword.train import Model
 
     torch.manual_seed(a.seed)
+    torch.set_num_threads(4)  # the work is on the GPU; avoid oversubscribing a busy CPU
     rng = np.random.default_rng(a.seed)
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     W = a.work
     k = os.path.join(W, "train_out", "kivi")
     P = np.load(os.path.join(k, f"positive_features_train{a.pos_suffix}.npy"), mmap_mode="r")
     N = np.load(os.path.join(k, f"negative_features_train{a.neg_suffix}.npy"), mmap_mode="r")
-    A = np.load(os.path.join(W, "data", "acav", "acav_part.npy"), mmap_mode="r")
-    M = np.load(os.path.join(W, "data", "feat_mls_es.npy"), mmap_mode="r")
+    A = np.load(a.acav or os.path.join(W, "data", "acav", "acav_part.npy"), mmap_mode="r")
+    M = np.load(a.mls or os.path.join(W, "data", "feat_mls_es.npy"), mmap_mode="r")
     Pt = torch.tensor(np.load(os.path.join(k, f"positive_features_test{a.pos_suffix}.npy")), device=dev)
     Nt = torch.tensor(np.load(os.path.join(k, f"negative_features_test{a.neg_suffix}.npy")), device=dev)
     V = np.load(os.path.join(W, "data", "valfeat", "validation_set_features.npy"))
-    Vw = torch.tensor(np.stack([V[i:i + 16] for i in range(0, len(V) - 16)]))  # CPU; scored in chunks
+    # every 4th window of the 11.3 h validation set (training-time indicator only; CPU, chunked)
+    Vw = torch.tensor(np.stack([V[i:i + 16] for i in range(0, len(V) - 16, 4)]))
 
     extra = []
     for spec in a.extra_neg:
@@ -90,7 +95,7 @@ def main():
             vs = torch.sort(vr, descending=True).values
             row = {"step": step + 1, "loss": float(loss)}
             for fa in (0.5, 1, 5):
-                t = float(vs[int(fa * 11.3)])
+                t = float(vs[max(0, int(fa * 11.3 / 4))])
                 row[f"thr@{fa}/h"] = round(t, 4)
                 row[f"val_recall@{fa}/h"] = round(float((pr > t).float().mean()), 4)
                 row[f"adv_pass@{fa}/h"] = round(float((nr > t).float().mean()), 4)

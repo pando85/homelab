@@ -37,6 +37,10 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--snr", default="0,20", help="simple mode: SNR range in dB against the clip RMS")
     ap.add_argument("--p-bg", type=float, default=0.8, help="simple mode: probability of background")
+    ap.add_argument("--stream-onnx", help="MEL_ROWMAX.onnx,EMBEDDING.onnx: compute server-exact features "
+                                          "(the last 16 embeddings the server would compute at the clip end)")
+    ap.add_argument("--jobs", type=int, default=8)
+    ap.add_argument("--max-clips", type=int, default=0, help="use a random subset of this many clips")
     a = ap.parse_args()
 
     import torch
@@ -48,6 +52,9 @@ def main():
     rx = re.compile(a.exclude_regex) if a.exclude_regex else None
     rows = list(csv.DictReader(open(a.manifest, encoding="utf-8")))
     keep = [os.path.join(clip_dir, r["file"]) for r in rows if not (rx and rx.search(r["text"]))]
+    if a.max_clips and len(keep) > a.max_clips:
+        import random
+        keep = sorted(random.Random(a.seed).sample(keep, a.max_clips))
     print(f"{a.set}: {len(keep)} of {len(rows)} clips kept")
     rirs = [e.path for d in cfg["rir_paths"] for e in os.scandir(d)]
     bg = []
@@ -89,7 +96,9 @@ def _mix_chunk(args):
                 b = np.resize(b, total)
             k = rng.integers(0, len(b) - total + 1)
             b = b[k:k + total]
-            snr = rng.uniform(snr_lo, snr_hi)
+            lo, hi = (snr_lo, snr_hi) if not isinstance(snr_lo, tuple) else \
+                (snr_lo if rng.random() < 0.5 else snr_hi)
+            snr = rng.uniform(lo, hi)
             w = w + b * (rms / (np.sqrt(np.mean(b ** 2)) + 1e-9)) / 10 ** (snr / 20)
         w = w / (np.max(np.abs(w)) + 1e-9) * 10 ** (rng.uniform(-20, -1) / 20)
         out[i] = (w * 32767).astype(np.int16)
@@ -98,18 +107,28 @@ def _mix_chunk(args):
 
 def simple(files, rirs, bg, a, total=32000):
     import multiprocessing as mp
-    from openwakeword.utils import AudioFeatures
-    F = AudioFeatures(device="gpu")
+    if a.stream_onnx:
+        from fast_eval import StreamFeatures, server_exact_tail
+        F = StreamFeatures(*a.stream_onnx.split(","))
+        total = max(a.total_length, 40960)
+    else:
+        from openwakeword.utils import AudioFeatures
+        F = AudioFeatures(device="gpu")
     rng = np.random.default_rng(a.seed)
     files = list(files)
     rng.shuffle(files)
-    lo, hi = (float(v) for v in a.snr.split(","))
+    v = [float(x) for x in a.snr.split(",")]
+    # "a,b": one range; "a,b,c,d": two ranges, each chosen with probability 0.5
+    lo, hi = (v[0], v[1]) if len(v) == 2 else ((v[0], v[1]), (v[2], v[3]))
     chunks = [(files[k:k + 256], rirs, bg, total, int(rng.integers(1 << 31)), lo, hi, a.p_bg)
               for k in range(0, len(files), 256)]
     res = []
-    with mp.get_context("spawn").Pool(12) as pool:
+    with mp.get_context("spawn").Pool(a.jobs) as pool:
         for i, audio in enumerate(pool.imap(_mix_chunk, chunks)):
-            res.append(F.embed_clips(audio, batch_size=256).astype(np.float32))
+            if a.stream_onnx:
+                res.append(server_exact_tail(F, audio))
+            else:
+                res.append(F.embed_clips(audio, batch_size=256).astype(np.float32))
             print(f"\r{(i + 1) * 256}/{len(files)}", end="", flush=True)
     feats = np.concatenate(res)
     np.save(a.out, feats)

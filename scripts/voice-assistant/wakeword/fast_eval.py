@@ -91,6 +91,29 @@ class StreamFeatures(TFLiteFeatures):
         return sess.run(None, {sess.get_inputs()[0].name: x})[0]
 
 
+def server_exact_tail(F, audio, n_windows=16):
+    """Server-exact features of the last `n_windows` embeddings of each equal-length clip in
+    `audio` (n, samples), as the server would compute them at the end of that audio: 1760-sample
+    chunks every 1280 samples, per-chunk melspectrogram clamp, one embedding per chunk (ending 4 mel
+    frames before the chunk end, as pyopen-wakeword's bookkeeping does). Returns (n, n_windows, 96) float32."""
+    n, L = audio.shape
+    nch = (L - 1760) // 1280 + 1
+    assert nch - 9 >= n_windows, "clip too short for the requested windows"
+    idx = np.arange(nch)[:, None] * 1280 + np.arange(1760)[None, :]
+    chunks = audio.astype(np.float32)[:, idx].reshape(-1, 1760)
+    mels = np.concatenate([F._run(None, np.ascontiguousarray(chunks[k:k + 8192]), "mel_n")
+                           for k in range(0, len(chunks), 8192)])
+    mels = (mels.reshape(n, nch * 8, 32) / 10 + 2).astype(np.float32)
+    # pyopen-wakeword keeps 80 new mel frames after each chunk and takes the window starting at the
+    # oldest of them, so each embedding ends 4 frames before the chunk's last frame
+    ends = 8 * (np.arange(nch - n_windows, nch) + 1) - 4
+    win = np.stack([mels[:, e - 76:e] for e in ends], axis=1)  # (n, n_windows, 76, 32)
+    win = win.reshape(-1, 76, 32, 1)
+    emb = np.concatenate([F._run(None, np.ascontiguousarray(win[k:k + 8192]), "emb_n").reshape(-1, 96)
+                          for k in range(0, len(win), 8192)])
+    return emb.reshape(n, n_windows, 96)
+
+
 def embed_audio(F, x):
     x = np.concatenate([x, np.zeros(RATE // 2, np.int16)])
     return F._get_embeddings(x).astype(np.float16)  # (frames, 96)
@@ -252,6 +275,19 @@ def cmd_mine(a):
     print(a.out, X.shape, "from", len(cand), "windows above", a.min_score)
 
 
+def cmd_windows(a):
+    """Turn an embedding cache into training windows (N, 16, 96), one every `stride` frames."""
+    z = np.load(a.emb)
+    data = z["data"]  # load once (npz members are re-read on every access)
+    out = []
+    for off, n in windows(z):
+        for i in range(0, n - 15, a.stride):
+            out.append(data[off + i:off + i + 16])
+    X = np.stack(out).astype(np.float16)
+    np.save(a.out, X)
+    print(a.out, X.shape)
+
+
 def main():
     ap = argparse.ArgumentParser()
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -277,8 +313,12 @@ def main():
     p.add_argument("--out", required=True)
     p.add_argument("--min-score", type=float, default=0.1)
     p.add_argument("--max", type=int, default=60000)
+    p = sp.add_parser("windows")
+    p.add_argument("--emb", required=True)
+    p.add_argument("--out", required=True)
+    p.add_argument("--stride", type=int, default=16)
     a = ap.parse_args()
-    {"embed": cmd_embed, "score": cmd_score, "mine": cmd_mine}[a.cmd](a)
+    {"embed": cmd_embed, "score": cmd_score, "mine": cmd_mine, "windows": cmd_windows}[a.cmd](a)
 
 
 if __name__ == "__main__":
