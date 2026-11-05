@@ -38,5 +38,13 @@ services.
   itself (Dockerfile, Forgejo workflow, Pascal sm_61 checks, runner disk, risks) lives in
   `agil/wyoming-whisper` on `git.grigri.cloud` (private).
 
+- [Custom wake word "kivi"](experiments/kivi-wake-word.md): openWakeWord model for the lone word
+  "kivi", trained on synthetic Spanish voices, measured against `alexa` with the server's exact
+  features (recall, false accepts per hour, near-words), deployment notes (`--custom-model-dir`,
+  calibrated threshold, rollback to `alexa`) and the owner's real-voice test. Not deployed.
+  Scripts in `scripts/voice-assistant/wakeword/`.
+- [Lessons learned](lessons-learned.md): pitfalls met so far, each with symptom, root cause,
+  detection, fix and guard.
+
 Results of evaluation runs (per-phrase JSON) are private and never committed; the harness writes
 them outside this repository.
