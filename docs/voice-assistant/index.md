@@ -14,6 +14,9 @@ services.
   own-component options verified on a throwaway Home Assistant 2026.10.4 with
   `prefer_local_intents`, the Kiais streamed tool-call quirk, and the deployment (core `llama_cpp`,
   UI only, deployed 2026-11-05 as `conversation.fast`) and rollback steps.
+- [Small local models](experiments/small-local-models.md): the GTX 1060 budget, small models as
+  router, STT corrector and home agent, Whisper prompt, model size and CPU options, measured on
+  synthetic Spanish audio; ranked additions in [Conversation agent design](conversation-agent.md).
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.
