@@ -43,6 +43,10 @@ services.
   features (recall, false accepts per hour, near-words), deployment notes (`--custom-model-dir`,
   calibrated threshold, rollback to `alexa`) and the owner's real-voice test. Not deployed.
   Scripts in `scripts/voice-assistant/wakeword/`.
+- [Model registry](model-registry.md): one row per model (STT, wake words `alexa` and `kivi`, conversation
+  agent, decision models) with version, short sha256, where it runs, whether it is deployed, threshold,
+  measured scores, licence and storage (the licence-restricted `kivi` model is in the private
+  Forgejo repository `agil/kivi-models`), and how to register a model.
 - [Lessons learned](lessons-learned.md): pitfalls met so far, each with symptom, root cause,
   detection, fix and guard.
 
