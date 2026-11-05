@@ -485,3 +485,43 @@ Created on 2026-11-05 for `--hass-token` (not yet wired into the whisper deploym
 - Does `hassil` 3.12.1 fold accents when matching Spanish names?
 - Does the context id of an LLM tool call reach the recorder's state changes, so they can be joined
   to the run?
+
+## 8. Log policy: no voice transcripts in logs or Loki
+
+Owner decision, 2026-11-05: what people say to the assistant must not be kept in logs or Loki.
+
+- **Source.** The Whisper container (`pando85/wyoming-whisper:2.4.0`, namespace `home-assistant`,
+  container `whisper`) logs every transcript to stdout as `INFO:wyoming_faster_whisper.handler:<text>`.
+  Vector ships all pod logs to Loki (180 days retention), so each utterance was stored there.
+- **Drop rule.** The `drop_voice_transcripts` filter in `system/loki/vector-agent.yaml` sits between
+  the `kubernetes_logs` source and the `truncate` transform and discards events from
+  `home-assistant/whisper` whose message starts with `INFO:` or `DEBUG:` followed by
+  `wyoming_faster_whisper.handler:`. Other lines still ship: startup, model loading, errors (any
+  other level of that logger) and the `faster_whisper` "Processing audio with duration" lines.
+  It is covered by `vector test` cases with synthetic lines (dropped: INFO and DEBUG transcript
+  lines; kept: duration, startup and error lines, and the same pattern from another container or
+  namespace). Run them on the rendered config:
+  `kustomize build --enable-helm system/loki`, extract `vector.yaml` from the `vector-agent`
+  ConfigMap, then `vector test vector.yaml`.
+- **Not dropped, by design.** The line is also kept on the node in the container log files until
+  Kubernetes rotates them; the rule only stops it reaching Loki. A new image that logs transcripts
+  only at DEBUG (separate work) makes the rule a safety net; keep it.
+- **Other places checked on 2026-11-05 (counts and shapes only, no text read).**
+  - Home Assistant (`hass`): default log level (no `logger:` config), so only warnings and errors
+    reach Loki. None of the 2,212 voice-related lines in 7 days carries input text (the common one is
+    an `ollama` "model not found" traceback). Do not enable debug for `conversation`,
+    `assist_pipeline` or `homeassistant.components.llama_cpp`: that would log request text.
+  - Home Assistant recorder (PostgreSQL): the `assist_satellite`, `conversation`, `stt`, `tts` and
+    `wake_word` entities only keep a state (idle, listening, processing, responding) and
+    `friendly_name`; no events carry speech text.
+  - Piper (`rhasspy/wyoming-piper:2.5.2`): only startup lines at INFO. It logs the synthesized text
+    only with `--debug`; never add that flag.
+  - openWakeWord: startup line only.
+  - Kiais gateway (namespace `isidoro`, `RUST_LOG=kiais=debug`): logs events and timings, no
+    request or response bodies seen. The `chat_messages` table in its database is empty. Re-check
+    after Kiais upgrades because it runs at debug level.
+- **Old transcripts already in Loki.** Not purged: owner decision 2026-11-05 is to stop collecting
+  them, not to delete the history. They age out with the 180-day retention (the oldest are gone by
+  about 2027-05). Loki's compactor has `retention_enabled: true` and `delete_request_store:
+  filesystem`; deletion mode is the default (`filter-and-delete`), so a purge by log selector and
+  line filter through the delete API remains possible if the owner changes the decision.
