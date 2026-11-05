@@ -12,10 +12,10 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [ArgoCD](#argocd) (4 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (6 entries)
-- [Storage & Backup](#storage--backup) (11 entries)
+- [Storage & Backup](#storage--backup) (12 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (11 entries)
+- [Desktop & Home](#desktop--home) (12 entries)
 - [Applications](#applications) (10 entries)
 
 ---
@@ -245,6 +245,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   revert chart to 2.10.1 and remove the image override.
   See `docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md`
 
+- OpenEBS ZFS 2.11.2 `zfs send | nc -w 3` uses netcat's 3s idle timeout: when the receiver pauses
+  during S3 multipart upload, `nc` exits 0, `zfs send` gets SIGPIPE (exit 141), and the velero
+  plugin uploads a truncated object while logging `successfully uploaded object`. Every scheduled
+  backup since 2026-10-13 is `PartiallyFailed`. Fix: fork image with `ZFS_NETCAT_TIMEOUT` env var
+  (default 300s). Do NOT downgrade to 2.10.1 (masks the bug) or lower `multiPartChunkSize` (breaks
+  large fulls). See `docs/troubleshooting/velero-truncated-zfs-backups.md`
+
 - Unattended-upgrades can restart k3s during backup windows, causing `PartiallyFailed` Velero backups.
   Use a broad maintenance window (Mon + Wed–Sun 08:00–18:00) instead of blacklisting systemd packages.
   See `docs/troubleshooting/velero-backup-failures.md`
@@ -384,6 +391,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   live config changed. Shelly EM channel 2 is circuit 2 (aerotherm + appliances), not the heat pump;
   `hass_*` history older than 10 days is only in `prometheus-long-term`. See
   `docs/troubleshooting/home-assistant-dashboards.md`
+
+- Omnibattery v1.5.0 can latch `sensor.omnibattery_integration_status` at `backup_mode` after the grid
+  returns while the battery's backup port has a load above `number.venus_backup_offgrid_threshold`
+  (upstream ffunes/Omnibattery#660, fix #723): the 5-minute cooldown re-arms every poll, and the
+  battery optimizer holds safe idle. Workaround: the threshold at 500 W instead of 50 W, which hides
+  small-load outages from Omnibattery and skips its post-backup cooldown. Set it back to 50 W once
+  #723 is released. See `docs/troubleshooting/home-assistant-omnibattery.md`
 
 ## Applications
 

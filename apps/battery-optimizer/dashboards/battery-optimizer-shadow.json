@@ -19,7 +19,20 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "battery"
+      ],
+      "targetBlank": false,
+      "title": "Battery dashboards",
+      "type": "dashboards"
+    }
+  ],
   "panels": [
     {
       "type": "row",
@@ -2124,7 +2137,8 @@
   "schemaVersion": 39,
   "tags": [
     "battery-optimizer",
-    "energy"
+    "energy",
+    "battery"
   ],
   "templating": {
     "list": [
@@ -2154,7 +2168,7 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Battery optimizer shadow service",
+  "title": "Battery optimizer service",
   "uid": "battery-optimizer-shadow",
   "version": 1
 }

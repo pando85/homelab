@@ -2,7 +2,7 @@ forgejo:
   image:
     rootless: true
     # renovate: datasource=docker depName=code.forgejo.org/forgejo/forgejo
-    tag: "16.0.6"
+    tag: "16.0.7"
   labels:
     backup/retain: quaterly
   strategy:
@@ -40,7 +40,7 @@ forgejo:
 
   resources:
     limits:
-      memory: 2Gi
+      memory: 4Gi
     requests:
       cpu: 200m
       memory: 256Mi
@@ -153,7 +153,7 @@ app-template:
         redis:
           image:
             repository: redis
-            tag: 8.10.2
+            tag: 8.10.3
 
           command:
             - sh

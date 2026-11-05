@@ -7,13 +7,20 @@
 # BATTERY_OPTIMIZER_PROMETHEUS_URL.  Override this whole file with
 # BATTERY_OPTIMIZER_SERVICE_CONFIG.
 #
-# SHADOW ONLY: the service has no actuation path.  Its Home Assistant adapter refuses
+# mode: shadow (default) has no actuation path.  Its Home Assistant adapter refuses
 # every WebSocket message type outside a read-only allowlist and every REST method but
 # GET, so nothing in this file can make it write a state.  The one service call it can
 # make is the non-mutating `weather.get_forecasts` query (see `archive:` below); every
 # other service call is refused in code, whatever this file says.
+#
+# mode: dry_run computes and records (service/v1/actuation/) every Omnibattery write the
+# `actuation:` section below would make, and sends nothing.  mode: live sends them, and only
+# them: the guard admits switch.turn_on/off, number.set_value and input_datetime.set_datetime
+# on exactly the entities of `actuation.entities` (never the kill switch), with bounded values
+# (ADR-0007).  REST stays GET-only in every mode.  live uses the separate token of the non-admin
+# HA user battery-optimizer-live (own Vault KV path); shadow/dry_run the read-only one.
 version: 1
-mode: shadow
+mode: live
 timezone: Europe/Madrid
 
 home_assistant:
@@ -34,31 +41,33 @@ prometheus:
   timeout_s: 60
   history_days: 28
 
-# Role -> entity ID.  Verified against the live registry with a read-only token on
-# 2026-10-25: the Shelly meter and the PVPC sensor exist; NO battery / Omnibattery
-# entity exists yet (the battery is bought but not integrated in HA).  The battery
-# roles therefore stay null until TODO-5.1; the typical Omnibattery fresh-install IDs
-# are given as comments (upstream: "use the entity picker instead of assuming").
+# Role -> entity ID.  Shelly meter and PVPC sensor verified against the live registry with
+# a read-only token on 2026-10-25; the battery roles (Marstek Venus E V3 behind Omnibattery,
+# device name `venus`) mapped at commissioning on 2026-11-03 (docs/components/regime-log.md).
 entities:
-  # Signed net-grid power, positive = import.  Sign/placement is a user assertion
-  # (ADR-0003): the export counter has never moved, so the sign is untested.
+  # Signed net-grid power, positive = import.  Sign verified 2026-11-03: it went negative
+  # (-10..-94 W) during a brief export of the commissioning discharge test.
   grid_power: sensor.shellyem_main_channel_1_power
   # Whole-home import counter (kWh); slot energy comes from its deltas.
   grid_energy: sensor.shellyem_main_channel_1_energy
   # PVPC (pvpc_updated): price_HHh today, price_next_day_HHh after publication,
   # "_d" suffix on the repeated fall-back hour.
   price: sensor.esios_pvpc
-  battery_soc: null                # sensor.omnibattery_system_soc
-  battery_power: null              # signed, + charge (per-battery *_battery_power)
-  battery_charge_power: null       # sensor.omnibattery_system_charge_power
-  battery_discharge_power: null    # sensor.omnibattery_system_discharge_power
-  # PLACEHOLDERS, not entity IDs: fill both in at installation from the HA entity picker
-  # (kWh, cumulative, AC side: the same terminals as the Shelly feed).  The live service
-  # history and the offline `build` (gross = grid + charge - discharge) both read these two.
-  battery_charge_energy: null      # sensor.*_total_charging_energy
-  battery_discharge_energy: null   # sensor.*_total_discharging_energy
-  # Read-only context recorded with each slot (never written).  Add the Omnibattery
-  # control surface here once it exists, e.g. number.omnibattery_pd_target_grid_power,
+  battery_soc: sensor.venus_battery_soc   # %
+  # Signed, + charge.  Not mapped: sensor.venus_ac_power is + while DISCHARGING (the
+  # actuator corrects that with actuation.battery_ac_power_sign; this role has no sign
+  # setting), and the counters below carry the energy.
+  battery_power: null
+  battery_charge_power: null
+  battery_discharge_power: null
+  # Cumulative kWh, AC side (verified 2026-11-03: a supervised charge read 0.180 kWh against
+  # 0.182 kWh of integrated AC power and 0.165 kWh DC; the discharge agreed with AC within the
+  # 0.01 kWh resolution).  The V3 discharge counter excludes the backup-port output.  The live
+  # service history and the offline `build` (gross = grid - charge + discharge) read these two.
+  battery_charge_energy: sensor.venus_total_charging_energy
+  battery_discharge_energy: sensor.venus_total_discharging_energy
+  # Read-only context recorded with each slot (never written).  The Omnibattery control
+  # surface can be added here, e.g. number.omnibattery_pd_target_grid_power,
   # switch.*_battery_allow_charge, switch.*_battery_allow_discharge,
   # switch.omnibattery_system_power_limits, number.omnibattery_system_max_charge_power,
   # number.omnibattery_system_max_discharge_power (0 = UNLIMITED, not zero output),
@@ -66,31 +75,39 @@ entities:
   observed:
     - sensor.shellyem_main_channel_2_power
 
-# Read by the offline dataset build and by `extract --entities` only; `serve` ignores it.
+# Read by the offline dataset build, by `extract --entities` and by the `serve` load history.
 # Not in config/tariff.yaml: that file's hash is part of every dataset_id (ADR-0006).
 battery:
-  # First instant at which the battery may exchange energy, ISO-8601 WITH a UTC offset,
-  # e.g. "2026-11-05T00:00:00+01:00"; null while no battery is installed.  Set it at
-  # installation together with the two energy counters above and the regime log line in
-  # docs/components/regime-log.md.  From this instant on `build` refuses the no-battery
-  # assumption: gross load = grid + charge - discharge, or the interval is unusable.  A window
-  # that ends before it is built exactly as before.
-  commissioned_at: null
+  # First instant at which the battery may exchange energy, ISO-8601 WITH a UTC offset.
+  # From this instant on `build` and the service history refuse the no-battery assumption:
+  # gross load = grid - charge + discharge, or the interval is unusable.  A slot that ends
+  # at or before it is the grid counter alone, exactly as before.  Commissioned 2026-11-03:
+  # the battery's AC input was first energised at 20:14:32 local (regime log).
+  commissioned_at: "2026-11-03T19:14:32.572Z"
 
 # Maximum source age (seconds since HA last_reported) before an input is stale.
 freshness_s:
   grid_power: 300
   grid_energy: 900
-  battery_soc: 900
+  # null (the default): availability only, no age test, as actuation.freshness_s.battery_soc.
+  # Omnibattery reports the SOC only on change (last_reported is not refreshed for an unchanged
+  # value, verified 2026-11-03), so an idle battery's SOC looks hours old while healthy; it keeps
+  # its last value when Modbus fails, which actuation.entities.battery_liveness catches instead.
+  # A number restores the age test.
+  battery_soc: null
   battery_power: 300
+  # The battery's AC energy counters are also reported only on change: null (the default since
+  # 0.6.1) is availability only, as battery_soc; battery_liveness catches a dead Modbus link.
+  battery_charge_energy: null
+  battery_discharge_energy: null
 
 planning:
-  # entity:    plan from the live battery SOC entity (refuses to plan when stale).
-  # simulated: pre-commissioning shadow — a virtual battery whose SOC evolves by
-  #            applying the service's own decisions against the measured load.  The
-  #            only honest choice while no battery entity exists; switch to `entity`
-  #            once battery_soc is mapped.
-  soc_source: simulated
+  # entity:    plan from the live battery SOC entity (refuses to plan when it is missing,
+  #            unavailable, out of range, older than freshness_s.battery_soc when that is set,
+  #            or while actuation.entities.battery_liveness is not exactly `None`).
+  # simulated: a virtual battery whose SOC evolves by applying the service's own decisions
+  #            against the measured load.
+  soc_source: entity
   interval_seconds: 900
   # Plans start at the next slot boundary and are solved this long before it.
   solve_lead_s: 120
@@ -112,6 +129,26 @@ planning:
   # saving within 5% of the 0-cost saving in S2 winter, S3 winter and summer);
   # see docs/components/battery-model.md.  Re-run hack/throughput_sweep.py on real battery data.
   throughput_cost_eur_per_kwh: 0.01
+  # High-SOC dwell cost: EUR per kWh of SOC above the threshold per hour held (planning only).
+  high_soc_threshold_frac: 0.90
+  high_soc_cost_eur_per_kwh_h: 0.01
+  # Thermal soft cap: EUR per AC kWh charged above charge_soft_cap_kw (planning only).
+  charge_soft_cap_kw: 1.5
+  charge_soft_cap_eur_per_kwh: 0.005
+  # Read-only thermal state and derate prediction (observability only: no plan, hash or actuation
+  # change, nothing here is ever written).  Needs actuation.entities.battery_ac_power and its sign;
+  # the temperature entity must equal battery_health.entities.temperature.
+  thermal:
+    mode: shadow
+    entities:
+      temperature: sensor.venus_internal_temperature
+      limit_switch: switch.omnibattery_temp_charge_limit
+      discharge_switch: switch.omnibattery_temp_charge_limit_discharge
+      limit_c: number.omnibattery_temp_charge_limit_c
+      band_c: number.omnibattery_temp_charge_limit_band_c
+      floor_pct: number.omnibattery_temp_charge_limit_floor_pct
+      system_max_charge_power: number.omnibattery_system_max_charge_power
+      venus_max_charge_power: number.venus_max_charge_power
   replan:
     soc_change_frac: 0.05
     debounce_s: 30
@@ -120,8 +157,6 @@ planning:
 observation:
   # How long after a slot ends late events may still land in it.
   slot_close_grace_s: 20
-  # A counter reading older than this at a slot edge is not used for that edge.
-  counter_max_age_s: 300
 
 # Passive, append-only data collection under <data_dir>/service/v1/.  Never read by the
 # planner; a failure is counted (battery_optimizer_*) and never affects readiness.
@@ -143,6 +178,112 @@ archive:
     interval_minutes: 60
     offset_minutes: 5
 
+# Live battery control through Omnibattery (ADR-0007).  Read only in dry_run / live; shadow
+# ignores it (it is still validated), except entities.battery_liveness, which every mode reads
+# with planning.soc_source: entity.  mode: live also needs planning.soc_source: entity.
+actuation:
+  entities:
+    # Owner's kill switch (HA helper, created by hand; only read).  Nothing is written while
+    # it is not `on`; its on -> off edge sets safe idle once.
+    kill_switch: input_boolean.battery_optimizer_live
+    # Heartbeat helper (has_date + has_time) the HA watchdog automation checks (live only).
+    heartbeat: input_datetime.battery_optimizer_heartbeat
+    allow_charge: switch.venus_battery_allow_charge
+    allow_discharge: switch.venus_battery_allow_discharge
+    pd_target: number.omnibattery_pd_target_grid_power         # + = grid import target (W)
+    power_limits: switch.omnibattery_system_power_limits
+    max_discharge_power: number.omnibattery_system_max_discharge_power  # 0 = UNLIMITED
+    integration_status: sensor.omnibattery_integration_status
+    battery_ac_power: sensor.venus_ac_power
+    battery_soc: sensor.venus_battery_soc                       # %
+    # Optional: its state must be exactly `None` (Omnibattery's healthy text); anything else,
+    # missing or unavailable holds safe idle (guard reason battery_unresponsive).
+    battery_liveness: sensor.omnibattery_non_responsive_batteries
+  # +1 when sensor.venus_ac_power is positive while CHARGING, -1 when positive while
+  # discharging.  Measured 2026-11-03: -797 W while charging, +797 W while discharging, so
+  # -1 (the actuator's house load is grid - sign * ac_power, charge positive).
+  battery_ac_power_sign: -1
+  tick_interval_s: 30             # <= 120: well inside the 5-minute heartbeat watchdog
+  # Highest grid-import target ever written: contracted import 5.0 kW and the meter trips
+  # instantly on overload.  The guard refuses any number.set_value above it.  Omnibattery
+  # bounds the PD target to its entity min/max, read live: +-2500 W (the batteries' limits)
+  # with the system power limits off, [-system max discharge, +system max charge] with them
+  # on (-800..+1000 on 2026-11-03).  The written target is min(house load + P, import_cap_w,
+  # entity max), so with the limits on the charge is at most system max charge - house load.
+  import_cap_w: 4500
+  # Measured import above import_cap_w + this while charging: charge off at once, and charge
+  # intents refused for import_trip_hold_s.  import_cap_w + this must stay below 5000.
+  import_guard_margin_w: 200
+  import_trip_hold_s: 300
+  neutral_pd_target_w: 0          # PD grid target in a planned idle
+  # > 0: small import while discharging, never export.  Omnibattery's PD loop swings about
+  # +-150..200 W on a ~2 s period; 50 W gave brief exports (-10..-94 W) on 2026-11-03.
+  discharge_margin_w: 200
+  min_discharge_cap_w: 100        # the discharge cap is never written below this (0 = unlimited)
+  # Venus E V3 limit: its own max charge/discharge is 2500 W (number.venus_max_charge_power /
+  # number.venus_max_discharge_power, min 800, never written here).  Separate from import_cap_w.
+  # Go-live: the system caps are 2500/2500 W and Premium mode is on in the Marstek app; without
+  # Premium the firmware limits discharge to 800 W, below what this cap and the planner assume.
+  max_discharge_cap_w: 2500       # <= 2500
+  # Omnibattery integration_status values in which the intent may be applied; any other
+  # (manual, grid_charging, backup_mode, initializing, a competing strategy...) holds safe idle.
+  healthy_states: [balanced, charging, discharging]
+  command_policy:
+    max_attempts: 3               # sends per write, the first included
+    min_setpoint_change_w: 100    # smaller numeric changes within one mode are not sent
+    min_command_interval_s: 30    # nor a numeric rewrite of the same entity within this
+  readback_timeout_s: 10          # per send: the entity must read back the new value
+  shutdown_timeout_s: 15          # safe idle at SIGTERM (uvicorn grace is 20 s)
+  # Maximum age (s since HA last reported) of the guard's inputs; null = availability only
+  # (present, not unavailable/unknown, numeric; SOC within 0-100), no age test.
+  freshness_s:
+    grid_power: 30
+    # null: Omnibattery's coordinator entities report only on change (last_reported is not
+    # refreshed for an unchanged value, verified 2026-11-03), so an idle battery's SOC and AC
+    # power look hours old while healthy; they turn `unavailable` when Modbus polling fails.
+    battery_soc: null
+    battery_ac_power: null
+
+# Periodic full charge for cell balancing (docs/planning/periodic-full-charge.md).  mode: shadow
+# decides and records with the simulated writer: nothing about the real control path changes and
+# the guard keeps refusing the two weekly entities.  Never `live` without the owner's decision.
+full_charge:
+  enabled: true
+  mode: shadow
+  entities:
+    enable_switch: switch.omnibattery_weekly_full_charge_enabled
+    day_select: select.omnibattery_weekly_full_charge_day
+    delay_switch: switch.omnibattery_weekly_full_charge_delay
+    charge_delay_switch: switch.omnibattery_charge_delay
+    last_balance_read: sensor.venus_last_balance_read
+    balancing_mode: binary_sensor.venus_balancing_mode
+    cell_delta: sensor.venus_cell_delta
+    balance_status: sensor.venus_balance_status
+    delta_trend: sensor.venus_delta_trend
+    delta_avg_4w: sensor.venus_delta_avg_4w
+
+# Read-only battery health telemetry (docs/service.md): temperature exposure, charge sessions,
+# cell voltages and Omnibattery's balance monitor, in /status and battery_optimizer_battery_*
+# metrics.  Reads only (the existing GET / state_changed path); every entity is optional and the
+# whole block is off while none is named.  Charge sessions use actuation.entities.battery_ac_power
+# and actuation.battery_ac_power_sign (charge = positive after the sign), so they work in shadow.
+# The balance sensors read `unknown` until the first full charge; that is None, never 0.
+battery_health:
+  entities:
+    temperature: sensor.venus_internal_temperature       # degC
+    cell_voltage_max: sensor.venus_max_cell_voltage      # V
+    cell_voltage_min: sensor.venus_min_cell_voltage      # V
+    cell_delta: sensor.venus_cell_delta                  # mV, last comparable settled top-of-charge
+    balance_status: sensor.venus_balance_status          # green | yellow | orange | red | unknown
+    last_balance_read: sensor.venus_last_balance_read    # timestamp of the last valid measurement
+    delta_trend: sensor.venus_delta_trend
+    delta_avg_4w: sensor.venus_delta_avg_4w              # mV, average of the last four readings
+    balancing_mode: binary_sensor.venus_balancing_mode
+  hot_thresholds_c: [35, 40]      # seconds strictly above each are counted
+  charge_threshold_w: 100         # sign-corrected AC power above this = charging
+  session_end_hold_s: 300         # at or below it this long ends a session (the taper is one)
+  max_gap_s: 300                  # most one clock advance credits to the held temperature
+
 # Climate shadow (track B2): B0's thermal model and the price-blind comfort MPC on live data,
 # every `replan_every_minutes` of the MPC config (hourly), `offset_minutes` after the boundary.
 # Records decisions, scores and the preregistered gates under <data_dir>/service/v1/climate_*;
@@ -153,8 +294,7 @@ climate_shadow:
   enabled: true
   climate_config: climate.yaml        # relative to this file's directory
   mpc_config: climate-mpc.yaml        # horizon, cadence, schedule, refit: as in the B1 replay
-  # S3 prior fitted at 45ce7f4 (hack/climate_shadow_prior.py); it lives on the PVC, not in git.
-  prior: "2311c010392f"               # prior id (hex prefix); required when enabled
+  prior: "2311c010392f"                         # prior id (hex prefix); required when enabled
   offset_minutes: 10                  # after the weather fetch at :05
   forecast_max_age_minutes: 180       # older archive records: the last outdoor reading is held
   score_lookback_days: 7              # unscored decisions older than this are dropped

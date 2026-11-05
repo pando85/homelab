@@ -1,0 +1,116 @@
+# Live battery control (ADR-0007 in the app repository). The actuator_* series exist only in
+# dry_run and live, so these rules stay silent in shadow. The heartbeat and kill-switch rules read
+# hass_* from the same long-term Prometheus and fire only while
+# input_boolean.battery_optimizer_live is on. Runbook: docs/deployment/battery-optimizer.md.
+- alert: BatteryOptimizerActuatorAlert
+  # A write was not confirmed after its retries: the actuator fell back to safe idle (alert
+  # write_failed), or could not even confirm safe idle (safe_idle_failed; no heartbeat then, so the
+  # HA watchdog turns the direction switches off after 5 minutes).
+  expr: battery_optimizer_actuator_alert == 1
+  for: 2m
+  labels:
+    severity: critical
+  annotations:
+    summary: battery-optimizer cannot confirm its battery writes
+    description: |
+      battery_optimizer_actuator_alert has been 1 for 2 minutes. See `/status` (actuator.alert,
+      actuator.last_error), battery_optimizer_actuator_write_failures_total by reason and the
+      actuation records. Turn input_boolean.battery_optimizer_live off to hand control back.
+- alert: BatteryOptimizerActuatorSafeIdle
+  # In control, but the guard has held safe idle (both direction switches off) for 30 minutes: the
+  # plan is not being executed. The reason is battery_optimizer_actuator_guard_reason == 1.
+  expr: battery_optimizer_actuator_in_control == 1 and battery_optimizer_actuator_guard_ok == 0
+  for: 30m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer has held the battery in safe idle for 30 minutes
+    description: |
+      The actuator owns the Omnibattery controls but its guard has refused the plan for 30 minutes.
+      Check battery_optimizer_actuator_guard_reason == 1 (or `/status`). integration_unhealthy with
+      Omnibattery in backup_mode is the known Omnibattery#660 latch; see
+      docs/troubleshooting/home-assistant-omnibattery.md.
+- alert: BatteryOptimizerImportOverCap
+  # The hard rule: measured import above import_cap_w + import_guard_margin_w (4700 W) while
+  # charging. The actuator has already switched charge off; the meter trips at 5 kW.
+  expr: battery_optimizer_actuator_guard_reason{reason="import_over_cap"} == 1
+  labels:
+    severity: critical
+  annotations:
+    summary: battery-optimizer cut charging on grid import above the cap
+    description: |
+      Grid import exceeded the 4700 W guard while the battery was charging (the meter trips at 5 kW).
+      Charge was switched off and charge intents are refused for import_trip_hold_s. Check
+      battery_optimizer_actuator_observed_grid_power_watts and house load.
+- alert: BatteryOptimizerHeartbeatFailures
+  expr: increase(battery_optimizer_actuator_heartbeats_total{result="failed"}[10m]) > 0
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer heartbeat writes are failing
+    description: '{{ $value | printf "%.0f" }} heartbeat write(s) to input_datetime.battery_optimizer_heartbeat failed in the last 10 minutes. After 5 minutes without one the HA watchdog turns the direction switches off.'
+- alert: BatteryOptimizerHeartbeatStale
+  # Seen from Home Assistant, so it fires even when the service is down (no build_info): the HA
+  # watchdog has turned (and keeps turning) both direction switches off. dry_run sends no heartbeat
+  # by design while the kill switch is on (ADR-0007 rollout step 2), so it is excluded.
+  expr: |
+    (time() - hass_last_updated_time_seconds{entity="input_datetime.battery_optimizer_heartbeat"} > 300)
+    and on () (hass_input_boolean_state{entity="input_boolean.battery_optimizer_live"} == 1)
+    unless on () (battery_optimizer_build_info{mode="dry_run"} == 1)
+  for: 2m
+  labels:
+    severity: critical
+  annotations:
+    summary: battery optimizer heartbeat is stale while live control is on
+    description: |
+      input_datetime.battery_optimizer_heartbeat is {{ $value | humanizeDuration }} old while
+      input_boolean.battery_optimizer_live is on. The HA watchdog is holding both Omnibattery
+      direction switches off. Check the service (pod, `/status` actuator block, heartbeat metrics).
+- alert: BatteryOptimizerKillSwitchOnNotLive
+  # The owner's kill switch is on but no actuator is running (service down, or mode shadow). The
+  # dry_run rehearsal keeps the switch on by design (ADR-0007 rollout step 2), so dry_run is
+  # excluded. Absent battery_optimizer_build_info (service down) counts as not live.
+  expr: |
+    (hass_input_boolean_state{entity="input_boolean.battery_optimizer_live"} == 1)
+    unless on () (battery_optimizer_build_info{mode=~"live|dry_run"} == 1)
+  for: 15m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery optimizer kill switch is on but the service is not live
+    description: |
+      input_boolean.battery_optimizer_live has been on for 15 minutes while the battery-optimizer
+      service is not running in live mode. Nothing follows the plan, and the HA watchdog keeps the
+      direction switches off. Turn the kill switch off, or roll the service out with mode: live.
+- alert: BatteryOptimizerChargePowerHigh
+  # Sized for go-live: system caps and the Venus's own limit at 2500 W. A measured charge above
+  # 2600 W (100 W of meter noise) means a cap is wrong or battery_ac_power_sign is inverted.
+  expr: battery_optimizer_actuator_observed_battery_power_watts > 2600
+  for: 2m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery charge power is above the 2500 W limit
+    description: |
+      The battery has been charging at {{ $value | printf "%.0f" }} W for 2 minutes, above the 2500 W
+      battery and system caps. Check number.venus_max_charge_power,
+      number.omnibattery_system_max_charge_power and the sign of sensor.venus_ac_power
+      (actuation.battery_ac_power_sign).
+- alert: BatteryOptimizerChargeClamped
+  # TODO(unconfirmed metric): battery_optimizer_actuator_clamped_watts is the name in the
+  # unreleased optimizer change that adds the clamp metric (planned battery power the last tick
+  # could not request). Confirm the name and meaning against the released /metrics before relying
+  # on this rule; until the series exists it never fires.
+  # With the go-live caps (system max charge 2500 W) the PD target bound cuts a 2500 W charge by
+  # the house load (~500 W at night) by design; more than 1000 W cut for 30 minutes means the charge
+  # is mostly lost (for example the system max charge left at 1000 W with the power limits on).
+  expr: battery_optimizer_actuator_clamped_watts > 1000
+  for: 30m
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer charge is being clamped
+    description: |
+      The actuator could not request {{ $value | printf "%.0f" }} W of the planned battery power for
+      30 minutes (import cap or the PD target entity max). Check number.omnibattery_system_max_charge_power
+      and switch.omnibattery_system_power_limits (see the app repo's known issues).

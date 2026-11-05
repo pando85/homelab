@@ -1,0 +1,71 @@
+substitutions:
+  device_name: "smart-plug-v2-battery"
+  friendly_name: "Smart Plug V2 Battery"
+  project_name: "athom.smart-plug-v2-battery"
+  project_version: "1.1"
+  # This plug feeds the house battery's AC input (see the failsafe below). Restore the last state
+  # after a reboot or OTA, and default to ON when nothing was saved, so a reboot never leaves the
+  # battery without AC by accident. A failsafe OFF is saved and restored as OFF.
+  relay_restore_mode: RESTORE_DEFAULT_ON
+
+packages:
+  connection: !include ./packages/connection.yaml
+  smart-plug-v2: !include ./packages/smart-plug-v2.yaml
+
+# Battery AC failsafe (this plug only). The battery holds its last charge or discharge command when
+# Home Assistant is gone, so after 5 minutes without a Home Assistant API client (state
+# subscribers only: a log viewer does not count) the relay turns OFF. The battery then only powers
+# its backup port and stops charging or discharging to the house. When Home Assistant reconnects
+# the relay turns back ON, but only if the failsafe turned it off: a relay the owner switched off
+# stays off. Runbook: docs/deployment/battery-optimizer.md#esphome-ac-failsafe.
+globals:
+  - id: battery_failsafe_tripped
+    type: bool
+    restore_value: yes
+    initial_value: "false"
+  - id: battery_failsafe_ha_absent_s
+    type: uint32_t
+    restore_value: no
+    initial_value: "0"
+
+switch:
+  - id: !extend relay
+    on_turn_on:
+      - globals.set:
+          id: battery_failsafe_tripped
+          value: "false"
+
+interval:
+  - interval: 10s
+    then:
+      - if:
+          condition:
+            api.connected:
+              state_subscription_only: true
+          then:
+            - globals.set:
+                id: battery_failsafe_ha_absent_s
+                value: "0"
+            - if:
+                condition:
+                  lambda: return id(battery_failsafe_tripped);
+                then:
+                  - logger.log:
+                      level: WARN
+                      format: "Battery failsafe: Home Assistant is back, relay ON"
+                  - switch.turn_on: relay
+          else:
+            - lambda: id(battery_failsafe_ha_absent_s) += 10;
+            - if:
+                condition:
+                  and:
+                    - lambda: return id(battery_failsafe_ha_absent_s) >= 300;
+                    - switch.is_on: relay
+                then:
+                  - logger.log:
+                      level: WARN
+                      format: "Battery failsafe: no Home Assistant for 5 min, relay OFF"
+                  - switch.turn_off: relay
+                  - globals.set:
+                      id: battery_failsafe_tripped
+                      value: "true"

@@ -31,6 +31,18 @@
       "targetBlank": false,
       "title": "battery-optimizer",
       "type": "dashboards"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": [
+        "climate"
+      ],
+      "targetBlank": false,
+      "title": "Climate dashboards",
+      "type": "dashboards"
     }
   ],
   "panels": [

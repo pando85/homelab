@@ -103,8 +103,8 @@ serviceMonitor:
       name: shellyem-main
       url: shellyem-main.iot.grigri
     - module: ping
-      name: shellypmmini-servers
-      url: shellypmmini-servers.iot.grigri
+      name: shellypmmini-z800
+      url: shellypmmini-z800.iot.grigri
     - module: ping
       name: shellyplus2pm-bedroom
       url: shellyplus2pm-bedroom.iot.grigri
@@ -121,11 +121,11 @@ serviceMonitor:
       name: rack-controller
       url: rack-controller.iot.grigri:6053
     - module: tcp_connect
+      name: smart-plug-v2-battery
+      url: smart-plug-v2-battery.iot.grigri:6053
+    - module: tcp_connect
       name: smart-plug-v2-snapmaker
       url: smart-plug-v2-snapmaker.iot.grigri:6053
-    # - module: tcp_connect
-    #   name: smart-plug-v2-terrace
-    #   url: smart-plug-v2-terrace.iot.grigri:6053
     # - module: tcp_connect
     #   name: lilygo-higrow-2
     #   url: lilygo-higrow-2.iot.grigri:6053

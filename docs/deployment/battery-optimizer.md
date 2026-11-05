@@ -8,7 +8,9 @@ from `apps/battery-optimizer/` with one image, one PVC and one ConfigMap:
   (Phase B).
 - **`service`**: the resident Phase C **shadow service** (`battery-optimizer serve`). It reads Home
   Assistant and Prometheus, solves the MPC plan every 15 minutes and records shadow intents and a
-  shadow-vs-native comparison. It has no actuation path and no write credentials. The production plan and its history live in
+  shadow-vs-native comparison. In `shadow` (deployed) it has no actuation path and no write
+  credentials; `dry_run` and `live` add the battery actuator of ADR-0007, see
+  [Live battery control](#live-battery-control). The production plan and its history live in
 [`planning/energy-baseline-production-execution.md`](https://github.com/pando85/homelab/blob/master/planning/energy-baseline-production-execution.md).
 
 The application code, ADRs and domain docs live in the app repository; this page covers only the
@@ -24,7 +26,7 @@ deployment.
 | Steps (one container, `sh -ec`, fails fast) | extract `ha-history` (8 d lookback) -> extract `prometheus` (3 d lookback) -> `validate` -> `build` |
 | Failure handling | `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
 | Node | pinned to `prusik` (node-local `openebs-zfspv`) |
-| Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk) |
+| Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk). Only with `global.liveHomeAssistantToken: true`: ExternalSecret `battery-optimizer-home-assistant-live` <- `secret/battery-optimizer/home-assistant-live` (service only, see [Live battery control](#live-battery-control)) |
 | Config | ConfigMap `battery-optimizer-config` rendered from `apps/battery-optimizer/files/` (`tariff.yaml`, `service.yaml`, and the climate shadow's `climate.yaml`, `climate-mpc.yaml`) |
 | Storage | PVC `battery-optimizer-data`, 5 Gi, `openebs-zfspv`, mounted at `/data` (`BATTERY_OPTIMIZER_DATA_DIR`) |
 | Backup | labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`; SnapshotSchedule `battery-optimizer-zfs-backups` (daily 06:00 UTC, keep 20) |
@@ -61,7 +63,8 @@ deployment.
 - **No NetworkPolicy.** An egress-only policy (DNS, HA 8123, long-term Prometheus 9090) ran from
   0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
   from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
-  control (LLM harnesses). Its only credential is the read-only HA token, and it has no actuation path.
+  control (LLM harnesses). Outside `live` its only credential is the read-only HA token and it has no
+  actuation path; in `live` the HA client can send only the allowlisted Omnibattery writes (ADR-0007).
 - **The two power signals come from a Gen1 Shelly EM over MQTT at 2 s; the counters still poll.**
   `shellyem-main` (`192.168.86.130`) publishes `shellies/shellyem-244CAB417668/emeter/{0,1}/power` to
   mosquitto every **2 s** (`mqtt_update_period: 2`) and HA consumes them via
@@ -118,13 +121,74 @@ deployment.
 | Workload | Deployment `battery-optimizer-service`, 1 replica, `strategy: Recreate`, same image anchor as the CronJob |
 | Command | `battery-optimizer serve`, port 8080: `/health/live`, `/health/ready`, `/status`, `/plan`, `/metrics` |
 | Config | `files/tariff.yaml` + `files/service.yaml` (vendored from the app repo `config/`) in ConfigMap `battery-optimizer-config`, mounted at `/config`. `service.yaml` uses `soc_source: simulated` because Home Assistant has no battery entities yet |
-| HA token | the same ExternalSecret as the pipeline, **mounted as a file** (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`). Read-only, non-admin; no other credential exists |
+| HA token | the same ExternalSecret as the pipeline, **mounted as a file** (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`). Read-only, non-admin. With `global.liveHomeAssistantToken: true` the live user's token is mounted at the same path instead ([Live battery control](#live-battery-control)) |
 | Storage | the same PVC `battery-optimizer-data` at `/data` (RWO on prusik, `Recreate` avoids two pods). The service writes only `/data/service/v1/`; the pipeline uses `raw/`, `manifests/` and `analysis/`, so the paths never collide |
 | Resources | requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS) |
 | Probes | liveness **and** readiness on `/health/live`; generous startup probe. `/health/ready` returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on `battery_optimizer_ready` instead |
 | Service / scrape | ClusterIP `battery-optimizer:8080` (`http`); ServiceMonitor labelled `operator.prometheus.io/instance: prometheus-long-term` (job `battery-optimizer`, 30 s), so `battery_optimizer_*` lives in the long-term Prometheus for the multi-week comparison |
-| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, and the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) |
-| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer shadow service` and `Battery optimizer climate shadow` |
+| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) and the [live control](#alerts) alerts (`rules-service/actuator.yaml`) |
+| Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer service`, `Battery optimizer climate shadow`, `Battery: plan vs actual`, `Battery: load forecast`, `Battery: model and actuation`, `Battery: temperature`, `Tariff prices` and the six `Climate: ...` dashboards (see [Dashboards per component](#dashboards-per-component)) |
+
+### Dashboards per component
+
+One dashboard per component KPI table of the app repository (`docs/components/*.md`, section "KPIs"). They share the
+`${datasource}` variable (default `prometheus-long-term`), the tags `battery-optimizer`, `energy` and `battery`, and a
+dashboard-links block that lists every dashboard tagged `battery`, so the six battery dashboards link to each other (a new
+battery dashboard needs only the tag). Panel descriptions state each sign and every approximation.
+
+| Component | Dashboard (uid) | What it answers |
+|---|---|---|
+| battery-optimizer | `Battery: plan vs actual` (`battery-plan-vs-actual`), `Battery optimizer service` (`battery-optimizer-shadow`) | day-ahead against final plan against actual; readiness, solves, shadow-vs-native cost |
+| battery-load-forecast | `Battery: load forecast` (`battery-load-forecast`) | forecast error of the two plans |
+| battery-model | `Battery: model and actuation` (`battery-model-actuation`) | commanded, planned and actual power (+ charge), clamped power and energy not delivered, SOC tracking error at the slot boundary, daily discharge/charge ratio. The commanded power is derived (charge: PD target - house load, since the PD target is a grid-import setpoint; discharge: - system discharge cap, a ceiling). There is no round-trip-efficiency metric: the panel is a discharge/charge ratio, and an "RTE estimate" line is drawn only while the SOC moved 3 points or less over the 24 h |
+| battery-thermal | `Battery: temperature` (`battery-temperature`) | measured against predicted temperature, derate factor and state, Omnibattery's limit settings, predicted achievable against actual charge power, MAE, RMSE and bias per lead (`final`, `1h`, `3h`), model status, parameters, last fit, refits and predictions by result; the HA sensor `sensor.venus_internal_temperature` and the hours above 35, 40 and 45 degC. Needs `planning.thermal.mode: shadow` (service 0.10.0); the error panels fill as slots close, the last-fit stat and the derate-error panels stay empty until a refit is accepted and a derate slot has closed |
+| tariff-prices | `Tariff prices` (`battery-tariff-prices`) | next-day publication (state, last flip time, hour per day), price and plan horizon, day-ahead lead, the PVPC price from `sensor.esios_pvpc` (current hour only; the forward curve is a sensor attribute, not a metric), daily cost native against counterfactual and their difference |
+
+The cost panels are `delta()` sums over the per-process-run gauges `shadow_native_cost_eur` and
+`shadow_counterfactual_cost_eur` (they restart at 0 with every pod, so a restart makes the day approximate). Since the
+battery is commissioned, *native* is the house with the battery as it ran and *counterfactual* the replayed shadow
+decisions: the pair is **not** a house with and without the battery. `shadow` has no actuator, so the actuator panels
+need `dry_run` or `live`.
+
+**Size.** The ConfigMap holds all thirteen JSON files (about 460 KB). Client-side apply stores the whole object in the
+`last-applied-configuration` annotation, which is limited to 256 KiB, so the ConfigMap in `templates/dashboards.yaml`
+carries `argocd.argoproj.io/sync-options: ServerSideApply=true` (as `kanidm`, `pyroscope` and `tempo` do). The object
+limit is 1 MiB, so there is room for roughly the same again; past about 800 KB split the climate files into a second
+ConfigMap `dashboards-climate` (a second template with the same label and `ServerSideApply`, its own file glob and
+`target-directory` annotation).
+
+#### Climate dashboards per component
+
+The climate KPI tables of the app repository (`docs/components/*.md`, section "KPIs") follow the same pattern: one
+dashboard per component that has at least three meaningful KPI panels, shared dashboards with one titled row per
+component where it does not. All carry the tags `battery-optimizer`, `energy` and `climate`, the `${datasource}`
+variable and a dashboard-links block "Climate dashboards" (every dashboard tagged `climate`, so a new climate dashboard
+needs only the tag; `Battery optimizer climate shadow` carries it too and keeps its own panels). A panel description
+states what is approximated. Where the headline KPI has no metric yet, the panel shows the measured side or a baseline and
+the closing text panel "Not yet measured" names the gap.
+
+| Component | Dashboard (uid) | What it answers |
+|---|---|---|
+| climate-mpc | `Climate: comfort MPC` (`climate-mpc`) | plan production (runs by result, planned share), solver health (solves by status, not-optimal share, duration), top-offset share, degree-hours below 21 degC and the hall-kitchen against 23.5 degC as the rule delivered them |
+| thermal-model | `Climate: thermal model` (`climate-thermal-model`) | room-mean RMSE, skill and bias per lead (1, 6, 12, 24 h) and window against the preregistered limits, daily heat MdAPE, scored origins and valid weeks, measured room temperatures, gate status, refits |
+| cop-model | `Climate: COP model` (`climate-cop`) | the measured side: COP from the HeishaMon counters (24 h, 7 d, by mode), reported COP, lift in heat mode, starts and compressor hours (the `d` and `e` terms), heat and electricity per day. The model's own error is offline (`hack/climate_cop.py`) |
+| heat-pump-controller | `Climate: heat-pump controller` (`climate-heat-pump-controller`) | room temperature against setpoint and the section-B comfort criteria, rule activity (heating and hot-water hours against `min_hours`, starts, water target), kWh per heating degree-day, heater safety and tank cap |
+| outdoor-temperature | `Climate: outdoor temperature` (`climate-outdoor-temperature`) | the unit sensor and compressor frequency, trusted, unknown and duty shares from the compressor frequency, weather forecast archive fetches and age |
+| hp-consumption-forecast, boost-mode | `Climate: planned components` (`climate-planned`), one row each | planned, not built: the heat-pump load and a same-slot-yesterday baseline (MAE, bias) the forecast must beat; for boost the grid import against the 5.0 kW limit, battery SOC and charge power, tank maximum against 50 degC and the heater states |
+
+Decisions: the first five have at least three KPI panels with real series (the outdoor-temperature ones are
+compressor-frequency approximations, and its forecast-error KPI is not measured). The two planned components have no
+metric of their own, only preconditions and baselines, so they share one dashboard with a titled row each instead of
+two near-empty ones. The thermal-model dashboard repeats the accuracy panels of `Battery optimizer climate shadow` on
+purpose (that one stays the job-level view) and adds the preregistered limits as dashed lines.
+
+Gaps (no metric exists): the MPC's planned comfort deficit and planned against actual heat-pump energy, the COP model's
+predicted COP and error, the outdoor temperature forecast error, the heat-pump consumption forecast error, boost
+activations and soak energy; the controller's decisions. The weather archive panels expose a real effect: while the
+`weather.forecast_home` entity does not answer, `weather_forecast_fetches_total{result="failed"}` grows and the MPC horizon
+holds the last reading.
+
+**Day-ahead and final plan (0.9.0).** The service keeps, per 15-minute slot, the *day-ahead plan* (the first plan that covered the slot, usually made the previous afternoon) next to the *final plan* (the intent frozen when the slot opened) and scores both against what happened. The metrics are `battery_optimizer_slot_*{plan="day_ahead|final"}`, `load_forecast_*_total{plan}`, `plan_revision_kwh_total` and `shadow_day_ahead_energy_kwh_total`; they appear after the first slot opens and closes, and the day-ahead values after a restart are rebuilt from the plan files on the PVC (startup log `day-ahead rebuilt plan_files=N slots=M`). Home Assistant gets four more template sensors from `/plan` `current_slot` in `apps/home-assistant/config/integrations/battery_optimizer_plan.yaml`: `sensor.battery_optimizer_day_ahead_power` and `sensor.battery_optimizer_day_ahead_soc` (next to the planned power and SOC, which the Battery dashboard calls *Final plan*), and `sensor.battery_optimizer_day_ahead_load` / `sensor.battery_optimizer_final_load` (forecast house load in W). They keep the existing sign (+ discharging, - charging), are `unknown` while the slot has no such plan and unavailable when the service does not answer (a service older than 0.9.0 has no `current_slot`, so they stay unknown). The Battery dashboard (`dashboard-battery`, storage mode) charts them as *Day-ahead plan*, *Final plan* and *Actual* (power, SOC and house load).
 
 **Passive archives (0.3.0).** The `archive:` block of `service.yaml` turns on two append-only
 collectors under `/data/service/v1/`: `pvpc_snapshots/` (every state change of the PVPC price sensor,
@@ -242,6 +306,406 @@ heating weeks are in a window.
 `ClimateShadowSolveFailures` (infeasible or error solves) and `ClimateShadowNoState` (the climate series
 have gaps). **Dashboard**: `Battery optimizer climate shadow` (runs, solver, accuracy per horizon,
 valid weeks, gates, regime).
+
+## Live battery control
+
+ADR-0007 in the app repository (`docs/adr/0007-live-battery-control.md`, operations in
+`docs/service.md#live-control-dry_run-and-live`) adds `mode: dry_run | live` to `files/service.yaml`.
+The service then sets Omnibattery's direction switches, PD grid target and discharge cap through a
+narrow write allowlist; Omnibattery stays the only Modbus writer. The deployed mode is `shadow`
+until the owner changes it. The battery and its Omnibattery setup are in
+[`home-assistant-omnibattery.md`](../troubleshooting/home-assistant-omnibattery.md).
+
+| Piece | Where | State |
+|---|---|---|
+| Kill switch `input_boolean.battery_optimizer_live` | `apps/home-assistant/config/integrations/battery_optimizer.yaml` | Read by the service only. Created off; restores its last state across HA restarts (no `initial:`) |
+| Heartbeat `input_datetime.battery_optimizer_heartbeat` | same file | Written by every reconciled `live` tick (~30 s) |
+| Watchdog automation `battery_optimizer_watchdog` | same file | Every minute: kill switch on and heartbeat older than 5 min -> both direction switches and `switch.omnibattery_weekly_full_charge_enabled` off (the last in its own `continue_on_error` step, so an unavailable entity blocks nothing); also on the kill switch's `off` edge. Persistent notification `battery_optimizer_watchdog` (replaced, not stacked) |
+| Live token | `global.liveHomeAssistantToken` in `values.yaml` (default `false`) | Off: nothing rendered. On: ExternalSecret `battery-optimizer-home-assistant-live`, mounted in the service at `/secrets/home-assistant/BATTERY_OPTIMIZER_HA_TOKEN` instead of the read-only token. The pipeline keeps the read-only token |
+| Alerts | `rules-service/actuator.yaml` | See [Alerts](#alerts) |
+| AC failsafe | `apps/esphome/config/smart-plug-v2-battery.yaml` | See [ESPHome AC failsafe](#esphome-ac-failsafe). Must be flashed by hand |
+
+**Tokens.** `shadow` and `dry_run` use the read-only `battery-optimizer` HA user. `live` uses the
+separate non-admin user `battery-optimizer-live` (group `system-users`, local only), whose long-lived
+token the owner keeps in `pass`. Home Assistant cannot restrict a token to entities, so the service's
+`ha_guard` allowlist is the restriction. Rendering fails when `files/service.yaml` says `mode: live`
+while `global.liveHomeAssistantToken` is `false` (ArgoCD then shows a `ComparisonError` and syncs
+nothing), so `live` never runs on the read-only token.
+
+**Watchdog in `dry_run`.** `dry_run` keeps the kill switch on (rollout step 2) but sends no heartbeat,
+so the watchdog turns both direction switches off every minute and keeps its notification up. That is
+expected: nothing else should be driving the battery during the rehearsal. The heartbeat and
+kill-switch alerts exclude `dry_run` for that reason.
+
+**Omnibattery weekly full charge.** `switch.omnibattery_weekly_full_charge_enabled` must stay off by
+default, and so must `switch.omnibattery_weekly_full_charge_delay`. When `full_charge.mode: live` the
+optimizer owns the weekly switch (it arms it for the periodic full charge), and the watchdog turns it
+off together with the direction switches, so a dead optimizer never leaves it armed.
+
+### Live token in Vault
+
+Once, before the first `live` rollout. Load the token from a `0600` file, never from the command line,
+and never print it:
+
+```bash
+export VAULT_ADDR=https://vault.internal.grigri.cloud
+umask 077
+TOKEN_FILE="$(mktemp)"
+# Put only the battery-optimizer-live user's long-lived token in "$TOKEN_FILE", taken from
+# `pass iot/hass-battery-optimizer-live` (no trailing newline).
+vault kv put secret/battery-optimizer/home-assistant-live token=@"$TOKEN_FILE"
+shred -u "$TOKEN_FILE"
+vault kv metadata get secret/battery-optimizer/home-assistant-live   # check it exists, no value shown
+```
+
+The ExternalSecret only exists while the flag is on, so a missing Vault secret shows up at the `live`
+rollout: `SecretSyncedError` on `battery-optimizer-home-assistant-live` and the new service pod stuck
+in `ContainerCreating`. The kill switch is off at that point, so nothing reaches the battery; roll back.
+
+### ESPHome AC failsafe
+
+The battery holds its last charge or discharge command while Home Assistant is down (commissioning
+test: outages of 23 s to 10.5 minutes, no device timeout). The watchdog and the service's safe idle
+both need HA, so the battery's AC plug (Athom Smart Plug V2 "Battery",
+`switch.smart_plug_v2_battery`) carries a failsafe in its own device file. The shared
+`packages/smart-plug-v2.yaml` is unchanged:
+
+- after **5 minutes** without a Home Assistant API client (`api.connected` with
+  `state_subscription_only`, so a log viewer does not count; checked every 10 s), the relay turns
+  **off**. The battery then only powers its backup port and stops charging or discharging to the house;
+- when HA reconnects, the relay turns back **on**, only if the failsafe turned it off. A global with
+  `restore_value` remembers that across reboots; any relay turn-on clears it. A relay the owner switched
+  off stays off;
+- `relay_restore_mode: RESTORE_DEFAULT_ON`: a reboot or OTA restores the last state, and ON when
+  nothing was saved. A failsafe OFF is restored as OFF and switched on again when HA returns;
+- ESPHome's own `api` `reboot_timeout` (default 15 min) reboots the plug during a long HA outage. The
+  relay stays off through it.
+
+It also trips on a Wi-Fi loss of 5 minutes. When the AC comes back the inverter goes back to Bypass,
+and Omnibattery may report `backup_mode` for a few minutes; the optimizer holds safe idle meanwhile.
+
+**Flashing.** Pushing changes only the ConfigMap that the ESPHome dashboard reads (Reloader restarts the
+`esphome` pod); the plug keeps its old firmware until it is flashed over OTA. Either use the dashboard at
+`esphome.internal.grigri.cloud` (`smart-plug-v2-battery` -> Install -> Wirelessly), or flash from
+`apps/esphome/config` (see its `README.md`):
+
+```bash
+cd apps/esphome/config
+make requirements
+KUBE_CONTEXT=grigri make secrets
+make smart-plug-v2-battery.yaml   # esphome run: compile + OTA
+```
+
+The plug reboots once (a few seconds) and restores the relay ON. The failsafe firmware has been on
+the plug since 2026-11-03 (ESPHome 2026.10.1) and passed the hardware
+[test](#failsafe-test) on 2026-11-04. Flash while the
+battery is idle (direction switches off), then check `switch.smart_plug_v2_battery` is on.
+
+**Known limit.** A manual relay ON (HA or the plug's button) during a long HA absence is undone within
+10 s: the absence counter is only reset by an HA reconnect or a reboot, not by a manual turn-on. To
+force AC while HA stays down, power-cycle the plug, then press the button (5 more minutes of grace).
+Fix candidate: let a manual turn-on suspend the failsafe until HA reconnects.
+
+**Servers on the backup port.** Since 2026-11-03 the backup port feeds the servers (~250 W) that host
+Home Assistant. A trip makes them run from the battery: at 50 % SOC that is roughly 8 h before the
+battery's own cutoff. An HA outage longer than that drains the battery and stops the servers; the
+plug then has to be switched on by hand (power-cycle + button).
+
+#### Failsafe test
+
+Passed on the flashed firmware on 2026-11-04 (see the result below). Repeat it after any change to the
+failsafe or the plug's firmware. It takes ~15 minutes and Home Assistant is really stopped for ~6
+minutes. The servers switch to battery power for the switchover and back, the same switchover the
+commissioning test passed with the TV (max ping gap 0.22 s).
+
+Preconditions:
+
+- SOC above 30 %, battery in Bypass, Omnibattery `balanced`, backup-port load below the 500 W threshold.
+- Kill switch `input_boolean.battery_optimizer_live` **off** (both direction switches off), so the
+  optimizer does not chase the battery while it is islanded. Note the time; turn it back on at the end.
+- A second way to reach the plug if HA misbehaves: the relay button, and the ESPHome logs from a
+  workstation (`apps/esphome/config`: `KUBE_CONTEXT=grigri make secrets`, then
+  `make logs FILE=smart-plug-v2-battery.yaml`; a log subscription is not a state subscriber, so it does
+  not keep the relay on). Delete `secrets.yaml` afterwards.
+- The Kubernetes API must stay reachable from the workstation: the servers host HA and the cluster.
+  Do not run it if a server reboot would be a problem.
+
+Steps (T = the moment HA is gone; the scaling only with the owner's explicit go):
+
+1. Start the ESPHome logs and note `switch.smart_plug_v2_battery` = on, `sensor.venus_inverter_state`
+   = Bypass, `sensor.venus_ac_offgrid_power` ≈ servers' load.
+2. **Stop HA for real.** The `home-assistant` Application comes from the `apps` ApplicationSet with
+   selfHeal, so scale `argocd/argocd-repo-server` to 0 first (otherwise Argo reverts the scale-down),
+   then `home-assistant/home-assistant-hass` to 0. **T:** the pod is gone and the plug logs the lost
+   API connection (`Reading failed CONNECTION_CLOSED`). Lighter alternative: Settings → Devices &
+   services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ → **Disable** drops only the plug's API
+   connection and leaves HA running.
+3. **~T+5:00:** the log shows `Battery failsafe: no Home Assistant for 5 min, relay OFF`. Within
+   seconds the battery reports `Backup Mode` (Omnibattery keeps polling it over Modbus) and the servers
+   keep running (check the Kubernetes API or a ping).
+4. **T+6:** restore HA (scale `home-assistant-hass` to 1), then `argocd-repo-server` to 1. Within ~10 s
+   of the HA API reconnect the log shows `Battery failsafe: Home Assistant is back, relay ON`; the
+   switch is on in HA and the inverter returns to Bypass within 5–33 s. The `home-assistant` app shows
+   sync Unknown until Argo's next refresh (about 3 min); a hard refresh clears it.
+5. Manual-off check: with HA connected, turn `switch.smart_plug_v2_battery` off, wait 30 s: it must
+   stay off (the failsafe only restores what it turned off). Turn it on again; the battery returns to
+   Bypass.
+6. Turn the kill switch back on and check the optimizer takes control at the next 15-minute slot.
+
+Pass: relay off at about T+5:00 (up to ~10 s early, see the result), back on within 20 s of the HA
+reconnect, manual off respected, servers never lost power. Fail or abort:
+
+- relay still on at T+6:00: the failsafe does not trip (likely `api.connected` still sees a state
+  subscriber). Restore HA and treat the battery as unprotected against HA outages until fixed;
+- relay not back on 1 minute after HA is back: turn it on from HA; if HA cannot reach the plug, press
+  the button once;
+- any server reboots during the switchover: put the servers back on mains and stop using the backup
+  port until the switchover is understood.
+
+Record the timings in this section and in the regime log of the optimizer repo.
+
+**Result 2026-11-04: PASS** (HA really stopped, repo-server scaled to 0 as above; kill switch off
+08:29:35, SOC 45 %, backup-port load ~220 W):
+
+| Event | Time (UTC) | Timing |
+| ----- | ---------- | ------ |
+| HA stopped / pod gone | 08:32:31 / 08:32:34 | T |
+| Plug relay OFF | 08:37:25 | 4:52 after the plug lost the HA API connection, 4:51 after the pod was gone |
+| HA back (API connected) | 08:38:48 | HA down ~6:17 |
+| Plug relay ON | 08:38:56 | 8 s after reconnect (limit 20 s) |
+| Inverter back in Bypass | ~08:39:06 | ~10 s after relay ON |
+| Manual OFF | 08:40:09 | respected for the 46 s observed, no failsafe restore |
+| Manual ON, then Bypass | 08:41:05 | ~7 s |
+| Kill switch ON, optimizer in control | 08:41:44 | `discharging` from 08:42:25 (~40 s) |
+
+- The trip is a few seconds before T+5:00 measured from the pod being gone: the 5-minute counter
+  starts when HA drops its state subscriptions, shortly before the TCP close. Not an early trip.
+- The servers never rebooted: no pod restarts, the Kubernetes API answered `/readyz` throughout. One
+  Modbus sample at the switchover showed the backup output at 0 W for one ~6 s poll interval; that is
+  the inverter's reading during the mode change, not a 6 s outage.
+- SOC 45 % -> 44 % (live discharge resumed, ~254 W).
+- Grid side (Shelly EM per-minute history, averages): ~450 W from the grid with the battery idle (kill
+  switch off). During the trip the servers' ~220 W moved to the battery (grid minute 08:38 averaged
+  241 W), back to ~450 W after the relay came on. No visible import spike at reconnection (minute
+  resolution only).
+
+### Rollout: dry_run, then live
+
+Preconditions (owner):
+
+- The HA helpers and the watchdog are deployed. Pushing them restarts Home Assistant through Reloader,
+  so check the Shelly `GET /cit/d` first (see the CoIoT note above). In Developer tools, check that the
+  three entity IDs exist without a `_2` suffix and that the kill switch is **off**.
+- The ESPHome failsafe is flashed and tested (passed 2026-11-04).
+- Omnibattery: competing strategies off; `number.omnibattery_pd_controller_max_power_change` raised to
+  2000 W. Note the backup threshold
+  [workaround](../troubleshooting/home-assistant-omnibattery.md#workaround-active-since-2026-11-03).
+- The system caps stay at today's 1000 W charge / 800 W discharge until go-live (steps 1-2 of the live
+  phase). In `dry_run` the charge clamping therefore reflects the 1000 W cap minus the house load,
+  not the go-live 2500 W.
+
+**dry_run (1-2 days):**
+
+1. Update the image to the optimizer release with live control (Renovate PR, or by hand) and vendor
+   its `config/service.yaml` changes (the `actuation:` section). Set `mode: dry_run` in
+   `files/service.yaml`. Merge; ArgoCD rolls the pod.
+2. Check `/status` (`mode: dry_run`, an `actuator` block) and `battery_optimizer_build_info{mode="dry_run"}`.
+3. Turn the kill switch **on**. Nothing is sent; the watchdog keeps the switches off (see above).
+4. Review `/data/service/v1/actuation/` and the `battery_optimizer_actuator_*` metrics: guard reasons,
+   the mapping at every slot, setpoint churn, how often a charge is clamped, and the house-load
+   estimate against the meter.
+
+**live, supervised:**
+
+Go-live steps first, with the battery idle. Above 800 W of discharge the Venus needs Premium mode, and
+with the system power limits on the PD target is bounded by the system caps (ADR-0007 commissioning
+findings):
+
+1. Turn both *Allow* switches (`switch.venus_battery_allow_charge`,
+   `switch.venus_battery_allow_discharge`) **off**, then switch **Premium mode on** in the Marstek app.
+   Change nothing else in the app.
+2. Set `number.omnibattery_system_max_charge_power` and `number.omnibattery_system_max_discharge_power`
+   to **2500 W** (today 1000 / 800 W). The Venus's own `number.venus_max_charge_power` /
+   `_max_discharge_power` are already 2500 W; check them.
+
+Then:
+
+3. Put the live token in Vault ([above](#live-token-in-vault)).
+4. Turn the kill switch **off**.
+5. In one commit: `mode: live` in `files/service.yaml` (the app also requires
+   `planning.soc_source: entity` for `live`) and `global.liveHomeAssistantToken: true` in `values.yaml`.
+   Merge.
+6. Check `kubectl --context=grigri -n battery-optimizer get externalsecret` (both `SecretSynced`), the
+   new pod running, `/status` `mode: live`, and `battery_optimizer_build_info{mode="live"}`.
+7. Turn the kill switch **on** while watching the grid meter. Verify: writes confirmed
+   (`battery_optimizer_actuator_writes_total{result="ok"}`), the heartbeat entity advancing about every
+   30 s, a slot change in each direction, the import staying under 4500 W while charging, and the
+   charge and discharge reaching up to 2500 W (minus the house load for a charge).
+8. Watchdog test: pause ArgoCD auto-sync for the app, scale the Deployment to 0, and within about 6
+   minutes see both direction switches go off, the `battery_optimizer_watchdog` notification and
+   `BatteryOptimizerHeartbeatStale`. Scale back to 1 and resume auto-sync. (Run these `kubectl` writes only
+   with the owner's explicit go.)
+9. Graceful stop: delete the pod (ArgoCD recreates it) and check that the actuation records show a
+   safe idle with reason `shutdown` before the restart, and that the new pod holds safe idle until its
+   first fresh plan.
+
+Only then leave it unattended. HA host power loss is still untested (app repo TODO-5.4); the AC
+failsafe is the layer that does not depend on HA.
+
+### Rollback
+
+1. Turn `input_boolean.battery_optimizer_live` **off**. This is immediate: the service sets safe idle
+   once and stops writing, and the watchdog repeats the safe idle in HA. In an emergency, also turn the
+   *Allow* switches off on the Battery dashboard, or the battery's AC plug.
+2. In one commit: `mode: shadow` (or `dry_run`) in `files/service.yaml` and
+   `global.liveHomeAssistantToken: false`. Merge. ArgoCD prunes the live ExternalSecret and its Secret
+   and the pod restarts on the read-only token. The flag cannot go off while the mode is still `live`
+   (rendering fails).
+3. Restore Omnibattery's native configuration by hand: safe idle leaves the PD target and the
+   discharge cap at their last values, so set them back before switching a direction on. Decide whether
+   the 2500 W system caps and Premium mode stay (both *Allow* switches off while changing them).
+4. To retire the live user for good: delete its long-lived token in HA (the user's profile, as an
+   admin) and `vault kv metadata delete secret/battery-optimizer/home-assistant-live`.
+
+### Alerts
+
+`rules-service/actuator.yaml`, long-term Prometheus. The `actuator_*` series exist only in `dry_run`
+and `live`; the HA-side rules read `hass_*` and only fire while the kill switch is on.
+
+| Alert | Fires when |
+|---|---|
+| `BatteryOptimizerActuatorAlert` (critical) | `actuator_alert == 1` for 2 m: a write was not confirmed after its retries |
+| `BatteryOptimizerActuatorSafeIdle` | in control and the guard has held safe idle for 30 m (`actuator_guard_reason` says why) |
+| `BatteryOptimizerImportOverCap` (critical) | guard reason `import_over_cap`: import above 4700 W while charging |
+| `BatteryOptimizerHeartbeatFailures` | a heartbeat write failed in the last 10 m |
+| `BatteryOptimizerHeartbeatStale` (critical) | the heartbeat entity is older than 5 m while the kill switch is on (not in `dry_run`); fires with the service down |
+| `BatteryOptimizerKillSwitchOnNotLive` | the kill switch has been on for 15 m while the service is not `live` or `dry_run` (or is down) |
+| `BatteryOptimizerChargePowerHigh` | measured battery charge above 2600 W for 2 m (the go-live caps are 2500 W): a cap or `battery_ac_power_sign` is wrong |
+| `BatteryOptimizerChargeClamped` | `battery_optimizer_actuator_clamped_watts > 1000` for 30 m (sized for the 2500 W caps). **Unconfirmed metric name** from the unreleased optimizer change; check it against the released `/metrics` |
+
+### Omnibattery backup cooldown workaround
+
+`number.venus_backup_offgrid_threshold` is **500 W** (default 50 W) because of upstream bug
+ffunes/Omnibattery#660 (`backup_mode` latched after the grid returns while the backup port has a load).
+The fix is ffunes/Omnibattery#723. Once a release with #723 is installed, set the threshold back to
+50 W and check that the status returns to `balanced` within 5 minutes with a load on the backup port in
+Bypass. Side effects of the high threshold and the full procedure:
+[`home-assistant-omnibattery.md`](../troubleshooting/home-assistant-omnibattery.md).
+
+## Battery settings: where they are and how to read them
+
+The battery is a Marstek Venus E V3 driven by Omnibattery (v1.5.1b1 at the time of writing). Settings sit in
+three places: the device (Marstek app), Omnibattery's own entities in Home Assistant, and the optimizer's
+`files/service.yaml`. All reads below are read-only.
+
+### Entities
+
+| Entity | Value on 2026-11-04 | Set by |
+|---|---|---|
+| `number.venus_max_discharge_power` | 2500 W (range 800-2500) | The device: Marstek app Premium mode. Never written by us |
+| `number.venus_max_charge_power` | 2500 W | The device. Never written by us |
+| `number.omnibattery_system_max_charge_power` | 2500 W | The owner, in the Omnibattery settings |
+| `number.omnibattery_system_max_discharge_power` | varies per slot | **Rewritten by the optimizer every slot**: the per-slot discharge cap (`actuation.entities.max_discharge_power`; 0 = unlimited) |
+| `number.omnibattery_pd_target_grid_power` | varies per slot | **Written by the optimizer**: the grid-import target |
+| `switch.omnibattery_system_power_limits` | on | **Written by the optimizer** |
+| `number.omnibattery_max_contracted_power` | 5000 W | The owner |
+
+Owned by the owner and read-only for the optimizer:
+
+- `select.omnibattery_pd_tuning_profile` (`balanced`) and the PD controller numbers (kp 0.35, kd 0.3, deadband
+  40 W, direction hysteresis 60 W, max power change 800 W).
+- The temperature limit: `switch.omnibattery_temp_charge_limit` and its numbers. The owner toggles it; the
+  optimizer only reads it.
+
+Optimizer-side knobs live in the deployed `apps/battery-optimizer/files/service.yaml`, `actuation:` block:
+
+| Key | Value | Meaning |
+|---|---|---|
+| `import_cap_w` | 4500 | Upper bound of the PD grid-import target (the meter trips at 5 kW) |
+| `import_guard_margin_w` | 200 | Margin the guard keeps below the import cap |
+| `discharge_margin_w` | 200 | Import kept while discharging, never export. Omnibattery's PD loop swings +-150-200 W; 50 W gave brief exports |
+| `min_discharge_cap_w` | 100 | Smallest per-slot discharge cap written |
+| `max_discharge_cap_w` | 2500 | Largest per-slot discharge cap written |
+| `neutral_pd_target_w` | 0 | PD grid target in a planned idle |
+
+### How to read them
+
+1. **Prometheus** (`prometheus-long-term`) exports HA switch states (`hass_switch_state`) and sensors, but
+   **not `number` entities** (only `hass_entity_available` and `hass_last_updated_time_seconds` for them).
+2. **`number` and `select` values**: run a short Python inside the optimizer pod. It uses the pod's own HA token
+   file (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`) and URL (`BATTERY_OPTIMIZER_HA_URL`, a ws URL: the script converts
+   it to http and strips `/api/websocket`) with `GET /api/states`. The token never leaves the pod and is never
+   printed. Use a GET only, never a POST with it. Save the script as `hastates.py` and pipe it on stdin:
+
+   ```bash
+   kubectl --context=grigri -n battery-optimizer exec -i deploy/battery-optimizer-service -c service -- python - < hastates.py
+   ```
+
+   ```python
+   import os,json,urllib.request,re
+   tok=open(os.environ['BATTERY_OPTIMIZER_HA_TOKEN_FILE']).read().strip()
+   base=os.environ['BATTERY_OPTIMIZER_HA_URL'].rstrip('/')
+   base=re.sub(r'^ws',r'http',base); base=re.sub(r'/api/websocket$','',base)
+   req=urllib.request.Request(base+'/api/states',headers={'Authorization':'Bearer '+tok})
+   st=json.load(urllib.request.urlopen(req,timeout=20))
+   pat=re.compile(r'^(number|select|switch|sensor)\.(omnibattery|venus)_.*(discharg|max_charge|power_limit|force_mode|work_mode|user_mode|manual|contracted|pd_|max_power|backup|premium|rs485|allow|set_charge|set_discharge|ac_power|battery_power|status)')
+   for s in sorted(st,key=lambda s:s['entity_id']):
+     if pat.search(s['entity_id']):
+       a=s.get('attributes',{})
+       print(s['entity_id'],'=',s['state'],a.get('unit_of_measurement',''),('min=%s max=%s'%(a.get('min'),a.get('max'))) if 'max' in a else '', a.get('options','') if s['entity_id'].startswith('select') else '')
+   ```
+
+3. **The optimizer's own view**, on port 8080 in the pod: `/status` (the `actuator`, `thermal` and `full_charge`
+   blocks) and `/plan`. `/metrics` has `battery_optimizer_actuator_desired_*`, `battery_optimizer_actuator_observed_*`
+   and `battery_optimizer_actuator_house_load_watts`.
+
+   ```bash
+   kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-service -c service -- \
+     python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:8080/status').read().decode())"
+   ```
+
+4. **Planned against actual discharge, caps, PD target and house load over 24 h**, hourly, as Prometheus
+   `query_range` calls run inside the pod (same `exec -i ... python - < promr.py` pattern):
+
+   ```python
+   import urllib.request,urllib.parse,json,sys,time
+   end=int(time.time()); start=end-24*3600
+   qs={'plan_dis':'sum(increase(battery_optimizer_shadow_planned_energy_kwh_total{direction="discharge"}[1h]))',
+       'act_dis':'sum(increase(battery_optimizer_shadow_actual_battery_energy_kwh_total{direction="discharge"}[1h]))',
+       'plan_w':'avg_over_time(max(battery_optimizer_slot_battery_power_watts{plan="final"})[1h:1m])',
+       'maxdis':'avg_over_time(max(battery_optimizer_actuator_desired_max_discharge_watts)[1h:1m])',
+       'pdt':'avg_over_time(max(battery_optimizer_actuator_desired_pd_target_watts)[1h:1m])',
+       'load':'avg_over_time(max(battery_optimizer_actuator_house_load_watts)[1h:1m])',
+       'obs':'avg_over_time(max(battery_optimizer_actuator_observed_battery_power_watts)[1h:1m])',
+       'soc':'max(hass_sensor_battery_percent{entity="sensor.venus_battery_soc"})',
+       'grid':'avg_over_time(max(hass_sensor_power_w{entity="sensor.shellyem_grid_power"})[1h:1m])'}
+   data={}
+   for k,q in qs.items():
+     u='http://prometheus-long-term.monitoring:9090/api/v1/query_range?'+urllib.parse.urlencode({'query':q,'start':start,'end':end,'step':3600})
+     r=json.load(urllib.request.urlopen(u))['data']['result']
+     data[k]={int(t):float(v) for t,v in r[0]['values']} if r else {}
+   ts=sorted(set().union(*[d.keys() for d in data.values()]))
+   print('hourUTC '+' '.join('%8s'%k for k in qs))
+   for t in ts:
+     print(time.strftime('%d %H:%M',time.gmtime(t)),' '.join('%8.2f'%data[k][t] if t in data[k] else '%8s'%'-' for k in qs))
+   ```
+
+5. **Grafana** (folder `battery-optimizer`), by dashboard uid: `battery-plan-vs-actual`,
+   `battery-load-forecast`, `battery-model-actuation`, `battery-temperature`, `battery-tariff-prices`, and the
+   service dashboard `battery-optimizer-shadow`.
+
+`kubectl exec` into the service pod is read-only use here. Never print or copy the token, and never reuse it
+for a write: writes are the actuator's job, through its allowlist.
+
+### Open issue: planned discharge is not delivered
+
+Status: **waiting for data (from 2026-11-04)**. The "Final plan energy not delivered" panel on
+`battery-model-actuation` shows a discharge shortfall. Part of it is an artefact of the shadow counters that
+ran before live control started (2026-11-03 22:45 UTC) and leaves the 24 h window after the first live day.
+The live part, in the morning discharge window, comes from the no-export rule, the 200 W import margin and a
+load forecast that ran high; the device limits and the per-slot cap are not involved. Diagnosis, candidate fix
+and decision criteria: the app repository's `docs/known-issues.md`, section "Planned discharge is not
+delivered".
 
 ## First run (2026-10-25)
 

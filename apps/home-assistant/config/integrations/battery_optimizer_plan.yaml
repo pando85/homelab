@@ -1,0 +1,171 @@
+# What the battery optimizer plans, next to what the battery does (the Battery dashboard). Read
+# only: GET /plan of the in-cluster service, once a minute. The service's own sign is + charge,
+# - discharge; these sensors use sensor.venus_ac_power's sign instead (+ discharging, - charging) so
+# both plot on one graph.
+# Two plans exist for every 15-minute slot. The "planned" sensors (shown as "Final plan") are the
+# intent the service opened for the current slot, made at most a quarter of an hour before it: unknown
+# when it has none (no plan yet, inputs not ready), unavailable when the service does not answer. The
+# "day-ahead" sensors are the FIRST plan that covered the slot, usually made the previous afternoon
+# when the next day's prices are published: unknown when the slot has none (right after a deploy, a
+# catch-up plan, a service older than 0.9.0). Day-ahead against final shows how much the plan was
+# revised, day-ahead load against final load how good the load forecast is. The SOC target is the
+# plan's state of charge at the END of the slot.
+rest_command:
+  battery_optimizer_plan:
+    url: http://battery-optimizer.battery-optimizer.svc:8080/plan
+    method: get
+    timeout: 10
+
+template:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: rest_command.battery_optimizer_plan
+        response_variable: plan_response
+        continue_on_error: true
+    sensor:
+      - name: Battery optimizer planned power
+        unique_id: battery_optimizer_planned_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        icon: mdi:battery-clock
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping }}
+        state: >-
+          {% set i = plan_response.content.current_intent %}
+          {{ (0 - i.signed_power_w) | round(0) | int if i else none }}
+        attributes:
+          mode: >-
+            {% set i = plan_response.content.current_intent %}
+            {{ i.mode if i else none }}
+      - name: Battery optimizer planned SOC
+        unique_id: battery_optimizer_planned_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        icon: mdi:battery-clock-outline
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping }}
+        state: >-
+          {% set i = plan_response.content.current_intent %}
+          {{ (i.soc_target_frac * 100) | round(1) if i else none }}
+      - name: Battery optimizer day-ahead power
+        unique_id: battery_optimizer_day_ahead_power
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        icon: mdi:battery-arrow-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping }}
+        state: >-
+          {% set d = plan_response.content.current_slot.day_ahead
+               if plan_response.content.current_slot is mapping else none %}
+          {{ (0 - d.signed_power_w) | round(0) | int
+             if d is mapping and d.signed_power_w is number else none }}
+        attributes:
+          plan_id: >-
+            {% set d = plan_response.content.current_slot.day_ahead
+                 if plan_response.content.current_slot is mapping else none %}
+            {{ d.plan_id if d is mapping else none }}
+          generated_at: >-
+            {% set d = plan_response.content.current_slot.day_ahead
+                 if plan_response.content.current_slot is mapping else none %}
+            {{ d.generated_at if d is mapping else none }}
+          lead_hours: >-
+            {% set d = plan_response.content.current_slot.day_ahead
+                 if plan_response.content.current_slot is mapping else none %}
+            {{ (d.lead_seconds / 3600) | round(1) if d is mapping and d.lead_seconds is number
+               else none }}
+      - name: Battery optimizer day-ahead SOC
+        unique_id: battery_optimizer_day_ahead_soc
+        unit_of_measurement: "%"
+        device_class: battery
+        state_class: measurement
+        icon: mdi:battery-arrow-up-outline
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping }}
+        state: >-
+          {% set d = plan_response.content.current_slot.day_ahead
+               if plan_response.content.current_slot is mapping else none %}
+          {{ (d.soc_target_frac * 100) | round(1)
+             if d is mapping and d.soc_target_frac is number else none }}
+      - name: Battery optimizer day-ahead load
+        unique_id: battery_optimizer_day_ahead_load
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        icon: mdi:home-lightning-bolt-outline
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping }}
+        state: >-
+          {% set d = plan_response.content.current_slot.day_ahead
+               if plan_response.content.current_slot is mapping else none %}
+          {{ d.load_forecast_w | round(0) | int
+             if d is mapping and d.load_forecast_w is number else none }}
+      - name: Battery optimizer final load
+        unique_id: battery_optimizer_final_load
+        unit_of_measurement: W
+        device_class: power
+        state_class: measurement
+        icon: mdi:home-lightning-bolt-outline
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping }}
+        state: >-
+          {% set d = plan_response.content.current_slot.final
+               if plan_response.content.current_slot is mapping else none %}
+          {{ d.load_forecast_w | round(0) | int
+             if d is mapping and d.load_forecast_w is number else none }}
+      # The rest of the plan, for a forward view. The state is when the plan was made. Slots past
+      # the plan's expiry are forecast only: the service replans every slot. `blocks` merges
+      # consecutive slots of the same mode (energy in kWh, peak power, SOC at the block's end);
+      # `slots` is one [start, power W, end SOC %] per 15-minute slot, for a chart card.
+      - name: Battery optimizer plan
+        unique_id: battery_optimizer_plan
+        device_class: timestamp
+        icon: mdi:calendar-clock
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping
+             and plan_response.content.plan is mapping }}
+        state: "{{ plan_response.content.plan.generated_at }}"
+        attributes:
+          expires_at: "{{ plan_response.content.plan.expires_at }}"
+          blocks: >-
+            {% set ns = namespace(blocks=[]) %}
+            {% for i in plan_response.content.plan.intents
+                 if as_datetime(i.interval_end) > now() %}
+              {% set w = (0 - i.signed_power_w) | round(0) | int %}
+              {% set hours = (as_datetime(i.interval_end) - as_datetime(i.valid_from))
+                   .total_seconds() / 3600 %}
+              {% set kwh = (w | abs) * hours / 1000 %}
+              {% set soc = (i.soc_target_frac * 100) | round(1) %}
+              {% set last = ns.blocks[-1] if ns.blocks else none %}
+              {% if last and last.mode == i.mode %}
+                {% set ns.blocks = ns.blocks[:-1] + [dict(last, until=i.interval_end,
+                     energy_kwh=(last.energy_kwh + kwh) | round(2),
+                     max_power_w=[last.max_power_w, w | abs] | max, soc_end_pct=soc)] %}
+              {% else %}
+                {% set ns.blocks = ns.blocks + [{'from': i.valid_from, 'until': i.interval_end,
+                     'mode': i.mode, 'energy_kwh': kwh | round(2), 'max_power_w': w | abs,
+                     'soc_end_pct': soc}] %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.blocks }}
+          slots: >-
+            {% set ns = namespace(slots=[]) %}
+            {% for i in plan_response.content.plan.intents
+                 if as_datetime(i.interval_end) > now() %}
+              {% set ns.slots = ns.slots + [[i.valid_from, (0 - i.signed_power_w) | round(0) | int,
+                   (i.soc_target_frac * 100) | round(1)]] %}
+            {% endfor %}
+            {{ ns.slots }}

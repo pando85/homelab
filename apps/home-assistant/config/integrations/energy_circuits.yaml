@@ -1,6 +1,13 @@
 # Shelly EM main: channel 1 is the whole house, channel 2 is circuit 2 (aerotherm, dishwasher,
 # washer and extractor). Circuit 1 (cooker, power sockets, humid areas, thermostats and lighting)
 # is the difference, as in the IoT Energy Grafana dashboard.
+#
+# The house battery (Marstek Venus E V3) plugs into circuit 1, so channel 1 - channel 2 is circuit 1
+# NET of the battery: it drops while the battery discharges and rises while it charges. Circuit 1
+# Power adds the battery's AC power back (sensor.venus_ac_power: + discharging, - charging; it is the
+# inverter's whole AC output, including what feeds the backup port) to give the gross consumption
+# of circuit 1's loads, servers on the backup port included. The cases are in
+# docs/troubleshooting/home-assistant-dashboards.md#energy-dashboard.
 template:
   - sensor:
       - name: "Circuit 1 Power"
@@ -8,18 +15,32 @@ template:
         unit_of_measurement: "W"
         device_class: power
         state_class: measurement
-        # Both channels are sampled independently, so clamp the transient negative difference.
+        # The difference is NOT clamped: it is negative when the battery feeds more than circuit
+        # 1 draws. Both channels and the battery are sampled independently, so clamp the
+        # transient negative gross. A missing battery reading counts as idle (0 W).
         state: >-
-          {{ [states('sensor.shellyem_main_channel_1_power') | float - states('sensor.shellyem_main_channel_2_power') | float, 0] | max | round(2) }}
+          {% set ch1 = states('sensor.shellyem_main_channel_1_power') | float %}
+          {% set ch2 = states('sensor.shellyem_main_channel_2_power') | float %}
+          {% set battery = states('sensor.venus_ac_power') | float(0) %}
+          {{ [ch1 - ch2 + battery, 0] | max | round(2) }}
         availability: >-
           {{ is_number(states('sensor.shellyem_main_channel_1_power')) and is_number(states('sensor.shellyem_main_channel_2_power')) }}
 
 sensor:
-  # Energy for circuit 1, so the Energy dashboard can nest the devices it feeds (servers, Snapmaker).
+  # Energy for circuit 1, so the Energy dashboard can nest the devices it feeds (Z800, servers).
   - platform: integration
     source: sensor.circuit_1_power
     name: Circuit 1 Energy
     unique_id: shellyem_main_circuit_1_energy
+    unit_prefix: k
+    method: left
+    round: 3
+  # Servers on the battery's backup (EPS) port since 2026-11-03: the port's output, whether it is
+  # passed through from the grid (Bypass) or fed by the battery (discharging, or an outage).
+  - platform: integration
+    source: sensor.venus_ac_offgrid_power
+    name: Servers Energy
+    unique_id: venus_ac_offgrid_servers_energy
     unit_prefix: k
     method: left
     round: 3

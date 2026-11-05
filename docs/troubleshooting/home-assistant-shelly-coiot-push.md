@@ -66,7 +66,7 @@ hygiene problem, not an outage.
 | HA `internal_url` / `external_url` | **both null** | `/api/config` |
 | HA CoAP socket | UDP `0.0.0.0:5683` bound in the pod, joined IGMP group `224.0.1.187` on `eth0` | `/proc/net/udp`, `/proc/net/igmp` |
 | HA service | `home-assistant-hass` exposes **TCP 8123 only** — nothing exposes UDP 5683 | `kubectl get svc` |
-| Other Shelly devices | `shellypmmini-servers`, `shellyplus2pm-{office-a,office-t,bedroom}` are **Gen2+** (RPC/WebSocket) and are unaffected | HA device registry |
+| Other Shelly devices | `shellypmmini-z800`, `shellyplus2pm-{office-a,office-t,bedroom}` are **Gen2+** (RPC/WebSocket) and are unaffected | HA device registry |
 
 ## Root cause
 
@@ -332,7 +332,7 @@ curl -sS -H "Authorization: Bearer $TOKEN" https://hass.grigri.cloud/api/repairs
 - **`externalTrafficPolicy: Local` + ECMP advertisement = ~50 % push loss.** See Step 1.
 - **The peer change needs a device reboot**; until then the device keeps multicasting and nothing
   appears to have changed.
-- **Gen2+ devices don't use this path.** `shellypmmini-servers` and the `shellyplus2pm-*` devices use
+- **Gen2+ devices don't use this path.** `shellypmmini-z800` and the `shellyplus2pm-*` devices use
   RPC/outbound WebSocket (and are on `192.168.86.0/24` too); they need no CoIoT peer and are not
   affected by the IoT UDP rule.
 - **Shelly relies on SNTP for metering.** This device reports 0 s clock skew, so nothing to do — but
