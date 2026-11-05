@@ -39,7 +39,7 @@ Summary of the decisions (details and evidence in that repository):
 ## What the owner must do before the first tag
 
 1. Create a Forgejo token with only `write:package`, keep it in `pass` (`0600` file) and set it as the
-   repository secret `FORGEJO_PACKAGES_PAT` of `agil/wyoming-whisper`.
+   repository secret `PACKAGES_PAT` (the `FORGEJO_` prefix is reserved) of `agil/wyoming-whisper`.
 2. Optional: the Renovate secrets `RENOVATE_PAT` and `RENOVATE_GITHUB_COM_TOKEN` for that repository, then
    enable the schedule in its `renovate.yml`.
 3. Approve the first tag (`v3.8.1.1`); afterwards set the package cleanup rule (keep the last 3 versions).
