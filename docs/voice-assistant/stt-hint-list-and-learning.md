@@ -5,8 +5,9 @@
 **Scope:** the Spanish STT step of the Assist pipeline "Kiwi" (assistant "Kivi"): Wyoming
 faster-whisper in namespace `home-assistant`, Home Assistant 2026.10.4, pipeline language `es`.
 **Related:** [conversation agent evaluation](experiments/conversation-agent-eval.md) (built-in
-intents coverage, `prefer_local_intents`); the small local models study (prompt and hotwords
-measurements, see [section 1.6](#16-measured-effect-on-this-setup)).
+intents coverage, `prefer_local_intents`); [small local models study, section 5](experiments/small-local-models.md#5-whisper-prompt-hotwords-beam-and-model-size)
+(prompt and hotwords measurements, summarised in [section 1.6](#16-measured-effect-on-this-setup));
+[Kiais integration](kiais-integration.md) (current conversation agent).
 
 Evidence labels: **documented** (read in source code, a changelog or a manifest, with the version
 named), **observed** (read from the cluster, Loki or the repository on the date above),
@@ -21,17 +22,23 @@ named), **observed** (read from the cluster, Loki or the repository on the date 
    background at the start of each utterance. 3.7.0 fixed alias ranking and added environment and
    `_FILE` configuration. The deployed image is 2.4.0 (2024-12), which has only a static
    `--initial-prompt`. The cheapest phase 1 is to rebuild the owner's image on 3.8.1 and set
-   `--hass-token` plus a short, generic `--initial-prompt` prefix. No home names need to be
-   committed, because they are fetched in the cluster.
-2. **`hotwords` is not a separate mechanism.** In faster-whisper it is the same "previous text"
+   `--hass-token` plus a fixed, generic Spanish command-verb `--initial-prompt` prefix. No home
+   names need to be committed, because they are fetched in the cluster.
+2. **Measured: names plus command verbs help, names alone barely do.** On 145 clips per condition
+   with TV sound mixed in, built-in intent success went from 82/71/65/46 % (clean, +10, +5, 0 dB)
+   without a prompt to 85/79/75/57 % with area and device names plus a generic verb list
+   (48 clips fixed against 7 broken over the noisy conditions, p ≤ 0.007 each). Names alone gave
+   81/74/70/52 %. `hotwords` gave byte-identical output to `initial_prompt`. "Kivi" in the prompt
+   leaked into 3 of 1400 transcripts, so the wake name stays out ([section 1.6](#16-measured-effect-on-this-setup)).
+3. **`hotwords` is not a separate mechanism.** In faster-whisper it is the same "previous text"
    slot as `initial_prompt` (no logit bias). For commands of a single 30 s window the two behave
-   alike, so `initial_prompt` is enough.
-3. **Home Assistant sends nothing usable per request.** The Wyoming integration in 2026.10.4 sends
+   alike (confirmed by measurement), so `initial_prompt` is enough.
+4. **Home Assistant sends nothing usable per request.** The Wyoming integration in 2026.10.4 sends
    `Transcribe(language=...)` only. The protocol has `transcript_names` and `transcript_terms`
    since Wyoming 1.10.0, but neither Home Assistant 2026.10.4 nor the server uses them.
-4. **Transcripts are already stored.** The deployed server logs every transcript at INFO level and
+5. **Transcripts are already stored.** The deployed server logs every transcript at INFO level and
    Vector ships it to Loki, which keeps 180 days. Any learning loop should start by deciding this.
-5. **Learning loop:** capture each run from Home Assistant's pipeline debug API (STT text, intent
+6. **Learning loop:** capture each run from Home Assistant's pipeline debug API (STT text, intent
    result, `processed_locally`, timings) into a small in-cluster store with 30-day retention for
    text, derive misrecognition signals, and turn them each week into ranked proposals (hint words,
    entity aliases, a text correction map) that the owner approves. Measure with intent success
@@ -132,13 +139,15 @@ Known pitfalls:
   English). The prefix should be Spanish and use the same punctuation as normal speech.
 - **Model dependence:** Distil-Whisper models degrade with prompts (documented, upstream 3.8.0
   changelog: `distil-small.en` breaks from about 52 prompt tokens). `large-v3-turbo` is a pruned,
-  fine-tuned model, not a distilled one; its response to prompts in Spanish is the question the
-  small local models study measures (see 1.6).
+  fine-tuned model, not a distilled one; in Spanish it benefits from a prompt of about 120
+  tokens (observed, 1.6). Whisper `small` and `medium` were significantly worse than turbo
+  without a prompt (clean 70 % and 76 % against 82 %), so the model stays.
 - **Latency:** prompt tokens add decoder prefill work per beam. Hypothesis: tens of milliseconds
-  on the GTX 1060 for about 200 tokens; to be measured against the 0.86 s p50.
-- **Wake word in the prompt:** if part of "Kivi" leaks into the STT audio after server-side wake
-  word detection, a prompt containing "Kivi" may make it appear at the start of the transcript and
-  break strict intent matching. Hypothesis; check the "Kivi" share of transcripts before adding it.
+  on the GTX 1060 for about 200 tokens; being measured in section 9 of the
+  [small local models study](experiments/small-local-models.md), against the 0.86 s p50.
+- **Wake word in the prompt:** observed: with "Kivi" at the start of the prompt, "Kivi" appeared
+  in 3 of 1400 transcripts whose audio did not contain it. A leading "Kivi" can break strict
+  intent matching, so the wake name stays out of the prompt.
 
 ### 1.5 Home Assistant matching that the hint list feeds (documented, 2026.10.4)
 
@@ -155,19 +164,46 @@ Known pitfalls:
 
 ### 1.6 Measured effect on this setup
 
-The small local models study measures `initial_prompt` and `hotwords` with area and entity names
-on synthetic noisy Spanish clips (WER and built-in intent success). Its results were not published
-in `docs/voice-assistant/` when this document was written.
+Source: [small local models study, section 5](experiments/small-local-models.md#5-whisper-prompt-hotwords-beam-and-model-size) (observed by that study, 2026-11-05). Setup:
+`faster-whisper` `large-v3-turbo` int8, beam 5, as deployed, run on `z800`; 5 Piper voices × 29
+control phrases that built-in intents can handle = 145 clips per condition; TV content mixed in
+at +10, +5 and 0 dB SNR. Metric: Home Assistant built-in intent success (`hassil` 3.12.1,
+`home-assistant-intents` 2026.10.6). The names are those of the study's test home, not the
+owner's.
 
-| Condition | WER | Built-in intent success | STT p50 | Source |
+| Prompt (`initial_prompt`) | Clean | +10 dB | +5 dB | 0 dB |
 | --- | --- | --- | --- | --- |
-| No prompt | _TBD_ | _TBD_ | 0.86 s (owner, real use) | small local models study |
-| Names as `initial_prompt` | _TBD_ | _TBD_ | _TBD_ | small local models study |
-| Names as `hotwords` | _TBD_ | _TBD_ | _TBD_ | small local models study |
-| Prompt words echoed on noise-only clips | _TBD_ | n/a | n/a | small local models study |
+| None | 82 % | 71 % | 65 % | 46 % |
+| Area and device names (about 80 tokens) | 81 % | 74 % | 70 % | 52 % |
+| Names plus generic Spanish command verbs (about 40 tokens more) | **85 %** | **79 %** | **75 %** | **57 %** |
+| Same text as `hotwords` | byte-identical output to `initial_prompt` | | | |
 
-Fill this table from that study before the phase 1 decision. If the gain is not significant,
-phase 1 stops at an image update without `--hass-token`.
+- Names only against no prompt: 31 clips fixed and 9 broken over the noisy conditions; no gain on
+  clean audio.
+- Names plus verbs against no prompt: 48 fixed and 7 broken over the noisy conditions
+  (p ≤ 0.007 in each noisy condition); against names only: 29 fixed and 4 broken.
+- The verb list used: `Enciende, apaga, sube, baja, abre, cierra, para, pausa, reanuda, silencia,
+  quita el silencio, pon, temporizador, minutos, volumen, brillo, por ciento, grados.` Without it
+  the remaining errors were mostly the first verb of short commands (for example "Apaga la tele"
+  heard as "Hasta acá la tele", "Reanuda" as "Renuda").
+- "Kivi" at the start of the prompt: 3 of 1400 transcripts contained "Kivi" not present in the
+  audio.
+- STT latency with the prompt: being measured (section 9 of that study); 0.86 s p50 without a
+  prompt in real use.
+
+Conclusion (inferred from the above): the command verbs carry most of the gain, and they are
+generic, so they belong in the static `--initial-prompt` prefix; the names add a smaller gain on
+noisy audio and come from Home Assistant through `--hass-token`.
+
+How 3.8.1 composes the two (documented, `vocabulary.py` `_build_prompt` at `v3.8.1`, unchanged at
+`HEAD`): the `--initial-prompt` text comes first (a `.` is added if it does not end in
+punctuation), then the Home Assistant names joined by `, ` and ending in `.`. The
+`--hass-prompt-max-tokens` budget (default 200) counts the **whole** prompt, prefix included,
+using the model's tokenizer, and the prefix is always kept. With the ~40-token verb prefix about
+160 tokens are left for names, in tier order. Two differences from the study's prompt are
+untested: the order (the study put names before verbs; upstream puts the prefix first) and the
+real home's name list, which may be longer than the study's ~80 tokens. Hypothesis: neither
+changes the result much; check with the study's harness by swapping the order once.
 
 ### 1.7 Making the hint list reloadable without a restart
 
@@ -224,13 +260,15 @@ data exists:
 - **Usage-weighted ranking:** within a tier, order names by how often they appear in successful
   commands over the last 30 days, and promote names that appear in misrecognitions (3.3). This
   needs the patch in 1.7 option 2 or 3.
-- **Budget:** keep `--hass-prompt-max-tokens` at the default 200 or lower; a smaller budget
-  (100 to 150) may be better if the study shows echo on noise. Spanish names with accents cost
+- **Budget:** keep `--hass-prompt-max-tokens` at the default 200. The measured prompt was about
+  120 tokens; a real home that fills the budget gives a longer prompt than was tested, so lower
+  the budget to about 130 if the phase 1 check shows echoed names. Spanish names with accents cost
   more tokens per character than English ones (inferred from BPE behaviour; check with `--debug`).
-- **Prefix (generic, in git):** one short Spanish sentence that sets spelling and register, for
-  example `Órdenes para la casa en español.` followed by bare infinitives or nouns
-  (`encender, apagar, subir, bajar, persiana, toldo, temporizador, volumen, tele`). No full
-  commands (1.4) and "Kivi" only if the leak check in 1.4 says so.
+- **Prefix (generic, in git):** the measured verb list from 1.6, unchanged:
+  `Enciende, apaga, sube, baja, abre, cierra, para, pausa, reanuda, silencia, quita el silencio,
+  pon, temporizador, minutos, volumen, brillo, por ciento, grados.` (about 40 tokens, counted
+  inside the 200-token budget). Single words and short phrases only, no full commands (1.4), and
+  never "Kivi" (observed leak, 1.6). Changing the list means re-running the study's comparison.
 
 ### 2.3 Refresh
 
@@ -307,7 +345,7 @@ Retention and access:
 | No local match | `intent-end` error `no_intent_match` or `no_valid_targets` from the built-in agent | strong for home commands, but general questions also fail locally by design when they go to the LLM |
 | Quick repeat | a second run from the same satellite within 20 s whose text is similar (normalised edit ratio at least 0.6) | strong; the second text is often the correction |
 | Repeat that succeeds | quick repeat where the first failed and the second gave `action_done` | strongest; gives a (wrong, right) pair |
-| LLM did a home action | with `prefer_local_intents`, `processed_locally` false and the LLM run changed a device state (state change with the run's context id, from the recorder) | medium; needs the context join, hypothesis that the context id carries through |
+| LLM did a home action | `prefer_local_intents` is on and the agent is Kiais through core `llama_cpp` (`conversation.fast`) since 2026-11-05 ([Kiais integration](kiais-integration.md)); so `processed_locally` false and the LLM run changed a device state (state change with the run's context id, from the recorder) | medium; needs the context join, hypothesis that the context id carries through |
 | Low confidence | `avg_logprob` below about -0.8 or `no_speech_prob` above 0.5 | weak alone; thresholds are hypotheses |
 | User correction | next run within 10 s is "no", "para", "cancela", "eso no" | medium |
 | Empty or one-word transcript | empty text or a lone area or entity name | medium; also detects prompt echo |
@@ -366,7 +404,8 @@ Review and approval:
 
 | Option | Effort | Risk | Latency cost | Privacy |
 | --- | --- | --- | --- | --- |
-| Static `--initial-prompt` on 2.4.0 | very low | names in git (public repo), stale | prompt prefill (hypothesis: tens of ms) | names exposed publicly: not acceptable |
+| Static `--initial-prompt` with home names on 2.4.0 | very low | names in git (public repo), stale | prompt prefill (hypothesis: tens of ms) | names exposed publicly: not acceptable |
+| Static verb-only `--initial-prompt` on 2.4.0 (interim) | very low | verbs alone not measured | about 40 prompt tokens | generic text only |
 | Upstream 3.8.1 `--hass-token` | low (image rebuild, Secret) | admin token in the STT pod; image jump 2.4 → 3.8 | same prefill; refresh hidden in the utterance; at most 1 s once per refresh interval if Home Assistant is slow | names stay in the cluster |
 | Generator CronJob plus ConfigMap | medium | write RBAC, drift with ArgoCD | same | names in a Kubernetes object |
 | Usage logging and weekly proposals | medium (collector, store, review page) | another admin token; text at rest 30 days | none (off the request path) | transcripts at rest; bounded retention |
@@ -376,15 +415,21 @@ Review and approval:
 
 ## 5. Recommended phased plan
 
-**Phase 1: generated hint list (static logic, live names).**
-Prerequisite: the small local models study shows a gain for `initial_prompt` with names on
-`large-v3-turbo` in Spanish, and acceptable echo on noise (1.6).
+**Phase 1: fixed verb prefix plus live Home Assistant names.**
+Justified by 1.6: names plus verbs raised built-in intent success by 3 to 11 points (more in
+noise), with few regressions; the wake name stays out. Open gate: the prompt's latency cost
+(study section 9) must stay small against the 0.86 s p50.
 1. Rebuild `pando85/wyoming-whisper` on `wyoming-faster-whisper[hass]==3.8.1` (owner's repo).
 2. In GitOps: new tag, `--hass-api`, `--hass-refresh-seconds 300`, token via ExternalSecret and
-   `WYO_WHISPER_HASS_TOKEN_FILE`, a short generic Spanish prefix in a ConfigMap
-   (`WYO_WHISPER_INITIAL_PROMPT_FILE`).
-3. Verify: `--debug` for a few minutes to read the prompt and the dropped-name count (then off);
-   STT p50 within 0.1 s of 0.86 s; owner's spot check on 20 home commands.
+   `WYO_WHISPER_HASS_TOKEN_FILE`, and the measured verb list (2.2) as `--initial-prompt`, in a
+   ConfigMap read through `WYO_WHISPER_INITIAL_PROMPT_FILE`. No "Kivi".
+3. Verify: `--debug` for a few minutes to read the composed prompt (verbs first, then names) and
+   the dropped-name count (then off); STT p50 within 0.1 s of 0.86 s; owner's spot check on 20
+   home commands, including short ones that start with a verb ("Apaga la tele", "Reanuda").
+   Optional interim step before the image rebuild: the verb list alone as `--initial-prompt` on
+   the deployed 2.4.0 (one arg, generic text). Verbs alone were not measured (hypothesis: most of
+   the gain, because the remaining no-verb errors were leading verbs); check with the study's
+   harness first.
 4. Owner-side cleanups that help immediately: add Spanish aliases for entities whose names are
    English or technical, and keep exposure to what is actually said.
 
@@ -411,12 +456,13 @@ fine-tune of the Whisper model on consented audio.
 
 ## 7. Open questions
 
-- Prompt effect on `large-v3-turbo` in Spanish, and echo rate on TV noise (small local models
-  study).
+- Latency cost of the ~120 to 200-token prompt on the GTX 1060 (small local models study,
+  section 9).
+- Verbs-only prompt and prefix-first order, not measured (1.6).
 - Does part of the wake word reach the STT audio, and does Home Assistant strip "Kivi" from the
-  transcript before matching?
-- Is `prefer_local_intents` on for the Kiwi pipeline, and which agent is configured? This decides
-  how "LLM did a home action" is detected.
+  transcript before matching? (Keeping "Kivi" out of the prompt is settled, 1.6.)
+- Answered: `prefer_local_intents` is on and the agent is Kiais via core `llama_cpp`
+  (`conversation.fast`) since 2026-11-05 ([Kiais integration](kiais-integration.md)).
 - Does `hassil` 3.12.1 fold accents when matching Spanish names?
 - Does the context id of an LLM tool call reach the recorder's state changes, so they can be joined
   to the run?
