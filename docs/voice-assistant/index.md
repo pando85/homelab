@@ -10,6 +10,9 @@ services.
 - [Conversation agent evaluation](experiments/conversation-agent-eval.md): Kiais gateway metrics,
   the dry-run harness in `scripts/voice-assistant/agent_eval/`, Spanish test phrases, and which
   requests Home Assistant's built-in intents already handle.
+- [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
+  Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
+  turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.
 
 Results of evaluation runs (per-phrase JSON) are private and never committed; the harness writes
 them outside this repository.
