@@ -107,6 +107,9 @@ app-template:
     whisper:
       type: deployment
       replicas: 1
+      annotations:
+        # Roll the pod when the Home Assistant token Secret changes.
+        reloader.stakater.com/auto: "true"
       pod:
         runtimeClassName: nvidia
         labels:
@@ -114,9 +117,11 @@ app-template:
       containers:
         whisper:
           image:
-            # https://github.com/pando85/wyoming-addons/tree/master/whisper
-            repository: pando85/wyoming-whisper
-            tag: 2.4.0
+            # Private image, built from https://git.grigri.cloud/agil/wyoming-whisper (wyoming-faster-whisper 3.8.1).
+            # No renovate hint: Renovate cannot read the private registry; bump tag and digest by hand after a canary.
+            repository: git.grigri.cloud/agil/wyoming-whisper
+            tag: 3.8.1.1@sha256:938daef7b6e3fd76bb8601171a34b375df13b8bd37fc61a27b5b6a696f61680d
+          # The image entrypoint (/run.sh) already passes --uri, --data-dir /data and --download-dir /data.
           args:
             - --model
             - large-v3-turbo
@@ -126,6 +131,16 @@ app-template:
             - cuda
             - --compute-type
             - int8
+            # Static verbs prefix; the server appends the live Home Assistant names after it.
+            - --initial-prompt
+            - "Enciende, apaga, sube, baja, abre, cierra, para, pausa, reanuda, silencia, quita el silencio, pon, temporizador, minutos, volumen, brillo, por ciento, grados."
+            - --hass-api
+            - http://home-assistant-hass.home-assistant.svc:8123/api
+            - --hass-refresh-seconds
+            - "300"
+          env:
+            # The value is read from the file and stripped by the server; keeps the token off the command line.
+            WYO_WHISPER_HASS_TOKEN_FILE: /secrets/hass_token
           resources:
             requests:
               cpu: 15m
@@ -140,7 +155,8 @@ app-template:
             startup:
               enabled: true
               spec:
-                failureThreshold: 30
+                # 5 minutes: room for a model (re)download on a cold cache.
+                failureThreshold: 60
                 periodSeconds: 5
     piper:
       type: deployment
@@ -400,6 +416,15 @@ app-template:
         whisper:
           whisper:
             - path: /data
+    whisper-hass-token:
+      enabled: true
+      type: secret
+      name: whisper-hass-token
+      advancedMounts:
+        whisper:
+          whisper:
+            - path: /secrets
+              readOnly: true
     piper:
       enabled: true
       type: emptyDir

@@ -1,7 +1,8 @@
 # Building the Kivi Whisper STT image on Forgejo
 
-**Status:** plan; the image repository exists, **nothing is published yet** (no tag, no registry push, no
-workflow run) and no cluster or Home Assistant change was made.
+**Status:** image `3.8.1.1` published (digest `sha256:938daef7b6e3fd76bb8601171a34b375df13b8bd37fc61a27b5b6a696f61680d`);
+the cutover (Phase C) is rolled out 2026-11-05 with the owner's approval, see
+[Rollout 2026-11-05](#rollout-2026-11-05) for the differences from this plan and the verification result.
 **Date:** 2026-11-05
 **Goal:** replace `pando85/wyoming-whisper:2.4.0` with an image built on
 `wyoming-faster-whisper[hass]==3.8.1`, so the STT step gets the live Home Assistant name list
@@ -218,3 +219,21 @@ duration of the start (about the probe's 150 s worst case).
   put the token or entity names in the image repository, its Actions logs or pasted `--debug` output.
 - Transcripts are no longer written to the whisper log at INFO (patched to DEBUG in the image); the
   Vector rule that drops voice transcripts before Loki still applies to the old image until the cutover.
+
+## Rollout 2026-11-05
+
+Rolled out 2026-11-05 as one commit (`home-assistant: Run whisper 3.8.1 with live Home Assistant names`).
+Differences from the plan above, checked against the image's own `--help` and source (the image wins):
+
+- No `ConfigMap` and no `WYO_WHISPER_INITIAL_PROMPT_FILE`: the static verbs prompt is the single
+  `--initial-prompt` argument (the verified single-argument form from the conversation-agent decisions).
+  The server puts it first and appends the names (`vocabulary.py`, `_build_prompt`).
+- Token via `WYO_WHISPER_HASS_TOKEN_FILE=/secrets/hass_token` as planned; the server reads the file and
+  `strip()`s it, so the trailing-newline hypothesis is closed (static check in the image, 2026-11-05).
+- The controller carries `reloader.stakater.com/auto` so a changed token Secret rolls the pod.
+- Model cache: the entrypoint passes `--data-dir /data --download-dir /data` as in 2.4.0, `HF_HOME` and
+  `XDG_CACHE_HOME` are `/data`, `large-v3-turbo` maps to `mobiuslabsgmbh/faster-whisper-large-v3-turbo`, and the
+  existing volume holds exactly `/data/models--mobiuslabsgmbh--faster-whisper-large-v3-turbo` (1.6 GB, read-only
+  `ls`/`du` on the 2.4.0 pod): the cache is reused (static evidence; the first start log is the check).
+- The startup probe allows 60 failures x 5 s (was 30) as insurance against a re-download.
+- Log level is the default (INFO, no `--debug`); transcripts are logged only at DEBUG in this image.
