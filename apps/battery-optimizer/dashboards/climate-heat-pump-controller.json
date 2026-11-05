@@ -1766,6 +1766,129 @@
       }
     },
     {
+      "type": "timeseries",
+      "title": "Heater minutes outside defrost",
+      "id": 31,
+      "description": "Minutes in the last 24 h (rolling) with the internal or external backup heater on while binary_sensor.aquarea_defrost_active is off. The heater is left to the unit's own control and runs inside defrost cycles (6 to 8 min a day in early November 2026); any minute outside defrost means the unit is leaning on the 3 kW heater instead of the compressor. Target 0 (dashed). Same condition as the HeatPumpHeaterOutsideDefrost alert.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 58
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum_over_time(((max(hass_binary_sensor_state{entity=~\"binary_sensor.aquarea_(internal|external)_heater_state\"}) > bool 0) * on() (1 - max(hass_binary_sensor_state{entity=\"binary_sensor.aquarea_defrost_active\"})))[24h:1m])",
+          "legendFormat": "Heater on, defrost off",
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "vector(0)",
+          "legendFormat": "Limit",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "gradientMode": "scheme",
+            "showPoints": "never",
+            "spanNulls": false,
+            "lineInterpolation": "linear",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Limit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              },
+              {
+                "id": "custom.gradientMode",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
       "type": "text",
       "title": "Not yet measured",
       "id": 30,
@@ -1773,7 +1896,7 @@
         "h": 3,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 66
       },
       "options": {
         "mode": "markdown",
