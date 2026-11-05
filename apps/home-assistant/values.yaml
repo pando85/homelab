@@ -194,6 +194,48 @@ app-template:
     openwakeword:
       type: deployment
       replicas: 1
+      initContainers:
+        # Puts the custom "kivi" wake word from the private repository agil/kivi-models
+        # (licence-restricted, never committed here) on the wakeword-models PVC. A cached file
+        # with the pinned sha256 is used as is, so restarts do not need git.grigri.cloud; the
+        # download runs only when the file is missing or differs (a version swap), and the pod
+        # fails closed when no file with the pinned sha256 can be had.
+        # Swap versions by changing KIVI_MODEL_VERSION and KIVI_MODEL_SHA256 together
+        # (docs/voice-assistant/model-registry.md).
+        01-fetch-kivi:
+          image:
+            repository: curlimages/curl
+            tag: 8.23.0@sha256:3fb7e13e5d179a845c97d78204f3f1064d1907037f26a3ebf91710571151fd93
+          env:
+            KIVI_MODEL_VERSION: v1-2026-11-05
+            KIVI_MODEL_SHA256: 5e20c8ee46428a4b6692efe19309d8ca4d02c2cf73679704d891c316297778cb
+          command:
+            - sh
+            - -ec
+            - |
+              f=/custom/kivi.tflite
+              tag="kivi ${KIVI_MODEL_VERSION}"
+              if [ -f "$f" ] && echo "${KIVI_MODEL_SHA256}  $f" | sha256sum -c -s; then
+                echo "$tag: cached file, sha256 OK ${KIVI_MODEL_SHA256}"
+                exit 0
+              fi
+              url="https://git.grigri.cloud/api/v1/repos/agil/kivi-models/raw/wakeword/kivi/${KIVI_MODEL_VERSION}/kivi.tflite"
+              if curl --fail --silent --show-error --proto =https --retry 5 --retry-all-errors \
+                  --max-time 120 -H @/secrets/auth-header -o "$f.part" "$url" \
+                && echo "${KIVI_MODEL_SHA256}  $f.part" | sha256sum -c -s; then
+                mv "$f.part" "$f"
+                echo "$tag: downloaded, sha256 OK ${KIVI_MODEL_SHA256}"
+              else
+                rm -f "$f.part"
+                echo "$tag: download failed or sha256 MISMATCH; no valid file, failing closed"
+                exit 1
+              fi
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
       containers:
         openwakeword:
           image:
@@ -202,6 +244,9 @@ app-template:
           args:
             - --preload-model
             - alexa
+            # Stock models (alexa, ...) stay available; every *.tflite here is added, id = file stem.
+            - --custom-model-dir
+            - /custom
           resources:
             requests:
               cpu: 15m
@@ -529,6 +574,26 @@ app-template:
         whisper:
           whisper:
             - path: /opt/whisper-logging
+              readOnly: true
+    # PVC: templates/pvc-wakeword-models.yaml.
+    kivi-model:
+      enabled: true
+      existingClaim: home-assistant-wakeword-models
+      advancedMounts:
+        openwakeword:
+          01-fetch-kivi:
+            - path: /custom
+          openwakeword:
+            - path: /custom
+              readOnly: true
+    kivi-models-read:
+      enabled: true
+      type: secret
+      name: kivi-models-read
+      advancedMounts:
+        openwakeword:
+          01-fetch-kivi:
+            - path: /secrets
               readOnly: true
     piper:
       enabled: true
