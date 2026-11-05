@@ -112,7 +112,94 @@ utterance (STT text)
 | P1 | Data, only if headroom is meaningful | |
 | P2 | Fine-tune Quyet-1.0-Tiny; optional local teacher: pplx-decider-v1.1-27b (open weights) or Laya | |
 | P3 | Gates: wrong actions at most 0.5%; at least 50% of built-in misses rescued; p95 below 150 ms; at most 800 MB on the GTX 1060 (fp32, Pascal) | Any miss of a gate stops the line |
-| P4 | Integration: decider HTTP service plus a small Home Assistant custom conversation agent that delegates to Kiais; shadow mode first | Owner approves each live step |
+| P4 | Integration: decider HTTP service plus a small Home Assistant custom conversation agent that delegates to Kiais; shadow mode first; structure borrowed from [home-assistant-laya](#related-project-home-assistant-laya), not installed | Owner approves each live step |
+
+#### Related project: home-assistant-laya
+
+[allenporter/home-assistant-laya](https://github.com/allenporter/home-assistant-laya) (Apache-2.0,
+read 2026-11-05 at `8803550`, `laya==0.4.24`; source reading only, nothing installed or run) is a
+Home Assistant custom component (HACS) with a conversation agent entity around the same Laya model.
+It is the closest existing match for P4, but it is a prototype, not a base to run as is.
+
+What it does (documented, from the source):
+
+- **Pipeline.** Selected as the pipeline's conversation agent. It builds a shortlist (at most 5
+  intents, 10 areas, 20 entities, lexical matching on names), asks one Laya forward pass five typed
+  questions (intent, compound, target entity, target area, entity or area), and on a confident
+  answer executes the HA intent (`intent.async_handle`, slots `name`, `area`, `domain`,
+  `brightness`, `temperature`). On low confidence or a "compound" request it calls
+  `conversation.async_converse` on a configured fallback agent, so a chain Laya, then Kiais is a
+  config option. With `prefer_local_intents` the pipeline tries the built-in intents first
+  (HA behaviour as in [Kiais integration](kiais-integration.md); not yet tried with this
+  non-LLM agent, hypothesis until the shadow run).
+- **Entities.** Only those exposed to Assist (`async_should_expose`), but if none are exposed it
+  silently uses all states. Controllable domains only.
+- **Gate.** Per-question probability of the chosen option against `confidence_threshold` 0.40 (the
+  README describes a normalised formula, the code uses the raw probability) and `compound_threshold`
+  0.70. Our zero-shot study needed 0.6 to 0.85 and the threshold did not transfer between phrase
+  sets ([Decision models](experiments/decision-models.md)).
+- **Hardware.** In-process PyTorch in the HA executor via the `laya` package; the README quotes
+  about 1.2 GB of RAM, 100 to 250 ms on a CUDA GPU and 1.5 to 3.0 s on CPU for a full home context
+  (author estimates, not measured by us). `idle_timeout` defaults to 0, so the weights are unloaded
+  after every request and reloaded on the next.
+
+Why it does not fit as is:
+
+- **No Spanish.** The component calls `laya.load()` with no checkpoint, which is the English-only
+  root checkpoint (ModernBERT-large); the multilingual one is never selected. Instructions, stopwords,
+  the domain words and the number regexes (`%`, "degrees") are English; "grados" or "por ciento" are
+  not parsed. Tests and the evaluation home are English only.
+- **No evidence for our gates.** No accuracy, wrong-action or rescue numbers; the benchmarks are the
+  model card's latency. The slot set excludes volume and media actions, which we planned to cover.
+- **Wrong-action risk by design.** An area target with no domain word in the utterance is sent as
+  `area` only (hypothesis: what HA does with it is unchecked).
+- **Hard to deploy in our cluster.** `requirements` makes HA pip-install `laya` (torch, transformers,
+  and a new `vegaml` dependency) into the HA container; issue 6 reports the install failing on
+  HA OS. Issue 7 (remote Laya service) is open without a reply.
+- **Maturity.** Created 2026-09-20, one release (0.1.0). The author's 45 commits are from 2026-09-20
+  and 21; since then only Renovate bumps (53 commits). 9 stars, 1 fork, 3 open issues. CI runs
+  pytest, ruff, hassfest and HACS validation; about 900 lines of integration tests, speculative-engine unit tests and slow live tests
+  on an English fake home. `hacs.json` says HA 2024.04 but the code uses the newer conversation
+  entity API; unproven against our HA 2026.10.4.
+- **Privacy and supply chain.** Inference is local and the integration code makes no network
+  calls of its own. HA installs `laya` from PyPI at runtime and the package downloads weights from
+  Hugging Face on first load (revision pinned inside `laya`, safetensors and JSON only, no
+  `trust_remote_code`). The integration passes no hash. Not reviewed: `laya` 0.4.24 beyond a read of
+  `load` and `serve`; `vegaml` not reviewed at all.
+
+What is reusable:
+
+- **`laya[serve]`** already ships an HTTP server (FastAPI, `POST /v1/systemone` and `/batch`, bearer
+  key, idle unload, `LAYA_THREADS`, `LAYA_MODELS` to pick `multilingual`, `LAYA_CUDA_AMP=fp32`
+  to avoid fp16 autocast on Pascal). That covers the "decider HTTP service" half of P4 without code
+  of ours, for Laya only (Quyet needs its own service).
+- **`DecisionEngine`** (`speculative/scoring/engine.py`) is a small abstract class
+  (`async_predict(state, questions)`), so a `RemoteEngine` that calls the server over HTTP is
+  roughly 60 lines. This is the change issue 7 asks for.
+- **The 5-stage `DecisionFlow`** (request, retrieval, hydration, scoring, resolution) and its
+  fixtures are a useful reference for the HA side: exposure handling, intent introspection,
+  originating-area prior, fallback via `async_converse`.
+
+How it changes P4 (proposal, owner decides):
+
+1. **Build our own thin HA agent for P4, borrowing the structure**; do not install this component.
+   Reasons: Spanish, our gates, shadow mode, our own question design and parsing (already measured
+   in `decision_models/`) and the model choice are all ours, so the reusable part is the ~190-line
+   `conversation.py` pattern and the `DecisionEngine` seam, both Apache-2.0 (keep the licence
+   header and attribution if code is copied).
+2. **Serve over HTTP outside HA**: `laya[serve]` for Laya, a minimal service for Quyet; HA never
+   imports torch.
+3. **Add what is missing**, in this order: Spanish number and domain parsing; the `multilingual`
+   or fine-tuned checkpoint; a per-question threshold fitted on `kivi-fake-v1` and real replay and
+   checked on held-out phrases; a shadow mode (log the decision, always fall through to Kiais, no
+   device action); no "all states" fallback; area-only targets rejected unless the domain is known;
+   unload disabled (`idle_timeout` > 0 equivalent) so p95 can be measured.
+4. **Contribute only small, upstreamable pieces** if useful (remote engine for issue 7, a
+   `model` option), after P3 says the line continues. There is no sign of maintainer activity
+   beyond the first two days, so do not depend on upstream merges.
+5. **Reference result, not a reason to skip P3.** This project does not change the P0 finding:
+   zero-shot Laya multilingual was near chance on action and area in Spanish; the component adds no
+   fine-tuning or Spanish data. The P3 gates stay as they are.
 
 ### e. Whisper fine-tuning (future, not now)
 
@@ -146,6 +233,8 @@ reverting the exception commit. No audio is collected. Policy and checked locati
    "Pon" / "Con" error.
 3. Decide, after the P0 headroom analysis, whether the decider goes on to P1 and P2.
 4. Choose the optional local teacher for P2 (pplx-decider-v1.1-27b or Laya), if the project reaches it.
+   Related: for P4, confirm "own thin agent, borrowing the home-assistant-laya structure" instead of
+   installing or forking that component (workstream d).
 5. Approve any live Home Assistant change: shadow-mode conversation agent, entity cleanup.
 6. Decide whether, and when, to open the audio collection for Whisper fine-tuning, with household
    consent.
