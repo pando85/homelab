@@ -23,6 +23,10 @@ services.
   built-in intents, measured before building one; the synthetic dataset `kivi-fake-v1` (four fake
   homes, phrasing styles, TV-dialogue negatives, local-LLM paraphrases, audio subset) and what
   custom sentences already cover.
+- [Decision models](experiments/decision-models.md): whether a small non-generative decision model
+  (Laya, Quyet) or an embedding and fuzzy-matching baseline can execute, offline and without wrong
+  actions, the home commands the built-in intents miss, before they go to Kiais; zero-shot on the
+  synthetic corpus, the `kivi-fake-v1` fake homes and the real names (counts only).
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.

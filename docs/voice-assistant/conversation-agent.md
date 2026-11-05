@@ -98,6 +98,14 @@ section 5).
    router) is rejected by the owner.** Kiais availability is considered the same as Home Assistant's,
    so there is no separate local fallback. Option 3 stays unchosen as well; the idle in-cluster
    Ollama question (open question 4) is unaffected by this decision.
+4. **Zero-shot decision models between the built-in intents and Kiais: not recommended (study
+   result, for the owner's decision).** Laya, Quyet-1.0-Tiny and Quyet-1.0-Small, used zero-shot with
+   typed questions over the home's options, rescued at most 8 % of the missed commands at a
+   wrong-action rate of about 1 % on the synthetic corpus, and fewer than an embedding and
+   fuzzy-matching baseline on the `kivi-fake-v1` homes (11 %). Their confidence threshold did not
+   transfer between phrase sets, and none rescued more than 1 of 27 missed commands built from the
+   real names ([decision models](experiments/decision-models.md)). A decider needs training on the
+   home's own commands ([decider PoC](experiments/kivi-decider-poc.md)) before it can be wired in.
 
 ## Proposed GitOps change for approval
 
