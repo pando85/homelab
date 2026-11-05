@@ -10,32 +10,36 @@ spec:
     - name: smartctl-exporter-custom.rules
       rules:
         # k8s-amd64-1: disk sda runs hot (P95: 56-58°C, max: 60°C)
+        # Filter temperature_type="current" to avoid matching static firmware limits
+        # (critical_limit_max, op_limit_max) which are thresholds, not actual temps
         - alert: SmartCTLDeviceHighTemperature
           annotations:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{instance="k8s-amd64-1", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance="k8s-amd64-1", device!~"nvme.*"} > 65
+          expr: smartctl_device_temperature{instance="k8s-amd64-1", temperature_type="current", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance="k8s-amd64-1", temperature_type="current", device!~"nvme.*"} > 65
           for: 60m
           labels:
             severity: warning
         # prusik: SSDs run warm (SATA P95: 51-52°C, NVMe P95: 51-52°C)
+        # Filter temperature_type="current" to avoid matching static firmware limits
         - alert: SmartCTLDeviceHighTemperature
           annotations:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{instance="prusik", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance="prusik", device!~"nvme.*"} > 65
+          expr: smartctl_device_temperature{instance="prusik", temperature_type="current", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance="prusik", temperature_type="current", device!~"nvme.*"} > 65
           for: 60m
           labels:
             severity: warning
         # Default thresholds for other hosts
+        # Filter temperature_type="current" to avoid matching static firmware limits
         - alert: SmartCTLDeviceHighTemperature
           annotations:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", device!~"nvme.*"} > 45
+          expr: smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", temperature_type="current", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", temperature_type="current", device!~"nvme.*"} > 45
           for: 60m
           labels:
             severity: warning
