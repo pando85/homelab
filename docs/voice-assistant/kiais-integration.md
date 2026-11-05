@@ -1,7 +1,8 @@
 # Kiais as the Kivi conversation agent in Home Assistant
 
 **Status:** VERIFIED on a throwaway local Home Assistant 2026.10.4 (same image as production);
-NOT deployed. The deployment below waits for the owner's approval.
+**DEPLOYED** to production on 2026-11-05 with the owner's approval (see
+[Deployed 2026-11-05](#deployed-2026-11-05)).
 **Date:** 2026-11-05
 **Scope:** how the production Home Assistant (2026.10.4, `apps/home-assistant/`) should talk to the
 Kiais gateway (`fast` tier) as the agent behind the "Kiwi" pipeline, with built-in intents first.
@@ -186,7 +187,67 @@ Findings (verified unless marked):
   had no device, hence the "which room?" question), calendar, behaviour when the gateway fails or
   hangs, real entity names.
 
-## Deployment steps (for the owner to approve)
+## Deployed 2026-11-05
+
+Done through Home Assistant's config-flow REST API and the websocket API with a short-lived login
+token (deleted afterwards); no git, chart or cluster change.
+
+- **Config entry** `llama_cpp`, title `http://isidoro.isidoro:8080/v1` (in-cluster URL), the
+  existing Kiais client key (kept only in Home Assistant's `.storage`), model `fast`. The setup-time
+  test detected streaming (`streaming: true`); the entry loaded.
+- **Conversation subentry** "Fast", entity **`conversation.fast`**: recommended settings off,
+  "Control Home Assistant" = Assist, temperature 0.2, maximum tokens 300, top_p 1, and the prompt
+  below. It differs from the earlier draft in two lines: live data (time, weather, calendar, device
+  states) must come from the tools or the answer is "I don't know", and a clarifying question must
+  be the whole answer. With the earlier wording the model added a sentence after its question, so
+  the answer did not end in `?` and Home Assistant did not keep listening (observed twice).
+- **Pipeline "Kiwi"**: `conversation_engine` `conversation.qwen2_5_3b` → `conversation.fast`,
+  `prefer_local_intents` false → true. Read back and compared with the snapshot taken before: no
+  other field changed (language `es`, faster-whisper, Piper `es_ES-sharvard-medium`, wake word
+  unchanged). "Kiwi Test", the other agents, exposure and aliases were not touched.
+
+```text
+Eres Kivi, el asistente de voz de esta casa. Tu nombre se escribe «Kivi» y se pronuncia «kivi».
+Habla siempre en español de España, de forma amable y directa. Tus respuestas se leen en voz alta,
+así que usa una o dos frases cortas en texto plano: nada de markdown, listas, asteriscos, emojis,
+enlaces ni símbolos como ° o %; di «grados» y «por ciento».
+Para controlar o consultar la casa usa siempre las herramientas, y confirma en pocas palabras solo
+lo que de verdad se ha hecho; si una herramienta falla, dilo.
+No inventes nunca datos en tiempo real (el tiempo, la hora, el calendario, el estado de los
+dispositivos, noticias o tráfico): consúltalos con las herramientas o di que no lo sabes.
+Si la petición es ambigua, contesta únicamente con una pregunta corta que acabe en «?», por ejemplo
+«¿En qué habitación?»; no enumeres opciones ni añadas nada después.
+Las preguntas generales respóndelas con tus conocimientos, de forma breve y útil.
+```
+
+Verification (observed on production, text only, no audio, no TTS, no action commands; times
+measured on the workstation over the public Home Assistant URL; repeated runs span the prompt
+revisions):
+
+| Path | Text | Result | Time |
+| --- | --- | --- | --- |
+| `/api/conversation/process`, agent `conversation.fast` | ¿Cuál es la capital de Portugal? | "Lisboa." | 1.0 to 2.0 s (3 runs) |
+| same | ¿Cómo te llamas? | "Me llamo Kivi." | 0.8 to 1.7 s (3 runs) |
+| same | ¿Qué temperatura hace en el salón? | the living-room sensor's value in degrees (tool call) | 2.8 to 3.4 s (3 runs) |
+| same | ¿Está encendida la luz? | "¿En qué habitación?", `continue_conversation` true | 1.2 s |
+| same | ¿Qué temperatura hace? | every room's temperature, then a question; `continue_conversation` true | 3.9 s (long answer) |
+| `assist_pipeline/run`, pipeline Kiwi, intent stage only | ¿Qué hora es? | `processed_locally` true, built-in intent | 0.42 s |
+| same | ¿Cuál es la capital de Portugal? | `processed_locally` false, `conversation.fast`, streamed | first delta 0.88 s, end 1.0 s |
+| same | Explícame en una frase qué es la fotosíntesis | same, one sentence, streamed | first delta 0.86 s, end 2.0 s |
+
+No `llama_cpp` errors or warnings in the Home Assistant log. Still open: the satellite end to end
+(STT, TTS, area context), action commands with the real entity names, the multi-room temperature
+answer (correct but long, with digits), and the open questions below.
+
+Rollback (instant, no restart; the pipeline object before the change is kept in a private
+snapshot outside this repository):
+
+1. Settings > Voice assistants > Kiwi, or `assist_pipeline/pipeline/update` with every field as
+   read back: conversation agent `conversation.qwen2_5_3b`, `prefer_local_intents` false.
+2. Delete the llama.cpp entry `http://isidoro.isidoro:8080/v1` in Settings > Devices & services.
+3. If needed, rotate the Kiais key it used.
+
+## Deployment steps (as approved)
 
 No GitOps change is needed: `llama_cpp` is part of Home Assistant core and its requirement
 (`openai==3.10.0`) ships in the image.
@@ -303,7 +364,8 @@ home. `llama_cpp` logs request chunks only at debug level; keep debug logging of
 
 ## Open questions
 
-1. Owner: approve the UI steps above (core `llama_cpp`, no code to own)?
+1. ~~Owner: approve the UI steps above (core `llama_cpp`, no code to own)?~~ Approved and deployed
+   2026-11-05.
 2. A Kiais key for Home Assistant: how it is issued in Kiais (not found in the custom resources).
 3. Kiais: normalise streamed tool calls to the OpenAI shape (section 3), and say whether its
    session affinity can use the `user` field, which `llama_cpp` and `litellm` set to the

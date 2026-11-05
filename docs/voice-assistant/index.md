@@ -12,8 +12,8 @@ services.
   requests Home Assistant's built-in intents already handle.
 - [Kiais as the conversation agent](kiais-integration.md): core (`llama_cpp`, `litellm`), HACS and
   own-component options verified on a throwaway Home Assistant 2026.10.4 with
-  `prefer_local_intents`, the Kiais streamed tool-call quirk, and the deployment and rollback steps
-  awaiting approval (core `llama_cpp`, UI only).
+  `prefer_local_intents`, the Kiais streamed tool-call quirk, and the deployment (core `llama_cpp`,
+  UI only, deployed 2026-11-05 as `conversation.fast`) and rollback steps.
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.
