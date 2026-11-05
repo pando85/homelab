@@ -19,6 +19,10 @@ services.
 - [Small local models](experiments/small-local-models.md): the GTX 1060 budget, small models as
   router, STT corrector and home agent, Whisper prompt, model size and CPU options, measured on
   synthetic Spanish audio; ranked additions in [Conversation agent design](conversation-agent.md).
+- [Kivi decider PoC](experiments/kivi-decider-poc.md): headroom of a small decision model behind the
+  built-in intents, measured before building one; the synthetic dataset `kivi-fake-v1` (four fake
+  homes, phrasing styles, TV-dialogue negatives, local-LLM paraphrases, audio subset) and what
+  custom sentences already cover.
 - [STT hint list and learning from usage](stt-hint-list-and-learning.md): biasing the Spanish
   Whisper STT towards the home's names (upstream `--hass-token`), a privacy-bounded loop that
   turns misrecognitions into reviewed hint, alias and correction proposals, and a phased plan.

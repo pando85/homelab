@@ -1,0 +1,223 @@
+# yamllint disable rule:line-length
+# Cheap-fix baseline for the Kivi decider PoC: Home Assistant custom sentences (format of
+# config/custom_sentences/es/*.yaml) for the phrasings HA's built-in Spanish sentences miss in
+# kivi-fake-v1's template families. Written in about an hour, the effort an owner would spend.
+# Reuses the built-in expansion rules (<enciende>, <apaga>, <sube>, <baja>, <para>, <vol>, ...)
+# and lists ({brightness}, {position}, {volume}, {temperature}, {fan_speed}, timer lists).
+# Measured by headroom_v1.py --custom, matched BEFORE the built-in sentences (HA's default agent
+# tries custom sentences first). Not deployed anywhere.
+language: es
+expansion_rules:
+  t: "[el|la|los|las] {name} [[en|de] [el|la]|del] [{area}]"
+  luces_area: "[todas] <luces> [[en|de] [el|la]|del] {area}"
+  cortesia: "[ya] [por favor|porfa|por fa]"
+  favor: "[me haces el favor de|haz el favor de|podrías|puedes|me puedes]"
+  pron: "(lo|la|los|las)"
+  pct: "{brightness:brightness}[ <porciento>]"
+intents:
+  HassTurnOn:
+    data:
+      - sentences:
+          - "[oye|a ver|eh] (<enciende>|pon|ponme|dale [a]|préndeme) <luces_area> <cortesia>"
+        slots:
+          domain: light
+      - sentences:
+          - "[oye|a ver|eh] (<enciende>|pon|ponme|dale [a]|préndeme|enciéndeme) <t> <cortesia>"
+          - "<t> (enciénde|enciéndeme|préndeme|préndele)<pron> <cortesia>"
+          - "me (enciendes|prendes) <t> <cortesia>"
+          - "<favor> (encender|prender) <t> <cortesia>"
+        excludes_context:
+          domain: [cover]
+      - sentences:
+          - "(<sube>|súbeme|recoge|abre) <t> [del todo] <cortesia>"
+          - "<t> (súbe|ábre|súbeme|ábreme)<pron> <cortesia>"
+          - "<t> arriba <cortesia>"
+          - "me (abres|subes) <t> <cortesia>"
+          - "<favor> (abrir|subir) <t> <cortesia>"
+        requires_context:
+          domain: cover
+  HassTurnOff:
+    data:
+      - sentences:
+          - "[oye|a ver|eh] (<apaga>|apágame|quita|fuera) <luces_area> <cortesia>"
+        slots:
+          domain: light
+      - sentences:
+          - "[oye|a ver|eh] (<apaga>|quita|apágame|fuera) <t> <cortesia>"
+          - "<t> (apága|apágame)<pron> <cortesia>"
+          - "me apagas <t> <cortesia>"
+          - "<favor> apagar <t> <cortesia>"
+          - "(apágalo|apaga) todo [lo] [[en|de] [el|la]|del] {area}"
+        excludes_context:
+          domain: [cover]
+      - sentences:
+          - "(<baja>|bájame|echa|chapa|cierra) <t> [del todo] <cortesia>"
+          - "<t> (bája|ciérra|bájame|ciérrame)<pron> <cortesia>"
+          - "<t> abajo <cortesia>"
+          - "me (cierras|bajas) <t> <cortesia>"
+          - "<favor> (cerrar|bajar) <t> <cortesia>"
+        requires_context:
+          domain: cover
+  HassStopMoving:
+    data:
+      - sentences:
+          - "[vale|ya|ya ya] (<para>|stop) <t> [ahí] <cortesia>"
+          - "<favor> parar <t>"
+          - "<t> stop"
+        requires_context:
+          domain: cover
+  HassSetPosition:
+    data:
+      - sentences:
+          - "(pon|deja|ajusta|abre|sube|baja) <t> (al|hasta el) {position}[ <porciento>] <cortesia>"
+          - "<favor> poner <t> al {position}[ <porciento>]"
+          - "al {position}[ <porciento>] <t> <cortesia>"
+        requires_context:
+          domain: cover
+      - sentences:
+          - "(pon|deja|baja|sube) <t> (a|hasta) la mitad <cortesia>"
+          - "a la mitad <t>"
+        slots:
+          position: 50
+        requires_context:
+          domain: cover
+  HassLightSet:
+    data:
+      - sentences:
+          - "(pon|deja|ajusta|sube|baja|regula) <luces_area> al <pct> <cortesia>"
+          - "(sube|baja|pon) el brillo [de] <luces_area> al <pct> <cortesia>"
+        slots:
+          domain: light
+      - sentences:
+          - "(pon|deja|ajusta|regula|atenúa|sube|baja) <t> al <pct> <cortesia>"
+          - "(sube|baja|pon) el brillo [de|del|de la] <t> al <pct> <cortesia>"
+          - "<favor> poner <t> al <pct>"
+          - "al <pct> <t> <cortesia>"
+          - "el brillo [de|del|de la] <t> al <pct>"
+          - "(súbele|bájale) [a] <t> al <pct>"
+          - "brillo <t> {brightness:brightness}"
+        requires_context:
+          domain: light
+      - sentences:
+          - "(pon|sube) <t> (al máximo|a tope) <cortesia>"
+        slots:
+          brightness: 100
+        requires_context:
+          domain: light
+  HassSetVolume:
+    data:
+      - sentences:
+          - "(pon|ajusta|deja|sube|baja) <vol> [de|del|de la] <t> (a|al|en) {volume:volume_level} <cortesia>"
+          - "<vol> [de|del|de la] <t> (a|al) {volume:volume_level}"
+          - "(a|al) {volume:volume_level} <vol> [de|del|de la] <t>"
+          - "ponle [el] volumen [a] <t> en {volume:volume_level}"
+          - "ponle {volume:volume_level} de volumen [a] <t>"
+          - "<favor> poner <vol> [de|del|de la] <t> (a|al) {volume:volume_level}"
+        requires_context:
+          domain: media_player
+  HassSetVolumeRelative:
+    data:
+      - sentences:
+          - "(sube|súbele [a]) [un poco|un poquito] <vol> [de|del|de la] <t> <cortesia>"
+          - "(súbele [a]|sube un poquito) <t>"
+          - "(más volumen|un poco más alto) en <t> <cortesia>"
+          - "<favor> subir <vol> [de|del|de la] <t>"
+          - "ponme <t> más (alto|alta)"
+        slots:
+          volume_step: up
+        requires_context:
+          domain: media_player
+      - sentences:
+          - "(baja|bájale [a]) [un poco|un poquito] <vol> [de|del|de la] <t> <cortesia>"
+          - "(bájale [a]|baja un poquito) <t>"
+          - "(menos volumen|un poco más bajo) en <t> <cortesia>"
+          - "<favor> bajar <vol> [de|del|de la] <t>"
+          - "ponme <t> más (bajo|baja|bajito|bajita)"
+        slots:
+          volume_step: down
+        requires_context:
+          domain: media_player
+  HassMediaPlayerMute:
+    data:
+      - sentences:
+          - "(silencia|mutea|calla|que se calle) <t> <cortesia>"
+          - "pon <t> en silencio <cortesia>"
+          - "(quita|quítale) el sonido [a|de|del|de la] <t> <cortesia>"
+          - "ponle mute [a] <t>"
+          - "<favor> silenciar <t>"
+        requires_context:
+          domain: media_player
+  HassMediaPlayerUnmute:
+    data:
+      - sentences:
+          - "(quita|quítale) el (silencio|mute) [a|de|del|de la] <t> <cortesia>"
+          - "desmutea <t>"
+          - "(activa|vuelve a poner) el sonido [de|del|de la] <t>"
+          - "<favor> quitar el silencio [de|del|de la] <t>"
+        requires_context:
+          domain: media_player
+  HassMediaPause:
+    data:
+      - sentences:
+          - "(pausa|para) <t> [un momento] <cortesia>"
+          - "[espera] para <t>"
+          - "pon <t> en pausa <cortesia>"
+          - "ponle pausa [a] <t>"
+          - "<favor> pausar <t>"
+        requires_context:
+          domain: media_player
+  HassMediaUnpause:
+    data:
+      - sentences:
+          - "(reanuda|continúa|sigue con|que siga) <t> <cortesia>"
+          - "(dale|ponle) play [a] <t>"
+          - "quita la pausa [de|del|de la] <t> <cortesia>"
+          - "<favor> reanudar <t>"
+          - "play <t>"
+        requires_context:
+          domain: media_player
+  HassMediaNext:
+    data:
+      - sentences:
+          - "(pasa a|salta a|pon) la siguiente [canción] en <t>"
+          - "(pasa de|salta|quita) esta canción en <t>[la siguiente]"
+          - "(siguiente canción|siguiente) en <t>"
+          - "(cámbiale de canción|pásale a la que sigue) [a|en] <t>"
+          - "<favor> pasar a la siguiente canción en <t>"
+        requires_context:
+          domain: media_player
+  HassMediaPrevious:
+    data:
+      - sentences:
+          - "(regresa|vuelve|regrésale) a la [canción] anterior en <t>"
+          - "<favor> volver a la canción anterior en <t>"
+        requires_context:
+          domain: media_player
+  HassClimateSetTemperature:
+    data:
+      - sentences:
+          - "(pon|ajusta|ponle|programa) <t> a {temperature} [grados] <cortesia>"
+          - "<t> (ponlo|ponla) a {temperature} [grados]"
+          - "a {temperature} grados <t> <cortesia>"
+          - "ponle {temperature} grados [a] <t>"
+          - "(ajústale|ajusta) [a] <t> a {temperature} [grados]"
+          - "<favor> poner <t> a {temperature} [grados]"
+        requires_context:
+          domain: climate
+  HassFanSetSpeed:
+    data:
+      - sentences:
+          - "(pon|ponle|deja|ajusta) [a] <t> al {fan_speed:percentage}[ <porciento>] <cortesia>"
+          - "velocidad [de|del|de la] <t> al {fan_speed:percentage}[ <porciento>]"
+        requires_context:
+          domain: fan
+  HassStartTimer:
+    data:
+      - sentences:
+          - "(pon|ponme|programa|crea) un (temporizador|timer) de (<nb_hours> hora[s]|<nb_minutes> minuto[s]|<nb_seconds> segundo[s]) [para {timer_name:name}]"
+          - "(<nb_minutes> minuto[s]|<nb_hours> hora[s]|<nb_seconds> segundo[s]) [de] temporizador"
+          - "temporizador (<nb_minutes> minuto[s]|<nb_hours> hora[s]|<nb_seconds> segundo[s])"
+  HassCancelTimer:
+    data:
+      - sentences:
+          - "(cancela|quita|borra|elimina) el (temporizador|timer)"
