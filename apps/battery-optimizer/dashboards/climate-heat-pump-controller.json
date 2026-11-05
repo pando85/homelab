@@ -522,7 +522,7 @@
       "type": "timeseries",
       "title": "Thermostat setpoint (degC)",
       "id": 10,
-      "description": "Written by the comfort controller at schedule boundaries (early start, window end, away); a manual change holds until the next boundary.",
+      "description": "Written by the comfort controller at schedule boundaries (early start, window end, away); a manual change holds until the next boundary. Dashed: each room's floor + margin and its day target max(day minimum, floor) + margin from its own helpers (input_number.comfort_floor_<room>, input_number.comfort_day_minimum_<room>; defaults 21 / 23.5 for the hall-kitchen and 21 / 21 for the other rooms until the helpers exist).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -543,6 +543,26 @@
           "expr": "label_replace(max by (entity) (hass_climate_target_temperature_celsius{entity=~\"climate.thermostat_(bedroom|hall_kitchen|office_t)\"}), \"room\", \"$1\", \"entity\", \"climate.thermostat_(.*)\")",
           "legendFormat": "{{room}}",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "(max by (room) (label_replace(hass_input_number_state{entity=~\"input_number.comfort_floor_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"input_number.comfort_floor_(.*)\")) or on(room) (label_replace(vector(21), \"room\", \"bedroom\", \"\", \"\") or label_replace(vector(21), \"room\", \"hall_kitchen\", \"\", \"\") or label_replace(vector(21), \"room\", \"office_t\", \"\", \"\"))) + scalar(max(hass_input_number_state{entity=\"input_number.comfort_margin\"}) or vector(0.5))",
+          "legendFormat": "{{room}} floor target",
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "max by (room) (label_replace((max by (room) (label_replace(hass_input_number_state{entity=~\"input_number.comfort_floor_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"input_number.comfort_floor_(.*)\")) or on(room) (label_replace(vector(21), \"room\", \"bedroom\", \"\", \"\") or label_replace(vector(21), \"room\", \"hall_kitchen\", \"\", \"\") or label_replace(vector(21), \"room\", \"office_t\", \"\", \"\"))), \"kind\", \"floor\", \"\", \"\") or label_replace((max by (room) (label_replace(hass_input_number_state{entity=~\"input_number.comfort_day_minimum_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"input_number.comfort_day_minimum_(.*)\")) or on(room) (label_replace(vector(23.5), \"room\", \"hall_kitchen\", \"\", \"\") or label_replace(vector(21), \"room\", \"bedroom\", \"\", \"\") or label_replace(vector(21), \"room\", \"office_t\", \"\", \"\"))), \"kind\", \"day\", \"\", \"\")) + scalar(max(hass_input_number_state{entity=\"input_number.comfort_margin\"}) or vector(0.5))",
+          "legendFormat": "{{room}} day target",
+          "refId": "C"
         }
       ],
       "fieldConfig": {
@@ -561,7 +581,30 @@
             }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* (floor|day) target"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineInterpolation",
+                "value": "stepAfter"
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -648,9 +691,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Share of time below 21 degC per room (rolling 24 h)",
+      "title": "Share of time below the room floor per room (rolling 24 h)",
       "id": 13,
-      "description": "Time below the 21 degC floor / time with a reading. Section B limit: at most 3% of all time per room (dashed).",
+      "description": "Time below the room's own floor (input_number.comfort_floor_<room>, 21 degC until the helper exists) / time with a reading. Section B limit: at most 3% of all time per room (dashed). Comfort criteria per room: see the optimizer preregistration amendment (pending).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -668,7 +711,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "label_replace(avg_over_time((max by (entity) (hass_climate_current_temperature_celsius{entity=~\"climate.thermostat_(bedroom|hall_kitchen|office_t)\"}) < bool 21)[1d:5m]), \"room\", \"$1\", \"entity\", \"climate.thermostat_(.*)\")",
+          "expr": "avg_over_time((max by (room) (label_replace(hass_climate_current_temperature_celsius{entity=~\"climate.thermostat_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"climate.thermostat_(.*)\")) < bool on(room) (max by (room) (label_replace(hass_input_number_state{entity=~\"input_number.comfort_floor_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"input_number.comfort_floor_(.*)\")) or on(room) (label_replace(vector(21), \"room\", \"bedroom\", \"\", \"\") or label_replace(vector(21), \"room\", \"hall_kitchen\", \"\", \"\") or label_replace(vector(21), \"room\", \"office_t\", \"\", \"\"))))[1d:5m])",
           "legendFormat": "{{room}}",
           "refId": "A"
         },
@@ -750,9 +793,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Hall-kitchen below 23.5 degC in the weekday day window (rolling 7 d)",
+      "title": "Rooms below their day minimum in the weekday day window (rolling 7 d)",
       "id": 14,
-      "description": "Share of 5 min steps below 23.5 degC on weekdays between 11:00 and 21:00 UTC (12:00 to 22:00 winter time; one hour off in summer time). Section B limit: at most 10% (dashed).",
+      "description": "Share of 5 min steps below the room's own day minimum max(input_number.comfort_day_minimum_<room>, floor) on weekdays between 11:00 and 21:00 UTC (12:00 to 22:00 winter time; one hour off in summer time). Defaults while the helpers do not exist: hall-kitchen 23.5, the other rooms 21. Section B limit: at most 10% (dashed). Comfort criteria per room: see the optimizer preregistration amendment (pending).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -770,8 +813,8 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "avg_over_time((max(hass_climate_current_temperature_celsius{entity=\"climate.thermostat_hall_kitchen\"}) < bool 23.5 and on() (hour() >= 11 and hour() < 21 and day_of_week() >= 1 and day_of_week() <= 5))[7d:5m])",
-          "legendFormat": "Below 23.5",
+          "expr": "avg_over_time((max by (room) (label_replace(hass_climate_current_temperature_celsius{entity=~\"climate.thermostat_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"climate.thermostat_(.*)\")) < bool on(room) max by (room) (label_replace((max by (room) (label_replace(hass_input_number_state{entity=~\"input_number.comfort_floor_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"input_number.comfort_floor_(.*)\")) or on(room) (label_replace(vector(21), \"room\", \"bedroom\", \"\", \"\") or label_replace(vector(21), \"room\", \"hall_kitchen\", \"\", \"\") or label_replace(vector(21), \"room\", \"office_t\", \"\", \"\"))), \"kind\", \"floor\", \"\", \"\") or label_replace((max by (room) (label_replace(hass_input_number_state{entity=~\"input_number.comfort_day_minimum_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"input_number.comfort_day_minimum_(.*)\")) or on(room) (label_replace(vector(23.5), \"room\", \"hall_kitchen\", \"\", \"\") or label_replace(vector(21), \"room\", \"bedroom\", \"\", \"\") or label_replace(vector(21), \"room\", \"office_t\", \"\", \"\"))), \"kind\", \"day\", \"\", \"\")) and on() (hour() >= 11 and hour() < 21 and day_of_week() >= 1 and day_of_week() <= 5))[7d:5m])",
+          "legendFormat": "{{room}}",
           "refId": "A"
         },
         {
@@ -852,9 +895,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Degree-hours below 21 degC per room (Kh, rolling 24 h)",
+      "title": "Degree-hours below the room floor per room (Kh, rolling 24 h)",
       "id": 15,
-      "description": "sum(max(21 - T, 0)) over 5 min steps / 12 per comfort room.",
+      "description": "sum(max(floor - T, 0)) over 5 min steps / 12 per comfort room, with the room's own floor helper (21 degC until it exists).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -872,7 +915,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "label_replace(sum_over_time(clamp_min(21 - max by (entity) (hass_climate_current_temperature_celsius{entity=~\"climate.thermostat_(bedroom|hall_kitchen|office_t)\"}), 0)[1d:5m]) / 12, \"room\", \"$1\", \"entity\", \"climate.thermostat_(.*)\")",
+          "expr": "sum_over_time(clamp_min((max by (room) (label_replace(hass_input_number_state{entity=~\"input_number.comfort_floor_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"input_number.comfort_floor_(.*)\")) or on(room) (label_replace(vector(21), \"room\", \"bedroom\", \"\", \"\") or label_replace(vector(21), \"room\", \"hall_kitchen\", \"\", \"\") or label_replace(vector(21), \"room\", \"office_t\", \"\", \"\"))) - on(room) max by (room) (label_replace(hass_climate_current_temperature_celsius{entity=~\"climate.thermostat_(bedroom|hall_kitchen|office_t)\"}, \"room\", \"$1\", \"entity\", \"climate.thermostat_(.*)\")), 0)[1d:5m]) / 12",
           "legendFormat": "{{room}}",
           "refId": "A"
         }
@@ -1526,7 +1569,7 @@
     },
     {
       "type": "row",
-      "title": "Heater safety (the booster and backup heater stay off)",
+      "title": "Heater safety (heater only inside defrost)",
       "id": 26,
       "collapsed": false,
       "gridPos": {
