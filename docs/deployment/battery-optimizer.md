@@ -751,6 +751,9 @@ the app repo plus bounded allowlist entries and tests.
 | pd_relay_cooldown | 0 |
 | no_pd_command_delay | 0 |
 
+Since 2026-11-06 09:30 UTC the profile select reads `custom`, because kp no longer matches a profile row (see the
+change log).
+
 **Baseline measurement**: 2 s HA history, 2026-11-03 to 2026-11-06, about 66 h, all at the baseline settings.
 
 - Steady discharge error, grid minus target: std about 24 W, p1/p99 about -50/+60 W. No limit cycle.
@@ -763,12 +766,12 @@ the app repo plus bounded allowlist entries and tests.
 - `max_power_change` was never binding: the fastest setpoint change was about 190 W/s against the 400 W/s allowed.
 - `pd_control_quality` was `oscillating` for 0.35 h of 66 h, always with fast-changing loads.
 
-**Candidate changes, not applied yet**:
+**Candidate changes, applied together on 2026-11-06 (kp 0.40 instead of the 0.45 candidate)**:
 
 1. `pd_min_cycle_interval` 1.0 -> 0.5 s. It may shorten the feedforward confirm by up to about 1 s; this is an
    estimate. Risk: more Modbus traffic, so watch `sensor.omnibattery_non_responsive_batteries`.
-2. Later and optional: kp 0.35 -> 0.45. Do not go above 0.55, where oscillation risk rises, so
-   `aggressive`/`very_aggressive` are not recommended.
+2. kp 0.35 -> 0.40, a cautious first step towards the 0.45 candidate. Do not go above 0.55, where oscillation
+   risk rises, so `aggressive`/`very_aggressive` are not recommended.
 
 Everything else stays at baseline.
 
@@ -785,6 +788,7 @@ Everything else stays at baseline.
 | Date | Setting | Old -> new | Why | Result |
 |---|---|---|---|---|
 | 2026-11-06 | all PD settings | - | Baseline recorded, no change | See baseline |
+| 2026-11-06 09:30 UTC | `pd_min_cycle_interval`; `pd_controller_kp` | 1.0 -> 0.5 s; 0.35 -> 0.40 | Shorten the feedforward confirm and the PD tail on load-down steps to cut export transients. Kp kept below the 0.45 candidate as a cautious first step. Both changed together (not one at a time), so the effects can't be separated | Pending: compare with the baseline after at least 7 days (about 2026-11-13) |
 
 ### Open issue: planned discharge is not delivered
 
