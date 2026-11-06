@@ -46,14 +46,9 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | Mini Switch 4 | `mini-switch-4.yaml` | ESP8266 | Light switch | Smart light switch |
 | Mini Switch Office A | `mini-switch-office-a.yaml` | ESP8266 | Light switch | Office smart light switch |
 | Rack Controller | `rack-controller.yaml` | ESP32 | Fan controller | Server rack cooling + OLED display |
+| Venus E Cooling | `venus-e-cooling.yaml` | ESP8266 | Fan RPM monitor | Marstek Venus E V3; two fixed-12 V Noctua FLX fans; [hardware and wiring](venus-e-cooling/README.md) |
 | Smart Plug Battery | `smart-plug-v2-battery.yaml` | ESP8266 | Power meter | House battery AC input; battery AC failsafe |
 | Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | Snapmaker 3D printer plug |
-
-### Hardware-only projects
-
-- [Venus E V3 Cooling Controller](venus-e-cooling/README.md): two Noctua FLX fans,
-  12 V fans direct, MP1584 buck for a bare 3.3 V ESP8266MOD. Includes a wiring SVG,
-  BOM, mechanical mounting notes and a bring-up checklist; firmware to follow.
 
 ## Package System
 
