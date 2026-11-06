@@ -1,0 +1,56 @@
+substitutions:
+  name: venus-e-cooling
+  friendly_name: Venus E Cooling
+
+packages:
+  connection: !include ./packages/connection.yaml
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "Marstek Venus E V3 - auxiliary cooling fan RPM monitoring"
+
+# This is the bare ESP8266MOD (ESP-12), NOT an ESP32 / USB development board.
+# Supply regulated 3.3 V to VCC from the D-SUN MP1584.
+# Boot straps: GPIO0/GPIO2/EN/RST high; GPIO15 low at startup.
+esp8266:
+  board: esp12e
+
+logger:
+
+# Wi-Fi, API, OTA, and fallback AP come from packages/connection.yaml.
+# No fan/switch/climate entity: both 3-pin NF-A4x10 FLX fans receive 12 V
+# directly from the barrel jack. The NA-YC1 forwards only one TACH signal.
+sensor:
+  - platform: pulse_counter
+    pin:
+      number: GPIO14
+      mode:
+        input: true
+        pullup: true
+    name: "Fan 1 Speed"
+    id: fan_1_speed
+    unit_of_measurement: "RPM"
+    icon: mdi:fan
+    accuracy_decimals: 0
+    state_class: measurement
+    update_interval: 5s
+    # Typical Noctua fan tach: 2 pulses/revolution.
+    # ESPHome pulse_counter produces pulses/minute.
+    filters:
+      - multiply: 0.5
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: status
+    name: "Controller Status"
+    entity_category: diagnostic
