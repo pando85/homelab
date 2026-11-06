@@ -122,7 +122,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (70 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (75 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -141,10 +141,11 @@ Full pitfall index (70 entries grouped by subsystem): `docs/troubleshooting/INDE
 **Subsystem index** (top pitfalls per group — see `docs/troubleshooting/INDEX.md` for full entries):
 
 - **Kubernetes & GitOps** (15): node addition, app-template `tpl` evaluation, topology spread constraints, `eviction-hard` replaces k3s defaults
-- **ArgoCD** (4): repo-server probe death-spiral, kustomize OCI auth override
+- **ArgoCD** (6): repo-server probe death-spiral, kustomize OCI auth override, Helm-hook mixing and
+  hook-only edits that never converge (`docs/troubleshooting/argocd-helm-hook-provisioning.md`)
 - **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps
 - **Networking** (6): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP
-- **Storage & Backup** (11): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
+- **Storage & Backup** (12): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
 - **Desktop & Home** (12): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote), Omnibattery `backup_mode` latch (backup threshold 500 W workaround)

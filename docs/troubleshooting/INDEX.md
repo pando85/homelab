@@ -9,7 +9,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 ## Table of Contents
 
 - [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
-- [ArgoCD](#argocd) (5 entries)
+- [ArgoCD](#argocd) (6 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (6 entries)
 - [Storage & Backup](#storage--backup) (12 entries)
@@ -113,6 +113,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   and a `syncPolicy` patch are both reverted (ApplicationSet with `selfHeal`). Scale
   `argocd/argocd-repo-server` to 0 first, then the workload; restore the workload first, then the
   repo-server. See `docs/troubleshooting/stop-home-assistant-under-argocd.md`
+
+- Provisioning hook Jobs in Helm-chart apps: defining an Argo CD hook disables *all* Helm hooks;
+  hook-only edits never trigger a sync (hooks are excluded from comparison, so a fixed hook silently
+  does not converge); a Job `activeDeadlineSeconds` above `controller.sync.timeout.seconds` reports
+  "controller sync timeout" instead of the real failure; a `0400` Secret is unreadable by a nonroot
+  hook pod. See `docs/troubleshooting/argocd-helm-hook-provisioning.md`
 
 ## Monitoring & Observability
 

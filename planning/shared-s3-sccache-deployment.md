@@ -95,15 +95,24 @@ Proposed initial settings, subject to verified capacity and backend support:
 | Anonymous access | Disabled |
 | Versioning / object locking | Disabled |
 | Purge existing contents during provisioning | Disabled |
-| Storage ceiling | 50 GiB, with verified enforcement/overshoot behavior |
-| Object expiration | 14 days; tune from observed reuse |
+| Storage ceiling | 50 GiB = 53,687,091,200 bytes, hard quota (verified: oversized writes rejected) |
+| Object expiration | 14 days; one lifecycle rule `sccache-expiry`; tune from observed reuse |
 | Backups | Do not add cache contents to backup jobs |
 | Authorization | Dedicated bucket-scoped policies; no administrative or backup-bucket access |
 
 Lifecycle expiration is object-age-based, not last-access LRU. `SCCACHE_CACHE_SIZE` bounds only
 local disk, not the bucket. Define capacity/error alerts and preserve operational headroom for
-other MinIO consumers. Confirm quota behavior for the installed server version; if a reliable
-ceiling is unavailable, agree an alternative safeguard before proceeding.
+other MinIO consumers.
+
+Quota behavior is confirmed on the installed server version (Silo/mc `RELEASE.2026-10-26T00-00-00Z`):
+`mc quota set --size 53687091200b` reports `{"quota":53687091200,"type":"hard"}` and a write past the
+cap fails with "Bucket quota exceeded", so compile jobs degrade to their local cache instead of
+filling the pool. Note `50gb` would be decimal 50,000,000,000 - the cap is expressed in bytes.
+The desired values live in `platform/minio/templates/sccache-config.yaml` and are applied and
+re-asserted by the `minio-sccache-provisioning` post-install/post-upgrade hook Job
+(`platform/minio/templates/sccache-provisioning.yaml`); see
+`docs/troubleshooting/argocd-helm-hook-provisioning.md` for why the state is in a ConfigMap and not
+only in the hook.
 
 Use only the S3 operations the chosen backend needs, including its capability-check object and
 multipart operations if required. Verify denial of access to unrelated buckets. Remote cache
