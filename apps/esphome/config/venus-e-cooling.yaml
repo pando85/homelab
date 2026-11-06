@@ -8,59 +8,51 @@ packages:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  comment: "Marstek Venus E V3 - auxiliary cooling fan relay and RPM monitoring"
+  comment: "Marstek Venus E V3 auxiliary cooling - Sinilink XY-WFMS"
 
-# This is the bare ESP8266MOD (ESP-12), NOT an ESP32 / USB development board.
-# Supply regulated 3.3 V to VCC from the D-SUN MP1584.
-# Boot straps: GPIO0/GPIO2/EN/RST high; GPIO15 low at startup.
+# Sinilink XY-WFMS / ESP-12F (1 MB flash).
+# Device GPIO mapping: https://devices.esphome.io/devices/sinilink-xy-vfms/
 esp8266:
-  board: esp12e
+  board: esp01_1m
 
 logger:
 
-# Wi-Fi, API, OTA, and fallback AP come from packages/connection.yaml.
-# Both 3-pin NF-A4x10 FLX fans share a 12 V rail switched by the normally-open
-# contacts of a 3.3 V, active-high relay module (powered from MP1584).
-# GPIO5 controls the module input; a 10k pulldown on GPIO5 keeps the relay off
-# during reset / boot. The NA-YC1 forwards only one TACH signal.
-# No PWM speed control is available with these 3-pin FLX fans.
+# On-board blue Wi-Fi/status LED (active-low).
+status_led:
+  pin:
+    number: GPIO2
+    inverted: true
+
+# GPIO4 switches the on-board MOSFET and the red LED.
+# The fans are connected to OUT+/OUT- via a Y-splitter.
+# These 3-pin Noctua FLX fans support ON/OFF only in this build;
+# this is NOT a variable-voltage or 4-pin PWM fan controller.
 switch:
   - platform: gpio
-    name: "Cooling Fans"
     id: cooling_fans
-    pin: GPIO5
+    name: "Cooling Fans"
+    pin: GPIO4
     restore_mode: ALWAYS_OFF
 
-sensor:
-  - platform: pulse_counter
-    pin:
-      number: GPIO14
-      mode:
-        input: true
-        pullup: true
-    name: "Fan 1 Speed"
-    id: fan_1_speed
-    unit_of_measurement: "RPM"
-    icon: mdi:fan
-    accuracy_decimals: 0
-    state_class: measurement
-    update_interval: 5s
-    # Typical Noctua fan tach: 2 pulses/revolution.
-    # ESPHome pulse_counter produces pulses/minute.
-    filters:
-      - multiply: 0.5
-
-  - platform: wifi_signal
-    name: "WiFi Signal"
-    update_interval: 60s
-    entity_category: diagnostic
-
-  - platform: uptime
-    name: "Uptime"
-    update_interval: 60s
-    entity_category: diagnostic
-
+# On-board pushbutton (active-low).
 binary_sensor:
+  - platform: gpio
+    id: local_button
+    pin:
+      number: GPIO12
+      mode: INPUT_PULLUP
+      inverted: true
+    internal: true
+    filters:
+      - delayed_on: 30ms
+      - delayed_off: 30ms
+    on_press:
+      - switch.toggle: cooling_fans
+
   - platform: status
     name: "Controller Status"
     entity_category: diagnostic
+
+# There is deliberately no tachometer sensor: the XY-WFMS switches
+# the low side (OUT-) and has no documented accessible fan-TACH GPIO.
+# Leave the Y-cable tachometer lead disconnected and insulated.
