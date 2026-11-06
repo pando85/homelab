@@ -114,6 +114,15 @@ re-asserted by the `minio-sccache-provisioning` post-install/post-upgrade hook J
 `docs/troubleshooting/argocd-helm-hook-provisioning.md` for why the state is in a ConfigMap and not
 only in the hook.
 
+Version constraint worth knowing before bumping the backend: the provisioning hook reuses the
+**server image's own `mc`** (`pgsty/silo:RELEASE.2026-10-26T00-00-00Z`), because the standalone
+`quay.io/minio/mc` images were removed and now return 401. That means a Renovate bump of the MinIO
+server release also changes the CLI surface the hook depends on. The script does not assume that
+quietly: it fails the Job with the applied state in the log if the cap, the quota type or the
+lifecycle rule is not exactly as configured, so a version bump surfaces as a failed sync rather than
+silently mis-provisioned bucket settings. The command surface verified for the current release is
+recorded in `docs/troubleshooting/argocd-helm-hook-provisioning.md`.
+
 Use only the S3 operations the chosen backend needs, including its capability-check object and
 multipart operations if required. Verify denial of access to unrelated buckets. Remote cache
 write rejection at capacity must not fail normal compilation with the selected hierarchy/policy;
@@ -254,6 +263,28 @@ After successful pilot review and explicit approval:
 Do not reduce local limits initially. Local-first sharing does not free the existing roughly
 10 GiB cache on k8s-amd64-1, and it does not solve Docker-image disk growth. Those remain separate
 capacity decisions. No worktree-target migration is implied by enabling S3.
+
+### Known limitation: shared storage is not yet shared hits
+
+The storage side is complete and verified: private `sccache` bucket, hard quota 50 GiB
+(53,687,091,200 bytes, writes past the cap rejected), one 14-day lifecycle rule
+(`sccache-expiry`), separate scoped identities (`sccache-ci` read/write, `sccache-desktop`
+read-only) and a credential file delivered to the runners. None of that makes a cache entry
+written on one host useful on another.
+
+sccache derives its cache keys from the compile invocation and its inputs, which include source
+file paths. CI builds run under a different workspace prefix than a workstation checkout, so the
+two produce different keys for the same compilation: entries land in the same bucket but are not
+looked up across hosts. Making them collide requires path normalization on the inputs (in sccache
+0.19 this is the `BASEDIRS` behavior, with the CI action passing the workspace root). That
+normalization is **not implemented and is not owned by this repository** - it belongs to the Calypso
+CI action work and the desktop rollout, each verifying against their own installed version.
+
+Read metrics accordingly: a healthy hit rate *within* CI together with close to zero cross-host hits
+is the expected state before normalization lands. Do not diagnose that as a broken shared cache, and
+do not "fix" it by changing bucket retention or the capacity cap - those are already at the values
+this plan specifies. Keep Phase 6 step 4 (workstations publishing) gated on demonstrated key
+compatibility, and treat the cross-host benefit as still to be earned.
 
 ## Rollback
 
