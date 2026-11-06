@@ -17,8 +17,11 @@ default 0), so weight "1" runs this Job after the chart's post-job (weight 0).
 Desired state it converges to on every sync (all commands verified against a server built from the
 same pinned image, RELEASE.2026-10-26T00-00-00Z):
   1. bucket exists          mc mb --ignore-existing                       -> idempotent
-  2. hard quota 50 GiB      mc quota set --size 50GiB                     -> 53,687,091,200 bytes
-  3. exactly one lifecycle  mc ilm rule import (replaces the whole config) -> ID sccache-expiry, 14d
+  2. hard quota (bytes)     mc quota set --size <SCCACHE_QUOTA_BYTES>b   -> rejects writes past the cap
+  3. exactly one lifecycle  mc ilm rule import (replaces the whole config) -> 1 rule, <RULE_ID>, <DAYS>
+
+The quota, expiry, rule ID, endpoint and bucket name are configured in templates/sccache-config.yaml
+(currently 50 GiB = 53,687,091,200 bytes and a 14-day expiry), not in this script.
   4. every step is read back and the Job FAILS if the applied state differs, so a green sync means
      the cap and the rule are actually in place (no `|| true` anywhere in this script).
 
@@ -50,9 +53,13 @@ spec:
   # Permission denied" - the Secret mounted 0400 root:root was unreadable by uid 1000 because the
   # pod had no fsGroup. Those attempts burned the window in backoff waits, which is what surfaced
   # as "Job was active longer than specified deadline". Fixed below with defaultMode 0440 +
-  # fsGroup 1000; the deadline is raised to 1200s so a cold image pull or a slow server rollout
-  # cannot be mistaken for failure. The chart's own post-job has no deadline at all.
-  activeDeadlineSeconds: 1200
+  # fsGroup 1000.
+  #
+  # The ceiling must stay BELOW argocd-cmd-params-cm controller.sync.timeout.seconds (600), or a
+  # slow Job gets reported as "Operation terminated, triggered by controller sync timeout" instead
+  # of a clean Job failure with readable logs. Budget: image pull + the bounded API wait
+  # (60 x 3s = 180s) + six mc calls, so 420s is generous without racing the controller.
+  activeDeadlineSeconds: 420
   backoffLimit: 6
   ttlSecondsAfterFinished: 600
   template:
@@ -62,6 +69,9 @@ spec:
         app.kubernetes.io/component: sccache-provisioning
     spec:
       restartPolicy: Never
+      # This Job talks to MinIO with credentials from a Secret; it has no use for the Kubernetes
+      # API, so no service account token is mounted.
+      automountServiceAccountToken: false
       # Secret volumes land as root-owned with the given mode; fsGroup makes the group readable,
       # which is what lets this nonroot container read /config/rootUser and /config/rootPassword.
       securityContext:
@@ -76,18 +86,30 @@ spec:
           # quay.io/minio/mc returns 401 after MinIO removed its quay images (2026-11).
           image: "{{ .Values.minio.mcImage.repository }}:{{ .Values.minio.mcImage.tag }}"
           imagePullPolicy: {{ .Values.minio.mcImage.pullPolicy | default "IfNotPresent" }}
+          # Desired state comes from templates/sccache-config.yaml, not from constants in this
+          # script: the enforced cap and the documented cap cannot drift, and changing that
+          # ConfigMap is a real diff that makes Argo CD run the hook again (hook-only edits are
+          # excluded from sync comparison and would never converge). Read through envFrom rather
+          # than a mounted file because this image has no parser to read a file with.
+          envFrom:
+            - configMapRef:
+                name: minio-sccache-desired
           command:
             - /bin/sh
             - -c
             - |
               set -eu
 
-              ENDPOINT="minio"
-              PORT="9000"
-              TARGET="myminio/sccache"
-              QUOTA_BYTES=53687091200
-              RULE_ID="sccache-expiry"
-              EXPIRY_DAYS=14
+              # Desired state comes from the minio-sccache-desired ConfigMap (envFrom). The ${VAR:?}
+              # form aborts with a clear message if a key is missing, so a mis-edited ConfigMap fails
+              # the Job loudly instead of provisioning something unintended.
+              ENDPOINT="${SCCACHE_S3_ENDPOINT:?ConfigMap key SCCACHE_S3_ENDPOINT is missing}"
+              PORT="${SCCACHE_S3_PORT:?ConfigMap key SCCACHE_S3_PORT is missing}"
+              BUCKET="${SCCACHE_S3_BUCKET:?ConfigMap key SCCACHE_S3_BUCKET is missing}"
+              QUOTA_BYTES="${SCCACHE_QUOTA_BYTES:?ConfigMap key SCCACHE_QUOTA_BYTES is missing}"
+              EXPIRY_DAYS="${SCCACHE_EXPIRY_DAYS:?ConfigMap key SCCACHE_EXPIRY_DAYS is missing}"
+              RULE_ID="${SCCACHE_RULE_ID:?ConfigMap key SCCACHE_RULE_ID is missing}"
+              TARGET="myminio/${BUCKET}"
               # Set early so the helpers below are safe to call before the Secret is read.
               ACCESS=""
               SECRET=""
@@ -141,6 +163,15 @@ spec:
                 printf '%s' "$_cn"
               }
 
+              # Validate the desired state before touching the object store.
+              case "$QUOTA_BYTES" in '' | *[!0-9]*) fail "SCCACHE_QUOTA_BYTES must be a plain byte count, got: $QUOTA_BYTES" ;; esac
+              case "$EXPIRY_DAYS" in '' | *[!0-9]*) fail "SCCACHE_EXPIRY_DAYS must be a whole number of days, got: $EXPIRY_DAYS" ;; esac
+              # Blast-radius guard: this Job exists to manage the disposable cache bucket. The
+              # backup bucket and the application buckets belong to the MinIO chart.
+              case "$BUCKET" in
+                velero | kaniop) fail "refusing to manage '$BUCKET': backup/application buckets belong to the MinIO chart" ;;
+              esac
+
               # mc's default config dir in this image is /tmp/.mc; use a directory we own inside the
               # /tmp emptyDir instead of depending on that default (and on HOME being writable).
               export MC_CONFIG_DIR=/tmp/mc
@@ -161,7 +192,7 @@ spec:
 
               # Wait for the MinIO API - this post-hook can start while the server pod rolls - but
               # stop immediately on a credential error: signature/access-key failures are permanent
-              # and retrying them would burn the deadline (a 100 x 3s spin would look like a hang).
+              # and retrying them would burn the deadline (60 x 3s of waiting already looks like a hang).
               i=0
               err=""
               while true; do
@@ -173,7 +204,7 @@ spec:
                   *ignature* | *AccessKey* | *access*key*) fail "credential rejected by MinIO (not retryable): $(safe "$err")" ;;
                 esac
                 i=$((i+1))
-                [ "$i" -le 100 ] || fail "MinIO API not reachable at ${ENDPOINT}:${PORT} after $i tries: $(safe "$err")"
+                [ "$i" -le 60 ] || fail "MinIO API not reachable at ${ENDPOINT}:${PORT} after $i tries: $(safe "$err")"
                 sleep 3
               done
 
@@ -194,14 +225,14 @@ spec:
               # trailing `*` below is load-bearing (tested: omitting it rejects a valid response).
               case "$Q" in
                 *"$q_a"* | *"$q_b"*) ;;
-                *) fail "quota is not ${QUOTA_BYTES} bytes (50 GiB); got: $(safe "$Q")" ;;
+                *) fail "quota is not ${QUOTA_BYTES} bytes; got: $(safe "$Q")" ;;
               esac
               t_hard='"type":"hard"'
               case "$Q" in
                 *"$t_hard"*) ;;
                 *) fail "quota type is not hard (writes would not be rejected); got: $(safe "$Q")" ;;
               esac
-              echo "sccache-provisioning: quota verified hard ${QUOTA_BYTES} bytes (50 GiB)"
+              echo "sccache-provisioning: quota verified hard ${QUOTA_BYTES} bytes on ${TARGET}"
 
               # Lifecycle: import replaces the entire configuration, so re-runs converge on exactly
               # one rule with a stable ID rather than accumulating duplicates, and an out-of-band
@@ -225,7 +256,7 @@ spec:
               n="$(count_of "$r_needle" "$L")"
               [ "$n" -eq 1 ] || fail "expected exactly 1 lifecycle rule, found $n; got: $(safe "$L")"
               echo "sccache-provisioning: lifecycle verified (${n} rule, ${RULE_ID}, ${EXPIRY_DAYS} days)"
-              echo "sccache bucket provisioned: quota=${QUOTA_BYTES} bytes (50 GiB) lifecycle=${EXPIRY_DAYS}d rule=${RULE_ID}"
+              echo "sccache bucket provisioned: bucket=${BUCKET} quota=${QUOTA_BYTES}b lifecycle=${EXPIRY_DAYS}d rule=${RULE_ID}"
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

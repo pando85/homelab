@@ -1,0 +1,36 @@
+{{- /*
+Single source of truth for the sccache shared-cache bucket's desired state.
+
+Why a ConfigMap instead of constants inside the provisioning Job:
+  - Argo CD excludes hook resources from sync comparison, so editing only a hook Job's spec leaves
+    the app "Synced" at the new revision and NO sync operation runs - the PostSync hook is never
+    re-created and the change never converges (this is exactly what happened to the first
+    permission fix). Keeping the desired state in a normal (non-hook) resource means any change to
+    the quota, the expiry or the rule ID produces a real diff, an automated sync runs, and the
+    PostSync hook re-applies and re-asserts it.
+  - It also keeps the numbers out of the shell script, so the documented cap and the enforced cap
+    cannot drift apart.
+
+templates/sccache-provisioning.yaml reads every value below through envFrom and asserts the
+applied state against the same values.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: minio-sccache-desired
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: sccache-provisioning
+data:
+  # In-cluster S3 endpoint. Plain HTTP on the MinIO service: the TLS ingress
+  # (s3.internal.grigri.cloud) is for external consumers such as CI runners and desktop clients.
+  SCCACHE_S3_ENDPOINT: minio
+  SCCACHE_S3_PORT: "9000"
+  SCCACHE_S3_BUCKET: sccache
+  # Hard capacity cap. 50 GiB is 53,687,091,200 bytes (IEC); "50gb" would be 50,000,000,000.
+  # Enforced by the server: writes past the cap are rejected, not merely reported.
+  SCCACHE_QUOTA_BYTES: "53687091200"
+  # Disposable cache: objects expire after 14 days. Exactly one rule, with this stable ID, so
+  # provisioning converges instead of accumulating rules.
+  SCCACHE_EXPIRY_DAYS: "14"
+  SCCACHE_RULE_ID: sccache-expiry
