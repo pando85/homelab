@@ -4,8 +4,8 @@
 <rect width="1600" height="990" fill="#f8fafc"/>
 <text x="60" y="60" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" text-anchor="start" fill="#162334">VENUS E V3 · COOLING CONTROLLER WIRING</text>
 <text x="60" y="90" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#526275">12 V barrel jack · two adjustable buck converters · bare ESP8266MOD · 2 × Noctua FLX (3-pin)</text>
-<path d="M555 180 H1460 M720 180 V326 M1110 180 V326" stroke="#cf3344" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M555 232 H1500 M805 232 V326 M1220 232 V326" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M295 180 H340 M555 180 H1460 M720 180 V326 M1110 180 V326" stroke="#cf3344" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M295 232 H340 M555 232 H1500 M805 232 V326 M1220 232 V326" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M720 483 V575 H695 V597" stroke="#d38a21" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M805 483 V555 H820 V597" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M1115 483 V558 H1160 V585" stroke="#008d8f" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
