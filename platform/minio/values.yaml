@@ -4,6 +4,13 @@ minio:
     repository: pgsty/silo
     tag: RELEASE.2026-10-26T00-00-00Z
 
+  # mc (MinIO client) for post-install hooks (bucket/policy/user provisioning).
+  # quay.io/minio/mc images were removed from quay.io (401 UNAUTHORIZED as of 2026-11).
+  # The pgsty/silo server image includes mc (symlinked to mcli), so reuse it.
+  mcImage:
+    repository: pgsty/silo
+    tag: RELEASE.2026-10-26T00-00-00Z
+
   mode: standalone
 
   drivesPerNode: 1
@@ -79,6 +86,7 @@ minio:
             - "s3:ListBucketMultipartUploads"
     # sccache CI: read-write access to the sccache bucket only.
     # No access to velero, kaniop or any other bucket. No admin actions.
+    # sccache 0.19.0 client only needs GetObject/PutObject for cache operations.
     - name: sccacheCiPolicy
       statements:
         - effect: Allow
@@ -88,7 +96,6 @@ minio:
             - "s3:AbortMultipartUpload"
             - "s3:GetObject"
             - "s3:PutObject"
-            - "s3:DeleteObject"
             - "s3:ListMultipartUploadParts"
         - effect: Allow
           resources:
@@ -161,8 +168,9 @@ minio:
       versioning: false
       objectlocking: false
     # sccache shared cache bucket: 14-day object expiry, no versioning or locking.
-    # Lifecycle rule is applied via customCommands (mc ilm add) after bucket creation.
-    # Capacity: 50 GiB soft ceiling on a 4 TB ZFS pool with ~2.6 TB free.
+    # Lifecycle rule is applied via customCommands (mc ilm rule add --id) after bucket creation.
+    # Capacity: no hard quota enforced; 14-day expiry bounds growth. Monitor via MinIO metrics.
+    # Pool: 4 TB ZFS with ~2.6 TB free; sccache is disposable cache, not backup-critical.
     - name: sccache
       policy: none
       purge: false
@@ -190,12 +198,11 @@ minio:
     #   objectlocking: false
 
   # Lifecycle rule for sccache bucket: 14-day object expiry.
-  # Note: bucket creation and custom commands run in parallel containers in the
-  # post-install Job. If the bucket doesn't exist yet when this runs, the Job
-  # fails and the next ArgoCD sync retries. In practice, bucket creation is fast
-  # and the custom command container takes time to connect, so this rarely fails.
+  # Uses --id for idempotency: re-running the hook updates the rule instead of creating duplicates.
+  # Note: bucket creation and custom commands run in parallel containers in the post-install Job.
+  # If the bucket doesn't exist yet when this runs, the Job fails and the next ArgoCD sync retries.
   customCommands:
-    - command: "ilm add --expiry-days 14 myminio/sccache"
+    - command: "ilm rule add --id sccache-expiry --expiry-days 14 myminio/sccache"
 
   environment:
     MINIO_IDENTITY_OPENID_ROLE_POLICY: consoleAdmin
