@@ -2,201 +2,149 @@
 
 ## Overview
 
-Auxiliary **bottom-to-top airflow** for the floor-standing Marstek Venus E V3. This is
-a **hardware assembly project**, modeled after the [Rack Controller](../rack-controller/README.md).
-The ESPHome configuration is [`../venus-e-cooling.yaml`](../venus-e-cooling.yaml),
-using the homelab's existing `packages/connection.yaml` for Wi-Fi, API and OTA.
+Auxiliary bottom-to-top airflow for the floor-standing **Marstek Venus E V3**
+using two existing **Noctua NF-A4x10 FLX** 40 × 40 × 10 mm, 12 V,
+three-pin fans. The battery is on the floor, approximately **50 mm** from
+the wall. Fans will be mounted horizontally below the rear vertical fins,
+blowing upward.
 
-The battery stands on the floor, with approximately **50 mm between the rear of the
-battery and the wall**. Two existing **Noctua NF-A4x10 FLX** 40 × 40 × 10 mm
-**three-pin, 12 V** fans will be mounted horizontally near the lower rear heatsink
-to encourage upward airflow along its vertical fins. Reuse the **supplied, unused
-Marstek wall-mount bars** only after confirming the real hole positions and
-clearances; they are **not** carrying the battery's weight in this build.
+This revision uses the **Sinilink XY-WFMS**: its ESP8266/ESP-12F, 5–36 V
+power input and MOSFET switch replace the bare ESP8266MOD, external
+buck regulator and separate relay. ESPHome configuration:
+[`venus-e-cooling.yaml`](../venus-e-cooling.yaml), using the existing
+[`connection.yaml`](../packages/connection.yaml) package.
 
 ## Electrical wiring
 
 <div align="center">
-  <img src="./wiring.svg" alt="Electrical wiring: 12 V barrel jack feeds both Noctua FLX fans directly through a Y splitter and an MP1584 buck converter for the bare 3.3 V ESP8266MOD; single tachometer to GPIO14" width="100%">
+  <img src="./wiring.svg" alt="Sinilink XY-WFMS: 12 V supply on VIN+ and VIN−, two Noctua FLX fans on MOSFET-switched OUT+ and OUT− through a Y splitter; unused TACH insulated" width="100%">
 </div>
 
-The **D-SUN MP1584EN is the only buck converter** and supplies regulated
-**3.3 V** to the bare ESP8266MOD **and a compatible 3.3 V relay module**.
-The relay's **normally-open (NO)** contact switches the **+12 V** fan supply
-from the barrel jack to the NA-YC1 splitter. Fan ground remains permanently
-connected to common ground. **ESP8266 GPIO5** drives the relay module's
-active-high **IN** pin, and **GPIO14** monitors the tachometer of one fan.
-
-**The primary feature is on/off control through Home Assistant**, with
-an ESPHome switch named **Cooling Fans**. The fans are off at boot
-(`restore_mode: ALWAYS_OFF`); an external **10 kΩ GPIO5 pull-down**
-keeps the relay input low while the ESP8266 resets. Confirm the selected
-relay really is **active-high** and remains de-energized with the GPIO
-disconnected.
-
-The three-pin **FLX** fans do **not** provide variable-speed PWM control.
-The ESP8266 can switch both fans simultaneously, but cannot adjust
-their RPM or independently control them. Do not PWM-chop the power supply.
+**Power stays on at VIN while only the fan output is switched.**
+The XY-WFMS uses a low-side MOSFET: connect fans to **OUT+ and OUT−**.
+**Never bridge OUT− to VIN− externally**; that would bypass the switch.
+The on-board ESP8266 and MOSFET need no additional GPIO or power wiring.
 
 ### Bill of materials
 
-| Qty | Part | Notes |
+| Qty | Component | Notes |
 | --- | --- | --- |
-| 1 | Regulated **12 V DC / 1 A or higher** adapter | 5.5 × 2.1 mm **center-positive** plug; 2 A is also fine |
-| 1 | Female 5.5 × 2.1 mm DC jack | Panel mount; check contact polarity with a meter |
-| 1 | **D-SUN MP1584EN** adjustable buck (green board) | **12 V → 3.30 V** for the bare ESP8266MOD and relay module |
-| 1 | **3.3 V active-high relay module**, single channel, contacts COM/NO | Prefer [BricoGeek PR2004](https://tienda.bricogeek.com/interruptores/2014-modulo-1-rele-33v.html); transistor driver and flyback protection integrated; verify input polarity |
-| 1 | **ESP8266MOD / ESP-12** bare Wi-Fi module | Requires 3.3 V supply, boot straps and a carrier/breakout |
-| 2 | Noctua **NF-A4x10 FLX** | 40 × 40 × 10 mm; 12 V, **0.05 A max each**, 3-pin |
-| 1 | Noctua **NA-YC1** Y-splitter | Both fan power leads, **tach from one fan only** |
-| 7 | 10 kΩ resistors | EN, RST, GPIO0, GPIO2 pull-up; GPIO15 and GPIO5 pull-down; tach pull-up |
-| 1 each | 100 nF ceramic and 10–47 µF capacitor | Place near ESP8266 VCC/GND on the carrier |
-| 1 | ESP-12 breakout/carrier or suitable PCB | ESP module pads are **not** normal 2.54 mm header pins |
-| 1 | 3.3 V USB–UART adapter (for programming) | UART TX/RX at 3.3 V logic; never 5 V |
-| Optional | FLASH (GPIO0→GND) / RESET (RST→GND) buttons | Useful when programming the bare module |
-| 1 | Inline low-voltage fuse, enclosure, wire and insulated terminals | Protect +12 V distribution and provide strain relief |
-| 2 | Original Marstek wall-mount bars, if unused | Reuse only if the fit is confirmed; do not drill the battery |
-| As needed | Small L-brackets, M3/M4 screws, nuts, spacers, rubber isolators | Exact sizes after physically measuring rail holes |
-| Optional | Thin printed PETG fan cradle / deflector | Only if generic brackets do not fit; keep air intake unobstructed |
+| 1 | **Sinilink XY-WFMS** | ESP8266 / ESP-12F, built-in regulator and MOSFET, 5–36 V input |
+| 1 | Regulated **12 V DC / ≥1 A** adapter | Certified external AC/DC supply |
+| 1 | DC jack 5.5 × 2.1 mm | As on rack controller; confirm center-positive polarity |
+| 2 | Noctua **NF-A4x10 FLX** | 3-pin, 12 V, **0.05 A max per fan** |
+| 1 | Noctua **NA-YC1** Y-cable | Both power lines shared; unused TACH insulated |
+| 1 | Fan connector breakout/harness | Mate to splitter input, expose **+V and GND only** |
+| 1 | Inline low-voltage fuse | Place on incoming positive conductor; insulate wiring |
+| 2 | Existing unused Marstek wall-mount bars | Only if geometrically suitable; **not load-bearing** |
+| As needed | Brackets, screws, spacers, isolators, enclosure | Measure fit and keep airflow path open |
 
-The fan pair draws **up to 0.10 A at 12 V** (1.2 W at rated voltage);
-the ESP8266 and relay module also draw from the 3.3 V MP1584.
-Size and test the MP1584 rail for **Wi-Fi bursts plus the relay-coil load**;
-verify the 3.3 V rail does not sag on fan switching or Wi-Fi connection.
-A quality **12 V / 1 A** supply should leave headroom, subject to
-measuring the actual relay and ESP current.
-Do not interpret the adapter's current rating as forced current.
+**No additional ESP8266, MP1584, LM2596, relay module, gate driver
+or ESP-12 boot resistors are needed** for the finished installation.
 
-### Power and signal connections
+### Power terminals
 
-| From | To | Function |
+| From | To | Notes |
 | --- | --- | --- |
-| DC jack +12 V | MP1584 **IN+** and relay **COM** contact | Fused 12 V feed for controller and switched fans |
-| Relay **NO** contact | Y-cable fan **+V** (3-pin connector pin 2) | 12 V delivered only while relay energized; **NC unused** |
-| DC jack GND | MP1584 **IN−**, Y-cable fan **GND** (pin 1) | Common return for fans and ESP8266 |
-| MP1584 **OUT+** (measured **3.30 V**) | ESP8266 **VCC**, relay module **VCC** | Use 3.3 V relay module, **not** a 5 V / 12 V coil board |
-| MP1584 **OUT−** | ESP8266 **GND**, relay module **GND**, Y-cable fan **GND** (pin 1) | Shared ground; **do not switch GND** |
-| ESP8266 **GPIO5** | Relay module **IN** | Active-HIGH enable; **10 kΩ pull-down to GND** for boot OFF |
-| Y-cable single **TACH** (pin 3) | ESP8266 **GPIO14** | One fan RPM only; **10 kΩ pull-up to 3.3 V**, no 12 V on GPIO |
-| ESP8266 **EN**, **RST**, **GPIO0**, **GPIO2** | Individual **10 kΩ** pull-ups to 3.3 V | Normal boot and enable |
-| ESP8266 **GPIO15** | **10 kΩ** pull-down to GND | Required normal boot strap |
-| UART TX/RX on ESP8266 | 3.3 V USB–UART RX/TX, crossed | Only needed to flash/diagnose; shared GND |
-| GPIO0 → GND during reset | Temporary FLASH button / jumper | Enter serial bootloader; release for normal boot |
+| Jack **+12 V**, via fuse | XY-WFMS **VIN+** | Permanent 12 V board power |
+| Jack **GND** | XY-WFMS **VIN−** | Board supply return |
+| XY-WFMS **OUT+** | Y-cable fan **+V** | Noctua pin 2, **red wire** |
+| XY-WFMS **OUT−** | Y-cable fan **GND** | Noctua pin 1, **black wire**; switched negative |
+| Y-cable **TACH** | **Not connected** | Noctua pin 3, **yellow wire**; insulate separately |
 
-**Do not parallel two tachometer outputs.** The NA-YC1 splitter provides
-a single tach signal by design. Most Noctua PC fan tachometer outputs are
-open-collector; use a **3.3 V pull-up** rather than a 5 V or 12 V pull-up,
-and confirm the actual signal on your hardware. Typical PC fans generate
-**two tach pulses per revolution** (RPM = pulses/s × 30).
+The two fans draw up to **0.10 A total at 12 V**. The 12 V supply also
+powers the Sinilink electronics. Check the actual terminal markings
+and output polarity with a multimeter before connecting the fans.
 
-The MP1584 is the **only** adjustable converter. Set its output to
-**3.30 V** and verify polarity **before connecting the ESP8266**.
-The fan harness connects to the relay's **NO contact**, **not** to the
-MP1584 output. The MP1584 feeds the ESP8266 and 3.3 V relay module only.
-Do not run fan current through GPIO5. Verify that NO is open while off
-and closes onto COM only while the relay is energized.
-The ESP8266 needs nearby decoupling and a reliable 3.3 V rail.
-Keep all low-voltage grounds common. The MP1584 output is **not
-controllable from firmware** in this configuration.
+### Functional scope
 
-## Mechanical arrangement
+- **ON/OFF:** the Home Assistant **Cooling Fans** entity operates the
+  on-board MOSFET via **GPIO4**. GPIO12 is the physical toggle button.
+- **Boot behavior:** ESPHome uses `restore_mode: ALWAYS_OFF`; confirm
+  actual switch behavior on power-up before relying on it as a hardware
+  safety mechanism.
+- **No adjustable DC voltage:** the XY-WFMS provides switching, not a
+  stable variable-voltage output. We deliberately **do not PWM-chop**
+  the supply of these three-pin FLX fans.
+- **No RPM measurement:** the module's output switches the low-side
+  return; there is no documented ready-to-use tachometer interface
+  on this device. A tachometer wire must **not** be attached directly
+  to a programming pad, GPIO12 or VIN−. We leave it insulated and
+  do not expose an invented RPM entity.
 
-- **Airflow:** Both 40 mm fans lie **horizontally**, axes pointing upward,
-  near the **bottom of the rear vertical-fin heatsink**. A small open-sided
-  plenum may help feed the lower fins; air must escape **above** the battery.
-- **50 mm wall gap:** The **40 mm footprint** of each fan must fit the rear
-  gap **plus its fasteners and clearance**. Its 10 mm thickness is vertical.
-  Do **not** confuse the 10 mm fan thickness with the 40 mm depth of the
-  horizontally positioned fan.
-- **Battery on the floor:** Keep the lower intake open to room air; the
-  floor and skirting board can block an unraised intake. Verify the
-  bottom of the fins is accessible and the fans **do not cover existing
-  ventilation, connectors or drain paths**.
-- **Original wall bars:** If they are unused, try them as a **removable
-  support frame** with standard L-brackets and screw-on fan corners.
-  Do not borrow load-bearing fasteners, rely on unmeasured hole spacing,
-  or transfer vibration/weight into heatsink fins.
-- **Enclosure:** Locate the ESP8266, relay and MP1584 **outside the hot
-  rear air channel**, with cable strain relief and insulated electronics.
-  The ESP antenna should remain clear of metal profiles.
+The battery's own thermal protection must remain independent of
+Home Assistant or this auxiliary airflow system.
 
-The Marstek mounting-bar dimensions and exact fin access have **not been
-measured on this installation**. Cut length, bracket count and hole spacing
-are intentionally left adjustable rather than inventing a drilling template.
-Confirm the applicable Marstek installation-clearance requirements: an
-auxiliary fan does **not** replace the manufacturer's minimum wall spacing.
+## Initial ESPHome flashing
 
-## Bring-up checklist
+The XY-WFMS has **six small programming pads at 1.25 mm pitch**.
+See the labelled photographs in the
+[ESPHome XY-WFMS device page](https://devices.esphome.io/devices/sinilink-xy-vfms/).
+Use the existing USB–UART adapter with verified **3.3 V logic**;
+thin wires or a pogo-pin jig work.
 
-1. Check jack **polarity** and verify the PSU's 12 V output.
-2. Set the **green MP1584 to 3.30 V** with a multimeter **before**
-   connecting the ESP8266. Check that the separate fan branch measures
-   **12 V**, and that all returns share a common ground.
-3. Verify the ESP-12 carrier's boot straps (EN/RST/GPIO0/GPIO2 high;
-   GPIO15 low), **GPIO5 relay pulldown**, 3.3 V decoupling and GPIO14 tach pull-up.
-4. Energize the ESP8266 **without** the fan harness first; check stable
-   boot and absence of 5 V / 12 V on GPIOs.
-5. With the relay **off**, verify **COM = 12 V**, **NO unpowered**,
-   both fans stopped and the ESP8266 still powered at 3.3 V. Then enable
-   `Cooling Fans` and verify both fans start at **12 V**, one tachometer
-   reports RPM, and the 3.3 V supply remains stable.
-6. Reset the ESP8266 and check the relay remains **off throughout boot**
-   thanks to the external GPIO5 pulldown. Check both on/off operations,
-   correct airflow and no blocked intakes. Measure thermal improvement
-   at matched battery load and ambient temperature.
-
-## ESPHome firmware
-
-The [`venus-e-cooling.yaml`](../venus-e-cooling.yaml) configuration uses the
-existing shared [connection package](../packages/connection.yaml). It targets
-`esp8266: board: esp12e` and exposes **Cooling Fans** as an active-high
-GPIO5 relay switch, defaulting to **ALWAYS_OFF** on reboot.
-It also exposes **Fan 1 Speed** from GPIO14 using `pulse_counter` and
-a ×0.5 filter (two tachometer pulses per revolution), Wi-Fi diagnostics,
-and controller status. The Y-cable reports only one fan's tachometer.
-Home Assistant can enable the relay explicitly or automate it against the
-battery's existing temperature sensor; the battery remains passively cooled
-if the auxiliary system is unavailable. Keep thermal safety limits and
-manufacturer protections independent of Home Assistant.
-
-### Initial serial flash (bare ESP-12)
-
-A bare ESP8266MOD has **no USB port**. Choose either a compatible **ESP-12
-USB programmer with a socket** (before soldering the module) or a 3.3 V
-USB–UART adapter wired to a carrier with boot resistors. The latter also
-allows serial recovery after assembly:
-
-| USB–UART / programming header | Bare ESP-12 |
+| Pad on Sinilink | Connect to |
 | --- | --- |
-| Adapter TX (3.3 V logic) | RXD0 |
-| Adapter RX (3.3 V logic) | TXD0 |
-| Adapter GND | GND (shared with MP1584) |
-| Supply for ESP | MP1584 OUT+ at **3.30 V**, not USB 5 V |
-| FLASH button / jumper | GPIO0 → GND during reset |
-| RESET button / jumper | RST → GND momentarily |
+| **1 – 3V3** | Reliable regulated **3.3 V** source |
+| **2 – RESET** | Momentarily GND for reset (if needed) |
+| **3 – GPIO0** | GND **during reset** to enter the serial bootloader |
+| **4 – RXD** | USB–UART **TXD** |
+| **5 – TXD** | USB–UART **RXD** |
+| **6 – GND** | USB–UART / supply **GND** |
 
-Keep **GPIO15 low**, **GPIO2 high** and **EN high**. For normal boot,
-GPIO0 must be high; for serial download, hold **GPIO0 low while
-resetting**. Use a dedicated MP1584 to supply the module during serial
-flashing; **do not connect USB–UART VCC to the MP1584's output** unless
-a deliberately designed single-supply arrangement is used.
+**Disconnect the 12 V input during 3V3-pad programming.**
+Do not put 5 V on the 3V3 pad, and do not combine two independently
+powered 3.3 V sources. If the USB–UART adapter cannot supply enough
+current for ESP8266 startup, use a separate regulated 3.3 V supply
+(the existing MP1584 can be reused temporarily) and share ground.
+Do not use ordinary 2.54 mm Dupont headers against the 1.25 mm pads.
 
-When the same ESPHome configuration and a valid local
-`secrets.yaml` are available on the flashing computer, the initial
-upload can be performed with:
+For a local checkout with the required `secrets.yaml` available:
 
-```bash
+```sh
 esphome run apps/esphome/config/venus-e-cooling.yaml \
   --device /dev/ttyUSB0 --upload_speed 115200
 ```
 
-The homelab deploys connection secrets through Vault in Kubernetes;
-`secrets.yaml` is not committed to Git. Alternatively compile/download
-the firmware through the already configured ESPHome dashboard, then
-flash the resulting ESP8266 binary locally using a suitable serial
-programmer. After the first successful Wi-Fi/API/OTA boot, further
-updates can be applied over the network using the existing dashboard.
+Alternatively compile/download the binary via the homelab ESPHome
+dashboard and flash it locally over UART. Once the module joins Wi-Fi,
+later updates can be made OTA through the shared connection package.
+The device definition uses `esp8266: board: esp01_1m`.
 
-References: [Espressif ESP8266 boot modes](https://docs.espressif.com/projects/esptool/en/latest/esp8266/advanced-topics/boot-mode-selection.html)
-and [ESPHome command-line installation](https://esphome.io/guides/cli/).
+## Mechanical arrangement
 
+- Fans are oriented **horizontally, blowing upward** into the bottom of
+  the rear heatsink's vertical fins; leave the upper outlet clear.
+- Each horizontal fan requires **40 mm depth**, not 10 mm; 10 mm is
+  its thickness. A 50 mm wall gap leaves little room for brackets and
+  inlet air. Check the actual clearance before mounting.
+- Reuse the **unused original Marstek wall bars** only as removable fan
+  supports, with suitable generic brackets and vibration isolators.
+  Do **not** drill, load or modify the battery or its heatsink fins.
+- Keep the Sinilink in an insulated, ventilated housing **away from the
+  hot exhaust path**, with strain relief and Wi-Fi antenna clearance.
+
+The bracket hole spacing and exact fin entrance have not yet been
+measured. Follow the manufacturer's minimum installation clearances.
+
+## Bring-up checklist
+
+1. With everything disconnected, inspect the **VIN+/VIN−/OUT+/OUT−**
+   markings, jack polarity, fuse and output wiring.
+2. Flash ESPHome at **3.3 V only**, with the 12 V adapter disconnected.
+   Release GPIO0, reboot and disconnect the programmer.
+3. Power VIN from 12 V. Verify the board connects to Wi-Fi and
+   **Cooling Fans** appears in Home Assistant.
+4. Confirm **OFF after firmware boot**, then switch ON from HA and the
+   on-board button. Both fans must run from OUT+/OUT− at rated speed.
+5. Test OFF, power cycling, Wi-Fi disconnect and reconnection.
+   Verify that the **fan TACH lead is not wired**.
+6. Check upward airflow, fan noise, cable strain relief, actual wall
+   clearance and cooling performance under comparable load/ambient
+   conditions before leaving the device running unattended.
+
+## References
+
+- [ESPHome Sinilink XY-WFMS](https://devices.esphome.io/devices/sinilink-xy-vfms/)
+- [Noctua NF-A4x10 FLX specifications](https://www.noctua.at/en/products/nf-a4x10-flx/specifications)
+- [Noctua fan pinout and two-wire operation](https://faqs.noctua.at/en/support/solutions/articles/101000081757)
