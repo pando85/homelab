@@ -792,13 +792,19 @@ Everything else stays at baseline.
 
 ### Open issue: planned discharge is not delivered
 
-Status: **waiting for data (from 2026-11-04)**. The "Final plan energy not delivered" panel on
-`battery-model-actuation` shows a discharge shortfall. Part of it is an artefact of the shadow counters that
-ran before live control started (2026-11-03 22:45 UTC) and leaves the 24 h window after the first live day.
-The live part, in the morning discharge window, comes from the no-export rule, the 200 W import margin and a
-load forecast that ran high; the device limits and the per-slot cap are not involved. Diagnosis, candidate fix
-and decision criteria: the app repository's `docs/known-issues.md`, section "Planned discharge is not
-delivered".
+Status: **monitoring**. The planner bound `planning.discharge_margin_bound: true` has been live with optimizer
+0.14.0 since 2026-11-05 14:14 UTC, at `discharge_margin_w` 100. Next review about 2026-11-11, after 7 live days.
+
+The "Final plan energy not delivered" panel on `battery-model-actuation` shows a discharge shortfall. Diagnosis of
+2026-11-04, kept as history: part of it is an artefact of the shadow counters that ran before live control
+started (2026-11-03 22:45 UTC) and leaves the 24 h window after the first live day. The live part, in the
+morning discharge window, comes from the no-export rule, the import margin (200 W at that time) and a load
+forecast that ran high; the device limits and the per-slot cap are not involved. First evening at 100 W
+(2026-11-05): 2 s and 30 s data show the battery delivering exactly its per-slot cap whenever the house load
+allowed, with no temperature or actuator derating; the remaining gap was the load forecast, which placed the
+evening peak about 1 h late and overestimated it. 15-min means mix load-limited and cap-limited minutes, so do
+not use them to infer an actuator shortfall. Diagnosis, candidate fix and decision criteria: the app
+repository's `docs/known-issues.md`, section "Planned discharge is not delivered".
 
 ## First run (2026-10-25)
 
