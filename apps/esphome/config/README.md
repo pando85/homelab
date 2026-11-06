@@ -49,6 +49,12 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | Smart Plug Battery | `smart-plug-v2-battery.yaml` | ESP8266 | Power meter | House battery AC input; battery AC failsafe |
 | Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | Snapmaker 3D printer plug |
 
+### Hardware-only projects
+
+- [Venus E V3 Cooling Controller](venus-e-cooling/README.md): two Noctua FLX fans,
+  12 V supply, MP1584 + LM2596 bucks and a bare ESP8266MOD. Includes a wiring SVG,
+  BOM, mechanical mounting notes and a bring-up checklist; firmware to follow.
+
 ## Package System
 
 Devices use `!include` to pull in shared packages. Each device YAML only defines `substitutions`
