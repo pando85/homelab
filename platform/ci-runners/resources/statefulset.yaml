@@ -106,6 +106,29 @@ spec:
               value: "4"
             - name: MAKEFLAGS
               value: "-j4"
+            # sccache S3 shared cache credentials and configuration.
+            # These are exposed to host-mode jobs (which inherit from the runner process).
+            # Docker-mode jobs get them from runner.envs in configmap.yaml via the Secret mount.
+            # The Secret is mounted as a volume and individual keys are exposed as env vars.
+            # sccache multilevel uses SCCACHE_BUCKET/ENDPOINT/REGION (not SCCACHE_S3_*).
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: sccache-s3-credentials
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sccache-s3-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: SCCACHE_BUCKET
+              value: "sccache"
+            - name: SCCACHE_ENDPOINT
+              value: "s3.internal.grigri.cloud"
+            - name: SCCACHE_REGION
+              value: "auto"
+            - name: SCCACHE_S3_USE_SSL
+              value: "true"
           volumeMounts:
             - name: ci-runner-data
               mountPath: /workspace

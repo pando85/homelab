@@ -7,6 +7,7 @@ resources:
   - resources/external-secret-keda.yaml
   - resources/external-secret-runner.yaml
   - resources/external-secret-runner-amd64.yaml
+  - resources/external-secret-sccache.yaml
   # Ephemeral workers need caches for forgejo runner and docker, so I will keep a simpler config
   # - resources/scale-job.yaml
   - resources/limit-range.yaml

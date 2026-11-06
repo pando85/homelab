@@ -77,6 +77,41 @@ minio:
             - "s3:GetBucketLocation"
             - "s3:ListBucket"
             - "s3:ListBucketMultipartUploads"
+    # sccache CI: read-write access to the sccache bucket only.
+    # No access to velero, kaniop or any other bucket. No admin actions.
+    - name: sccacheCiPolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache/*'
+          actions:
+            - "s3:AbortMultipartUpload"
+            - "s3:GetObject"
+            - "s3:PutObject"
+            - "s3:DeleteObject"
+            - "s3:ListMultipartUploadParts"
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache'
+          actions:
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
+            - "s3:ListBucketMultipartUploads"
+    # sccache desktop: read-only access to the sccache bucket only.
+    # No write, delete, admin or backup-bucket access.
+    - name: sccacheDesktopPolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache/*'
+          actions:
+            - "s3:GetObject"
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache'
+          actions:
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
 
   users:
     - accessKey: velero
@@ -87,6 +122,16 @@ minio:
       existingSecret: minio-users
       existingSecretKey: kaniopPassword
       policy: kaniopBackupPolicy
+    # sccache CI: read-write access to sccache bucket for cache publication
+    - accessKey: sccache-ci
+      existingSecret: minio-users
+      existingSecretKey: sccacheCiPassword
+      policy: sccacheCiPolicy
+    # sccache desktop: read-only access to sccache bucket for cache consumption
+    - accessKey: sccache-desktop
+      existingSecret: minio-users
+      existingSecretKey: sccacheDesktopPassword
+      policy: sccacheDesktopPolicy
     ## Username, password and policy to be assigned to the user
     ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
     ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
@@ -115,6 +160,14 @@ minio:
       purge: false
       versioning: false
       objectlocking: false
+    # sccache shared cache bucket: 14-day object expiry, no versioning or locking.
+    # Lifecycle rule is applied via customCommands (mc ilm add) after bucket creation.
+    # Capacity: 50 GiB soft ceiling on a 4 TB ZFS pool with ~2.6 TB free.
+    - name: sccache
+      policy: none
+      purge: false
+      versioning: false
+      objectlocking: false
     #   # Name of the bucket
     # - name: bucket1
     #   # Policy to be set on the
@@ -135,6 +188,14 @@ minio:
     #   # set objectlocking for
     #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
     #   objectlocking: false
+
+  # Lifecycle rule for sccache bucket: 14-day object expiry.
+  # Note: bucket creation and custom commands run in parallel containers in the
+  # post-install Job. If the bucket doesn't exist yet when this runs, the Job
+  # fails and the next ArgoCD sync retries. In practice, bucket creation is fast
+  # and the custom command container takes time to connect, so this rarely fails.
+  customCommands:
+    - command: "ilm add --expiry-days 14 myminio/sccache"
 
   environment:
     MINIO_IDENTITY_OPENID_ROLE_POLICY: consoleAdmin
