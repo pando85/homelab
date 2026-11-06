@@ -8,7 +8,7 @@ packages:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
-  comment: "Marstek Venus E V3 - auxiliary cooling fan RPM monitoring"
+  comment: "Marstek Venus E V3 - auxiliary cooling fan relay and RPM monitoring"
 
 # This is the bare ESP8266MOD (ESP-12), NOT an ESP32 / USB development board.
 # Supply regulated 3.3 V to VCC from the D-SUN MP1584.
@@ -19,8 +19,18 @@ esp8266:
 logger:
 
 # Wi-Fi, API, OTA, and fallback AP come from packages/connection.yaml.
-# No fan/switch/climate entity: both 3-pin NF-A4x10 FLX fans receive 12 V
-# directly from the barrel jack. The NA-YC1 forwards only one TACH signal.
+# Both 3-pin NF-A4x10 FLX fans share a 12 V rail switched by the normally-open
+# contacts of a 3.3 V, active-high relay module (powered from MP1584).
+# GPIO5 controls the module input; a 10k pulldown on GPIO5 keeps the relay off
+# during reset / boot. The NA-YC1 forwards only one TACH signal.
+# No PWM speed control is available with these 3-pin FLX fans.
+switch:
+  - platform: gpio
+    name: "Cooling Fans"
+    id: cooling_fans
+    pin: GPIO5
+    restore_mode: ALWAYS_OFF
+
 sensor:
   - platform: pulse_counter
     pin:
