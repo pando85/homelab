@@ -174,3 +174,115 @@ CI, so splitting the disk is not worth it.
   little use of `actions/cache`.
 - **Removing images in the producing workflow is the real source fix.** Calypso's `build-or-retag`
   could run `docker image rm` after pushing, so CI wouldn't depend on `docker-gc` racing a burst.
+
+## Future improvement: Redis-backed sccache
+
+Currently, sccache stores its cache on the local disk at `/cache/sccache` (k8s-amd64-1) or the
+ZFS-backed PVC (prusik). This has two problems:
+
+1. **Cache is lost on pod restart or eviction.** When the runner pod is evicted (OOM, node drain,
+   DiskPressure), the sccache starts cold on the next run. Rust builds then take 2-3x longer until
+   the cache warms up again.
+2. **No sharing between runners.** The prusik and k8s-amd64-1 runners maintain separate caches, so
+   a build that runs on both nodes duplicates the work.
+
+### Proposed architecture
+
+Deploy a shared Redis instance in the `ci-runners` namespace as sccache's remote cache backend:
+
+```
+┌─────────────────┐         ┌──────────────────┐
+│  ci-runner      │         │  ci-runner-amd64 │
+│  (prusik)       │         │  (k8s-amd64-1)   │
+│                 │         │                  │
+│  SCCACHE_REDIS ─┼────┐    │  SCCACHE_REDIS ──┼──┐
+└─────────────────┘    │    └──────────────────┘  │
+                       │                          │
+                       └──────────┬───────────────┘
+                                  │
+                       ┌──────────▼──────────┐
+                       │  sccache-redis      │
+                       │  (Deployment)       │
+                       │  - 512Mi maxmemory  │
+                       │  - allkeys-lru      │
+                       │  - no persistence   │
+                       └─────────────────────┘
+```
+
+### Implementation
+
+**Redis Deployment** (`platform/ci-runners/resources/deployment-redis.yaml`):
+- Single replica, `Recreate` strategy (cache is ephemeral, no HA needed)
+- 512 MiB `maxmemory` with `allkeys-lru` eviction (oldest cache entries evicted first)
+- Persistence disabled (`--save ""`, `--appendonly no`): this is a volatile cache
+- Resource limits: 640Mi memory (covers Redis overhead), 500m CPU
+- No node affinity: small footprint fits anywhere
+
+**Service** (`platform/ci-runners/resources/service-redis.yaml`):
+- ClusterIP Service `sccache-redis.ci-runners.svc.cluster.local:6379`
+- Both runners reach it via the cluster DNS
+
+**Secret** (`platform/ci-runners/resources/external-secret-redis.yaml`):
+- Vault path: `/git/sccache-redis` with `password` property
+- ExternalSecret renders the full Redis URL: `redis://:password@host:6379`
+
+**Runner changes** (both StatefulSets):
+- Mount the `sccache-redis` secret as an env var: `SCCACHE_REDIS`
+- Inject into `runner.envs` in both configmaps so docker-mode jobs inherit it
+- sccache auto-detects `SCCACHE_REDIS` and uses it as the remote cache backend
+
+**Resource quota impact**:
+- Redis adds ~128Mi requests, ~640Mi limits to the namespace
+- Current quota: 16Gi requests, 48Gi limits — plenty of headroom
+
+### Benefits
+
+- **Cache survives pod restarts.** Evictions, rollouts, and OOM kills no longer invalidate the
+  cache. Builds stay warm across restarts.
+- **Shared cache pool.** Both runners contribute to and read from the same cache. A build that
+  runs on prusik warms the cache for k8s-amd64-1, and vice versa.
+- **Reduced disk pressure.** sccache no longer writes to `/cache/sccache` on k8s-amd64-1, freeing
+  ~10 GiB of the root filesystem. The `SCCACHE_CACHE_SIZE=10G` limit becomes irrelevant.
+- **Predictable memory usage.** Redis caps at 512 MiB with LRU eviction, so cache growth is bounded
+  and does not compete with the runner's memory budget.
+
+### Trade-offs
+
+- **Network latency.** sccache must serialize/deserialize cache entries over the network instead of
+  reading local disk. For Rust, cache entries are typically 1-10 MiB; at 1 Gbps network speed,
+  that's 10-100 ms per entry. The latency is acceptable because:
+  - Cache hits are still faster than recompiling (seconds vs. minutes)
+  - sccache batches writes and does not block the compiler
+  - The alternative (cold cache) is 2-3x slower
+- **Single point of failure.** If Redis goes down, sccache falls back to local disk (or no cache
+  if `SCCACHE_CACHE_SIZE` is not set). The runners continue to work, just slower.
+- **Cache eviction under load.** With `allkeys-lru`, heavy cache churn can evict entries that a
+  subsequent build would have reused. This is acceptable for a shared cache; the alternative
+  (unbounded growth) would OOM the Redis pod.
+
+### Migration path
+
+1. Deploy Redis and the Service
+2. Add `SCCACHE_REDIS` to the runner env vars (both StatefulSets and configmaps)
+3. Restart the runners to pick up the new env vars
+4. Monitor cache hit rates via `sccache --show-stats` in runner logs
+5. (Optional) Remove `SCCACHE_CACHE_SIZE` from calypso's `sccache-setup` since the local disk
+   cache is no longer the primary backend
+
+### Monitoring
+
+sccache exposes stats via `sccache --show-stats`. Key metrics:
+- `Cache hits`: should increase over time as the cache warms
+- `Cache misses`: should decrease as the cache fills
+- `Cache errors`: should be zero; non-zero indicates Redis connectivity issues
+
+Add a Loki query to track cache hit rates:
+```logql
+{namespace="ci-runners",container="runner"} |~ "sccache.*Cache hits"
+```
+
+### References
+
+- sccache Redis backend: https://github.com/mozilla/sccache/blob/main/docs/Redis.md
+- Existing Redis pattern: `platform/git/values.yaml` (Forgejo's Redis sidecar)
+- sccache local cache: `docs/troubleshooting/ci-runner-amd64-disk-full.md` (this document)
