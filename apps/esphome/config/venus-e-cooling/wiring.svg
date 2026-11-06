@@ -1,67 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="990" viewBox="0 0 1600 990" role="img" aria-labelledby="title desc">
-<title id="title">Venus E V3 cooling controller electrical wiring</title>
-<desc id="desc">A fused 12-volt DC jack directly feeds the two 3-pin Noctua FLX fans via a Y cable and feeds an MP1584 buck at 3.3 volts for a bare ESP8266MOD with boot resistors. One fan tachometer wire goes to GPIO14 with a 3.3-volt pull-up. Fan speed is fixed rather than GPIO PWM controlled.</desc>
-<rect width="1600" height="990" fill="#f8fafc"/>
-<text x="60" y="60" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" text-anchor="start" fill="#162334">VENUS E V3 · COOLING CONTROLLER WIRING</text>
-<text x="60" y="90" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#526275">12 V barrel jack · MP1584 to 3.3 V · bare ESP8266MOD · 2 × Noctua FLX at 12 V</text>
-<path d="M295 180 H340 M555 180 H1460 M720 180 V326 M1160 180 V585" stroke="#cf3344" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M295 232 H340 M555 232 H1500 M805 232 V326 M1275 232 V585" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M720 483 V575 H695 V597" stroke="#d38a21" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M805 483 V555 H820 V597" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M1160 706 V746 H1110 V785 M1160 746 H1370 V785" stroke="#008d8f" stroke-width="4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M1275 706 V764 H1150 V785 M1275 764 H1410 V785" stroke="#566171" stroke-width="4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M1060 670 H990 V702 H978" stroke="#7255ba" stroke-width="4" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
-<path d="M480 675 H525" stroke="#566171" stroke-width="3" fill="none" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="8 6"/>
-<text x="895" y="164" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start" fill="#cf3344">+12 V bus (fans direct)</text>
-<text x="916" y="225" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start" fill="#566171">Common ground</text>
-<rect x="60" y="132" width="235" height="132" rx="12" fill="#fff" stroke="#dbe3eb" stroke-width="2"/>
-<rect x="340" y="132" width="215" height="132" rx="12" fill="#fff" stroke="#dbe3eb" stroke-width="2"/>
-<text x="82" y="167" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start" fill="#162334">Regulated adapter</text>
-<text x="82" y="197" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start" fill="#162334">12 V DC / ≥1 A</text>
-<text x="82" y="226" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#526275">External certified PSU</text>
-<text x="365" y="167" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start" fill="#162334">DC barrel jack</text>
-<text x="365" y="197" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">5.5 × 2.1 mm</text>
-<text x="365" y="227" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">Check center + polarity</text>
-<rect x="630" y="326" width="322" height="157" rx="12" fill="#fff8ea" stroke="#e7c18b" stroke-width="2"/>
-<text x="651" y="362" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start" fill="#162334">D-SUN MP1584EN (green)</text>
-<text x="651" y="391" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">IN+/IN− = 12 V / GND</text>
-<text x="651" y="420" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">OUT+/OUT− = 3.30 V / GND</text>
-<text x="651" y="453" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#526275">Adjust + measure first</text>
-<text x="659" y="561" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" text-anchor="start" fill="#d38a21">3.3 V</text>
-<text x="821" y="561" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700" text-anchor="start" fill="#566171">GND</text>
-<rect x="57" y="542" width="425" height="298" rx="12" fill="#f1fcfc" stroke="#8bc9cb" stroke-width="2"/>
-<text x="80" y="577" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start" fill="#162334">ESP-12 boot network</text>
-<text x="81" y="611" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start" fill="#162334">10 kΩ to 3.3 V:</text>
-<text x="100" y="642" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">EN · RST · GPIO0 · GPIO2</text>
-<text x="81" y="682" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start" fill="#162334">10 kΩ to GND:</text>
-<text x="100" y="713" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#162334">GPIO15</text>
-<text x="81" y="753" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" text-anchor="start" fill="#7255ba">TACH pull-up: 10 kΩ to 3.3 V</text>
-<text x="81" y="790" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Decouple VCC: 100 nF + 10–47 µF</text>
-<text x="81" y="816" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">FLASH: GPIO0 low during reset</text>
-<rect x="525" y="597" width="453" height="274" rx="12" fill="#f1fcfc" stroke="#8bc9cb" stroke-width="2"/>
-<text x="550" y="632" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start" fill="#162334">ESP8266MOD · ESP-12 (bare)</text>
-<text x="549" y="664" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" text-anchor="start" fill="#d38a21">VCC = regulated 3.3 V only</text>
-<text x="549" y="693" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" text-anchor="start" fill="#566171">GND = common ground</text>
-<text x="549" y="725" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start" fill="#7255ba">GPIO14 ← fan 1 tach</text>
-<text x="549" y="759" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">EN / RST / IO0 / IO2: HIGH</text>
-<text x="549" y="790" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">GPIO15: LOW at normal boot</text>
-<text x="549" y="825" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">Flash with 3.3 V USB–UART</text>
-<text x="549" y="851" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">Carrier + passives required</text>
-<rect x="1060" y="585" width="360" height="121" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
-<text x="1085" y="616" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start" fill="#162334">Noctua NA-YC1 Y splitter</text>
-<text x="1085" y="644" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" text-anchor="start" fill="#008d8f">Shared 12 V + GND</text>
-<text x="1085" y="674" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" text-anchor="start" fill="#7255ba">Single TACH output</text>
-<text x="1085" y="699" font-family="Arial,Helvetica,sans-serif" font-size="14" font-weight="400" text-anchor="start" fill="#526275">No fourth-pin PWM input</text>
-<rect x="1015" y="785" width="232" height="139" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
-<rect x="1290" y="785" width="232" height="139" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
-<text x="1039" y="818" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start" fill="#162334">Noctua NF-A4x10 FLX</text>
-<text x="1039" y="846" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Fan 1 · 12 V rated</text>
-<text x="1039" y="872" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" text-anchor="start" fill="#008d8f">+12 V / GND</text>
-<text x="1039" y="898" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700" text-anchor="start" fill="#7255ba">TACH → ESP GPIO14</text>
-<text x="1314" y="818" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start" fill="#162334">Noctua NF-A4x10 FLX</text>
-<text x="1314" y="846" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" text-anchor="start" fill="#162334">Fan 2 · 12 V rated</text>
-<text x="1314" y="872" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" text-anchor="start" fill="#008d8f">+12 V / GND</text>
-<text x="1314" y="898" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="400" text-anchor="start" fill="#526275">TACH not connected</text>
-<rect x="60" y="943" width="1460" height="31" rx="6" fill="#eaf0f6" stroke="#eaf0f6" stroke-width="2"/>
-<text x="81" y="966" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" text-anchor="start" fill="#162334">SAFETY: 3.3 V ONLY to bare ESP8266 · 12 V directly to fans · common GND · no fan GPIO control</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="1630" height="1010" viewBox="0 0 1630 1010" role="img" aria-labelledby="title desc">
+<title id="title">Venus E V3 cooling - Sinilink XY-WFMS wiring</title>
+<desc id="desc">A 12 V adapter powers the Sinilink XY-WFMS VIN terminals. Its MOSFET switched OUT terminals supply two 12 V Noctua FLX fans through a Y cable. Tachometer signal is unused and insulated. On-board GPIO4 controls fan power and GPIO12 is a physical toggle button. No additional controller or regulator is necessary.</desc>
+<rect width="1630" height="1010" fill="#f8fafc"/>
+<text x="60" y="64" font-family="Arial,Helvetica,sans-serif" font-size="31" font-weight="700" fill="#162334">VENUS E V3 · SINILINK XY-WFMS WIRING</text>
+<text x="60" y="96" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#526275">Integrated ESP8266 + MOSFET · 12 V DC · 2 × Noctua FLX · ON/OFF control</text>
+<path d="M350 235 H440" fill="none" stroke="#cf3344" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M350 294 H440" fill="none" stroke="#566171" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1050 404 H1155" fill="none" stroke="#cf3344" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1050 465 H1155" fill="none" stroke="#566171" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1200 548 V621 H1100 V702" fill="none" stroke="#cf3344" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1235 548 V652 H1175 V702" fill="none" stroke="#566171" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1435 548 V621 H1400 V702" fill="none" stroke="#cf3344" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M1470 548 V652 H1500 V702" fill="none" stroke="#566171" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="358" y="221" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700" fill="#cf3344">+12 V</text>
+<text x="357" y="317" font-family="Arial,Helvetica,sans-serif" font-size="15" font-weight="700" fill="#566171">GND</text>
+<text x="1063" y="389" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#cf3344">OUT+</text>
+<text x="1063" y="486" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#566171">OUT−</text>
+<rect x="55" y="170" width="295" height="200" rx="12" fill="#fff" stroke="#dbe3eb" stroke-width="2"/>
+<text x="78" y="210" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#162334">AC/DC + barrel jack</text>
+<text x="78" y="245" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#162334">Regulated 12 V / ≥1 A</text>
+<text x="78" y="279" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">5.5 × 2.1 mm jack</text>
+<text x="78" y="314" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" fill="#526275">Center-positive (verify)</text>
+<text x="78" y="345" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="#cf3344">Fuse on +12 V</text>
+<rect x="440" y="140" width="610" height="440" rx="12" fill="#f1fcfc" stroke="#8bc9cb" stroke-width="2"/>
+<text x="473" y="181" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="#162334">SINILINK XY-WFMS</text>
+<text x="473" y="211" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#526275">ESP-12F · Wi-Fi · on-board MOSFET + regulator</text>
+<text x="475" y="251" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#cf3344">VIN+     ← +12 V from adapter</text>
+<text x="475" y="304" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#566171">VIN−      ← GND from adapter</text>
+<rect x="474" y="339" width="531" height="192" rx="12" fill="#ffffff" stroke="#c4e1e1" stroke-width="2"/>
+<text x="495" y="369" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#162334">Integrated ESPHome hardware</text>
+<text x="495" y="403" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#007f87">GPIO4 → MOSFET + red LED</text>
+<text x="495" y="433" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#2270aa">GPIO12 → local toggle button</text>
+<text x="495" y="464" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">GPIO2 → blue status LED</text>
+<text x="495" y="494" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">GPIO13 → green indicator LED</text>
+<text x="486" y="560" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#566171">Low-side switching: OUT− is NOT permanently grounded</text>
+<rect x="1155" y="335" width="410" height="213" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
+<text x="1182" y="370" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#162334">Noctua NA-YC1 Y splitter</text>
+<text x="1182" y="410" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="#cf3344">OUT+ → pin 2 (+12 V; red)</text>
+<text x="1182" y="445" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#566171">OUT− → pin 1 (switched GND; black)</text>
+<text x="1182" y="479" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="#c58416">TACH pin 3 (yellow): insulated</text>
+<text x="1182" y="517" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="400" fill="#526275">No RPM sensor connection</text>
+<rect x="1033" y="702" width="260" height="175" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
+<text x="1055" y="742" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#162334">Noctua NF-A4x10 FLX</text>
+<text x="1055" y="773" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">Fan 1 · 12 V · 3-pin</text>
+<text x="1055" y="806" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#007f87">Supply via XY-WFMS</text>
+<text x="1055" y="843" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#c58416">TACH not connected</text>
+<rect x="1320" y="702" width="260" height="175" rx="12" fill="#f6f3ff" stroke="#ae9bd9" stroke-width="2"/>
+<text x="1342" y="742" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#162334">Noctua NF-A4x10 FLX</text>
+<text x="1342" y="773" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">Fan 2 · 12 V · 3-pin</text>
+<text x="1342" y="806" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#007f87">Supply via XY-WFMS</text>
+<text x="1342" y="843" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#c58416">TACH not connected</text>
+<rect x="55" y="461" width="345" height="416" rx="12" fill="#fff8ea" stroke="#e7c18b" stroke-width="2"/>
+<text x="80" y="501" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#162334">ESPHome functions</text>
+<text x="80" y="544" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#007f87">GPIO4: Cooling Fans</text>
+<text x="80" y="581" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">GPIO12: on-board button</text>
+<text x="80" y="616" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">GPIO2: status LED</text>
+<text x="80" y="659" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="#2270aa">Board: esp01_1m</text>
+<text x="80" y="696" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">Initial flash: 3.3 V UART</text>
+<text x="80" y="735" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#162334">Then Wi-Fi OTA</text>
+<text x="80" y="789" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#162334">ON/OFF only</text>
+<text x="80" y="830" font-family="Arial,Helvetica,sans-serif" font-size="16" font-weight="700" fill="#c58416">No variable DC, no RPM</text>
+<rect x="429" y="655" width="556" height="222" rx="12" fill="#fff" stroke="#dbe3eb" stroke-width="2"/>
+<text x="454" y="695" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#162334">Critical wiring rules</text>
+<text x="454" y="733" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#566171">VIN− and OUT− are not interchangeable.</text>
+<text x="454" y="772" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#cf3344">Do NOT bridge OUT− to VIN−:</text>
+<text x="454" y="804" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#cf3344">it would bypass the MOSFET switch.</text>
+<text x="454" y="847" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#526275">Leave the yellow fan TACH wire insulated.</text>
+<rect x="55" y="915" width="1525" height="59" rx="12" fill="#eaf0f6" stroke="#eaf0f6" stroke-width="2"/>
+<text x="84" y="952" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="#162334">SAFETY: check output polarity, the switched return and boot-OFF behavior before attaching the fans to the battery</text>
 </svg>
