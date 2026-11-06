@@ -4,7 +4,8 @@
 
 Auxiliary **bottom-to-top airflow** for the floor-standing Marstek Venus E V3. This is
 a **hardware assembly project**, modeled after the [Rack Controller](../rack-controller/README.md).
-The fan controller firmware and Home Assistant integration will be provided separately.
+The ESPHome configuration is [`../venus-e-cooling.yaml`](../venus-e-cooling.yaml),
+using the homelab's existing `packages/connection.yaml` for Wi-Fi, API and OTA.
 
 The battery stands on the floor, with approximately **50 mm between the rear of the
 battery and the wall**. Two existing **Noctua NF-A4x10 FLX** 40 × 40 × 10 mm
@@ -126,5 +127,56 @@ auxiliary fan does **not** replace the manufacturer's minimum wall spacing.
    intake or excess vibration; measure temperature against a fan-off
    baseline at matched battery load and ambient temperature.
 
-**Scope:** This PR documents mechanical and electrical assembly only.
-The ESPHome firmware and Home Assistant entities will follow separately.
+## ESPHome firmware
+
+The [`venus-e-cooling.yaml`](../venus-e-cooling.yaml) configuration uses the
+existing shared [connection package](../packages/connection.yaml). It targets
+`esp8266: board: esp12e` and exposes **Fan 1 Speed** from GPIO14 using
+`pulse_counter` and a ×0.5 filter (two tachometer pulses per revolution),
+plus Wi-Fi diagnostics and controller status.
+
+**No controllable fan or climate entity is created.** Both fans receive
+continuous direct 12 V, regardless of ESP or Home Assistant availability.
+The Y-cable carries only one tachometer reading.
+
+### Initial serial flash (bare ESP-12)
+
+A bare ESP8266MOD has **no USB port**. Choose either a compatible **ESP-12
+USB programmer with a socket** (before soldering the module) or a 3.3 V
+USB–UART adapter wired to a carrier with boot resistors. The latter also
+allows serial recovery after assembly:
+
+| USB–UART / programming header | Bare ESP-12 |
+| --- | --- |
+| Adapter TX (3.3 V logic) | RXD0 |
+| Adapter RX (3.3 V logic) | TXD0 |
+| Adapter GND | GND (shared with MP1584) |
+| Supply for ESP | MP1584 OUT+ at **3.30 V**, not USB 5 V |
+| FLASH button / jumper | GPIO0 → GND during reset |
+| RESET button / jumper | RST → GND momentarily |
+
+Keep **GPIO15 low**, **GPIO2 high** and **EN high**. For normal boot,
+GPIO0 must be high; for serial download, hold **GPIO0 low while
+resetting**. Use a dedicated MP1584 to supply the module during serial
+flashing; **do not connect USB–UART VCC to the MP1584's output** unless
+a deliberately designed single-supply arrangement is used.
+
+When the same ESPHome configuration and a valid local
+`secrets.yaml` are available on the flashing computer, the initial
+upload can be performed with:
+
+```bash
+esphome run apps/esphome/config/venus-e-cooling.yaml \
+  --device /dev/ttyUSB0 --upload_speed 115200
+```
+
+The homelab deploys connection secrets through Vault in Kubernetes;
+`secrets.yaml` is not committed to Git. Alternatively compile/download
+the firmware through the already configured ESPHome dashboard, then
+flash the resulting ESP8266 binary locally using a suitable serial
+programmer. After the first successful Wi-Fi/API/OTA boot, further
+updates can be applied over the network using the existing dashboard.
+
+References: [Espressif ESP8266 boot modes](https://docs.espressif.com/projects/esptool/en/latest/esp8266/advanced-topics/boot-mode-selection.html)
+and [ESPHome command-line installation](https://esphome.io/guides/cli/).
+
