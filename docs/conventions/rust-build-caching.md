@@ -4,6 +4,8 @@
 
 **Proposal, not deployed.** Evidence collected on 2026-11-06. Recheck versions, storage and
 performance before implementation. This document changes no runner, workstation or bucket config.
+The [shared S3 deployment plan](../../planning/shared-s3-sccache-deployment.md) records implementation
+phases, approval gates, acceptance criteria and rollback; deployment remains unapproved.
 
 Use three complementary layers:
 
