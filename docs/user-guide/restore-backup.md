@@ -37,6 +37,8 @@ ALTER USER APP_USER_NAME WITH PASSWORD 'VALUE_FROM_SECRET';
 - Create backup
 - Change old PV `persistentVolumeReclaimPolicy` to `Retain`
 - Stop service (deployment and destroy PVCs). Recommended manually: scale argocd-repo-server to 0 and proceed manually.
+  Why, and the same steps for Home Assistant:
+  [`stop-home-assistant-under-argocd.md`](../troubleshooting/stop-home-assistant-under-argocd.md).
 - Restore from backup
 - Enable service. Scale up argocd-repo-server.
 - Check everything is OK

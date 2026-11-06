@@ -434,16 +434,16 @@ Steps (T = the moment HA is gone; the scaling only with the owner's explicit go)
 
 1. Start the ESPHome logs and note `switch.smart_plug_v2_battery` = on, `sensor.venus_inverter_state`
    = Bypass, `sensor.venus_ac_offgrid_power` ≈ servers' load.
-2. **Stop HA for real.** The `home-assistant` Application comes from the `apps` ApplicationSet with
-   selfHeal, so scale `argocd/argocd-repo-server` to 0 first (otherwise Argo reverts the scale-down),
-   then `home-assistant/home-assistant-hass` to 0. **T:** the pod is gone and the plug logs the lost
-   API connection (`Reading failed CONNECTION_CLOSED`). Lighter alternative: Settings → Devices &
-   services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ → **Disable** drops only the plug's API
-   connection and leaves HA running.
+2. **Stop HA for real**, following
+   [Stopping Home Assistant under ArgoCD](../troubleshooting/stop-home-assistant-under-argocd.md): scale
+   `argocd/argocd-repo-server` to 0 first, then `home-assistant/home-assistant-hass` to 0. **T:** the
+   pod is gone and the plug logs the lost API connection (`Reading failed CONNECTION_CLOSED`). Lighter
+   alternative: Settings → Devices & services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ →
+   **Disable** drops only the plug's API connection and leaves HA running.
 3. **~T+5:00:** the log shows `Battery failsafe: no Home Assistant for 5 min, relay OFF`. Within
    seconds the battery reports `Backup Mode` (Omnibattery keeps polling it over Modbus) and the servers
    keep running (check the Kubernetes API or a ping).
-4. **T+6:** restore HA (scale `home-assistant-hass` to 1), then `argocd-repo-server` to 1. Within ~10 s
+4. **T+6:** restore HA first, then `argocd-repo-server` (same doc). Within ~10 s
    of the HA API reconnect the log shows `Battery failsafe: Home Assistant is back, relay ON`; the
    switch is on in HA and the inverter returns to Bypass within 5–33 s. The `home-assistant` app shows
    sync Unknown until Argo's next refresh (about 3 min); a hard refresh clears it.
@@ -497,12 +497,14 @@ Preconditions (owner):
   so check the Shelly `GET /cit/d` first (see the CoIoT note above). In Developer tools, check that the
   three entity IDs exist without a `_2` suffix and that the kill switch is **off**.
 - The ESPHome failsafe is flashed and tested (passed 2026-11-04).
-- Omnibattery: competing strategies off; `number.omnibattery_pd_controller_max_power_change` raised to
-  2000 W. Note the backup threshold
+- Omnibattery: competing strategies off
+  ([configuration](#device-facts-and-omnibattery-configuration)); the PD controller stays on `balanced`
+  (`number.omnibattery_pd_controller_max_power_change` 800 W; an earlier version of this page asked
+  for 2000 W, but the PD log shows 800 W since 2026-11-03 and it never bound). Note the backup threshold
   [workaround](../troubleshooting/home-assistant-omnibattery.md#workaround-active-since-2026-11-03).
-- The system caps stay at today's 1000 W charge / 800 W discharge until go-live (steps 1-2 of the live
-  phase). In `dry_run` the charge clamping therefore reflects the 1000 W cap minus the house load,
-  not the go-live 2500 W.
+- At the time (2026-11-03) the system caps were 1000 W charge / 800 W discharge until go-live (steps 1-2
+  of the live phase), so in `dry_run` the charge clamping reflected the 1000 W cap minus the house
+  load. Current values: 2500 W / 2500 W since go-live, see [Entities](#entities).
 
 **dry_run (1-2 days):**
 
@@ -525,7 +527,7 @@ findings):
    `switch.venus_battery_allow_discharge`) **off**, then switch **Premium mode on** in the Marstek app.
    Change nothing else in the app.
 2. Set `number.omnibattery_system_max_charge_power` and `number.omnibattery_system_max_discharge_power`
-   to **2500 W** (today 1000 / 800 W). The Venus's own `number.venus_max_charge_power` /
+   to **2500 W** (2026-11-03: 1000 / 800 W). The Venus's own `number.venus_max_charge_power` /
    `_max_discharge_power` are already 2500 W; check them.
 
 Then:
@@ -629,6 +631,21 @@ Optimizer-side knobs live in the deployed `apps/battery-optimizer/files/service.
 | `min_discharge_cap_w` | 100 | Smallest per-slot discharge cap written |
 | `max_discharge_cap_w` | 2500 | Largest per-slot discharge cap written |
 | `neutral_pd_target_w` | 0 | PD grid target in a planned idle |
+
+### Device facts and Omnibattery configuration
+
+| Item | Value |
+|---|---|
+| Venus E V3 firmware | EMS 148, VMS 117, BMS 114 (as of commissioning, 2026-11-03) |
+| Marstek app | Manual mode, empty schedule, no meter configured, Premium mode on (see the go-live steps). Never change it while Omnibattery runs |
+| Grid sensor | The Shelly EM, channel 1 |
+| SOC window | 20-95 % |
+| Contracted power | 5000 W. The meter trips instantly, so charge targets stay at most 4500 W (`import_cap_w`) |
+
+Every Omnibattery feature that competes with the optimizer is off: predictive charging, charge delay,
+capacity protection, hourly balance and the weekly full charge. The weekly full charge is the one
+exception: `full_charge.mode` is `shadow` today, so its switches stay off; with `live` the optimizer arms
+it itself (see [Live battery control](#live-battery-control)).
 
 ### How to read them
 
