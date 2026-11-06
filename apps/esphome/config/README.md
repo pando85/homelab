@@ -52,7 +52,7 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 ### Hardware-only projects
 
 - [Venus E V3 Cooling Controller](venus-e-cooling/README.md): two Noctua FLX fans,
-  12 V supply, MP1584 + LM2596 bucks and a bare ESP8266MOD. Includes a wiring SVG,
+  12 V fans direct, MP1584 buck for a bare 3.3 V ESP8266MOD. Includes a wiring SVG,
   BOM, mechanical mounting notes and a bring-up checklist; firmware to follow.
 
 ## Package System
