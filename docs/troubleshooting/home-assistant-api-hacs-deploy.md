@@ -26,6 +26,10 @@ curl -s -X POST $H/auth/token -d grant_type=authorization_code -d code=$CODE -d 
   | jq -r .access_token > "$TOKEN_FILE"
 ```
 
+When finished, revoke the short-lived session's refresh token (the snippet above keeps only the access
+token, so use the UI): the session under the user's profile, Security tab, refresh tokens. Then check
+that a refresh with that token fails.
+
 REST examples (`Authorization: Bearer $(cat $TOKEN_FILE)`):
 
 - `GET /api/config` — HA version
