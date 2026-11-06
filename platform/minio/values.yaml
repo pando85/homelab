@@ -167,15 +167,10 @@ minio:
       purge: false
       versioning: false
       objectlocking: false
-    # sccache shared cache bucket: 14-day object expiry, no versioning or locking.
-    # Lifecycle rule is applied via customCommands (mc ilm rule add --id) after bucket creation.
-    # Capacity: no hard quota enforced; 14-day expiry bounds growth. Monitor via MinIO metrics.
-    # Pool: 4 TB ZFS with ~2.6 TB free; sccache is disposable cache, not backup-critical.
-    - name: sccache
-      policy: none
-      purge: false
-      versioning: false
-      objectlocking: false
+    # sccache bucket is NOT declared here: it is provisioned deterministically by
+    # templates/sccache-provisioning.yaml (dedicated sync-wave Job) which owns bucket
+    # creation + 50 GiB hard quota + 14-day lifecycle in one sequential, idempotent
+    # script. Declaring it here too would create a second owner racing the Job.
     #   # Name of the bucket
     # - name: bucket1
     #   # Policy to be set on the
@@ -197,12 +192,16 @@ minio:
     #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
     #   objectlocking: false
 
-  # Lifecycle rule for sccache bucket: 14-day object expiry.
-  # Uses --id for idempotency: re-running the hook updates the rule instead of creating duplicates.
-  # Note: bucket creation and custom commands run in parallel containers in the post-install Job.
-  # If the bucket doesn't exist yet when this runs, the Job fails and the next ArgoCD sync retries.
-  customCommands:
-    - command: "ilm rule add --id sccache-expiry --expiry-days 14 myminio/sccache"
+  # Lifecycle + quota + bucket creation for sccache are owned by
+  # templates/sccache-provisioning.yaml (deterministic, idempotent). No customCommands
+  # here: the chart runs the bucket/user/custom-command containers in parallel with
+  # `set -e` and no stdin, which cannot safely order `mb` before `ilm`/`quota` or import
+  # JSON, and re-running `mc ilm add` accumulates duplicate rules. All of that lives in the
+  # provisioning Job instead.
+  #
+  # NOTE: quay.io/minio/mc images were removed from quay.io (401 UNAUTHORIZED as of 2026-11).
+  # The provisioning Job and this chart's post-install hooks therefore use mcImage below,
+  # pinned to the already-deployed server image, which ships mc (symlinked to mcli).
 
   environment:
     MINIO_IDENTITY_OPENID_ROLE_POLICY: consoleAdmin

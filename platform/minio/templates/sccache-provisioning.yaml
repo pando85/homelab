@@ -1,0 +1,118 @@
+{{- /*
+Deterministic, idempotent provisioning for the sccache shared-cache bucket.
+
+Why a dedicated Job instead of the MinIO chart's `buckets:` + `customCommands:`:
+  - The chart runs the make-bucket / make-user / custom-command containers in PARALLEL in one
+    Job, so `mc ilm`/`mc admin quota` can race ahead of bucket creation.
+  - The chart's custom-command helper uses `set -e` and cannot pipe stdin, so `mc ilm import`
+    (the idempotent "replace whole lifecycle config" form) is unusable there, and repeating
+    `mc ilm add` accumulates duplicate rules on every GitOps sync.
+
+This Job owns the sccache bucket and converges it to a fixed desired state on every sync:
+  1. create bucket            (mc mb --ignore-existing)     -> idempotent
+  2. enforce 50 GiB hard cap  (mc admin bucket quota --hard) -> writes rejected past quota; idempotent
+  3. 14-day expiry, one rule  (ilm rule rm --all --force, then rule add --id sccache-expiry)
+       -> remove-then-add converges to exactly one rule with a stable ID; re-runs never duplicate.
+
+Ordering guarantees for the shared MinIO instance:
+  - Policies are created by the chart post-job *initContainer* (add-policy), before its main
+    containers; users attach policies, not buckets, so the sccache users are independent of
+    this Job. This Job only touches the bucket/lifecycle/quota.
+  - Sync wave + helm hook weights place this Job in the same post phase as the chart hooks.
+    Velero/Kaniop buckets are managed separately by the chart; this Job never references them.
+  - It MUST NOT run against the backup buckets. Every mc target below is hard-scoped to
+    `myminio/sccache`; `--all --force` only clears lifecycle rules on the sccache bucket.
+
+Secrets: mounts the existing `minio-users` Secret (rootUser/rootPassword) read-only at /config.
+Values are never logged; the script reads them with `cat` into shell vars, not echo.
+*/ -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-sccache-provisioning
+  labels:
+    app.kubernetes.io/name: minio
+    app.kubernetes.io/component: sccache-provisioning
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "argocd.argoproj.io/hook": PostSync
+    "argocd.argoproj.io/hook-delete-policy": BeforeHookCreation,HookSucceeded
+spec:
+  # Bound the blast radius: a stuck pull or hang must terminate rather than run forever
+  # (the earlier post-job hung in ImagePullBackOff with no deadline). backoffLimit retries
+  # the whole script; every step is idempotent so a retry is safe.
+  activeDeadlineSeconds: 300
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: minio
+        app.kubernetes.io/component: sccache-provisioning
+    spec:
+      restartPolicy: Never
+      {{- /* Reuse the already-pulled server image: it ships mc (symlinked to mcli).
+            quay.io/minio/mc returns 401 after MinIO removed its quay images (2026-11). */}}
+      containers:
+        - name: provision
+          image: "{{ .Values.minio.mcImage.repository }}:{{ .Values.minio.mcImage.tag }}"
+          imagePullPolicy: {{ .Values.minio.mcImage.pullPolicy | default "IfNotPresent" }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              # mc lives inside the pod network; talk to the in-cluster service over HTTP.
+              # TLS/ingress (s3.internal.grigri.cloud) is for external consumers, not this hook.
+              SCHEME=http
+              ENDPOINT=minio
+              PORT=9000
+              # Read root creds from the mounted secret without ever printing them.
+              ACCESS="$(cat /config/rootUser)"
+              SECRET="$(cat /config/rootPassword)"
+              MC="mc --insecure"
+              # connectToMinio: retry until the API answers (it may lag the Deployment rollout).
+              i=0
+              until $MC alias set myminio "${SCHEME}://${ENDPOINT}:${PORT}" "$ACCESS" "$SECRET" >/dev/null 2>&1; do
+                i=$((i+1))
+                if [ "$i" -gt 60 ]; then echo "sccache provisioning: MinIO not reachable after 60 tries" >&2; exit 1; fi
+                sleep 3
+              done
+              # 1. Bucket (idempotent).
+              $MC mb --ignore-existing myminio/sccache
+              # 2. Hard 50 GiB quota: writes are rejected past the cap (verified enforced by the
+              #    pilot's quota-rejection gate). Idempotent: re-applying the same value is a no-op.
+              $MC admin bucket quota myminio/sccache --hard 50gb
+              # 3. Lifecycle: converge to exactly one 14-day expiry rule via remove-all then add.
+              #    rm --all --force tolerates "no rules currently set".
+              $MC ilm rule rm myminio/sccache --all --force >/dev/null 2>&1 || true
+              $MC ilm rule add --id sccache-expiry --expiry-days 14 myminio/sccache
+              echo "sccache bucket provisioned: quota=50gb lifecycle=14d rule=sccache-expiry"
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: minio-users
+              mountPath: /config
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: minio-users
+          secret:
+            secretName: minio-users
+            defaultMode: 0400
+        - name: tmp
+          emptyDir: {}

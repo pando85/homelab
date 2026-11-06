@@ -373,6 +373,9 @@ spec:
         - name: sccache-s3-credentials
           secret:
             secretName: sccache-s3-credentials
+            # uid 1001 must read /sccache-credentials/credentials; no fsGroup applies to this
+            # secret, so 0444 (pod-local world-readable) is required. Scoped sccache-ci only.
+            defaultMode: 0444
         - name: ci-runner-cache
           hostPath:
             path: /srv/ci-runner/cache
