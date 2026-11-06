@@ -1,30 +1,34 @@
 {{- /*
-Deterministic, idempotent provisioning for the sccache shared-cache bucket.
+Deterministic, self-verifying provisioning for the sccache shared-cache bucket.
 
-Why a dedicated Job instead of the MinIO chart's `buckets:` + `customCommands:`:
-  - The chart runs the make-bucket / make-user / custom-command containers in PARALLEL in one
-    Job, so `mc ilm`/`mc admin quota` can race ahead of bucket creation.
-  - The chart's custom-command helper uses `set -e` and cannot pipe stdin, so `mc ilm import`
-    (the idempotent "replace whole lifecycle config" form) is unusable there, and repeating
-    `mc ilm add` accumulates duplicate rules on every GitOps sync.
+Why a dedicated hook Job instead of the MinIO chart's `buckets:` + `customCommands:`:
+  - The chart runs the make-bucket / make-user / custom-command containers in PARALLEL in one Job,
+    so quota/lifecycle work can race ahead of bucket creation.
+  - The chart's custom-command script runs under `set -e` with no stdin, so `mc ilm rule import`
+    (the only idempotent form) cannot be used there.
 
-This Job owns the sccache bucket and converges it to a fixed desired state on every sync:
-  1. create bucket            (mc mb --ignore-existing)     -> idempotent
-  2. enforce 50 GiB hard cap  (mc admin bucket quota --hard) -> writes rejected past quota; idempotent
-  3. 14-day expiry, one rule  (ilm rule rm --all --force, then rule add --id sccache-expiry)
-       -> remove-then-add converges to exactly one rule with a stable ID; re-runs never duplicate.
+Hook style: HELM annotations only, no `argocd.argoproj.io/hook`. Argo CD ignores *all* Helm hooks
+as soon as any Argo CD hook is defined (docs/user-guide/helm.md), and the chart's own post-job
+(policies/users/buckets) is a Helm hook - adding an Argo hook here would have silently stopped the
+chart's users/policies from reconciling. Argo maps Helm post-install/post-upgrade onto its own
+PostSync phase and reads helm.sh/hook-weight for ordering (gitops-engine pkg/sync/hook/helm/weight.go,
+default 0), so weight "1" runs this Job after the chart's post-job (weight 0).
 
-Ordering guarantees for the shared MinIO instance:
-  - Policies are created by the chart post-job *initContainer* (add-policy), before its main
-    containers; users attach policies, not buckets, so the sccache users are independent of
-    this Job. This Job only touches the bucket/lifecycle/quota.
-  - Sync wave + helm hook weights place this Job in the same post phase as the chart hooks.
-    Velero/Kaniop buckets are managed separately by the chart; this Job never references them.
-  - It MUST NOT run against the backup buckets. Every mc target below is hard-scoped to
-    `myminio/sccache`; `--all --force` only clears lifecycle rules on the sccache bucket.
+Desired state it converges to on every sync (all commands verified against a server built from the
+same pinned image, RELEASE.2026-10-26T00-00-00Z):
+  1. bucket exists          mc mb --ignore-existing                       -> idempotent
+  2. hard quota 50 GiB      mc quota set --size 50GiB                     -> 53,687,091,200 bytes
+  3. exactly one lifecycle  mc ilm rule import (replaces the whole config) -> ID sccache-expiry, 14d
+  4. every step is read back and the Job FAILS if the applied state differs, so a green sync means
+     the cap and the rule are actually in place (no `|| true` anywhere in this script).
 
-Secrets: mounts the existing `minio-users` Secret (rootUser/rootPassword) read-only at /config.
-Values are never logged; the script reads them with `cat` into shell vars, not echo.
+Scope: every mc target below is hard-coded to `myminio/sccache`. The velero and kaniop buckets are
+owned by the chart and are never referenced, listed or cleared here.
+
+Credentials: read from the `minio-users` Secret (keys rootUser / rootPassword) and handed to mc as
+the MC_HOST_myminio environment variable, so they never appear in a command line, a config file on
+disk, or a log line. Anything this script echoes goes through safe(), which withholds output that
+contains either credential.
 */ -}}
 apiVersion: batch/v1
 kind: Job
@@ -36,14 +40,19 @@ metadata:
   annotations:
     "helm.sh/hook": post-install,post-upgrade
     "helm.sh/hook-weight": "1"
-    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
-    "argocd.argoproj.io/hook": PostSync
-    "argocd.argoproj.io/hook-delete-policy": BeforeHookCreation,HookSucceeded
+    # before-hook-creation only (no hook-succeeded): a successful Job stays visible so its
+    # assertion output can be read as acceptance evidence instead of being deleted the moment it
+    # succeeds. ttlSecondsAfterFinished below still bounds how long it lingers, and the log is
+    # archived in Loki either way.
+    "helm.sh/hook-delete-policy": before-hook-creation
 spec:
-  # Bound the blast radius: a stuck pull or hang must terminate rather than run forever
-  # (the earlier post-job hung in ImagePullBackOff with no deadline). backoffLimit retries
-  # the whole script; every step is idempotent so a retry is safe.
-  activeDeadlineSeconds: 300
+  # Confirmed root cause of the first failed run (Loki, 10 attempts): "cat: /config/rootUser:
+  # Permission denied" - the Secret mounted 0400 root:root was unreadable by uid 1000 because the
+  # pod had no fsGroup. Those attempts burned the window in backoff waits, which is what surfaced
+  # as "Job was active longer than specified deadline". Fixed below with defaultMode 0440 +
+  # fsGroup 1000; the deadline is raised to 1200s so a cold image pull or a slow server rollout
+  # cannot be mistaken for failure. The chart's own post-job has no deadline at all.
+  activeDeadlineSeconds: 1200
   backoffLimit: 6
   ttlSecondsAfterFinished: 600
   template:
@@ -53,10 +62,18 @@ spec:
         app.kubernetes.io/component: sccache-provisioning
     spec:
       restartPolicy: Never
-      {{- /* Reuse the already-pulled server image: it ships mc (symlinked to mcli).
-            quay.io/minio/mc returns 401 after MinIO removed its quay images (2026-11). */}}
+      # Secret volumes land as root-owned with the given mode; fsGroup makes the group readable,
+      # which is what lets this nonroot container read /config/rootUser and /config/rootPassword.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: provision
+          # Reuses the already-pulled server image: it ships mc (symlinked to mcli).
+          # quay.io/minio/mc returns 401 after MinIO removed its quay images (2026-11).
           image: "{{ .Values.minio.mcImage.repository }}:{{ .Values.minio.mcImage.tag }}"
           imagePullPolicy: {{ .Values.minio.mcImage.pullPolicy | default "IfNotPresent" }}
           command:
@@ -64,43 +81,158 @@ spec:
             - -c
             - |
               set -eu
-              # mc lives inside the pod network; talk to the in-cluster service over HTTP.
-              # TLS/ingress (s3.internal.grigri.cloud) is for external consumers, not this hook.
-              SCHEME=http
-              ENDPOINT=minio
-              PORT=9000
-              # Read root creds from the mounted secret without ever printing them.
+
+              ENDPOINT="minio"
+              PORT="9000"
+              TARGET="myminio/sccache"
+              QUOTA_BYTES=53687091200
+              RULE_ID="sccache-expiry"
+              EXPIRY_DAYS=14
+              # Set early so the helpers below are safe to call before the Secret is read.
+              ACCESS=""
+              SECRET=""
+
+              # Never echo anything that contains a credential.
+              needs_redaction() {
+                if [ -n "$ACCESS" ]; then
+                  case "$1" in *"$ACCESS"*) return 0 ;; esac
+                fi
+                if [ -n "$SECRET" ]; then
+                  case "$1" in *"$SECRET"*) return 0 ;; esac
+                fi
+                return 1
+              }
+              safe() {
+                if needs_redaction "$1"; then
+                  printf '%s\n' "[withheld: output contained credential material]"
+                else
+                  printf '%s\n' "$1"
+                fi
+              }
+              fail() {
+                printf 'sccache-provisioning: FAILED: %s\n' "$(safe "$*")" >&2
+                exit 1
+              }
+              # Strip whitespace so assertions match compact AND pretty-printed JSON: this mc build
+              # prints compact today, but the check must not break if a release changes the format.
+              # Default IFS splits on space/tab/newline; set -f stops globbing of the split words.
+              normalize() {
+                _nold="$IFS"
+                set -f
+                set -- $1
+                IFS=''
+                _nres="$*"
+                IFS="$_nold"
+                set +f
+                printf '%s' "$_nres"
+              }
+              # Count occurrences of a literal needle (POSIX shell only: this image has bash as
+              # /bin/sh but no grep/sed/awk/jq/python).
+              count_of() {
+                _cneedle="$1"
+                _ctext="$2"
+                _cn=0
+                while true; do
+                  case "$_ctext" in
+                    *"$_cneedle"*) _cn=$((_cn+1)); _ctext="${_ctext#*"$_cneedle"}" ;;
+                    *) break ;;
+                  esac
+                done
+                printf '%s' "$_cn"
+              }
+
+              # mc's default config dir in this image is /tmp/.mc; use a directory we own inside the
+              # /tmp emptyDir instead of depending on that default (and on HOME being writable).
+              export MC_CONFIG_DIR=/tmp/mc
+              mkdir -p "$MC_CONFIG_DIR"
+              chmod 700 "$MC_CONFIG_DIR"
+
+              [ -r /config/rootUser ] || fail "/config/rootUser not readable (needs fsGroup 1000 + mode 0440)"
+              [ -r /config/rootPassword ] || fail "/config/rootPassword not readable (needs fsGroup 1000 + mode 0440)"
               ACCESS="$(cat /config/rootUser)"
               SECRET="$(cat /config/rootPassword)"
-              MC="mc --insecure"
-              # connectToMinio: retry until the API answers (it may lag the Deployment rollout).
+              [ -n "$ACCESS" ] || fail "/config/rootUser is empty"
+              [ -n "$SECRET" ] || fail "/config/rootPassword is empty"
+              # Credentials travel as env (this container only), never as mc argv. MC_HOST_<alias> is
+              # supported by this mc build; verified to keep '/', '@', '%', '#', '?', '+', '=', '&'
+              # literal (it does not percent-decode the userinfo).
+              export MC_HOST_myminio="http://${ACCESS}:${SECRET}@${ENDPOINT}:${PORT}"
+              echo "sccache-provisioning: target=${TARGET} endpoint=http://${ENDPOINT}:${PORT} (credentials via env, never logged)"
+
+              # Wait for the MinIO API - this post-hook can start while the server pod rolls - but
+              # stop immediately on a credential error: signature/access-key failures are permanent
+              # and retrying them would burn the deadline (a 100 x 3s spin would look like a hang).
               i=0
-              until $MC alias set myminio "${SCHEME}://${ENDPOINT}:${PORT}" "$ACCESS" "$SECRET" >/dev/null 2>&1; do
+              err=""
+              while true; do
+                if err="$(mc mb --ignore-existing "$TARGET" 2>&1)"; then
+                  echo "sccache-provisioning: bucket ensured"
+                  break
+                fi
+                case "$err" in
+                  *ignature* | *AccessKey* | *access*key*) fail "credential rejected by MinIO (not retryable): $(safe "$err")" ;;
+                esac
                 i=$((i+1))
-                if [ "$i" -gt 60 ]; then echo "sccache provisioning: MinIO not reachable after 60 tries" >&2; exit 1; fi
+                [ "$i" -le 100 ] || fail "MinIO API not reachable at ${ENDPOINT}:${PORT} after $i tries: $(safe "$err")"
                 sleep 3
               done
-              # 1. Bucket (idempotent).
-              $MC mb --ignore-existing myminio/sccache
-              # 2. Hard quota: writes rejected past the cap. Use 50GiB (binary, 53,687,091,200 B),
-              #    NOT "50gb" (decimal 50,000,000,000 B) - mcli/MinIO parse both but they differ.
-              #    Re-applying the same value is a no-op. Idempotent.
-              $MC admin bucket quota myminio/sccache --hard 50GiB
-              # 3. Lifecycle: converge to exactly one 14-day expiry rule via remove-all then add.
-              #    rm --all --force tolerates "no rules currently set".
-              $MC ilm rule rm myminio/sccache --all --force >/dev/null 2>&1 || true
-              $MC ilm rule add --id sccache-expiry --expiry-days 14 myminio/sccache
-              # Read back applied quota + lifecycle (prints size/rule config, never credentials)
-              # so the provisioning outcome is observable in the Job log for acceptance evidence.
-              $MC admin bucket quota myminio/sccache || true
-              $MC ilm rule list myminio/sccache || true
-              echo "sccache bucket provisioned: quota=50GiB lifecycle=14d rule=sccache-expiry"
+
+              # Hard quota. `mc admin bucket quota` is deprecated and errors in this mc build
+              # ("Please use 'mcli quota' instead"); `mc quota set --size` is the supported form.
+              # The cap is passed as an explicit byte count with the "b" suffix (mc accepts it), so
+              # no unit parser can turn "50gb" (decimal 50,000,000,000) into a surprise: 50 GiB is
+              # exactly 53,687,091,200 bytes and that is what the assertion below requires.
+              mc quota set "$TARGET" --size "${QUOTA_BYTES}b" >/dev/null || fail "quota set failed"
+              Q="$(normalize "$(mc quota info "$TARGET" --json 2>&1)")"
+              # The number is a JSON *number*, so it is followed by , or }. Matching that delimiter
+              # is what stops a prefix (5368709120 vs 53687091200) from passing. Needles are built
+              # as variables so the patterns stay literal - hand-spliced quotes here are error-prone.
+              q_needle='"quota":'"$QUOTA_BYTES"
+              q_a="${q_needle},"
+              q_b="${q_needle}}"
+              # NOTE on shell patterns: `*"$x")` means "ends with $x", NOT "contains $x" - the
+              # trailing `*` below is load-bearing (tested: omitting it rejects a valid response).
+              case "$Q" in
+                *"$q_a"* | *"$q_b"*) ;;
+                *) fail "quota is not ${QUOTA_BYTES} bytes (50 GiB); got: $(safe "$Q")" ;;
+              esac
+              t_hard='"type":"hard"'
+              case "$Q" in
+                *"$t_hard"*) ;;
+                *) fail "quota type is not hard (writes would not be rejected); got: $(safe "$Q")" ;;
+              esac
+              echo "sccache-provisioning: quota verified hard ${QUOTA_BYTES} bytes (50 GiB)"
+
+              # Lifecycle: import replaces the entire configuration, so re-runs converge on exactly
+              # one rule with a stable ID rather than accumulating duplicates, and an out-of-band
+              # extra rule is removed by the next sync.
+              printf '%s' '{"Rules":[{"ID":"'"$RULE_ID"'","Status":"Enabled","Filter":{"Prefix":""},"Expiration":{"Days":'"$EXPIRY_DAYS"'}}]}' >/tmp/lifecycle.json
+              mc ilm rule import "$TARGET" </tmp/lifecycle.json >/dev/null || fail "lifecycle import failed"
+              L="$(normalize "$(mc ilm rule export "$TARGET" 2>&1)")"
+              id_needle='"ID":"'"$RULE_ID"'"'
+              case "$L" in
+                *"$id_needle"*) ;;
+                *) fail "lifecycle rule ${RULE_ID} missing; got: $(safe "$L")" ;;
+              esac
+              d_needle='"Days":'"$EXPIRY_DAYS"
+              d_a="${d_needle},"
+              d_b="${d_needle}}"
+              case "$L" in
+                *"$d_a"* | *"$d_b"*) ;;
+                *) fail "lifecycle expiry is not ${EXPIRY_DAYS} days; got: $(safe "$L")" ;;
+              esac
+              r_needle='"ID":'
+              n="$(count_of "$r_needle" "$L")"
+              [ "$n" -eq 1 ] || fail "expected exactly 1 lifecycle rule, found $n; got: $(safe "$L")"
+              echo "sccache-provisioning: lifecycle verified (${n} rule, ${RULE_ID}, ${EXPIRY_DAYS} days)"
+              echo "sccache bucket provisioned: quota=${QUOTA_BYTES} bytes (50 GiB) lifecycle=${EXPIRY_DAYS}d rule=${RULE_ID}"
           securityContext:
-            runAsNonRoot: true
-            runAsUser: 1000
             allowPrivilegeEscalation: false
             capabilities:
               drop: ["ALL"]
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
           resources:
             requests:
               memory: "128Mi"
@@ -118,6 +250,8 @@ spec:
         - name: minio-users
           secret:
             secretName: minio-users
-            defaultMode: 0400
+            # 0400 root-owned is unreadable by uid 1000 (confirmed via Loki: 10x Permission denied).
+            # 0440 + pod fsGroup 1000 is the minimal fix: group-readable, world-unreadable.
+            defaultMode: 0440
         - name: tmp
           emptyDir: {}
