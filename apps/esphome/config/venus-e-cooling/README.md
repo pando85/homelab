@@ -16,17 +16,19 @@ clearances; they are **not** carrying the battery's weight in this build.
 ## Electrical wiring
 
 <div align="center">
-  <img src="./wiring.svg" alt="Electrical wiring: 12 V barrel jack, D-SUN MP1584 at 3.3 V, LM2596 at 9 V, bare ESP8266MOD and two Noctua FLX fans through a Y splitter" width="100%">
+  <img src="./wiring.svg" alt="Electrical wiring: 12 V barrel jack feeds both Noctua FLX fans directly through a Y splitter and an MP1584 buck converter for the bare 3.3 V ESP8266MOD; single tachometer to GPIO14" width="100%">
 </div>
 
-This circuit gives the fans a **fixed DC voltage** (initially **9 V**) and lets
-the ESP8266 **observe the RPM of one fan**. **There is no PWM speed control,
-on/off switching or independent RPM readout for both fans** in this minimal
-configuration. The three-pin **FLX** fans have **no fourth-pin PWM input**:
-do **not** connect an ESP GPIO to their power lead or PWM-chop their supply
-without a separately validated driver. Adjusting the LM2596 trimmer is
-**manual**, and its step-down output **cannot provide a regulated 12 V**
-from a 12 V input; a direct 12 V bypass would be needed for full speed.
+The fans receive **12 V directly from the barrel jack**, through the
+Noctua Y-splitter; the **D-SUN MP1584EN is the only buck converter** and
+supplies a regulated **3.3 V** to the bare ESP8266MOD. The ESP8266
+**monitors RPM from one fan** via the splitter's single tachometer line.
+
+**This minimal circuit has no fan on/off switch, PWM speed control or
+independent RPM readout for the second fan.** The three-pin **FLX** fans
+do not have a fourth-pin PWM input. Do not PWM-chop their 12 V power rail
+from an ESP GPIO; add a separately validated power-control stage if
+software switching or speed control is required later.
 
 ### Bill of materials
 
@@ -35,7 +37,6 @@ from a 12 V input; a direct 12 V bypass would be needed for full speed.
 | 1 | Regulated **12 V DC / 1 A or higher** adapter | 5.5 × 2.1 mm **center-positive** plug; 2 A is also fine |
 | 1 | Female 5.5 × 2.1 mm DC jack | Panel mount; check contact polarity with a meter |
 | 1 | **D-SUN MP1584EN** adjustable buck (green board) | **12 V → 3.30 V** for the **bare** ESP8266MOD |
-| 1 | **LM2596** adjustable buck (blue board) | **12 V → 9.0 V** to supply the fans |
 | 1 | **ESP8266MOD / ESP-12** bare Wi-Fi module | Requires 3.3 V supply, boot straps and a carrier/breakout |
 | 2 | Noctua **NF-A4x10 FLX** | 40 × 40 × 10 mm; 12 V, **0.05 A max each**, 3-pin |
 | 1 | Noctua **NA-YC1** Y-splitter | Both fan power leads, **tach from one fan only** |
@@ -58,12 +59,10 @@ assembly. Do not interpret the adapter's current rating as forced current.
 
 | From | To | Function |
 | --- | --- | --- |
-| DC jack +12 V | MP1584 **IN+**, LM2596 **IN+** | Shared 12 V input, ideally through a fuse |
-| DC jack GND | Both **IN−** | Common power return |
+| DC jack +12 V | MP1584 **IN+**, Y-cable fan **+V** (3-pin connector pin 2) | Fans run at nominal 12 V; branch after the fuse |
+| DC jack GND | MP1584 **IN−**, Y-cable fan **GND** (pin 1) | Common return for fans and ESP8266 |
 | MP1584 **OUT+** (measured **3.30 V**) | ESP8266 **VCC** | **Never use 5 V** on bare ESP8266MOD |
 | MP1584 **OUT−** | ESP8266 **GND**, fan GND reference | Shared ground |
-| LM2596 **OUT+** (measured **9.0 V**) | Y-cable fan **+V** (3-pin connector pin 2) | Fixed lower-speed fan supply |
-| LM2596 **OUT−** | Y-cable fan **GND** (pin 1) | Fan return, common with ESP GND |
 | Y-cable single **TACH** (pin 3) | ESP8266 **GPIO14** | One fan RPM only; **10 kΩ pull-up to 3.3 V**, no 12 V on GPIO |
 | ESP8266 **EN**, **RST**, **GPIO0**, **GPIO2** | Individual **10 kΩ** pull-ups to 3.3 V | Normal boot and enable |
 | ESP8266 **GPIO15** | **10 kΩ** pull-down to GND | Required normal boot strap |
@@ -76,11 +75,12 @@ open-collector; use a **3.3 V pull-up** rather than a 5 V or 12 V pull-up,
 and confirm the actual signal on your hardware. Typical PC fans generate
 **two tach pulses per revolution** (RPM = pulses/s × 30).
 
-The MP1584 and LM2596 are **adjustable**. Set and verify their respective
-outputs **with no ESP or fans connected**, including polarity, then connect
-the load. The ESP8266 must have nearby decoupling and a reliable 3.3 V rail.
-Keep all low-voltage grounds common. **Neither buck can be controlled
-by firmware in this configuration.**
+The MP1584 is the **only** adjustable converter. Set its output to
+**3.30 V** and verify polarity **before connecting the ESP8266**.
+The fan harness connects to the fused 12 V input, **not** to the MP1584
+output. The ESP8266 needs nearby decoupling and a reliable 3.3 V rail.
+Keep all low-voltage grounds common. The MP1584 output is **not
+controllable from firmware** in this configuration.
 
 ## Mechanical arrangement
 
@@ -99,7 +99,7 @@ by firmware in this configuration.**
   support frame** with standard L-brackets and screw-on fan corners.
   Do not borrow load-bearing fasteners, rely on unmeasured hole spacing,
   or transfer vibration/weight into heatsink fins.
-- **Enclosure:** Locate the ESP8266 and both bucks **outside the hot
+- **Enclosure:** Locate the ESP8266 and MP1584 **outside the hot
   rear air channel**, with cable strain relief and insulated electronics.
   The ESP antenna should remain clear of metal profiles.
 
@@ -112,16 +112,16 @@ auxiliary fan does **not** replace the manufacturer's minimum wall spacing.
 ## Bring-up checklist
 
 1. Check jack **polarity** and verify the PSU's 12 V output.
-2. Set the **green MP1584 to 3.30 V** and the **blue LM2596 to 9.0 V**
-   independently using a multimeter, without loads connected.
+2. Set the **green MP1584 to 3.30 V** with a multimeter **before**
+   connecting the ESP8266. Check that the separate fan branch measures
+   **12 V**, and that all returns share a common ground.
 3. Verify the ESP-12 carrier's boot straps (EN/RST/GPIO0/GPIO2 high;
    GPIO15 low), 3.3 V decoupling and GPIO14 tach pull-up.
 4. Energize the ESP8266 **without** the fan harness first; check stable
    boot and absence of 5 V / 12 V on GPIOs.
-5. Connect the Y-cable and confirm **both fans start reliably** at 9 V
-   after every power cycle. If not, raise the voltage **within the
-   converter's achievable range**, or use a separately switched direct
-   12 V fan rail for startup.
+5. Connect the Y-cable to **12 V directly** and confirm **both fans
+   start reliably** at rated voltage after every power cycle. The fan
+   harness must **not** be connected to the MP1584 output.
 6. Confirm one RPM signal, correct airflow direction and no blocked
    intake or excess vibration; measure temperature against a fan-off
    baseline at matched battery load and ambient temperature.
