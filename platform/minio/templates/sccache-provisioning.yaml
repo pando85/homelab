@@ -82,14 +82,19 @@ spec:
               done
               # 1. Bucket (idempotent).
               $MC mb --ignore-existing myminio/sccache
-              # 2. Hard 50 GiB quota: writes are rejected past the cap (verified enforced by the
-              #    pilot's quota-rejection gate). Idempotent: re-applying the same value is a no-op.
-              $MC admin bucket quota myminio/sccache --hard 50gb
+              # 2. Hard quota: writes rejected past the cap. Use 50GiB (binary, 53,687,091,200 B),
+              #    NOT "50gb" (decimal 50,000,000,000 B) - mcli/MinIO parse both but they differ.
+              #    Re-applying the same value is a no-op. Idempotent.
+              $MC admin bucket quota myminio/sccache --hard 50GiB
               # 3. Lifecycle: converge to exactly one 14-day expiry rule via remove-all then add.
               #    rm --all --force tolerates "no rules currently set".
               $MC ilm rule rm myminio/sccache --all --force >/dev/null 2>&1 || true
               $MC ilm rule add --id sccache-expiry --expiry-days 14 myminio/sccache
-              echo "sccache bucket provisioned: quota=50gb lifecycle=14d rule=sccache-expiry"
+              # Read back applied quota + lifecycle (prints size/rule config, never credentials)
+              # so the provisioning outcome is observable in the Job log for acceptance evidence.
+              $MC admin bucket quota myminio/sccache || true
+              $MC ilm rule list myminio/sccache || true
+              echo "sccache bucket provisioned: quota=50GiB lifecycle=14d rule=sccache-expiry"
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
