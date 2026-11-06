@@ -20,16 +20,23 @@ clearances; they are **not** carrying the battery's weight in this build.
   <img src="./wiring.svg" alt="Electrical wiring: 12 V barrel jack feeds both Noctua FLX fans directly through a Y splitter and an MP1584 buck converter for the bare 3.3 V ESP8266MOD; single tachometer to GPIO14" width="100%">
 </div>
 
-The fans receive **12 V directly from the barrel jack**, through the
-Noctua Y-splitter; the **D-SUN MP1584EN is the only buck converter** and
-supplies a regulated **3.3 V** to the bare ESP8266MOD. The ESP8266
-**monitors RPM from one fan** via the splitter's single tachometer line.
+The **D-SUN MP1584EN is the only buck converter** and supplies regulated
+**3.3 V** to the bare ESP8266MOD **and a compatible 3.3 V relay module**.
+The relay's **normally-open (NO)** contact switches the **+12 V** fan supply
+from the barrel jack to the NA-YC1 splitter. Fan ground remains permanently
+connected to common ground. **ESP8266 GPIO5** drives the relay module's
+active-high **IN** pin, and **GPIO14** monitors the tachometer of one fan.
 
-**This minimal circuit has no fan on/off switch, PWM speed control or
-independent RPM readout for the second fan.** The three-pin **FLX** fans
-do not have a fourth-pin PWM input. Do not PWM-chop their 12 V power rail
-from an ESP GPIO; add a separately validated power-control stage if
-software switching or speed control is required later.
+**The primary feature is on/off control through Home Assistant**, with
+an ESPHome switch named **Cooling Fans**. The fans are off at boot
+(`restore_mode: ALWAYS_OFF`); an external **10 kΩ GPIO5 pull-down**
+keeps the relay input low while the ESP8266 resets. Confirm the selected
+relay really is **active-high** and remains de-energized with the GPIO
+disconnected.
+
+The three-pin **FLX** fans do **not** provide variable-speed PWM control.
+The ESP8266 can switch both fans simultaneously, but cannot adjust
+their RPM or independently control them. Do not PWM-chop the power supply.
 
 ### Bill of materials
 
@@ -37,11 +44,12 @@ software switching or speed control is required later.
 | --- | --- | --- |
 | 1 | Regulated **12 V DC / 1 A or higher** adapter | 5.5 × 2.1 mm **center-positive** plug; 2 A is also fine |
 | 1 | Female 5.5 × 2.1 mm DC jack | Panel mount; check contact polarity with a meter |
-| 1 | **D-SUN MP1584EN** adjustable buck (green board) | **12 V → 3.30 V** for the **bare** ESP8266MOD |
+| 1 | **D-SUN MP1584EN** adjustable buck (green board) | **12 V → 3.30 V** for the bare ESP8266MOD and relay module |
+| 1 | **3.3 V active-high relay module**, single channel, contacts COM/NO | Prefer [BricoGeek PR2004](https://tienda.bricogeek.com/interruptores/2014-modulo-1-rele-33v.html); transistor driver and flyback protection integrated; verify input polarity |
 | 1 | **ESP8266MOD / ESP-12** bare Wi-Fi module | Requires 3.3 V supply, boot straps and a carrier/breakout |
 | 2 | Noctua **NF-A4x10 FLX** | 40 × 40 × 10 mm; 12 V, **0.05 A max each**, 3-pin |
 | 1 | Noctua **NA-YC1** Y-splitter | Both fan power leads, **tach from one fan only** |
-| 6 | 10 kΩ resistors | EN, RST, GPIO0, GPIO2 pull-up; GPIO15 pull-down; tach pull-up |
+| 7 | 10 kΩ resistors | EN, RST, GPIO0, GPIO2 pull-up; GPIO15 and GPIO5 pull-down; tach pull-up |
 | 1 each | 100 nF ceramic and 10–47 µF capacitor | Place near ESP8266 VCC/GND on the carrier |
 | 1 | ESP-12 breakout/carrier or suitable PCB | ESP module pads are **not** normal 2.54 mm header pins |
 | 1 | 3.3 V USB–UART adapter (for programming) | UART TX/RX at 3.3 V logic; never 5 V |
@@ -52,18 +60,23 @@ software switching or speed control is required later.
 | Optional | Thin printed PETG fan cradle / deflector | Only if generic brackets do not fit; keep air intake unobstructed |
 
 The fan pair draws **up to 0.10 A at 12 V** (1.2 W at rated voltage);
-the ESP8266 needs a regulator capable of **Wi-Fi current bursts**.
-A quality **12 V / 1 A** supply leaves substantial headroom for this
-assembly. Do not interpret the adapter's current rating as forced current.
+the ESP8266 and relay module also draw from the 3.3 V MP1584.
+Size and test the MP1584 rail for **Wi-Fi bursts plus the relay-coil load**;
+verify the 3.3 V rail does not sag on fan switching or Wi-Fi connection.
+A quality **12 V / 1 A** supply should leave headroom, subject to
+measuring the actual relay and ESP current.
+Do not interpret the adapter's current rating as forced current.
 
 ### Power and signal connections
 
 | From | To | Function |
 | --- | --- | --- |
-| DC jack +12 V | MP1584 **IN+**, Y-cable fan **+V** (3-pin connector pin 2) | Fans run at nominal 12 V; branch after the fuse |
+| DC jack +12 V | MP1584 **IN+** and relay **COM** contact | Fused 12 V feed for controller and switched fans |
+| Relay **NO** contact | Y-cable fan **+V** (3-pin connector pin 2) | 12 V delivered only while relay energized; **NC unused** |
 | DC jack GND | MP1584 **IN−**, Y-cable fan **GND** (pin 1) | Common return for fans and ESP8266 |
-| MP1584 **OUT+** (measured **3.30 V**) | ESP8266 **VCC** | **Never use 5 V** on bare ESP8266MOD |
-| MP1584 **OUT−** | ESP8266 **GND**, fan GND reference | Shared ground |
+| MP1584 **OUT+** (measured **3.30 V**) | ESP8266 **VCC**, relay module **VCC** | Use 3.3 V relay module, **not** a 5 V / 12 V coil board |
+| MP1584 **OUT−** | ESP8266 **GND**, relay module **GND**, Y-cable fan **GND** (pin 1) | Shared ground; **do not switch GND** |
+| ESP8266 **GPIO5** | Relay module **IN** | Active-HIGH enable; **10 kΩ pull-down to GND** for boot OFF |
 | Y-cable single **TACH** (pin 3) | ESP8266 **GPIO14** | One fan RPM only; **10 kΩ pull-up to 3.3 V**, no 12 V on GPIO |
 | ESP8266 **EN**, **RST**, **GPIO0**, **GPIO2** | Individual **10 kΩ** pull-ups to 3.3 V | Normal boot and enable |
 | ESP8266 **GPIO15** | **10 kΩ** pull-down to GND | Required normal boot strap |
@@ -78,8 +91,11 @@ and confirm the actual signal on your hardware. Typical PC fans generate
 
 The MP1584 is the **only** adjustable converter. Set its output to
 **3.30 V** and verify polarity **before connecting the ESP8266**.
-The fan harness connects to the fused 12 V input, **not** to the MP1584
-output. The ESP8266 needs nearby decoupling and a reliable 3.3 V rail.
+The fan harness connects to the relay's **NO contact**, **not** to the
+MP1584 output. The MP1584 feeds the ESP8266 and 3.3 V relay module only.
+Do not run fan current through GPIO5. Verify that NO is open while off
+and closes onto COM only while the relay is energized.
+The ESP8266 needs nearby decoupling and a reliable 3.3 V rail.
 Keep all low-voltage grounds common. The MP1584 output is **not
 controllable from firmware** in this configuration.
 
@@ -100,7 +116,7 @@ controllable from firmware** in this configuration.
   support frame** with standard L-brackets and screw-on fan corners.
   Do not borrow load-bearing fasteners, rely on unmeasured hole spacing,
   or transfer vibration/weight into heatsink fins.
-- **Enclosure:** Locate the ESP8266 and MP1584 **outside the hot
+- **Enclosure:** Locate the ESP8266, relay and MP1584 **outside the hot
   rear air channel**, with cable strain relief and insulated electronics.
   The ESP antenna should remain clear of metal profiles.
 
@@ -117,27 +133,31 @@ auxiliary fan does **not** replace the manufacturer's minimum wall spacing.
    connecting the ESP8266. Check that the separate fan branch measures
    **12 V**, and that all returns share a common ground.
 3. Verify the ESP-12 carrier's boot straps (EN/RST/GPIO0/GPIO2 high;
-   GPIO15 low), 3.3 V decoupling and GPIO14 tach pull-up.
+   GPIO15 low), **GPIO5 relay pulldown**, 3.3 V decoupling and GPIO14 tach pull-up.
 4. Energize the ESP8266 **without** the fan harness first; check stable
    boot and absence of 5 V / 12 V on GPIOs.
-5. Connect the Y-cable to **12 V directly** and confirm **both fans
-   start reliably** at rated voltage after every power cycle. The fan
-   harness must **not** be connected to the MP1584 output.
-6. Confirm one RPM signal, correct airflow direction and no blocked
-   intake or excess vibration; measure temperature against a fan-off
-   baseline at matched battery load and ambient temperature.
+5. With the relay **off**, verify **COM = 12 V**, **NO unpowered**,
+   both fans stopped and the ESP8266 still powered at 3.3 V. Then enable
+   `Cooling Fans` and verify both fans start at **12 V**, one tachometer
+   reports RPM, and the 3.3 V supply remains stable.
+6. Reset the ESP8266 and check the relay remains **off throughout boot**
+   thanks to the external GPIO5 pulldown. Check both on/off operations,
+   correct airflow and no blocked intakes. Measure thermal improvement
+   at matched battery load and ambient temperature.
 
 ## ESPHome firmware
 
 The [`venus-e-cooling.yaml`](../venus-e-cooling.yaml) configuration uses the
 existing shared [connection package](../packages/connection.yaml). It targets
-`esp8266: board: esp12e` and exposes **Fan 1 Speed** from GPIO14 using
-`pulse_counter` and a ×0.5 filter (two tachometer pulses per revolution),
-plus Wi-Fi diagnostics and controller status.
-
-**No controllable fan or climate entity is created.** Both fans receive
-continuous direct 12 V, regardless of ESP or Home Assistant availability.
-The Y-cable carries only one tachometer reading.
+`esp8266: board: esp12e` and exposes **Cooling Fans** as an active-high
+GPIO5 relay switch, defaulting to **ALWAYS_OFF** on reboot.
+It also exposes **Fan 1 Speed** from GPIO14 using `pulse_counter` and
+a ×0.5 filter (two tachometer pulses per revolution), Wi-Fi diagnostics,
+and controller status. The Y-cable reports only one fan's tachometer.
+Home Assistant can enable the relay explicitly or automate it against the
+battery's existing temperature sensor; the battery remains passively cooled
+if the auxiliary system is unavailable. Keep thermal safety limits and
+manufacturer protections independent of Home Assistant.
 
 ### Initial serial flash (bare ESP-12)
 
