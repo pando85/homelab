@@ -40,10 +40,10 @@ forgejo:
 
   resources:
     limits:
-      memory: 4Gi
+      memory: 8Gi
     requests:
       cpu: 200m
-      memory: 256Mi
+      memory: 1Gi
   deployment:
     annotations:
       reloader.stakater.com/auto: "true"
