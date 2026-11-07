@@ -706,6 +706,26 @@ runs (about 30 s each warm, 1 min from scratch) and the final evaluation (6 min)
 | `kivi_uncalibrated.tflite` | `beda360612183fe58f22cf062cdaed6c805105bbf523d17d3b5c32cc71c1ab10` | raw output (`kivi_score.py`, threshold sweeps) |
 | `kivi_uncalibrated.onnx` | `0444db525743dee9a8bf07a1058bcabe17d6241b8981955a4c49537a2366be51` | raw output (`fast_report.py`, `v3_select.py`) |
 
+## spk02 c3-b button takes (2026-11-07, observed-offline, test split only)
+
+Consent: relayed by the owner on 2026-11-07 (recorded in dataset 9 of the data register). These takes are `test` and are never trained on. Nothing was listened to or transcribed; the numbers below are counts, levels and scores.
+
+**Presses.** `input_button.kivi_take` has 23 presses since it was created (the helper was loaded at 10:39Z; the recorder holds no earlier press): all between 14:11:54Z and 14:13:54Z on 2026-11-07, none before, none during the c3-a sessions (the two `unknown` states at 10:39Z and 12:27Z are the entity being loaded and restored, not presses). Two pairs are 0.8 s apart (double presses of one take), so there are **21 takes**. Gaps between consecutive takes: 2.2 to 18 s (median 3.5 s). Three clusters, split at gaps over 12 s: A 3 takes, B 3 takes, C 15 takes.
+
+**Coverage.** All 23 presses lie inside one closed c3-b wake file (14:11:21Z to 14:15:11Z, 7.36 MB, 230 s, first press 33 s in): 21 of 21 takes have full audio, none partial, none missing. Speech energy in the 5 s before the press (window start at the previous take's press when that is closer): 20 of 21 takes have RMS 28 to 43 dB and peak 40 to 55 dB above the floor (the floor is -71.6 dBFS, the 20th percentile of 20 ms frames over the press span; peaks -31 to -16 dBFS). One take (the second of cluster A) has RMS 3.5 dB and peak 15 dB above the floor: no speech. The wake file closed at 14:15:11.7Z, 78 s after the last press, with a 1.1 s request-audio file (a server-side wake detection of the live word `alexa`, not related to a take). Offline `alexa` on the same file: peak score 0.43, no detection above 0.5 in the take span. A second wake file started at 14:15:25Z and holds no press.
+
+**The extraction tool and this protocol do not match.** `kivi_extract.py --button-takes` looks for the word 0 to 6 s *after* a press. These takes were spoken *before* the press (the model scores peak a median 1.4 s before it). With presses 3.5 s apart the tool therefore cut the next take's word: 20 clips from 23 presses, 3 presses with no clear onset, 16 clips flagged `needs_review` (set to `unassigned`), 4 clips in `test`, and 6 pairs of clips that cut the same burst twice (median onset 2.1 s after the press). **Do not use those clips**; they are in `datasets/real/button-20261107T141100Z-spk02-tv-c3b/` and no mark was added. The scores below do not use them: the stored raw wake file was streamed once through pyopen-wakeword (the server's runtime) and each take's score is the maximum of the model's output between max(press - 4 s, previous press) and press + 1 s (the 1 s is the file-time uncertainty, +-1 s).
+
+**Recall, uncalibrated models, window before the press** (Wilson 95 % interval; raw threshold in brackets):
+
+| Model | Server-0.5 point | Pooled (n 21) | Cluster A (3) | Cluster B (3) | Cluster C (15) | Raw 0.9, pooled | Median of max scores |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| v1 | raw 0.98 | 6/21 = 0.29 [0.14, 0.50] | 1/3 [0.06, 0.79] | 1/3 [0.06, 0.79] | 4/15 [0.11, 0.52] | 14/21 = 0.67 [0.45, 0.83] | 0.94 |
+| v2 | raw 0.95 | 9/21 = 0.43 [0.25, 0.64] | 1/3 [0.06, 0.79] | 1/3 [0.06, 0.79] | 7/15 [0.25, 0.70] | 11/21 = 0.52 [0.32, 0.72] | 0.94 |
+| v3 | raw 0.8653 | 4/21 = 0.19 [0.08, 0.40] | 1/3 [0.06, 0.79] | 1/3 [0.06, 0.79] | 2/15 [0.04, 0.38] | 2/21 = 0.10 [0.03, 0.29] | 0.71 |
+
+Per cluster at raw 0.9: v1 1/3, 3/3, 10/15; v2 1/3, 2/3, 8/15; v3 0/3, 1/3, 1/15. Sensitivity to the window (pooled, server-0.5 point): from press - 4 s to press + 1 s without the previous-press limit: v1 7/21, v2 10/21, v3 6/21; the tool's after-press window (press - 1 s to press + 7 s, which reaches the next take): v1 8/21, v2 11/21, v3 7/21. The no-speech take counts as a miss in every figure (without it, n is 20). The clusters are not independent samples of the voice (one speaker, one session, 2 minutes), and the intervals are wide. These are the same models that scored higher on the spk01 and synthetic sets; on this speaker the v3 server-0.5 point (chosen for a false-accept budget) recovers fewer takes than v1 and v2 at theirs.
+
 ## Alternatives if the owner test fails
 
 - Retrain on server-exact features (see Pitfalls, item 1). This is the cheapest next step: the scripts exist, about 1 h on the PC.
