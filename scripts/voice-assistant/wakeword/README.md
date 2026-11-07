@@ -47,6 +47,8 @@ openWakeWord models).
 | `kivi_negatives.py` | **Owner-triggered:** copies about 30 h of closed wake files as real negatives, minus cues, presses, detection boundaries, the whole window of every recorded session and (`--exclude-after DEVICE=ISO`) everything of a device from a time on |
 | `kivi_dataset_marks.py` | **Owner-run:** append-only marks for the permanent dataset: a later split per session (`splits.jsonl`, also for button-take sessions) and superseded extraction revisions (`superseded.jsonl`); `read_manifest` applies them and `training_rows` and the scorers skip superseded rows |
 | `kivi_real_common.py`, `kivi_devices.json` | Shared helpers (WAV, GCC-PHAT alignment, energy takes, manifest schema, split policy); satellite name to HA device-id prefix |
+| `wake_release.py` | **Release driver** (owner-run steps, idempotent, state in `$WORK/releases/<version>/`): `init`, `record-check`, `extract`, `pick-threshold` (room selection part only), `calibrate`, `score`, `gate` (recall ≥ 80 % TV silent, ≥ 60 % TV on, ≤ 0.25 false wakes/h, per speaker and pooled, with intervals), `package` (kivi-models version directory, model card, `models.lock`), `release` and `enable` (owner gate: `--yes-owner-approved`), `deploy`, `rollback`, `status`. Calls the tools above. Runbook: `docs/runbook/wake-word-release.md` in the private `agil/kivi-models` |
+| `test_wake_release.py` | Light tests of the driver (no audio, network or cluster) |
 | `test_kivi_real.py` | Tests with synthetic signals (alignment, manifest crash safety, prompter, byte-range extraction, run ends, unaligned files, phone import, button takes, negatives, scorer) |
 
 **Never report numbers from batch features** (`AudioFeatures.embed_clips`, `fast_eval.py embed`
@@ -135,6 +137,13 @@ single word (the MLS "low" Spanish voices and `ca_ES-upc_pau-x_low`) are exclude
 than their phoneme count allows are synthesized again. `eval_stream.py` runs the server's own
 runtime and is the reference for `alexa`; it is slow (about 14x real time per process on an idle
 machine, far slower under load).
+
+## Releasing a model (driver)
+
+`python3 wake_release.py status` shows what is live. The release phase (score real takes, gate, package into
+the private `agil/kivi-models`, tag, deploy, enable on one TV, roll back) is one driver, `wake_release.py`;
+its runbook is `docs/runbook/wake-word-release.md` in that private repository. Tests:
+`$WORK/.venv/bin/python -m pytest test_wake_release.py -q` (light, no audio or network).
 
 ## Real-voice tools
 

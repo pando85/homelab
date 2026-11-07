@@ -1,6 +1,6 @@
 # Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
 
-**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run. A **v2 candidate** (server-exact features, front-end emulation; [v2](#v2-2026-11-07-candidate-not-deployed)) exists, not deployed. A **v3 candidate** (v2 plus real takes of one speaker and real room negatives; [v3](#v3-2026-11-07-candidate-not-deployed)) passes the owner gate on point estimates for that speaker on c3-a, not deployed. A **v4 candidate** for the new wake phrase **"oye Kivi"** ([v4](#v4-oye-kivi-2026-11-07-candidate-not-deployed)) exists, not deployed; its real recall is untested.
+**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run. A **v2 candidate** (server-exact features, front-end emulation; [v2](#v2-2026-11-07-candidate-not-deployed)) exists, not deployed. A **v3 candidate** (v2 plus real takes of one speaker and real room negatives; [v3](#v3-2026-11-07-candidate-not-deployed)) passes the owner gate on point estimates for that speaker on c3-a, not deployed. A **v4 candidate** for the new wake phrase **"oye Kivi"** ([v4](#v4-oye-kivi-2026-11-07-candidate-not-deployed)) failed the room false-wake gate and its real recall is untested; the owner approved it as a **trial on c3-a only** on 2026-11-07 ([v4 trial](#v4-trial-deployment-2026-11-07-c3-a-only)). c3-b and the household pipeline "Kiwi" stay on `alexa`.
 **Date:** 2026-11-05
 **Device alias / model / firmware / webOS / architecture:** none. PC only (x86_64, RTX 4060 Ti 16 GB, 32 threads). No TV, no microphone, no speaker, no change in Home Assistant, the cluster or the GitOps tree.
 **Power and playback state:** not applicable
@@ -966,6 +966,9 @@ ran on the same PC at the same time.
 
 ## v4: "oye Kivi" (2026-11-07, candidate, not deployed)
 
+**Update (2026-11-07, evening):** released and enabled as a trial on c3-a only, with the owner's approval; see
+[v4 trial deployment](#v4-trial-deployment-2026-11-07-c3-a-only). The text below is the state before that.
+
 **Status:** candidate model files for the new wake phrase "oye Kivi" and a one-shot evaluation. **Not deployed**;
 no change in Home Assistant, the cluster, the TVs or the kivi-models tags. PC only. Nothing was listened to,
 transcribed or printed. **Real "oye Kivi" recall is untested:** no real "oye Kivi" takes exist yet. The real
@@ -1213,6 +1216,90 @@ Wall clock 15:23 to 18:40, about 3 h 15 min:
 | `oye_kivi.onnx` | `5d49da88f54dcf12febc11737c2f65aaaf83816c481b8bf30594f08c2d87b803` | same, ONNX |
 | `oye_kivi_uncalibrated.tflite` | `4304cb85601ce54e5e8f3cf105a8905f3584b713f11ac8f4ede80b5ece5480a6` | raw output (`kivi_score.py`, threshold sweeps) |
 | `oye_kivi_uncalibrated.onnx` | `b3576b0a7461cf3858906f9db7ea7b70fdc67f9382caa67fe63b73073183e859` | raw output (`fast_report.py`, `v4_select.py`) |
+
+## v4 trial deployment (2026-11-07, c3-a only)
+
+**Approval:** the owner, 2026-11-07: "Go ahead, deploy it and document with scripts all the workflow to almost
+automate this phase". It covers one kivi-models release tag for this model and a pipeline switch for c3-a. v4
+fails the room false-wake gate (0.96/h [0.42, 1.90] against ≤ 0.25/h) and its real recall is untested; the
+trial exists to record real "oye Kivi" takes and count false wakes. Nothing on the TVs was touched (no SSH, no
+install); c3-b stays on `alexa`.
+
+**Release (private repository `agil/kivi-models`):**
+- The image now carries **every model of `models.lock`** at the tagged commit, one `/models/<id>.tflite` each
+  plus `/models/SHA256SUMS`: `kivi` `v1-2026-11-05` (`5e20c8ee4642`) and `oye_kivi` `v4-oye-kivi-2026-11-07`
+  (`4ec448f65f61`). Each pin is checked against the version's `SHA256SUMS` by the workflow and against the
+  file inside the build (a wrong pin fails the build, checked locally).
+- Release `git.grigri.cloud/agil/kivi-models:v4-oye-kivi-2026-11-07@sha256:a73af8e220f03afecca80dbbdd7ae62f9d2ab8023b12ff0fd12839a2ac9d215b`
+  (CI run 5 on tag `v4-oye-kivi-2026-11-07`, commit `b908806`). Anonymous pull refused (registry HTTP 401;
+  `docker pull` without credentials: `unauthorized`).
+- Old releases still build: a dispatch of `v1-2026-11-05` (no push) rebuilt the tag's commit the old
+  single-model way, and a dispatch of the then untagged v4 version built `main` as a pre-release check
+  (runs 3 and 4, both green). The digest read through the registry API for `v1-2026-11-05` matches the old
+  pin (`9e51e0c9dba0`), so the digest method is the one Kubernetes resolves.
+
+**Cluster (GitOps, Argo CD):** the init container, renamed `01-copy-wake-words`, runs
+`cd /models && sha256sum -c SHA256SUMS && cp /models/*.tflite /custom/` (commit `3b7250cb7`).
+Observed-on-cluster, 2026-11-07 18:28-18:33 UTC:
+- Argo CD Synced and Healthy; the new openwakeword pod Ready. Init log: `kivi.tflite: OK`, `oye_kivi.tflite: OK`.
+- In the pod: `/custom/kivi.tflite` `5e20c8ee…778cb` and `/custom/oye_kivi.tflite` `4ec448f6…2333c8`.
+- Wyoming `describe` (from inside the openwakeword pod) lists `alexa`, `hey_jarvis`, `hey_mycroft`,
+  `hey_rhasspy`, `kivi`, `okay_nabu` and `oye_kivi` ("Oye Kivi"); Home Assistant's `wake_word/info` lists
+  `oye_kivi` without a Wyoming reload.
+- Synthetic check through the server (held-out Piper clips, never trained on, streamed from inside the
+  openwakeword pod, nothing written): "oye Kivi" sent to `oye_kivi` 4/4 detected; "alexa" sent to `alexa` 2/3;
+  "alexa" sent to `oye_kivi` 0/2; "Kivi" alone sent to `oye_kivi` 0/3; "oye Kivi" sent to `alexa` 0/2.
+- `alexa`: the stock model and the server image are unchanged; c3-a's Kiwi run restarted with `wake_word-start`
+  right after the pod restart (18:29 UTC), before the trial switch.
+
+**Home Assistant (websocket API, short-lived login token, refresh token revoked afterwards; nothing written on
+the HA pod):**
+- Can `alexa` stay next to `oye_kivi` on one satellite? **No, not with server-side wake words in Home Assistant
+  2026.10.4** (source read in the pod): an ESPHome satellite has two pipeline selects, but the second one is
+  chosen only when the device reports which on-device wake word fired (`handle_pipeline_start` matches
+  `wake_word_phrase` against the satellite's wake word selects); with streaming wake words the satellite sends
+  none, so pipeline 1 always runs. A pipeline has one `wake_word_id`, and the Wyoming client sends
+  `Detect(names=[wake_word_id])` (or the server default `okay_nabu` without one). So c3-a hears only "oye Kivi"
+  during the trial; on-device wake words in the satellite would lift this.
+- New pipeline **"oye Kivi"**: a copy of "Kiwi" with only `wake_word_id: oye_kivi`
+  (same STT, conversation agent `conversation.fast`, TTS and `prefer_local_intents`). "Kiwi" stays the preferred
+  pipeline and keeps `alexa`; "Kiwi Test" unchanged.
+- `select.lg_c3_c3_a_voice_satellite_assistant`: `preferred` → **`oye Kivi`**. c3-b's select stays `preferred`.
+- A select change applies at the satellite's next run, and the open wake-word run lasts until a detection or a
+  reconnect. An `assist_pipeline/pipeline/update` of "Kiwi" with every field unchanged (read back identical)
+  invalidated the open run (the runtime aborts the runs of an updated pipeline); c3-a started an "oye Kivi" run
+  (`wake_word-start`) within 15 s. c3-b's microphone was muted at the time.
+- **A Home Assistant restart reset the select to `preferred`** (observed-on-cluster): the dashboard commit
+  below changed a file under `apps/home-assistant/config/`, Reloader restarted the `hass` pod at 18:35 UTC, and
+  after the restart c3-a's pipeline select was `preferred` again (history: `oye Kivi` set 18:31:20 by the API
+  call, `preferred` at 18:35:46 when the satellite reconnected). The trial stopped silently for 7 minutes, until
+  `wake_release.py enable` set it again at 18:42:48 and saw a new "oye Kivi" run. Why the restored state was
+  `preferred` is not known. Check `wake_release.py status` after any HA restart.
+- Snapshots before and after: `/work/workspaces/kivi-wakeword/releases/v4-oye-kivi-2026-11-07/` (pipeline
+  settings and select states only), and the driver's `state.json`.
+- Dashboard `/voice-assistant`: an "oye Kivi trial (c3-a pipeline)" select with its on/off state (commit
+  `8252f8aa9`; it restarted Home Assistant through Reloader, about 10 s).
+
+**Rollback (exact):**
+1. `select.select_option` on `select.lg_c3_c3_a_voice_satellite_assistant` with option `preferred`.
+2. Restart the open run: `assist_pipeline/pipeline/update` of "oye Kivi" with its own fields unchanged; c3-a
+   starts a "Kiwi" (`alexa`) run within about 15 s (check with `assist_pipeline/pipeline_debug/list`).
+   `wake_release.py rollback --tv c3-a` does both and checks the new run (no approval flag: a rollback is always allowed).
+3. Optional: delete the pipeline "oye Kivi" (`assist_pipeline/pipeline/delete`). The models stay loaded; to
+   drop `oye_kivi` from the cluster, pin `v1-2026-11-05@sha256:9e51e0c9…` again with the old init command.
+
+**Data:** no new dataset. The trial's wake-word audio is HA's existing debug recordings of c3-a (data register,
+dataset 1 and the `/voice-recordings` rows), read only by the owner-run extraction tools. Counts only in reports.
+
+**Release driver:** the whole phase is scripted in
+[`wake_release.py`](../../../scripts/voice-assistant/wakeword/wake_release.py) (record-check, extract, score,
+pick-threshold, calibrate, gate, package, release, deploy, enable, rollback, status); the runbook is
+`docs/runbook/wake-word-release.md` in the private `agil/kivi-models`. The v4 release state was recorded with it:
+`release`, `deploy` and `enable` ran idempotently against what was already done (no second tag, no new commit),
+and `enable` restored the trial after the restart above.
+
+**Next (owner):** record real "oye Kivi" takes (`wake_release.py record-check --version v4-oye-kivi-2026-11-07`
+prints the exact commands), then `score` and `gate` on them; then re-select on more room hours.
 
 ## Alternatives if the owner test fails
 
