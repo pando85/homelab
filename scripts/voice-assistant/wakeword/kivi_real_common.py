@@ -11,6 +11,9 @@ import json
 import os
 import re
 import struct
+import subprocess
+import sys
+import time
 import unicodedata
 from pathlib import Path
 
@@ -24,9 +27,9 @@ PC_SOURCES = ("pc-mic", "webcam-mic")
 SPLITS = ("unassigned", "train", "dev", "test", "train-only")
 # Split policy (docs/voice-assistant/experiments/kivi-wake-word.md): the split belongs to the session,
 # so every channel of one utterance and every take of a session share it. Hold out by speaker and by
-# device. PC, webcam and phone audio is never an evaluation channel; in a train or unassigned session
-# those channels are tagged `train-only`, in a dev or test session they carry that split (so they can
-# never leak into training) and `eval_channel` is false.
+# device. PC and webcam audio is never an evaluation channel; in a train or unassigned session those
+# channels are tagged `train-only`, in a dev or test session they carry that split (so they can never
+# leak into training) and `eval_channel` is false. A phone memo carries the split given at import.
 
 # ---------------------------------------------------------------------------------------------
 # naming
@@ -85,6 +88,8 @@ def ascii_slug(text):
 
 
 def wav_header(n_bytes, rate=RATE):
+    if n_bytes > 0xFFFFFFFF - 36:
+        raise OverflowError("a WAV data chunk is limited to 4 GiB: copy a smaller range")
     return struct.pack("<4sI4s4sIHHIIHH4sI", b"RIFF", 36 + n_bytes, b"WAVE", b"fmt ", 16, 1, 1, rate,
                        rate * 2, 2, 16, b"data", n_bytes)
 
@@ -95,9 +100,23 @@ def create_exclusive(path, mode=0o600):
     return os.fdopen(fd, "wb")
 
 
+def part_path(path):
+    """A unique sibling name for a file being written: `<name>.<pid>-<ns>.part`."""
+    return Path(f"{path}.{os.getpid()}-{time.time_ns()}.part")
+
+
+def finalize_part(part, final):
+    """Move a finished `.part` file to its final name. The only rename in the dataset tools; it
+    refuses to replace an existing file, so nothing in the dataset is ever overwritten."""
+    if Path(final).exists():
+        raise FileExistsError(str(final))
+    os.rename(part, final)
+
+
 class WavWriter:
     """Incremental 16 kHz mono S16 writer. The header is patched on `flush_header`, so a crash
-    leaves a file whose PCM can still be read from offset 44."""
+    leaves a file whose PCM can still be read from offset 44. Used for the owner's live
+    recording; the dataset uses `PartWavWriter`."""
 
     def __init__(self, path, rate=RATE):
         self.f = create_exclusive(path)
@@ -122,10 +141,44 @@ class WavWriter:
             self.f.close()
 
 
+class PartWavWriter(WavWriter):
+    """Dataset WAV: written as `<name>.<nonce>.part`, fsynced, and renamed only by `commit` after
+    the byte count was checked. If the copy fails the `.part` stays and the final name never appears."""
+
+    def __init__(self, path, rate=RATE):
+        self.final = Path(path)
+        if self.final.exists():
+            raise FileExistsError(str(path))
+        self.part = part_path(path)
+        super().__init__(self.part, rate)
+
+    def commit(self, expected_bytes=None):
+        if expected_bytes is not None and self.n != expected_bytes:
+            self.close()
+            raise OSError(f"short or long copy of {self.final.name}: got {self.n} bytes, expected {expected_bytes}")
+        self.close_sync()
+        finalize_part(self.part, self.final)
+
+    def close_sync(self):
+        if not self.f.closed:
+            self.flush_header()
+            os.fsync(self.f.fileno())
+            self.f.close()
+
+
 def write_wav_new(path, pcm16):
-    w = WavWriter(path)
+    w = PartWavWriter(path)
     w.write(np.ascontiguousarray(pcm16, dtype="<i2").tobytes())
-    w.close()
+    w.commit()
+
+
+def write_bytes_new(path, data):
+    part = part_path(path)
+    with create_exclusive(part) as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+    finalize_part(part, path)
 
 
 def read_pcm16(path):
@@ -168,26 +221,91 @@ def private_mkdir(path, root):
 
 
 def append_jsonl(path, rows):
-    """Append JSON lines under an exclusive lock; the file is mode 600."""
+    """Append rows one line at a time: each line is one `write` on an O_APPEND descriptor followed
+    by `fsync`, so a crash leaves whole lines plus at most one truncated last line. The file is mode 600."""
+    repair_jsonl(path)
     fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
-    with os.fdopen(fd, "a", encoding="utf-8") as f:
-        fcntl.flock(f, fcntl.LOCK_EX)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
         for r in rows:
-            f.write(json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n")
-        f.flush()
-        fcntl.flock(f, fcntl.LOCK_UN)
+            os.write(fd, (json.dumps(r, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8"))
+            os.fsync(fd)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
     os.chmod(path, 0o600)
 
 
+def repair_jsonl(path):
+    """Terminate a truncated last line (a crash mid-write) with a newline, without deleting anything;
+    `read_jsonl` skips such a line with a warning."""
+    p = Path(path)
+    if p.exists() and p.stat().st_size:
+        with open(p, "rb") as f:
+            f.seek(-1, os.SEEK_END)
+            last = f.read(1)
+        if last != b"\n":
+            print(f"WARNING: {p.name} ended in a truncated line; terminated it (the line is skipped)", file=sys.stderr)
+            fd = os.open(str(p), os.O_WRONLY | os.O_APPEND)
+            os.write(fd, b"\n")
+            os.fsync(fd)
+            os.close(fd)
+
+
 def read_jsonl(path):
+    """All valid rows; a line that is not valid JSON (a truncated write) is skipped with a warning."""
     if not Path(path).exists():
         return []
-    return [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows = []
+    for n, line in enumerate(Path(path).read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except ValueError:
+            print(f"WARNING: {Path(path).name} line {n} is not valid JSON; skipped", file=sys.stderr)
+    return rows
 
 
 def write_json_new(path, obj):
-    with create_exclusive(path) as f:
-        f.write((json.dumps(obj, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
+    write_bytes_new(path, (json.dumps(obj, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
+
+
+def training_rows(rows, exclude_speakers=(), include_unassigned=False):
+    """Manifest rows that may train the model: split train or train-only, never `needs_review`,
+    and none from `exclude_speakers` (the unseen-speaker ablation excludes ALL data of that speaker)."""
+    ok = {"train", "train-only"} | ({"unassigned"} if include_unassigned else set())
+    return [r for r in rows if r.get("split") in ok and not r.get("needs_review")
+            and r.get("speaker") not in set(exclude_speakers)]
+
+
+def sample_drift(samples, elapsed_s, rate=RATE):
+    """Relative difference between the recorded audio length and the elapsed time."""
+    return (samples / rate - elapsed_s) / elapsed_s if elapsed_s > 0 else 0.0
+
+
+def pipeline_preflight(context, namespace, pod, container=None, model="kivi", text=None,
+                       path="/config/.storage/assist_pipeline.pipelines"):
+    """Wake word ids of the Assist pipelines, read-only (`kubectl exec ... cat`). `live` is True when
+    the preferred pipeline (or any pipeline, listed in `others`) uses `model` as its wake word: a
+    detection then closes the satellite's wake file mid-session. The device is assumed to use the
+    preferred pipeline unless its own selection says otherwise (not read here)."""
+    try:
+        if text is None:
+            cmd = ["kubectl", "--context", context, "-n", namespace, "exec", pod] + (["-c", container] if container else []) + ["--", "cat", path]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if r.returncode != 0:
+                return {"error": r.stderr.strip()[:200]}
+            text = r.stdout
+        data = json.loads(text)["data"]
+        items = data["items"]
+        pref = next((i for i in items if i.get("id") == data.get("preferred_item")), None)
+        wake = (pref or {}).get("wake_word_id")
+        others = sorted({i.get("wake_word_id") for i in items if i.get("wake_word_id")} - {wake})
+        return {"preferred_wake_word": wake, "others": others,
+                "live": bool(wake and model in wake), "any_live": any(model in (o or "") for o in others)}
+    except Exception as e:  # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -200,7 +318,7 @@ MANIFEST_FIELDS = (
     "conditions", "tags", "block", "block_name", "label", "word", "kind", "clip", "start_s", "end_s",
     "start_utc", "end_utc", "cue_index", "cue_offset_s", "align_offset_s", "align_conf", "align_ok",
     "drift_ppm", "source_run", "revision", "extract_id", "dry_run_session", "press_utc",
-    "onset_after_press_s", "snr_db", "n_candidates", "consent_confirmed")
+    "onset_after_press_s", "snr_db", "n_candidates", "consent_confirmed", "needs_review", "split_requested", "run_end_in_window")
 
 
 def make_row(**kw):
@@ -390,10 +508,10 @@ def _fit_line(taus, ds, iters=4, floor_s=0.005):
 
 
 def align_stream(ref, sig, d_prior_s, *, coarse_lag_s=20.0, refine_lag_s=1.5, win_s=15.0, min_conf=8.0,
-                 max_coarse_windows=10, min_rms=20.0, max_resid_s=0.03, max_drift=1e-3):
+                 max_coarse_windows=60, min_rms=20.0, max_resid_s=0.03, max_drift=1e-3):
     """Offset of `sig` against `ref` (both int16 at 16 kHz): `sig` time = `ref` time + d(tau), tau in
     seconds of `ref`. Starts from the prior d_prior_s (for the TV file: from its mtime). Stage 1
-    finds the offset on the loudest windows within +-coarse_lag_s; stage 2 measures every window
+    finds the offset on the windows with the most energy in both signals within +-coarse_lag_s; stage 2 measures every window
     within +-refine_lag_s of that and fits d(tau) = a + b * tau (b is the drift).
     Returns a dict with a, b, ok, confidence statistics and the per-window results. When `ok` is
     False the offset is the prior (nothing measured can be trusted)."""
@@ -405,10 +523,11 @@ def align_stream(ref, sig, d_prior_s, *, coarse_lag_s=20.0, refine_lag_s=1.5, wi
         rms = float(np.sqrt(np.mean(ref_f[s:s + W] ** 2)))
         j0 = int(round((s / RATE + d_prior_s) * RATE))
         overlap = min(len(sig), j0 + W) - max(0, j0)
-        if rms >= min_rms and overlap >= W // 2:
-            starts.append((s, rms))
+        srms = float(np.sqrt(np.mean(_segment(sig_f, j0, W) ** 2)))
+        if rms >= min_rms and srms >= min_rms and overlap >= W // 2:
+            starts.append((s, min(rms, srms)))
     dur = len(ref) / RATE
-    res = {"a": float(d_prior_s), "b": 0.0, "ok": False, "n_windows": len(starts), "n_confident": 0,
+    res = {"a": float(d_prior_s), "b": 0.0, "ok": False, "n_windows": len(starts), "n_coarse": 0, "n_confident": 0,
            "n_inliers": 0, "median_conf": 0.0, "resid_std_ms": None, "drift_ppm": 0.0,
            "drift_over_session_s": 0.0, "d_prior_s": float(d_prior_s), "windows": []}
     if not starts:
@@ -420,8 +539,12 @@ def align_stream(ref, sig, d_prior_s, *, coarse_lag_s=20.0, refine_lag_s=1.5, wi
         lag, conf = gcc_phat(ref_f[s:s + W], _segment(sig_f, j0 - L, W + 2 * L), L)
         return s / RATE + win_s / 2, d0 + lag, conf
 
-    loudest = sorted(starts, key=lambda x: -x[1])[:max_coarse_windows]
-    coarse = [measure(s, d_prior_s, coarse_lag_s) for s, _ in loudest]
+    # every window is tried (best first, at most max_coarse_windows): windows are ranked by the
+    # weaker of the two signals, so a loud TV that only one recorder hears does not crowd out the
+    # windows where both recorders hear the speaker
+    best = sorted(starts, key=lambda x: -x[1])[:max_coarse_windows]
+    res["n_coarse"] = len(best)
+    coarse = [measure(s, d_prior_s, coarse_lag_s) for s, _ in best]
     good = [m for m in coarse if m[2] >= min_conf]
     if not good:
         res["median_conf"] = float(np.median([m[2] for m in coarse]))

@@ -2,19 +2,20 @@
 """Import a phone voice memo of "kivi" takes into the permanent real-voice dataset.
 
     kivi_import_phone.py MEMO.m4a --speaker spk02 --consent-confirmed \
-        [--near-labels kiwi,kiwi,tivi,tivi,kili,kili] [--expect 30] [--dry-run]
+        --split train [--near-labels kiwi,kiwi,tivi,tivi,kili,kili] [--expect 30] [--dry-run]
 
 The memo (m4a, ogg, wav, anything ffmpeg reads) is converted to 16 kHz mono, the takes are found by
 short-time energy (no model, no transcription), each take is cut with padding, and the clips are
 labelled `kivi` (or `near:<word>` for the trailing near-word takes, in the order given), stored
-as source `phone` with the speaker id and split `train-only`, and appended to the manifest. The
+as source `phone` with the speaker id and the split given with `--split` (required), and appended to the manifest. The
 original file and the converted memo are kept whole under `<session>/phone/raw/`.
 
 Rules: the speaker must have agreed to this (`--consent-confirmed` is required and recorded);
 the speaker is a pseudonymous id (spk01...), never a name; nothing is played, transcribed or
 printed; only counts are shown. The dataset is permanent: nothing is deleted or overwritten. A
-phone memo is not an evaluation channel; if the speaker is held out for evaluation, give the
-memo that speaker's split with `--split` (never train data for a held-out speaker).
+phone memo is not an evaluation channel. Decided policy (2026-11-07): the memo of spk02 is `train`
+for the production model; her button takes on c3-b are `test` and never trained on; the unseen-speaker
+check is an ablation that excludes ALL spk02 data from training (`training_rows(exclude_speakers=...)`).
 """
 import argparse
 import hashlib
@@ -93,8 +94,7 @@ def import_memo(a):
     sroot = C.private_mkdir(root / sid, root)
     raw = C.private_mkdir(sroot / "phone" / "raw", root)
     orig = memo.read_bytes()
-    with C.create_exclusive(raw / ("original" + memo.suffix.lower())) as f:   # the file's own name is not kept
-        f.write(orig)
+    C.write_bytes_new(raw / ("original" + memo.suffix.lower()), orig)   # the file's own name is not kept
     C.write_wav_new(raw / "memo-16k.wav", pcm)
     pad_b, pad_a = a.pad_before, a.pad_after
     exid = "ex-" + now.strftime("%Y%m%dT%H%M%S%fZ")
@@ -107,13 +107,14 @@ def import_memo(a):
         rel = f"{sid}/phone/clips/00-phone-memo/c{i:03d}-{C.ascii_slug(lab)}.wav"
         C.private_mkdir(root / Path(rel).parent, root)
         C.write_wav_new(root / rel, pcm[int(c0 * RATE):int(c1 * RATE)])
-        rows.append(C.make_row(
+        row = C.make_row(
             origin="phone", session=sid, source="phone", device="phone", session_device="", speaker=a.speaker,
             split=a.split, eval_channel=False, condition="phone-memo", conditions={}, tags={}, block=1,
             block_name="phone-memo", label=lab, word=lab.split(":", 1)[1] if ":" in lab else "kivi", kind="cue",
             clip=rel, start_s=round(c0, 3), end_s=round(c1, 3), cue_index=i, snr_db=t["snr_db"],
-            extract_id=exid, consent_confirmed=True, revision=""))
-    C.append_jsonl(root / "manifest.jsonl", rows)
+            extract_id=exid, consent_confirmed=True, revision="", needs_review=False)
+        C.append_jsonl(root / "manifest.jsonl", [row])      # one fsynced line per clip, right after the clip
+        rows.append(row)
     C.write_json_new(sroot / "session.json", {
         "schema": 1, "session_id": sid, "kind": "phone-memo", "device": "phone", "tv_source": "",
         "speaker": a.speaker, "split": a.split, "consent_confirmed": True, "imported_utc": now.isoformat(),
@@ -129,7 +130,8 @@ def main(argv=None):
     ap.add_argument("memo")
     ap.add_argument("--speaker", required=True, help="pseudonymous id, e.g. spk02 (never a name)")
     ap.add_argument("--consent-confirmed", action="store_true", help="the speaker agreed to this import")
-    ap.add_argument("--split", default="train-only", choices=C.SPLITS)
+    ap.add_argument("--split", required=True, choices=C.SPLITS,
+                    help="required, no default: the owner decides (policy: the production memo of spk02 is train)")
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
     ap.add_argument("--near-labels", help="comma list for the last takes, in order: kiwi,kiwi,tivi,tivi")
     ap.add_argument("--near-from", type=int, help="1-based index of the first near-word take (checked)")

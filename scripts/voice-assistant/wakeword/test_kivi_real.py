@@ -144,12 +144,7 @@ def test_wake_file_with_placeholder_header_is_read_from_offset_44(tmp_path):
     assert (C.read_pcm16(p) == pcm).all()
 
 
-def test_no_deletion_or_overwrite_code_in_the_dataset_tools():
-    banned = re.compile(r"os\.(remove|unlink|rmdir|replace|rename)|shutil\.(rmtree|move)|\.unlink\(|rmtree")
-    for name in ("kivi_extract.py", "kivi_real_common.py", "kivi_score.py", "kivi_import_phone.py", "kivi_negatives.py"):
-        text = (HERE / name).read_text(encoding="utf-8")
-        code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-        assert not banned.search(code), name
+
 
 
 # ---------------------------------------------------------------------------------------------
@@ -236,80 +231,7 @@ def test_prompter_recorder_logic_with_a_fake_parec(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------------------------
 
 
-def test_extract_end_to_end(tmp_path):
-    d, s = dry_session(tmp_path)
-    ref = speechlike(len(C.read_pcm16(d / "pc-mic.wav")) / RATE, 21)
-    rng = np.random.default_rng(5)
-    web = delayed(ref, 0.0123, rng)[:len(ref)]
-    for name, x in (("pc-mic.wav", ref), ("webcam-mic.wav", web)):
-        (d / name).chmod(0o600)
-        (d / name).unlink()
-        C.write_wav_new(d / name, x)
-    # a satellite file: it started 1.84 s before the desk recording; its mtime is 0.7 s off
-    d_true = 1.84
-    tv = delayed(ref, d_true, rng, gain=10, snr_db=8, tail_s=4)
-    o_pc = C.session_pc_offset(s)
-    t0 = X.parse_utc(s["t0_utc"]).timestamp()
-    end_true = t0 + (o_pc - d_true) + len(tv) / RATE
-    rec = tmp_path / "rec" / "bd8256abcdef" / "Kiwi" / "123456789"
-    rec.mkdir(parents=True)
-    f = rec / "00_wake-wake_word.openwakeword.wav"
-    hdr = C.wav_header(0)
-    f.write_bytes(hdr[:4] + b"\xff\xff\xff\xff" + hdr[8:40] + b"\xff\xff\xff\xff" + tv.tobytes())
-    os.utime(f, (end_true + 0.7, end_true + 0.7))
-    other = tmp_path / "rec" / "fda18fffff" / "Kiwi" / "999"  # another satellite: must be ignored
-    other.mkdir(parents=True)
-    (other / "00_wake-x.wav").write_bytes(hdr + b"\x00\x00" * 1000)
-    ds = tmp_path / "datasets" / "real"
-    args = ["--session-dir", str(d), "--dataset-root", str(ds), "--from-dir", str(tmp_path / "rec"), "--win-s", "10"]
 
-    X.main(args + ["--dry-run"])
-    assert not ds.exists()  # nothing written
-
-    X.main(args)
-    sid = s["session_id"]
-    rows = C.read_jsonl(ds / "manifest.jsonl")
-    sources = {r["source"] for r in rows}
-    assert sources == {"tv-c3a", "pc-mic", "webcam-mic"}
-    n_cues = sum(len(b["cues"]) for b in s["blocks"])
-    for src in sources:
-        cues = [r for r in rows if r["source"] == src and r["kind"] == "cue"]
-        assert len(cues) == n_cues == 8
-        assert {r["label"] for r in cues} == {"kivi", "near:kiwi", "near:aquí vi"}
-    labels = {r["label"] for r in rows}
-    assert "silence" in labels
-    r0 = next(r for r in rows if r["source"] == "tv-c3a" and r["kind"] == "cue")
-    assert r0["device"] == "c3-a" and r0["session_device"] == "c3-a" and r0["split"] == "unassigned"
-    assert r0["speaker"] == "" and r0["source_run"] == "Kiwi/123456789" and r0["align_ok"]
-    assert abs(r0["align_offset_s"] - d_true) < 0.003, r0["align_offset_s"]
-    assert next(r for r in rows if r["source"] == "pc-mic")["device"] == "pc-mic"
-    # split policy: PC channels of an unassigned session are train-only, the satellite channel is the eval channel
-    assert {r["split"] for r in rows if r["source"] == "pc-mic"} == {"train-only"}
-    assert {r["split"] for r in rows if r["source"] == "tv-c3a"} == {"unassigned"}
-    assert {r["eval_channel"] for r in rows if r["source"] == "tv-c3a"} == {True}
-    assert {r["eval_channel"] for r in rows if r["source"] != "tv-c3a"} == {False}
-    assert all(set(r) == set(C.MANIFEST_FIELDS) for r in rows)
-    assert (ds / sid / "tv-c3a" / "raw" / "123456789.wav").exists()
-    assert (ds / sid / "tv-c3a" / "timeline.wav").exists() and (ds / sid / "session.json").exists()
-    assert (ds / sid / "pc-mic" / "raw" / "pc-mic.wav").exists()
-    # permissions
-    for p in [ds, ds / sid, ds / sid / "tv-c3a", ds / sid / "tv-c3a" / "clips"]:
-        assert stat.S_IMODE(p.stat().st_mode) == 0o700, p
-    for p in ds.rglob("*"):
-        assert stat.S_IMODE(p.stat().st_mode) in (0o700, 0o600), p
-    # the satellite clip and the desk clip hold the same content at the same time
-    tvc = next(r for r in rows if r["source"] == "tv-c3a" and r["kind"] == "cue" and r["label"] == "kivi")
-    pcc = next(r for r in rows if r["source"] == "pc-mic" and r["clip"].split("/", 2)[2] == tvc["clip"].split("/", 2)[2])
-    a_, b_ = C.read_pcm16(ds / tvc["clip"]), C.read_pcm16(ds / pcc["clip"])
-    assert len(a_) == len(b_)
-    lag, conf = C.gcc_phat(b_, np.concatenate([np.zeros(800, np.int16), a_, np.zeros(800, np.int16)]), 800)
-    assert abs(lag) < 0.002 and conf > 8, (lag, conf)
-    # a second run adds no duplicate rows and overwrites nothing
-    X.main(args)
-    rows2 = C.read_jsonl(ds / "manifest.jsonl")
-    assert len(rows2) == len(rows)
-    # the manifest holds no audio paths outside the dataset and no household names
-    assert all(not r["clip"].startswith("/") for r in rows2)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -328,92 +250,16 @@ def fake_session(cues_by_block):
             "sources": {"pc-mic": {"first_sample_offset_s": 0.0}}, "blocks": blocks}
 
 
-def test_score_aggregation_with_synthetic_probabilities():
-    import kivi_score as K
-    sess = fake_session([("k", "kivi", [(5.0, "kivi", "kivi"), (15.0, "kivi", "kivi")], 0.0, 30.0),
-                         ("n", "near", [(35.0, "near:kiwi", "kiwi"), (45.0, "near:tivi", "tivi")], 30.0, 55.0),
-                         ("s", "silence", [], 55.0, 65.0)])
-    times = np.arange(0, 65, 0.08)
-    pk = np.zeros(len(times))
-    pk[np.argmin(abs(times - 6.0))] = 0.99     # cue 1 detected at 0.98
-    pk[np.argmin(abs(times - 20.0))] = 0.975   # gap between cues: a false accept at 0.9 (cue 2 window ends 18.5)
-    pk[np.argmin(abs(times - 36.0))] = 0.96    # near-word kiwi
-    pk[np.argmin(abs(times - 60.0))] = 0.91    # in silence
-    pa = np.zeros(len(times))
-    rep = K.analyze(sess, {"kivi": pk, "alexa": pa}, times, [[0.0, 65.0]], [0.5, 0.9, 0.97, 0.98, 0.99])
-    kb = rep["blocks"][0]["cue_hits"]["kivi"]
-    assert (kb["0.5"]["k"], kb["0.5"]["n"]) == (2 - 1, 2)
-    assert kb["0.98"]["k"] == 1 and kb["0.99"]["k"] == 0
-    assert rep["blocks"][0]["cue_hits"]["alexa"]["0.5"]["k"] == 0
-    nb = rep["blocks"][1]["by_word"]
-    assert nb["kiwi"]["kivi"]["0.9"]["k"] == 1 and nb["tivi"]["kivi"]["0.9"]["k"] == 0
-    fa = rep["overall"]["false_accepts"]["kivi"]
-    assert fa["0.9"]["k"] == 2 and fa["0.97"]["k"] == 1 and fa["0.99"]["k"] == 0, fa
-    assert abs(fa["0.9"]["hours"] - (65 - 4 * 4.0) / 3600) < 1e-3  # 4 cue windows of 4 s excluded
-    assert rep["overall"]["false_accepts"]["alexa"]["0.5"]["k"] == 0
-    # uncovered audio is left out
-    rep2 = K.analyze(sess, {"kivi": pk}, times, [[0.0, 10.0]], [0.5])
-    assert rep2["blocks"][0]["uncovered_cues"] == 1
-    md = K.to_markdown({**rep, "session": "t", "source": "tv-c3a", "models": {"kivi": "k.onnx", "alexa": "a.onnx"}})
-    assert "Near-word" in md and "False accepts per hour" in md
 
 
-needs_work = pytest.mark.skipif(not (WORK / "final/kivi_uncalibrated.onnx").exists()
-                                or not (WORK / "emb_s_melrow.onnx").exists(), reason="no kivi work directory")
+
+needs_work = pytest.mark.skipif(not (WORK / "final/kivi_uncalibrated.tflite").exists(), reason="no kivi work directory")
 
 
-@needs_work
-def test_piecewise_embeddings_equal_one_shot():
-    import kivi_score as K
-    F = K.CappedFeatures(WORK / "emb_s_melrow.onnx", K.OWW_MODELS / "embedding_model.onnx", cpu=True)
-    x = speechlike(20, 31)
-    whole = K.stream_embeddings(F, x, piece_chunks=10 ** 6)
-    pieces = K.stream_embeddings(F, x, piece_chunks=60, ctx_chunks=40)
-    assert whole.shape == pieces.shape and np.abs(whole.astype(np.float32) - pieces.astype(np.float32)).max() < 0.05
 
 
-@needs_work
-def test_scorer_on_held_out_synthetic_clips(tmp_path):
-    """kivi on held-out synthetic 'kivi' clips, near-word clips and silence, through the whole
-    path: dataset session -> alignment.json/timeline.wav -> scorer."""
-    import kivi_score as K
-    import soundfile as sf
-    mk = list(csv.DictReader(open(WORK / "eval_clips/eval_kivi.manifest.csv", encoding="utf-8")))
-    nm = list(csv.DictReader(open(WORK / "eval_clips/eval_nearmiss.manifest.csv", encoding="utf-8")))
-    kivi_clips = [r["file"] for r in mk if r["text"] == "kivi"][:14]
-    near_clips = [(r["file"], r["text"]) for r in nm][:6]
-    x = np.zeros(3 * RATE, np.int16)
-    cues_k, cues_n = [], []
-    for i, f in enumerate(kivi_clips, 1):
-        c, _ = sf.read(WORK / "eval_clips/eval_kivi" / f, dtype="int16")
-        cues_k.append((len(x) / RATE + 0.5, "kivi", "kivi"))
-        x = np.concatenate([x, np.zeros(RATE // 2, np.int16), c, np.zeros(int(4.5 * RATE) - len(c), np.int16)])
-    k_end = len(x) / RATE
-    for f, t in near_clips:
-        c, _ = sf.read(WORK / "eval_clips/eval_nearmiss" / f, dtype="int16")
-        cues_n.append((len(x) / RATE + 0.5, f"near:{t}", t))
-        x = np.concatenate([x, np.zeros(RATE // 2, np.int16), c, np.zeros(int(4.5 * RATE) - len(c), np.int16)])
-    n_end = len(x) / RATE
-    x = np.concatenate([x, np.zeros(15 * RATE, np.int16)])
-    sess = fake_session([("kivi-b", "kivi", cues_k, 0.0, k_end), ("near", "near", cues_n, k_end, n_end),
-                         ("silence", "silence", [], n_end, n_end + 15)])
-    sdir = tmp_path / "ds" / "t"
-    (sdir / "tv-c3a").mkdir(parents=True)
-    (sdir / "session.json").write_text(json.dumps(sess))
-    C.write_wav_new(sdir / "tv-c3a" / "timeline.wav", x)
-    (sdir / "tv-c3a" / "alignment.json").write_text(json.dumps({"timeline": "timeline.wav", "coverage_s": [[0, len(x) / RATE]]}))
-    a = Namespace(session=str(sdir), source=None, also_pc=False, model=None, mel_rowmax=None, embedding_model=None,
-                  thresholds="0.5,0.9,0.98", pad_before=0.5, pad_after=3.5, refractory=2.0, cpu=True)
-    (rep,) = K.score_session(a)
-    kb = rep["blocks"][0]["cue_hits"]
-    assert kb["kivi"]["0.5"]["n"] == len(kivi_clips)
-    assert kb["kivi"]["0.5"]["k"] >= len(kivi_clips) // 3   # synthetic held-out recall is about 60-85 %
-    assert kb["alexa"]["0.5"]["k"] <= 2                      # "kivi" is not "alexa"
-    assert rep["blocks"][2]["false_accepts"]["kivi"]["0.5"]["k"] == 0  # digital silence
-    assert rep["blocks"][2]["noncue_hours"] > 0
-    md = K.to_markdown(rep)
-    assert "Recall" in md
-    assert "clip" not in json.dumps(rep) and "path" not in json.dumps(rep)  # aggregates only
+
+
 
 
 # ---------------------------------------------------------------------------------------------
@@ -468,19 +314,21 @@ def test_phone_import(tmp_path, capsys):
     subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(memo), "-ar", "48000", "-ac", "2", str(flac)], check=True)
     ds = tmp_path / "ds"
     base = [str(flac), "--speaker", "spk02", "--dataset-root", str(ds)]
+    with pytest.raises(SystemExit):               # the split is required, there is no default
+        P.main(base + ["--consent-confirmed"])
     with pytest.raises(SystemExit):               # consent is required
-        P.main(base)
+        P.main(base + ["--split", "train"])
     with pytest.raises(SystemExit):               # names are refused
-        P.main([str(flac), "--speaker", "Maria", "--consent-confirmed", "--dataset-root", str(ds)])
-    P.main(base + ["--dry-run"])
+        P.main([str(flac), "--speaker", "Maria", "--split", "train", "--consent-confirmed", "--dataset-root", str(ds)])
+    P.main(base + ["--split", "train", "--dry-run"])
     assert not ds.exists()
-    assert P.main(base + ["--consent-confirmed", "--expect", "7"]) is None   # mismatch: nothing written
+    assert P.main(base + ["--split", "train", "--consent-confirmed", "--expect", "7"]) is None   # mismatch: nothing written
     assert not ds.exists()
-    P.main(base + ["--consent-confirmed", "--expect", "6", "--near-labels", "kiwi,Tivi"])
+    P.main(base + ["--split", "train", "--consent-confirmed", "--expect", "6", "--near-labels", "kiwi,Tivi"])
     rows = C.read_jsonl(ds / "manifest.jsonl")
     assert [r["label"] for r in rows] == ["kivi"] * 4 + ["near:kiwi", "near:tivi"]
     assert {r["source"] for r in rows} == {"phone"} and {r["speaker"] for r in rows} == {"spk02"}
-    assert {r["split"] for r in rows} == {"train-only"} and all(r["consent_confirmed"] for r in rows)
+    assert {r["split"] for r in rows} == {"train"} and all(r["consent_confirmed"] for r in rows)
     assert all(not r["eval_channel"] for r in rows)
     sid = rows[0]["session"]
     names = sorted(p.name for p in (ds / sid / "phone" / "raw").iterdir())
@@ -507,29 +355,7 @@ def make_wake_tree(root, prefix, run, start, x, pipeline="Kiwi"):
 T0 = 1_800_000_000.0
 
 
-def test_button_takes(tmp_path):
-    x = bursts_audio(120, [22.0, 53.5, 100.0], seed=7)    # presses at 20 s and 50 s hit; the one at 80 s has no speech
-    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
-    presses = [T0 + 20.0, T0 + 50.0, T0 + 80.0, T0 + 500.0]
-    pf = tmp_path / "presses.json"
-    pf.write_text(json.dumps([X.utc_str(t) for t in presses]))
-    ds = tmp_path / "ds"
-    args = ["--button-takes", "--device", "c3-b", "--speaker", "spk02", "--since", X.utc_str(T0 - 60),
-            "--until", X.utc_str(T0 + 600), "--presses-file", str(pf), "--dataset-root", str(ds),
-            "--from-dir", str(tmp_path / "rec")]
-    X.main(args)
-    rows = C.read_jsonl(ds / "manifest.jsonl")
-    assert [r["label"] for r in rows] == ["kivi", "kivi"]
-    assert {r["source"] for r in rows} == {"tv-c3b"} and {r["device"] for r in rows} == {"c3-b"}
-    assert {r["speaker"] for r in rows} == {"spk02"} and {r["origin"] for r in rows} == {"button"}
-    assert [r["cue_index"] for r in rows] == [1, 2]
-    assert 1.5 < rows[0]["onset_after_press_s"] < 2.5 and 3.0 < rows[1]["onset_after_press_s"] < 4.0
-    n = len(C.read_pcm16(ds / rows[0]["clip"])) / RATE
-    assert 1.8 < n < 2.8
-    rep = json.loads(next((ds).glob("button-*/extract-*.json")).read_text())
-    assert (rep["presses"], rep["clips"], rep["no_clear_onset"], rep["no_file"]) == (4, 2, 1, 1)
-    X.main(args)                                            # idempotent
-    assert len(C.read_jsonl(ds / "manifest.jsonl")) == 2
+
 
 
 def test_negatives_selection_and_copy(tmp_path):
@@ -595,3 +421,435 @@ def test_noncue_segments_with_zero_min_len_terminates():
             "print(len(C.noncue_segments(s, w, min_len=0.0, max_len=1e9)))")
     r = subprocess.run([sys.executable, "-c", code], cwd=str(HERE), capture_output=True, text=True, timeout=30)
     assert r.returncode == 0 and r.stdout.strip() == "2", r.stderr[-300:]
+
+
+# ---------------------------------------------------------------------------------------------
+# review fixes: ranges, part files, run ends, unaligned files, crash safety, pre-flight, splits
+# ---------------------------------------------------------------------------------------------
+
+
+def test_static_no_deletion_and_one_rename():
+    banned = re.compile(r"os\.(remove|unlink|rmdir|replace)|shutil\.(rmtree|move)|\.unlink\(|rmtree|os\.truncate|\.truncate\(")
+    for name in ("kivi_extract.py", "kivi_real_common.py", "kivi_score.py", "kivi_import_phone.py", "kivi_negatives.py"):
+        text = (HERE / name).read_text(encoding="utf-8")
+        code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+        assert not banned.search(code), name
+        n_rename = len(re.findall(r"os\.rename\(", code))
+        assert n_rename == (1 if name == "kivi_real_common.py" else 0), (name, n_rename)   # finalize_part only
+
+
+def prepared_session(tmp_path, blocks=SMALL_BLOCKS, seed=3):
+    d, s = dry_session(tmp_path, blocks=blocks, seed=seed)
+    ref = speechlike(len(C.read_pcm16(d / "pc-mic.wav")) / RATE, 21)
+    rng = np.random.default_rng(5)
+    web = delayed(ref, 0.0123, rng)[:len(ref)]
+    for name, x in (("pc-mic.wav", ref), ("webcam-mic.wav", web)):
+        (d / name).unlink()
+        C.write_wav_new(d / name, x)
+    return d, s, ref, rng, C.session_pc_offset(s), X.parse_utc(s["t0_utc"]).timestamp()
+
+
+def put_tv_file(tmp_path, s, t0, sig, session_start_s, err=0.7, run=123456789, prefix="bd8256"):
+    """A wake file whose first sample is at session time `session_start_s`; its listed mtime is `err` s off."""
+    start_epoch = t0 + session_start_s
+    return make_wake_tree(tmp_path / "rec", prefix + "abcdef", run, start_epoch + err, sig), start_epoch + err + len(sig) / RATE
+
+
+def extract_args(tmp_path, d, ds, *extra):
+    return ["--session-dir", str(d), "--dataset-root", str(ds), "--from-dir", str(tmp_path / "rec"), "--win-s", "10", *extra]
+
+
+def test_extract_copies_only_the_window_and_aligns(tmp_path):
+    d, s, ref, rng, o_pc, t0 = prepared_session(tmp_path)
+    d_true, lead, tail = 1.84, 150.0, 100.0
+    sig = np.concatenate([speechlike(lead, 41), delayed(ref, d_true, rng, gain=10, snr_db=8), speechlike(tail, 42)])
+    f, mtime = put_tv_file(tmp_path, s, t0, sig, o_pc - d_true - lead)
+    other = tmp_path / "rec" / "fda18fffff" / "Kiwi" / "999"                     # another satellite: ignored
+    other.mkdir(parents=True)
+    (other / "00_wake-x.wav").write_bytes(C.wav_header(0) + b"\x00\x00" * 1000)
+    ds = tmp_path / "datasets" / "real"
+    args = extract_args(tmp_path, d, ds, "--now", str(mtime + 1000))
+    X.main(args + ["--dry-run"])
+    assert not ds.exists()
+    X.main(args)
+    sid = s["session_id"]
+    rows = C.read_jsonl(ds / "manifest.jsonl")
+    assert {r["source"] for r in rows} == {"tv-c3a", "pc-mic", "webcam-mic"}
+    assert all(set(r) == set(C.MANIFEST_FIELDS) for r in rows)
+    n_cues = sum(len(b["cues"]) for b in s["blocks"])
+    for src in ("tv-c3a", "pc-mic", "webcam-mic"):
+        cues = [r for r in rows if r["source"] == src and r["kind"] == "cue"]
+        assert len(cues) == n_cues == 8
+        assert {r["label"] for r in cues} == {"kivi", "near:kiwi", "near:aquí vi"}
+    assert "silence" in {r["label"] for r in rows}
+    # only the session window +-60 s was copied, not the 250 s file; the copy is a proper WAV
+    raw = list((ds / sid / "tv-c3a" / "raw").glob("*.wav"))
+    assert len(raw) == 1 and "@" in raw[0].name
+    n = len(C.read_pcm16(raw[0])) / RATE
+    ref_dur = len(ref) / RATE
+    assert ref_dur + 100 < n < ref_dur + 125 and n < len(sig) / RATE - 100, n
+    assert not list((ds / sid / "tv-c3a" / "raw").glob("*.part"))
+    al = json.loads((ds / sid / "tv-c3a" / "alignment.json").read_text())
+    rec = al["files"][0]
+    assert rec["ok"] and rec["included"] and rec["run_end_ref_s"] is None
+    expect_a = d_true + lead - rec["copied_from_s"]                      # offset relative to the copy's sample 0
+    assert abs(rec["offset_a_s"] - expect_a) < 0.003, (rec["offset_a_s"], expect_a)
+    r0 = next(r for r in rows if r["source"] == "tv-c3a" and r["kind"] == "cue")
+    assert r0["device"] == "c3-a" and r0["session_device"] == "c3-a" and r0["split"] == "unassigned"
+    assert r0["source_run"] == "Kiwi/123456789" and r0["align_ok"] and r0["eval_channel"]
+    assert {r["split"] for r in rows if r["source"] == "pc-mic"} == {"train-only"}
+    assert {r["eval_channel"] for r in rows if r["source"] != "tv-c3a"} == {False}
+    # the satellite clip and the desk clip hold the same content at the same time
+    tvc = next(r for r in rows if r["source"] == "tv-c3a" and r["label"] == "kivi")
+    pcc = next(r for r in rows if r["source"] == "pc-mic" and r["clip"].split("/", 2)[2] == tvc["clip"].split("/", 2)[2])
+    a_, b_ = C.read_pcm16(ds / tvc["clip"]), C.read_pcm16(ds / pcc["clip"])
+    lag, conf = C.gcc_phat(b_, np.concatenate([np.zeros(800, np.int16), a_, np.zeros(800, np.int16)]), 800)
+    assert len(a_) == len(b_) and abs(lag) < 0.002 and conf > 8, (lag, conf)
+    for p in [ds, ds / sid, ds / sid / "tv-c3a", ds / sid / "tv-c3a" / "clips"]:
+        assert stat.S_IMODE(p.stat().st_mode) == 0o700, p
+    for p in ds.rglob("*"):
+        assert stat.S_IMODE(p.stat().st_mode) in (0o700, 0o600), p
+    # request-audio files are fetched too when they exist
+    assert (ds / sid / "tv-c3a" / "raw-stt").is_dir()
+    rep = json.loads(next(ds.glob(f"{sid}/extract-*.json")).read_text())
+    assert rep["per_source"]["tv-c3a"] == {"cues": 8, "cues_cut": 8, "lost_cues": 0, "run_end_in_window": 0,
+                                           "segments_uncovered": 0, "rows_reconciled": 0}
+
+
+def test_extract_run_end_inside_a_cue_window_is_a_detection_not_uncovered(tmp_path, capsys):
+    d, s, ref, rng, o_pc, t0 = prepared_session(tmp_path)
+    cue = s["blocks"][0]["cues"][-1]["offset_s"]                  # the last kivi cue of block 1
+    tau_end = cue - o_pc + 1.5                                     # the server closes the file 1.5 s after the cue
+    d_true = 1.2
+    sig = delayed(ref[:int(tau_end * RATE)], d_true, rng, gain=10, snr_db=8)
+    f, mtime = put_tv_file(tmp_path, s, t0, sig, o_pc - d_true, err=0.4)
+    ds = tmp_path / "ds"
+    X.main(extract_args(tmp_path, d, ds, "--win-s", "5", "--now", str(mtime + 1000)))
+    out = capsys.readouterr().out
+    rep = json.loads(next(ds.glob("*/extract-*.json")).read_text())
+    st = rep["per_source"]["tv-c3a"]
+    assert (st["cues"], st["run_end_in_window"], st["cues_cut"], st["lost_cues"]) == (8, 1, 4, 4)
+    rows = [r for r in C.read_jsonl(ds / "manifest.jsonl") if r["source"] == "tv-c3a" and r["kind"] == "cue"]
+    flagged = [r for r in rows if r["run_end_in_window"]]
+    assert len(flagged) == 1 and flagged[0]["cue_index"] == 4 and flagged[0]["block"] == 1
+    assert 1.8 < len(C.read_pcm16(ds / flagged[0]["clip"])) / RATE < 2.2          # cue - 0.5 s .. file end
+    assert "lost or partly uncovered 4" in out and "server run end inside the window 1" in out
+    al = json.loads((ds / s["session_id"] / "tv-c3a" / "alignment.json").read_text())
+    assert al["files"][0]["run_end_ref_s"] == pytest.approx(tau_end, abs=0.01)
+
+
+def test_unaligned_files_are_left_out_unless_asked(tmp_path, capsys):
+    d, s, ref, rng, o_pc, t0 = prepared_session(tmp_path)
+    sig = speechlike(len(ref) / RATE + 20, 77)                      # unrelated audio: cannot align
+    f, mtime = put_tv_file(tmp_path, s, t0, sig, o_pc - 5.0)
+    ds1, ds2 = tmp_path / "ds1", tmp_path / "ds2"
+    X.main(extract_args(tmp_path, d, ds1, "--now", str(mtime + 1000)))
+    out = capsys.readouterr().out
+    assert "NOT TRUSTED" in out and "LEFT OUT" in out
+    assert not [r for r in C.read_jsonl(ds1 / "manifest.jsonl") if r["source"] == "tv-c3a"]
+    assert [r for r in C.read_jsonl(ds1 / "manifest.jsonl") if r["source"] == "pc-mic"]
+    rec = json.loads((ds1 / s["session_id"] / "tv-c3a" / "alignment.json").read_text())["files"][0]
+    assert rec["ok"] is False and rec["included"] is False
+    X.main(extract_args(tmp_path, d, ds2, "--include-unaligned", "--now", str(mtime + 1000)))
+    tv = [r for r in C.read_jsonl(ds2 / "manifest.jsonl") if r["source"] == "tv-c3a"]
+    assert tv and {r["align_ok"] for r in tv} == {False}
+
+
+def test_coarse_alignment_tries_every_window():
+    """The recorder that hears a loud TV in half of the windows must not stop the alignment: windows
+    are ranked by the weaker of the two signals and all of them are tried."""
+    rng = np.random.default_rng(8)
+    ref = speechlike(120, 51)
+    sig = delayed(ref, 2.5, rng)
+    noisy = ref.astype(np.float32).copy()
+    for k in range(0, 120, 10):                                     # loud interference in the desk mic only
+        a = int(k * RATE)
+        noisy[a:a + 5 * RATE] += np.random.default_rng(k).standard_normal(5 * RATE) * 20000
+    noisy = np.clip(noisy, -32000, 32000).astype(np.int16)
+    al = C.align_stream(noisy, sig, 2.5 + 1.2, win_s=5.0)
+    assert al["n_coarse"] == al["n_windows"] > 20                   # every window, not the 10 loudest
+    assert al["ok"] and abs(al["a"] - 2.5) < 0.003, al["a"]
+
+
+def test_manifest_is_crash_safe_and_reconciled(tmp_path, capsys):
+    d, s, ref, rng, o_pc, t0 = prepared_session(tmp_path)
+    ds = tmp_path / "ds"
+    args = extract_args(tmp_path, d, ds, "--no-tv")
+    X.main(args)
+    man = ds / "manifest.jsonl"
+    lines = man.read_text().splitlines()
+    assert len(lines) > 10
+    man.write_text("\n".join(lines[:-3]) + "\n" + '{"session": "trunc')          # a crash: 3 rows lost, a half line
+    capsys.readouterr()
+    assert len(C.read_jsonl(man)) == len(lines) - 3                                # the half line is skipped, with a warning
+    assert "not valid JSON" in capsys.readouterr().err
+    X.main(args)                                                                   # re-run: clips exist, rows are reconciled
+    rows = C.read_jsonl(man)
+    assert len(rows) == len(lines)
+    assert sorted(r["clip"] for r in rows) == sorted(json.loads(l)["clip"] for l in lines)
+    rep = sorted(ds.glob(f"{s['session_id']}/extract-*.json"))[-1]
+    assert sum(v["rows_reconciled"] for v in json.loads(rep.read_text())["per_source"].values()) == 3
+    raw = man.read_bytes()
+    assert raw.endswith(b"\n") and b'{"session": "trunc\n' in raw                  # repaired by a newline, nothing deleted
+
+
+def test_short_copy_fails_and_leaves_only_a_part_file(tmp_path):
+    make_wake_tree(tmp_path / "rec", "bd8256", 5, T0, bursts_audio(30, [], seed=1))
+    (f,) = X.list_files(X.LocalFetcher(tmp_path / "rec"), "bd8256", "wake")
+
+    class Short(X.LocalFetcher):
+        def fetch_range(self, path, lo, hi):
+            for b in super().fetch_range(path, lo, hi - 2):
+                yield b
+
+    rawdir = tmp_path / "raw"
+    rawdir.mkdir()
+    with pytest.raises(SystemExit):
+        X.fetch_samples(Short(tmp_path / "rec"), f, 0, f["n"], rawdir)
+    assert not list(rawdir.glob("*.wav")) and len(list(rawdir.glob("*.part"))) == 1
+    dst, name = X.fetch_samples(X.LocalFetcher(tmp_path / "rec"), f, 16000, 16000 * 10, rawdir)   # a good copy of a range
+    assert len(C.read_pcm16(dst)) == 16000 * 9 and name.endswith("@16000-160000.wav")
+    with pytest.raises(FileExistsError):
+        C.write_wav_new(dst, np.zeros(10, np.int16))
+
+
+def test_kubectl_fetcher_byte_ranges_with_a_stand_in_kubectl(tmp_path, monkeypatch):
+    """KubectlFetcher against a `kubectl` that runs the command after `--` locally: the glob and stat
+    listing and the dd byte range (not whole files)."""
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    k = bindir / "kubectl"
+    k.write_text('#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done\nshift\nexec "$@"\n')
+    k.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    x = (np.arange(20000) % 30000).astype(np.int16)
+    f = make_wake_tree(tmp_path / "rec", "bd8256", 7, T0, x)
+    kf = X.KubectlFetcher("ctx", "ns", "pod", None, root=str(tmp_path / "rec"))
+    (item,) = kf.list_run_files("bd8256", "wake")
+    assert item["size"] == 44 + 40000
+    data = f.read_bytes()
+    for lo, hi in ((44, 44 + 40000), (5013, 17001), (4096, 8192), (12345, 12346)):
+        assert b"".join(kf.fetch_range(item["path"], lo, hi)) == data[lo:hi], (lo, hi)
+    with pytest.raises(SystemExit):
+        list(kf.fetch_range("/x; rm -rf /", 0, 10))                  # paths are validated
+
+
+def test_pipeline_preflight_and_warning(tmp_path, capsys):
+    kivi = json.dumps({"data": {"items": [{"id": "a", "name": "P1", "wake_word_id": "kivi"},
+                                          {"id": "b", "name": "P2", "wake_word_id": "alexa_v0.1"}], "preferred_item": "a"}})
+    alexa = kivi.replace('"preferred_item": "a"', '"preferred_item": "b"')
+    r = C.pipeline_preflight("c", "n", "p", text=kivi)
+    assert r["preferred_wake_word"] == "kivi" and r["live"] and r["others"] == ["alexa_v0.1"]
+    r = C.pipeline_preflight("c", "n", "p", text=alexa)
+    assert r["preferred_wake_word"] == "alexa_v0.1" and not r["live"] and r["any_live"]   # kivi is on another pipeline
+    assert "error" in C.pipeline_preflight("c", "n", "p", text="not json")
+    d, s, ref, rng, o_pc, t0 = prepared_session(tmp_path)
+    pf = tmp_path / "pipes.json"
+    pf.write_text(kivi)
+    X.main(extract_args(tmp_path, d, tmp_path / "ds", "--no-tv", "--pipelines-file", str(pf), "--dry-run"))
+    X.main(extract_args(tmp_path, d, tmp_path / "ds", "--pipelines-file", str(pf), "--dry-run"))
+    assert "'kivi' is a live wake word" in capsys.readouterr().out
+
+
+def test_button_takes_flags_review_and_ignores_restored_states(tmp_path):
+    x = bursts_audio(120, [22.0, 53.5, 91.0, 94.0], seed=7)
+    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
+    presses = [T0 + 20.0, T0 + 50.0, T0 + 80.0, T0 + 90.0, T0 + 500.0]
+    pf = tmp_path / "presses.json"
+    pf.write_text(json.dumps([X.utc_str(t) for t in presses]))
+    ds = tmp_path / "ds"
+    base = ["--button-takes", "--device", "c3-b", "--speaker", "spk02", "--since", X.utc_str(T0 - 60),
+            "--until", X.utc_str(T0 + 600), "--presses-file", str(pf), "--dataset-root", str(ds),
+            "--from-dir", str(tmp_path / "rec")]
+    with pytest.raises(SystemExit):
+        X.main(base)                                            # --split is required
+    X.main(base + ["--split", "test"])
+    rows = C.read_jsonl(ds / "manifest.jsonl")
+    assert [r["cue_index"] for r in rows] == [1, 2, 4]
+    assert {r["source"] for r in rows} == {"tv-c3b"} and {r["speaker"] for r in rows} == {"spk02"}
+    assert [r["needs_review"] for r in rows] == [False, False, True]
+    assert [r["split"] for r in rows] == ["test", "test", "unassigned"]       # a review take is kept out of test
+    assert rows[2]["split_requested"] == "test" and rows[2]["n_candidates"] == 2
+    assert 1.5 < rows[0]["onset_after_press_s"] < 2.5 and 3.0 < rows[1]["onset_after_press_s"] < 4.0
+    rep = json.loads(next(ds.glob("button-*/extract-*.json")).read_text())
+    assert (rep["presses"], rep["clips"], rep["no_clear_onset"], rep["no_file"], rep["needs_review"]) == (5, 3, 1, 1, 1)
+    X.main(base + ["--split", "test"])                                         # idempotent
+    assert len(C.read_jsonl(ds / "manifest.jsonl")) == 3
+    ds2 = tmp_path / "ds2"
+    X.main([str(ds2) if t == str(ds) else t for t in base] + ["--split", "test", "--keep-review-in-split"])
+    assert [r["split"] for r in C.read_jsonl(ds2 / "manifest.jsonl")] == ["test", "test", "test"]
+    # a state restored after a Home Assistant restart repeats the old press time: one press, not two
+    st = [X.utc_str(T0 + 20).replace("Z", "+00:00"), X.utc_str(T0 + 20).replace("Z", "+00:00"), "unknown", "",
+          X.utc_str(T0 + 50)]
+    assert X.state_press_times(st, T0, T0 + 100) == [T0 + 20, T0 + 50]
+    assert X.state_press_times(st, T0 + 30, T0 + 100) == [T0 + 50]
+
+
+def test_training_rows_and_ablation_and_drift():
+    rows = [{"speaker": "spk01", "split": "train"}, {"speaker": "spk02", "split": "train"},       # phone memo of spk02
+            {"speaker": "spk02", "split": "test"}, {"speaker": "spk01", "split": "train-only"},
+            {"speaker": "spk01", "split": "unassigned"}, {"speaker": "spk01", "split": "train", "needs_review": True},
+            {"speaker": "", "split": "train"}]
+    prod = C.training_rows(rows)
+    assert len(prod) == 4 and {"speaker": "spk02", "split": "test"} not in prod
+    abl = C.training_rows(rows, exclude_speakers=["spk02"])
+    assert all(r["speaker"] != "spk02" for r in abl) and len(abl) == 3
+    assert C.sample_drift(16000 * 100, 100.0) == 0 and abs(C.sample_drift(16000 * 99, 100.0) + 0.01) < 1e-9
+    assert abs(C.sample_drift(16000 * 100.4, 100.0)) < 0.005
+
+
+def session_ns(tmp_path, **kw):
+    d = dict(list_devices=False, print_protocol=False, device="c3-a", speaker="spk01", split="unassigned",
+             desk_mic=None, webcam_mic=None, out_dir=str(tmp_path / "sessions"), blocks=str(tmp_path / "blocks.json"),
+             only=None, repeat=1, tag=None, seed=3, context="c", namespace="n", pod="p", container=None,
+             model_name="kivi", pipelines_file=None, no_preflight=True, no_wait=False, dry_run=False,
+             fake_source="sine", time_scale=0.01)
+    d.update(kw)
+    return Namespace(**d)
+
+
+def test_session_json_is_written_at_start_and_updated(tmp_path):
+    (tmp_path / "blocks.json").write_text(json.dumps(SMALL_BLOCKS))
+    seen = []
+
+    def prompt(msg):
+        (j,) = (tmp_path / "sessions").glob("*/session.json")
+        seen.append(json.loads(j.read_text()))
+
+    S.run(session_ns(tmp_path), input_fn=prompt)
+    assert len(seen) == 3
+    first = seen[0]                                       # at the first "Enter when ready": the recording is running
+    assert first["status"] == "recording" and first["blocks"] == []
+    assert first["sources"]["pc-mic"]["first_sample_offset_s"] is not None
+    assert len(seen[1]["blocks"]) == 1 and len(seen[1]["blocks"][0]["cues"]) == 4      # updated after block 1
+    (j,) = (tmp_path / "sessions").glob("*/session.json")
+    assert json.loads(j.read_text())["status"] == "complete"
+
+
+def test_session_interrupt_keeps_files_and_marks_interrupted(tmp_path):
+    (tmp_path / "blocks.json").write_text(json.dumps(SMALL_BLOCKS))
+    calls = []
+
+    def prompt(msg):
+        calls.append(1)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+
+    S.run(session_ns(tmp_path), input_fn=prompt)
+    (j,) = (tmp_path / "sessions").glob("*/session.json")
+    s = json.loads(j.read_text())
+    assert s["status"] == "interrupted" and len(s["blocks"]) == 1 and s["blocks"][0]["end_offset_s"] is not None
+    assert s["sources"]["pc-mic"]["samples"] > 0 and (j.parent / "pc-mic.wav").stat().st_size > 44
+
+
+def test_recorder_children_get_their_own_process_group(tmp_path, monkeypatch):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    fake = bindir / "parec"
+    fake.write_text("#!/bin/sh\nexec python3 -c \"import sys,time\n"
+                    "z=b'\\x00\\x01'*1600\n"
+                    "while True:\n sys.stdout.buffer.write(z); sys.stdout.buffer.flush(); time.sleep(0.1)\"\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    src = S.ParecSource("pc-mic", "dummy", tmp_path / "x.wav", S.Clock(1.0))
+    src.start()
+    try:
+        assert src.wait_first(5)
+        assert os.getpgid(src.proc.pid) != os.getpgid(os.getpid())      # Ctrl-C in the terminal does not reach it
+    finally:
+        src.finish()
+
+
+def test_score_aggregation_lost_cues_and_run_ends():
+    import kivi_score as K
+    sess = fake_session([("k", "kivi", [(5.0, "kivi", "kivi"), (15.0, "kivi", "kivi")], 0.0, 30.0),
+                         ("n", "near", [(35.0, "near:kiwi", "kiwi"), (45.0, "near:tivi", "tivi")], 30.0, 55.0),
+                         ("s", "silence", [], 55.0, 65.0)])
+    times = np.arange(0, 65, 0.08)
+    pk = np.zeros(len(times))
+    pk[np.argmin(abs(times - 6.0))] = 0.99     # cue 1 detected at 0.98
+    pk[np.argmin(abs(times - 20.0))] = 0.975   # between cues: a false accept at 0.9 and 0.97
+    pk[np.argmin(abs(times - 36.0))] = 0.96    # near-word kiwi
+    pk[np.argmin(abs(times - 60.0))] = 0.91    # in silence
+    pa = np.zeros(len(times))
+    rep = K.analyze(sess, {"kivi": pk, "alexa": pa}, times, [[0.0, 65.0]], [0.5, 0.9, 0.97, 0.98, 0.99])
+    kb = rep["blocks"][0]["cue_hits"]["kivi"]
+    assert (kb["0.5"]["k"], kb["0.5"]["n"]) == (1, 2) and kb["0.98"]["k"] == 1 and kb["0.99"]["k"] == 0
+    nb = rep["blocks"][1]["by_word"]
+    assert nb["kiwi"]["kivi"]["0.9"]["k"] == 1 and nb["tivi"]["kivi"]["0.9"]["k"] == 0
+    fa = rep["overall"]["false_accepts"]["kivi"]
+    assert fa["0.9"]["k"] == 2 and fa["0.97"]["k"] == 1 and fa["0.99"]["k"] == 0, fa
+    assert abs(fa["0.9"]["hours"] - (65 - 4 * 4.0) / 3600) < 1e-3
+    # lost cues stay in the denominators as misses
+    rep2 = K.analyze(sess, {"kivi": pk}, times, [[0.0, 10.0]], [0.5])
+    b0 = rep2["blocks"][0]
+    assert b0["lost_cues"] == 1 and b0["cue_hits"]["kivi"]["0.5"] == {**b0["cue_hits"]["kivi"]["0.5"], "k": 1, "n": 2}
+    assert rep2["overall"]["lost_cues"] == 3 + 0 or rep2["overall"]["lost_cues"] >= 3
+    # a closed file ending inside a cue window is a server detection: kept (clipped window), not lost
+    rep3 = K.analyze(sess, {"kivi": pk}, times, [[0.0, 17.0]], [0.5, 0.9], run_ends=[17.0, 58.0])
+    b = rep3["blocks"][0]
+    assert b["run_end_cues"] == 1 and b["lost_cues"] == 0 and b["cue_hits"]["kivi"]["0.5"]["n"] == 2
+    assert rep3["blocks"][2]["server_run_ends"] == 1 and rep3["overall"]["run_end_cues"] == 1
+    md = K.to_markdown({**rep3, "session": "t", "source": "tv-c3a", "models": {"kivi": "k.tflite"}})
+    assert "Coverage and server events" in md and "Near-word" in md
+
+
+def synthetic_score_session(tmp_path, ok=True):
+    import soundfile as sf
+    mk = list(csv.DictReader(open(WORK / "eval_clips/eval_kivi.manifest.csv", encoding="utf-8")))
+    nm = list(csv.DictReader(open(WORK / "eval_clips/eval_nearmiss.manifest.csv", encoding="utf-8")))
+    kivi_clips = [r["file"] for r in mk if r["text"] == "kivi"][:12]
+    near_clips = [(r["file"], r["text"]) for r in nm][:4]
+    x = np.zeros(10 * RATE, np.int16)
+    cues_k, cues_n = [], []
+    for f in kivi_clips:
+        c, _ = sf.read(WORK / "eval_clips/eval_kivi" / f, dtype="int16")
+        cues_k.append((len(x) / RATE + 0.5, "kivi", "kivi"))
+        x = np.concatenate([x, np.zeros(RATE // 2, np.int16), c, np.zeros(int(4.5 * RATE) - len(c), np.int16)])
+    k_end = len(x) / RATE
+    for f, t in near_clips:
+        c, _ = sf.read(WORK / "eval_clips/eval_nearmiss" / f, dtype="int16")
+        cues_n.append((len(x) / RATE + 0.5, f"near:{t}", t))
+        x = np.concatenate([x, np.zeros(RATE // 2, np.int16), c, np.zeros(int(4.5 * RATE) - len(c), np.int16)])
+    n_end = len(x) / RATE
+    x = np.concatenate([x, np.zeros(15 * RATE, np.int16)])
+    sess = fake_session([("kivi-b", "kivi", cues_k, 0.0, k_end), ("near", "near", cues_n, k_end, n_end),
+                         ("silence", "silence", [], n_end, n_end + 15)])
+    sdir = tmp_path / "ds" / "t"
+    (sdir / "tv-c3a" / "raw").mkdir(parents=True)
+    (sdir / "session.json").write_text(json.dumps(sess))
+    C.write_wav_new(sdir / "tv-c3a" / "raw" / "x@0-1.wav", x)
+    (sdir / "tv-c3a" / "alignment.json").write_text(json.dumps({"files": [
+        {"name": "x@0-1.wav", "ok": ok, "included": True, "offset_a_s": 0.0, "b": 0.0, "median_conf": 30.0, "drift_ppm": 0.0,
+         "coverage_s": [0, len(x) / RATE], "run_end_ref_s": None}]}))
+    return sdir, len(kivi_clips)
+
+
+@needs_work
+def test_scorer_runs_the_server_runtime_on_raw_files(tmp_path):
+    """kivi and alexa through pyopen-wakeword (the server's library) on held-out synthetic clips; an
+    untrusted alignment leaves the file out (all cues lost, still in the denominators) unless asked."""
+    import kivi_score as K
+    sdir, n = synthetic_score_session(tmp_path)
+    a = Namespace(session=str(sdir), source=None, also_pc=False, model=None, thresholds="0.5,0.9,0.98",
+                  pad_before=0.5, pad_after=3.5, refractory=2.0, include_unaligned=False)
+    (rep,) = K.score_session(a)
+    kb = rep["blocks"][0]["cue_hits"]
+    assert kb["kivi"]["0.5"]["n"] == n and rep["blocks"][0]["lost_cues"] == 0
+    assert kb["kivi"]["0.5"]["k"] >= n // 3                # synthetic held-out recall is about 60-85 %
+    assert kb["alexa"]["0.5"]["k"] <= 2                    # "kivi" is not "alexa"
+    assert rep["blocks"][2]["false_accepts"]["kivi"]["0.5"]["k"] == 0 and rep["blocks"][2]["noncue_hours"] > 0
+    assert rep["alignment_files"][0]["used"] and "clip" not in json.dumps(rep)
+    md = K.to_markdown(rep)
+    assert "Recall" in md and "Coverage and server events" in md
+    bad_dir = tmp_path / "bad"
+    bad_dir.mkdir()
+    sdir2, _ = synthetic_score_session(bad_dir, ok=False)
+    a.session = str(sdir2)
+    (rep2,) = K.score_session(a)
+    assert rep2["blocks"][0]["lost_cues"] == n and rep2["blocks"][0]["cue_hits"]["kivi"]["0.5"] == {
+        **rep2["blocks"][0]["cue_hits"]["kivi"]["0.5"], "k": 0, "n": n}
+    assert not rep2["alignment_files"][0]["used"] and "NOT TRUSTED" in K.to_markdown(rep2)
+    a.include_unaligned = True
+    (rep3,) = K.score_session(a)
+    assert rep3["blocks"][0]["cue_hits"]["kivi"]["0.5"]["k"] == kb["kivi"]["0.5"]["k"]

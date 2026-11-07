@@ -187,7 +187,8 @@ class ParecSource(_Source):
     def start(self):
         cmd = ["parec", f"--device={self.device}", f"--rate={RATE}", "--channels=1", "--format=s16le",
                "--raw", "--latency-msec=50"]
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        # its own session and process group: Ctrl-C goes to the prompter only, which stops the recorders cleanly
+        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
         self._thread = threading.Thread(target=self._read, daemon=True)
         self._thread.start()
 
@@ -327,12 +328,13 @@ def write_session_json(path, session):
     os.replace(tmp, path)
 
 
-def run_block(b, clock, rng, say, rec):
+def run_block(b, clock, rng, say, rec, on_update=lambda: None):
     """Show the cues of one block, filling `rec` (already part of the session record, so an
     interrupted block is kept with the cues shown so far)."""
     rec.update({"name": b["name"], "kind": b["kind"], "conditions": b.get("conditions", {}),
                 "start_offset_s": round(clock.now(), 3), "cues": [], "end_offset_s": None})
     rec["start_utc"] = clock.utc(rec["start_offset_s"])
+    on_update()
     if b["kind"] == "silence":
         secs = float(b["seconds"])
         say(f"  SILENCE: do not speak for {secs:g} s (stay where you are)")
@@ -358,6 +360,7 @@ def run_block(b, clock, rng, say, rec):
             say(f"  >>> say {shown} now <<<   ({i}/{len(items)})", bold=True)
             rec["cues"].append({"index": i, "offset_s": round(off, 3), "utc": clock.utc(off), "label": label,
                                 "word": word if b["kind"] == "near" else ""})
+            on_update()
             t += interval + rng.uniform(-jitter, jitter)
         clock.sleep_until(rec["cues"][-1]["offset_s"] + TAIL_S)
     rec["end_offset_s"] = round(clock.now(), 3)
@@ -417,11 +420,30 @@ def run(args, input_fn=input):
     say(f"Session {sid}\n  desk mic   : {names[0]}\n  webcam mic : {names[1]}\n"
         f"  satellite  : {args.device} (unmute it in Home Assistant before you start)\n"
         f"  {len(blocks)} blocks: " + ", ".join(b["name"] for b in blocks) + "\n  Cues are text only; nothing plays sound.")
+    if not fake and not args.no_preflight:
+        pre = C.pipeline_preflight(args.context, args.namespace, args.pod, args.container, args.model_name,
+                                   Path(args.pipelines_file).read_text(encoding="utf-8") if args.pipelines_file else None)
+        session["preflight"] = pre
+        if "error" in pre:
+            say(f"pre-flight: could not read the Assist pipelines ({pre['error']}); continuing")
+        else:
+            say(f"pre-flight: preferred Assist pipeline wake word is {pre['preferred_wake_word']!r}")
+            if pre["live"] or pre["any_live"]:
+                say("*" * 78 + f"\n* WARNING: {args.model_name!r} is a live wake word. Saying it can end the satellite's wake\n"
+                    "* file mid-session (a detection). kivi_extract.py counts those cues as server detections,\n"
+                    "* but audio after them is lost until the next run starts.\n" + "*" * 78)
+
+    def snapshot():
+        session["sources"] = {s.label: s.info() for s in srcs}
+        session["end_offset_s"] = round(clock.now(), 3)
+        write_session_json(sdir / "session.json", session)
+
     for s in srcs:
         s.start()
     try:
         if not all(s.wait_first() for s in srcs):
             raise SystemExit("a recorder produced no audio: " + "; ".join(s.error or "?" for s in srcs))
+        snapshot()                    # session.json exists from here on, with the sources and first_sample_offset_s
         say("Recording both microphones. Ctrl-C stops the session (the files are kept).")
         pause_start = clock.now()
         for n, b in enumerate(blocks, 1):
@@ -432,9 +454,9 @@ def run(args, input_fn=input):
                                       "end_offset_s": round(clock.now(), 3)})
             rec = {"index": n}
             session["blocks"].append(rec)
-            run_block(b, clock, rng, say, rec)
+            run_block(b, clock, rng, say, rec, snapshot)
             pause_start = clock.now()
-            write_session_json(sdir / "session.json", session)
+            snapshot()
         session["status"] = "complete"
     except KeyboardInterrupt:
         session["status"] = "interrupted"
@@ -449,6 +471,16 @@ def run(args, input_fn=input):
         session["end_offset_s"] = round(end, 3)
         session["end_utc"] = clock.utc(end)
         session["sources"] = {s.label: s.info() for s in srcs}
+        if not fake:
+            checks = {}
+            for s in srcs:
+                first = s.first_sample_offset_s or 0.0
+                d = C.sample_drift(s.wav.n // 2, end - first)
+                checks[s.label] = round(d, 5)
+                if abs(d) > 0.005:
+                    say(f"WARNING: {s.label} recorded {s.wav.n // 2 / RATE:.1f} s of audio in {end - first:.1f} s "
+                        f"({d * 100:+.2f} %): samples were lost or the clock is off; its alignment may drift")
+            session["sample_check"] = checks
         errs = [s.error for s in srcs if s.error]
         if errs:
             session["status"] = "error"
@@ -475,6 +507,13 @@ def main(argv=None):
     ap.add_argument("--repeat", type=int, default=1, help="repeat the whole block list N times")
     ap.add_argument("--tag", action="append", metavar="K=V", help="free conditions, e.g. volume=loud speed=fast")
     ap.add_argument("--seed", type=int)
+    ap.add_argument("--context", default="grigri")
+    ap.add_argument("--namespace", default="home-assistant")
+    ap.add_argument("--pod", default="home-assistant-hass-0")
+    ap.add_argument("--container")
+    ap.add_argument("--model-name", default="kivi", help="the model under test, for the live-wake-word warning")
+    ap.add_argument("--pipelines-file", help="a copy of assist_pipeline.pipelines instead of reading the pod")
+    ap.add_argument("--no-preflight", action="store_true", help="do not read the Assist pipelines from the pod")
     ap.add_argument("--no-wait", action="store_true", help="do not wait for Enter between blocks")
     ap.add_argument("--dry-run", action="store_true", help="fake tones, no microphone, compressed time, no waits")
     ap.add_argument("--fake-source", choices=["sine", "silence"], help="synthetic sources at real speed")

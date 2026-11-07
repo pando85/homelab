@@ -5,7 +5,7 @@
     kivi_negatives.py --hours 30                        # about 30 h split over the devices in kivi_devices.json
 
 NOT run by the tools that build the dataset: the owner (or the orchestrator, on the owner's word)
-starts it. It reads the pod with `kubectl exec ... stat/cat` only. This is household audio, the
+starts it. It reads the pod with `kubectl exec ... stat/dd` only (byte ranges of the pieces it keeps). This is household audio, the
 satellites' continuous room sound: see the data register. It lands under
 `<dataset>/negatives/<device>/<run>-<k>.wav` with `<dataset>/negatives/manifest.jsonl`.
 
@@ -91,12 +91,7 @@ def run(a, fetcher=None, presses=None):
     for d in devs:
         prefix = C.device_prefix(d, a.devices_file)
         files = []
-        for f in fetcher.list_wake_files(prefix):
-            dur = max(0, f["size"] - 44) / 2 / RATE
-            f.update(dur=dur, start=f["mtime"] - dur, **X.run_of(f["path"]))
-            files.append(f)
-        files.sort(key=lambda f: f["start"])
-        all_files[d] = files
+        all_files[d] = X.list_files(fetcher, prefix, "wake")
     spans = [(f["start"], f["mtime"]) for fs in all_files.values() for f in fs]
     if presses is None and not a.no_presses:
         presses = (X.FilePresses(a.presses_file) if a.presses_file else
@@ -143,31 +138,35 @@ def run(a, fetcher=None, presses=None):
                 rel = f"negatives/{d}/{f['run']}-{k:02d}.wav"
                 if key in done or (root / rel).exists():
                     continue
-                s0 = int(round((t0 - f["start"]) * RATE)) * 2
-                s1 = int(round((t1 - f["start"]) * RATE)) * 2
-                todo.append((s0, s1, C.WavWriter(root / rel), rel, t0, t1))
+                s0 = max(0, int(round((t0 - f["start"]) * RATE)))
+                s1 = min(f["n"], int(round((t1 - f["start"]) * RATE)))
+                todo.append((s0, s1, C.PartWavWriter(root / rel), rel, t0, t1))
             if not todo:
                 continue
-            pos, skip = 0, 44      # byte position in the PCM (the 44-byte header is skipped)
+            lo = 44 + 2 * min(t[0] for t in todo)
+            hi = 44 + 2 * max(t[1] for t in todo)
+            pos = lo                         # byte position in the file
             try:
-                for chunk in fetcher.fetch(f["path"]):
-                    if skip:
-                        cut = min(skip, len(chunk))
-                        chunk, skip = chunk[cut:], skip - cut
+                for chunk in fetcher.fetch_range(f["path"], lo, hi):
                     for s0, s1, w, *_ in todo:
-                        lo, hi = max(s0, pos), min(s1, pos + len(chunk))
-                        if hi > lo:
-                            w.write(chunk[lo - pos:hi - pos])
+                        b0, b1 = 44 + 2 * s0, 44 + 2 * s1
+                        a0, a1 = max(b0, pos), min(b1, pos + len(chunk))
+                        if a1 > a0:
+                            w.write(chunk[a0 - pos:a1 - pos])
                     pos += len(chunk)
-            finally:
+                for s0, s1, w, *_ in todo:       # the byte count must match the range, else the piece is not kept
+                    w.commit(expected_bytes=2 * (s1 - s0))
+            except Exception as e:
                 for _, _, w, *_ in todo:
                     w.close()
+                raise SystemExit(f"copy of {run_id} failed ({e}); unfinished .part files stay in {ddir}")
             for s0, s1, w, rel, t0, t1 in todo:
-                rows.append(C.make_row(
+                row = C.make_row(
                     origin="negatives", session="negatives", source=src, device=d, session_device=d, speaker="",
                     split="unassigned", eval_channel=True, condition="household", label="negative", kind="negative",
-                    clip=rel, start_utc=X.utc_str(t0), end_utc=X.utc_str(t1), source_run=run_id, revision=""))
-            C.append_jsonl(manifest, rows[-len(todo):])
+                    clip=rel, start_utc=X.utc_str(t0), end_utc=X.utc_str(t1), source_run=run_id, revision="")
+                C.append_jsonl(manifest, [row])
+                rows.append(row)
     print(f"wrote {len(rows)} pieces; manifest {manifest}")
     return summary
 

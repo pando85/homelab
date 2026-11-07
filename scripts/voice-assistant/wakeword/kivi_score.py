@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
-"""Score `kivi` and the baseline `alexa` on a real session with the server-exact feature path.
+"""Score `kivi` and the baseline `alexa` on a real session with the server's own runtime.
 
     kivi_score.py --session ~/.../datasets/real/<session id>                  # the satellite's audio
     kivi_score.py --session ... --also-pc                                     # plus pc-mic and webcam-mic
 
-The input is the aligned full-session audio that `kivi_extract.py` stored (`timeline.wav` of the
-satellite source; the raw file for pc-mic). It is streamed through `fast_eval.StreamFeatures` (the
-per-chunk melspectrogram clamp and pyopen-wakeword's chunking and frame bookkeeping, see
-`test_server_exact_features.py`) in pieces, then through the ONNX heads. Use the **uncalibrated**
-kivi head: the thresholds are raw (the deployed, calibrated file shifts 0.98 to 0.5).
+Each raw audio file that `kivi_extract.py` stored is streamed from its sample 0 through
+`eval_stream.stream`, which is pyopen-wakeword (the library inside wyoming-openwakeword 2.x, TFLite C
+API) fed in 1280-sample chunks as 16-bit PCM, with the library's own 8 s startup autofill. No
+re-implemented features, no float16 cache. (The server handler's own re-chunking of the Wyoming audio
+could not be checked: its 2.1.0 source is not available here.) The score times are mapped to the
+desk-mic clock through the stored alignment. Files whose alignment was not trusted are left out
+unless `--include-unaligned`. Use the **uncalibrated** kivi model: thresholds are raw (the deployed,
+calibrated file shifts 0.98 to 0.5).
 
 Reported per block, per model and raw threshold: recall of the cues (a cue counts when any score
 inside its window is above the threshold), near-word false accepts (the same rule for the near-word
 cues), and false accepts per hour on the time that is not a cue window (silence block included,
-pauses between blocks excluded; 2 s refractory as in the server). `alexa` is not said in the
+pauses between blocks excluded; 2 s refractory as in the server). Cues that no aligned audio covers
+are `lost` and stay in the denominators (counted as misses, listed separately). A closed wake file that
+ends inside a cue window is a server detection of the live wake word: it is counted as
+`run_end_cues`, and file ends outside cue windows as `server_run_ends`. `alexa` is not said in the
 protocol: its recall on "kivi" is a cross-talk check, and its false accepts per hour are the baseline.
 
 Output: a markdown table and JSON with aggregates only (counts, rates, intervals). No audio, no
-text content. The score time of a window is the end of its 16-embedding window (accurate to about 0.1 s).
+text content. Score times are the end of an 80 ms step.
 """
 import os
 
@@ -34,78 +40,20 @@ import numpy as np  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kivi_real_common as C  # noqa: E402
-from eval_stream import detections, poisson_ci, wilson  # noqa: E402
-from fast_eval import StreamFeatures, score_model  # noqa: E402
+from eval_stream import detections, load_models, poisson_ci, stream, wilson  # noqa: E402
 
 RATE = C.RATE
 WORK = Path(os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
-OWW_MODELS = WORK / "src/openWakeWord/openwakeword/resources/models"
 DEFAULT_THRESHOLDS = "0.5,0.7,0.9,0.95,0.97,0.98,0.99"
-PIECE_CHUNKS = 3750   # 300 s of audio per feature call
-CTX_CHUNKS = 40       # chunks of left context re-computed per piece (an embedding needs 9)
 
 
-class CappedFeatures(StreamFeatures):
-    """fast_eval.StreamFeatures (same `_get_embeddings`, `_run`, chunking) with the ONNX sessions
-    limited to 4 CPU threads, on the GPU when available."""
-
-    def __init__(self, mel_rowmax, embedding, cpu=False, threads=4):
-        import onnxruntime as ort
-        so = ort.SessionOptions()
-        so.intra_op_num_threads = threads
-        so.inter_op_num_threads = 1
-        if cpu:
-            prov = ["CPUExecutionProvider"]
-        else:
-            import torch  # noqa: F401  loads the CUDA libraries onnxruntime-gpu needs
-            prov = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-        self.mel_s = ort.InferenceSession(str(mel_rowmax), sess_options=so, providers=prov)
-        self.emb_s = ort.InferenceSession(str(embedding), sess_options=so, providers=prov)
-        self.batch_mel = True
+def default_models():
+    return [f"kivi={WORK / 'final/kivi_uncalibrated.tflite'}", "alexa=builtin"]
 
 
-def stream_embeddings(F, x, piece_chunks=PIECE_CHUNKS, ctx_chunks=CTX_CHUNKS):
-    """Server-exact embeddings of a long int16 signal, computed in pieces. Embedding row r belongs
-    to chunk r + 9 (chunk c covers samples c*1280 .. c*1280 + 1760); a piece re-computes
-    `ctx_chunks` of left context, which is exact because an embedding only needs the last 10 chunks."""
-    total = (len(x) - 1760) // 1280 + 1
-    if total < 10:
-        return np.zeros((0, 96), np.float16)
-    out = []
-    for k0 in range(0, total, piece_chunks):
-        k1 = min(total, k0 + piece_chunks)
-        c_start = max(0, k0 - ctx_chunks)
-        emb = F._get_embeddings(x[c_start * 1280:(k1 - 1) * 1280 + 1760])
-        lo = max(0, k0 - c_start - 9)
-        hi = k1 - c_start - 9
-        if hi > lo:
-            out.append(emb[lo:hi].astype(np.float16))
-    return np.concatenate(out) if out else np.zeros((0, 96), np.float16)
-
-
-def score_times(n):
-    """Time (s) of score i: the end of the chunk of its newest embedding (row i + 15, chunk i + 24)."""
-    return ((np.arange(n) + 24) * 1280 + 1760) / RATE
-
-
-def load_head(path, threads=4):
-    import onnx
-    import onnxruntime as ort
-    m = onnx.load(str(path))
-    m.graph.input[0].type.tensor_type.shape.dim[0].dim_param = "N"
-    m.graph.output[0].type.tensor_type.shape.dim[0].dim_param = "N"
-    so = ort.SessionOptions()
-    so.intra_op_num_threads = threads
-    return ort.InferenceSession(m.SerializeToString(), sess_options=so, providers=["CPUExecutionProvider"])
-
-
-def score_audio(F, heads, x):
-    """{model: per-score probabilities}, score times. `heads` is {name: onnx session}."""
-    emb = stream_embeddings(F, x)
-    if len(emb) < 16:
-        return {n: np.zeros(0, np.float32) for n in heads}, np.zeros(0)
-    probs = {n: score_model(h, emb, [(0, len(emb))])[0] for n, h in heads.items()}
-    return probs, score_times(len(emb) - 15)
+def score_pcm(feats, models, pcm):
+    """{model: probabilities}, step times (s since the first sample): the server's runtime, from sample 0."""
+    return stream(feats, models, pcm)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -127,7 +75,7 @@ def rate_cell(k, n):
     return {"k": int(k), "n": int(n), "rate": round(k / n, 4) if n else None, "ci95": [round(lo, 4), round(hi, 4)]}
 
 
-def analyze(session, probs, times, coverage, thresholds, pad_before=0.5, pad_after=3.5, refractory=2.0):
+def analyze(session, probs, times, coverage, thresholds, pad_before=0.5, pad_after=3.5, refractory=2.0, run_ends=()):
     """Aggregate scores of one source. Times are on the reference clock (s since the pc-mic file
     start); the session's block and cue times are converted with the pc-mic offset."""
     o = C.session_pc_offset(session)
@@ -137,13 +85,19 @@ def analyze(session, probs, times, coverage, thresholds, pad_before=0.5, pad_aft
             C.noncue_segments(session, sess_windows, min_len=0.0, max_len=1e9)]
     models = list(probs)
     blocks = {b["index"]: b for b in session["blocks"]}
-    max_in = {}   # (model, window idx) -> max score in the window, or None when uncovered
+    max_in = {}   # (model, window idx) -> max score in the window, or None when the cue is lost
+    run_end_in = {}
+    for i, w in enumerate(windows):
+        ends = [e for e in run_ends if w["t0"] <= e < w["t1"]]
+        run_end_in[i] = bool(ends)
+        w["t1_eff"] = max(w["t0"], min(ends)) if ends else w["t1"]   # the audio stops at the server's detection
     for m in models:
         for i, w in enumerate(windows):
-            if covered_fraction(coverage, w["t0"], w["t1"]) < 0.9:
-                max_in[(m, i)] = None
+            t1 = w["t1_eff"]
+            if t1 - w["t0"] < (1.0 if run_end_in[i] else 0.1) or covered_fraction(coverage, w["t0"], t1) < 0.9:
+                max_in[(m, i)] = None            # lost: kept in the denominators as a miss
                 continue
-            sel = (times >= w["t0"]) & (times <= w["t1"])
+            sel = (times >= w["t0"]) & (times <= t1)
             max_in[(m, i)] = float(probs[m][sel].max()) if sel.any() else 0.0
     dets = {(m, t): np.asarray(detections(probs[m], times, t, refractory)) for m in models for t in thresholds}
     out_blocks = []
@@ -151,20 +105,22 @@ def analyze(session, probs, times, coverage, thresholds, pad_before=0.5, pad_aft
         b = blocks[bi]
         idx = [i for i, w in enumerate(windows) if w["block"] == bi]
         entry = {"index": bi, "name": b["name"], "kind": b["kind"], "condition": C.condition_string(b),
-                 "cues": len(idx), "uncovered_cues": sum(max_in[(models[0], i)] is None for i in idx) if models else 0}
+                 "cues": len(idx), "lost_cues": sum(max_in[(models[0], i)] is None for i in idx) if models else 0,
+                 "run_end_cues": sum(run_end_in[i] for i in idx)}
         entry["cue_hits"] = {m: {str(t): rate_cell(sum(1 for i in idx if max_in[(m, i)] is not None and max_in[(m, i)] > t),
-                                                    sum(1 for i in idx if max_in[(m, i)] is not None))
+                                                    len(idx))
                                  for t in thresholds} for m in models}
         if b["kind"] == "near":
             words = {}
             for i in idx:
                 words.setdefault(windows[i]["word"].lower(), []).append(i)
             entry["by_word"] = {wd: {m: {str(t): rate_cell(sum(1 for i in ii if max_in[(m, i)] is not None and max_in[(m, i)] > t),
-                                                          sum(1 for i in ii if max_in[(m, i)] is not None))
+                                                          len(ii))
                                          for t in thresholds} for m in models} for wd, ii in sorted(words.items())}
         bsegs = [s for s in segs if s[0] == bi]
         hours = sum(covered_seconds(coverage, s[2], s[3]) for s in bsegs) / 3600
         entry["noncue_hours"] = round(hours, 4)
+        entry["server_run_ends"] = sum(1 for e in run_ends if any(sg[2] <= e <= sg[3] for sg in bsegs))
         entry["false_accepts"] = {}
         for m in models:
             entry["false_accepts"][m] = {}
@@ -202,6 +158,9 @@ def overall(blocks, models, thresholds):
                                                               sum(b["by_word"][wd][m][str(t)]["n"] for b in nb if wd in b["by_word"]))
                                            for t in thresholds} for m in models}
     hours = sum(b["noncue_hours"] for b in blocks)
+    res["lost_cues"] = sum(b["lost_cues"] for b in blocks)
+    res["run_end_cues"] = sum(b["run_end_cues"] for b in blocks)
+    res["server_run_ends"] = sum(b["server_run_ends"] for b in blocks)
     for m in models:
         res["false_accepts"][m] = {}
         for t in thresholds:
@@ -264,9 +223,14 @@ def to_markdown(rep):
     for m in models:
         hrs = next(iter(ov["false_accepts"][m].values()))["hours"]
         L.append("| **all** | " + " | ".join([f"{hrs:.3f}", m] + [fa_cell(ov["false_accepts"][m][str(t)]) for t in thr]) + " |")
-    unc = sum(b["uncovered_cues"] for b in rep["blocks"])
-    if unc:
-        L += ["", f"{unc} cue(s) were not covered by this source's audio and are left out of the counts."]
+    ov = rep["overall"]
+    L += ["", "### Coverage and server events", "",
+          f"- cues in the denominators: {sum(b['cues'] for b in rep['blocks'])}; lost or partly uncovered (counted as misses): {ov['lost_cues']}",
+          f"- cues whose window contains the end of a closed wake file (a server detection of the live wake word): {ov['run_end_cues']}",
+          f"- file ends outside cue windows (server detections of the live wake word on other sound): {ov['server_run_ends']}"]
+    for f in rep.get("alignment_files", []):
+        L.append(f"- alignment {f['name']}: {'OK' if f['ok'] else 'NOT TRUSTED'}, "
+                 f"{'used' if f['used'] else 'LEFT OUT (use --include-unaligned)'}, median PSR {f['median_conf']}, drift {f['drift_ppm']} ppm")
     return "\n".join(L) + "\n"
 
 
@@ -275,39 +239,62 @@ def to_markdown(rep):
 # ---------------------------------------------------------------------------------------------
 
 
-def load_source(sdir, label):
-    """(int16 timeline on the reference clock, coverage intervals) of a dataset source."""
+def load_source(sdir, label, feats, models, include_unaligned=False):
+    """Stream every raw file of a dataset source through the server runtime and map the scores to the
+    desk-mic clock. Returns (probs per model, times, coverage intervals, run ends, file status)."""
     base = Path(sdir) / label
     als = sorted(base.glob("alignment*.json"), key=lambda p: p.stat().st_mtime)
     if not als:
         raise SystemExit(f"{base}: no alignment.json (run kivi_extract.py first)")
     al = json.loads(als[-1].read_text(encoding="utf-8"))
-    return C.read_pcm16(base / al["timeline"]), al["coverage_s"]
+    parts, cov, ends, status = [], [], [], []
+    for f in al["files"]:
+        used = bool(f.get("included", True)) and (f["ok"] or include_unaligned)
+        status.append({"name": f["name"], "ok": bool(f["ok"]), "used": used, "median_conf": f.get("median_conf"),
+                       "drift_ppm": f.get("drift_ppm")})
+        if not used or not f.get("coverage_s"):
+            continue
+        pcm = C.read_pcm16(base / "raw" / f["name"])
+        probs, t = score_pcm(feats, models, pcm)
+        a_, b_ = f["offset_a_s"], f.get("b", 0.0)
+        parts.append((probs, (t - a_) / (1 + b_)))     # file time -> desk-mic time
+        cov.append(f["coverage_s"])
+        if f.get("run_end_ref_s") is not None:
+            ends.append(f["run_end_ref_s"])
+    names = list(models)
+    if parts:
+        times = np.concatenate([t for _, t in parts])
+        probs = {n: np.concatenate([p[n] for p, _ in parts]) for n in names}
+        order = np.argsort(times, kind="stable")
+        times, probs = times[order], {n: v[order] for n, v in probs.items()}
+    else:
+        times, probs = np.zeros(0), {n: np.zeros(0, np.float32) for n in names}
+    return probs, times, cov, ends, status
 
 
-def score_session(a, F=None, heads=None):
+def score_session(a, feats=None, models=None):
     sdir = Path(a.session).expanduser()
     session = json.loads((sdir / "session.json").read_text(encoding="utf-8"))
     thr = [float(t) for t in a.thresholds.split(",")]
-    models = dict(m.split("=", 1) for m in a.model) if a.model else {
-        "kivi": str(WORK / "final/kivi_uncalibrated.onnx"), "alexa": str(OWW_MODELS / "alexa_v0.1.onnx")}
-    if F is None:
-        mel = a.mel_rowmax or str(WORK / "emb_s_melrow.onnx")
-        emb = a.embedding_model or str(OWW_MODELS / "embedding_model.onnx")
-        F = CappedFeatures(mel, emb, cpu=a.cpu)
-    heads = heads or {n: load_head(p) for n, p in models.items()}
+    specs = a.model or default_models()
+    if feats is None:
+        feats, models = load_models(specs)
     sources = [a.source or session.get("tv_source") or C.source_label(session["device"])]
     if a.also_pc:
         sources += list(C.PC_SOURCES)
     reports = []
     for label in sources:
-        x, cov = load_source(sdir, label)
-        probs, times = score_audio(F, heads, x)
-        rep = analyze(session, probs, times, cov, thr, a.pad_before, a.pad_after, a.refractory)
+        probs, times, cov, ends, status = load_source(sdir, label, feats, models, a.include_unaligned)
+        rep = analyze(session, probs, times, cov, thr, a.pad_before, a.pad_after, a.refractory, ends)
         rep.update(session=session["session_id"], speaker=session.get("speaker", ""), device=session["device"],
-                   split=session.get("split", ""), source=label, models={n: Path(p).name for n, p in models.items()},
-                   audio_hours=round(len(x) / RATE / 3600, 4))
+                   split=session.get("split", ""), source=label, alignment_files=status,
+                   models={s.split("=", 1)[0]: Path(s.split("=", 1)[1]).name for s in specs},
+                   audio_hours=round(sum(c[1] - c[0] for c in cov) / 3600, 4))
         reports.append(rep)
+        bad = [f for f in status if not f["used"]]
+        if bad:
+            print(f"NOTE: {label}: {len(bad)} file(s) with untrusted alignment left out of the scores "
+                  "(--include-unaligned to keep them)", file=sys.stderr)
     return reports
 
 
@@ -316,15 +303,14 @@ def main(argv=None):
     ap.add_argument("--session", required=True, help="the session directory inside the dataset")
     ap.add_argument("--source", help="satellite source label (default: the session's)")
     ap.add_argument("--also-pc", action="store_true", help="also score pc-mic and webcam-mic, for comparison")
-    ap.add_argument("--model", action="append", metavar="NAME=head.onnx",
-                    help="default: kivi (uncalibrated head) and alexa (openWakeWord package)")
-    ap.add_argument("--mel-rowmax", help="melspectrogram ONNX rewritten by stream_mel.py")
-    ap.add_argument("--embedding-model")
+    ap.add_argument("--model", action="append", metavar="NAME=model.tflite|builtin",
+                    help="default: kivi (uncalibrated TFLite) and alexa=builtin")
+    ap.add_argument("--include-unaligned", action="store_true",
+                    help="also score files whose alignment was not trusted (reported as NOT TRUSTED)")
     ap.add_argument("--thresholds", default=DEFAULT_THRESHOLDS)
     ap.add_argument("--pad-before", type=float, default=0.5)
     ap.add_argument("--pad-after", type=float, default=3.5)
     ap.add_argument("--refractory", type=float, default=2.0)
-    ap.add_argument("--cpu", action="store_true", help="no GPU")
     ap.add_argument("--json", help="write the JSON here (default: <session>/scores/)")
     ap.add_argument("--md", help="write the markdown here (default: <session>/scores/)")
     ap.add_argument("--no-save", action="store_true")

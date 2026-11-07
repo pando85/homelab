@@ -27,11 +27,11 @@ openWakeWord models).
 | `test_server_exact_features.py` | Regression test: server streaming vs batched server-exact features, and the report's refusal of other features |
 | `kivi_session.py` | **Owner-run:** text-only cues and a dual PC recording (desk mic, webcam mic) for a real-voice session; `session.json` |
 | `kivi_extract.py` | **Owner-run:** copies the satellite's wake files out of the HA pod, aligns them to the desk mic, cuts labelled clips of 3 sources into the private dataset and its manifest; `--button-takes` for takes marked by `input_button.kivi_take` |
-| `kivi_score.py` | Scores kivi (uncalibrated head) and alexa on a session through the server-exact path; markdown and JSON aggregates only |
-| `kivi_import_phone.py` | Imports a phone voice memo as `phone` takes (consent flag required) |
+| `kivi_score.py` | Scores kivi (uncalibrated TFLite) and alexa on a session by streaming each raw file through pyopen-wakeword (the server's library); lost cues stay in the denominators; markdown and JSON aggregates only |
+| `kivi_import_phone.py` | Imports a phone voice memo as `phone` takes (`--consent-confirmed` and `--split` are required, no defaults) |
 | `kivi_negatives.py` | **Owner-triggered, not run yet:** copies about 30 h of closed wake files as real negatives |
 | `kivi_real_common.py`, `kivi_devices.json` | Shared helpers (WAV, GCC-PHAT alignment, energy takes, manifest schema, split policy); satellite name to HA device-id prefix |
-| `test_kivi_real.py` | Tests with synthetic signals (alignment, manifest, prompter dry-run, extraction, phone import, button takes, negatives, scorer) |
+| `test_kivi_real.py` | Tests with synthetic signals (alignment, manifest crash safety, prompter, byte-range extraction, run ends, unaligned files, phone import, button takes, negatives, scorer) |
 
 **Never report numbers from batch features** (`AudioFeatures.embed_clips`, `fast_eval.py embed`
 without `--stream-onnx`): openWakeWord's melspectrogram clamps at max - 80 dB over its whole input,
@@ -125,5 +125,8 @@ machine, far slower under load).
 Procedure, split policy and data rules: [the experiment](../../../docs/voice-assistant/experiments/kivi-wake-word.md#real-voice-measurement-and-dataset-tools-built-2026-11-07-not-yet-run-on-a-person) and the [data register](../../../docs/voice-assistant/data-register.md). The dataset lives at `/work/workspaces/kivi-wakeword/datasets/real/` (mode 700, permanent: the tools contain no deletion code). Tests:
 
 ```sh
-OMP_NUM_THREADS=4 $WORK/.venv/bin/python -m pytest $H/test_kivi_real.py -q     # light: 4 threads, CPU
+OMP_NUM_THREADS=4 systemd-run --user --scope -p MemoryMax=6G -p CPUQuota=400% -- \
+  $WORK/.venv/bin/python -m pytest $H/test_kivi_real.py -q     # light: 4 threads, 6 GB cap
 ```
+
+Split policy (decided 2026-11-07): the phone memo of spk02 is `train` for the production model (`kivi_import_phone.py --split train`); her c3-b button takes are `test` and never trained on (`kivi_extract.py --button-takes --split test`); the unseen-speaker check is an ablation that excludes ALL spk02 data from training (`training_rows(exclude_speakers=["spk02"])`). Details in the experiment note.
