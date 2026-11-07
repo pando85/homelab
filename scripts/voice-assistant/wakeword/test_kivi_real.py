@@ -1402,3 +1402,29 @@ def test_split_mark_reaches_button_rows_and_superseded_rows_are_skipped(tmp_path
     assert C.training_rows(rows) == []
     with pytest.raises(SystemExit):
         M.main(["exclude", "--dataset-root", str(ds), "--session", sid, "--revision", "nope", "--cue-index", "1", "--reason", "x"])
+
+
+def test_score_button_takes_uses_the_extraction_windows(tmp_path, monkeypatch):
+    import kivi_score as K
+    x = bursts_audio(60, [20.0, 30.0], seed=6)
+    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
+    X.main(button_args(tmp_path, [T0 + 22.0, T0 + 32.0, T0 + 50.0]))                  # takes 1, 2, and 3 (no speech)
+    sdir = next((tmp_path / "ds").glob("button-*"))
+    peaks = {21.0: 0.99, 31.5: 0.6}                                                    # score peaks (file seconds)
+
+    def fake_score(feats, models, pcm):
+        t = np.arange(1, len(pcm) // 1280 + 1) * 0.08
+        p = np.zeros(len(t), np.float32)
+        for at, v in peaks.items():
+            p[np.argmin(abs(t - at - (X.parse_when(json.loads(next(sdir.glob("extract-*.json")).read_text())["raw_files"][0]["t0_utc"]) - T0)))] = v
+        return {"m": p}, t
+    monkeypatch.setattr(K, "score_pcm", fake_score)
+    monkeypatch.setattr(K, "load_models", lambda specs: (None, {"m": None}))
+    a = Namespace(button_takes=str(sdir), revision=None, exclude_take=[3], model=["m=builtin"], calibration=None, label=None,
+                  thresholds="0.5,0.9")
+    rep = K.score_button_takes(a)
+    assert rep["takes"] == 3 and rep["revision"] == X.SAY_THEN_PRESS_REVISION
+    r = rep["recall"]["m"]
+    assert (r["0.9"]["all_takes"]["k"], r["0.9"]["all_takes"]["n"]) == (1, 3)           # take 1 hits, take 2 peaks at 0.6
+    assert (r["0.5"]["all_takes"]["k"], r["0.5"]["without_excluded"]["n"]) == (2, 2)     # at 0.5 take 2 hits; take 3 left out
+    assert "button takes" in K.button_takes_markdown(rep)

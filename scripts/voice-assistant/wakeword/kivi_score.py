@@ -45,6 +45,7 @@ from datetime import datetime, timezone  # noqa: E402
 from pathlib import Path  # noqa: E402
 
 import numpy as np  # noqa: E402
+from argparse import Namespace  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kivi_real_common as C  # noqa: E402
@@ -636,8 +637,91 @@ def negatives_markdown(rep):
     return "\n".join(L) + "\n"
 
 
+def score_button_takes(a, feats=None, models=None):
+    """Recall on the takes of a `kivi_extract.py --button-takes` session: the raw wake file(s) of the extraction
+    are streamed once through the server runtime and each take's score is the maximum of the model output inside
+    the take's window (the extractor's own `take_window`, from the extraction record). A take with no speech
+    counts as a miss; takes whose window is not covered by the audio are `no_audio` misses. Aggregates only."""
+    import kivi_extract as X
+    sdir = Path(a.button_takes).expanduser()
+    rev = a.revision if a.revision is not None else X.SAY_THEN_PRESS_REVISION
+    recs = sorted(sdir.glob("extract-*.json"))
+    recs = [r for r in ((p, json.loads(p.read_text(encoding="utf-8"))) for p in recs) if (r[1].get("revision") or "") == rev
+            and r[1].get("takes_log")]
+    if not recs:
+        raise SystemExit(f"no extraction record with revision {rev!r} (and a takes_log) in {sdir}")
+    path, ex = recs[-1]
+    specs = a.model or default_models()
+    infos = model_infos(specs, parse_calibration(getattr(a, "calibration", None)), getattr(a, "label", None))
+    thr = thresholds_with_ops(a.thresholds, infos)
+    if feats is None:
+        feats, models = load_models(specs)
+    tv = ex.get("tv_source") or next(p.name for p in sdir.iterdir() if p.is_dir() and p.name.startswith("tv-"))
+    parts = []
+    for rf in ex["raw_files"]:
+        t0 = X.parse_when(rf["t0_utc"])
+        probs, t = score_pcm(feats, models, C.read_pcm16(sdir / tv / "raw" / rf["name"]))
+        parts.append((t0, probs, t))
+    w = Namespace(before_s=ex["window_s"]["before"], after_s=ex["window_s"]["after"],
+                  min_gap_after_prev_s=ex["window_s"]["min_gap_after_prev"], window_s=ex["window_s"]["window"],
+                  tolerance_s=ex["window_s"]["tolerance"])
+    excl = {int(x) for x in (a.exclude_take or [])}
+    best = {m: [] for m in models}
+    for tk in ex["takes_log"]:
+        press = X.parse_when(tk["press_utc"])
+        prev = X.parse_when(tk["prev_last_press_utc"]) if tk.get("prev_last_press_utc") else None
+        lo, hi = X.take_window(ex["button_order"], press, prev, w)
+        for m in models:
+            v = None
+            for t0, probs, t in parts:
+                sel = (t0 + t >= lo) & (t0 + t <= hi)
+                cover = max(0.0, min(hi, t0 + t[-1]) - max(lo, t0 + t[0] - 0.08)) / max(1e-9, hi - lo)
+                if sel.any() and cover >= 0.9:               # the window must be (nearly) inside the audio
+                    mx = float(probs[m][sel].max())
+                    v = mx if v is None else max(v, mx)
+            best[m].append(v)
+    n_takes = len(ex["takes_log"])
+    take_ids = [tk["take"] for tk in ex["takes_log"]]
+    rep = {"kind": "button-takes", "session": sdir.name, "extract_record": path.name, "revision": rev,
+           "button_order": ex["button_order"], "phrase": ex.get("phrase", "kivi"), "takes": n_takes, "presses": ex["presses"],
+           "double_presses": ex["double_presses"], "excluded_takes": sorted(excl), "models": infos, "thresholds": thr,
+           "no_audio_takes": sorted({take_ids[i] for m in models for i, v in enumerate(best[m]) if v is None}),
+           "median_of_max": {m: round(float(np.median([v or 0.0 for v in best[m]])), 4) for m in models}, "recall": {}}
+    for m in models:
+        rep["recall"][m] = {}
+        for t in thr:
+            hits = [v is not None and v > t for v in best[m]]
+            rep["recall"][m][str(t)] = {"all_takes": rate_cell(sum(hits), n_takes),
+                                        "without_excluded": rate_cell(sum(h for h, i in zip(hits, take_ids) if i not in excl),
+                                                                      sum(1 for i in take_ids if i not in excl))}
+    return rep
+
+
+def button_takes_markdown(rep):
+    L = [f"## button takes - session {rep['session']} (revision {rep['revision']}, order {rep['button_order']}, "
+         f"phrase {rep['phrase']})", "",
+         f"{rep['takes']} takes from {rep['presses']} presses ({rep['double_presses']} double); takes left out in the second "
+         f"figure: {rep['excluded_takes'] or 'none'}.", ""]
+    for m, p in rep["models"].items():
+        op = p.get("server_0_5_raw")
+        L.append(f"- model `{m}` (label `{p.get('label')}`): `{p.get('path')}`, sha256 `{p.get('sha256')}`, "
+                 + (f"server 0.5 = raw {op}" if op is not None else "no calibration given"))
+    L += ["", "| model | raw threshold | all takes | without excluded | median of max score |", "| --- | --- | --- | --- | --- |"]
+    for m, p in rep["models"].items():
+        for t in rep["thresholds"]:
+            if t == p.get("server_0_5_raw") or t in (0.9,):
+                c, d = rep["recall"][m][str(t)]["all_takes"], rep["recall"][m][str(t)]["without_excluded"]
+                L.append(f"| {m} | {t}{' (server 0.5)' if t == p.get('server_0_5_raw') else ''} | {c['k']}/{c['n']} "
+                         f"[{c['ci95'][0]}, {c['ci95'][1]}] | {d['k']}/{d['n']} | {rep['median_of_max'][m]} |")
+    return "\n".join(L) + "\n"
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--button-takes", help="score a `kivi_extract.py --button-takes` session directory instead of a "
+                                           "kivi_session.py session (recall per take, window of the extraction)")
+    ap.add_argument("--revision", help="(--button-takes) extraction revision (default: the say-then-press one)")
+    ap.add_argument("--exclude-take", action="append", type=int, help="(--button-takes) take number for the 'without excluded' figure")
     ap.add_argument("--session", help="the session directory inside the dataset")
     ap.add_argument("--negatives", help="the dataset's negatives directory (kivi_negatives.py output): score it instead of a session")
     ap.add_argument("--source", help="satellite source label (default: the session's)")
@@ -661,9 +745,13 @@ def main(argv=None):
     ap.add_argument("--md", help="write the markdown here (default: <session>/scores/)")
     ap.add_argument("--no-save", action="store_true")
     a = ap.parse_args(argv)
-    if bool(a.session) == bool(a.negatives):
-        raise SystemExit("give exactly one of --session and --negatives")
-    if a.negatives:
+    if sum(bool(x) for x in (a.session, a.negatives, a.button_takes)) != 1:
+        raise SystemExit("give exactly one of --session, --negatives and --button-takes")
+    if a.button_takes:
+        reports = score_button_takes(a)
+        md = button_takes_markdown(reports)
+        base = Path(a.button_takes).expanduser()
+    elif a.negatives:
         rep = score_negatives(a)
         md = negatives_markdown(rep)
         reports = rep
