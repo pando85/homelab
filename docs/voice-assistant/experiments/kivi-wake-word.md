@@ -202,6 +202,70 @@ Synthetic recall says nothing reliable about real voices. Before switching the "
 3. False wakes: leave the test pipeline active for 3 to 7 evenings of normal TV, and count pipeline runs that nobody started (Home Assistant logbook or the satellite's wake events). Only counts, no recordings.
 4. Suggested acceptance: recall of at least 80 % with the TV off and at least 60 % with the TV on, and at most 1 false wake per evening. If it fails, go to the alternatives below rather than lower the threshold.
 
+## Real-voice measurement and dataset tools (built 2026-11-07, not yet run on a person)
+
+Tools in [`scripts/voice-assistant/wakeword/`](../../../scripts/voice-assistant/wakeword/README.md) measure `kivi` on real voices and keep every recording as a permanent, private dataset at `/work/workspaces/kivi-wakeword/datasets/real/` (outside git, mode 700, never deleted by the tools; see [data register](../data-register.md) rows 8-11). They were tested with synthetic signals only: no microphone was opened while writing them.
+
+| Tool | Who runs it | What it does |
+| --- | --- | --- |
+| `kivi_session.py` | the speaker | text-only cues ("say KIVI now", about every 5 s) while recording the desk mic and the webcam mic; writes `session.json` |
+| `kivi_extract.py` | the owner | copies the satellite's wake files for the session out of the HA pod (`kubectl exec ... cat`), aligns them to the desk mic by GCC-PHAT, cuts clips of the three sources, appends to `manifest.jsonl`. `--button-takes` cuts takes marked by `input_button.kivi_take` presses instead |
+| `kivi_score.py` | the owner | kivi (uncalibrated head, raw thresholds) and alexa through the server-exact path over the aligned satellite audio: recall per block and threshold, near-word false accepts, false accepts per hour on the non-cue time; aggregates only |
+| `kivi_import_phone.py` | the owner | imports a phone voice memo (takes found by energy, source `phone`) |
+| `kivi_negatives.py` | the owner, on request | copies about 30 h of closed wake files of both TVs as real negatives, minus the cues, presses and detection boundaries |
+
+Satellites are a parameter (`--device c3-a`, `--device c3-b`, mapped to the HA device-id prefix in `kivi_devices.json`; the source label is `tv-c3a`, `tv-c3b`, ...). Speakers are pseudonymous ids only (`spk01`, `spk02`): the mapping to people is kept by the owner, outside the tools and the repository.
+
+### Owner procedure: one session (about 12 min, c3-a, first speaker)
+
+```sh
+cd ~/homelab/scripts/voice-assistant/wakeword
+PY=/work/workspaces/kivi-wakeword/.venv/bin/python
+# 1. Unmute c3-a in Home Assistant (its mute switch), so the wake stage audio flows.
+python3 kivi_session.py --list-devices            # pick the hardware inputs (alsa_input.*), not monitors or Easy Effects
+# 2. The session. Cues are text only. Sit at 1.5 m, then 3 m; the TV is off, then on (normal volume, your content).
+python3 kivi_session.py --device c3-a --speaker spk01 --desk-mic Samson --webcam-mic C920 --tag volume=normal
+# 3. Soon after (Home Assistant deletes files after 90 days). Check first with --dry-run.
+$PY kivi_extract.py --session-dir ~/kivi-sessions/<session id> --dry-run
+$PY kivi_extract.py --session-dir ~/kivi-sessions/<session id>
+# 4. Scores (aggregates only; also saved in the dataset's scores/ directory).
+$PY kivi_score.py --session /work/workspaces/kivi-wakeword/datasets/real/<session id> --also-pc
+# 5. Mute c3-a again.
+```
+
+The protocol: positions 1.5 m and 3 m, each with the TV off and with the TV on, 10 "kivi" per block; then the near-words kiwi, tivi, kili, kiri, Pipi and "aquí vi", 2 each; then 60 s of silence with the speaker present and quiet. `Enter` separates the blocks. For the 4-6 training sessions vary the conditions: `--repeat 2`, `--only kivi-3m-tvon`, `--tag volume=loud`, `--tag speed=fast`, or `--blocks my_blocks.json` (print the default with `--print-protocol`). Check the `align` lines the extractor prints: a source marked LOW CONFIDENCE was not aligned reliably (its clips use the file-time estimate and may be shifted by up to a second). `alexa` is not said in the protocol: its recall on "kivi" is a cross-talk check, and its false accepts per hour are the baseline to compare with.
+
+### Second speaker (consent first)
+
+Nobody's voice is imported before that person has agreed, knowing what is stored (local, never in git, kept until the owner deletes it, used to measure and train Kivi) and that they can ask for it to be deleted. The importers refuse without `--consent-confirmed`.
+
+1. **Phone memo (3 minutes, any quiet room).** Hold the phone at about 1 m. Say "kivi" 30 times, about 3 s apart: ten at normal volume, ten louder and slower, ten quicker and softer. Then say each of kiwi, tivi, kili, kiri, Pipi and "aquí vi" twice, in that order. Say nothing else (no counting, no comments) and leave a clear pause between takes. Send the memo to the owner. Import with `$PY kivi_import_phone.py MEMO --speaker spk02 --consent-confirmed --expect 42 --near-labels kiwi,kiwi,tivi,tivi,kili,kili,kiri,kiri,Pipi,Pipi,"aquí vi","aquí vi"` (`--dry-run` first: it only counts the takes; a mismatch with `--expect` writes nothing).
+2. **Button takes on c3-b (about 5 min).** Unmute c3-b. In Home Assistant press the **Kivi take** button (`input_button.kivi_take`), then within 6 s say "kivi" once; repeat 30 times (10 with the TV off, 20 with it on, from where she normally sits). Then mute c3-b. The owner runs `$PY kivi_extract.py --button-takes --device c3-b --speaker spk02 --since 2026-11-.. --until 2026-11-.. --split test` (times are local unless they end in Z). The report counts presses, clips cut and presses without a clear speech onset.
+3. The button exists only after the Home Assistant configuration change (`apps/home-assistant/config/integrations/kivi_take.yaml`) is deployed and the helper is loaded (restart, or reload input buttons). One button serves every satellite: the extraction names the device, so run one speaker and one satellite per time window.
+
+### Split policy (decided 2026-11-07)
+
+- Every record has a `split`: `train`, `dev`, `test` or `train-only` (`unassigned` until the owner decides). The split belongs to the **session**: all takes of a session and all channels of one utterance (satellite, desk mic, webcam, phone) are in the same split.
+- **Hold out by speaker and by device**, not by clip: a held-out speaker has no training data at all (including phone memos), a held-out device (c3-b) contributes no training audio. Planned: spk02 and c3-b are the held-out evaluation pair.
+- PC, webcam and phone audio is **train-only** material (`eval_channel` false): it is not what the wake word hears. In a train or unassigned session these channels are tagged `train-only`; in a `dev` or `test` session they carry that split, so they cannot leak into training. Evaluation uses the satellite channel only (`eval_channel` true).
+- Negatives (`negatives/`) are split by device and by time; none from a session window or a held-out device may train.
+
+### Trade-offs and doubts
+
+The alignment confidence is a peak-to-sidelobe ratio of GCC-PHAT in 15 s windows; unrelated audio can look sharp in one window, so a source is trusted only when several windows agree on one offset line (small residual, plausible drift). The Postgres read (`--button-takes` without `--presses-file`) is a single `SELECT` through `kubectl exec ... psql` with `default_transaction_read_only`; it was not run against the cluster, so the pod, user and container defaults (`home-assistant-postgres-0`, `postgres`) are unverified: if it fails, pass `--presses-file` with a JSON list of the press times from the HA logbook.
+
+## Decided training recipe (2026-11-07)
+
+Evidence review: kivi-models repo, docs/research/kivi-training-evidence.md. Retraining follows this recipe:
+
+1. **Server-exact features** for training and evaluation (`stream_mel.py`, `fast_eval.py embed --stream-onnx`); no batch features.
+2. **Real positives** from household speakers on the TVs, post-front-end (the wake files are exactly what the wake word sees), plus the PC, webcam and phone takes as train-only extras.
+3. **Interference augmentation**: TV speech, music and household voices mixed in at 0-30 dB measured on the word, then passed through the front-end emulation. No stationary noise.
+4. **Front-end emulation** (120 Hz high-pass, AEC3 and noise suppression, +24 dB) applied to the training audio, so it matches what the satellites send.
+5. **Real TV-room negatives** (`kivi_negatives.py`) plus hard-negative mining on them.
+6. **Keep** room impulse response and level augmentation.
+7. **Evaluation** as the false-reject rate at 0.5 and at 0.1 false accepts per hour, with a DET curve, reported per speaker and per device, with c3-b and spk02 held out.
+
 ## Alternatives if the owner test fails
 
 - Retrain on server-exact features (see Pitfalls, item 1). This is the cheapest next step: the scripts exist, about 1 h on the PC.
