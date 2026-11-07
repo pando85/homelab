@@ -138,6 +138,9 @@ app-template:
             - http://home-assistant-hass.home-assistant.svc:8123/api
             - --hass-refresh-seconds
             - "300"
+            # 2026-11-07: Silero VAD drops non-speech before decoding, so room noise is not transcribed as words.
+            # Rollback: remove this line. Do not add --vad-endpointing (it replaces HA's end-of-command logic).
+            - --vad-filter
           env:
             # The value is read from the file and stripped by the server; keeps the token off the command line.
             WYO_WHISPER_HASS_TOKEN_FILE: /secrets/hass_token
