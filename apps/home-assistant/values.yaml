@@ -195,21 +195,23 @@ app-template:
       type: deployment
       replicas: 1
       initContainers:
-        # Copies the custom "kivi" wake word (licence-restricted, never committed here) from a
-        # private image into the server's --custom-model-dir. The image is built from the private
-        # repository agil/kivi-models (package owner agil, which must stay "limited": packages take
-        # their owner's visibility); the nodes pull it with their containerd credential for
-        # git.grigri.cloud, like the whisper image.
-        # Swap versions by changing the tag and digest (docs/voice-assistant/model-registry.md).
-        01-copy-kivi:
+        # Copies the custom wake words (licence-restricted, never committed here) from a private image
+        # into the server's --custom-model-dir: every model of the image's models.lock, one
+        # /models/<id>.tflite each (id = file stem: kivi, oye_kivi), checked against /models/SHA256SUMS
+        # first. The image is built from the private repository agil/kivi-models (package owner agil,
+        # which must stay "limited": packages take their owner's visibility); the nodes pull it with
+        # their containerd credential for git.grigri.cloud, like the whisper image.
+        # Swap releases by changing the tag and digest (docs/voice-assistant/model-registry.md;
+        # scripts/voice-assistant/wakeword/wake_release.py deploy).
+        01-copy-wake-words:
           image:
-            # No renovate hint: Renovate cannot read the private registry; one tag per model version.
+            # No renovate hint: Renovate cannot read the private registry; one tag per release.
             repository: git.grigri.cloud/agil/kivi-models
-            tag: v1-2026-11-05@sha256:9e51e0c9dba009480f0706da8f90f178380fd72fceeb05e9e148555bb178b40c
+            tag: v4-oye-kivi-2026-11-07@sha256:a73af8e220f03afecca80dbbdd7ae62f9d2ab8023b12ff0fd12839a2ac9d215b
           command:
             - sh
             - -ec
-            - cp /models/kivi.tflite /custom/kivi.tflite && sha256sum /custom/kivi.tflite
+            - cd /models && sha256sum -c SHA256SUMS && cp /models/*.tflite /custom/ && cd /custom && sha256sum *.tflite
           resources:
             requests:
               cpu: 10m
@@ -561,7 +563,7 @@ app-template:
       sizeLimit: 16Mi
       advancedMounts:
         openwakeword:
-          01-copy-kivi:
+          01-copy-wake-words:
             - path: /custom
           openwakeword:
             - path: /custom
