@@ -47,3 +47,5 @@ nav:
       - troubleshooting
   - Architecture decisions:
       - adr
+  - Voice assistant:
+      - voice-assistant

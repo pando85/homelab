@@ -111,6 +111,9 @@ app-template:
     whisper:
       type: deployment
       replicas: 1
+      annotations:
+        # Roll the pod when the Home Assistant token Secret changes.
+        reloader.stakater.com/auto: "true"
       pod:
         runtimeClassName: nvidia
         labels:
@@ -118,9 +121,11 @@ app-template:
       containers:
         whisper:
           image:
-            # https://github.com/pando85/wyoming-addons/tree/master/whisper
-            repository: pando85/wyoming-whisper
-            tag: 2.4.0
+            # Private image, built from https://git.grigri.cloud/agil/wyoming-whisper (wyoming-faster-whisper 3.8.1).
+            # No renovate hint: Renovate cannot read the private registry; bump tag and digest by hand after a canary.
+            repository: git.grigri.cloud/agil/wyoming-whisper
+            tag: 3.8.1.1@sha256:938daef7b6e3fd76bb8601171a34b375df13b8bd37fc61a27b5b6a696f61680d
+          # The image entrypoint (/run.sh) already passes --uri, --data-dir /data and --download-dir /data.
           args:
             - --model
             - large-v3-turbo
@@ -130,6 +135,20 @@ app-template:
             - cuda
             - --compute-type
             - int8
+            # Static verbs prefix; the server appends the live Home Assistant names after it.
+            - --initial-prompt
+            - "Enciende, apaga, sube, baja, abre, cierra, para, pausa, reanuda, silencia, quita el silencio, pon, temporizador, minutos, volumen, brillo, por ciento, grados."
+            - --hass-api
+            - http://home-assistant-hass.home-assistant.svc:8123/api
+            - --hass-refresh-seconds
+            - "300"
+          env:
+            # The value is read from the file and stripped by the server; keeps the token off the command line.
+            WYO_WHISPER_HASS_TOKEN_FILE: /secrets/hass_token
+            # TEMPORARY (from 2026-11-05): log transcripts for a usage study (Loki global 180 d retention), see
+            # docs/voice-assistant/data-register.md. Loads the sitecustomize.py mounted below;
+            # remove this variable and the whisper-logging mount to stop.
+            PYTHONPATH: /opt/whisper-logging
           resources:
             requests:
               cpu: 15m
@@ -144,7 +163,8 @@ app-template:
             startup:
               enabled: true
               spec:
-                failureThreshold: 30
+                # 5 minutes: room for a model (re)download on a cold cache.
+                failureThreshold: 60
                 periodSeconds: 5
     piper:
       type: deployment
@@ -178,6 +198,28 @@ app-template:
     openwakeword:
       type: deployment
       replicas: 1
+      initContainers:
+        # Copies the custom "kivi" wake word (licence-restricted, never committed here) from a
+        # private image into the server's --custom-model-dir. The image is built from the private
+        # repository agil/kivi-models (package owner agil, which must stay "limited": packages take
+        # their owner's visibility); the nodes pull it with their containerd credential for
+        # git.grigri.cloud, like the whisper image.
+        # Swap versions by changing the tag and digest (docs/voice-assistant/model-registry.md).
+        01-copy-kivi:
+          image:
+            # No renovate hint: Renovate cannot read the private registry; one tag per model version.
+            repository: git.grigri.cloud/agil/kivi-models
+            tag: v1-2026-11-05@sha256:9e51e0c9dba009480f0706da8f90f178380fd72fceeb05e9e148555bb178b40c
+          command:
+            - sh
+            - -ec
+            - cp /models/kivi.tflite /custom/kivi.tflite && sha256sum /custom/kivi.tflite
+          resources:
+            requests:
+              cpu: 10m
+              memory: 8Mi
+            limits:
+              memory: 32Mi
       containers:
         openwakeword:
           image:
@@ -186,6 +228,9 @@ app-template:
           args:
             - --preload-model
             - alexa
+            # Stock models (alexa, ...) stay available; every *.tflite here is added, id = file stem.
+            - --custom-model-dir
+            - /custom
           resources:
             requests:
               cpu: 15m
@@ -235,6 +280,86 @@ app-template:
                 periodSeconds: 5
       pod:
         affinity: *affinity
+
+    # 90-day expiry and size guard for the voice audio that Home Assistant writes to the
+    # home-assistant-voice-recordings volume (docs/voice-assistant/data-register.md). The ZFS
+    # volume is pinned to its node and `shared: yes` lets this pod mount it while Home Assistant
+    # runs. Runs as the Home Assistant user (defaultPodOptions), which owns the files.
+    # Logs counts and usage only, never paths or contents.
+    voice-recordings-cleanup:
+      type: cronjob
+      cronjob:
+        schedule: "15 4 * * *"
+        timeZone: Europe/Madrid
+        concurrencyPolicy: Forbid
+        startingDeadlineSeconds: 21600
+        successfulJobsHistory: 1
+        failedJobsHistory: 3
+        backoffLimit: 2
+        activeDeadlineSeconds: 3600
+        ttlSecondsAfterFinished: 604800
+      pod:
+        restartPolicy: Never
+        automountServiceAccountToken: false
+      containers:
+        cleanup:
+          image:
+            # renovate: datasource=docker depName=busybox
+            repository: busybox
+            tag: 1.38@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4
+          command:
+            - sh
+            - -ec
+            - |
+              ROOT=/recordings
+              RETENTION_DAYS=90
+              HIGH_PCT=90
+              LOW_PCT=85
+              [ -d "$ROOT" ] || { echo "missing $ROOT"; exit 1; }
+              # 1. Age expiry: -mtime +89 matches files last written at least 90 full days ago.
+              n=$(find "$ROOT" -mindepth 1 -type f -mtime +$((RETENTION_DAYS - 1)) -print -delete | wc -l)
+              echo "expired files: $n"
+              # 2. Size guard: above HIGH_PCT used, delete whole run directories (the parent of
+              #    the WAV files), oldest last write first, until usage is back to LOW_PCT.
+              #    Directories written in the last 10 minutes (open runs) are never touched.
+              set -- $(df -Pk "$ROOT" | awk 'NR == 2 { print $2, $3 }')
+              total_k=$1
+              used_k=$2
+              echo "usage: $((used_k * 100 / total_k))% of $((total_k / 1048576)) GiB"
+              if [ $((used_k * 100)) -gt $((total_k * HIGH_PCT)) ]; then
+                excess_k=$((used_k - total_k * LOW_PCT / 100))
+                now=$(date +%s)
+                find "$ROOT" -type f -name '*.wav' -exec stat -c '%Y %s %n' {} + \
+                  | awk -v now="$now" '{
+                      p = $0; sub(/^[0-9]+ [0-9]+ /, "", p)
+                      d = p; sub(/\/[^\/]*$/, "", d)
+                      if ($1 > mt[d]) mt[d] = $1
+                      sz[d] += $2
+                    }
+                    END { for (d in mt) if (now - mt[d] > 600) print mt[d], int(sz[d] / 1024), d }' \
+                  | sort -n \
+                  | {
+                      removed=0
+                      freed_k=0
+                      while read -r mt kb dir; do
+                        [ "$freed_k" -lt "$excess_k" ] || break
+                        rm -rf -- "$dir"
+                        freed_k=$((freed_k + kb))
+                        removed=$((removed + 1))
+                      done
+                      echo "size guard: removed $removed run dirs, $((freed_k / 1024)) MiB"
+                    }
+              fi
+              # 3. Prune empty directories untouched for an hour (Home Assistant recreates the
+              #    parents for every run). Directories emptied by step 1 go on the next run.
+              n=$(find "$ROOT" -mindepth 1 -depth -type d -empty -mmin +60 -print -delete | wc -l)
+              echo "pruned empty dirs: $n"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 128Mi
   defaultPodOptions:
     terminationGracePeriodSeconds: 1
 
@@ -349,6 +474,18 @@ app-template:
         hass:
           hass:
             - path: /config
+    # Voice audio (assist_pipeline debug_recording_dir in config/configuration.yaml). Outside
+    # /config (backed up) and /media (HA media browser). PVC: templates/pvc-voice-recordings.yaml.
+    voice-recordings:
+      enabled: true
+      existingClaim: home-assistant-voice-recordings
+      advancedMounts:
+        hass:
+          hass:
+            - path: /voice-recordings
+        voice-recordings-cleanup:
+          cleanup:
+            - path: /recordings
     configmap:
       enabled: true
       type: configMap
@@ -404,6 +541,35 @@ app-template:
         whisper:
           whisper:
             - path: /data
+    whisper-hass-token:
+      enabled: true
+      type: secret
+      name: whisper-hass-token
+      advancedMounts:
+        whisper:
+          whisper:
+            - path: /secrets
+              readOnly: true
+    whisper-logging:
+      enabled: true
+      type: configMap
+      name: home-assistant-whisper-logging
+      advancedMounts:
+        whisper:
+          whisper:
+            - path: /opt/whisper-logging
+              readOnly: true
+    kivi-model:
+      enabled: true
+      type: emptyDir
+      sizeLimit: 16Mi
+      advancedMounts:
+        openwakeword:
+          01-copy-kivi:
+            - path: /custom
+          openwakeword:
+            - path: /custom
+              readOnly: true
     piper:
       enabled: true
       type: emptyDir

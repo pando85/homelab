@@ -9,7 +9,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 ## Table of Contents
 
 - [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
-- [ArgoCD](#argocd) (4 entries)
+- [ArgoCD](#argocd) (6 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (6 entries)
 - [Storage & Backup](#storage--backup) (12 entries)
@@ -108,6 +108,17 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `Sync=Unknown`. Fix: set `DOCKER_CONFIG` on repo-server to the mounted registry dir.
   Check env after any ArgoCD version bump. See
   `docs/troubleshooting/argocd-kustomize-helm-oci-auth.md`
+
+- Stopping a workload that Argo CD manages (e.g. Home Assistant for an outage test): `kubectl scale`
+  and a `syncPolicy` patch are both reverted (ApplicationSet with `selfHeal`). Scale
+  `argocd/argocd-repo-server` to 0 first, then the workload; restore the workload first, then the
+  repo-server. See `docs/troubleshooting/stop-home-assistant-under-argocd.md`
+
+- Provisioning hook Jobs in Helm-chart apps: defining an Argo CD hook disables *all* Helm hooks;
+  hook-only edits never trigger a sync (hooks are excluded from comparison, so a fixed hook silently
+  does not converge); a Job `activeDeadlineSeconds` above `controller.sync.timeout.seconds` reports
+  "controller sync timeout" instead of the real failure; a `0400` Secret is unreadable by a nonroot
+  hook pod. See `docs/troubleshooting/argocd-helm-hook-provisioning.md`
 
 ## Monitoring & Observability
 
@@ -392,9 +403,9 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `hass_*` history older than 10 days is only in `prometheus-long-term`. See
   `docs/troubleshooting/home-assistant-dashboards.md`
 
-- Omnibattery v1.5.0 can latch `sensor.omnibattery_integration_status` at `backup_mode` after the grid
-  returns while the battery's backup port has a load above `number.venus_backup_offgrid_threshold`
-  (upstream ffunes/Omnibattery#660, fix #723): the 5-minute cooldown re-arms every poll, and the
+- Omnibattery v1.5.0 (and the v1.5.1b1 beta, which lacks #723) can latch
+  `sensor.omnibattery_integration_status` at `backup_mode` after the grid returns while the battery's
+  backup port has a load above `number.venus_backup_offgrid_threshold` (upstream ffunes/Omnibattery#660, fix #723): the 5-minute cooldown re-arms every poll, and the
   battery optimizer holds safe idle. Workaround: the threshold at 500 W instead of 50 W, which hides
   small-load outages from Omnibattery and skips its post-backup cooldown. Set it back to 50 W once
   #723 is released. See `docs/troubleshooting/home-assistant-omnibattery.md`

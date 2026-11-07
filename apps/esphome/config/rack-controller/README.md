@@ -21,13 +21,11 @@ and utilizing our controller for precision temperature management in rack-mounte
 
 - **DC-DC Step-down (LM2596):** Voltage regulation component that efficiently steps down the voltage, contributing to stable and reliable operation of the ESP32 controller.
 
-## Electrical wiring (reference)
+## Electrical wiring
 
-This is a **logical wiring reference**, derived from the components in this README and
-[`rack-controller.yaml`](../rack-controller.yaml). The photos show the enclosure rather
-than the internal connections, so the exact terminal placement, wire routing, and any
-additional interface components are **not verified**. Check the physical assembly before
-applying power.
+The diagram documents the assembled rack controller, using the components listed here
+and the GPIO assignments in [`rack-controller.yaml`](../rack-controller.yaml).
+Check supply polarity and the voltage rails before making wiring changes or applying power.
 
 ![Rack controller reference electrical wiring](./wiring.svg)
 
@@ -65,8 +63,7 @@ applying power.
   logic-level signal, and compatible fans accept 3.3 V control. The ESP32 GPIOs are
   **not 5 V tolerant**: ensure that the specific fan/input arrangement cannot pull a
   GPIO above 3.3 V, including during startup or when the ESP32 is unpowered. Use a
-  suitable 3.3 V-safe buffer/interface if necessary; this diagram does not claim that
-  an unverified direct connection is safe in every build.
+  suitable 3.3 V-safe buffer/interface if necessary.
 - The tachometer is an open-collector signal. The configuration enables the ESP32's
   internal pull-up for GPIO17; verify the resulting high level never exceeds 3.3 V.
   The `pulse_counter` filter multiplies by **0.5**, accounting for two pulses per fan

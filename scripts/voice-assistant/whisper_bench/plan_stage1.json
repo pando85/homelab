@@ -1,0 +1,8 @@
+{"configs": [
+  {"name": "int8-b0",      "args": ["--compute-type", "int8",         "--beam-size", "0"]},
+  {"name": "int8-b5",      "args": ["--compute-type", "int8",         "--beam-size", "5"]},
+  {"name": "int8-b1",      "args": ["--compute-type", "int8",         "--beam-size", "1"]},
+  {"name": "int8f32-b0",   "args": ["--compute-type", "int8_float32", "--beam-size", "0"]},
+  {"name": "int8f32-b5",   "args": ["--compute-type", "int8_float32", "--beam-size", "5"]},
+  {"name": "int8f32-b1",   "args": ["--compute-type", "int8_float32", "--beam-size", "1"]}
+]}

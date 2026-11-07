@@ -110,9 +110,26 @@ customConfig:
       type: internal_metrics
 
   transforms:
+    # TEMPORARY EXCEPTION (from 2026-11-05): voice transcripts DO reach Loki, kept 180 days (Loki
+    # global retention_period, system/loki/values.yaml) for a usage study. See
+    # docs/voice-assistant/data-register.md. This filter is therefore NOT wired into the pipeline
+    # (the truncate transform reads kubernetes_logs directly). It is kept, with its tests, so that
+    # stopping the study is one change: set truncate.inputs back to drop_voice_transcripts, or
+    # revert the commit that disabled it.
+    # What it drops: the Whisper STT container (namespace home-assistant, container whisper)
+    # logs transcripts as "INFO:wyoming_faster_whisper.handler:<text>" in 2.x images and as
+    # "DEBUG:wyoming_faster_whisper.dispatch_handler:<text>" in the 3.8.1.x image.
+    drop_voice_transcripts:
+      type: filter
+      inputs:
+        - kubernetes_logs
+      # One line on purpose: VRL does not accept a newline after "&&".
+      condition: '!(.kubernetes.pod_namespace == "home-assistant" && .kubernetes.container_name == "whisper" && match(string(.message) ?? "", r''^(INFO|DEBUG):wyoming_faster_whisper\.(dispatch_)?handler:''))'
+
     truncate:
       type: remap
       inputs:
+        # Temporary exception: was drop_voice_transcripts (see the comment above).
         - kubernetes_logs
       source: |-
         if length(string(.message) ?? "") > 262000 {
@@ -178,6 +195,93 @@ customConfig:
         syslog_identifier: "{{`{{ syslog_identifier }}`}}"
 
   tests:
+    - name: whisper_transcript_line_is_dropped
+      inputs:
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: whisper
+            message: "INFO:wyoming_faster_whisper.handler:synthetic test sentence"
+      no_outputs_from:
+        - drop_voice_transcripts
+    - name: whisper_debug_transcript_line_is_dropped
+      inputs:
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: whisper
+            message: "DEBUG:wyoming_faster_whisper.handler:synthetic test sentence"
+      no_outputs_from:
+        - drop_voice_transcripts
+    - name: whisper_dispatch_handler_transcript_line_is_dropped
+      inputs:
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: whisper
+            message: "DEBUG:wyoming_faster_whisper.dispatch_handler:synthetic test sentence"
+      no_outputs_from:
+        - drop_voice_transcripts
+    - name: truncate_reads_kubernetes_logs_while_transcripts_are_collected
+      inputs:
+        - insert_at: truncate
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: whisper
+            message: "DEBUG:wyoming_faster_whisper.dispatch_handler:synthetic test sentence"
+      outputs:
+        - extract_from: truncate
+          conditions:
+            - type: vrl
+              source: 'true'
+    - name: whisper_other_lines_are_kept
+      inputs:
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: whisper
+            message: "INFO:faster_whisper:Processing audio with duration 00:03.000"
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: whisper
+            message: "ERROR:wyoming_faster_whisper.handler:synthetic failure"
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: whisper
+            message: "INFO:__main__:Ready"
+      outputs:
+        - extract_from: drop_voice_transcripts
+          conditions:
+            - type: vrl
+              source: 'true'
+    - name: transcript_pattern_in_other_containers_is_kept
+      inputs:
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: home-assistant
+            kubernetes.container_name: piper
+            message: "INFO:wyoming_faster_whisper.handler:synthetic"
+        - insert_at: drop_voice_transcripts
+          type: log
+          log_fields:
+            kubernetes.pod_namespace: other
+            kubernetes.container_name: whisper
+            message: "INFO:wyoming_faster_whisper.handler:synthetic"
+      outputs:
+        - extract_from: drop_voice_transcripts
+          conditions:
+            - type: vrl
+              source: 'true'
     - name: journal_node_name_prefers_host
       inputs:
         - insert_at: journal_labels

@@ -1,0 +1,22 @@
+# Voice audio from Home Assistant's assist_pipeline debug recording (wake-stage room audio and
+# request audio), 90-day expiry by the voice-recordings-cleanup CronJob. See
+# docs/voice-assistant/data-register.md. Deliberately WITHOUT backup labels: Velero selects by
+# `backup/retain` and its bucket is synced offsite, and this audio must stay in the cluster.
+# 500Gi is the worst case (two TVs listening 24 h/day for 90 days); the storage class allows
+# expansion if more satellites stream.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: home-assistant-voice-recordings
+  labels:
+    app.kubernetes.io/instance: home-assistant
+    app.kubernetes.io/name: home-assistant
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  storageClassName: openebs-zfspv
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Gi

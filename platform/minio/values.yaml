@@ -4,6 +4,13 @@ minio:
     repository: pgsty/silo
     tag: RELEASE.2026-10-26T00-00-00Z
 
+  # mc (MinIO client) for post-install hooks (bucket/policy/user provisioning).
+  # quay.io/minio/mc images were removed from quay.io (401 UNAUTHORIZED as of 2026-11).
+  # The pgsty/silo server image includes mc (symlinked to mcli), so reuse it.
+  mcImage:
+    repository: pgsty/silo
+    tag: RELEASE.2026-10-26T00-00-00Z
+
   mode: standalone
 
   drivesPerNode: 1
@@ -77,6 +84,41 @@ minio:
             - "s3:GetBucketLocation"
             - "s3:ListBucket"
             - "s3:ListBucketMultipartUploads"
+    # sccache CI: read-write access to the sccache bucket only.
+    # No access to velero, kaniop or any other bucket. No admin actions.
+    # sccache 0.19.0 client only needs GetObject/PutObject for cache operations.
+    - name: sccacheCiPolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache/*'
+          actions:
+            - "s3:AbortMultipartUpload"
+            - "s3:GetObject"
+            - "s3:PutObject"
+            - "s3:ListMultipartUploadParts"
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache'
+          actions:
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
+            - "s3:ListBucketMultipartUploads"
+    # sccache desktop: read-only access to the sccache bucket only.
+    # No write, delete, admin or backup-bucket access.
+    - name: sccacheDesktopPolicy
+      statements:
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache/*'
+          actions:
+            - "s3:GetObject"
+        - effect: Allow
+          resources:
+            - 'arn:aws:s3:::sccache'
+          actions:
+            - "s3:GetBucketLocation"
+            - "s3:ListBucket"
 
   users:
     - accessKey: velero
@@ -87,6 +129,16 @@ minio:
       existingSecret: minio-users
       existingSecretKey: kaniopPassword
       policy: kaniopBackupPolicy
+    # sccache CI: read-write access to sccache bucket for cache publication
+    - accessKey: sccache-ci
+      existingSecret: minio-users
+      existingSecretKey: sccacheCiPassword
+      policy: sccacheCiPolicy
+    # sccache desktop: read-only access to sccache bucket for cache consumption
+    - accessKey: sccache-desktop
+      existingSecret: minio-users
+      existingSecretKey: sccacheDesktopPassword
+      policy: sccacheDesktopPolicy
     ## Username, password and policy to be assigned to the user
     ## Default policies are [readonly|readwrite|writeonly|consoleAdmin|diagnostics]
     ## Add new policies as explained here https://min.io/docs/minio/kubernetes/upstream/administration/identity-access-management.html#access-management
@@ -115,6 +167,11 @@ minio:
       purge: false
       versioning: false
       objectlocking: false
+    # sccache bucket is NOT declared here: it is provisioned deterministically by
+    # templates/sccache-provisioning.yaml (Helm post-hook Job, hook-weight 1, so it runs after the
+    # chart's post-job that owns policies/users) which owns bucket creation + 50 GiB hard quota +
+    # the 14-day lifecycle rule in one sequential, idempotent, self-verifying script. Declaring it
+    # here too would create a second owner racing the Job.
     #   # Name of the bucket
     # - name: bucket1
     #   # Policy to be set on the
@@ -135,6 +192,23 @@ minio:
     #   # set objectlocking for
     #   # bucket [true|false] NOTE: versioning is enabled by default if you use locking
     #   objectlocking: false
+
+  # Lifecycle + quota + bucket creation for sccache are owned by
+  # templates/sccache-provisioning.yaml (deterministic, self-verifying). No customCommands here:
+  # the chart runs the bucket/user/custom-command containers in PARALLEL with `set -e` and no stdin,
+  # so it cannot order `mb` before the quota/lifecycle steps or pipe a lifecycle JSON document.
+  # Verified against a server built from the same mc image (RELEASE.2026-10-26T00-00-00Z):
+  #   - `mc ilm rule add` has no --id and no --expiry-days (only --expire-days), so a rule cannot be
+  #     given a stable ID that way; `mc ilm rule import` replaces the whole config and is the only
+  #     idempotent form, converging on exactly one rule per sync instead of accumulating.
+  #   - `mc admin bucket quota` is deprecated and errors ("Please use 'mcli quota' instead");
+  #     `mc quota set --size 50GiB` is the supported form and stores 53687091200 bytes.
+  # Both belong in the provisioning Job, which also asserts the applied state and fails the sync
+  # if the cap or the 14-day rule is not exactly right.
+  #
+  # NOTE: quay.io/minio/mc images were removed from quay.io (401 UNAUTHORIZED as of 2026-11).
+  # The provisioning Job and this chart's post-install hooks therefore use mcImage below,
+  # pinned to the already-deployed server image, which ships mc (symlinked to mcli).
 
   environment:
     MINIO_IDENTITY_OPENID_ROLE_POLICY: consoleAdmin

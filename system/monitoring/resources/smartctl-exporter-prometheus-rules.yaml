@@ -9,33 +9,49 @@ spec:
   groups:
     - name: smartctl-exporter-custom.rules
       rules:
-        # k8s-amd64-1: disk sda runs hot (P95: 56-58°C, max: 60°C)
+        # NVMe: dynamic threshold at 80% of firmware-reported op_limit_max
+        # This automatically adapts to each drive's thermal characteristics
+        # (e.g., FIKWOT 90°C → 72°C, SanDisk 84°C → 67°C, grigri 70°C → 56°C)
         - alert: SmartCTLDeviceHighTemperature
           annotations:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
-              a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{instance="k8s-amd64-1", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance="k8s-amd64-1", device!~"nvme.*"} > 65
+              a temperature of {{ $value }} celsius degrees (80% of throttle limit).
+          expr: |
+            smartctl_device_temperature{temperature_type="current", device=~"nvme.*"}
+            > on(device, instance) group_left()
+            smartctl_device_temperature{temperature_type="op_limit_max"} * 0.8
           for: 60m
           labels:
             severity: warning
-        # prusik: SSDs run warm (SATA P95: 51-52°C, NVMe P95: 51-52°C)
+        # k8s-amd64-1: SATA disk sda runs hot (P95: 56-58°C, max: 60°C)
+        # SATA drives don't report op_limit_max, so use hardcoded threshold
         - alert: SmartCTLDeviceHighTemperature
           annotations:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{instance="prusik", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance="prusik", device!~"nvme.*"} > 65
+          expr: smartctl_device_temperature{instance="k8s-amd64-1", temperature_type="current", device!~"nvme.*"} > 65
           for: 60m
           labels:
             severity: warning
-        # Default thresholds for other hosts
+        # prusik: SATA SSDs run warm (P95: 51-52°C)
         - alert: SmartCTLDeviceHighTemperature
           annotations:
             description: |
               Device {{ $labels.device }} on instance {{ $labels.instance }} has
               a temperature of {{ $value }} celsius degrees.
-          expr: smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", device=~"nvme.*"} > 72 or smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", device!~"nvme.*"} > 45
+          expr: smartctl_device_temperature{instance="prusik", temperature_type="current", device!~"nvme.*"} > 65
+          for: 60m
+          labels:
+            severity: warning
+        # Default thresholds for other hosts (SATA only)
+        - alert: SmartCTLDeviceHighTemperature
+          annotations:
+            description: |
+              Device {{ $labels.device }} on instance {{ $labels.instance }} has
+              a temperature of {{ $value }} celsius degrees.
+          expr: smartctl_device_temperature{instance!="k8s-amd64-1", instance!="prusik", temperature_type="current", device!~"nvme.*"} > 45
           for: 60m
           labels:
             severity: warning

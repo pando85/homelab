@@ -1,0 +1,208 @@
+# Synthetic data plan for the "kivi" openWakeWord model (read by gen_clips.py).
+# Voices are Piper ONNX voices (rhasspy/piper-voices on Hugging Face). Every clip is rendered from
+# Spanish phonemes (espeak-ng "es" / "es-419"), also for the English, Italian, Portuguese and Catalan
+# voices: they add speaker variety (LibriTTS-R has 904 speakers, VCTK 109) with a Spanish pronunciation.
+# Speakers are split by role: "train" voices make the training and validation clips, "heldout" voices
+# are used only by the evaluation (eval_*) sets.
+
+voices:
+  # name: [model file stem, role, speaker ids ("all" or [first, last] inclusive), weight, phonemizer]
+  sharvard_m: [es_ES-sharvard-medium, train, [0, 0], 1.5, es]
+  sharvard_f: [es_ES-sharvard-medium, train, [1, 1], 1.5, es]
+  davefx: [es_ES-davefx-medium, train, all, 1.5, es]
+  ald: [es_MX-ald-medium, train, all, 1.5, es-419]
+  libritts_tr: [en_US-libritts_r-medium, train, [0, 799], 4.5, mix]
+  vctk_tr: [en_GB-vctk-medium, train, [0, 89], 1.8, mix]
+  paola: [it_IT-paola-medium, train, all, 0.6, mix]
+  riccardo: [it_IT-riccardo-x_low, train, all, 0.4, mix]
+  faber: [pt_BR-faber-medium, train, all, 0.5, mix]
+  ona: [ca_ES-upc_ona-medium, train, all, 0.5, mix]
+  # held-out speakers (never in training or validation)
+  claude: [es_MX-claude-high, heldout, all, 1.0, es-419]
+  daniela: [es_AR-daniela-high, heldout, all, 1.0, es-419]
+  carlfm: [es_ES-carlfm-x_low, heldout, all, 1.0, es]
+  libritts_ho: [en_US-libritts_r-medium, heldout, [800, 903], 1.0, mix]
+  vctk_ho: [en_GB-vctk-medium, heldout, [90, 108], 0.5, mix]
+# Not used: es_ES-mls_9972-low, es_ES-mls_10246-low and ca_ES-upc_pau-x_low babble or repeat on a single
+# word (median 1.5 to 2.6 s and 2 to 8 energy bursts for "kˈiβi", checked 2026-11-05).
+
+# Pronunciation variants of the target, as phoneme strings (espeak IPA, one symbol per character).
+# "kivi", "quivi" and "kibi" all phonemize to kˈiβi in Spanish espeak; the variants below steer
+# the consonant (approximant β, stop b, labiodental v) and the vowel length instead.
+positive_phonemes:
+  "kˈiβi": 0.45
+  "kˈibi": 0.20
+  "kˈivi": 0.20
+  "kˈiːβi": 0.10
+  "kˈiːbi": 0.05
+# Trailing punctuation changes Piper's prosody (statement, call, question, pause).
+endings: {"": 0.35, ".": 0.2, "!": 0.2, ",": 0.15, "?": 0.1}
+# Piper synthesis ranges (uniform)
+length_scale: [0.75, 1.35]
+noise_scale: [0.4, 1.0]
+noise_w_scale: [0.4, 1.0]
+
+# The comparison wake word for the held-out recall baseline (Spanish phonetics, as the household says it).
+alexa_phonemes: {"alˈeksa": 0.7, "alˈeɣsa": 0.3}
+
+# Adversarial negatives: Spanish words and phrases that share sounds with "kivi". Phonemized with the
+# voice's phonemizer. Some are deliberately very close (only the first consonant differs, or /w/ instead
+# of /β/); each is reported separately by eval so the owner can see which ones are risky.
+adversarial_words:
+  # /w/ instead of /β/, and the fruit itself
+  - kiwi
+  - kiwis
+  - kiui
+  - el kiwi
+  - un kiwi
+  - quiwi
+  # one consonant away
+  - Vivi
+  - Bibi
+  - tivi
+  - la tivi
+  - Fivi
+  - chivi
+  - Pipi
+  - pipí
+  - Titi
+  - Kiki
+  - Kiko
+  - Gigi
+  - Didi
+  - Mimi
+  - Lili
+  - Nini
+  - Fifi
+  - Chichi
+  - Quique
+  - kilo
+  - kilos
+  - Kili
+  - kiri
+  - Kibo
+  - Kiva
+  - Kia
+  - bici
+  - bicis
+  - civil
+  - cívico
+  - civiles
+  - bebí
+  - viví
+  - vivir
+  - vivo
+  - debí
+  - pedí
+  - servir
+  - sirvió
+  - Olivia
+  - Silvia
+  - Livia
+  - Libia
+  # "qui" / "ki" starts
+  - quizá
+  - quizás
+  - quieres
+  - quiere
+  - quiero
+  - quién
+  - quiénes
+  - quina
+  - quinina
+  - quinto
+  - quince
+  - quise
+  - quiso
+  - quita
+  - quitar
+  - quitó
+  - quieto
+  - quimera
+  - química
+  - kimono
+  - kiosco
+  - quinoa
+  - Quito
+  - kit
+  - Kindle
+  - kebab
+  - Kevin
+  - Kenia
+  - Kiev
+  - quisiera
+  - esquí
+  - esquivo
+  - esquivar
+  - esquivé
+  - esquivó
+  - equivocar
+  - equívoco
+  - equivale
+  - equipo
+  - Aquiles
+  - esquimal
+  - tranquilo
+  - chiquito
+  - chivo
+  - chiva
+  - chivato
+  # across word boundaries
+  - aquí vi
+  - aquí vino
+  - aquí viví
+  - aquí vive
+  - y aquí vi
+  - aquí
+  - aquí está
+  - y vi
+  - ya vi
+  - lo vi
+  - te vi
+  - la vi
+  - si vi
+  - ti vi
+  - qué vi
+  - que vi
+  - qué vino
+  - qué bien
+  - y bien
+  - y vino
+  - mi vida
+  - ki
+  - qui
+  - vi
+  - ki ki ri kí
+  - cuchi cuchi
+# Sentences with the confusers in context (spoken as one clip).
+adversarial_sentences:
+  - aquí vi una película muy buena
+  - quizá vamos mañana al cine
+  - el kiwi está muy maduro
+  - Vivi, ven a cenar
+  - tengo una bici nueva
+  - ¿quieres ver la tivi un rato?
+  - esquivó el golpe en el último segundo
+  - Kiko, apaga la luz de la cocina
+  - Quique está en casa de su abuela
+  - la guerra civil duró tres años
+  - ya lo vi ayer por la noche
+  - ¿qué vino compraste para la cena?
+  - me equivoqué de canal
+  - quiero un zumo de kiwi
+  - ¿quién viene a comer hoy?
+  - aquí vive mi hermana
+  - quizás vi mal el resultado
+  - Bibi y Fifi juegan en el parque
+  - el equipo ganó el partido
+  - qué bien lo hemos pasado
+  - Silvia, ¿dónde están las llaves?
+  - mi vida es muy tranquila
+  - se fue a Kiev en avión
+  - la química es difícil
+  - ¿quieres un kilo de naranjas?
+  - quita eso de la mesa
+  - el chivo salta la valla
+  - Olivia vive en Sevilla
+  - pon la tele en el canal uno
+  - ¿qué ves en la tivi?

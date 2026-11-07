@@ -13,6 +13,12 @@ frontend:
 recorder:
   db_url: !env_var ZZ_DB_URL
 
+# Owner decision 2026-11-05: keep the audio of every pipeline run for 90 days, including the
+# wake-stage audio (continuous room audio while a satellite listens). Volume, expiry and rules:
+# docs/voice-assistant/data-register.md. Stop: remove this block (needs a Home Assistant restart).
+assist_pipeline:
+  debug_recording_dir: /voice-recordings
+
 prometheus:
   namespace: hass
   requires_auth: false

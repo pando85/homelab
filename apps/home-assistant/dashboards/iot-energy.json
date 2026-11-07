@@ -233,7 +233,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "(\n    sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__range])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__range]))\n    + (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[$__range])) or vector(0))\n    - (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[$__range])) or vector(0))\n)",
+          "expr": "(\n    sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__range])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__range]))\n    + (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[$__range:1m])) or vector(0))\n    - (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[$__range:1m])) or vector(0))\n)",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -775,7 +775,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum_over_time(\n    (\n        (\n            (\n                sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[1h])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[1h]))\n                + (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[1h])) or vector(0))\n                - (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[1h])) or vector(0))\n            )\n            * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n        ) >= 0\n    )[$__range:1h]\n)",
+          "expr": "sum_over_time(\n    (\n        (\n            (\n                sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[1h])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[1h]))\n                + (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[1h:1m])) or vector(0))\n                - (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[1h:1m])) or vector(0))\n            )\n            * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n        ) >= 0\n    )[$__range:1h]\n)",
           "hide": false,
           "instant": true,
           "legendFormat": "Circuit 1",
@@ -1380,7 +1380,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "(\n    sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__interval])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__interval]))\n    + (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[$__interval])) or vector(0))\n    - (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[$__interval])) or vector(0))\n)",
+          "expr": "(\n    sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[$__interval])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[$__interval]))\n    + (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[$__interval:1m])) or vector(0))\n    - (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[$__interval:1m])) or vector(0))\n)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1613,7 +1613,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum_over_time(\n    (\n        (\n            sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[1h])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[1h]))\n            + (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[1h])) or vector(0))\n            - (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[1h])) or vector(0))\n        )\n        * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n    )[$__interval:1h]\n)",
+          "expr": "sum_over_time(\n    (\n        (\n            sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_1_energy\"}[1h])) - sum(increase(hass_sensor_energy_kwh{entity=\"sensor.shellyem_main_channel_2_energy\"}[1h]))\n            + (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[1h:1m])) or vector(0))\n            - (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[1h:1m])) or vector(0))\n        )\n        * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n    )[$__interval:1h]\n)",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -1633,6 +1633,351 @@
         "w": 24,
         "x": 0,
         "y": 57
+      },
+      "id": 61,
+      "panels": [],
+      "title": "Servers",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "kwatth"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 58
+      },
+      "id": 62,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum(delta((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.servers_energy\"}))[$__interval:1m])) by (entity, friendly_name)",
+          "format": "time_series",
+          "instant": false,
+          "interval": "1h",
+          "legendFormat": "servers",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Energy Consumed",
+      "type": "barchart",
+      "description": "Backup-port (servers) energy, the integral of the battery backup-port output; inside circuit 1."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "watt"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Price"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "auto"
+              },
+              {
+                "id": "unit",
+                "value": "€/kWh"
+              },
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#ff780a",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 58
+      },
+      "id": 63,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "avg_over_time((sum(hass_sensor_power_w{entity=~\"sensor.venus_ac_offgrid_power\"}) by (entity, friendly_name))[$__interval:])",
+          "instant": false,
+          "legendFormat": "servers",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "expr": "sum(hass_sensor_unit_u0x20ac_per_kwh{entity=~\"sensor.esios_pvpc\"})",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "Price",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Power",
+      "type": "timeseries",
+      "description": "Battery backup-port (EPS) output power feeding the servers; inside circuit 1."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${datasource}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "currencyEUR"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 66
+      },
+      "id": 64,
+      "options": {
+        "barRadius": 0,
+        "barWidth": 0.97,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "auto",
+        "showValue": "never",
+        "stacking": "normal",
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "xField": "Time",
+        "xTickLabelRotation": 0,
+        "xTickLabelSpacing": 100
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum_over_time(\n    (\n        sum(delta((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.servers_energy\"}))[1h:1m])) by (entity, friendly_name)\n        * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n    )[$__interval:1h]\n)",
+          "format": "time_series",
+          "instant": false,
+          "interval": "1h",
+          "legendFormat": "servers",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Cost",
+      "type": "barchart",
+      "description": "Servers energy x the hour's mean PVPC price; inside circuit 1."
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 74
       },
       "id": 28,
       "panels": [],
@@ -1692,7 +2037,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 75
       },
       "id": 29,
       "options": {
@@ -1825,7 +2170,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 75
       },
       "id": 30,
       "options": {
@@ -1923,7 +2268,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 83
       },
       "id": 35,
       "options": {
@@ -1974,7 +2319,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 74
+        "y": 91
       },
       "id": 48,
       "panels": [],
@@ -2034,7 +2379,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 75
+        "y": 92
       },
       "id": 49,
       "options": {
@@ -2167,7 +2512,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 75
+        "y": 92
       },
       "id": 50,
       "options": {
@@ -2265,7 +2610,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 83
+        "y": 100
       },
       "id": 51,
       "options": {
@@ -2316,7 +2661,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 91
+        "y": 108
       },
       "id": 24,
       "panels": [],
@@ -2376,7 +2721,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 92
+        "y": 109
       },
       "id": 25,
       "options": {
@@ -2509,7 +2854,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 92
+        "y": 109
       },
       "id": 26,
       "options": {
@@ -2607,7 +2952,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 100
+        "y": 117
       },
       "id": 34,
       "options": {
@@ -2658,7 +3003,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 108
+        "y": 125
       },
       "id": 4,
       "panels": [],
@@ -2718,7 +3063,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 109
+        "y": 126
       },
       "id": 21,
       "options": {
@@ -2883,7 +3228,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 109
+        "y": 126
       },
       "id": 14,
       "options": {
@@ -2960,7 +3305,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 117
+        "y": 134
       },
       "id": 52,
       "panels": [],
@@ -2995,7 +3340,7 @@
         "h": 5,
         "w": 6,
         "x": 0,
-        "y": 118
+        "y": 135
       },
       "id": 53,
       "options": {
@@ -3022,7 +3367,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[$__range]))",
+          "expr": "sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[$__range:1m]))",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -3060,7 +3405,7 @@
         "h": 5,
         "w": 6,
         "x": 6,
-        "y": 118
+        "y": 135
       },
       "id": 54,
       "options": {
@@ -3087,7 +3432,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[$__range]))",
+          "expr": "sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[$__range:1m]))",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -3125,7 +3470,7 @@
         "h": 5,
         "w": 6,
         "x": 12,
-        "y": 118
+        "y": 135
       },
       "id": 55,
       "options": {
@@ -3152,7 +3497,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum_over_time((\n    (\n        (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[1h])) or vector(0))\n        - (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[1h])) or vector(0))\n    )\n    * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n)[$__range:1h])",
+          "expr": "sum_over_time((\n    (\n        (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[1h:1m])) or vector(0))\n        - (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[1h:1m])) or vector(0))\n    )\n    * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n)[$__range:1h])",
           "instant": true,
           "legendFormat": "__auto",
           "range": false,
@@ -3190,7 +3535,7 @@
         "h": 5,
         "w": 6,
         "x": 18,
-        "y": 118
+        "y": 135
       },
       "id": 56,
       "options": {
@@ -3280,7 +3625,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 123
+        "y": 140
       },
       "id": 57,
       "options": {
@@ -3313,7 +3658,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[$__interval]))",
+          "expr": "sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[$__interval:1m]))",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -3328,7 +3673,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "-sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[$__interval]))",
+          "expr": "-sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[$__interval:1m]))",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -3405,7 +3750,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 123
+        "y": 140
       },
       "id": 58,
       "options": {
@@ -3434,25 +3779,11 @@
           "legendFormat": "AC power",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "exemplar": false,
-          "expr": "avg_over_time(sum(hass_sensor_power_w{entity=\"sensor.venus_ac_offgrid_power\"})[$__interval:])",
-          "format": "time_series",
-          "instant": false,
-          "legendFormat": "Backup port (servers)",
-          "range": true,
-          "refId": "B"
         }
       ],
       "title": "Power",
       "type": "timeseries",
-      "description": "Battery AC power (positive discharging, negative charging; includes what it feeds the backup port) and the backup-port (servers) load."
+      "description": "Battery AC power (positive discharging, negative charging; includes what it feeds the backup port, shown under Servers)."
     },
     {
       "datasource": {
@@ -3558,7 +3889,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 131
+        "y": 148
       },
       "id": 59,
       "options": {
@@ -3581,7 +3912,7 @@
           },
           "editorMode": "code",
           "exemplar": false,
-          "expr": "sum_over_time((\n    (\n        (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}[1h])) or vector(0))\n        - (sum(increase(hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}[1h])) or vector(0))\n    )\n    * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n)[$__interval:1h])",
+          "expr": "sum_over_time((\n    (\n        (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_discharging_energy\"}))[1h:1m])) or vector(0))\n        - (sum(increase((max without(instance, pod) (hass_sensor_energy_kwh{entity=\"sensor.venus_total_charging_energy\"}))[1h:1m])) or vector(0))\n    )\n    * scalar(sum(sum_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])) / sum(count_over_time(hass_sensor_unit_u0x20ac_per_kwh{entity=\"sensor.esios_pvpc\"}[1h])))\n)[$__interval:1h])",
           "format": "time_series",
           "instant": false,
           "interval": "1h",
@@ -3675,7 +4006,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 131
+        "y": 148
       },
       "id": 60,
       "options": {

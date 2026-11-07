@@ -1,0 +1,509 @@
+# What the climate optimizer plans, in SHADOW mode only: the Climate optimizer dashboard shows the
+# plan next to what the heat pump does, and the select below is the owner's mode switch. Read only:
+# GET /climate/plan/summary of the in-cluster optimizer service (battery-optimizer, contract in
+# pando85/home-energy-optimizer docs/climate-plan-contract.md), once a minute, same mechanism as
+# battery_optimizer_plan.yaml. Nothing here writes to a device or reads the plan to control it: the
+# plan is advisory and `live` is locked in the optimizer (ADR-0008 proposed), whatever is selected.
+#
+# The summary answers 200 in every state, so the sensors can say `mode_off` or `expired`: the plan
+# state sensor then shows the state, the values of the plan are unknown (never the last plan's), and
+# every sensor is unavailable when the service does not answer (down, non-200, not JSON).
+#
+# The mode select: `shadow` is first so a fresh helper starts in shadow without a write, and there
+# is no `initial:` on purpose, so the owner's choice survives restarts (Reloader, updates). The
+# optimizer reads it; with the helper absent or unknown it falls back to its own config. `live` is
+# a request the optimizer refuses (live_locked); `off` stops the export, not the optimizer's
+# measurement.
+#
+# Rooms are those of the plan (bedroom, hall_kitchen, office_t); a room added to the optimizer needs
+# its three predicted-temperature sensors below.
+input_select:
+  climate_optimizer_mode:
+    name: Climate optimizer mode
+    icon: mdi:home-thermometer-outline
+    options:
+      - shadow
+      - "off"
+      - live
+
+rest_command:
+  climate_optimizer_summary:
+    url: http://battery-optimizer.battery-optimizer.svc:8080/climate/plan/summary
+    method: get
+    timeout: 10
+
+template:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: rest_command.climate_optimizer_summary
+        response_variable: plan_response
+        continue_on_error: true
+    sensor:
+      - name: Climate optimizer plan state
+        unique_id: climate_optimizer_plan_state
+        icon: mdi:calendar-check
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.state if c.state is string else none }}
+        attributes:
+          reason: >-
+            {% set c = plan_response.content %}
+            {{ c.reason if c.reason is string else none }}
+          plan_status: >-
+            {% set c = plan_response.content %}
+            {{ c.status if c.status is string else none }}
+      - name: Climate optimizer requested mode
+        unique_id: climate_optimizer_requested_mode
+        icon: mdi:account-arrow-right
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.requested_mode if c.requested_mode is string else none }}
+      - name: Climate optimizer effective mode
+        unique_id: climate_optimizer_effective_mode
+        icon: mdi:shield-check
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.effective_mode if c.effective_mode is string else none }}
+      - name: Climate optimizer mode source
+        unique_id: climate_optimizer_mode_source
+        icon: mdi:source-branch
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.mode_source if c.mode_source is string else none }}
+      - name: Climate optimizer plan id
+        unique_id: climate_optimizer_plan_id
+        icon: mdi:identifier
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.plan_id if c.plan_id is string else none }}
+        attributes:
+          generated_at: >-
+            {% set c = plan_response.content %}
+            {{ c.generated_at if c.generated_at is string else none }}
+          valid_until: >-
+            {% set c = plan_response.content %}
+            {{ c.valid_until if c.valid_until is string else none }}
+          regime: >-
+            {% set c = plan_response.content %}
+            {{ c.regime if c.regime is string else none }}
+          code_version: >-
+            {% set c = plan_response.content %}
+            {{ c.code_version if c.code_version is string else none }}
+      - name: Climate optimizer plan generated
+        unique_id: climate_optimizer_plan_generated
+        device_class: timestamp
+        icon: mdi:calendar-clock
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.generated_at if c.generated_at is string else none }}
+        attributes:
+          valid_until: >-
+            {% set c = plan_response.content %}
+            {{ c.valid_until if c.valid_until is string else none }}
+      - name: Climate optimizer plan age
+        unique_id: climate_optimizer_plan_age
+        unit_of_measurement: "min"
+        device_class: duration
+        state_class: measurement
+        icon: mdi:timer-sand
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ ((c.age_s / 60) | round(1)) if c.age_s is number else none }}
+      - name: Climate optimizer plan expires in
+        unique_id: climate_optimizer_plan_expires_in
+        unit_of_measurement: "min"
+        device_class: duration
+        state_class: measurement
+        icon: mdi:timer-sand-complete
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ ((c.expires_in_s / 60) | round(1)) if c.expires_in_s is number else none }}
+      - name: Climate optimizer water target now
+        unique_id: climate_optimizer_water_target_now
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:water-thermometer
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ (c.water_c_now | int) if c.water_c_now is number else none }}
+      - name: Climate optimizer next heating start
+        unique_id: climate_optimizer_next_heating_start
+        device_class: timestamp
+        icon: mdi:radiator
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.next_heating_start if c.next_heating_start is string else none }}
+      - name: Climate optimizer next heating stop
+        unique_id: climate_optimizer_next_heating_stop
+        device_class: timestamp
+        icon: mdi:radiator-off
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.next_heating_stop if c.next_heating_stop is string else none }}
+      - name: Climate optimizer heating slots
+        unique_id: climate_optimizer_heating_slots
+        unit_of_measurement: "slots"
+        state_class: measurement
+        icon: mdi:counter
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ (c.heating_slots | int) if c.heating_slots is number else none }}
+      - name: Climate optimizer bedroom predicted 1h
+        unique_id: climate_optimizer_bedroom_predicted_1h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('bedroom') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(1) if p is mapping and 1 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer bedroom predicted 3h
+        unique_id: climate_optimizer_bedroom_predicted_3h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('bedroom') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(3) if p is mapping and 3 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer bedroom predicted 6h
+        unique_id: climate_optimizer_bedroom_predicted_6h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('bedroom') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(6) if p is mapping and 6 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('bedroom') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer hall kitchen predicted 1h
+        unique_id: climate_optimizer_hall_kitchen_predicted_1h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('hall_kitchen') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(1) if p is mapping and 1 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer hall kitchen predicted 3h
+        unique_id: climate_optimizer_hall_kitchen_predicted_3h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('hall_kitchen') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(3) if p is mapping and 3 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer hall kitchen predicted 6h
+        unique_id: climate_optimizer_hall_kitchen_predicted_6h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('hall_kitchen') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(6) if p is mapping and 6 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('hall_kitchen') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer office t predicted 1h
+        unique_id: climate_optimizer_office_t_predicted_1h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('office_t') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(1) if p is mapping and 1 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer office t predicted 3h
+        unique_id: climate_optimizer_office_t_predicted_3h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('office_t') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(3) if p is mapping and 3 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+      - name: Climate optimizer office t predicted 6h
+        unique_id: climate_optimizer_office_t_predicted_6h
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer-chevron-up
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {% set p = c.predicted_room_c %}
+          {% set v = p.rooms.get('office_t') if p is mapping and p.rooms is mapping else none %}
+          {% set i = p.hours_ahead.index(6) if p is mapping and 6 in p.hours_ahead else none %}
+          {{ v[i] | round(1) if v is sequence and i is not none and i < v | length and v[i] is number else none }}
+        attributes:
+          comfort_floor_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.floor_c if k is mapping else none }}
+          comfort_day_min_c: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.day_min_c if k is mapping else none }}
+          floor_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.floor_from_helper if k is mapping else none }}
+          day_min_from_helper: >-
+            {% set c = plan_response.content %}
+            {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
+            {{ k.day_min_from_helper if k is mapping else none }}
+    binary_sensor:
+      - name: Climate optimizer live locked
+        unique_id: climate_optimizer_live_locked
+        icon: mdi:lock-alert
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.live_locked if c.live_locked is boolean else none }}
+        attributes:
+          reason: >-
+            {% set c = plan_response.content %}
+            {{ c.live_lock_reason if c.live_lock_reason is string else none }}
+      - name: Climate optimizer heating planned now
+        unique_id: climate_optimizer_heating_planned_now
+        icon: mdi:radiator
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping and plan_response.content.state is string }}
+        state: >-
+          {% set c = plan_response.content %}
+          {{ c.heating_now if c.heating_now is boolean else none }}
+        attributes:
+          slot_start: >-
+            {% set c = plan_response.content %}
+            {{ c.slot_start if c.slot_start is string else none }}
+          hot_water_planned_now: >-
+            {% set c = plan_response.content %}
+            {{ c.dhw_now if c.dhw_now is boolean else none }}

@@ -1,0 +1,132 @@
+# yamllint disable rule:colons rule:commas rule:braces
+# Synthetic Spanish test phrases for the "Kivi" conversation-agent evaluation.
+# No real user data. Entity ids refer to scripts/voice-assistant/agent_eval/inventory_es.yaml
+# (a FAKE home; the satellite is in "salon").
+#
+# Expectation language (see scripts/voice-assistant/agent_eval/grade.py):
+#   expect: a single alternative, or {any_of: [alternative, ...]}.
+#   alternative keys:
+#     tool: name or [names]     one successful call to one of these tools
+#     targets / targets_include / targets_within: entity ids the fake HA
+#                               resolved for that call (exact / superset / subset)
+#     args: {slot: value | ">=N" | "<=N" | [alternatives]}  (also the derived
+#                               slots volume_dir and total_seconds)
+#     calls: [ {tool, targets, args}, ... ]   several required calls
+#     clarify: true             no state-changing call, answer is a question
+#     no_tool: true             no tool call at all
+#     tools_any: [names]        at least one call to one of these (any result)
+#     answer_regex / answer_regex_all / must_not_regex   checks on the final text
+#     limitation: true          the final text must say it cannot know/consult it
+#     review: true              not auto-graded (reported separately)
+# Each phrase also gets automatic spoken-format checks (no markdown, Spanish).
+
+control:
+  # ---- lights ----
+  - {id: c01, kind: action, text: "Enciende la luz del salón", expect: {tool: intent__HassTurnOn, targets: [light.salon_techo, light.salon_lampara]}}
+  - {id: c02, kind: action, text: "Apaga la luz de la cocina", expect: {tool: intent__HassTurnOff, targets: [light.cocina_techo, light.cocina_encimera]}}
+  - {id: c03, kind: action, text: "Apaga todas las luces del dormitorio", expect: {tool: intent__HassTurnOff, targets: [light.dormitorio_techo, light.dormitorio_noche]}}
+  - {id: c04, kind: action, text: "Enciende la lámpara de pie", expect: {tool: intent__HassTurnOn, targets: [light.salon_lampara]}}
+  - {id: c05, kind: action, text: "Pon la luz del salón al cuarenta por ciento", expect: {tool: light__HassLightSet, targets: [light.salon_techo, light.salon_lampara], args: {brightness: 40}}}
+  - {id: c06, kind: action, text: "Sube el brillo de la lámpara de pie al 80", expect: {tool: light__HassLightSet, targets: [light.salon_lampara], args: {brightness: 80}}}
+  - {id: c07, kind: action, text: "Pon la luz de la encimera al máximo", expect: {tool: light__HassLightSet, targets: [light.cocina_encimera], args: {brightness: 100}}}
+  - {id: c08, kind: action, text: "Enciende la luz del baño", expect: {tool: intent__HassTurnOn, targets: [light.bano]}}
+  - {id: c09, kind: action, text: "Apaga todas las luces de la casa", expect: {tool: intent__HassTurnOff, targets: [light.salon_techo, light.salon_lampara, light.cocina_techo, light.cocina_encimera, light.dormitorio_techo, light.dormitorio_noche, light.bano]}}
+  # ---- covers ----
+  - {id: c10, kind: action, text: "Baja la persiana del salón", expect: {any_of: [{tool: intent__HassTurnOff, targets: [cover.salon_persiana]}, {tool: intent__HassSetPosition, targets: [cover.salon_persiana], args: {position: 0}}]}}
+  - {id: c11, kind: action, text: "Sube la persiana del dormitorio", expect: {any_of: [{tool: intent__HassTurnOn, targets: [cover.dormitorio_persiana]}, {tool: intent__HassSetPosition, targets: [cover.dormitorio_persiana], args: {position: 100}}]}}
+  - {id: c12, kind: action, text: "Abre el toldo de la terraza", expect: {any_of: [{tool: intent__HassTurnOn, targets: [cover.terraza_toldo]}, {tool: intent__HassSetPosition, targets: [cover.terraza_toldo], args: {position: 100}}]}}
+  - {id: c13, kind: action, text: "Pon la persiana del salón a la mitad", expect: {tool: intent__HassSetPosition, targets: [cover.salon_persiana], args: {position: 50}}}
+  - {id: c14, kind: action, text: "Para el toldo", expect: {tool: intent__HassStopMoving, targets: [cover.terraza_toldo]}}
+  # ---- climate ----
+  - {id: c15, kind: action, text: "Pon el aire del salón a 22 grados", expect: {tool: climate__HassClimateSetTemperature, targets: [climate.salon_aire], args: {temperature: 22}}}
+  - {id: c16, kind: action, text: "Pon la temperatura del dormitorio a veintiuno y medio", expect: {tool: climate__HassClimateSetTemperature, targets: [climate.dormitorio_aire], args: {temperature: 21.5}}}
+  - {id: c17, kind: ambiguous, text: "Pon el aire acondicionado a 24", expect: {any_of: [{tool: climate__HassClimateSetTemperature, targets: [climate.salon_aire], args: {temperature: 24}}, {clarify: true}]}}
+  # ---- media on "la tele" ----
+  - {id: c18, kind: action, text: "Pon el volumen de la tele al 30", expect: {tool: media_player__HassSetVolume, targets: [media_player.tele_salon], args: {volume_level: 30}}}
+  - {id: c19, kind: action, text: "Sube el volumen de la tele", expect: {any_of: [{tool: media_player__HassSetVolumeRelative, targets: [media_player.tele_salon], args: {volume_dir: up}}, {tool: media_player__HassSetVolume, targets: [media_player.tele_salon], args: {volume_level: ">=26"}}]}}
+  - {id: c20, kind: ambiguous, text: "Baja el volumen", expect: {any_of: [{tool: media_player__HassSetVolumeRelative, targets: [media_player.tele_salon], args: {volume_dir: down}}, {clarify: true}]}}
+  - {id: c21, kind: action, text: "Silencia la tele", expect: {tool: media_player__HassMediaPlayerMute, targets: [media_player.tele_salon]}}
+  - {id: c22, kind: action, text: "Quita el silencio de la tele", expect: {tool: media_player__HassMediaPlayerUnmute, targets: [media_player.tele_salon]}}
+  - {id: c23, kind: action, text: "Pausa la tele", expect: {tool: media_player__HassMediaPause, targets: [media_player.tele_salon]}}
+  - {id: c24, kind: action, text: "Reanuda la tele", expect: {tool: media_player__HassMediaUnpause, targets: [media_player.tele_salon]}}
+  - {id: c25, kind: action, text: "Apaga la tele", expect: {tool: intent__HassTurnOff, targets: [media_player.tele_salon]}}
+  - {id: c26, kind: action, text: "Pon la siguiente canción en el altavoz de la cocina", expect: {tool: media_player__HassMediaNext, targets: [media_player.altavoz_cocina]}}
+  # ---- timers and misc devices ----
+  - {id: c27, kind: action, text: "Pon un temporizador de diez minutos", expect: {tool: intent__HassStartTimer, args: {total_seconds: 600}}}
+  - {id: c28, kind: action, text: "Pon un temporizador de una hora y media", expect: {tool: intent__HassStartTimer, args: {total_seconds: 5400}}}
+  - {id: c29, kind: action, text: "Pon un temporizador de la pasta de ocho minutos", expect: {tool: intent__HassStartTimer, args: {total_seconds: 480}}}
+  - {id: c30, kind: action, text: "Cancela el temporizador", expect: {tool: [intent__HassCancelTimer, intent__HassCancelAllTimers]}}
+  - {id: c31, kind: state, text: "¿Cuánto falta para el temporizador?", expect: {tool: intent__HassTimerStatus}}
+  - {id: c32, kind: action, text: "Enciende la cafetera", expect: {tool: intent__HassTurnOn, targets: [switch.cafetera]}}
+  - {id: c33, kind: action, text: "Apaga el ventilador del dormitorio", expect: {tool: intent__HassTurnOff, targets: [fan.dormitorio_ventilador]}}
+  - {id: c34, kind: action, text: "Pon el ventilador al cincuenta por ciento", expect: {tool: fan__HassFanSetSpeed, targets: [fan.dormitorio_ventilador], args: {percentage: 50}}}
+  # ---- state questions (read the live context) ----
+  - {id: c35, kind: state, text: "¿Qué temperatura hace en el salón?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "22[.,]4|22 coma 4|veintidós|22 grados y (4|cuatro) décimas"}}
+  - {id: c36, kind: state, text: "¿Está encendida la luz de la cocina?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "(?i)(no está|está apagada|apagada|\\bno\\b)"}}
+  - {id: c37, kind: state, text: "¿Está abierta la persiana del dormitorio?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "(?i)(cerrada|no está abierta|\\bno\\b)"}}
+  # ---- colloquial and ambiguous ----
+  - {id: c38, kind: colloquial, text: "Está muy oscuro aquí", expect: {any_of: [{tool: [intent__HassTurnOn, light__HassLightSet], targets_include: [light.salon_techo]}, {clarify: true}]}}
+  - {id: c39, kind: colloquial, text: "Quita la tele", expect: {any_of: [{tool: intent__HassTurnOff, targets: [media_player.tele_salon]}, {clarify: true}]}}
+  - {id: c40, kind: colloquial, text: "Ponme la tele más bajita", expect: {any_of: [{tool: media_player__HassSetVolumeRelative, targets: [media_player.tele_salon], args: {volume_dir: down}}, {tool: media_player__HassSetVolume, targets: [media_player.tele_salon], args: {volume_level: "<=24"}}]}}
+  - {id: c41, kind: colloquial, text: "Apágalo todo en la cocina", expect: {tool: intent__HassTurnOff, targets_include: [light.cocina_techo, light.cocina_encimera], targets_within: [light.cocina_techo, light.cocina_encimera, media_player.altavoz_cocina, switch.cafetera]}}
+  - {id: c42, kind: ambiguous, text: "Enciende la luz del techo", expect: {any_of: [{tool: intent__HassTurnOn, targets: [light.salon_techo]}, {clarify: true}]}}
+  - {id: c43, kind: colloquial, text: "Hace mucho calor", expect: {review: true}}
+  - {id: c44, kind: unknown_target, text: "Enciende la luz del garaje", expect: {no_success_claim: true, answer_regex: "(?i)(no (hay|existe|encuentro|conozco|tengo|he podido|puedo|reconozco)|no está|ninguna)"}}
+
+general:
+  - {id: g01, text: "¿Cuál es la capital de Francia?", expect: {no_tool: true, answer_regex: "(?i)par[ií]s"}}
+  - {id: g02, text: "¿Cuántos días tiene febrero en un año bisiesto?", expect: {no_tool: true, answer_regex: "29|veintinueve"}}
+  - {id: g03, text: "¿Quién pintó Las Meninas?", expect: {no_tool: true, answer_regex: "(?i)vel[aá]zquez"}}
+  - {id: g04, text: "¿Cuánto es diecisiete por veintitrés?", expect: {no_tool: true, answer_regex: "391|trescientos noventa y uno"}}
+  - {id: g05, text: "¿Cómo se dice gracias en inglés?", expect: {no_tool: true, answer_regex: "(?i)thank"}}
+  - {id: g06, text: "¿A cuántos grados hierve el agua a nivel del mar?", expect: {no_tool: true, answer_regex: "100|cien"}}
+  - {id: g07, text: "¿Cuántos planetas tiene el sistema solar?", expect: {no_tool: true, answer_regex: "(?i)\\b(8|ocho)\\b"}}
+  - {id: g08, text: "Traduce buenos días al francés", expect: {no_tool: true, answer_regex: "(?i)bonjour"}}
+  - {id: g09, text: "¿Cómo te llamas?", expect: {no_tool: true, answer_regex: "Kivi"}}
+  - {id: g10, text: "¿Cuál es la raíz cuadrada de ciento cuarenta y cuatro?", expect: {no_tool: true, answer_regex: "(?i)\\b(12|doce)\\b"}}
+  - {id: g11, text: "¿Cuánto tarda la luz del Sol en llegar a la Tierra?", expect: {no_tool: true, answer_regex: "(?i)(8|ocho)\\s*minutos"}}
+  - {id: g12, text: "Cuéntame un chiste corto", expect: {no_tool: true, review: true}}
+  - {id: g13, text: "Dame una receta rápida de tortilla de patatas, en pocas frases", expect: {no_tool: true, answer_regex: "(?i)(huevo)"}}
+  - {id: g14, text: "¿Qué diferencia hay entre una pila y una batería?", expect: {no_tool: true, review: true}}
+  - {id: g15, text: "¿Quién escribió El Quijote?", expect: {no_tool: true, answer_regex: "(?i)cervantes"}}
+
+live:
+  - {id: l01, text: "¿Qué tiempo hace fuera?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "14|catorce"}}
+  - {id: l02, text: "¿Va a llover mañana?", expect: {limitation: true}}
+  - {id: l03, text: "¿Qué hora es?", expect: {answer_regex: "(18[:.h ]?42|6[:.]42|seis y cuarenta y dos|siete menos dieciocho)"}}
+  - {id: l04, text: "¿Qué día es hoy?", expect: {answer_regex_all: ["(?i)jueves", "(?i)(\\b5\\b|cinco)"]}}
+  - {id: l05, text: "¿Qué tengo hoy en el calendario?", expect: {tools_any: [calendar__get_events], answer_regex: "(?i)colegio"}}
+  - {id: l06, text: "¿Qué tengo esta semana en el calendario?", expect: {tools_any: [calendar__get_events], answer_regex: "(?i)dentista"}}
+  - {id: l07, text: "¿A cuánto está el bitcoin ahora mismo?", expect: {limitation: true, must_not_regex: "\\d[\\d.,]*\\s*(€|\\$|euros|dólares|mil)"}}
+  - {id: l08, text: "¿Cómo quedó el partido de ayer del Real Madrid?", expect: {limitation: true, must_not_regex: "\\d\\s*(-|–|a|\\sa\\s)\\s*\\d"}}
+  - {id: l09, text: "¿Hay atascos ahora mismo en la M-30?", expect: {limitation: true}}
+  - {id: l10, text: "¿Qué noticias hay hoy?", expect: {limitation: true}}
+  - {id: l11, text: "¿Qué tiempo va a hacer el fin de semana?", expect: {limitation: true}}
+
+# Each follow-up is a conversation; every turn is graded and the model sees
+# its own previous answers and (fake) tool results.
+followup:
+  - id: f01
+    turns:
+      - {text: "Enciende la luz del dormitorio", expect: {tool: intent__HassTurnOn, targets: [light.dormitorio_techo, light.dormitorio_noche]}}
+      - {text: "Ahora apágala", expect: {tool: intent__HassTurnOff, targets: [light.dormitorio_techo, light.dormitorio_noche]}}
+  - id: f02
+    turns:
+      - {text: "Pon el volumen de la tele al 30", expect: {tool: media_player__HassSetVolume, targets: [media_player.tele_salon], args: {volume_level: 30}}}
+      - {text: "Un poco más alto", expect: {any_of: [{tool: media_player__HassSetVolumeRelative, targets: [media_player.tele_salon], args: {volume_dir: up}}, {tool: media_player__HassSetVolume, targets: [media_player.tele_salon], args: {volume_level: ">=31"}}]}}
+  - id: f03
+    turns:
+      - {text: "¿Qué temperatura hay en la cocina?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "24[.,]1|24 coma 1|veinticuatro"}}
+      - {text: "¿Y en el dormitorio?", expect: {tools_any: [homeassistant__GetLiveContext], answer_regex: "19[.,]8|19 coma 8|diecinueve|veinte"}}
+  - id: f04
+    turns:
+      - {text: "Pon un temporizador de diez minutos para la pizza", expect: {tool: intent__HassStartTimer, args: {total_seconds: 600}}}
+      - {text: "¿Cuánto le queda?", expect: {tool: intent__HassTimerStatus}}
+  - id: f05
+    turns:
+      - {text: "¿Quién escribió Cien años de soledad?", expect: {no_tool: true, answer_regex: "(?i)(garc[ií]a m[aá]rquez|gabo)"}}
+      - {text: "¿Y en qué año salió?", expect: {no_tool: true, answer_regex: "1967|mil novecientos sesenta y siete"}}
+  - id: f06
+    turns:
+      - {text: "Baja la persiana del salón", expect: {any_of: [{tool: intent__HassTurnOff, targets: [cover.salon_persiana]}, {tool: intent__HassSetPosition, targets: [cover.salon_persiana], args: {position: 0}}]}}
+      - {text: "Y la del dormitorio también", expect: {any_of: [{tool: intent__HassTurnOff, targets: [cover.dormitorio_persiana]}, {tool: intent__HassSetPosition, targets: [cover.dormitorio_persiana], args: {position: 0}}]}}

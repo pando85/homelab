@@ -174,3 +174,24 @@ CI, so splitting the disk is not worth it.
   little use of `actions/cache`.
 - **Removing images in the producing workflow is the real source fix.** Calypso's `build-or-retag`
   could run `docker image rm` after pushing, so CI wouldn't depend on `docker-gc` racing a burst.
+
+## Future improvement: local-first shared compiler cache
+
+The original 512 MiB Redis proposal is superseded by the measured analysis in
+[Rust build caching for concurrent agents and CI](../conventions/rust-build-caching.md).
+
+The 2026-11-06 inventory found about 10 GiB of artifacts on each runner and an 18.87 GiB union.
+A 512 MiB shared cache is too small to replace that retained content. Ordinary Redis keeps the
+working dataset in RAM; mounting fast CSI storage provides persistence, not SSD-backed capacity
+behind a small memory allowance.
+
+Keep bounded local sccache storage and evaluate a private MinIO bucket as a secondary shared
+backend. Preserve local-hit performance and benchmark remote hits, misses and concurrent uploads
+before adoption. For local agent development, isolate Cargo targets per active worktree while
+sharing the machine's sccache and retaining incremental compilation.
+
+**Corrections to the previous proposal:** the existing hostPath/PVC caches already survive ordinary
+pod restarts. A remote backend does not imply automatic local fallback, and no 2–3x speedup has
+been established. Keeping local caches initially provides no disk-space relief; reducing their
+limits is a later measured trade-off. Docker image accumulation remains the primary disk-pressure
+problem. See the linked proposal for evidence, compatibility/security constraints and validation.

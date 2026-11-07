@@ -15,3 +15,4 @@ Chart.lock
 charts
 .playwright-mcp
 apps/readest/files/.sql-*
+__pycache__

@@ -1,0 +1,34 @@
+# openWakeWord train.py config for "kivi" (paths are filled in by train.sh from $WORK).
+model_name: kivi
+target_phrase:
+  - kivi
+custom_negative_phrases: []
+n_samples: 60000
+n_samples_val: 3000
+tts_batch_size: 50
+augmentation_batch_size: 16
+piper_sample_generator_path: "@STUB@"
+output_dir: "@WORK@/train_out"
+rir_paths:
+  - "@WORK@/data/mit_rirs"
+background_paths:
+  - "@WORK@/data/bg_audioset"
+  - "@WORK@/data/bg_mls_es"
+background_paths_duplication_rate:
+  - 3
+  - 1
+false_positive_validation_data_path: "@WORK@/data/valfeat/validation_set_features.npy"
+augmentation_rounds: 1
+feature_data_files:
+  ACAV100M_sample: "@WORK@/data/acav/acav_part.npy"
+  mls_es: "@WORK@/data/feat_mls_es.npy"
+batch_n_per_class:
+  ACAV100M_sample: 1024
+  mls_es: 256
+  adversarial_negative: 100
+  positive: 100
+model_type: dnn
+layer_size: 32
+steps: 50000
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2

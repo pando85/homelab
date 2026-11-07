@@ -1,9 +1,28 @@
 # Home Assistant: Omnibattery and the house battery
 
 The house battery (Marstek Venus E V3, `venus` in Home Assistant) is driven by the Omnibattery
-integration (HACS, v1.5.0, Modbus TCP). battery-optimizer controls it through Omnibattery's entities
-in `live` mode; deployment, rollout and rollback are in
+integration (HACS, v1.5.1b1 beta since 2026-11-04, Modbus TCP). battery-optimizer controls it through
+Omnibattery's entities in `live` mode; deployment, rollout and rollback are in
 [`docs/deployment/battery-optimizer.md`](../deployment/battery-optimizer.md#live-battery-control).
+
+## Version and upgrade
+
+Installed: **v1.5.1b1** (beta) since 2026-11-04, the owner's choice, from
+<https://github.com/ffunes/omnibattery>. It was installed for upstream issue #598: v1.5.0 capped the PD
+grid target at 2500 W (the device maximum), so charging was at most 2500 W minus the house load. The
+beta bounds the target by the contracted power (max 5000 W).
+
+The upstream fix for the backup threshold (#723, for #660) is **not** in the beta, so the 500 W
+[workaround](#workaround-active-since-2026-11-03) stays. Before upgrading, check that both still hold:
+the target bound by the contracted power, and the #723 fix.
+
+## Modbus access
+
+The Venus accepts one Modbus TCP client, Omnibattery. Other clients are refused, so do not run
+read-only Modbus probes while Omnibattery is connected.
+
+When Modbus fails, Omnibattery keeps the last SOC and AC values; the only visible change is
+`sensor.omnibattery_non_responsive_batteries` going from `None` to `venus`.
 
 ## `integration_status` stuck in `backup_mode` after the grid returns
 

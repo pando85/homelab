@@ -1,0 +1,58 @@
+substitutions:
+  name: venus-e-cooling
+  friendly_name: Venus E Cooling
+
+packages:
+  connection: !include ./packages/connection.yaml
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "Marstek Venus E V3 auxiliary cooling - Sinilink XY-WFMS"
+
+# Sinilink XY-WFMS / ESP-12F (1 MB flash).
+# Device GPIO mapping: https://devices.esphome.io/devices/sinilink-xy-vfms/
+esp8266:
+  board: esp01_1m
+
+logger:
+
+# On-board blue Wi-Fi/status LED (active-low).
+status_led:
+  pin:
+    number: GPIO2
+    inverted: true
+
+# GPIO4 switches the on-board MOSFET and the red LED.
+# The fans are connected to OUT+/OUT- via a Y-splitter.
+# These 3-pin Noctua FLX fans support ON/OFF only in this build;
+# this is NOT a variable-voltage or 4-pin PWM fan controller.
+switch:
+  - platform: gpio
+    id: cooling_fans
+    name: "Cooling Fans"
+    pin: GPIO4
+    restore_mode: ALWAYS_OFF
+
+# On-board pushbutton (active-low).
+binary_sensor:
+  - platform: gpio
+    id: local_button
+    pin:
+      number: GPIO12
+      mode: INPUT_PULLUP
+      inverted: true
+    internal: true
+    filters:
+      - delayed_on: 30ms
+      - delayed_off: 30ms
+    on_press:
+      - switch.toggle: cooling_fans
+
+  - platform: status
+    name: "Controller Status"
+    entity_category: diagnostic
+
+# There is deliberately no tachometer sensor: the XY-WFMS switches
+# the low side (OUT-) and has no documented accessible fan-TACH GPIO.
+# Leave the Y-cable tachometer lead disconnected and insulated.

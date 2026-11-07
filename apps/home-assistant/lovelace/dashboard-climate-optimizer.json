@@ -1,0 +1,360 @@
+{
+ "title": "Climate optimizer",
+ "views": [
+  {
+   "title": "Climate optimizer",
+   "path": "climate-optimizer",
+   "icon": "mdi:home-thermometer-outline",
+   "type": "sections",
+   "max_columns": 4,
+   "sections": [
+    {
+     "type": "grid",
+     "cards": [
+      {
+       "type": "heading",
+       "heading": "Operate",
+       "icon": "mdi:shield-check"
+      },
+      {
+       "type": "tile",
+       "entity": "input_select.climate_optimizer_mode",
+       "name": "Mode",
+       "features": [
+        {
+         "type": "select-options"
+        }
+       ]
+      },
+      {
+       "type": "markdown",
+       "content": "{%- set ok = '\u2705' %}{% set warn = '\u26a0\ufe0f' %}\n{%- set st = states('sensor.climate_optimizer_plan_state') %}\n{%- set req = states('sensor.climate_optimizer_requested_mode') %}\n{%- set eff = states('sensor.climate_optimizer_effective_mode') %}\n{%- set src = states('sensor.climate_optimizer_mode_source') %}\n{%- set locked = is_state('binary_sensor.climate_optimizer_live_locked', 'on') %}\n{%- set age = states('sensor.climate_optimizer_plan_age') | float(none) %}\n{%- set exp = states('sensor.climate_optimizer_plan_expires_in') | float(none) %}\n{%- set pid = states('sensor.climate_optimizer_plan_id') %}\n### Health\n\n\u2139\ufe0f **Shadow: the optimizer plans but never acts on the heat pump.** The plan is advisory; the heating is run by the existing controller.\n\n{% if st in ['unavailable', 'unknown'] -%}\n{{ warn }} **Optimizer:** not answering (the plan sensors are {{ st }}). The heat pump is not affected.\n{%- else -%}\n{{ ok if eff == 'shadow' else warn }} **Mode:** requested **{{ req }}**, effective **{{ eff }}** (set by the {{ src }}{{ ': the select below' if src == 'helper' else ', the select is not read yet' }})\n{%- endif %}\n\n{% if locked -%}\n{{ warn }} **LIVE requested \u2014 locked (ADR-0008 proposed).** The optimizer stays in shadow; selecting live changes nothing on the heat pump.\n{%- endif %}\n\n{{ ok if st == 'planned' else warn }} **Plan:** {{ st }}{% if st == 'mode_off' %} (the mode is off: the optimizer serves no plan){% elif st == 'expired' %} (the last plan ran out; the optimizer replans hourly){% elif st in ['skipped', 'error'] %} ({{ state_attr('sensor.climate_optimizer_plan_state', 'reason') }}){% endif %}\n\n{% if age is not none -%}\n{{ ok if exp is not none and exp > 10 else warn }} **Plan {{ pid }}:** made {{ age | round(0) | int }} min ago, valid for {{ exp | round(0) | int if exp is not none else '?' }} more min\n{%- endif %}\n",
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
+       "type": "markdown",
+       "content": "**Modes.** *shadow*: the optimizer plans and records, nothing acts. *off*: it serves no plan (its measurement continues). *live*: a request only: it is refused (locked, ADR-0008 proposed) and behaves as shadow. Nothing on this page changes the heat pump.",
+       "grid_options": {
+        "columns": 12
+       }
+      }
+     ]
+    },
+    {
+     "type": "grid",
+     "cards": [
+      {
+       "type": "heading",
+       "heading": "Now",
+       "icon": "mdi:radiator"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.climate_optimizer_plan_state",
+       "name": "Plan"
+      },
+      {
+       "type": "tile",
+       "entity": "binary_sensor.climate_optimizer_heating_planned_now",
+       "name": "Heating planned now"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.climate_optimizer_water_target_now",
+       "name": "Water target now"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.climate_optimizer_next_heating_start",
+       "name": "Next heating start"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.climate_optimizer_next_heating_stop",
+       "name": "Next heating stop"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.climate_optimizer_heating_slots",
+       "name": "Heating slots (24 h)"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.aquarea_heat_power_consumed",
+       "name": "Heat pump power"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.aquarea_outlet_target_temperature",
+       "name": "Heat pump water target"
+      },
+      {
+       "type": "tile",
+       "entity": "sensor.aquarea_outlet_temperature",
+       "name": "Heat pump outlet"
+      }
+     ]
+    },
+    {
+     "type": "grid",
+     "cards": [
+      {
+       "type": "heading",
+       "heading": "Rooms",
+       "icon": "mdi:thermometer"
+      },
+      {
+       "type": "markdown",
+       "content": "### Rooms: actual against the plan (degC)\n\n| Room | Now | +1 h | +3 h | +6 h | Floor | Day min |\n|---|---|---|---|---|---|---|\n| **Bedroom** | {{ state_attr('climate.thermostat_bedroom', 'current_temperature') | default('?', true) }} | {{ states('sensor.climate_optimizer_bedroom_predicted_1h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_bedroom_predicted_1h') | float(99) < state_attr('sensor.climate_optimizer_bedroom_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ states('sensor.climate_optimizer_bedroom_predicted_3h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_bedroom_predicted_3h') | float(99) < state_attr('sensor.climate_optimizer_bedroom_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ states('sensor.climate_optimizer_bedroom_predicted_6h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_bedroom_predicted_6h') | float(99) < state_attr('sensor.climate_optimizer_bedroom_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ state_attr('sensor.climate_optimizer_bedroom_predicted_1h', 'comfort_floor_c') }} | {{ state_attr('sensor.climate_optimizer_bedroom_predicted_1h', 'comfort_day_min_c') }} |\n| **Hall / kitchen** | {{ state_attr('climate.thermostat_hall_kitchen', 'current_temperature') | default('?', true) }} | {{ states('sensor.climate_optimizer_hall_kitchen_predicted_1h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_hall_kitchen_predicted_1h') | float(99) < state_attr('sensor.climate_optimizer_hall_kitchen_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ states('sensor.climate_optimizer_hall_kitchen_predicted_3h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_hall_kitchen_predicted_3h') | float(99) < state_attr('sensor.climate_optimizer_hall_kitchen_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ states('sensor.climate_optimizer_hall_kitchen_predicted_6h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_hall_kitchen_predicted_6h') | float(99) < state_attr('sensor.climate_optimizer_hall_kitchen_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ state_attr('sensor.climate_optimizer_hall_kitchen_predicted_1h', 'comfort_floor_c') }} | {{ state_attr('sensor.climate_optimizer_hall_kitchen_predicted_1h', 'comfort_day_min_c') }} |\n| **Office T** | {{ state_attr('climate.thermostat_office_t', 'current_temperature') | default('?', true) }} | {{ states('sensor.climate_optimizer_office_t_predicted_1h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_office_t_predicted_1h') | float(99) < state_attr('sensor.climate_optimizer_office_t_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ states('sensor.climate_optimizer_office_t_predicted_3h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_office_t_predicted_3h') | float(99) < state_attr('sensor.climate_optimizer_office_t_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ states('sensor.climate_optimizer_office_t_predicted_6h') }}{{ ' \u26a0\ufe0f' if states('sensor.climate_optimizer_office_t_predicted_6h') | float(99) < state_attr('sensor.climate_optimizer_office_t_predicted_1h', 'comfort_floor_c') | float(0) else '' }} | {{ state_attr('sensor.climate_optimizer_office_t_predicted_1h', 'comfort_floor_c') }} | {{ state_attr('sensor.climate_optimizer_office_t_predicted_1h', 'comfort_day_min_c') }} |\n\n\u26a0\ufe0f = predicted below the comfort floor. The floor and day minimum are the levels the plan was computed with. A prediction is a model forecast of a plan that is not executed.",
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
+       "type": "tile",
+       "entity": "climate.thermostat_bedroom",
+       "name": "Bedroom",
+       "state_content": [
+        "current_temperature",
+        "hvac_action"
+       ]
+      },
+      {
+       "type": "tile",
+       "entity": "climate.thermostat_hall_kitchen",
+       "name": "Hall / kitchen",
+       "state_content": [
+        "current_temperature",
+        "hvac_action"
+       ]
+      },
+      {
+       "type": "tile",
+       "entity": "climate.thermostat_office_t",
+       "name": "Office T",
+       "state_content": [
+        "current_temperature",
+        "hvac_action"
+       ]
+      }
+     ]
+    },
+    {
+     "type": "grid",
+     "cards": [
+      {
+       "type": "heading",
+       "heading": "Last 24 h: plan against the heat pump",
+       "icon": "mdi:chart-line"
+      },
+      {
+       "type": "history-graph",
+       "title": "Planned heating and heat pump power (W)",
+       "hours_to_show": 24,
+       "entities": [
+        {
+         "entity": "binary_sensor.climate_optimizer_heating_planned_now",
+         "name": "Heating planned"
+        },
+        {
+         "entity": "sensor.aquarea_heat_power_consumed",
+         "name": "Heat pump power"
+        }
+       ],
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
+       "type": "history-graph",
+       "title": "Water: planned target against the heat pump (degC)",
+       "hours_to_show": 24,
+       "entities": [
+        {
+         "entity": "sensor.climate_optimizer_water_target_now",
+         "name": "Planned target"
+        },
+        {
+         "entity": "sensor.aquarea_outlet_target_temperature",
+         "name": "Heat pump target"
+        },
+        {
+         "entity": "sensor.aquarea_outlet_temperature",
+         "name": "Heat pump outlet"
+        }
+       ],
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
+       "type": "history-graph",
+       "title": "Bedroom: actual against predicted (degC)",
+       "hours_to_show": 24,
+       "entities": [
+        {
+         "entity": "sensor.bedroom_temperature",
+         "name": "Actual"
+        },
+        {
+         "entity": "sensor.climate_optimizer_bedroom_predicted_1h",
+         "name": "Predicted +1 h"
+        },
+        {
+         "entity": "sensor.climate_optimizer_bedroom_predicted_3h",
+         "name": "Predicted +3 h"
+        }
+       ],
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
+       "type": "history-graph",
+       "title": "Hall / kitchen: actual against predicted (degC)",
+       "hours_to_show": 24,
+       "entities": [
+        {
+         "entity": "sensor.living_room_temperature",
+         "name": "Actual"
+        },
+        {
+         "entity": "sensor.climate_optimizer_hall_kitchen_predicted_1h",
+         "name": "Predicted +1 h"
+        },
+        {
+         "entity": "sensor.climate_optimizer_hall_kitchen_predicted_3h",
+         "name": "Predicted +3 h"
+        }
+       ],
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
+       "type": "history-graph",
+       "title": "Office T: actual against predicted (degC)",
+       "hours_to_show": 24,
+       "entities": [
+        {
+         "entity": "sensor.office_t_temperature",
+         "name": "Actual"
+        },
+        {
+         "entity": "sensor.climate_optimizer_office_t_predicted_1h",
+         "name": "Predicted +1 h"
+        },
+        {
+         "entity": "sensor.climate_optimizer_office_t_predicted_3h",
+         "name": "Predicted +3 h"
+        }
+       ],
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
+       "type": "markdown",
+       "content": "A prediction is drawn at the time its plan was made and is meant for 1 h or 3 h later: compare it with the *Actual* line that far to the right.",
+       "grid_options": {
+        "columns": 12
+       }
+      }
+     ]
+    },
+    {
+     "type": "grid",
+     "cards": [
+      {
+       "type": "heading",
+       "heading": "Details",
+       "icon": "mdi:information-outline"
+      },
+      {
+       "type": "custom:expander-card",
+       "title": "Plan details",
+       "expanded": false,
+       "grid_options": {
+        "columns": 12
+       },
+       "cards": [
+        {
+         "type": "entities",
+         "entities": [
+          {
+           "type": "simple-entity",
+           "entity": "sensor.climate_optimizer_plan_id",
+           "name": "Plan id"
+          },
+          {
+           "type": "simple-entity",
+           "entity": "sensor.climate_optimizer_plan_generated",
+           "name": "Generated at"
+          },
+          {
+           "type": "attribute",
+           "entity": "sensor.climate_optimizer_plan_id",
+           "attribute": "valid_until",
+           "name": "Valid until"
+          },
+          {
+           "type": "attribute",
+           "entity": "sensor.climate_optimizer_plan_id",
+           "attribute": "regime",
+           "name": "Regime seen by the optimizer"
+          },
+          {
+           "type": "simple-entity",
+           "entity": "sensor.climate_optimizer_mode_source",
+           "name": "Mode source"
+          },
+          {
+           "type": "simple-entity",
+           "entity": "sensor.climate_optimizer_requested_mode",
+           "name": "Requested mode"
+          },
+          {
+           "type": "simple-entity",
+           "entity": "sensor.climate_optimizer_effective_mode",
+           "name": "Effective mode"
+          },
+          {
+           "type": "simple-entity",
+           "entity": "binary_sensor.climate_optimizer_live_locked",
+           "name": "Live locked"
+          },
+          {
+           "type": "simple-entity",
+           "entity": "sensor.climate_optimizer_plan_age",
+           "name": "Plan age"
+          },
+          {
+           "type": "simple-entity",
+           "entity": "sensor.climate_optimizer_plan_expires_in",
+           "name": "Expires in"
+          },
+          {
+           "type": "attribute",
+           "entity": "sensor.climate_optimizer_plan_id",
+           "attribute": "code_version",
+           "name": "Optimizer build"
+          }
+         ],
+         "grid_options": {
+          "columns": 12
+         }
+        },
+        {
+         "type": "markdown",
+         "content": "[Grafana: climate-mpc](https://grafana.grigri.cloud/d/climate-mpc) (plan production, solver, Shadow plan row).\n\nContract: *docs/climate-plan-contract.md* of home-energy-optimizer; the plan is advisory and `live` is locked (ADR-0008 proposed)."
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

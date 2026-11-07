@@ -1,0 +1,14 @@
+{
+  "domain": "kiais_conversation",
+  "name": "Kiais Conversation",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["conversation"],
+  "after_dependencies": ["assist_pipeline", "intent"],
+  "documentation": "https://github.com/pando85/homelab/blob/master/docs/voice-assistant/kiais-integration.md",
+  "issue_tracker": "https://github.com/pando85/homelab/issues",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "0.1.0"
+}

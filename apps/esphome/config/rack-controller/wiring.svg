@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1500" height="950" viewBox="0 0 1500 950" role="img" aria-labelledby="title desc"><title id="title">Rack controller reference electrical wiring</title><desc id="desc">12-volt supply feeds two PWM fans and an LM2596 buck converter. The converter provides 5 volts to an ESP32 DevKit. The ESP32 supplies 3.3 volts to a DHT22 and SSD1306 OLED, controls fan PWM on GPIO16, and reads fan 1 tachometer on GPIO17.</desc><rect width="1500" height="950" fill="#f8fafc"/>
 <text x="60" y="57" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" text-anchor="start" fill="#162334">RACK CONTROLLER · REFERENCE WIRING</text>
-<text x="60" y="85" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#526275">Power distribution and GPIO assignments from rack-controller.yaml (not verified as-built wiring)</text>
+<text x="60" y="85" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start" fill="#526275">Assembled circuit and GPIO assignments from rack-controller.yaml</text>
 <path d="M315 165 H370 M580 165 H990 V565 M710 165 V300" stroke="#cf3344" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M315 213 H370 M580 213 H1030 V595 M760 213 V300" stroke="#566171" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
 <path d="M990 365 H1100 M990 565 H1100" stroke="#cf3344" stroke-width="5" fill="none" stroke-linejoin="round" stroke-linecap="round"/>

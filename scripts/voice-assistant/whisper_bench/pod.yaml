@@ -1,0 +1,40 @@
+# TEMPORARY benchmark pod (owner-approved 2026-11-05). Shares the time-sliced GPU of node prusik with
+# the live Whisper. It cannot share the live model volume: the volume is an OpenEBS ZFS dataset that
+# the node will not mount a second time ("already mounted"), so the pod downloads the same model
+# revision into an emptyDir (needs egress to Hugging Face). Delete it after the run:
+#   kubectl --context grigri -n home-assistant delete pod whisper-bench
+apiVersion: v1
+kind: Pod
+metadata:
+  name: whisper-bench
+  namespace: home-assistant
+  labels:
+    app: whisper-bench
+spec:
+  restartPolicy: Never
+  activeDeadlineSeconds: 10800     # 3 h hard stop
+  nodeName: prusik                 # same GPU as the live Whisper; the image is cached there
+  runtimeClassName: nvidia
+  terminationGracePeriodSeconds: 1
+  securityContext:
+    runAsUser: 568
+    runAsGroup: 568
+    fsGroup: 568
+  containers:
+    - name: bench
+      image: git.grigri.cloud/agil/wyoming-whisper:3.8.1.1@sha256:938daef7b6e3fd76bb8601171a34b375df13b8bd37fc61a27b5b6a696f61680d
+      imagePullPolicy: IfNotPresent
+      command: ["sleep", "infinity"]
+      env:
+        - {name: HOME, value: /work}
+      resources:
+        requests: {cpu: 500m, memory: 1500Mi}
+        limits: {memory: 3Gi, nvidia.com/gpu: "1"}
+      volumeMounts:
+        - {name: models, mountPath: /data}
+        - {name: work, mountPath: /work}
+  volumes:
+    - name: models
+      emptyDir: {sizeLimit: 4Gi}
+    - name: work
+      emptyDir: {sizeLimit: 1Gi}

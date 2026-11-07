@@ -434,16 +434,16 @@ Steps (T = the moment HA is gone; the scaling only with the owner's explicit go)
 
 1. Start the ESPHome logs and note `switch.smart_plug_v2_battery` = on, `sensor.venus_inverter_state`
    = Bypass, `sensor.venus_ac_offgrid_power` ≈ servers' load.
-2. **Stop HA for real.** The `home-assistant` Application comes from the `apps` ApplicationSet with
-   selfHeal, so scale `argocd/argocd-repo-server` to 0 first (otherwise Argo reverts the scale-down),
-   then `home-assistant/home-assistant-hass` to 0. **T:** the pod is gone and the plug logs the lost
-   API connection (`Reading failed CONNECTION_CLOSED`). Lighter alternative: Settings → Devices &
-   services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ → **Disable** drops only the plug's API
-   connection and leaves HA running.
+2. **Stop HA for real**, following
+   [Stopping Home Assistant under ArgoCD](../troubleshooting/stop-home-assistant-under-argocd.md): scale
+   `argocd/argocd-repo-server` to 0 first, then `home-assistant/home-assistant-hass` to 0. **T:** the
+   pod is gone and the plug logs the lost API connection (`Reading failed CONNECTION_CLOSED`). Lighter
+   alternative: Settings → Devices & services → ESPHome → `smart-plug-v2-battery-9d9516` → ⋮ →
+   **Disable** drops only the plug's API connection and leaves HA running.
 3. **~T+5:00:** the log shows `Battery failsafe: no Home Assistant for 5 min, relay OFF`. Within
    seconds the battery reports `Backup Mode` (Omnibattery keeps polling it over Modbus) and the servers
    keep running (check the Kubernetes API or a ping).
-4. **T+6:** restore HA (scale `home-assistant-hass` to 1), then `argocd-repo-server` to 1. Within ~10 s
+4. **T+6:** restore HA first, then `argocd-repo-server` (same doc). Within ~10 s
    of the HA API reconnect the log shows `Battery failsafe: Home Assistant is back, relay ON`; the
    switch is on in HA and the inverter returns to Bypass within 5–33 s. The `home-assistant` app shows
    sync Unknown until Argo's next refresh (about 3 min); a hard refresh clears it.
@@ -497,12 +497,14 @@ Preconditions (owner):
   so check the Shelly `GET /cit/d` first (see the CoIoT note above). In Developer tools, check that the
   three entity IDs exist without a `_2` suffix and that the kill switch is **off**.
 - The ESPHome failsafe is flashed and tested (passed 2026-11-04).
-- Omnibattery: competing strategies off; `number.omnibattery_pd_controller_max_power_change` raised to
-  2000 W. Note the backup threshold
+- Omnibattery: competing strategies off
+  ([configuration](#device-facts-and-omnibattery-configuration)); the PD controller stays on `balanced`
+  (`number.omnibattery_pd_controller_max_power_change` 800 W; an earlier version of this page asked
+  for 2000 W, but the PD log shows 800 W since 2026-11-03 and it never bound). Note the backup threshold
   [workaround](../troubleshooting/home-assistant-omnibattery.md#workaround-active-since-2026-11-03).
-- The system caps stay at today's 1000 W charge / 800 W discharge until go-live (steps 1-2 of the live
-  phase). In `dry_run` the charge clamping therefore reflects the 1000 W cap minus the house load,
-  not the go-live 2500 W.
+- At the time (2026-11-03) the system caps were 1000 W charge / 800 W discharge until go-live (steps 1-2
+  of the live phase), so in `dry_run` the charge clamping reflected the 1000 W cap minus the house
+  load. Current values: 2500 W / 2500 W since go-live, see [Entities](#entities).
 
 **dry_run (1-2 days):**
 
@@ -525,7 +527,7 @@ findings):
    `switch.venus_battery_allow_discharge`) **off**, then switch **Premium mode on** in the Marstek app.
    Change nothing else in the app.
 2. Set `number.omnibattery_system_max_charge_power` and `number.omnibattery_system_max_discharge_power`
-   to **2500 W** (today 1000 / 800 W). The Venus's own `number.venus_max_charge_power` /
+   to **2500 W** (2026-11-03: 1000 / 800 W). The Venus's own `number.venus_max_charge_power` /
    `_max_discharge_power` are already 2500 W; check them.
 
 Then:
@@ -613,7 +615,9 @@ three places: the device (Marstek app), Omnibattery's own entities in Home Assis
 Owned by the owner and read-only for the optimizer:
 
 - `select.omnibattery_pd_tuning_profile` (`balanced`) and the PD controller numbers (kp 0.35, kd 0.3, deadband
-  40 W, direction hysteresis 60 W, max power change 800 W).
+  40 W, direction hysteresis 60 W, max power change 800 W). How they act, the baseline and the change log:
+  [Omnibattery PD controller settings log](#omnibattery-pd-controller-settings-log). Integration source:
+  <https://github.com/ffunes/omnibattery>.
 - The temperature limit: `switch.omnibattery_temp_charge_limit` and its numbers. The owner toggles it; the
   optimizer only reads it.
 
@@ -623,16 +627,35 @@ Optimizer-side knobs live in the deployed `apps/battery-optimizer/files/service.
 |---|---|---|
 | `import_cap_w` | 4500 | Upper bound of the PD grid-import target (the meter trips at 5 kW) |
 | `import_guard_margin_w` | 200 | Margin the guard keeps below the import cap |
-| `discharge_margin_w` | 200 | Import kept while discharging, never export. Omnibattery's PD loop swings +-150-200 W; 50 W gave brief exports |
+| `discharge_margin_w` | 100 | Import kept while discharging, never export. 100 W since 2026-11-05 (owner decision, optimizer 0.14.0, with `planning.discharge_margin_bound: true`). Steady-state error is about +-40 W (the PD deadband); export comes from 1-4 s transients when a large load stops while the battery is cap-pinned. 50 W gave brief exports |
 | `min_discharge_cap_w` | 100 | Smallest per-slot discharge cap written |
 | `max_discharge_cap_w` | 2500 | Largest per-slot discharge cap written |
 | `neutral_pd_target_w` | 0 | PD grid target in a planned idle |
 
+### Device facts and Omnibattery configuration
+
+| Item | Value |
+|---|---|
+| Venus E V3 firmware | EMS 148, VMS 117, BMS 114 (as of commissioning, 2026-11-03) |
+| Marstek app | Manual mode, empty schedule, no meter configured, Premium mode on (see the go-live steps). Never change it while Omnibattery runs |
+| Grid sensor | The Shelly EM, channel 1 |
+| SOC window | 20-95 % |
+| Contracted power | 5000 W. The meter trips instantly, so charge targets stay at most 4500 W (`import_cap_w`) |
+
+Every Omnibattery feature that competes with the optimizer is off: predictive charging, charge delay,
+capacity protection, hourly balance and the weekly full charge. The weekly full charge is the one
+exception: `full_charge.mode` is `shadow` today, so its switches stay off; with `live` the optimizer arms
+it itself (see [Live battery control](#live-battery-control)).
+
 ### How to read them
 
-1. **Prometheus** (`prometheus-long-term`) exports HA switch states (`hass_switch_state`) and sensors, but
-   **not `number` entities** (only `hass_entity_available` and `hass_last_updated_time_seconds` for them).
-2. **`number` and `select` values**: run a short Python inside the optimizer pod. It uses the pod's own HA token
+1. **Prometheus** (`prometheus-long-term`) exports HA switch states (`hass_switch_state`), sensors and, verified
+   2026-11-06, the Omnibattery and Venus `number` entities: `hass_number_state` (unitless, such as kp and kd, e.g.
+   `hass_number_state{entity="number.omnibattery_pd_controller_kp"}`) and the unit-suffixed `hass_number_state_w`,
+   `_s`, `_percent`, `_celsius`, `_kwh` and `_h`. The `select` entities have no value series, only
+   `hass_state_change_total`, `hass_entity_available` and `hass_last_updated_time_seconds`. Prometheus therefore
+   gives what changed and when; the [settings log](#omnibattery-pd-controller-settings-log) gives why.
+2. **`select` values and attributes (min/max)**: run a short Python inside the optimizer pod. It uses the pod's own HA token
    file (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`) and URL (`BATTERY_OPTIMIZER_HA_URL`, a ws URL: the script converts
    it to http and strips `/api/websocket`) with `GET /api/states`. The token never leaves the pod and is never
    printed. Use a GET only, never a POST with it. Save the script as `hastates.py` and pipe it on stdin:
@@ -697,15 +720,108 @@ Optimizer-side knobs live in the deployed `apps/battery-optimizer/files/service.
 `kubectl exec` into the service pod is read-only use here. Never print or copy the token, and never reuse it
 for a write: writes are the actuator's job, through its allowlist.
 
+### Omnibattery PD controller settings log
+
+**Policy (owner decision 2026-11-06).** The optimizer analyses the PD response and recommends values. The owner
+sets them by hand in HA, and every change gets a row in the log below with date, old -> new, why and result. The
+optimizer does not write PD settings today. A later step may let it, which would need an ADR-0007 amendment in
+the app repo plus bounded allowlist entries and tests.
+
+**How the settings act** (integration source at commit 2c94da9, manifest 1.5.0):
+
+- Cycles run on each grid-sensor change plus a 2 s timer. Event-triggered cycles closer than
+  `pd_min_cycle_interval` are dropped; the timer is not.
+- The grid is filtered with an EMA of tau 2 s, which snaps on big deviations.
+- Nothing happens within `deadband` of the target.
+- Feedforward: an error jump above max(5 x deadband, 400 W) that is confirmed on the next sample (80 %) issues one
+  deadbeat command, bypassing the rate limit. It has a 10 s cooldown, and an opposite-sign step within 30 s is
+  treated as a pulsing load.
+- Otherwise incremental PD: Kp is applied per 2 s, the derivative is filtered, and the change is clamped by
+  `max_power_change` per 2 s.
+- `direction_hysteresis` gates charge/discharge flips.
+- Selecting a `pd_tuning_profile` overwrites only kp, kd and max_power_change. Profiles:
+
+  | Profile | kp | kd | max_power_change (W) |
+  |---|---|---|---|
+  | very_smooth | 0.22 | 0.15 | 400 |
+  | smooth | 0.30 | 0.25 | 600 |
+  | balanced | 0.35 | 0.30 | 800 |
+  | aggressive | 0.55 | 0.45 | 1200 |
+  | very_aggressive | 0.75 | 0.45 | 2000 |
+
+  Editing a number by hand makes the select show `custom`. To revert, write the numbers, not the profile.
+- `relay_cooldown` must stay 0: it holds discharge at 100 W or more after demand falls, which causes export.
+
+**Baseline (2026-11-06):**
+
+| Entity | Value |
+|---|---|
+| Profile | balanced |
+| kp | 0.35 |
+| kd | 0.30 |
+| deadband | 40 W |
+| max_power_change | 800 W |
+| direction_hysteresis | 60 W |
+| pd_min_cycle_interval | 1.0 s |
+| pd_min_charge_power | 0 |
+| pd_min_discharge_power | 0 |
+| pd_relay_cooldown | 0 |
+| no_pd_command_delay | 0 |
+
+Since 2026-11-06 09:30 UTC the profile select reads `custom`, because kp no longer matches a profile row (see the
+change log).
+
+**Baseline measurement**: 2 s HA history, 2026-11-03 to 2026-11-06, about 66 h, all at the baseline settings.
+
+- Steady discharge error, grid minus target: std about 24 W, p1/p99 about -50/+60 W. No limit cycle.
+- Charge at the 4500 W cap: p99 about +105 W over target.
+- End-to-end dead time 1-4 s: about 1.4 s is the feedforward confirm, the rest is Modbus write plus inverter
+  ramp. Gains cannot remove it.
+- Export comes almost only from load-down steps while the battery is pinned at its per-slot cap: 2-4 s below 0 W,
+  worst about -290 W and about 0.27 Wh per event. That is about 0.05 Wh per discharge hour at the 100 W margin,
+  well below the 5 Wh/day `BatteryGridExport` alert.
+- `max_power_change` was never binding: the fastest setpoint change was about 190 W/s against the 400 W/s allowed.
+- `pd_control_quality` was `oscillating` for 0.35 h of 66 h, always with fast-changing loads.
+
+**Candidate changes, applied together on 2026-11-06 (kp 0.40 instead of the 0.45 candidate)**:
+
+1. `pd_min_cycle_interval` 1.0 -> 0.5 s. It may shorten the feedforward confirm by up to about 1 s; this is an
+   estimate. Risk: more Modbus traffic, so watch `sensor.omnibattery_non_responsive_batteries`.
+2. kp 0.35 -> 0.40, a cautious first step towards the 0.45 candidate. Do not go above 0.55, where oscillation
+   risk rises, so `aggressive`/`very_aggressive` are not recommended.
+
+Everything else stays at baseline.
+
+**Evaluating a change**:
+
+- Compare at least a week of real events against the baseline: seconds below 0 W, export Wh per event, settle
+  time, 60 s steady std and `oscillating` time.
+- Or run an owner-triggered test: switch a 1-1.6 kW load off about 10 times per setting, ABAB.
+- Revert if any of these happens: `oscillating` for more than 2 min, an export episode over 5 s or 0.5 Wh,
+  `non_responsive_batteries` not `None`, or import above 4700 W while charging.
+
+**Change log:**
+
+| Date | Setting | Old -> new | Why | Result |
+|---|---|---|---|---|
+| 2026-11-06 | all PD settings | - | Baseline recorded, no change | See baseline |
+| 2026-11-06 09:30 UTC | `pd_min_cycle_interval`; `pd_controller_kp` | 1.0 -> 0.5 s; 0.35 -> 0.40 | Shorten the feedforward confirm and the PD tail on load-down steps to cut export transients. Kp kept below the 0.45 candidate as a cautious first step. Both changed together (not one at a time), so the effects can't be separated | Pending: compare with the baseline after at least 7 days (about 2026-11-13) |
+
 ### Open issue: planned discharge is not delivered
 
-Status: **waiting for data (from 2026-11-04)**. The "Final plan energy not delivered" panel on
-`battery-model-actuation` shows a discharge shortfall. Part of it is an artefact of the shadow counters that
-ran before live control started (2026-11-03 22:45 UTC) and leaves the 24 h window after the first live day.
-The live part, in the morning discharge window, comes from the no-export rule, the 200 W import margin and a
-load forecast that ran high; the device limits and the per-slot cap are not involved. Diagnosis, candidate fix
-and decision criteria: the app repository's `docs/known-issues.md`, section "Planned discharge is not
-delivered".
+Status: **monitoring**. The planner bound `planning.discharge_margin_bound: true` has been live with optimizer
+0.14.0 since 2026-11-05 14:14 UTC, at `discharge_margin_w` 100. Next review about 2026-11-11, after 7 live days.
+
+The "Final plan energy not delivered" panel on `battery-model-actuation` shows a discharge shortfall. Diagnosis of
+2026-11-04, kept as history: part of it is an artefact of the shadow counters that ran before live control
+started (2026-11-03 22:45 UTC) and leaves the 24 h window after the first live day. The live part, in the
+morning discharge window, comes from the no-export rule, the import margin (200 W at that time) and a load
+forecast that ran high; the device limits and the per-slot cap are not involved. First evening at 100 W
+(2026-11-05): 2 s and 30 s data show the battery delivering exactly its per-slot cap whenever the house load
+allowed, with no temperature or actuator derating; the remaining gap was the load forecast, which placed the
+evening peak about 1 h late and overestimated it. 15-min means mix load-limited and cap-limited minutes, so do
+not use them to infer an actuator shortfall. Diagnosis, candidate fix and decision criteria: the app
+repository's `docs/known-issues.md`, section "Planned discharge is not delivered".
 
 ## First run (2026-10-25)
 

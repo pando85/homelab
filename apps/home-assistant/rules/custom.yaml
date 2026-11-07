@@ -16,6 +16,25 @@
   for: 10m
   labels:
     severity: warning
+- alert: HeatPumpHeaterOutsideDefrost
+  # The backup heater is left to the unit's own control. Under the legacy control it ran only inside
+  # defrost (6 to 8 minutes a day in early November 2026), so heater minutes outside defrost are the
+  # one warning sign. Silent when either series is missing. Panel: climate-heat-pump-controller,
+  # "Heater minutes outside defrost".
+  expr: |
+    (max(hass_binary_sensor_state{entity=~"binary_sensor.aquarea_(internal|external)_heater_state"}) > 0)
+    and on ()
+    (max(hass_binary_sensor_state{entity="binary_sensor.aquarea_defrost_active"}) == 0)
+  annotations:
+    summary: The heat pump backup heater is on outside a defrost cycle
+    description: |
+      The Aquarea internal or external backup heater has been on for over 5 minutes while no defrost is
+      running. The unit is leaning on the 3 kW heater to deliver heat instead of protecting a defrost.
+      Check the outdoor temperature, the water targets and the compressor starts on the
+      climate-heat-pump-controller dashboard.
+  for: 5m
+  labels:
+    severity: warning
 - alert: VacuumCleaningRequired
   # Vacuum robot needs around 45 minutes for cleaning the main rooms.
   expr: sum(sum_over_time(hass_binary_sensor_state{entity="binary_sensor.valetudo_cleaning"}[1w])) < 45

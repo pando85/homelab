@@ -119,6 +119,9 @@ spec:
               subPath: cache
             - name: docker-run
               mountPath: /sock
+            - name: sccache-s3-credentials
+              mountPath: /sccache-credentials
+              readOnly: true
         - name: daemon
           # renovate: datasource=docker
           image: docker:29.9.2
@@ -365,6 +368,14 @@ spec:
           emptyDir: {}
         - name: docker-run
           emptyDir: {}
+        - name: sccache-s3-credentials
+          secret:
+            secretName: sccache-s3-credentials
+            # uid 1001 (the runner) must read /sccache-credentials/credentials. These pods
+            # deliberately have no fsGroup (ZFS startup), so 0444 (world-readable inside the
+            # pod) is what makes it readable. Content is a single scoped sccache-ci credential,
+            # not backup/admin material, so pod-local readability is acceptable.
+            defaultMode: 0444
       # not working with kata runtime
       # resources:
       #   requests:

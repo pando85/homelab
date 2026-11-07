@@ -49,6 +49,7 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | ReSpeaker Kitchen | `respeaker-xvf3800-kitchen.yaml` | ESP32-S3 / XMOS | Voice satellite + media | Kitchen (planned) |
 | Smart Plug Battery | `smart-plug-v2-battery.yaml` | ESP8266 | Power meter | House battery AC input; battery AC failsafe |
 | Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | Snapmaker 3D printer plug |
+| Venus E Cooling | `venus-e-cooling.yaml` | ESP8266 (XY-WFMS) | MOSFET fan switch | Marstek Venus E V3; two 12 V Noctua FLX fans switched together; [hardware and wiring](venus-e-cooling/README.md) |
 
 ## Package System
 
