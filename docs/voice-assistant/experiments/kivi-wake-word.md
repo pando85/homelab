@@ -1,6 +1,6 @@
 # Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
 
-**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run.
+**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run. A **v2 candidate** (server-exact features, front-end emulation; [v2](#v2-2026-11-07-candidate-not-deployed)) exists, not deployed.
 **Date:** 2026-11-05
 **Device alias / model / firmware / webOS / architecture:** none. PC only (x86_64, RTX 4060 Ti 16 GB, 32 threads). No TV, no microphone, no speaker, no change in Home Assistant, the cluster or the GitOps tree.
 **Power and playback state:** not applicable
@@ -270,6 +270,164 @@ Evidence review: kivi-models repo, docs/research/kivi-training-evidence.md. Retr
 5. **Real TV-room negatives** (`kivi_negatives.py`) plus hard-negative mining on them.
 6. **Keep** room impulse response and level augmentation.
 7. **Evaluation** as the false-reject rate at 0.5 and at 0.1 false accepts per hour, with a DET curve, reported per speaker and per device. The test set is spk02's c3-b button takes (never trained on); the unseen-speaker ablation excludes all spk02 data from training.
+
+## v2 (2026-11-07, candidate, not deployed)
+
+**Status:** candidate model files and an offline comparison with v1. **Not deployed**, no change in
+Home Assistant, the cluster or kivi-models. PC only; no TV, no microphone. All numbers are
+observed-offline on synthetic voices (Piper); real voices are still unmeasured. Recipe items 1, 3,
+4 and 6 were applied; items 2 and 5 (real positives and real TV-room negatives) wait for the
+owner's sessions.
+
+### Method
+
+1. **Server-exact features.** Positives, adversarial negatives, mined hard negatives and the MLS
+   Spanish speech negatives were recomputed with the server's chunking and per-chunk clamp
+   (`v2_augment.py`, built on `fast_eval.StreamFeatures`). Two traps were found on the way, both in
+   [lessons learned](../lessons-learned.md): the old stream training window cut up to 100 ms of the
+   word in about half of the positives, and v1's evaluation clips are padded with digital silence,
+   which decides the comparison by itself.
+2. **ACAV100M kept as batch features.** Its audio is not available, so the gap was measured on proxy
+   audio computed both ways (400 AudioSet and 400 MLS clips of 10 s at -30 to -1 dBFS peak,
+   `v2_acav_check.py`). The median |embedding difference| was 0.27 (values reach ±43; the 99th
+   percentile was 10.5, in quiet windows). v1's score changed by 0.005 on average, and its rates
+   above 0.5 / 0.9 / 0.98 were 0.46 / 0.03 / 0 % in batch and 0.43 / 0.03 / 0 % in stream. A linear
+   probe separated batch from stream windows of the same audio only at AUC 0.61. Removing ACAV made
+   validation recall worse (10.8 % against 12.0 to 15.6 % at 4 dev false accepts), and so did
+   128 ACAV + 512 MLS per step (5.3 %).
+3. **Interference, TV-like only:** 964 AudioSet balanced-train clips (shards 00-03) with a music,
+   singing, speech, conversation, TV, radio, laughter, applause or crowd label and none of 40
+   stationary-noise labels (`v2_prep_bg.py`), plus 1 500 x 10 s of MLS Spanish speech, about half
+   and half. The SNR is measured on the word, and the interference runs through a 2 s lead before
+   the window so the noise suppression has adapted. No white, pink or fan noise.
+4. **Front-end emulation after mixing:** the satellite's own chain, the `aec_offline` example of
+   webos-voice-satellite (daemon file mode; `v2_frontend.py`). It applies the 120 Hz high-pass,
+   sonora AEC3 with noise suppression (the shipped `[aec] enabled = true, ns = true`), +24 dB and
+   saturating S16, at 166x real time per core, and the 224-sample latency is removed. The echo
+   reference is silent, because synthetic mixes have none. AEC3 therefore passes the mix through,
+   and the interference stands for sound that the canceller leaves, such as household voices or
+   residual echo; NS still acts on it.
+5. **Level and floor, calibrated on real satellite audio.** Aggregates only, from the last 2.5 s of
+   24 closed wake-stage files that ended in a detection, plus 4 x 20 s from other files, both TVs
+   ([data register](../data-register.md), row 12):
+   - loudest 0.5 s before the detection: median -21.5 dBFS RMS (IQR -26.5 to -20.6), peak median
+     -7.4 dBFS, no clipping;
+   - quietest 80 ms frames: -74.6 to -49.9 dBFS (5th to 95th percentile).
+
+   Clips get a word level of N(-23, 5) dBFS (loudest 0.5 s) and a white mic floor of -62 to
+   -48 dBFS before the front-end, which NS lowers by 13 dB into the measured range. Long
+   evaluation audio is scaled to a 90th-percentile 80 ms RMS of -24 dBFS.
+6. **Kept from v1:** RIR at p 0.5; the same 60 000 positives, the 57 103 adversarial clips without
+   "aquí vi", and the same held-out voices; `train_simple.py` settings (layer 64, one-cycle, per
+   step 256 positives, 512 ACAV, 128 MLS, 64 adversarial and 128 mined, weight 3). One mining round
+   ran on 31 h of MLS train shard 1 through the front-end (27 618 windows).
+7. **Evaluation:** `fast_report.py` on server-exact features of the held-out voices (clean, P2 TV
+   content at 10 and 0 dB), the near-words and v1's false-accept test sets (16.9 h), all through
+   the same level, floor and front-end. The threshold was picked on MLS dev through the front-end.
+   v1's original zero-padded set is also reported, labelled as such.
+
+### Candidates and selection
+
+18 heads on these features (plus 6 diagnostic heads on the earlier stream features), 1-6 min each
+on the GPU. They were ranked only on the training-voice validation positives
+(0-30 dB, p 0.8, through the front-end) at 4 / 8 / 16 false accepts on MLS dev through the
+front-end (`v2_rank.py`). The held-out voices were not used for the choice.
+
+| Variant | Validation recall at 4 / 8 / 16 dev false accepts |
+| --- | --- |
+| v1 (reference) | 17.5 / 34.6 / 46.2 % |
+| From scratch, 0-30 dB, p 0.8 (3 seeds; layer 128 similar) | 12.0-15.6 / 16.9-24.2 / 26.5-30.6 % |
+| From scratch, 5-30 dB, p 0.7 | 17.2 / 26.3 / 35.2 % |
+| From scratch, 10-30 dB, p 0.5 (3 seeds) | 18.0-27.4 / 31.3-34.3 / 37.6-40.6 % |
+| v1 + v2 training data together | 27.7 / 36.5 / 44.1 % |
+| v1 warm start, 0-30 dB data, 2 000 steps at 1e-4 | 21.8 / 33.2 / 46.4 % |
+| **v1 warm start, 10-30 dB p 0.5 data, 2 000 steps at 1e-4** (3 seeds; 4 000 steps worse) | **34.2-39.8 / 42.3-46.3 / 47.9-50.4 %** |
+
+**Chosen:** the v1 warm start on 10-30 dB data, seed 1. Its threshold is **0.95**, the highest
+threshold with at most 4 false accepts on MLS dev through the front-end (v1 had 4 at its 0.98 on the
+raw dev). It differs from the recipe in two ways:
+
+- **SNR 10-30 dB at p 0.5** instead of 0-30 dB at p 0.8. With 0-30 dB, every from-scratch run was
+  worse than v1 on validation. Harder interference made the model fire on plain speech.
+- **Fine-tuned from v1** (2 000 steps, lr 1e-4) instead of trained from scratch. The best from-scratch
+  run reached 27.4 % at 4 dev false accepts, and the warm start 39.8 %.
+
+### Results (observed-offline, server-exact, through the front-end)
+
+Held-out voices, n = 1 800 per condition, 95 % Wilson intervals; false accepts on v1's test sets
+(16.9 h), exact Poisson 95 %:
+
+| Model @ threshold | Clean | TV 10 dB | TV 0 dB | Near-words | False accepts (test) | MLS dev |
+| --- | --- | --- | --- | --- | --- | --- |
+| v1 @ 0.98 (deployed) | 45.7 % [43.4, 48.0] | 24.9 % [22.9, 26.9] | 11.0 % [9.6, 12.5] | 3.2 % [2.5, 4.2] | 8 = 0.47/h [0.20, 0.93] | 5 |
+| **v2 @ 0.95** | **77.9 % [75.9, 79.8]** | **32.4 % [30.3, 34.6]** | **14.5 % [13.0, 16.2]** | 9.3 % [8.1, 10.8] | 14 = 0.83/h [0.45, 1.39] | 4 |
+| v2 seeds 0 / 2 @ 0.95 | 79.8 / 77.0 % | 32.7 / 31.1 % | 15.1 / 14.1 % | 10.0 / 9.4 % | 1.06 / 0.77/h | 5 / 6 |
+
+The dev-picked thresholds do not give equal test false accepts (v2 0.83/h, v1 0.47/h; the
+intervals overlap), so the same models are compared again at matched test false accepts. This is a
+DET comparison only; no threshold is chosen on the test sets:
+
+| Test false accepts | v1 (threshold): clean / 10 dB / 0 dB / near-words | v2 (threshold): clean / 10 dB / 0 dB / near-words |
+| --- | --- | --- |
+| about 0.45/h | 0.98: 45.7 / 24.9 / 11.0 / 3.2 % (0.47/h) | 0.97: 59.4 / 23.0 / 10.0 / 5.7 % (0.41/h) |
+| about 0.9-1.1/h | 0.97: 58.1 / 32.3 / 14.9 / 6.1 % (1.06/h) | 0.94: 84.3 / 35.6 / 16.1 / 11.4 % (0.89/h) |
+| about 1.4-1.8/h | 0.96: 69.6 / 38.3 / 17.9 / 7.7 % (1.77/h) | 0.93: 87.6 / 38.8 / 18.0 / 13.6 % (1.42/h) |
+| 0 | 0.99: 25.1 / 13.9 / 5.7 / 1.2 % | 0.99: 19.6 / 6.8 / 2.9 / 0.9 % |
+
+**Threshold trade-off of v2** (same features; test total 16.9 h):
+
+| Threshold | Clean | TV 10 dB | TV 0 dB | Near-words | False accepts (test) | MLS dev |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.9 | 93.6 % | 46.0 % | 21.4 % | 19.8 % | 39 = 2.30/h | 20 |
+| 0.93 | 87.6 % | 38.8 % | 18.0 % | 13.6 % | 24 = 1.42/h | 7 |
+| 0.94 | 84.3 % | 35.6 % | 16.1 % | 11.4 % | 15 = 0.89/h | 5 |
+| **0.95** | **77.9 %** | **32.4 %** | **14.5 %** | **9.3 %** | **14 = 0.83/h** | **4** |
+| 0.96 | 71.0 % | 28.1 % | 12.4 % | 7.2 % | 10 = 0.59/h | 3 |
+| 0.97 | 59.4 % | 23.0 % | 10.0 % | 5.7 % | 7 = 0.41/h | 1 |
+| 0.98 | 43.1 % | 16.2 % | 6.4 % | 3.6 % | 3 = 0.18/h | 0 |
+| 0.99 | 19.6 % | 6.8 % | 2.9 % | 0.9 % | 0 (< 0.18/h) | 0 |
+
+**On v1's zero-padded set** (no floor, no front-end; as in v1's results): v1 @ 0.98 scores
+60.2 / 25.1 / 9.7 % with 0.24/h, and v2 @ 0.95 scores 46.2 / 28.8 / 12.2 % with 0.53/h. v2 never
+saw digital silence. The real satellite never sends it either (its quietest frames are -75 to
+-50 dBFS), so this set does not decide between the two.
+
+**Server runtime check:** 12 held-out clips through the front-end (6 clean, 6 with TV at 10 dB) were
+streamed through pyopen-wakeword 1.1.0 with the TFLite files (`eval_stream.py probs`). The maximum
+scores matched the ONNX path to 0.0005. The calibrated file at 0.5 decided like the raw file at
+0.95 on all 12, and the calibrated ONNX on all 2 999 validation windows.
+
+### Interpretation
+
+- At equal false accepts per hour, v2 has a much higher **clean** recall than v1 through the
+  emulated front-end: +14 points at about 0.45/h and +26 points at about 1/h. **With TV interference
+  it is level with v1**, within about ±3 points and inside the intervals. The interference
+  augmentation did not buy noisy-TV recall here.
+- v2 accepts **near-words more often** at the same false-accept rate (5.7 % against 3.2 % at about
+  0.45/h, 11.4 % against 6.1 % at about 1/h).
+- v1 loses 15 points of clean recall when its input goes through the front-end and floor (60.2 % to
+  45.7 % at 0.98). The deployed model's real recall is probably closer to the front-end number
+  (inferred, not measured on real voices).
+- The candidate is worth a real-voice A/B against v1 (the owner procedure above, `kivi_score.py`
+  with `v2/final/kivi_uncalibrated.onnx`) before any deployment decision. If deployed at 0.95
+  (the calibrated file at 0.5), the offline false-accept estimate is 0.8/h [0.45, 1.4]. That is
+  above v1's 0.47/h and far above the 0.1/h goal; 0.97 gives about v1's false-accept rate.
+- The cheapest next levers remain the recipe's items 2 and 5 (real positives, real TV-room
+  negatives). A two-word phrase is the fallback if near-words and false accepts stay high.
+
+### Artifacts (private, not committed)
+
+In `/work/workspaces/kivi-wakeword/v2/`: `final/` (model files, `SHA256SUMS`, training history),
+`results/` (`fast_report.py` JSON for v1, v2 and the other seeds on both evaluation sets, rankings,
+tables), `feat/` (server-exact front-end features), `runs/` (the 18 candidates) and the run scripts
+(`feats.sh`, `train*.sh`, `report.sh`, `export.sh`).
+
+| File | SHA-256 | Use |
+| --- | --- | --- |
+| `kivi.tflite` | `131e185b075a7bf0dbcb3ca8396d3f4c80b2304440260fe38b9434ccf7e29414` | calibrated: server 0.5 = raw 0.95 |
+| `kivi.onnx` | `0cd09be2622c5853f515f9300279e4e631de605a78e962d0fcbdf6bf6af2951d` | same, ONNX |
+| `kivi_uncalibrated.tflite` | `aeab0360089b4805a4833009f2aeee108aa8807bd7803fae573f6ad861a4a627` | raw output, threshold sweeps |
+| `kivi_uncalibrated.onnx` | `531cbe78f41fb895de992e6d00ca3590f16bbb634815b2a7087e6c6fc30e5584` | raw output (`kivi_score.py`, `fast_report.py`) |
 
 ## Alternatives if the owner test fails
 
