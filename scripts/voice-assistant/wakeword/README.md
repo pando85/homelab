@@ -17,7 +17,7 @@ openWakeWord models).
 | `gen_clips.py` | Synthetic clips with Piper ONNX voices, rendered from Spanish phonemes (also for English, Italian, Portuguese and Catalan voices, for speaker variety) |
 | `prep_data.py` | Dataset preparation: partial ACAV100M feature file, MIT RIRs, background clips, Spanish speech features (MLS), long evaluation streams (MLS, VoxPopuli) |
 | `augment_set.py` | Augmentation and features of one clip set: openWakeWord's `augment_clips`, or `--mode simple` (SNR on the word; used for the final model) |
-| `train_simple.py` | **Final training:** the openWakeWord DNN head with a plain balanced loop, fixed negative weight, optional mined hard negatives |
+| `train_simple.py` | **Final training:** the openWakeWord DNN head with a plain balanced loop, fixed negative weight, optional mined hard negatives; `--extra-pos FILE:N` and `--extra-neg FILE:N:W` (per-class weight) for v3 |
 | `kivi.yaml`, `train.sh`, `train_driver.py`, `stub/` | The official `train.py` / `auto_train` path (collapsed for "kivi", kept for reference and comparison) |
 | `export_tflite.py` | ONNX to TFLite for the openWakeWord DNN (no `onnx_tf`), output check, `--calibrate-threshold T` (T becomes 0.5) |
 | `stream_mel.py` | Melspectrogram model with a per-row max, so batched features equal the server's per-chunk features |
@@ -29,6 +29,10 @@ openWakeWord models).
 | `v2_prep_bg.py` | **v2:** TV-like AudioSet backgrounds (music, speech, TV, ...), stationary-noise labels excluded |
 | `v2_acav_check.py` | **v2:** batch vs server-exact features on the same proxy audio (embedding gap, score gap, domain probe), to decide whether the ACAV100M batch features can stay |
 | `v2_rank.py`, `v2_summary.py` | **v2:** candidate ranking on the selection set and training-voice validation only; comparison tables from `fast_report.py` JSON |
+| `kivi_v3_near.yaml` | **v3:** synthetic near-word plan for `gen_clips.py` (measured confusers weighted up; "kibi" left out, it phonemizes to the target) |
+| `v3_real.py` | **v3:** real session takes re-cut from the raw files with context (checked against the stored clips), word end from the desk mic; augmented training windows (tv takes as recorded, desk takes through the front-end emulation) and evaluation sequences, with a by-take hold-out |
+| `v3_room.py` | **v3:** room negatives split by time per TV (train / sel / test), server-exact features of the train and sel parts, and the test part scored with the server runtime (false accepts per hour, Poisson intervals) |
+| `v3_select.py` | **v3:** threshold at a false-accept budget on the room selection part, then recall on held-out synthetic voices and real held-out takes at that threshold |
 | `test_server_exact_features.py` | Regression test: server streaming vs batched server-exact features, and the report's refusal of other features |
 | `kivi_session.py` | **Owner-run:** text-only cues and a dual PC recording (desk mic, webcam mic) for a real-voice session; `session.json` |
 | `kivi_extract.py` | **Owner-run:** copies the satellite's wake files out of the HA pod, aligns them to the desk mic, cuts labelled clips of 3 sources into the private dataset and its manifest; also recovers request-audio-only runs (`01_stt-*.wav` without a wake file, e.g. a continued-conversation loop), each aligned on its own and trusted only when at least two agree (`stage` stt in the manifest); reports every cue as full, partial or no audio; pod reads are blocks of 16 MiB, re-read when short; `--button-takes` for takes marked by `input_button.kivi_take` |

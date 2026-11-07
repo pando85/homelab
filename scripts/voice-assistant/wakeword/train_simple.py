@@ -12,7 +12,9 @@ by threshold on held-out audio.
         [--pos-suffix _simple] [--neg-suffix _simple] [--adv 64]
 
 Batch per step: positives 256, ACAV100M 512, MLS Spanish 128, adversarial negatives `--adv`, and
-optional mined hard negatives (`--extra-neg FILE.npy:N`, from `fast_eval.py mine`).
+optional mined hard negatives (`--extra-neg FILE.npy:N`, from `fast_eval.py mine`). v3 additions:
+`--extra-neg FILE.npy:N:W` gives that class its own loss weight W (default `--neg-weight`), and
+`--extra-pos FILE.npy:N` adds N positives per step from another set (e.g. real takes).
 """
 import argparse
 import json
@@ -38,7 +40,9 @@ def main():
     ap.add_argument("--acav", help="ACAV100M windows (default data/acav/acav_part.npy; a smaller random "
                                     "subset keeps it in the page cache on a busy machine)")
     ap.add_argument("--mls", help="Spanish speech negative windows (default data/feat_mls_es.npy)")
-    ap.add_argument("--extra-neg", action="append", default=[], help="FILE.npy:N extra negatives per step")
+    ap.add_argument("--extra-neg", action="append", default=[],
+                    help="FILE.npy:N[:W] extra negatives per step, optional loss weight W (default --neg-weight)")
+    ap.add_argument("--extra-pos", action="append", default=[], help="FILE.npy:N extra positives per step")
     ap.add_argument("--n-pos", type=int, default=256, help="positives per step")
     ap.add_argument("--n-acav", type=int, default=512, help="ACAV100M windows per step (0: none)")
     ap.add_argument("--n-mls", type=int, default=128, help="Spanish speech windows per step")
@@ -72,8 +76,13 @@ def main():
 
     extra = []
     for spec in a.extra_neg:
+        f, n, *wt = spec.split(":")
+        extra.append((np.load(f, mmap_mode="r"), int(n), float(wt[0]) if wt else a.neg_weight))
+    extra_pos = []
+    for spec in a.extra_pos:
         f, n = spec.rsplit(":", 1)
-        extra.append((np.load(f, mmap_mode="r"), int(n)))
+        extra_pos.append((np.load(f, mmap_mode="r"), int(n)))
+    n_pos = a.n_pos + sum(n for _, n in extra_pos)
 
     def batch(X, n):
         i = np.sort(rng.choice(len(X), n, replace=False))
@@ -94,13 +103,19 @@ def main():
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.steps)
     hist = []
     for step in range(a.steps):
-        parts = [batch(P, a.n_pos)] + ([batch(A, a.n_acav)] if a.n_acav else []) + [batch(M, a.n_mls)] + \
-            ([batch(N, a.adv)] if a.adv else []) + [batch(X, n) for X, n in extra]
+        parts = [batch(P, a.n_pos)] + [batch(X, n) for X, n in extra_pos] + \
+            ([batch(A, a.n_acav)] if a.n_acav else []) + [batch(M, a.n_mls)] + \
+            ([batch(N, a.adv)] if a.adv else []) + [batch(X, n) for X, n, _ in extra]
         x = torch.cat(parts)
         y = torch.zeros(len(x), device=dev)
-        y[:a.n_pos] = 1
+        y[:n_pos] = 1
         w = torch.full((len(x),), a.neg_weight, device=dev)
-        w[:a.n_pos] = 1
+        w[:n_pos] = 1
+        if extra:
+            off = len(x) - sum(n for _, n, _ in extra)
+            for _, n, wt in extra:
+                w[off:off + n] = wt
+                off += n
         loss = (nn.functional.binary_cross_entropy_with_logits(logits(x).squeeze(1), y, reduction="none") * w).mean()
         opt.zero_grad()
         loss.backward()
