@@ -232,6 +232,12 @@ actuation:
   # Go-live: the system caps are 2500/2500 W and Premium mode is on in the Marstek app; without
   # Premium the firmware limits discharge to 800 W, below what this cap and the planner assume.
   max_discharge_cap_w: 2500       # <= 2500
+  # Load-following discharge (owner decision 2026-11-07, optimizer 0.15.0): in a planned discharge
+  # slot, while the measured SOC is at or above the plan's end-of-slot SOC, the system discharge
+  # cap is raised from the planned power to max_w so the battery covers the real house load.
+  load_following:
+    enabled: true
+    max_w: 2500
   # Omnibattery integration_status values in which the intent may be applied; any other
   # (manual, grid_charging, backup_mode, initializing, a competing strategy...) holds safe idle.
   healthy_states: [balanced, charging, discharging]
