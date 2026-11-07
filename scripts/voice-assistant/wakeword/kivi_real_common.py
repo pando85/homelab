@@ -271,14 +271,59 @@ def write_json_new(path, obj):
     write_bytes_new(path, (json.dumps(obj, indent=1, ensure_ascii=False) + "\n").encode("utf-8"))
 
 
-def training_rows(rows, exclude_speakers=(), include_unassigned=False):
+DEFAULT_PHRASE = "kivi"        # the wake phrase of every row recorded before the `phrase` field existed
+
+
+def normalize_phrase(text):
+    """A wake phrase as stored: lower case, single spaces, letters only (Spanish letters allowed)."""
+    p = " ".join(str(text).lower().split())
+    if not re.fullmatch(r"[a-z\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f1]+( [a-z\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f1]+){0,3}", p):
+        raise SystemExit(f"bad phrase {text!r}: one to four words of letters")
+    return p
+
+
+def row_phrase(r):
+    """The wake phrase a manifest row was recorded for. Rows without the field (recorded before it existed)
+    are `kivi`. Room-audio negatives (kind `negative`) belong to no phrase: None."""
+    if r.get("kind") == "negative":
+        return None
+    return r.get("phrase") or DEFAULT_PHRASE
+
+
+def training_rows(rows, exclude_speakers=(), include_unassigned=False, phrase=None):
     """Manifest rows that may train the model: split train or train-only, never `needs_review`, never
-    `superseded` (rows read with `read_manifest`), and none from `exclude_speakers` (the unseen-speaker
+    `excluded` or `superseded` (rows read with `read_manifest`), and none from `exclude_speakers` (the unseen-speaker
     ablation excludes ALL data of that speaker). Pass rows from `read_manifest`, so that later split
-    decisions and superseded marks are applied."""
+    decisions and superseded marks are applied.
+
+    `phrase` keeps only rows recorded for that wake phrase (old rows count as `kivi`) plus phrase-free
+    rows (room-audio negatives). Rows of other phrases are not lost: `negative_rows_for_phrase` returns them."""
     ok = {"train", "train-only"} | ({"unassigned"} if include_unassigned else set())
-    return [r for r in rows if r.get("split") in ok and not r.get("needs_review") and not r.get("superseded")
-            and r.get("speaker") not in set(exclude_speakers)]
+    out = [r for r in rows if r.get("split") in ok and not r.get("needs_review") and not r.get("superseded")
+           and not r.get("excluded") and r.get("speaker") not in set(exclude_speakers)]
+    if phrase is not None:
+        want = normalize_phrase(phrase)
+        out = [r for r in out if row_phrase(r) in (None, want)]
+    return out
+
+
+def negative_rows_for_phrase(rows, phrase, **kw):
+    """Rows recorded for ANOTHER phrase that may train as negatives for `phrase` (same filters as
+    `training_rows`: split, needs_review, superseded, `exclude_speakers=`, `include_unassigned=`): the old
+    "kivi" takes become negatives for "oye kivi" (and the reverse), together with that session's near-words
+    and background. A row whose label or word is the target phrase itself is left out. Each row is a copy
+    with `negative_for` set and its own label kept in `label_original`; the audio is the same file."""
+    want = normalize_phrase(phrase)
+    out = []
+    for r in training_rows(rows, **kw):
+        p = row_phrase(r)
+        if p is None or p == want:
+            continue
+        if want in (str(r.get("label", "")).lower(), str(r.get("label", "")).lower().removeprefix("near:"),
+                    str(r.get("word", "")).lower()):
+            continue
+        out.append({**r, "negative_for": want, "label_original": r.get("label")})
+    return out
 
 
 # The manifest is append-only and the tools never rewrite it. Later decisions live in two append-only
@@ -292,20 +337,30 @@ def read_marks(root):
     return splits, read_jsonl(root / "superseded.jsonl")
 
 
+def read_excluded(root):
+    """excluded.jsonl records: {session, revision, source (optional), cue_index [..], reason, set_utc}."""
+    return read_jsonl(Path(root) / "excluded.jsonl")
+
+
 def read_manifest(root):
     """The manifest rows with the marks applied: `split` becomes the split decided later for session
     rows (through `channel_split`, the original is kept in `split_in_manifest`), and `superseded` is
-    True for rows that a superseded mark covers."""
+    True for rows that a superseded mark covers; `phrase` is filled in (old rows are "kivi")."""
     root = Path(root)
     splits, sup = read_marks(root)
+    exc = read_excluded(root)
     out = []
     for r in read_jsonl(root / "manifest.jsonl"):
         r = dict(r)
-        if r.get("origin") == "session" and r.get("session") in splits:
+        r["phrase"] = row_phrase(r)               # old rows (no field) are "kivi"; room negatives have none
+        if r.get("origin") in ("session", "button") and r.get("session") in splits:
             r["split_in_manifest"] = r.get("split")
             r["split"] = channel_split(splits[r["session"]], r.get("source"))
         r["superseded"] = any(m["session"] == r.get("session") and (m.get("revision") or "") == (r.get("revision") or "")
                               and m.get("source") in (None, r.get("source")) for m in sup)
+        r["excluded"] = any(m["session"] == r.get("session") and (m.get("revision") or "") == (r.get("revision") or "")
+                            and m.get("source") in (None, r.get("source")) and r.get("cue_index") in m["cue_index"]
+                            for m in exc)
         out.append(r)
     return out
 
@@ -358,7 +413,7 @@ MANIFEST_FIELDS = (
     "start_utc", "end_utc", "cue_index", "cue_offset_s", "align_offset_s", "align_conf", "align_ok",
     "drift_ppm", "source_run", "revision", "extract_id", "dry_run_session", "press_utc",
     "onset_after_press_s", "snr_db", "n_candidates", "consent_confirmed", "needs_review", "split_requested", "run_end_in_window",
-    "stage")        # "wake" or "stt": which Assist stage the satellite audio was recorded at (None for desk sources)
+    "stage", "phrase")        # "wake" or "stt": which Assist stage the satellite audio was recorded at (None for desk sources)
 
 
 def make_row(**kw):
@@ -382,19 +437,20 @@ def is_eval_channel(source):
 
 
 def energy_segments(pcm, t_offset=0.0, *, frame_s=0.02, margin_db=10.0, min_len_s=0.15, max_len_s=3.0,
-                    merge_gap_s=0.25, floor_pct=20.0, hang_s=0.04):
+                    merge_gap_s=0.25, floor_pct=20.0, hang_s=0.04, floor_db=None):
     """Speech-like bursts by short-time energy (no model, no text): frames more than `margin_db`
     above the `floor_pct` percentile of the frame energies of `pcm` (so pass the audio with some
     surrounding context). Bursts closer than `merge_gap_s` are merged; bursts shorter than
     `min_len_s` dropped; longer than `max_len_s` flagged `long`. Returns dicts
-    (t0, t1 in seconds + t_offset, snr_db over the floor, peak_db, long)."""
+    (t0, t1 in seconds + t_offset, snr_db over the floor, peak_db, long). `floor_db` (dBFS) replaces the
+    percentile, e.g. one floor measured on a whole recording instead of a short context."""
     n = int(frame_s * RATE)
     nf = len(pcm) // n
     if nf < 5:
         return []
     x = pcm[:nf * n].astype(np.float32).reshape(nf, n) / 32768.0
     db = 20 * np.log10(np.sqrt((x ** 2).mean(axis=1)) + 1e-7)
-    floor = float(np.percentile(db, floor_pct))
+    floor = float(np.percentile(db, floor_pct)) if floor_db is None else float(floor_db)
     act = db > floor + margin_db
     segs, i = [], 0
     while i < nf:

@@ -50,9 +50,9 @@ def find_takes(pcm, margin_db=10.0, min_len_s=0.15, max_len_s=3.0, merge_gap_s=0
     return takes, len(segs) - len(takes)
 
 
-def assign_labels(n, near_labels, near_from=None):
-    """kivi for every take except the last len(near_labels), which get near:<label> in order."""
-    labels = ["kivi"] * n
+def assign_labels(n, near_labels, near_from=None, phrase=C.DEFAULT_PHRASE):
+    """The phrase for every take except the last len(near_labels), which get near:<label> in order."""
+    labels = [phrase] * n
     if near_labels:
         k = len(near_labels)
         if k > n:
@@ -75,9 +75,10 @@ def import_memo(a):
     pcm = decode_memo(memo)
     takes, dropped = find_takes(pcm, a.margin_db, a.min_len_s, a.max_len_s)
     near = [w.strip() for w in a.near_labels.split(",")] if a.near_labels else []
-    labels = assign_labels(len(takes), near, a.near_from)
+    phrase = C.normalize_phrase(getattr(a, "phrase", None) or C.DEFAULT_PHRASE)
+    labels = assign_labels(len(takes), near, a.near_from, phrase)
     n_near = sum(l.startswith("near:") for l in labels)
-    print(f"memo {len(pcm) / RATE:.1f} s: {len(takes)} takes found ({len(takes) - n_near} kivi, {n_near} near-word), "
+    print(f"memo {len(pcm) / RATE:.1f} s: {len(takes)} takes found ({len(takes) - n_near} {phrase}, {n_near} near-word), "
           f"{dropped} bursts longer than {a.max_len_s:g} s skipped"
           + (f"; expected {a.expect}" if a.expect else ""))
     if a.expect and a.expect != len(takes):
@@ -110,7 +111,7 @@ def import_memo(a):
         row = C.make_row(
             origin="phone", session=sid, source="phone", device="phone", session_device="", speaker=a.speaker,
             split=a.split, eval_channel=False, condition="phone-memo", conditions={}, tags={}, block=1,
-            block_name="phone-memo", label=lab, word=lab.split(":", 1)[1] if ":" in lab else "kivi", kind="cue",
+            block_name="phone-memo", label=lab, word=lab.split(":", 1)[1] if ":" in lab else phrase, kind="cue", phrase=phrase,
             clip=rel, start_s=round(c0, 3), end_s=round(c1, 3), cue_index=i, snr_db=t["snr_db"],
             extract_id=exid, consent_confirmed=True, revision="", needs_review=False)
         C.append_jsonl(root / "manifest.jsonl", [row])      # one fsynced line per clip, right after the clip
@@ -133,6 +134,7 @@ def main(argv=None):
     ap.add_argument("--split", required=True, choices=C.SPLITS,
                     help="required, no default: the owner decides (policy: the production memo of spk02 is train)")
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
+    ap.add_argument("--phrase", default=C.DEFAULT_PHRASE, help="the wake phrase of the takes (default kivi)")
     ap.add_argument("--near-labels", help="comma list for the last takes, in order: kiwi,kiwi,tivi,tivi")
     ap.add_argument("--near-from", type=int, help="1-based index of the first near-word take (checked)")
     ap.add_argument("--expect", type=int, help="number of takes you recorded; refuses to import on a mismatch")

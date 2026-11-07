@@ -11,8 +11,13 @@ audio is taken afterwards from Home Assistant by `kivi_extract.py`.
     kivi_session.py --device c3-a --speaker spk01 --desk-mic Samson --webcam-mic C920
     kivi_session.py --print-protocol > my_blocks.json      # edit, then: --blocks my_blocks.json
     kivi_session.py --dry-run                              # fake tones, no microphone, fast
+    kivi_session.py --phrase "oye kivi" ...                # another wake phrase (cues, labels, near-words, session.json)
 
-Default protocol (one session, about 12 min): at 1.5 m and at 3 m, each with the TV silent (on, with nothing
+`--phrase` (default "kivi") is the phrase to say; the cues show it, the cues are labelled with it, the default
+near-words are the list for that phrase (`NEAR_WORDS_BY_PHRASE`; "oye kivi": kivi, oye kili, oye kiri, oye tivi,
+oye mira, oye tú, hoy vi, oye Fifi, o sea, 2 each) and `session.json` records `phrase`.
+
+Default protocol for "kivi" (one session, about 12 min): at 1.5 m and at 3 m, each with the TV silent (on, with nothing
 playing: the satellite runs on the TV, so it must stay on) and with the TV playing, 10 x "kivi" (a cue about every 5 s, +-1 s); then the near-words kiwi, tivi, kili, kiri,
 Pipi and "aquí vi", 2 each; then 60 s of silence with you present. "Enter when ready" separates
 the blocks; the recording runs through the pauses (they are logged and never used as negatives).
@@ -39,7 +44,12 @@ import kivi_real_common as C  # noqa: E402
 
 RATE = C.RATE
 CHUNK_BYTES = 3200            # 100 ms of S16 mono
-NEAR_WORDS = ["kiwi", "tivi", "kili", "kiri", "Pipi", "aquí vi"]
+NEAR_WORDS = ["kiwi", "tivi", "kili", "kiri", "Pipi", "aquí vi"]          # near-words of the default phrase "kivi"
+# Phrase-specific near-word lists (2 cues each). For "oye kivi" the bare word "kivi" is one of them: it must NOT wake.
+NEAR_WORDS_BY_PHRASE = {
+    "kivi": NEAR_WORDS,
+    "oye kivi": ["kivi", "oye kili", "oye kiri", "oye tivi", "oye mira", "oye tú", "hoy vi", "oye Fifi", "o sea"],
+}
 MIN_GAP_S = 3.0               # smallest allowed time between two cues (interval - jitter)
 LEAD_IN_S = 3.0
 TAIL_S = 4.0
@@ -50,13 +60,20 @@ TAIL_S = 4.0
 # ---------------------------------------------------------------------------------------------
 
 
-def default_blocks():
+def default_blocks(phrase=C.DEFAULT_PHRASE):
+    """The default protocol for `phrase`. A `kivi` block is a block of the target phrase (the kind name is kept
+    for old session files and the scorer); its cues are labelled with the phrase."""
+    phrase = C.normalize_phrase(phrase)
+    if phrase not in NEAR_WORDS_BY_PHRASE:
+        raise SystemExit(f"no default near-word list for phrase {phrase!r} (have {sorted(NEAR_WORDS_BY_PHRASE)}): "
+                         "give the blocks with --blocks")
+    slug = phrase.replace(" ", "-")
     blocks = []
     for pos in (1.5, 3):
         for tv in ("off", "on"):
-            blocks.append({"name": f"kivi-{pos}m-tv{tv}", "kind": "kivi", "n": 10, "interval_s": 5.0,
+            blocks.append({"name": f"{slug}-{pos}m-tv{tv}", "kind": "kivi", "n": 10, "interval_s": 5.0,
                            "jitter_s": 1.0, "conditions": {"position_m": pos, "tv": tv}})
-    blocks.append({"name": "near-words", "kind": "near", "words": NEAR_WORDS, "each": 2, "interval_s": 5.0,
+    blocks.append({"name": "near-words", "kind": "near", "words": NEAR_WORDS_BY_PHRASE[phrase], "each": 2, "interval_s": 5.0,
                    "jitter_s": 1.0, "conditions": {"position_m": 1.5, "tv": "off"}})
     blocks.append({"name": "silence", "kind": "silence", "seconds": 60,
                    "conditions": {"position_m": 1.5, "tv": "off"}})
@@ -105,14 +122,14 @@ def expand_blocks(blocks, only=None, repeat=1):
     return out
 
 
-def instruction(b):
+def instruction(b, phrase=C.DEFAULT_PHRASE):
     c = b.get("conditions", {})
     where = f"{c['position_m']} m from the TV" if "position_m" in c else "your usual place"
     tv = {"off": "TV SILENT: keep the TV on, with nothing playing (no sound)",
           "on": "TV ON at normal volume (content of your choice)"}.get(c.get("tv"), "")
     extra = ", ".join(f"{k}={v}" for k, v in c.items() if k not in ("position_m", "tv"))
     if b["kind"] == "kivi":
-        what = f"say KIVI {b['n']} times, a cue about every {b.get('interval_s', 5):g} s"
+        what = f"say {phrase.upper()} {b['n']} times, a cue about every {b.get('interval_s', 5):g} s"
     elif b["kind"] == "near":
         what = (f"say each word {b.get('each', 2)} times in the order shown ("
                 + ", ".join(b["words"]) + ")")
@@ -329,7 +346,7 @@ def write_session_json(path, session):
     os.replace(tmp, path)
 
 
-def run_block(b, clock, rng, say, rec, on_update=lambda: None):
+def run_block(b, clock, rng, say, rec, on_update=lambda: None, phrase=C.DEFAULT_PHRASE):
     """Show the cues of one block, filling `rec` (already part of the session record, so an
     interrupted block is kept with the cues shown so far)."""
     rec.update({"name": b["name"], "kind": b["kind"], "conditions": b.get("conditions", {}),
@@ -348,7 +365,7 @@ def run_block(b, clock, rng, say, rec, on_update=lambda: None):
         clock.sleep_until(end)
     else:
         if b["kind"] == "kivi":
-            items = [("kivi", "kivi")] * int(b["n"])
+            items = [(phrase, phrase)] * int(b["n"])
         else:
             items = [(f"near:{w.lower()}", w) for w in b["words"] for _ in range(int(b.get("each", 2)))]
             rng.shuffle(items)
@@ -357,7 +374,7 @@ def run_block(b, clock, rng, say, rec, on_update=lambda: None):
         for i, (label, word) in enumerate(items, 1):
             clock.sleep_until(t)
             off = clock.now()
-            shown = "KIVI" if b["kind"] == "kivi" else f'"{word}"'
+            shown = phrase.upper() if b["kind"] == "kivi" else f'"{word}"'
             say(f"  >>> say {shown} now <<<   ({i}/{len(items)})", bold=True)
             rec["cues"].append({"index": i, "offset_s": round(off, 3), "utc": clock.utc(off), "label": label,
                                 "word": word if b["kind"] == "near" else ""})
@@ -374,7 +391,8 @@ def run(args, input_fn=input):
     C.valid_device(args.device)
     if args.split not in C.SPLITS:
         raise SystemExit(f"--split must be one of {C.SPLITS}")
-    blocks = load_blocks(args.blocks) if args.blocks else default_blocks()
+    phrase = C.normalize_phrase(getattr(args, "phrase", None) or C.DEFAULT_PHRASE)
+    blocks = load_blocks(args.blocks) if args.blocks else default_blocks(phrase)
     blocks = expand_blocks(validate_blocks(blocks), args.only, args.repeat)
     tags = dict(t.split("=", 1) for t in args.tag or [])
     fake = args.dry_run or args.fake_source
@@ -405,7 +423,7 @@ def run(args, input_fn=input):
     sdir = Path(args.out_dir).expanduser() / sid
     sdir.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     sdir.mkdir(mode=0o700)
-    session = {"schema": 1, "session_id": sid, "device": args.device, "tv_source": C.source_label(args.device),
+    session = {"schema": 1, "session_id": sid, "phrase": phrase, "device": args.device, "tv_source": C.source_label(args.device),
                "speaker": args.speaker or "", "split": args.split, "tags": tags, "dry_run": bool(args.dry_run),
                "t0_utc": clock.t0_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                "t0_mono_ns": clock.t0_mono_ns, "time_scale": scale, "seed": args.seed,
@@ -448,14 +466,14 @@ def run(args, input_fn=input):
         say("Recording both microphones. Ctrl-C stops the session (the files are kept).")
         pause_start = clock.now()
         for n, b in enumerate(blocks, 1):
-            say(f"\nBlock {n}/{len(blocks)}: {b['name']}\n  {instruction(b)}")
+            say(f"\nBlock {n}/{len(blocks)}: {b['name']}\n  {instruction(b, phrase)}")
             if wait:
                 input_fn("  Press Enter when ready... ")
             session["pauses"].append({"before_block": n, "start_offset_s": round(pause_start, 3),
                                       "end_offset_s": round(clock.now(), 3)})
             rec = {"index": n}
             session["blocks"].append(rec)
-            run_block(b, clock, rng, say, rec, snapshot)
+            run_block(b, clock, rng, say, rec, snapshot, phrase)
             pause_start = clock.now()
             snapshot()
         session["status"] = "complete"
@@ -497,6 +515,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--list-devices", action="store_true")
     ap.add_argument("--print-protocol", action="store_true", help="print the default blocks as JSON")
+    ap.add_argument("--phrase", default=C.DEFAULT_PHRASE,
+                    help="the wake phrase to say and label (default kivi; e.g. 'oye kivi'); recorded in session.json")
     ap.add_argument("--device", default="c3-a", help="satellite under test (kivi_devices.json); default c3-a")
     ap.add_argument("--speaker", help="pseudonymous speaker id, e.g. spk01 (never a name)")
     ap.add_argument("--split", default="unassigned", choices=C.SPLITS, help="dataset split to record in the manifest")
@@ -524,7 +544,7 @@ def main(argv=None):
         print_sources()
         return
     if a.print_protocol:
-        print(json.dumps({"blocks": default_blocks()}, indent=1, ensure_ascii=False))
+        print(json.dumps({"blocks": default_blocks(a.phrase)}, indent=1, ensure_ascii=False))
         return
     if a.repeat < 1:
         raise SystemExit("--repeat must be >= 1")

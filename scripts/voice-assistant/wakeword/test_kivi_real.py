@@ -652,7 +652,7 @@ def test_pipeline_preflight_and_warning(tmp_path, capsys):
     assert "'kivi' is a live wake word" in capsys.readouterr().out
 
 
-def test_button_takes_flags_review_and_ignores_restored_states(tmp_path):
+def test_button_takes_press_then_say_flags_review_and_ignores_restored_states(tmp_path):
     x = bursts_audio(120, [22.0, 53.5, 91.0, 94.0], seed=7)
     make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
     presses = [T0 + 20.0, T0 + 50.0, T0 + 80.0, T0 + 90.0, T0 + 500.0]
@@ -661,11 +661,12 @@ def test_button_takes_flags_review_and_ignores_restored_states(tmp_path):
     ds = tmp_path / "ds"
     base = ["--button-takes", "--device", "c3-b", "--speaker", "spk02", "--since", X.utc_str(T0 - 60),
             "--until", X.utc_str(T0 + 600), "--presses-file", str(pf), "--dataset-root", str(ds),
-            "--from-dir", str(tmp_path / "rec")]
+            "--from-dir", str(tmp_path / "rec"), "--button-order", "press-then-say"]
     with pytest.raises(SystemExit):
         X.main(base)                                            # --split is required
     X.main(base + ["--split", "test"])
     rows = C.read_jsonl(ds / "manifest.jsonl")
+    assert {r["revision"] for r in rows} == {""} and {r["tags"]["button_order"] for r in rows} == {"press-then-say"}
     assert [r["cue_index"] for r in rows] == [1, 2, 4]
     assert {r["source"] for r in rows} == {"tv-c3b"} and {r["speaker"] for r in rows} == {"spk02"}
     assert [r["needs_review"] for r in rows] == [False, False, True]
@@ -684,6 +685,70 @@ def test_button_takes_flags_review_and_ignores_restored_states(tmp_path):
           X.utc_str(T0 + 50)]
     assert X.state_press_times(st, T0, T0 + 100) == [T0 + 20, T0 + 50]
     assert X.state_press_times(st, T0 + 30, T0 + 100) == [T0 + 50]
+
+
+def button_args(tmp_path, presses, *extra, ds="ds"):
+    pf = tmp_path / "presses.json"
+    pf.write_text(json.dumps([X.utc_str(t) for t in presses]))
+    return ["--button-takes", "--device", "c3-b", "--speaker", "spk02", "--since", X.utc_str(T0 - 60),
+            "--until", X.utc_str(T0 + 600), "--presses-file", str(pf), "--dataset-root", str(tmp_path / ds),
+            "--from-dir", str(tmp_path / "rec"), "--split", "test", *extra]
+
+
+def test_button_takes_default_is_say_then_press_and_window(tmp_path):
+    """The word is spoken before the press: window max(press - 4 s, previous press + 0.3 s) ... press + 1 s."""
+    words = [10.0, 13.0, 20.0, 25.0, 50.0, 52.0, 80.0]
+    x = bursts_audio(120, words, seed=11)
+    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
+    presses = [T0 + t for t in (11.5, 14.6, 21.5, 22.3, 26.5, 40.0, 50.8, 53.2, 90.0)]
+    # 11.5 and 14.6: two ordinary takes; 21.5 + 22.3 is a double press of the word at 20.0 (0.8 s apart);
+    # 26.5: the word at 25.0; 40.0: no speech in 36..41; 50.8 / 53.2: word A at 50.0 and word B at 52.0, so B's
+    # window (53.2 - 4 = 49.2) would hold A too, but it starts at A's press + 0.3 = 51.1 and holds only B; 90.0: the word at 80.0 is 10 s before
+    X.main(button_args(tmp_path, presses))                                       # no --button-order: the default
+    rows = C.read_jsonl(tmp_path / "ds" / "manifest.jsonl")
+    assert {r["revision"] for r in rows} == {X.SAY_THEN_PRESS_REVISION} and all(f"/clips-{X.SAY_THEN_PRESS_REVISION}/00-button-takes/" in r["clip"] for r in rows)
+    assert {r["tags"]["button_order"] for r in rows} == {"say-then-press"}
+    assert [r["cue_index"] for r in rows] == [1, 2, 3, 4, 6, 7] and 5 not in [r["cue_index"] for r in rows]
+    assert [r["tags"]["n_presses"] for r in rows] == [1, 1, 2, 1, 1, 1]
+    assert [r["needs_review"] for r in rows] == [False] * 6                        # B's window excludes A's burst
+    assert [r["split"] for r in rows] == ["test"] * 6
+    # onsets are before the first press of the take (negative), inside 4 s before it
+    assert all(-4.0 <= r["onset_after_press_s"] <= -0.5 for r in rows)
+    assert abs(rows[0]["onset_after_press_s"] + 1.5) < 0.2 and abs(rows[2]["onset_after_press_s"] + 1.5) < 0.2
+    assert abs(rows[4]["onset_after_press_s"] + 0.8) < 0.2 and abs(rows[5]["onset_after_press_s"] + 1.2) < 0.2
+    rep = json.loads(next((tmp_path / "ds").glob("button-*/extract-*.json")).read_text())
+    assert (rep["presses"], rep["takes"], rep["double_presses"], rep["clips"], rep["no_clear_onset"],
+            rep["needs_review"], rep["button_order"], rep["revision"]) == (9, 8, 1, 6, 2, 0, "say-then-press", X.SAY_THEN_PRESS_REVISION)
+    X.main(button_args(tmp_path, presses))                                       # idempotent
+    assert len(C.read_jsonl(tmp_path / "ds" / "manifest.jsonl")) == 6
+
+
+def test_button_takes_double_press_merge_and_say_then_press_flags_two_words(tmp_path):
+    assert X.merge_presses([5.0, 5.8, 6.2, 9.0, 12.0, 13.4, 20.0], 1.5) == [
+        (5.0, 6.2, 3), (9.0, 9.0, 1), (12.0, 13.4, 2), (20.0, 20.0, 1)]          # chained: < 1.5 s from the previous press
+    assert X.merge_presses([5.0, 6.5], 1.5) == [(5.0, 5.0, 1), (6.5, 6.5, 1)]    # exactly 1.5 s apart: two takes
+    a = Namespace(before_s=4.0, after_s=1.0, min_gap_after_prev_s=0.3, tolerance_s=1.0, window_s=6.0)
+    assert X.take_window("say-then-press", 30.0, None, a) == (26.0, 31.0)
+    assert X.take_window("say-then-press", 30.0, 28.0, a) == (28.3, 31.0)
+    assert X.take_window("say-then-press", 30.0, 20.0, a) == (26.0, 31.0)
+    assert X.take_window("press-then-say", 30.0, 28.0, a) == (29.0, 37.0)
+    # two separate words in one window (no previous press to cut it): flagged and kept out of test
+    x = bursts_audio(60, [20.0, 22.0], seed=5)
+    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
+    X.main(button_args(tmp_path, [T0 + 23.0]))
+    (row,) = C.read_jsonl(tmp_path / "ds" / "manifest.jsonl")
+    assert row["needs_review"] and row["n_candidates"] == 2 and row["split"] == "unassigned"
+
+
+def test_button_order_default_in_the_parser(tmp_path, capsys):
+    x = bursts_audio(30, [10.0], seed=2)
+    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
+    X.main(button_args(tmp_path, [T0 + 11.5], "--dry-run"))
+    assert "order say-then-press" in capsys.readouterr().out
+    X.main(button_args(tmp_path, [T0 + 11.5], "--dry-run", "--button-order", "press-then-say"))
+    assert "order press-then-say" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        X.main(button_args(tmp_path, [T0 + 11.5], "--button-order", "bogus"))
 
 
 def test_training_rows_and_ablation_and_drift():
@@ -1247,3 +1312,93 @@ def test_session_cue_wording_says_silent_not_off():
     import kivi_session as S2
     text = S2.instruction({"kind": "kivi", "n": 3, "conditions": {"position_m": 1.5, "tv": "off"}})
     assert "TV SILENT" in text and "keep the TV on" in text and "TV OFF" not in text
+
+
+# ---------------------------------------------------------------------------------------------
+# wake phrase (default "kivi"; "oye kivi" for the fallback phrase)
+# ---------------------------------------------------------------------------------------------
+
+
+def test_session_phrase_default_and_oye_kivi(tmp_path, capsys):
+    d, s = dry_session(tmp_path)
+    assert s["phrase"] == "kivi" and {c["label"] for c in s["blocks"][0]["cues"]} == {"kivi"}
+    capsys.readouterr()
+    blocks = S.default_blocks("oye kivi")
+    near = next(b for b in blocks if b["kind"] == "near")
+    assert near["words"] == ["kivi", "oye kili", "oye kiri", "oye tivi", "oye mira", "oye tú", "hoy vi", "oye Fifi", "o sea"]
+    assert near["each"] == 2 and blocks[0]["name"].startswith("oye-kivi-")
+    assert [b["words"] for b in S.default_blocks() if b["kind"] == "near"] == [S.NEAR_WORDS]       # default unchanged
+    assert S.default_blocks("  Oye   KIVI ") == blocks                                              # normalized
+    with pytest.raises(SystemExit):
+        S.default_blocks("hola kivi")                    # no near-word list for it: give --blocks
+    with pytest.raises(SystemExit):
+        S.default_blocks("oye kivi 2")                   # letters only
+    assert "say OYE KIVI 10 times" in S.instruction(blocks[0], "oye kivi")
+    out = tmp_path / "sessions2"
+    S.main(["--dry-run", "--phrase", "oye kivi", "--out-dir", str(out), "--seed", "3", "--only", "oye-kivi-1.5m-tvoff",
+            "--only", "near-words"])
+    (sd,) = list(out.iterdir())
+    s = json.loads((sd / "session.json").read_text(encoding="utf-8"))
+    assert s["phrase"] == "oye kivi"
+    pos = [c for b in s["blocks"] if b["kind"] == "kivi" for c in b["cues"]]
+    assert {c["label"] for c in pos} == {"oye kivi"}
+    assert {c["label"] for b in s["blocks"] if b["kind"] == "near" for c in b["cues"]} >= {"near:kivi", "near:oye kili", "near:o sea"}
+    assert "say OYE KIVI now" in capsys.readouterr().out
+
+
+def test_training_rows_filter_by_phrase_and_old_rows_are_kivi():
+    rows = [{"speaker": "spk01", "split": "train", "label": "kivi", "kind": "cue"},                         # old row: no phrase
+            {"speaker": "spk01", "split": "train", "label": "near:kili", "kind": "cue", "phrase": "kivi"},
+            {"speaker": "spk01", "split": "train", "label": "background", "kind": "segment", "phrase": "kivi"},
+            {"speaker": "spk01", "split": "train", "label": "oye kivi", "kind": "cue", "phrase": "oye kivi"},
+            {"speaker": "spk01", "split": "train", "label": "near:kivi", "kind": "cue", "phrase": "oye kivi"},
+            {"speaker": "spk01", "split": "test", "label": "kivi", "kind": "cue"},
+            {"speaker": "", "split": "train", "label": "negative", "kind": "negative"}]
+    assert C.row_phrase(rows[0]) == "kivi" and C.row_phrase(rows[6]) is None and C.row_phrase(rows[3]) == "oye kivi"
+    assert len(C.training_rows(rows)) == 6                                           # no phrase: unchanged
+    assert [r["label"] for r in C.training_rows(rows, phrase="kivi")] == ["kivi", "near:kili", "background", "negative"]
+    assert [r["label"] for r in C.training_rows(rows, phrase=" Oye  Kivi ")] == ["oye kivi", "near:kivi", "negative"]
+    neg = C.negative_rows_for_phrase(rows, "oye kivi")
+    assert [r["label"] for r in neg] == ["kivi", "near:kili", "background"]          # old kivi takes are negatives now
+    assert {r["negative_for"] for r in neg} == {"oye kivi"} and neg[0]["label_original"] == "kivi"
+    assert [r["label"] for r in C.negative_rows_for_phrase(rows, "kivi")] == ["oye kivi"]   # near:kivi of the other phrase: the word itself is skipped
+    assert C.negative_rows_for_phrase(rows, "oye kivi", exclude_speakers=["spk01"]) == []
+    assert rows[0] == {"speaker": "spk01", "split": "train", "label": "kivi", "kind": "cue"}   # inputs are not modified
+
+
+def test_extract_and_manifest_carry_the_phrase(tmp_path):
+    x = bursts_audio(60, [20.0], seed=4)
+    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
+    X.main(button_args(tmp_path, [T0 + 22.0], "--phrase", "oye kivi", ds="ds1"))
+    X.main(button_args(tmp_path, [T0 + 22.0], ds="ds2"))
+    (r1,) = C.read_manifest(tmp_path / "ds1")
+    (r2,) = C.read_manifest(tmp_path / "ds2")
+    assert (r1["phrase"], r1["label"], r1["word"]) == ("oye kivi", "oye kivi", "oye kivi")
+    assert (r2["phrase"], r2["label"]) == ("kivi", "kivi")
+    assert json.loads(next((tmp_path / "ds1").glob("button-*/session.json")).read_text())["phrase"] == "oye kivi"
+    assert C.read_manifest(tmp_path / "ds1")[0]["clip"].endswith("p001-oye-kivi.wav")
+    with pytest.raises(SystemExit):
+        X.main(button_args(tmp_path, [T0 + 22.0], "--phrase", "oye kivi!", ds="ds3"))
+
+
+def test_split_mark_reaches_button_rows_and_superseded_rows_are_skipped(tmp_path):
+    import kivi_dataset_marks as M
+    x = bursts_audio(60, [20.0], seed=4)
+    make_wake_tree(tmp_path / "rec", "fda18f", 111, T0, x)
+    X.main(button_args(tmp_path, [T0 + 18.0], "--button-order", "press-then-say"))      # revision "", wrong order
+    X.main(button_args(tmp_path, [T0 + 22.0]))                                            # say-then-press (stp3)
+    ds = tmp_path / "ds"
+    sid = C.read_manifest(ds)[0]["session"]
+    M.main(["supersede", "--dataset-root", str(ds), "--session", sid, "--revision", "", "--by", X.SAY_THEN_PRESS_REVISION,
+            "--reason", "wrong order"])
+    M.main(["split", "--dataset-root", str(ds), "--session", sid, "--split", "train", "--reason", "owner decision"])
+    rows = C.read_manifest(ds)
+    assert {(r["revision"], r["superseded"], r["split"]) for r in rows} == {("", True, "train"), (X.SAY_THEN_PRESS_REVISION, False, "train")}
+    assert [r["revision"] for r in C.training_rows(rows)] == [X.SAY_THEN_PRESS_REVISION]
+    M.main(["exclude", "--dataset-root", str(ds), "--session", sid, "--revision", X.SAY_THEN_PRESS_REVISION,
+            "--cue-index", "1", "--reason", "no speech"])
+    rows = C.read_manifest(ds)
+    assert [(r["revision"], r["excluded"]) for r in rows] == [("", False), (X.SAY_THEN_PRESS_REVISION, True)]
+    assert C.training_rows(rows) == []
+    with pytest.raises(SystemExit):
+        M.main(["exclude", "--dataset-root", str(ds), "--session", sid, "--revision", "nope", "--cue-index", "1", "--reason", "x"])

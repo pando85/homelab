@@ -6,6 +6,7 @@ dataset.
     kivi_extract.py --session-dir ~/kivi-sessions/<session id>            # reads the pod with kubectl
     kivi_extract.py --session-dir ... --dry-run                           # list what it would do
     kivi_extract.py --button-takes --device c3-b --speaker spk02 --split test --since ... --until ...
+                    [--button-order say-then-press (default) | press-then-say] [--phrase "oye kivi"]
 
 Steps
 1. Pre-flight (read only): the wake word id of the Assist pipelines (`.storage/assist_pipeline.pipelines`).
@@ -408,6 +409,7 @@ def extract(a, fetcher=None):
     now = time.time() if a.now is None else a.now
     exid = "ex-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     rev = a.revision or ""
+    phrase = C.normalize_phrase(session.get("phrase") or C.DEFAULT_PHRASE)     # sessions before the field: kivi
     kw = dict(coarse_lag_s=a.coarse_lag_s, refine_lag_s=a.refine_lag_s, win_s=a.win_s, min_conf=a.min_conf,
               allow_curve=not a.linear_only)
     to_ref, ref_map = C.session_to_ref(session)
@@ -595,7 +597,8 @@ def extract(a, fetcher=None):
                 cue_index=idx if kind == "cue" else None, cue_offset_s=cue_off,
                 align_offset_s=round(d_used, 5), align_conf=f["conf"], align_ok=bool(f["ok"]),
                 drift_ppm=f["drift_ppm"], source_run=f["run"], stage=f.get("stage"), revision=rev, extract_id=exid,
-                dry_run_session=bool(session.get("dry_run")), run_end_in_window=run_end is not None, needs_review=False)
+                dry_run_session=bool(session.get("dry_run")), run_end_in_window=run_end is not None, needs_review=False,
+                phrase=phrase)
             C.private_mkdir(root / Path(rel).parent, root)
             if (label, rel) in done:
                 s["cues_cut"] += kind == "cue"
@@ -639,11 +642,62 @@ def extract(a, fetcher=None):
 # ---------------------------------------------------------------------------------------------
 
 
+BUTTON_ORDERS = ("say-then-press", "press-then-say")
+SAY_THEN_PRESS_REVISION = "stp3"        # revision of rows cut by the say-then-press rule below
+
+
+def frame_floor_db(x, pct=10.0, frame_s=0.02):
+    """The room floor of a whole recording: the `pct` percentile of its 20 ms frame levels (dBFS)."""
+    n = int(frame_s * RATE)
+    nf = len(x) // n
+    f = x[:nf * n].astype(np.float32).reshape(nf, n) / 32768.0
+    return float(np.percentile(20 * np.log10(np.sqrt((f ** 2).mean(axis=1)) + 1e-7), pct))
+
+
+def merge_presses(times, gap_s):
+    """Group presses into takes: a press less than `gap_s` after the previous one belongs to the same take
+    (a double press). Returns (first_press, last_press, n_presses) per take, in time order."""
+    takes = []
+    for t in sorted(times):
+        if takes and t - takes[-1][1] < gap_s:
+            takes[-1][1] = t
+            takes[-1][2] += 1
+        else:
+            takes.append([t, t, 1])
+    return [tuple(x) for x in takes]
+
+
+def take_window(order, rel, prev_rel, a):
+    """Search window (seconds in the file, press at `rel`) in which a take's word must start.
+    say-then-press: the word comes before the press, from max(press - before, previous take's last press +
+    min-gap) to press + after (the file-time uncertainty). press-then-say: 0 to `--window-s` after the press
+    (plus the tolerance on both sides)."""
+    if order == "say-then-press":
+        lo = rel - a.before_s
+        if prev_rel is not None:
+            lo = max(lo, prev_rel + a.min_gap_after_prev_s)
+        return lo, rel + a.after_s
+    return rel - a.tolerance_s, rel + a.window_s + a.tolerance_s
+
+
 def button_takes(a, fetcher=None, presses=None):
-    """Takes marked by presses of `input_button.kivi_take`: for each press, find the word in the
-    wake audio of the device within 0-6 s after it (energy only), and cut a clip around it. Takes with
-    more than one candidate burst are flagged `needs_review` and kept out of `test` unless
-    `--keep-review-in-split`."""
+    """Takes marked by presses of `input_button.kivi_take`. Default order `say-then-press` (the owner's
+    protocol: say "Kivi", then press, then wait about 5 s): the word is the energy burst in
+    max(press - 4 s, previous take's press + 0.3 s) ... press + 1 s. `press-then-say` looks 0-6 s after the
+    press instead. Presses less than `--double-press-s` apart are one take (a double press, counted).
+    Takes with more than one candidate burst are flagged `needs_review` and kept out of `test` unless
+    `--keep-review-in-split`. Re-extractions with the new order are stored as revision `stp3` (or --revision),
+    so rows of the old order (revision '') can be superseded without touching audio.
+
+    Which bursts are the word (say-then-press; found in the window's audio only, against the 10th-percentile floor of the whole file): "ki-vi" is often two or three bursts, so the word is the span from
+    the first to the last burst that starts before the press (inside the window); more than `--max-word-s` of span
+    flags the take `needs_review`. Bursts in the last second after the press count only when none starts before
+    it (the next take's word can begin within a second of the press when takes are only 3-4 s apart), and such a
+    take is always flagged `needs_review`."""
+    phrase = C.normalize_phrase(getattr(a, "phrase", None) or C.DEFAULT_PHRASE)
+    order = getattr(a, "button_order", "say-then-press")
+    if order not in BUTTON_ORDERS:
+        raise SystemExit(f"--button-order must be one of {BUTTON_ORDERS}")
     C.valid_speaker(a.speaker)
     if a.split not in C.SPLITS:
         raise SystemExit(f"--split must be one of {C.SPLITS}")
@@ -654,34 +708,50 @@ def button_takes(a, fetcher=None, presses=None):
         raise SystemExit("--until must be after --since")
     presses = presses or (FilePresses(a.presses_file) if a.presses_file else
                           PostgresPresses(a.context, a.namespace, a.pg_pod, a.pg_container, a.pg_user, a.pg_db))
-    times = presses.presses(since, until)
+    raw_times = presses.presses(since, until)
+    takes = merge_presses(raw_times, a.double_press_s)
+    n_double = len(raw_times) - len(takes)
+    rev = a.revision or (SAY_THEN_PRESS_REVISION if order == "say-then-press" else "")
+    cdir = "clips" + (f"-{C.ascii_slug(rev)}" if rev else "")
     prefix = C.device_prefix(device, a.devices_file, a.device_id_prefix)
     is_local = fetcher is not None
     fetcher = fetcher or KubectlFetcher(a.context, a.namespace, a.pod, a.container, a.recordings_root)
     preflight(a, device, is_local)
     files = [f for f in list_files(fetcher, prefix, "wake") if f["mtime"] >= since - a.slack and f["start"] <= until + a.slack]
-    print(f"{len(times)} button press(es) between {a.since} and {a.until}; {len(files)} {tv} wake file(s) overlap")
+    print(f"{len(raw_times)} button press(es) = {len(takes)} take(s) ({n_double} double press(es) merged, "
+          f"order {order}) between {a.since} and {a.until}; {len(files)} {tv} wake file(s) overlap")
     if a.dry_run:
         return None
     root = Path(a.dataset_root).expanduser()
     sid = f"button-{datetime.fromtimestamp(since, timezone.utc):%Y%m%dT%H%M%SZ}-{a.speaker}-{tv}"
     sroot = C.private_mkdir(root / sid, root)
     raw = C.private_mkdir(sroot / tv / "raw", root)
-    loaded = []
+    loaded, raw_files, take_log = [], [], []
     for f in files:
         s0, s1, _ = window_samples(f, since, until, a.copy_pad_s)
         if s1 - s0 < RATE:
             continue
         dst, _ = fetch_samples(fetcher, f, s0, s1, raw)
         loaded.append((f, f["start"] + s0 / RATE, C.read_pcm16(dst)))
+        raw_files.append({"name": dst.name, "t0_utc": utc_str(f["start"] + s0 / RATE), "run": f"{f['pipeline']}/{f['run']}"})
     exid = "ex-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     manifest = root / "manifest.jsonl"
     done = {r["clip"] for r in C.read_jsonl(manifest) if r["session"] == sid}
-    stats = {"presses": len(times), "no_file": 0, "no_clear_onset": 0, "clips": 0, "needs_review": 0,
+    stats = {"phrase": phrase, "presses": len(raw_times), "takes": len(takes), "double_presses": n_double, "button_order": order,
+             "revision": rev, "no_file": 0, "no_clear_onset": 0, "clips": 0, "needs_review": 0,
              "already_there": 0, "reconciled": 0}
     after = []
     tol = a.tolerance_s
-    for n, t in enumerate(times, 1):
+    prev_t = None
+    floors = {}
+
+    def floor_of(x):
+        return floors.setdefault(id(x), frame_floor_db(x))
+
+    for n, (t, t_last, n_pr) in enumerate(takes, 1):
+        prev_last, prev_t = prev_t, t_last
+        take_log.append({"take": n, "press_utc": utc_str(t), "last_press_utc": utc_str(t_last), "n_presses": n_pr,
+                         "prev_last_press_utc": utc_str(prev_last) if prev_last is not None else None})
         hit = next(((f, b0, x) for f, b0, x in loaded if b0 - tol <= t <= f["mtime"] + tol), None)
         if hit is None:
             stats["no_file"] += 1
@@ -689,18 +759,36 @@ def button_takes(a, fetcher=None, presses=None):
         f, base, x = hit
         dur = len(x) / RATE
         rel = t - base
-        c0, c1 = max(0.0, rel - 10.0), min(dur, rel + a.window_s + tol + 10.0)
-        segs = C.energy_segments(x[int(c0 * RATE):int(c1 * RATE)], c0, margin_db=a.margin_db,
-                                 min_len_s=0.15, max_len_s=a.max_word_s, merge_gap_s=0.3)
-        cands = [s for s in segs if not s["long"] and rel - tol <= s["t0"] <= rel + a.window_s + tol
-                 and s["snr_db"] >= a.min_snr_db]
+        w0, w1 = take_window(order, rel, None if prev_last is None else prev_last - base, a)
+        c0, c1 = max(0.0, min(rel, w0) - 10.0), min(dur, max(rel, w1) + 10.0)
+        say_first = order == "say-then-press"
+        if say_first:
+            # only the window's audio, against one floor measured on the whole file: in a run of takes 3-4 s
+            # apart a context floor is raised by the speech itself and bursts run into each other
+            lo, hi = max(0.0, w0), min(dur, w1)
+            segs = C.energy_segments(x[int(lo * RATE):int(hi * RATE)], lo, margin_db=a.margin_db, min_len_s=0.15,
+                                     max_len_s=a.max_word_s, merge_gap_s=0.3, floor_db=floor_of(x))
+        else:
+            segs = C.energy_segments(x[int(c0 * RATE):int(c1 * RATE)], c0, margin_db=a.margin_db,
+                                     min_len_s=0.15, max_len_s=a.max_word_s, merge_gap_s=0.3)
+        slack = 0.1 if say_first else 0.0
+        cands = [s for s in segs if not s["long"] and w0 - slack <= s["t0"] <= w1 and s["snr_db"] >= a.min_snr_db]
+        late_only = False
+        if say_first and cands:
+            pre = [s for s in cands if s["t0"] <= rel]
+            late_only = not pre
+            cands = pre or cands
         if not cands:
             stats["no_clear_onset"] += 1
             continue
         w = max(cands, key=lambda s: s["peak_db"])
+        span_long = False
+        if say_first and not late_only and len(cands) > 1:
+            w = {**w, "t0": min(s["t0"] for s in cands), "t1": max(s["t1"] for s in cands)}
+            span_long = w["t1"] - w["t0"] > a.max_word_s
         k0, k1 = max(0.0, w["t0"] - a.pad), min(dur, w["t1"] + a.pad)
-        clip = f"{sid}/{tv}/clips/00-button-takes/p{n:03d}-kivi.wav"
-        review = len(cands) > 1
+        clip = f"{sid}/{tv}/{cdir}/00-button-takes/p{n:03d}-{C.ascii_slug(phrase)}.wav"
+        review = span_long or late_only or (len(cands) > 1 and not say_first)
         split = a.split
         if review and split == "test" and not a.keep_review_in_split:
             split = "unassigned"
@@ -708,11 +796,11 @@ def button_takes(a, fetcher=None, presses=None):
             stats["needs_review"] += 1
         row = C.make_row(
             origin="button", session=sid, source=tv, device=device, session_device=device, speaker=a.speaker,
-            split=split, split_requested=a.split, eval_channel=True, condition="button-take", conditions={}, tags={},
-            block=1, block_name="button-takes", label="kivi", word="kivi", kind="cue", clip=clip,
+            split=split, split_requested=a.split, eval_channel=True, condition="button-take", conditions={}, tags={"button_order": order, "n_presses": n_pr},
+            block=1, block_name="button-takes", label=phrase, word=phrase, kind="cue", clip=clip, phrase=phrase,
             start_s=round(base + k0 - since, 3), end_s=round(base + k1 - since, 3),
             start_utc=utc_str(base + k0), end_utc=utc_str(base + k1), cue_index=n,
-            source_run=f"{f['pipeline']}/{f['run']}", revision="", extract_id=exid, press_utc=utc_str(t),
+            source_run=f"{f['pipeline']}/{f['run']}", revision=rev, extract_id=exid, press_utc=utc_str(t),
             onset_after_press_s=round(w["t0"] - rel, 2), snr_db=w["snr_db"], n_candidates=len(cands),
             needs_review=review)
         if clip in done:
@@ -729,17 +817,21 @@ def button_takes(a, fetcher=None, presses=None):
     meta = sroot / "session.json"
     if not meta.exists():
         C.write_json_new(meta, {"schema": 1, "session_id": sid, "kind": "button-takes", "device": device,
-                                "tv_source": tv, "speaker": a.speaker, "split": a.split, "since": utc_str(since),
+                                "tv_source": tv, "phrase": phrase, "speaker": a.speaker, "split": a.split, "since": utc_str(since),
                                 "until": utc_str(until), "t0_utc": utc_str(since), "blocks": []})
-    C.write_json_new(sroot / f"extract-{exid}.json", {"extract_id": exid, **stats,
+    C.write_json_new(sroot / f"extract-{exid}.json", {"extract_id": exid, **stats, "raw_files": raw_files, "takes_log": take_log,
+                     "window_s": {"before": a.before_s, "after": a.after_s, "min_gap_after_prev": a.min_gap_after_prev_s,
+                                  "window": a.window_s, "tolerance": a.tolerance_s},
                      "median_onset_after_press_s": round(float(np.median(after)), 2) if after else None})
-    print(f"clips cut: {stats['clips']} of {stats['presses']} presses; no wake file for {stats['no_file']}; "
+    print(f"clips cut: {stats['clips']} of {stats['takes']} takes ({stats['presses']} presses, {n_double} double); no wake file for {stats['no_file']}; "
           f"no clear speech onset for {stats['no_clear_onset']}; flagged needs_review (several candidate bursts) "
           f"{stats['needs_review']}; already in the dataset {stats['already_there']}"
           + (f"; median onset {np.median(after):.1f} s after the press" if after else ""))
     if stats["no_clear_onset"]:
         print("  (a press without a clear onset means no burst of speech 10 dB above the room within the window; "
-              "check the satellite was unmuted and the take was spoken within 6 s of the press)")
+              "check the satellite was unmuted and the word was spoken in the window: "
+              + ("4 s before the press, after the previous take's press" if order == "say-then-press"
+                 else "within 6 s after the press") + ")")
     if stats["needs_review"] and a.split == "test" and not a.keep_review_in_split:
         print("  needs_review takes were set to split 'unassigned' (not test, not train) until the owner decides")
     return stats
@@ -752,6 +844,9 @@ def main(argv=None):
                     help="cut takes marked by input_button.kivi_take presses: needs --device --speaker --split --since --until")
     ap.add_argument("--device", default="c3-b", help="(--button-takes) the satellite the takes were spoken to")
     ap.add_argument("--speaker", help="(--button-takes) pseudonymous id, e.g. spk02")
+    ap.add_argument("--phrase", default=C.DEFAULT_PHRASE,
+                    help="(--button-takes) the wake phrase the takes were spoken for (label and manifest `phrase`); "
+                         "session mode takes it from session.json (old sessions: kivi)")
     ap.add_argument("--split", choices=C.SPLITS, help="--button-takes: required (train, dev, test, train-only or unassigned). "
                     "Session mode: optional, sets the session's split in the dataset copy and the manifest instead of the one in session.json")
     ap.add_argument("--keep-review-in-split", action="store_true", help="(--button-takes) keep needs_review takes in --split")
@@ -762,7 +857,14 @@ def main(argv=None):
     ap.add_argument("--pg-container", default="postgres")
     ap.add_argument("--pg-user", default="postgres")
     ap.add_argument("--pg-db", default="home_assistant")
-    ap.add_argument("--window-s", type=float, default=6.0, help="(--button-takes) look for the word this long after a press")
+    ap.add_argument("--button-order", choices=BUTTON_ORDERS, default="say-then-press",
+                    help="(--button-takes) say-then-press (default): the word comes before the press; press-then-say: after it")
+    ap.add_argument("--before-s", type=float, default=4.0, help="(say-then-press) look for the word this long before a press")
+    ap.add_argument("--after-s", type=float, default=1.0, help="(say-then-press) and this long after it (file-time uncertainty)")
+    ap.add_argument("--min-gap-after-prev-s", type=float, default=0.3,
+                    help="(say-then-press) the window starts at least this long after the previous take's press")
+    ap.add_argument("--double-press-s", type=float, default=1.5, help="(--button-takes) presses closer than this are one take")
+    ap.add_argument("--window-s", type=float, default=6.0, help="(press-then-say) look for the word this long after a press")
     ap.add_argument("--tolerance-s", type=float, default=1.0, help="(--button-takes) timing uncertainty of the file (mtime)")
     ap.add_argument("--pad", type=float, default=1.0, help="(--button-takes) padding around the word")
     ap.add_argument("--max-word-s", type=float, default=2.5)
