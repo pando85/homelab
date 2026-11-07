@@ -582,3 +582,16 @@ def test_negatives_selection_and_copy(tmp_path):
     N.run(ns, X.LocalFetcher(tmp_path / "rec"))                    # re-run: nothing new, nothing overwritten
     assert len(C.read_jsonl(ds / "negatives" / "manifest.jsonl")) == n_before
     assert stat.S_IMODE((ds / "negatives" / "c3-a").stat().st_mode) == 0o700
+
+
+def test_noncue_segments_with_zero_min_len_terminates():
+    """Regression: min_len=0 once looped forever (and grew to about 48 GB). Run in a subprocess with a
+    time and memory limit so that a regression fails instead of eating the machine."""
+    import subprocess
+    code = ("import kivi_real_common as C, test_kivi_real as T, resource; "
+            "resource.setrlimit(resource.RLIMIT_AS, (4 << 30, 4 << 30)); "
+            "s = T.fake_session([('k', 'kivi', [(5.0, 'kivi', 'kivi')], 0.0, 30.0)]); "
+            "w = C.cue_windows(s); "
+            "print(len(C.noncue_segments(s, w, min_len=0.0, max_len=1e9)))")
+    r = subprocess.run([sys.executable, "-c", code], cwd=str(HERE), capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0 and r.stdout.strip() == "2", r.stderr[-300:]
