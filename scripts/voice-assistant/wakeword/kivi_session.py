@@ -12,8 +12,8 @@ audio is taken afterwards from Home Assistant by `kivi_extract.py`.
     kivi_session.py --print-protocol > my_blocks.json      # edit, then: --blocks my_blocks.json
     kivi_session.py --dry-run                              # fake tones, no microphone, fast
 
-Default protocol (one session, about 12 min): at 1.5 m and at 3 m, each with the TV off and with
-the TV on, 10 x "kivi" (a cue about every 5 s, +-1 s); then the near-words kiwi, tivi, kili, kiri,
+Default protocol (one session, about 12 min): at 1.5 m and at 3 m, each with the TV silent (on, with nothing
+playing: the satellite runs on the TV, so it must stay on) and with the TV playing, 10 x "kivi" (a cue about every 5 s, +-1 s); then the near-words kiwi, tivi, kili, kiri,
 Pipi and "aquí vi", 2 each; then 60 s of silence with you present. "Enter when ready" separates
 the blocks; the recording runs through the pauses (they are logged and never used as negatives).
 Use `--repeat N`, `--only NAME`, `--tag volume=loud` and a `--blocks` file for the 4-6 training
@@ -108,7 +108,8 @@ def expand_blocks(blocks, only=None, repeat=1):
 def instruction(b):
     c = b.get("conditions", {})
     where = f"{c['position_m']} m from the TV" if "position_m" in c else "your usual place"
-    tv = {"off": "TV OFF", "on": "TV ON at normal volume (content of your choice)"}.get(c.get("tv"), "")
+    tv = {"off": "TV SILENT: keep the TV on, with nothing playing (no sound)",
+          "on": "TV ON at normal volume (content of your choice)"}.get(c.get("tv"), "")
     extra = ", ".join(f"{k}={v}" for k, v in c.items() if k not in ("position_m", "tv"))
     if b["kind"] == "kivi":
         what = f"say KIVI {b['n']} times, a cue about every {b.get('interval_s', 5):g} s"

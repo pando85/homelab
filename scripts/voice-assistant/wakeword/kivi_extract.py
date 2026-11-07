@@ -23,6 +23,16 @@ Steps
    A closed wake file that ends inside a cue window is a server detection of the live wake word: the cue
    keeps its place in the counts, is flagged `run_end_in_window`, and its clip ends at the file end.
    Cues that no aligned audio covers are counted as `lost`, never dropped from the denominators.
+3b. Request-audio-only runs: a run whose wake file does not exist (a continued conversation: the live
+   wake word fired once and Home Assistant then re-opened the microphone for follow-up requests)
+   leaves only `01_stt-*.wav`, the same satellite stream sent to the STT stage. Every such file
+   inside the session window is copied whole, aligned on its own to the desk mic (one GCC-PHAT of the
+   whole file, +-`--stt-lag-s` around the listed start, PSR at least `--stt-min-conf` = 15), and trusted only
+   when at least two files agree on the listing latency (`consistent_group`); the wake-file offset is not assumed. These
+   files are stored in `raw/` as `stt-<run>@...wav`, flagged `stage: stt` in `alignment.json`, and
+   their clips carry `stage` stt in the manifest. Home Assistant ends such a run at the end of speech,
+   so the stream has gaps between runs: the report counts every cue as covered in full, in part or
+   not at all (a clip is cut only for a cue covered in full by one file).
 4. Cut a clip per cue (cue - 0.5 s ... cue + 3.5 s, shortened before the next cue), the silence
    block and the gaps between cues (`background`), for `tv-<device>`, `pc-mic` and `webcam-mic`.
 5. Write `<dataset>/<session>/<source>/{raw,raw-stt,clips,alignment.json}`; every clip is written
@@ -109,29 +119,42 @@ class KubectlFetcher:
                 out.append({"path": m.group(1), "size": int(m.group(2)), "mtime": float(m.group(3))})
         return out
 
-    def fetch_range(self, path, lo, hi):
-        """Bytes [lo, hi) with `dd bs=4096 skip= count=` (seeks, works in BusyBox), trimmed here."""
-        if not SAFE_PATH.match(path):
-            raise SystemExit(f"refusing an unexpected path {path!r}")
+    BLOCK = 16 << 20       # bytes per `kubectl exec`: one long exec stream was seen to end early on a 110 MB copy
+    RETRIES = 4
+
+    def _dd(self, path, lo, hi):
+        """Bytes [lo, hi) with `dd bs=4096 skip= count=` (seeks, works in BusyBox), trimmed here. Read only."""
         sk = lo // 4096
         cnt = -(-(hi - sk * 4096) // 4096)
-        p = subprocess.Popen(self.base + ["--", "sh", "-c", f'dd if="$1" bs=4096 skip={sk} count={cnt} 2>/dev/null', "sh", path],
-                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        skip, left = lo - sk * 4096, hi - lo
-        while left > 0:
-            b = p.stdout.read(1 << 20)
-            if not b:
-                break
-            if skip:
-                cut = min(skip, len(b))
-                b, skip = b[cut:], skip - cut
-            b = b[:left]
-            left -= len(b)
-            if b:
-                yield b
-        p.stdout.close()
-        if p.wait() != 0:
-            raise SystemExit(f"kubectl dd {path} failed: {p.stderr.read().decode()[:300]}")
+        r = subprocess.run(self.base + ["--", "sh", "-c", f'dd if="$1" bs=4096 skip={sk} count={cnt} 2>/dev/null', "sh", path],
+                           capture_output=True, timeout=900)
+        if r.returncode != 0:
+            raise OSError(f"kubectl dd {path} failed: {r.stderr.decode(errors='replace')[:300]}")
+        skip = lo - sk * 4096
+        return r.stdout[skip:skip + (hi - lo)]
+
+    def fetch_range(self, path, lo, hi):
+        """Bytes [lo, hi) in blocks of `BLOCK` bytes, each its own exec and checked against its length
+        (a short block is read again, up to `RETRIES` times, before the copy fails)."""
+        if not SAFE_PATH.match(path):
+            raise SystemExit(f"refusing an unexpected path {path!r}")
+        pos = lo
+        while pos < hi:
+            end = min(hi, pos + self.BLOCK)
+            for attempt in range(1, self.RETRIES + 1):
+                try:
+                    data = self._dd(path, pos, end)
+                    err = None if len(data) == end - pos else f"got {len(data)} of {end - pos} bytes"
+                except (OSError, subprocess.TimeoutExpired) as e:
+                    data, err = b"", str(e)
+                if err is None:
+                    break
+                print(f"  kubectl dd {path} [{pos}, {end}): {err}; attempt {attempt} of {self.RETRIES}", file=sys.stderr)
+                if attempt == self.RETRIES:
+                    raise SystemExit(f"kubectl dd {path} failed after {self.RETRIES} attempts: {err}")
+            for i in range(0, len(data), 1 << 20):
+                yield data[i:i + (1 << 20)]
+            pos = end
 
 
 def run_of(path):
@@ -196,17 +219,17 @@ class Stream:
         self.label, self.ref_len, self.files = label, ref_len, []
 
     def add(self, pcm, a, b, **info):
-        self.files.append({"pcm": pcm, "a": a, "b": b, **info})
+        self.files.append({"pcm": pcm, "a": a, "b": b, "curve": (info.get("align") or {}).get("curve"), **info})
 
     @staticmethod
     def d(f, tau):
-        return f["a"] + f["b"] * tau
+        return float(C.curve_offset(f.get("curve"), f["a"], f["b"], tau))
 
     @staticmethod
     def coverage(f, ref_dur):
         """Reference-time interval that the file's audio spans (clipped to the reference recording)."""
-        lo = max(0.0, (0.0 - f["a"]) / (1 + f["b"]))
-        hi = min(ref_dur, (len(f["pcm"]) / RATE - f["a"]) / (1 + f["b"]))
+        lo = max(0.0, float(C.curve_ref_time(f.get("curve"), f["a"], f["b"], 0.0)))
+        hi = min(ref_dur, float(C.curve_ref_time(f.get("curve"), f["a"], f["b"], len(f["pcm"]) / RATE)))
         return (lo, hi) if hi > lo else None
 
     def cut(self, tau0, tau1, min_cov=0.9):
@@ -225,6 +248,28 @@ class Stream:
         a, b = max(0, j0), min(len(f["pcm"]), j0 + n)
         out[a - j0:b - j0] = f["pcm"][a:b]
         return out, self.d(f, mid), f
+
+
+def cue_coverage(st, ref_dur, tau0, tau1, full=0.9):
+    """How much of the window [tau0, tau1] (reference clock) the stream's included files cover, all
+    files together: ('full' at >= `full`, 'partial' above 0, else 'none'), the covered fraction and
+    the stages of the files that cover any of it."""
+    n = max(1e-9, tau1 - tau0)
+    spans, stages = [], set()
+    for f in st.files:
+        c = Stream.coverage(f, ref_dur)
+        if c and min(c[1], tau1) > max(c[0], tau0):
+            spans.append((max(c[0], tau0), min(c[1], tau1)))
+            stages.add(f.get("stage") or "ref")
+    spans.sort()
+    tot, cur = 0.0, tau0
+    for a, b in spans:
+        a = max(a, cur)
+        if b > a:
+            tot += b - a
+            cur = b
+    frac = tot / n
+    return ("full" if frac >= full else "partial" if frac > 1e-6 else "none"), frac, sorted(stages)
 
 
 def parse_utc(s):
@@ -315,7 +360,7 @@ def state_press_times(states, since, until):
 
 def summarize_alignment(label, run, al, included=True):
     return {"source": label, "run": run, "ok": al["ok"], "included": included, "offset_a_s": round(al["a"], 4),
-            "prior_s": round(al["d_prior_s"], 4), "drift_ppm": al["drift_ppm"],
+            "prior_s": round(al["d_prior_s"], 4), "drift_ppm": al["drift_ppm"], "mode": al.get("mode", "linear"),
             "drift_over_session_s": al["drift_over_session_s"], "windows": al["n_windows"],
             "coarse_windows": al.get("n_coarse"), "confident": al["n_confident"], "inliers": al["n_inliers"],
             "median_conf": round(al["median_conf"], 1), "resid_std_ms": al["resid_std_ms"]}
@@ -348,6 +393,8 @@ def extract(a, fetcher=None):
     sdir = Path(a.session_dir).expanduser()
     session = json.loads((sdir / "session.json").read_text(encoding="utf-8"))
     sid, device = session["session_id"], session["device"]
+    if a.split:                                  # the owner's decision at extraction time (not known when it was recorded)
+        session = {**session, "split": a.split, "split_in_session_file": session.get("split")}
     tv = session.get("tv_source") or C.source_label(device)
     if session.get("status") != "complete":
         print(f"WARNING: session status is {session.get('status')!r}; extracting what exists.")
@@ -361,9 +408,14 @@ def extract(a, fetcher=None):
     now = time.time() if a.now is None else a.now
     exid = "ex-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     rev = a.revision or ""
-    kw = dict(coarse_lag_s=a.coarse_lag_s, refine_lag_s=a.refine_lag_s, win_s=a.win_s, min_conf=a.min_conf)
+    kw = dict(coarse_lag_s=a.coarse_lag_s, refine_lag_s=a.refine_lag_s, win_s=a.win_s, min_conf=a.min_conf,
+              allow_curve=not a.linear_only)
+    to_ref, ref_map = C.session_to_ref(session)
+    if ref_map != "offset":
+        print(f"NOTE: the desk mic lost audio during the session; cue times follow its recorded sample count "
+              f"(mode {ref_map}) instead of a fixed offset")
     pre = None
-    tv_files, stt_files = [], []
+    tv_files, stt_files, stt_only = [], [], []
     if not a.no_tv:
         prefix = C.device_prefix(device, a.devices_file, a.device_id_prefix)
         is_local = fetcher is not None
@@ -372,10 +424,13 @@ def extract(a, fetcher=None):
         keep = lambda f: f["mtime"] >= t0 - a.slack and f["start"] <= t_end + a.slack  # noqa: E731
         tv_files = [f for f in list_files(fetcher, prefix, "wake") if keep(f)]
         runs = {(f["pipeline"], f["run"]) for f in tv_files}
-        stt_files = [f for f in list_files(fetcher, prefix, "stt") if (f["pipeline"], f["run"]) in runs]
-        print(f"{tv}: {len(tv_files)} wake file(s) and {len(stt_files)} request-audio file(s) overlap the session "
-              f"window (device {device}, id prefix {prefix}); session {ref_dur / 60:.1f} min")
-        if not tv_files:
+        all_stt = [f for f in list_files(fetcher, prefix, "stt") if keep(f) or (f["pipeline"], f["run"]) in runs]
+        stt_files = [f for f in all_stt if (f["pipeline"], f["run"]) in runs]
+        stt_only = [f for f in all_stt if (f["pipeline"], f["run"]) not in runs and f["n"] >= a.min_stt_s * RATE]
+        print(f"{tv}: {len(tv_files)} wake file(s), {len(stt_files)} request-audio file(s) of those runs and "
+              f"{len(stt_only)} request-audio-only run(s) overlap the session window (device {device}, "
+              f"id prefix {prefix}); session {ref_dur / 60:.1f} min")
+        if not tv_files and not stt_only:
             print("WARNING: no wake file overlaps the session. Was the satellite unmuted and connected? "
                   "Continuing with the PC sources only.")
     if a.dry_run:
@@ -383,6 +438,9 @@ def extract(a, fetcher=None):
             s0, s1, _ = window_samples(f, t0, t_end, a.copy_pad_s)
             print(f"  would copy {f['pipeline']}/{f['run']}: {(s1 - s0) / RATE:.0f} s of {f['dur']:.0f} s, "
                   f"file ends {datetime.fromtimestamp(f['mtime'], timezone.utc):%H:%M:%SZ}")
+        for f in stt_only:
+            print(f"  would copy request-audio-only run {f['pipeline']}/{f['run']}: {f['dur']:.1f} s, "
+                  f"ends {datetime.fromtimestamp(f['mtime'], timezone.utc):%H:%M:%SZ}")
         print(f"  would cut {len(C.cue_windows(session, a.pad_before, a.pad_after))} cue clips and "
               f"the non-cue segments per source into {a.dataset_root}/{sid}")
         return None
@@ -403,21 +461,23 @@ def extract(a, fetcher=None):
     records = {"pc-mic": [{"name": "pc-mic.wav", "run": "", "ok": True, "included": True, "offset_a_s": 0.0, "b": 0.0,
                            "drift_ppm": 0.0, "median_conf": None, "coverage_s": [0.0, round(ref_dur, 3)],
                            "run_end_ref_s": None, "windows": []}]}
-    al = C.align_stream(pc, web, o_pc - o_web, coarse_lag_s=2.0, refine_lag_s=0.5, win_s=a.win_s, min_conf=a.min_conf)
+    al = C.align_stream(pc, web, o_pc - o_web, coarse_lag_s=2.0, refine_lag_s=0.5, win_s=a.win_s, min_conf=a.min_conf,
+                        allow_curve=not a.linear_only)
     inc = al["ok"] or include_bad
     summaries.append(summarize_alignment("webcam-mic", "", al, inc))
     streams["webcam-mic"] = Stream("webcam-mic", len(pc))
-    cov = Stream.coverage({"a": al["a"], "b": al["b"], "pcm": web}, ref_dur)
+    cov = Stream.coverage({"a": al["a"], "b": al["b"], "pcm": web, "curve": al.get("curve")}, ref_dur)
     if inc:
         streams["webcam-mic"].add(web, al["a"], al["b"], run="", name="webcam-mic.wav", ok=al["ok"], conf=al["median_conf"],
                                   drift_ppm=al["drift_ppm"], align=al, run_end=None)
     records["webcam-mic"] = [{"name": "webcam-mic.wav", "run": "", "ok": bool(al["ok"]), "included": bool(inc),
                               "offset_a_s": round(al["a"], 5), "b": al["b"], "drift_ppm": al["drift_ppm"],
+                              "curve": al.get("curve"), "mode": al.get("mode", "linear"),
                               "median_conf": al["median_conf"], "coverage_s": [round(x, 3) for x in cov] if cov else None,
                               "run_end_ref_s": None, "windows": al["windows"]}]
 
     # satellite: the session window +-copy_pad_s of every overlapping file, by byte range
-    if tv_files:
+    if tv_files or stt_only:
         streams[tv] = Stream(tv, len(pc))
         records[tv] = []
         raw = C.private_mkdir(sroot / tv / "raw", root)
@@ -432,17 +492,44 @@ def extract(a, fetcher=None):
             inc = al["ok"] or include_bad
             summaries.append(summarize_alignment(tv, f["run"], al, inc))
             closed = reaches_end and now - f["mtime"] >= CLOSED_AGE_S
-            fd = {"pcm": sig, "a": al["a"], "b": al["b"]}
+            fd = {"pcm": sig, "a": al["a"], "b": al["b"], "curve": al.get("curve")}
             cov = Stream.coverage(fd, ref_dur)
-            run_end = (len(sig) / RATE - al["a"]) / (1 + al["b"]) if closed else None
+            run_end = float(C.curve_ref_time(al.get("curve"), al["a"], al["b"], len(sig) / RATE)) if closed else None
             if inc:
                 streams[tv].add(sig, al["a"], al["b"], run=f"{f['pipeline']}/{f['run']}", name=name, ok=al["ok"],
-                                conf=al["median_conf"], drift_ppm=al["drift_ppm"], align=al, run_end=run_end)
-            records[tv].append({"name": name, "run": f"{f['pipeline']}/{f['run']}", "ok": bool(al["ok"]), "included": bool(inc),
+                                conf=al["median_conf"], drift_ppm=al["drift_ppm"], align=al, run_end=run_end, stage="wake")
+            records[tv].append({"name": name, "stage": "wake", "run": f"{f['pipeline']}/{f['run']}", "ok": bool(al["ok"]), "included": bool(inc),
                                 "offset_a_s": round(al["a"], 5), "b": al["b"], "drift_ppm": al["drift_ppm"],
+                              "curve": al.get("curve"), "mode": al.get("mode", "linear"),
                                 "median_conf": al["median_conf"], "coverage_s": [round(x, 3) for x in cov] if cov else None,
                                 "run_end_ref_s": round(run_end, 3) if run_end is not None else None,
                                 "copied_from_s": s0 / RATE, "listed_samples": f["n"], "windows": al["windows"]})
+        if stt_only:
+            raw = C.private_mkdir(sroot / tv / "raw", root)
+            loaded = []
+            for f in stt_only:
+                dst, name = fetch_samples(fetcher, f, 0, f["n"], raw, tag=f"stt-{f['run']}")
+                sig = C.read_pcm16(dst)
+                s_est = f["start"] - t0                   # session time of the first sample (listed mtime and size)
+                loaded.append((f, name, sig, C.align_short(pc, sig, o_pc - s_est, lag_s=a.stt_lag_s, min_conf=a.stt_min_conf)))
+            agree = C.consistent_group([r for *_, r in loaded], tol_s=a.stt_tol_s)
+            for (f, name, sig, al), good in zip(loaded, agree):
+                delta = round(al["a"] - al["d_prior_s"], 3)
+                al["ok"] = bool(good)
+                al["n_inliers"] = int(good)
+                if not good:
+                    al["a"] = al["d_prior_s"]            # as align_stream: an untrusted file keeps its prior
+                inc = good or include_bad
+                summaries.append({**summarize_alignment(tv, f["run"], al, inc), "stage": "stt", "delta_vs_listed_s": delta})
+                cov = Stream.coverage({"pcm": sig, "a": al["a"], "b": 0.0}, ref_dur)
+                if inc:
+                    streams[tv].add(sig, al["a"], 0.0, run=f"{f['pipeline']}/{f['run']}", name=name, ok=good,
+                                    conf=al["median_conf"], drift_ppm=0.0, align=al, run_end=None, stage="stt")
+                records[tv].append({"name": name, "stage": "stt", "run": f"{f['pipeline']}/{f['run']}", "ok": bool(good),
+                                    "included": bool(inc), "offset_a_s": round(al["a"], 5), "b": 0.0, "drift_ppm": 0.0,
+                                    "median_conf": al["median_conf"], "coverage_s": [round(x, 3) for x in cov] if cov else None,
+                                    "run_end_ref_s": None, "copied_from_s": 0.0, "listed_samples": f["n"],
+                                    "delta_vs_listed_s": delta, "windows": al["windows"]})
         sdirs = C.private_mkdir(sroot / tv / "raw-stt", root)
         for f in stt_files:
             if f["n"] > 0:
@@ -453,7 +540,7 @@ def extract(a, fetcher=None):
     for label, recs in records.items():
         aname = "alignment.json" if not (sroot / label / "alignment.json").exists() else f"alignment-{exid}.json"
         C.write_json_new(sroot / label / aname, {"extract_id": exid, "source": label, "reference": "pc-mic",
-                                                 "ref_samples": len(pc), "pc_offset_s": o_pc, "files": recs})
+                                                 "ref_samples": len(pc), "pc_offset_s": o_pc, "ref_map": ref_map, "files": recs})
         report_streams[label] = {"alignment": aname, "files": len(recs), "included": sum(1 for r in recs if r["included"])}
 
     # clips
@@ -469,10 +556,11 @@ def extract(a, fetcher=None):
     rows_written = 0
     for label, st in streams.items():
         s = stats.setdefault(label, {"cues": 0, "cues_cut": 0, "lost_cues": 0, "run_end_in_window": 0,
-                                     "segments_uncovered": 0, "rows_reconciled": 0})
+                                     "segments_uncovered": 0, "rows_reconciled": 0,
+                                     "coverage": {"full": 0, "partial": 0, "none": 0}, "cue_coverage": []})
         for kind, bi, idx, lab, word, t0_, t1_, cue_off in items:
             b = blocks[bi]
-            tau0, tau1 = t0_ - o_pc, t1_ - o_pc
+            tau0, tau1 = float(to_ref(t0_)), float(to_ref(t1_))
             run_end = None
             if kind == "cue":
                 s["cues"] += 1
@@ -485,6 +573,11 @@ def extract(a, fetcher=None):
                 got = None
             else:
                 got = st.cut(tau0, tau1)
+            if kind == "cue":
+                cls, frac, stages = cue_coverage(st, ref_dur, tau0, tau1)
+                s["coverage"][cls] += 1
+                s["cue_coverage"].append({"block": bi, "cue": idx, "coverage": cls, "covered_fraction": round(frac, 3),
+                                          "stages": stages, "clip_cut": got is not None})
             if got is None:
                 s["lost_cues" if kind == "cue" else "segments_uncovered"] += 1
                 continue
@@ -501,7 +594,7 @@ def extract(a, fetcher=None):
                 start_utc=utc_str(t0_ + t0), end_utc=utc_str(t0_ + (tau1 - tau0) + t0),
                 cue_index=idx if kind == "cue" else None, cue_offset_s=cue_off,
                 align_offset_s=round(d_used, 5), align_conf=f["conf"], align_ok=bool(f["ok"]),
-                drift_ppm=f["drift_ppm"], source_run=f["run"], revision=rev, extract_id=exid,
+                drift_ppm=f["drift_ppm"], source_run=f["run"], stage=f.get("stage"), revision=rev, extract_id=exid,
                 dry_run_session=bool(session.get("dry_run")), run_end_in_window=run_end is not None, needs_review=False)
             C.private_mkdir(root / Path(rel).parent, root)
             if (label, rel) in done:
@@ -524,10 +617,13 @@ def extract(a, fetcher=None):
     for s in summaries:
         flag = "OK " if s["ok"] else "NOT TRUSTED"
         used = "" if s["ok"] else (" (kept: --include-unaligned)" if s["included"] else " (LEFT OUT of clips and scores)")
-        print(f"  align {s['source']:11s} {s['run'][:12]:12s} {flag}{used}: offset {s['offset_a_s']:+.3f} s "
+        print(f"  align {s['source']:11s} {s['run'][:12]:12s} {flag}{used}{' [piecewise offset curve]' if s.get('mode') == 'piecewise' else ''}: offset {s['offset_a_s']:+.3f} s "
               f"(prior {s['prior_s']:+.3f}), {s['confident']}/{s['windows']} windows confident, median PSR "
               f"{s['median_conf']}, drift {s['drift_ppm']:+.1f} ppm = {s['drift_over_session_s'] * 1000:+.0f} ms, "
               f"residual {s['resid_std_ms']} ms")
+    for label, s in stats.items():
+        cv = s["coverage"]
+        print(f"  {label:11s} cue coverage: full {cv['full']}, partial {cv['partial']}, none {cv['none']} of {s['cues']}")
     for label, s in stats.items():
         print(f"  {label:11s} cues {s['cues']}: cut {s['cues_cut']}, lost or partly uncovered {s['lost_cues']}, "
               f"server run end inside the window {s['run_end_in_window']}"
@@ -656,7 +752,8 @@ def main(argv=None):
                     help="cut takes marked by input_button.kivi_take presses: needs --device --speaker --split --since --until")
     ap.add_argument("--device", default="c3-b", help="(--button-takes) the satellite the takes were spoken to")
     ap.add_argument("--speaker", help="(--button-takes) pseudonymous id, e.g. spk02")
-    ap.add_argument("--split", choices=C.SPLITS, help="(--button-takes) required: train, dev, test, train-only or unassigned")
+    ap.add_argument("--split", choices=C.SPLITS, help="--button-takes: required (train, dev, test, train-only or unassigned). "
+                    "Session mode: optional, sets the session's split in the dataset copy and the manifest instead of the one in session.json")
     ap.add_argument("--keep-review-in-split", action="store_true", help="(--button-takes) keep needs_review takes in --split")
     ap.add_argument("--since", help="(--button-takes) ISO time; without an offset it is local time")
     ap.add_argument("--until", help="(--button-takes) ISO time")
@@ -691,9 +788,18 @@ def main(argv=None):
     ap.add_argument("--refine-lag-s", type=float, default=1.5)
     ap.add_argument("--win-s", type=float, default=15.0)
     ap.add_argument("--min-conf", type=float, default=8.0, help="minimum PSR of a trusted alignment window")
+    ap.add_argument("--linear-only", action="store_true",
+                    help="trust only one offset line per file (default: also a smooth offset curve when nearly every window "
+                         "found a sharp peak, which happens when a recorder dropped audio)")
     ap.add_argument("--include-unaligned", action="store_true",
                     help="keep files whose alignment is not trusted (flagged align_ok false)")
     ap.add_argument("--revision", help="tag for a re-extraction with other settings (clips-<tag>/)")
+    ap.add_argument("--stt-lag-s", type=float, default=3.0, help="search +- this around the listed start of a request-only run")
+    ap.add_argument("--stt-min-conf", type=float, default=15.0,
+                    help="minimum PSR of a request-only file (one window only, so stricter than --min-conf: an unrelated "
+                         "file reached 10 by chance in a test, the accepted ones of the real session were at 50-83)")
+    ap.add_argument("--stt-tol-s", type=float, default=0.5, help="request-only files must agree on the listing latency within this")
+    ap.add_argument("--min-stt-s", type=float, default=1.0, help="ignore request-only runs shorter than this")
     ap.add_argument("--no-tv", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--now", type=float, help=argparse.SUPPRESS)

@@ -16,6 +16,11 @@ What is kept: closed files only (not written for `--min-age-s`), minus
   detection: the reply and the follow-up),
 - every window within 10 s of a button press (`input_button.kivi_take`) or of a cue of a recorded
   session or button-take in the dataset (so spoken "kivi" never ends up as a negative).
+- the whole window of every recorded session of that device (start - 120 s to end + 120 s), so the
+  positives, near-words and the talking around them never become negatives,
+- everything from `--exclude-after DEVICE=ISO_TIME` onward (repeatable; e.g. while a new session is
+  being recorded on that device) and everything of a device between two times
+  (`--exclude-between DEVICE=START,END`, repeatable; closes such a window once the session is over),
 Pieces shorter than `--min-seg-s` are dropped. Files are picked at random (seeded) per device until the
 hours are reached. Nothing is deleted or overwritten; re-running skips what is already there.
 """
@@ -69,15 +74,63 @@ def subtract(intervals, cuts):
     return out
 
 
-def plan_file(f, prev_end, marks, a):
-    """Kept pieces of one closed file, in epoch seconds: [(t0, t1)]."""
+def session_windows(root, margin_s=120.0):
+    """{device: [(t0, t1)]}: the recorded sessions of the dataset with a margin on both sides."""
+    out = {}
+    for sj in Path(root).glob("*/session.json"):
+        try:
+            s = json.loads(sj.read_text(encoding="utf-8"))
+            t0 = X.parse_utc(s["t0_utc"]).timestamp()
+            t1 = X.parse_utc(s["end_utc"]).timestamp() if s.get("end_utc") else t0 + float(s.get("end_offset_s") or 0)
+            if s.get("kind") == "button-takes":
+                t0, t1 = X.parse_utc(s["since"]).timestamp(), X.parse_utc(s["until"]).timestamp()
+            out.setdefault(s.get("device"), []).append((t0 - margin_s, t1 + margin_s))
+        except Exception:
+            continue
+    return out
+
+
+def parse_exclude_between(items):
+    """['c3-a=2026-11-07T11:50:00Z,2026-11-07T12:24:40Z'] -> {'c3-a': [(start_epoch, end_epoch)]}."""
+    out = {}
+    for it in items or []:
+        dev, _, rng = it.partition("=")
+        lo, _, hi = rng.partition(",")
+        if not (dev and lo and hi):
+            raise SystemExit(f"--exclude-between needs DEVICE=START,END, got {it!r}")
+        t0, t1 = X.parse_when(lo), X.parse_when(hi)
+        if t1 <= t0:
+            raise SystemExit(f"--exclude-between: END must be after START in {it!r}")
+        out.setdefault(dev.strip(), []).append((t0, t1))
+    return out
+
+
+def parse_exclude_after(items):
+    """['c3-a=2026-11-07T11:50:00Z'] -> {'c3-a': epoch}."""
+    out = {}
+    for it in items or []:
+        dev, _, when = it.partition("=")
+        if not dev or not when:
+            raise SystemExit(f"--exclude-after needs DEVICE=ISO_TIME, got {it!r}")
+        out[dev.strip()] = X.parse_when(when)
+    return out
+
+
+def plan_file(f, prev_end, marks, a, windows=(), after=None):
+    """Kept pieces of one closed file, in epoch seconds: [(t0, t1)]. `windows` are intervals to leave out
+    entirely, `after` an epoch time from which nothing is kept."""
     lo = f["start"] + a.trim_start_s
     if prev_end is not None and 0 <= f["start"] - prev_end <= a.followup_s:
         lo = max(lo, f["start"] + a.boundary_s)
     hi = f["mtime"] - a.boundary_s
     if hi - lo < a.min_seg_s:
         return []
+    if after is not None:
+        hi = min(hi, after)
+        if hi - lo < a.min_seg_s:
+            return []
     cuts = [(m - a.exclude_s, m + a.exclude_s) for m in marks if f["start"] - a.exclude_s <= m <= f["mtime"] + a.exclude_s]
+    cuts += [(w0, w1) for w0, w1 in windows if w1 > f["start"] and w0 < f["mtime"]]
     return [(x, y) for x, y in subtract([(lo, hi)], cuts) if y - x >= a.min_seg_s]
 
 
@@ -98,6 +151,11 @@ def run(a, fetcher=None, presses=None):
                    X.PostgresPresses(a.context, a.namespace, a.pg_pod, a.pg_container, a.pg_user, a.pg_db))
     presses_t = presses.presses(min(s for s, _ in spans) - 60, max(e for _, e in spans) + 60) if presses and spans else []
     marks = known_marks(root, presses_t)
+    swin = session_windows(root)
+    after = parse_exclude_after(getattr(a, "exclude_after", None))
+    between = parse_exclude_between(getattr(a, "exclude_between", None))
+    for d, w in between.items():
+        swin[d] = list(swin.get(d, [])) + w
     rng = random.Random(a.seed)
     target = a.hours * 3600 / max(1, len(devs))
     manifest = root / "negatives" / "manifest.jsonl"
@@ -113,14 +171,16 @@ def run(a, fetcher=None, presses=None):
         for f in order:
             if total >= target:
                 break
-            segs = plan_file(f, prev_end[id(f)], marks, a)
+            segs = plan_file(f, prev_end[id(f)], marks, a, swin.get(d, ()), after.get(d))
             if segs:
                 picked.append((f, segs))
                 total += sum(y - x for x, y in segs)
         plans[d] = picked
         summary[d] = {"files_listed": len(files), "closed": len(closed), "files_picked": len(picked),
                       "pieces": sum(len(s) for _, s in picked), "hours": round(total / 3600, 2)}
-    print(f"press and cue marks excluded: {len(marks)}")
+    print(f"press and cue marks excluded: {len(marks)}; session windows excluded: "
+          f"{ {d: len(w) for d, w in swin.items()} }; excluded from a time on: "
+          f"{ {d: X.utc_str(t) for d, t in after.items()} }")
     for d, s in summary.items():
         print(f"  {d}: {s['files_listed']} files, {s['closed']} closed, picked {s['files_picked']} ({s['pieces']} pieces, {s['hours']} h)")
     if a.dry_run:
@@ -189,6 +249,10 @@ def main(argv=None):
     ap.add_argument("--pg-container", default="postgres")
     ap.add_argument("--pg-user", default="postgres")
     ap.add_argument("--pg-db", default="home_assistant")
+    ap.add_argument("--exclude-after", action="append", metavar="DEVICE=ISO_TIME",
+                    help="keep nothing of DEVICE from this time on (repeatable), e.g. c3-a=2026-11-07T11:50:00Z")
+    ap.add_argument("--exclude-between", action="append", metavar="DEVICE=START,END",
+                    help="keep nothing of DEVICE between two ISO times (repeatable), e.g. c3-a=2026-11-07T11:50:00Z,2026-11-07T12:24:40Z")
     ap.add_argument("--min-age-s", type=float, default=600.0, help="a file is closed when not written for this long")
     ap.add_argument("--trim-start-s", type=float, default=0.3)
     ap.add_argument("--boundary-s", type=float, default=7.0)

@@ -272,11 +272,50 @@ def write_json_new(path, obj):
 
 
 def training_rows(rows, exclude_speakers=(), include_unassigned=False):
-    """Manifest rows that may train the model: split train or train-only, never `needs_review`,
-    and none from `exclude_speakers` (the unseen-speaker ablation excludes ALL data of that speaker)."""
+    """Manifest rows that may train the model: split train or train-only, never `needs_review`, never
+    `superseded` (rows read with `read_manifest`), and none from `exclude_speakers` (the unseen-speaker
+    ablation excludes ALL data of that speaker). Pass rows from `read_manifest`, so that later split
+    decisions and superseded marks are applied."""
     ok = {"train", "train-only"} | ({"unassigned"} if include_unassigned else set())
-    return [r for r in rows if r.get("split") in ok and not r.get("needs_review")
+    return [r for r in rows if r.get("split") in ok and not r.get("needs_review") and not r.get("superseded")
             and r.get("speaker") not in set(exclude_speakers)]
+
+
+# The manifest is append-only and the tools never rewrite it. Later decisions live in two append-only
+# files next to it, applied by `read_manifest`:
+#   splits.jsonl      {session, split, reason, set_utc}: the owner's split for a whole session (the last record wins)
+#   superseded.jsonl  {session, revision, source (optional), superseded_by, reason, set_utc}: rows of that
+#                     extraction revision are wrong (e.g. a bad time mapping) and must never be used; the audio stays.
+def read_marks(root):
+    root = Path(root)
+    splits = {r["session"]: r["split"] for r in read_jsonl(root / "splits.jsonl")}
+    return splits, read_jsonl(root / "superseded.jsonl")
+
+
+def read_manifest(root):
+    """The manifest rows with the marks applied: `split` becomes the split decided later for session
+    rows (through `channel_split`, the original is kept in `split_in_manifest`), and `superseded` is
+    True for rows that a superseded mark covers."""
+    root = Path(root)
+    splits, sup = read_marks(root)
+    out = []
+    for r in read_jsonl(root / "manifest.jsonl"):
+        r = dict(r)
+        if r.get("origin") == "session" and r.get("session") in splits:
+            r["split_in_manifest"] = r.get("split")
+            r["split"] = channel_split(splits[r["session"]], r.get("source"))
+        r["superseded"] = any(m["session"] == r.get("session") and (m.get("revision") or "") == (r.get("revision") or "")
+                              and m.get("source") in (None, r.get("source")) for m in sup)
+        out.append(r)
+    return out
+
+
+def session_split(root, session):
+    """The split of a session: the last decision in splits.jsonl, else the one in its session.json."""
+    d = read_marks(root)[0]
+    if session["session_id"] in d:
+        return d[session["session_id"]]
+    return session.get("split", "")
 
 
 def sample_drift(samples, elapsed_s, rate=RATE):
@@ -318,7 +357,8 @@ MANIFEST_FIELDS = (
     "conditions", "tags", "block", "block_name", "label", "word", "kind", "clip", "start_s", "end_s",
     "start_utc", "end_utc", "cue_index", "cue_offset_s", "align_offset_s", "align_conf", "align_ok",
     "drift_ppm", "source_run", "revision", "extract_id", "dry_run_session", "press_utc",
-    "onset_after_press_s", "snr_db", "n_candidates", "consent_confirmed", "needs_review", "split_requested", "run_end_in_window")
+    "onset_after_press_s", "snr_db", "n_candidates", "consent_confirmed", "needs_review", "split_requested", "run_end_in_window",
+    "stage")        # "wake" or "stt": which Assist stage the satellite audio was recorded at (None for desk sources)
 
 
 def make_row(**kw):
@@ -507,8 +547,69 @@ def _fit_line(taus, ds, iters=4, floor_s=0.005):
     return float(a), float(b), keep
 
 
+def smooth_curve(taus, ds, max_slope=0.01, max_gap_s=20.0, max_jump_s=1.0):
+    """True when the confident window offsets form one continuous curve d(tau): neighbours less than
+    `max_gap_s` apart differ by at most `max_slope` x their distance (1 % clock slope, far more than any
+    crystal; a dropout of the reference recorder shows up as a short steep stretch), and any larger gap
+    by at most `max_jump_s`. A sequence of unrelated peaks cannot pass this: it is not monotone-smooth."""
+    order = np.argsort(taus)
+    t, d = np.asarray(taus, float)[order], np.asarray(ds, float)[order]
+    if len(t) < 6:
+        return False
+    dt, dd = np.diff(t), np.abs(np.diff(d))
+    return bool(np.all(np.where(dt <= max_gap_s, dd <= max_slope * dt + 0.003, dd <= max_jump_s)))
+
+
+def curve_ref_time(curve, a, b, j):
+    """Reference time tau of file time j (array or scalar) for an alignment: piecewise-linear
+    d(tau) through `curve` ([[tau, d], ...], flat beyond its ends with the drift b) or the line a + b * tau.
+    Solves j = tau + d(tau) by fixed-point iteration (the slope of d is far below 1)."""
+    j = np.asarray(j, float)
+    if not curve:
+        return (j - a) / (1 + b)
+    ct, cd = np.asarray(curve, float).T
+
+    def d_of(tau):
+        d = np.interp(tau, ct, cd)
+        return np.where(tau < ct[0], cd[0] + b * (tau - ct[0]), np.where(tau > ct[-1], cd[-1] + b * (tau - ct[-1]), d))
+
+    tau = j - d_of(j - cd[0])
+    for _ in range(4):
+        tau = j - d_of(tau)
+    return tau
+
+
+def curve_offset(curve, a, b, tau):
+    """d(tau) of an alignment record (see `curve_ref_time`)."""
+    if not curve:
+        return a + b * np.asarray(tau, float)
+    ct, cd = np.asarray(curve, float).T
+    tau = np.asarray(tau, float)
+    return np.where(tau < ct[0], cd[0] + b * (tau - ct[0]), np.where(tau > ct[-1], cd[-1] + b * (tau - ct[-1]),
+                                                                      np.interp(tau, ct, cd)))
+
+
+REF_MAP_MIN_S = 0.3
+
+
+def session_to_ref(session, min_dev_s=REF_MAP_MIN_S):
+    """(f, mode): f maps session time to the desk-mic file's time (tau). Normally tau = t - first_sample_offset.
+    When the desk recorder lost more than `min_dev_s` of audio during the session (a dropout; the
+    session's `progress` list holds (elapsed s, samples so far) every 10 s), the mapping follows
+    the recorded sample count instead, so cues stay on the audio they were spoken in. A smaller
+    drift is left alone (the cue windows are 4 s wide)."""
+    o = session_pc_offset(session)
+    pr = ((session.get("sources") or {}).get("pc-mic") or {}).get("progress") or []
+    devs = [(float(e), float(e) - (o + float(n) / RATE)) for e, n in pr]
+    if len(devs) < 3 or max(d for _, d in devs) - min(d for _, d in devs) < min_dev_s:
+        return (lambda t: np.asarray(t, float) - o), "offset"
+    es = np.array([e for e, _ in devs])
+    ds = np.array([d for _, d in devs])
+    return (lambda t: np.asarray(t, float) - o - np.interp(t, es, ds, left=0.0, right=ds[-1])), "progress"
+
+
 def align_stream(ref, sig, d_prior_s, *, coarse_lag_s=20.0, refine_lag_s=1.5, win_s=15.0, min_conf=8.0,
-                 max_coarse_windows=60, min_rms=20.0, max_resid_s=0.03, max_drift=1e-3):
+                 max_coarse_windows=60, min_rms=20.0, max_resid_s=0.03, max_drift=1e-3, allow_curve=False):
     """Offset of `sig` against `ref` (both int16 at 16 kHz): `sig` time = `ref` time + d(tau), tau in
     seconds of `ref`. Starts from the prior d_prior_s (for the TV file: from its mtime). Stage 1
     finds the offset on the windows with the most energy in both signals within +-coarse_lag_s; stage 2 measures every window
@@ -568,6 +669,64 @@ def align_stream(ref, sig, d_prior_s, *, coarse_lag_s=20.0, refine_lag_s=1.5, wi
     ok = (int(keep.sum()) >= 2 and keep.sum() >= 0.5 * len(conf_w) and resid_std <= max_resid_s
           and abs(b) <= max_drift)
     res.update(ok=bool(ok), n_inliers=int(keep.sum()), resid_std_ms=round(resid_std * 1000, 3))
-    if ok:
+    all_resid = float(np.std(np.asarray(ds) - (a + b * np.asarray(taus))))
+    if (allow_curve and len(conf_w) >= max(6, 0.8 * len(fine)) and all_resid > max_resid_s and smooth_curve(taus, ds)):
+        # one offset line does not fit all the windows (it may fit a subset, by dropping the rest as outliers), yet
+        # nearly every window found a sharp peak and the offsets form a smooth curve: the clocks did not run at a
+        # constant ratio (a dropout or creep in one recorder). Keep the curve.
+        o = np.argsort(taus)
+        curve = [[round(float(taus[i]), 3), round(float(ds[i]), 5)] for i in o]
+        res.update(ok=True, curve=curve, mode="piecewise", a=a, b=b, drift_ppm=round(b * 1e6, 2),
+                   drift_over_session_s=round(float(max(ds) - min(ds)), 4), n_inliers=len(conf_w),
+                   resid_std_ms=round(all_resid * 1000, 3))
+    elif ok:
         res.update(a=a, b=b, drift_ppm=round(b * 1e6, 2), drift_over_session_s=round(b * dur, 4))
     return res
+
+
+def align_short(ref, sig, d_prior_s, *, lag_s=3.0, min_conf=8.0, min_rms=20.0):
+    """Offset of one SHORT file (a request-audio run of 1-15 s) against `ref`, with the same
+    convention as `align_stream` (`sig` time = `ref` time + d). The whole file is the template, and
+    the search is over +-`lag_s` around its prior position in `ref` (so every lag has full overlap).
+    One window cannot show a consistent offset line, so `ok` here only says the single peak is
+    confident (PSR >= `min_conf`, not on the search edge); the caller must still check the files
+    of a group against each other (`consistent_group`). The drift is not estimated (b = 0): over a
+    file of 15 s at the 130 ppm seen on the TV it is 2 ms."""
+    W, L = len(sig), int(lag_s * RATE)
+    res = {"a": float(d_prior_s), "b": 0.0, "ok": False, "n_windows": 1, "n_coarse": 1, "n_confident": 0,
+           "n_inliers": 0, "median_conf": 0.0, "resid_std_ms": None, "drift_ppm": 0.0,
+           "drift_over_session_s": 0.0, "d_prior_s": float(d_prior_s), "windows": [], "lag_s": None}
+    if W < RATE // 2:
+        return res
+    sig_f, ref_f = sig.astype(np.float32), ref.astype(np.float32)
+    j0 = int(round(-d_prior_s * RATE))                  # position of the file's sample 0 in ref
+    seg = _segment(ref_f, j0 - L, W + 2 * L)
+    srms = float(np.sqrt(np.mean(sig_f ** 2)))
+    rrms = float(np.sqrt(np.mean(seg[L:L + W] ** 2)))
+    lag, conf = gcc_phat(sig_f, seg, L)                  # ref[j0 + lag ...] matches the file's start
+    res["median_conf"] = float(conf)
+    res["lag_s"] = float(lag)
+    res["windows"] = [{"tau_s": round((j0 / RATE) + lag + W / RATE / 2, 2), "d_s": round(d_prior_s - lag, 5),
+                       "conf": round(float(conf), 2)}]
+    if srms < min_rms or rrms < min_rms:
+        return res
+    res.update(n_confident=int(conf >= min_conf), a=float(d_prior_s - lag))
+    res["ok"] = bool(conf >= min_conf and abs(lag) < lag_s - 0.05)
+    res["n_inliers"] = int(res["ok"])
+    return res
+
+
+def consistent_group(results, tol_s=0.5, min_files=2):
+    """Which short files agree with each other. `results` are `align_short` dicts (prior and offset);
+    each file's offset error against the listed start (`a - d_prior`) is the same latency for all
+    files of one device (the file clock is the Home Assistant host), so confident files must agree
+    within `tol_s` of their median. Returns a list of booleans: confident AND consistent, and at
+    least `min_files` such files (a lone file has nothing to agree with, so it is not trusted)."""
+    conf = [r["ok"] for r in results]
+    deltas = [r["a"] - r["d_prior_s"] for r in results]
+    good = [d for d, c in zip(deltas, conf) if c]
+    if len(good) < min_files:
+        return [False] * len(results)
+    med = float(np.median(good))
+    out = [bool(c and abs(d - med) <= tol_s) for d, c in zip(deltas, conf)]
+    return out if sum(out) >= min_files else [False] * len(results)

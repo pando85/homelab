@@ -212,7 +212,8 @@ Tools in [`scripts/voice-assistant/wakeword/`](../../../scripts/voice-assistant/
 | `kivi_extract.py` | the owner | copies the satellite's wake files for the session out of the HA pod (`kubectl exec ... cat`), aligns them to the desk mic by GCC-PHAT, cuts clips of the three sources, appends to `manifest.jsonl`. `--button-takes` cuts takes marked by `input_button.kivi_take` presses instead |
 | `kivi_score.py` | the owner | kivi (uncalibrated head, raw thresholds) and alexa through the server-exact path over the aligned satellite audio: recall per block and threshold, near-word false accepts, false accepts per hour on the non-cue time; aggregates only |
 | `kivi_import_phone.py` | the owner | imports a phone voice memo (takes found by energy, source `phone`) |
-| `kivi_negatives.py` | the owner, on request | copies about 30 h of closed wake files of both TVs as real negatives, minus the cues, presses and detection boundaries |
+| `kivi_negatives.py` | the owner, on request | copies about 30 h of closed wake files of both TVs as real negatives, minus the cues, presses, detection boundaries, every session window and `--exclude-after` / `--exclude-between` windows |
+| `kivi_dataset_marks.py` | the owner | records a later split for a session (`splits.jsonl`) or marks an extraction revision superseded (`superseded.jsonl`); append-only, manifest and audio untouched |
 
 Satellites are a parameter (`--device c3-a`, `--device c3-b`, mapped to the HA device-id prefix in `kivi_devices.json`; the source label is `tv-c3a`, `tv-c3b`, ...). Speakers are pseudonymous ids only (`spk01`, `spk02`): the mapping to people is kept by the owner, outside the tools and the repository.
 
@@ -258,6 +259,51 @@ Pre-flight: `kivi_session.py` and `kivi_extract.py` read `.storage/assist_pipeli
 ### Trade-offs and doubts
 
 The alignment confidence is a peak-to-sidelobe ratio of GCC-PHAT in 15 s windows; unrelated audio can look sharp in one window, so a source is trusted only when several windows agree on one offset line (small residual, plausible drift). The Postgres read (`--button-takes` without `--presses-file`) is a single `SELECT DISTINCT` of the button's state values through `kubectl exec ... psql` with `default_transaction_read_only`. Checked on 2026-11-07 against the cluster with read-only SELECTs: the defaults (`home-assistant-postgres-0`, container `postgres`, user `postgres`, database `home_assistant`) work, `input_button.kivi_take` exists in `states_meta` with state `unknown` (never pressed), and the query returns 0 presses. A real press has not been read yet.
+
+## First real sessions and room audio (2026-11-07, observed on c3-a and c3-b)
+
+Numbers only. Two sessions of one speaker (spk01) on c3-a, scored with the server's own runtime (`kivi_score.py`) on the uncalibrated v1 (`final/`, sha256 `81e0827f...0511`) and v2 (`v2/final/`, sha256 `aeab0360...a627`). Each model is read at its server-0.5 point (v1 raw 0.98, v2 raw 0.95, given as `--calibration`, not assumed) and at raw 0.9. Session 1 is split `train`, session 2 `test` (marks in `splits.jsonl`). One take is excluded per session because nothing was said: session 1 block 4 cue 5 (B4c5), session 2 block 4 cue 7 (B4c7; the desk mic and the webcam show no speech burst there). Scores used extraction revision `(default)` for session 1 (fixed time offset) and `r2` for session 2 (desk-mic sample count, see below). "TV off" in the block names means the TV on and silent.
+
+**Session 1: what was lost and recovered.** The live wake word (alexa) fired at 11:36:53Z and Home Assistant then ran 8 request-only runs (`01_stt-*.wav`, no wake file) until 11:38:57Z. `kivi_extract.py` now also takes request-only runs inside the session window, aligns each file on its own (PSR at least 15, and at least two files agreeing on the listing latency within 0.5 s), and marks the stage (`stt`). Of the 8 runs, 6 aligned (PSR 50 to 83; offsets within 0.64 s of the listed start); 2 did not (PSR 5.4 and 8.7) and stay out. Cue coverage of tv-c3a for 52 cues, counting the cue window of 4 s: before 40 full and 12 none; now **43 full, 8 partial (0.1 to 0.7 of the window), 1 none**. Partial cues have audio but not the whole window (a run ends at the end of speech, gaps of 2 to 5 s between runs); clips are cut only for full windows (3 new cue clips, 2 new segments; 5 new manifest rows).
+
+**Session 2.** 1 wake file spans the whole window, no request-only run and no live detection inside it (the live detection and the follow-up runs are at 12:26Z, after the session). Cue coverage: tv-c3a, pc-mic and webcam-mic 52 of 52 full. Takes present per source: 40 of 40 "kivi" and 12 of 12 near-words on each. Flagged takes (energy heuristics on the clips): 1 empty on pc-mic and webcam-mic (B4c7); 7 "multi-burst" on pc-mic, 12 on tv-c3a and 6 on webcam-mic (with the TV on, its content makes bursts); 12 clipped on webcam-mic (3 or more full-scale samples), 1 on tv-c3a, none on pc-mic; 1 digital-silence clip on pc-mic (the same B4c7 window, the desk mic gates to zero when quiet). **The desk mic fell about 0.5 s behind the clock between about 600 s and 720 s, 0.7 s over the whole session** (its recorded sample count; probably a dropout while the PC was busy, not verified), so a single offset line no longer fits tv-c3a or webcam-mic (residual 108 and 96 ms, all windows confident, PSR 30 and 12). `kivi_extract.py` now accepts a smooth offset curve when at least 80 % of the windows have a sharp peak, the offsets are continuous and the line fails (flagged `piecewise`; the unrelated-audio test still fails), and it maps session times to the desk-mic file by its sample count when the desk mic lost more than 0.3 s. The first extraction (revision `""`) used the old mapping: its 80 desk-mic rows are **superseded** (`superseded.jsonl`; audio kept) and skipped by `read_manifest`, `training_rows` and the scorers; the data is in revision `r2`.
+
+**tv-c3a recall on "kivi" (k/n), counting every cue as a trial (a cue without a full window of audio is a miss), and over full-audio cues only.** Session 1 has 39 cues (B4c5 excluded), session 2 has 39 (B4c7 excluded).
+
+| block | S1 all / full-only | S2 all / full-only | pooled all / full-only |
+| --- | --- | --- | --- |
+| *v1, server 0.5 (raw 0.98)* | | | |
+| 1.5 m, TV silent | 2/10 / 2/3 | 3/10 / 3/10 | 5/20 / 5/13 |
+| 1.5 m, TV on | 1/10 / 1/8 | 2/10 / 2/10 | 3/20 / 3/18 |
+| 3 m, TV silent | 2/10 / 2/10 | 2/10 / 2/10 | 4/20 / 4/20 |
+| 3 m, TV on | 2/9 / 2/9 | 3/9 / 3/9 | 5/18 / 5/18 |
+| **all** | **7/39 / 7/30** | **10/39 / 10/39** | **17/78 / 17/69** |
+| *v2, server 0.5 (raw 0.95)* | | | |
+| 1.5 m, TV silent | 2/10 / 2/3 | 8/10 / 8/10 | 10/20 / 10/13 |
+| 1.5 m, TV on | 5/10 / 5/8 | 6/10 / 6/10 | 11/20 / 11/18 |
+| 3 m, TV silent | 3/10 / 3/10 | 2/10 / 2/10 | 5/20 / 5/20 |
+| 3 m, TV on | 5/9 / 5/9 | 5/9 / 5/9 | 10/18 / 10/18 |
+| **all** | **15/39 / 15/30** | **21/39 / 21/39** | **36/78 / 36/69** |
+| *v1 at raw 0.9* | | | |
+| all | 20/39 / 20/30 | 28/39 / 28/39 | 48/78 / 48/69 |
+| *v2 at raw 0.9* | | | |
+| all | 24/39 / 24/30 | 29/39 / 29/39 | 53/78 / 53/69 |
+
+Per block at raw 0.9 (pooled, all cues): v1 12/20, 11/20, 11/20, 14/18; v2 11/20, 14/20, 14/20, 14/18. When the spoken word itself (the desk-mic burst, +-0.25 s) has to lie inside the audio instead of the whole window, session 1 is 17/34 (v2, 0.95) and 8/34 (v1, 0.98).
+
+**Near-words on tv-c3a, hits out of 12 per session** (kiwi, tivi, kili, kiri, Pipi, "aquí vi", 2 each; a hit is a score above the threshold in the cue window). At the server-0.5 point: v1 5 (S1), 4 (S2); v2 9 (S1), 6 (S2). At raw 0.9: v1 10 and 8; v2 10 and 8. Desk mic, v1 0.98: 2 and 4; v2 0.95: 1 and 5. Webcam, v1 0.98: 3 and 6; v2 0.95: 6 and 9. For comparison the desk-mic and webcam recall on "kivi" (pooled, 78 cues) at the server-0.5 point is 6 and 13 (v1) and 12 and 34 (v2).
+
+**Room-audio negatives** (wake-stage audio of both TVs, closed files only, minus the first 0.3 s and last 7 s of every file, the 7 s after a follow-up run, 10 s around cues and presses, the whole window of every recorded session of the device +-120 s, and c3-a from 11:50Z on): 33.24 h in 36 pieces, 16.44 h on c3-a (12 pieces) and 16.81 h on c3-b (24 pieces), all recorded before 2026-11-07 (the PVC held more: 21.5 h usable per TV at most). False accepts at each model's server-0.5 point, exact Poisson 95 % intervals, 2 s refractory:
+
+| scope | hours | v1 (raw 0.98) | v2 (raw 0.95) |
+| --- | --- | --- | --- |
+| c3-a | 16.44 | 1, 0.06/h [0.002, 0.34] | 7, 0.43/h [0.17, 0.88] |
+| c3-b | 16.81 | 4, 0.24/h [0.065, 0.61] | 16, 0.95/h [0.54, 1.55] |
+| pooled | 33.24 | 5, 0.15/h [0.049, 0.35] | 23, 0.69/h [0.44, 1.04] |
+
+At raw 0.9 pooled: v1 242 (7.3/h), v2 106 (3.2/h). The v2 offline estimate at its server-0.5 point (0.8/h [0.45, 1.4]) is matched by the room audio; v1 is 4.6 times lower at its own point, v2 recalls about twice as much on the TV.
+
+**Not established.** Two speakers or sessions on one TV are far from a test of unseen voices; per-block counts of 8 to 20 trials have wide intervals; the window rule counts a score anywhere in the 4 s window; the "multi-burst" and "clipped" flags are heuristics.
 
 ## Decided training recipe (2026-11-07)
 
