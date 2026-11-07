@@ -19,6 +19,9 @@ Steps (each idempotent; each prints what it will do and records its result in
     deploy          homelab values bump, push, Argo CD rollout, in-pod sha256 and Wyoming describe check
     enable          OWNER GATE: trial pipeline (copy of the base pipeline, wake word changed) on one TV
     rollback        that TV back to its previous pipeline (always allowed)
+    promote         OWNER GATE: the model becomes the wake word of the household (preferred) pipeline; TVs on
+                    the trial pipeline go back to it; open runs restarted
+    demote          undo promote: the household pipeline's wake word back to the previous one (always allowed)
     status          what is live and where: lock, image pin, files in the pod, pipelines, TV selects
 
 The existing tools are called, not re-implemented. Runbook: kivi-models docs/runbook/wake-word-release.md.
@@ -1363,6 +1366,107 @@ def cmd_rollback(a):
             record(st, f"rollback-{a.tv}", to=target, summary=f"{a.tv} back on {target!r}")
 
 
+def promoted_fields(pipeline, wake_word_id):
+    """The update of `pipeline` that changes only its wake word id."""
+    out = {k: pipeline[k] for k in pipeline if k != "id"}
+    out["wake_word_id"] = wake_word_id
+    return out
+
+
+def tvs_on_pipeline(selects, plist, pipeline_name):
+    """TVs whose select points at `pipeline_name` (by name, or 'preferred' when it is the preferred one)."""
+    p = find_pipeline(plist, pipeline_name)
+    out = []
+    for tv, option in selects.items():
+        q = resolve_option(plist, option) if option else None
+        if p and q and q["id"] == p["id"]:
+            out.append(tv)
+    return out
+
+
+def cmd_promote(a):
+    """Make the model the household wake word: the preferred (or --pipeline) pipeline gets its wake word id;
+    TVs on the trial pipeline go back to that pipeline. Every other pipeline field stays unchanged."""
+    st = load_state(a.version)
+    cfg = st["config"]
+    require_owner(a, st, "promote (it changes the wake word of every TV on the household pipeline)")
+    mid, trial_name = cfg["model_id"], cfg["pipeline_name"]
+    with HA(a.ha_token_file) as ha:
+        if mid not in ha.wake_words():
+            raise Refused(f"{mid} is not served (wake_word/info): deploy first")
+        plist = ha.pipelines()
+        target = resolve_option(plist, a.pipeline)
+        if not target:
+            raise Refused(f"pipeline {a.pipeline!r} not found")
+        if target["name"] == trial_name:
+            raise Refused("the target is the trial pipeline itself; promote into the household pipeline")
+        reg, states = ha.call("config/entity_registry/list"), ha.states()
+        ents = {tv: tv_entities(reg, tv) for tv in devices_map()}
+        selects = {tv: states.get(e["select"], {}).get("state") for tv, e in ents.items()}
+        muted = {tv: states.get(e["muted"], {}).get("state") if e["muted"] else None for tv, e in ents.items()}
+        t0 = dt.datetime.now(dt.timezone.utc)
+        prev = st.get("promotion", {}).get("previous_wake_word") or (
+            target["wake_word_id"] if target["wake_word_id"] != mid else "alexa")
+        if target["wake_word_id"] == mid:
+            say(f"promote: {target['name']!r} already uses {mid}")
+        elif will(f"pipeline {target['name']!r}: wake_word_id {target['wake_word_id']} -> {mid} (all else unchanged); "
+                  "Home Assistant ends its open runs"):
+            ha.call("assist_pipeline/pipeline/update", pipeline_id=target["id"], **promoted_fields(target, mid))
+            after = find_pipeline(ha.pipelines(), target["id"])
+            if {k: v for k, v in after.items() if k != "wake_word_id"} != {k: v for k, v in target.items() if k != "wake_word_id"}:
+                raise Refused(f"other fields changed: {target} -> {after}")
+            st["promotion"] = {"pipeline_id": target["id"], "pipeline": target["name"], "previous_wake_word": prev,
+                               "promoted_at": now_utc()}
+            save_state(st)
+        back = "preferred" if target["id"] == plist["preferred_pipeline"] else target["name"]
+        trial = find_pipeline(plist, trial_name)
+        for tv in (tvs_on_pipeline(selects, plist, trial_name) if trial else []):
+            if will(f"{ents[tv]['select']}: {selects[tv]!r} -> {back!r}, then end the open {trial_name!r} run (no-op update)"):
+                ha.call("call_service", domain="select", service="select_option",
+                        service_data={"option": back}, target={"entity_id": ents[tv]["select"]})
+                ha.kick(trial)
+                st.setdefault("tvs", {}).pop(tv, None)
+                save_state(st)
+        if PLAN:
+            return
+        seen = wait_new_run(ha, target["id"], t0)
+        states = ha.states()
+        plist = ha.pipelines()
+        live = {}
+        for tv, e in ents.items():
+            p = resolve_option(plist, states.get(e["select"], {}).get("state"))
+            live[tv] = {"select": states.get(e["select"], {}).get("state"), "wake_word": p and p["wake_word_id"],
+                        "muted": muted[tv]}
+            say(f"promote: {tv}: select {live[tv]['select']!r} -> {live[tv]['wake_word']} (microphone muted: {muted[tv]})")
+        say(f"promote: new {target['name']!r} run seen: {seen}")
+        record(st, "promote", pipeline=target["name"], previous_wake_word=prev, live=live, new_run_seen=seen,
+               summary=f"{target['name']!r} on {mid} (was {prev}); TVs {live}")
+    say(f"\nRollback: python3 wake_release.py demote --version {a.version}   (wake word back to {prev})")
+
+
+def cmd_demote(a):
+    """Undo promote: the household pipeline's wake word back to the recorded previous one (always allowed)."""
+    st = load_state(a.version)
+    promo = st.get("promotion") or {}
+    to = a.to or promo.get("previous_wake_word") or "alexa"
+    with HA(a.ha_token_file) as ha:
+        if to not in ha.wake_words():
+            raise Refused(f"{to} is not served (wake_word/info)")
+        plist = ha.pipelines()
+        target = find_pipeline(plist, promo.get("pipeline_id") or "") or resolve_option(plist, a.pipeline)
+        if not target:
+            raise Refused("household pipeline not found")
+        if target["wake_word_id"] == to:
+            say(f"demote: {target['name']!r} already uses {to}")
+        elif will(f"pipeline {target['name']!r}: wake_word_id {target['wake_word_id']} -> {to} (all else unchanged)"):
+            t0 = dt.datetime.now(dt.timezone.utc)
+            ha.call("assist_pipeline/pipeline/update", pipeline_id=target["id"], **promoted_fields(target, to))
+            say(f"demote: new {target['name']!r} run seen: {wait_new_run(ha, target['id'], t0)}")
+        if not PLAN:
+            st.pop("promotion", None)
+            record(st, "demote", pipeline=target["name"], to=to, summary=f"{target['name']!r} back on {to}")
+
+
 def cmd_status(a):
     say("== kivi-models")
     try:
@@ -1500,6 +1604,13 @@ def build_parser():
     p.add_argument("--tv", required=True)
     p.add_argument("--to", help="select option to go back to (default: the one recorded by enable, else preferred)")
     p.add_argument("--delete-pipeline", action="store_true", help="also delete the trial pipeline if nothing selects it")
+
+    p = sub("promote", cmd_promote, ha=True, owner=True)
+    p.add_argument("--pipeline", default="preferred", help="household pipeline to switch (default: the preferred one)")
+
+    p = sub("demote", cmd_demote, ha=True)
+    p.add_argument("--pipeline", default="preferred")
+    p.add_argument("--to", help="wake word id to go back to (default: the one promote replaced, else alexa)")
 
     p = sub("status", cmd_status, version=False, ha=True)
     p.add_argument("--no-ha", action="store_true")

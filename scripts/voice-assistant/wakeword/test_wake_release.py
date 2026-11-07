@@ -244,3 +244,28 @@ def test_image_staging_script_checks_pins(tmp_path):
         assert (r.returncode != 0) == bool(rc), r.stdout + r.stderr
     assert (tmp_path / "out-0/m_one.tflite").exists() and "m_one.tflite" in (tmp_path / "out-0/SHA256SUMS").read_text()
     os.chmod(tmp_path / "out-0", 0o755)
+
+
+def test_promote_fields_and_moves():
+    kiwi = {"id": "k", "name": "Kiwi", "wake_word_entity": "wake_word.openwakeword", "wake_word_id": "alexa",
+            "conversation_engine": "conversation.fast", "prefer_local_intents": True}
+    trial = dict(kiwi, id="t", name="oye Kivi", wake_word_id="oye_kivi")
+    f = W.promoted_fields(kiwi, "oye_kivi")
+    assert "id" not in f and f["wake_word_id"] == "oye_kivi"
+    assert {k: v for k, v in f.items() if k != "wake_word_id"} == {k: v for k, v in kiwi.items() if k not in ("id", "wake_word_id")}
+    plist = {"preferred_pipeline": "k", "pipelines": [kiwi, trial]}
+    sel = {"c3-a": "oye Kivi", "c3-b": "preferred", "c3-c": None}
+    assert W.tvs_on_pipeline(sel, plist, "oye Kivi") == ["c3-a"]
+    assert W.tvs_on_pipeline(sel, plist, "Kiwi") == ["c3-b"]
+
+
+def test_promote_needs_owner_and_demote_does_not(releases, tmp_path, monkeypatch):
+    make_state(releases, tmp_path)
+    entered = []
+
+    def fake_enter(self):
+        entered.append(1)
+        raise W.Refused("no network in tests")
+    monkeypatch.setattr(W.HA, "__enter__", fake_enter)
+    assert W.main(["promote", "--version", V]) == 2 and not entered      # refused before any HA contact
+    assert W.main(["demote", "--version", V]) == 2 and entered == [1]    # rollback goes straight to HA

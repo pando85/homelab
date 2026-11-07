@@ -1,6 +1,6 @@
 # Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
 
-**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run. A **v2 candidate** (server-exact features, front-end emulation; [v2](#v2-2026-11-07-candidate-not-deployed)) exists, not deployed. A **v3 candidate** (v2 plus real takes of one speaker and real room negatives; [v3](#v3-2026-11-07-candidate-not-deployed)) passes the owner gate on point estimates for that speaker on c3-a, not deployed. A **v4 candidate** for the new wake phrase **"oye Kivi"** ([v4](#v4-oye-kivi-2026-11-07-candidate-not-deployed)) failed the room false-wake gate and its real recall is untested; the owner approved it as a **trial on c3-a only** on 2026-11-07 ([v4 trial](#v4-trial-deployment-2026-11-07-c3-a-only)). c3-b and the household pipeline "Kiwi" stay on `alexa`.
+**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run. A **v2 candidate** (server-exact features, front-end emulation; [v2](#v2-2026-11-07-candidate-not-deployed)) exists, not deployed. A **v3 candidate** (v2 plus real takes of one speaker and real room negatives; [v3](#v3-2026-11-07-candidate-not-deployed)) passes the owner gate on point estimates for that speaker on c3-a, not deployed. A **v4 candidate** for the new wake phrase **"oye Kivi"** ([v4](#v4-oye-kivi-2026-11-07-candidate-not-deployed)) failed the room false-wake gate and its real recall is untested; the owner approved it as a **trial on c3-a only** on 2026-11-07 and the same evening made it the **household wake word** (pipeline "Kiwi", both TVs; [v4 trial and promotion](#v4-trial-deployment-2026-11-07-c3-a-only)). Rollback: `alexa`.
 **Date:** 2026-11-05
 **Device alias / model / firmware / webOS / architecture:** none. PC only (x86_64, RTX 4060 Ti 16 GB, 32 threads). No TV, no microphone, no speaker, no change in Home Assistant, the cluster or the GitOps tree.
 **Power and playback state:** not applicable
@@ -1300,6 +1300,53 @@ and `enable` restored the trial after the restart above.
 
 **Next (owner):** record real "oye Kivi" takes (`wake_release.py record-check --version v4-oye-kivi-2026-11-07`
 prints the exact commands), then `score` and `gate` on them; then re-select on more room hours.
+
+### Promotion to the household wake word (2026-11-07, 19:59 UTC)
+
+**Owner decision (2026-11-07, evening):** "We have to deploy the oye Kivi as the general wake word." The gate is
+**not passed** (room false wakes 0.96/h [0.42, 1.90] on the test part; real recall untested). The owner also
+reported false wakes on the c3-a trial: about 9 wakes in about 1.1 h, of which at least 2 were likely room noise
+(owner observation, not measured by a tool; nothing was listened to here).
+
+**Change (websocket API, short-lived login revoked afterwards; `wake_release.py promote`):**
+- Pipeline "Kiwi" (preferred): `wake_word_id` `alexa` → `oye_kivi`; every other field unchanged (diff of
+  `pipeline/list` before and after: only `wake_word_id`). Updating it ended the open "Kiwi" runs.
+- c3-a's pipeline select: `oye Kivi` → `preferred`, then a no-op update of "oye Kivi" ended its open run.
+  A new "Kiwi" run started at 19:59:21 UTC. Since both selects are `preferred`, an HA restart that resets the
+  selects no longer changes the wake word.
+- c3-b: select `preferred` (so `oye_kivi`); its microphone is muted by Home Assistant (left as it is), so it
+  starts no run until it is unmuted.
+- The pipeline "oye Kivi" stays (now identical to "Kiwi"); delete it with `rollback --delete-pipeline` later.
+- The dashboard's trial select was replaced by the household wake word and both selects' state (another HA
+  restart through Reloader, harmless now).
+- Snapshot before: `releases/v4-oye-kivi-2026-11-07/ha-before-promote.json`.
+
+**Rollback (exact):** `wake_release.py demote --version v4-oye-kivi-2026-11-07`, or by hand
+`assist_pipeline/pipeline/update` of "Kiwi" with every field unchanged except `wake_word_id: alexa`. The update
+itself ends the open runs, so both TVs switch within about 15 s. `alexa` and `kivi` stay loaded.
+
+**Stricter threshold without a new image? (investigated, nothing changed):**
+- wyoming-openwakeword 2.1.0 (source in the pod) has **no per-model threshold**: `--threshold` (default 0.5),
+  `--trigger-level` (default 1) and `--refractory-seconds` (default 2) are global. Home Assistant 2026.10.4 has
+  no wake-word sensitivity in the pipeline or the Wyoming integration: a pipeline sends only
+  `Detect(names=[wake_word_id])`.
+- **Global `--threshold 0.745`** gives `oye_kivi` exactly raw 0.98 (calibrated file: server t = sigmoid(logit(raw)
+  − logit(0.9437)); raw 0.97 = 0.659, raw 0.99 = 0.855). A values change (openwakeword args), no new image,
+  openwakeword restart only. It also makes `alexa` stricter (0.745 instead of 0.5) and `kivi` (raw 0.993); neither
+  is used by a pipeline now, but the `alexa` rollback would then wake less (its recall at 0.745 was not
+  measured; it should go back to 0.5 with the rollback).
+- **`--trigger-level N`:** in 2.1.0 the counter is not reset when the score drops, only at the start of a run, so
+  N counts above-threshold 80 ms steps anywhere in a run, not consecutive ones. Not measured offline; not
+  recommended as a precise lever.
+- **Recalibrated file** (`oye_kivi.tflite` with raw 0.98 at 0.5): `alexa` untouched, but a new version directory,
+  a new tag (needs the owner's approval) and a new image; `wake_release.py init/pick-threshold --threshold 0.98
+  --reason .../calibrate/package/release/deploy` does it.
+- **What raw 0.98 means** (v4 DET table, same runs; 0.98 was read off the test part, so it is an owner choice, not
+  a clean selection): room test part 1 false wake in 8.31 h = 0.12/h [0.00, 0.67] against 8 = 0.96/h [0.42,
+  1.90]; held-out synthetic recall 57.5 % clean (72.8 %), 30.8 % with TV at 10 dB (47.2 %), 15.1 % at 0 dB
+  (23.9 %), 42.3 % quiet (61.8 %); near-phrases 4.1 % (8.9 %). Real recall at either threshold is unknown; the
+  owner's trial count (at least 2 false in about 1.1 h) is above both offline rates, so the room may differ
+  from the test part (one evening, one TV).
 
 ## Alternatives if the owner test fails
 

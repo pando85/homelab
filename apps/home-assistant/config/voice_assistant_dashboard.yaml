@@ -38,21 +38,11 @@ views:
               Press right after saying the wake phrase ("Kivi" or "oye Kivi") during a test session.
 
               Last pressed: **{% set s = states('input_button.kivi_take') %}{% if s in ['unknown', 'unavailable'] %}never{% else %}{{ as_datetime(s) | relative_time }} ago ({{ as_local(as_datetime(s)).strftime('%Y-%m-%d %H:%M:%S') }}){% endif %}**
-          # "oye Kivi" trial (2026-11-07): c3-a uses the pipeline "oye Kivi" (wake word oye_kivi);
-          # "preferred" is the household pipeline "Kiwi" (alexa). Rollback = preferred.
-          - type: tile
-            entity: select.lg_c3_c3_a_voice_satellite_assistant
-            name: oye Kivi trial (c3-a pipeline)
-            icon: mdi:flask-outline
-            vertical: false
-            features:
-              - type: select-options
-            grid_options:
-              columns: 12
+          # Household wake word "oye Kivi" (oye_kivi) since 2026-11-07: the preferred pipeline "Kiwi".
           - type: markdown
             content: |
-              oye Kivi trial on c3-a: **{{ 'on' if is_state('select.lg_c3_c3_a_voice_satellite_assistant', 'oye Kivi') else 'off' }}** (c3-b: {{ states('select.lg_c3_c3_b_voice_satellite_assistant') }}).
-              "oye Kivi" = trial, "preferred" = back to Kiwi (alexa). A change here applies at the satellite's next wake-word run (after a wake, a reconnect or a pipeline edit); `wake_release.py enable` / `rollback` also restarts the open run.
+              Household wake word: **oye Kivi** (pipeline Kiwi, since 2026-11-07). Both TVs should show the pipeline **preferred**: c3-a **{{ states('select.lg_c3_c3_a_voice_satellite_assistant') }}**, c3-b **{{ states('select.lg_c3_c3_b_voice_satellite_assistant') }}**.
+              Rollback to alexa: `wake_release.py demote` (runbook in kivi-models).
       - type: grid
         cards:
           - type: heading
