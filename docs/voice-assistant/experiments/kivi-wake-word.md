@@ -1316,7 +1316,12 @@ reported false wakes on the c3-a trial: about 9 wakes in about 1.1 h, of which a
   selects no longer changes the wake word.
 - c3-b: select `preferred` (so `oye_kivi`); its microphone is muted by Home Assistant (left as it is), so it
   starts no run until it is unmuted.
-- The pipeline "oye Kivi" stays (now identical to "Kiwi"); delete it with `rollback --delete-pipeline` later.
+- **The select restore is stale in both directions** (observed-on-cluster): after the dashboard's HA restart at
+  20:02 UTC c3-a's select came back as `oye Kivi` (its value before the promotion), as at 18:35 it had come back as
+  `preferred` (its value before the trial). Home Assistant restores this select from an older saved state, not
+  the last one. `promote` was run again (c3-a → `preferred`, new "Kiwi" run seen) and the now redundant pipeline
+  "oye Kivi" was deleted (`rollback --tv c3-a --delete-pipeline`), so a stale restore can only fall back to
+  `preferred`. The wake word was `oye_kivi` throughout.
 - The dashboard's trial select was replaced by the household wake word and both selects' state (another HA
   restart through Reloader, harmless now).
 - Snapshot before: `releases/v4-oye-kivi-2026-11-07/ha-before-promote.json`.
