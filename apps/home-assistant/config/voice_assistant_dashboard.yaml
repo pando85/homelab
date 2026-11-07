@@ -1,0 +1,325 @@
+# Voice assistant dashboard (YAML mode), registered in configuration.yaml under lovelace.dashboards.
+# Built-in cards only. Satellites: webos-voice-satellite on the two LG TVs (c3-a, c3-b), ESPHome native API.
+# Entity ids are the ones in the entity registry; if a satellite is re-adopted they may change.
+# The wake word runs on the server (openwakeword), so the satellites' own "Wake word" selects are
+# unavailable placeholders and are not shown.
+title: Voice assistant
+views:
+  - title: Voice assistant
+    path: voice-assistant
+    icon: mdi:microphone-message
+    type: sections
+    max_columns: 3
+    sections:
+      - type: grid
+        cards:
+          - type: heading
+            heading: Kivi wake-word testing
+            heading_style: title
+            icon: mdi:account-voice
+          - type: button
+            entity: input_button.kivi_take
+            name: Kivi take
+            icon: mdi:record-rec
+            show_name: true
+            show_icon: true
+            show_state: false
+            icon_height: 72px
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.kivi_take
+            grid_options:
+              columns: 12
+              rows: 3
+          - type: markdown
+            content: |
+              Press right after saying Kivi during a test session.
+
+              Last pressed: **{% set s = states('input_button.kivi_take') %}{% if s in ['unknown', 'unavailable'] %}never{% else %}{{ as_datetime(s) | relative_time }} ago ({{ as_local(as_datetime(s)).strftime('%Y-%m-%d %H:%M:%S') }}){% endif %}**
+      - type: grid
+        cards:
+          - type: heading
+            heading: c3-a (office)
+            heading_style: title
+            icon: mdi:television-ambient-light
+          - type: tile
+            entity: assist_satellite.lg_c3_c3_a_voice_satellite_assist_satellite
+            name: Satellite state
+            icon: mdi:microphone-message
+            vertical: false
+            grid_options:
+              columns: 12
+              rows: 1
+          - type: markdown
+            content: |
+              Connection: **{{ 'connected' if not is_state('assist_satellite.lg_c3_c3_a_voice_satellite_assist_satellite', ['unavailable', 'unknown']) else 'not connected' }}**
+
+              Satellite version: **{{ device_attr('assist_satellite.lg_c3_c3_a_voice_satellite_assist_satellite', 'sw_version') or 'unknown' }}**
+
+              TV power: **{{ states('sensor.lg_c3_c3_a_voice_satellite_tv_power_state') }}**
+          - type: tile
+            entity: switch.lg_c3_c3_a_voice_satellite_mute_microphone
+            name: Mute microphone
+            vertical: false
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: switch.office_a_lg_c3_c3_a_voice_satellite_echo_cancellation
+            name: Echo cancellation
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: switch.office_a_lg_c3_c3_a_voice_satellite_music_playback
+            name: Music playback
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: select.lg_c3_c3_a_voice_satellite_assistant
+            name: Pipeline
+            vertical: false
+            features:
+              - type: select-options
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: select.lg_c3_c3_a_voice_satellite_finished_speaking_detection
+            name: Finished speaking detection
+            vertical: false
+            features:
+              - type: select-options
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: media_player.lg_c3_c3_a_voice_satellite
+            name: Satellite media player
+            vertical: false
+            features:
+              - type: media-player-playback-controls
+              - type: media-player-volume-slider
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: button.office_a_lg_c3_c3_a_voice_satellite_stop_timer_alarm
+            name: Stop timer alarm
+            vertical: false
+            icon: mdi:alarm-off
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.office_a_lg_c3_c3_a_voice_satellite_stop_timer_alarm
+            grid_options:
+              columns: 12
+          - type: entities
+            title: Status
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.lg_c3_c3_a_voice_satellite_microphone_muted
+                name: Microphone muted
+              - entity: binary_sensor.lg_c3_c3_a_voice_satellite_listening
+                name: Listening
+              - entity: binary_sensor.office_a_lg_c3_c3_a_voice_satellite_capture_problem
+                name: Capture problem
+              - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_microphone_self_check
+                name: Microphone self-check
+              - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_lg_hands_free
+                name: LG hands-free
+              - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_always_ready
+                name: Always ready
+              - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_compatibility
+                name: Compatibility
+              - entity: binary_sensor.office_a_lg_c3_c3_a_voice_satellite_firmware_verified
+                name: Firmware verified
+              - entity: binary_sensor.office_a_lg_c3_c3_a_voice_satellite_firmware_changed
+                name: Firmware changed
+              - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_tv_firmware
+                name: TV firmware
+              - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_timers
+                name: Timers
+              - entity: binary_sensor.office_a_lg_c3_c3_a_voice_satellite_timer_alarm
+                name: Timer alarm
+      - type: grid
+        cards:
+          - type: heading
+            heading: c3-b (living room)
+            heading_style: title
+            icon: mdi:television-ambient-light
+          - type: tile
+            entity: assist_satellite.lg_c3_c3_b_voice_satellite_assist_satellite
+            name: Satellite state
+            icon: mdi:microphone-message
+            vertical: false
+            grid_options:
+              columns: 12
+              rows: 1
+          - type: markdown
+            content: |
+              Connection: **{{ 'connected' if not is_state('assist_satellite.lg_c3_c3_b_voice_satellite_assist_satellite', ['unavailable', 'unknown']) else 'not connected' }}**
+
+              Satellite version: **{{ device_attr('assist_satellite.lg_c3_c3_b_voice_satellite_assist_satellite', 'sw_version') or 'unknown' }}**
+
+              TV power: **{{ states('sensor.lg_c3_c3_b_voice_satellite_tv_power_state') }}**
+          - type: tile
+            entity: switch.lg_c3_c3_b_voice_satellite_mute_microphone
+            name: Mute microphone
+            vertical: false
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: switch.living_room_lg_c3_c3_b_voice_satellite_echo_cancellation
+            name: Echo cancellation
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: switch.living_room_lg_c3_c3_b_voice_satellite_music_playback
+            name: Music playback
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: select.lg_c3_c3_b_voice_satellite_assistant
+            name: Pipeline
+            vertical: false
+            features:
+              - type: select-options
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: select.lg_c3_c3_b_voice_satellite_finished_speaking_detection
+            name: Finished speaking detection
+            vertical: false
+            features:
+              - type: select-options
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: media_player.lg_c3_c3_b_voice_satellite
+            name: Satellite media player
+            vertical: false
+            features:
+              - type: media-player-playback-controls
+              - type: media-player-volume-slider
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: button.lg_c3_c3_b_voice_satellite_stop_timer_alarm
+            name: Stop timer alarm
+            vertical: false
+            icon: mdi:alarm-off
+            tap_action:
+              action: perform-action
+              perform_action: button.press
+              target:
+                entity_id: button.lg_c3_c3_b_voice_satellite_stop_timer_alarm
+            grid_options:
+              columns: 12
+          - type: entities
+            title: Status
+            show_header_toggle: false
+            entities:
+              - entity: binary_sensor.lg_c3_c3_b_voice_satellite_microphone_muted
+                name: Microphone muted
+              - entity: binary_sensor.lg_c3_c3_b_voice_satellite_listening
+                name: Listening
+              - entity: binary_sensor.living_room_lg_c3_c3_b_voice_satellite_capture_problem
+                name: Capture problem
+              - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_microphone_self_check
+                name: Microphone self-check
+              - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_lg_hands_free
+                name: LG hands-free
+              - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_always_ready
+                name: Always ready
+              - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_compatibility
+                name: Compatibility
+              - entity: binary_sensor.living_room_lg_c3_c3_b_voice_satellite_firmware_verified
+                name: Firmware verified
+              - entity: binary_sensor.living_room_lg_c3_c3_b_voice_satellite_firmware_changed
+                name: Firmware changed
+              - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_tv_firmware
+                name: TV firmware
+              - entity: sensor.lg_c3_c3_b_voice_satellite_timers
+                name: Timers
+              - entity: binary_sensor.lg_c3_c3_b_voice_satellite_timer_alarm
+                name: Timer alarm
+      - type: grid
+        cards:
+          - type: heading
+            heading: Pipelines and services
+            heading_style: title
+            icon: mdi:cog-transfer
+          - type: tile
+            entity: select.lg_c3_c3_a_voice_satellite_assistant
+            name: c3-a pipeline
+            vertical: false
+            features:
+              - type: select-options
+            grid_options:
+              columns: 12
+          - type: tile
+            entity: select.lg_c3_c3_b_voice_satellite_assistant
+            name: c3-b pipeline
+            vertical: false
+            features:
+              - type: select-options
+            grid_options:
+              columns: 12
+          - type: markdown
+            content: |
+              **Kiwi**: Spanish, wake word on the server (alexa), conversation agent Fast.
+
+              **Kiwi Test**: same speech services, conversation agent ChatGPT, wake word alexa_v0.1.
+
+              "preferred" follows the Home Assistant default pipeline.
+          - type: entities
+            title: Wyoming and conversation (state = last use)
+            show_header_toggle: false
+            entities:
+              - entity: wake_word.openwakeword
+                name: openwakeword (wake word)
+              - entity: stt.faster_whisper
+                name: faster-whisper (STT)
+              - entity: tts.piper
+                name: piper (TTS)
+              - entity: conversation.fast
+                name: Fast (conversation)
+              - entity: conversation.chatgpt
+                name: ChatGPT (conversation)
+      - type: grid
+        cards:
+          - type: heading
+            heading: Recent activity (24 h)
+            heading_style: title
+            icon: mdi:history
+          - type: history-graph
+            title: Satellite state
+            hours_to_show: 24
+            entities:
+              - entity: assist_satellite.lg_c3_c3_a_voice_satellite_assist_satellite
+                name: c3-a
+              - entity: assist_satellite.lg_c3_c3_b_voice_satellite_assist_satellite
+                name: c3-b
+            grid_options:
+              columns: 12
+          - type: logbook
+            title: Logbook
+            hours_to_show: 24
+            target:
+              entity_id:
+                - assist_satellite.lg_c3_c3_a_voice_satellite_assist_satellite
+                - assist_satellite.lg_c3_c3_b_voice_satellite_assist_satellite
+                - switch.lg_c3_c3_a_voice_satellite_mute_microphone
+                - switch.lg_c3_c3_b_voice_satellite_mute_microphone
+                - switch.office_a_lg_c3_c3_a_voice_satellite_echo_cancellation
+                - switch.living_room_lg_c3_c3_b_voice_satellite_echo_cancellation
+                - switch.office_a_lg_c3_c3_a_voice_satellite_music_playback
+                - switch.living_room_lg_c3_c3_b_voice_satellite_music_playback
+                - select.lg_c3_c3_a_voice_satellite_assistant
+                - select.lg_c3_c3_b_voice_satellite_assistant
+                - input_button.kivi_take
+            grid_options:
+              columns: 12

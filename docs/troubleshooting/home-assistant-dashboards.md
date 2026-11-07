@@ -2,7 +2,7 @@
 
 ## Overview
 
-Every Lovelace dashboard is UI-managed (`mode: storage`): the config lives in
+Every Lovelace dashboard except one is UI-managed (`mode: storage`): the config lives in
 `/config/.storage/lovelace.<id>` on the `home-assistant-config` PVC, **not in git**. The dashboard
 list is `/config/.storage/lovelace_dashboards`. They were redesigned on 2026-10-30 into `sections`
 views; the build scripts used then were throwaway, so the live storage files are the source of
@@ -17,6 +17,7 @@ truth.
 | Office (`dashboard-rack`), Terrace, Tanque, Plants, Mobiles | yes | Detail pages; diagnostics and rarely used entities live in `custom:expander-card` sections |
 | Kitchen, Bedroom, Office T (`dashboard-kitchen`, `dashboard-bedroom`, `office-t`) | **hidden** | Detail pages reached from Overview room headings |
 | Areas, Map | yes | Auto-generated strategies |
+| Voice assistant (`voice-assistant`) | yes | **YAML mode, in git** (the only one): `config/voice_assistant_dashboard.yaml`, registered under `lovelace: dashboards:` in `config/configuration.yaml`, mounted at `/config/gitops/`. Built-in cards only: Kivi take button, a card per LG TV satellite (c3-a, c3-b), pipelines and Wyoming services, 24 h activity. Edit the file in git, not in the UI; a file change shows after a page refresh, a new or changed `lovelace:` entry needs a restart (the ConfigMap change rolls the pod through the reloader annotation). Created 2026-11-07 |
 
 Installed custom cards (`lovelace_resources`): `scheduler-card`, `expander-card`,
 `valetudo-map-card`, `flower-card`. Anything else (`apexcharts-card`, `card-mod`) is not installed.

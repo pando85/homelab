@@ -6,6 +6,19 @@ homeassistant:
 
 script: !include_dir_merge_named script
 
+# YAML-mode dashboard "Voice assistant" (the other dashboards are UI-managed, see
+# docs/troubleshooting/home-assistant-dashboards.md). The file is mounted from the gitops ConfigMap.
+# A change to the dashboard file reloads on page refresh; adding or removing this entry needs a restart.
+lovelace:
+  dashboards:
+    voice-assistant:
+      mode: yaml
+      title: Voice assistant
+      icon: mdi:microphone-message
+      show_in_sidebar: true
+      require_admin: false
+      filename: gitops/voice_assistant_dashboard.yaml
+
 # Load frontend themes from the themes folder
 frontend:
   themes: !include_dir_merge_named themes
