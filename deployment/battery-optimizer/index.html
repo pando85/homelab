@@ -1,0 +1,5249 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../../network/webos-voice-satellite/">
+      
+      
+        <link rel="next" href="../cilium-bgp-control-plane/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>battery-optimizer - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#battery-optimizer" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              battery-optimizer
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/webos-voice-satellite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    webOS voice satellite network requirement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What runs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-notes-and-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design notes and gotchas
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shadow-service-phase-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shadow service (Phase C)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Shadow service (Phase C)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dashboards-per-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dashboards per component
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dashboards per component">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climate-dashboards-per-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      Climate dashboards per component
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climate-shadow-track-b2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Climate shadow (track B2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-battery-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live battery control
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Live battery control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#live-token-in-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live token in Vault
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esphome-ac-failsafe" class="md-nav__link">
+    <span class="md-ellipsis">
+      ESPHome AC failsafe
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ESPHome AC failsafe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#failsafe-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Failsafe test
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollout-dry_run-then-live" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rollout: dry_run, then live
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rollback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alerts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#omnibattery-backup-cooldown-workaround" class="md-nav__link">
+    <span class="md-ellipsis">
+      Omnibattery backup cooldown workaround
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#battery-settings-where-they-are-and-how-to-read-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      Battery settings: where they are and how to read them
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Battery settings: where they are and how to read them">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      Entities
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-facts-and-omnibattery-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Device facts and Omnibattery configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-read-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      How to read them
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#omnibattery-pd-controller-settings-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      Omnibattery PD controller settings log
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#open-issue-planned-discharge-is-not-delivered" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open issue: planned discharge is not delivered
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-run-2026-10-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      First run (2026-10-25)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-repository-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      App Repository Notes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-helm-hook-provisioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD Helm hooks: provisioning Jobs that never run, and hooks that silently stop running
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-amd64-disk-full/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ci-runner-amd64 fills the k8s-amd64-1 root disk
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-omnibattery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: Omnibattery and the house battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stop-home-assistant-under-argocd/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stopping Home Assistant under ArgoCD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-truncated-zfs-backups/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../voice-assistant/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Voice assistant
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Voice assistant
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/conversation-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation agent: where small local models fit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/data-register/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi data register
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/kiais-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kiais as the Kivi conversation agent in Home Assistant
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/lessons-learned/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lessons learned
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/model-registry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi model registry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/stt-hint-list-and-learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/whisper-image-build/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building the Kivi Whisper STT image on Forgejo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_10" id="__nav_7_10_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    experiments
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_10">
+            <span class="md-nav__icon md-icon"></span>
+            experiments
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/conversation-agent-eval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conversation agent evaluation for "Kivi": Kiais gateway metrics, a reusable dry-run harness, and what Home Assistant's built-in intents already cover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/decision-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decision models for Kivi: can a small classifier rescue the commands the built-in intents miss?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/kivi-decider-poc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/kivi-wake-word/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/small-local-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/whisper-gpu-benchmark/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Whisper decoding settings on the GTX 1060: compute type, beam size, VAD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      What runs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#design-notes-and-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Design notes and gotchas
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#shadow-service-phase-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Shadow service (Phase C)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Shadow service (Phase C)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#dashboards-per-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      Dashboards per component
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Dashboards per component">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#climate-dashboards-per-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      Climate dashboards per component
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#climate-shadow-track-b2" class="md-nav__link">
+    <span class="md-ellipsis">
+      Climate shadow (track B2)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-battery-control" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live battery control
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Live battery control">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#live-token-in-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      Live token in Vault
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#esphome-ac-failsafe" class="md-nav__link">
+    <span class="md-ellipsis">
+      ESPHome AC failsafe
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ESPHome AC failsafe">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#failsafe-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Failsafe test
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollout-dry_run-then-live" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rollout: dry_run, then live
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rollback
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#alerts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alerts
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#omnibattery-backup-cooldown-workaround" class="md-nav__link">
+    <span class="md-ellipsis">
+      Omnibattery backup cooldown workaround
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#battery-settings-where-they-are-and-how-to-read-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      Battery settings: where they are and how to read them
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Battery settings: where they are and how to read them">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#entities" class="md-nav__link">
+    <span class="md-ellipsis">
+      Entities
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-facts-and-omnibattery-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      Device facts and Omnibattery configuration
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-read-them" class="md-nav__link">
+    <span class="md-ellipsis">
+      How to read them
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#omnibattery-pd-controller-settings-log" class="md-nav__link">
+    <span class="md-ellipsis">
+      Omnibattery PD controller settings log
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#open-issue-planned-discharge-is-not-delivered" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open issue: planned discharge is not delivered
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#first-run-2026-10-25" class="md-nav__link">
+    <span class="md-ellipsis">
+      First run (2026-10-25)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operate" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operate
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#app-repository-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      App Repository Notes
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="battery-optimizer">battery-optimizer</h1>
+<p>Two workloads of <a href="https://github.com/pando85/home-energy-optimizer">pando85/home-energy-optimizer</a>, deployed
+from <code>apps/battery-optimizer/</code> with one image, one PVC and one ConfigMap:</p>
+<ul>
+<li><strong><code>pipeline</code></strong>: a CronJob that extracts Home Assistant recorder history and Prometheus samples
+  into an append-only Parquet store, validates it, and builds the 15-minute analysis dataset
+  (Phase B).</li>
+<li><strong><code>service</code></strong>: the resident Phase C <strong>shadow service</strong> (<code>battery-optimizer serve</code>). It reads Home
+  Assistant and Prometheus, solves the MPC plan every 15 minutes and records shadow intents and a
+  shadow-vs-native comparison. In <code>shadow</code> (deployed) it has no actuation path and no write
+  credentials; <code>dry_run</code> and <code>live</code> add the battery actuator of ADR-0007, see
+  <a href="#live-battery-control">Live battery control</a>. The production plan and its history live in
+<a href="https://github.com/pando85/homelab/blob/master/planning/energy-baseline-production-execution.md"><code>planning/energy-baseline-production-execution.md</code></a>.</li>
+</ul>
+<p>The application code, ADRs and domain docs live in the app repository; this page covers only the
+deployment.</p>
+<h2 id="what-runs">What runs</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Namespace / ArgoCD app</td>
+<td><code>battery-optimizer</code> (ApplicationSet auto-discovery)</td>
+</tr>
+<tr>
+<td>CronJob</td>
+<td><code>battery-optimizer-pipeline</code>, <code>30 3 * * *</code> UTC, <code>concurrencyPolicy: Forbid</code></td>
+</tr>
+<tr>
+<td>Image</td>
+<td><code>ghcr.io/pando85/battery-optimizer</code> (keeps its name after the repo rename until the staged OCI rename), pinned <code>tag@sha256</code>, Renovate-managed</td>
+</tr>
+<tr>
+<td>Steps (one container, <code>sh -ec</code>, fails fast)</td>
+<td>extract <code>ha-history</code> (8 d lookback) -&gt; extract <code>prometheus</code> (3 d lookback) -&gt; <code>validate</code> -&gt; <code>build</code></td>
+</tr>
+<tr>
+<td>Failure handling</td>
+<td><code>backoffLimit: 2</code>, <code>activeDeadlineSeconds: 3600</code>, <code>startingDeadlineSeconds: 21600</code>, history 3/3</td>
+</tr>
+<tr>
+<td>Node</td>
+<td>pinned to <code>prusik</code> (node-local <code>openebs-zfspv</code>)</td>
+</tr>
+<tr>
+<td>Secret</td>
+<td>ExternalSecret <code>battery-optimizer-home-assistant</code> &lt;- Vault KV <code>secret/battery-optimizer/home-assistant</code>, property <code>token</code> (read-only HA token, env only, never on disk). Only with <code>global.liveHomeAssistantToken: true</code>: ExternalSecret <code>battery-optimizer-home-assistant-live</code> &lt;- <code>secret/battery-optimizer/home-assistant-live</code> (service only, see <a href="#live-battery-control">Live battery control</a>)</td>
+</tr>
+<tr>
+<td>Config</td>
+<td>ConfigMap <code>battery-optimizer-config</code> rendered from <code>apps/battery-optimizer/files/</code> (<code>tariff.yaml</code>, <code>service.yaml</code>, and the climate shadow's <code>climate.yaml</code>, <code>climate-mpc.yaml</code>)</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>PVC <code>battery-optimizer-data</code>, 5 Gi, <code>openebs-zfspv</code>, mounted at <code>/data</code> (<code>BATTERY_OPTIMIZER_DATA_DIR</code>)</td>
+</tr>
+<tr>
+<td>Backup</td>
+<td>labels <code>backup: battery-optimizer-zfs</code>, <code>backup/retain: quaterly</code>; SnapshotSchedule <code>battery-optimizer-zfs-backups</code> (daily 06:00 UTC, keep 20)</td>
+</tr>
+<tr>
+<td>Alerts</td>
+<td><code>PrometheusRule/battery-optimizer</code> (label <code>release: monitoring</code>) for the CronJob, <code>PrometheusRule/battery-optimizer-service</code> (long-term) for the service</td>
+</tr>
+</tbody>
+</table>
+<h2 id="design-notes-and-gotchas">Design notes and gotchas</h2>
+<ul>
+<li><strong>Why daily with an 8 day HA window.</strong> HA's recorder keeps 10 days (<code>purge_keep_days</code> default,
+  nothing overrides it). Rows older than that are gone for good, so the binding rule is "never more
+  than 10 days between two successful runs". Daily with an 8 day lookback tolerates 7 missed runs. The window is deliberately shorter than the
+  retention: the recorder purges nightly, so the oldest chunk of a 10 day window is partly or wholly
+  gone and would raise a coverage gap every night (see the next note). Re-pulling is
+  free because the HA extractor dedups against rows already in the store. Chunk width stays at the
+  CLI default (86400 s); changing it on a live store mints new carry-in anchors.</li>
+<li><strong>Prometheus extraction is not deduplicated across runs</strong>, so the lookback is only 3 days
+  (about 40 KB per day-part). The Prometheus archive has no retention limit, so there is no urgency.</li>
+<li><strong>Bootstrap.</strong> If <code>/data/manifests</code> holds no finished Prometheus extraction (empty PVC), the run
+  extracts Prometheus from <code>PROM_BOOTSTRAP_START</code> (2024-01-01) instead of the 3 day lookback. A
+  manifest is written only by a finished run, so an interrupted bootstrap retries from scratch.</li>
+<li><strong>Build cadence and window.</strong> <code>build</code> is content-addressed and write-once, and measured on the
+  cluster <strong>every new extraction changes the dataset id</strong> (the part list changes), adding about
+  4.2 MB per run (~1.5 GB a year if built daily) while nothing consumes the dataset yet. The job
+  therefore builds only on UTC days 01 and 02 of the month (<code>BUILD_ON_DAYS</code>), over the complete
+  months <code>[BUILD_START, first of this month)</code>; other days log <code>build skipped</code>. The newest partial
+  month is not in the dataset until the month closes. There is no CLI-side garbage collection of
+  superseded datasets. Run a manual build job if you need one off-cycle (steps 1-3 still run).</li>
+<li><strong>Permissions.</strong> No <code>fsGroup</code> (slow startup on <code>openebs-zfspv</code>). A fresh ZFS dataset is
+  <code>root:root 0755</code>, so the <code>fix-permissions</code> init container chowns the volume <strong>root</strong> to 65532
+  (recursively only if the root is not already owned by 65532). See
+  <a href="../../troubleshooting/ci-runner-workspace-permission-denied/"><code>ci-runner-workspace-permission-denied.md</code></a>.</li>
+<li><strong>Alerts use <code>release: monitoring</code>, not <code>operator.prometheus.io/instance: prometheus-long-term</code>.</strong>
+  kube-state-metrics and kubelet series exist only in the main Prometheus; a rule labelled for
+  <code>prometheus-long-term</code> would load but never fire.</li>
+<li><strong>No NetworkPolicy.</strong> An egress-only policy (DNS, HA 8123, long-term Prometheus 9090) ran from
+  0.2.1 until 0.3.0 and was removed on 2026-10-25: battery-optimizer is first-party software published
+  from our own repository, and the repo keeps NetworkPolicies for workloads that are not under our
+  control (LLM harnesses). Outside <code>live</code> its only credential is the read-only HA token and it has no
+  actuation path; in <code>live</code> the HA client can send only the allowlisted Omnibattery writes (ADR-0007).</li>
+<li><strong>The two power signals come from a Gen1 Shelly EM over MQTT at 2 s; the counters still poll.</strong>
+  <code>shellyem-main</code> (<code>192.168.86.130</code>) publishes <code>shellies/shellyem-244CAB417668/emeter/{0,1}/power</code> to
+  mosquitto every <strong>2 s</strong> (<code>mqtt_update_period: 2</code>) and HA consumes them via
+  <code>apps/home-assistant/config/integrations/shelly_em_mqtt.yaml</code>. Since the 2026-10-27 cutover,
+  <code>grid_power</code> and <code>observed</code> carry those IDs from the <strong><code>mqtt</code></strong> platform, measured as
+  <code>battery_optimizer_input_age_seconds{role="grid_power"} = 2.3 s</code> (was 31.9 s). <code>grid_energy</code> and
+  everything else still arrive over the native integration at <code>2.2 × 15 s = 33 s</code>, which is correct for
+  a monotonic counter consumed as 900 s deltas — a faster transport would add recorder rows without
+  adding information. The device still carries a permanent error-level <code>push_update_*</code> repair, because
+  CoIoT is multicast-only (<code>peer: ""</code>) and nothing forwards it to the HA pod; that is a hygiene item,
+  not a data problem.
+  A faster transport initially looked unusable — the device reboot-looped — but that was
+  <strong>mis-diagnosed</strong>: the loop needs MQTT <em>and</em> <code>coiot.enabled: false</code> <em>and</em> an HA <code>setup_retry</code> storm,
+  so MQTT is safe as long as CoIoT stays enabled
+  (<a href="../../planning/shelly-em-mqtt-implementation.md"><code>planning/shelly-em-mqtt-implementation.md</code></a>).
+  Do <strong>not</strong> rename these entities or the device: <code>friendly_name</code> is a Prometheus label and part of
+  the archive's <code>series_key</code>. Renaming also <em>moves</em> recorder history — if an ID must ever change hands
+  again, use remove-then-promote
+  (<a href="../../troubleshooting/home-assistant-entity-id-handover/"><code>home-assistant-entity-id-handover.md</code></a>).</li>
+<li><strong>Never disable CoIoT on that device, and treat HA restarts as a checked operation.</strong> With
+  <code>coiot.enabled: false</code> the firmware stops serving <code>/cit/*</code>, HA's <code>initialize()</code> hangs on
+  <code>GET /cit/d</code>, and the <em>next</em> HA restart drops all 14 <code>shellyem-main</code> entities into <code>setup_retry</code>.
+  That happened on 2026-10-26 and cost ~48 min of history (18:02:35Z-18:50:34Z). Since the MQTT cutover
+  the blast radius is narrower but not gone: <code>grid_power</code> and <code>observed</code> would keep working (they come
+  from the broker), while <strong><code>grid_energy</code> — what the dataset is actually built from — would be lost</strong>,
+  and MQTT being permanently enabled means the reboot-loop co-factor is always present. Before any HA
+  ConfigMap change (Reloader restarts the pod), verify <code>GET /cit/d</code> still answers <code>200</code>. Recovery,
+  correct endpoint and pitfalls:
+  <a href="../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/"><code>shelly-gen1-coiot-disabled-breaks-ha-setup.md</code></a>.</li>
+<li><strong><code>grid_energy</code> still takes ~20 poll timeouts a day; <code>grid_power</code> no longer does.</strong> The native
+  <code>/status</code> REST poll occasionally exceeds <code>DEVICE_IO_TIMEOUT = 10 s</code> (~19.7 <code>unavailable</code> rows/day on
+  <code>metadata_id</code> 182 over a 10-day window, dating back before MQTT existed), which flips the whole block
+  to <code>unavailable</code> at <code>T + 33 s + 10 s</code>. In the Prometheus archive those become missing 60 s samples —
+  the 2026-10-27 03:30Z run saw 4420 of ~4526 expected over 3 days and still reported <code>violations=0</code>.
+  Watch for it if the coverage check below ever starts failing: the fix is to move the counters to MQTT
+  too, which has so far not been worth the recorder cost.</li>
+<li><strong><code>tariff.yaml</code> and <code>service.yaml</code> are vendored copies</strong> of <code>config/</code> in the app repository (the
+  image carries no config). Update both together; the tariff config hash is part of every dataset id.
+  The CronJob mounts the same ConfigMap at <code>/config</code> and sets <code>BATTERY_OPTIMIZER_SERVICE_CONFIG=/config/service.yaml</code>,
+  so <code>build</code> and <code>extract</code> read <code>battery.commissioned_at</code> and the battery counters from the same
+  <code>service.yaml</code> as the service; set them there on installation day and nothing else needs changing.</li>
+<li><strong>Coverage gaps fail the Job.</strong> From 0.2.1 <code>extract</code> exits 3 when the run's manifest records a
+  coverage gap (HA: <code>empty_chunk</code>, <code>empty_chunk_after_window_filter</code>, <code>chunk_accounting_mismatch</code>,
+  <code>no_rows_for_entity</code>, <code>no_rows_extracted:all</code>; Prometheus: <code>no_samples_extracted</code>,
+  <code>no_series_chunks</code>, <code>series_without_samples_chunks</code>). The data and manifest are kept, but the Job
+  fails and <code>BatteryOptimizerJobFailed</code> fires, so a silent gap is no longer silent. The pipeline does
+  <strong>not</strong> pass <code>--allow-coverage-gaps</code> (except for the one-off Prometheus bootstrap, whose 2024
+  history has known holes). If a window legitimately has no data, fix the window rather than opting out.</li>
+</ul>
+<h2 id="shadow-service-phase-c">Shadow service (Phase C)</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workload</td>
+<td>Deployment <code>battery-optimizer-service</code>, 1 replica, <code>strategy: Recreate</code>, same image anchor as the CronJob</td>
+</tr>
+<tr>
+<td>Command</td>
+<td><code>battery-optimizer serve</code>, port 8080: <code>/health/live</code>, <code>/health/ready</code>, <code>/status</code>, <code>/plan</code>, <code>/metrics</code></td>
+</tr>
+<tr>
+<td>Config</td>
+<td><code>files/tariff.yaml</code> + <code>files/service.yaml</code> (vendored from the app repo <code>config/</code>) in ConfigMap <code>battery-optimizer-config</code>, mounted at <code>/config</code>. <code>service.yaml</code> uses <code>soc_source: simulated</code> because Home Assistant has no battery entities yet</td>
+</tr>
+<tr>
+<td>HA token</td>
+<td>the same ExternalSecret as the pipeline, <strong>mounted as a file</strong> (<code>BATTERY_OPTIMIZER_HA_TOKEN_FILE</code>). Read-only, non-admin. With <code>global.liveHomeAssistantToken: true</code> the live user's token is mounted at the same path instead (<a href="#live-battery-control">Live battery control</a>)</td>
+</tr>
+<tr>
+<td>Storage</td>
+<td>the same PVC <code>battery-optimizer-data</code> at <code>/data</code> (RWO on prusik, <code>Recreate</code> avoids two pods). The service writes only <code>/data/service/v1/</code>; the pipeline uses <code>raw/</code>, <code>manifests/</code> and <code>analysis/</code>, so the paths never collide</td>
+</tr>
+<tr>
+<td>Resources</td>
+<td>requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS)</td>
+</tr>
+<tr>
+<td>Probes</td>
+<td>liveness <strong>and</strong> readiness on <code>/health/live</code>; generous startup probe. <code>/health/ready</code> returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on <code>battery_optimizer_ready</code> instead</td>
+</tr>
+<tr>
+<td>Service / scrape</td>
+<td>ClusterIP <code>battery-optimizer:8080</code> (<code>http</code>); ServiceMonitor labelled <code>operator.prometheus.io/instance: prometheus-long-term</code> (job <code>battery-optimizer</code>, 30 s), so <code>battery_optimizer_*</code> lives in the long-term Prometheus for the multi-week comparison</td>
+</tr>
+<tr>
+<td>Alerts</td>
+<td><code>PrometheusRule/battery-optimizer-service</code> (long-term Prometheus): <code>BatteryOptimizerServiceDown</code>, <code>ServiceAbsent</code>, <code>NotReady</code> (30 m), <code>HomeAssistantDisconnected</code> (10 m), <code>GridPowerStale</code> (15 m), <code>PlanStale</code> (1 h), <code>SolveFailures</code>, <code>SinkWriteErrors</code>, <code>SolvesSkipped</code>, <code>HistoryStale</code>, the <a href="#climate-shadow-track-b2">climate shadow</a> alerts (<code>rules-service/climate-shadow.yaml</code>) and the <a href="#alerts">live control</a> alerts (<code>rules-service/actuator.yaml</code>)</td>
+</tr>
+<tr>
+<td>Dashboard</td>
+<td>ConfigMap <code>dashboards-battery-optimizer</code>, Grafana folder <code>battery-optimizer</code>, datasource <code>prometheus-long-term</code>: <code>Battery optimizer service</code>, <code>Battery optimizer climate shadow</code>, <code>Battery: plan vs actual</code>, <code>Battery: load forecast</code>, <code>Battery: model and actuation</code>, <code>Battery: temperature</code>, <code>Tariff prices</code> and the six <code>Climate: ...</code> dashboards (see <a href="#dashboards-per-component">Dashboards per component</a>)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dashboards-per-component">Dashboards per component</h3>
+<p>One dashboard per component KPI table of the app repository (<code>docs/components/*.md</code>, section "KPIs"). They share the
+<code>${datasource}</code> variable (default <code>prometheus-long-term</code>), the tags <code>battery-optimizer</code>, <code>energy</code> and <code>battery</code>, and a
+dashboard-links block that lists every dashboard tagged <code>battery</code>, so the six battery dashboards link to each other (a new
+battery dashboard needs only the tag). Panel descriptions state each sign and every approximation.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Dashboard (uid)</th>
+<th>What it answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>battery-optimizer</td>
+<td><code>Battery: plan vs actual</code> (<code>battery-plan-vs-actual</code>), <code>Battery optimizer service</code> (<code>battery-optimizer-shadow</code>)</td>
+<td>day-ahead against final plan against actual; readiness, solves, shadow-vs-native cost</td>
+</tr>
+<tr>
+<td>battery-load-forecast</td>
+<td><code>Battery: load forecast</code> (<code>battery-load-forecast</code>)</td>
+<td>forecast error of the two plans</td>
+</tr>
+<tr>
+<td>battery-model</td>
+<td><code>Battery: model and actuation</code> (<code>battery-model-actuation</code>)</td>
+<td>commanded, planned and actual power (+ charge), clamped power and energy not delivered, SOC tracking error at the slot boundary, daily discharge/charge ratio. The commanded power is derived (charge: PD target - house load, since the PD target is a grid-import setpoint; discharge: - system discharge cap, a ceiling). There is no round-trip-efficiency metric: the panel is a discharge/charge ratio, and an "RTE estimate" line is drawn only while the SOC moved 3 points or less over the 24 h</td>
+</tr>
+<tr>
+<td>battery-thermal</td>
+<td><code>Battery: temperature</code> (<code>battery-temperature</code>)</td>
+<td>measured against predicted temperature, derate factor and state, Omnibattery's limit settings, predicted achievable against actual charge power, MAE, RMSE and bias per lead (<code>final</code>, <code>1h</code>, <code>3h</code>), model status, parameters, last fit, refits and predictions by result; the HA sensor <code>sensor.venus_internal_temperature</code> and the hours above 35, 40 and 45 degC. Needs <code>planning.thermal.mode: shadow</code> (service 0.10.0); the error panels fill as slots close, the last-fit stat and the derate-error panels stay empty until a refit is accepted and a derate slot has closed</td>
+</tr>
+<tr>
+<td>tariff-prices</td>
+<td><code>Tariff prices</code> (<code>battery-tariff-prices</code>)</td>
+<td>next-day publication (state, last flip time, hour per day), price and plan horizon, day-ahead lead, the PVPC price from <code>sensor.esios_pvpc</code> (current hour only; the forward curve is a sensor attribute, not a metric), daily cost native against counterfactual and their difference</td>
+</tr>
+</tbody>
+</table>
+<p>The cost panels are <code>delta()</code> sums over the per-process-run gauges <code>shadow_native_cost_eur</code> and
+<code>shadow_counterfactual_cost_eur</code> (they restart at 0 with every pod, so a restart makes the day approximate). Since the
+battery is commissioned, <em>native</em> is the house with the battery as it ran and <em>counterfactual</em> the replayed shadow
+decisions: the pair is <strong>not</strong> a house with and without the battery. <code>shadow</code> has no actuator, so the actuator panels
+need <code>dry_run</code> or <code>live</code>.</p>
+<p><strong>Size.</strong> The ConfigMap holds all thirteen JSON files (about 460 KB). Client-side apply stores the whole object in the
+<code>last-applied-configuration</code> annotation, which is limited to 256 KiB, so the ConfigMap in <code>templates/dashboards.yaml</code>
+carries <code>argocd.argoproj.io/sync-options: ServerSideApply=true</code> (as <code>kanidm</code>, <code>pyroscope</code> and <code>tempo</code> do). The object
+limit is 1 MiB, so there is room for roughly the same again; past about 800 KB split the climate files into a second
+ConfigMap <code>dashboards-climate</code> (a second template with the same label and <code>ServerSideApply</code>, its own file glob and
+<code>target-directory</code> annotation).</p>
+<h4 id="climate-dashboards-per-component">Climate dashboards per component</h4>
+<p>The climate KPI tables of the app repository (<code>docs/components/*.md</code>, section "KPIs") follow the same pattern: one
+dashboard per component that has at least three meaningful KPI panels, shared dashboards with one titled row per
+component where it does not. All carry the tags <code>battery-optimizer</code>, <code>energy</code> and <code>climate</code>, the <code>${datasource}</code>
+variable and a dashboard-links block "Climate dashboards" (every dashboard tagged <code>climate</code>, so a new climate dashboard
+needs only the tag; <code>Battery optimizer climate shadow</code> carries it too and keeps its own panels). A panel description
+states what is approximated. Where the headline KPI has no metric yet, the panel shows the measured side or a baseline and
+the closing text panel "Not yet measured" names the gap.</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Dashboard (uid)</th>
+<th>What it answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>climate-mpc</td>
+<td><code>Climate: comfort MPC</code> (<code>climate-mpc</code>)</td>
+<td>plan production (runs by result, planned share), solver health (solves by status, not-optimal share, duration), top-offset share, degree-hours below 21 degC and the hall-kitchen against 23.5 degC as the rule delivered them</td>
+</tr>
+<tr>
+<td>thermal-model</td>
+<td><code>Climate: thermal model</code> (<code>climate-thermal-model</code>)</td>
+<td>room-mean RMSE, skill and bias per lead (1, 6, 12, 24 h) and window against the preregistered limits, daily heat MdAPE, scored origins and valid weeks, measured room temperatures, gate status, refits</td>
+</tr>
+<tr>
+<td>cop-model</td>
+<td><code>Climate: COP model</code> (<code>climate-cop</code>)</td>
+<td>the measured side: COP from the HeishaMon counters (24 h, 7 d, by mode), reported COP, lift in heat mode, starts and compressor hours (the <code>d</code> and <code>e</code> terms), heat and electricity per day. The model's own error is offline (<code>hack/climate_cop.py</code>)</td>
+</tr>
+<tr>
+<td>heat-pump-controller</td>
+<td><code>Climate: heat-pump controller</code> (<code>climate-heat-pump-controller</code>)</td>
+<td>room temperature against setpoint and the section-B comfort criteria, rule activity (heating and hot-water hours against <code>min_hours</code>, starts, water target), kWh per heating degree-day, heater safety and tank cap</td>
+</tr>
+<tr>
+<td>outdoor-temperature</td>
+<td><code>Climate: outdoor temperature</code> (<code>climate-outdoor-temperature</code>)</td>
+<td>the unit sensor and compressor frequency, trusted, unknown and duty shares from the compressor frequency, weather forecast archive fetches and age</td>
+</tr>
+<tr>
+<td>hp-consumption-forecast, boost-mode</td>
+<td><code>Climate: planned components</code> (<code>climate-planned</code>), one row each</td>
+<td>planned, not built: the heat-pump load and a same-slot-yesterday baseline (MAE, bias) the forecast must beat; for boost the grid import against the 5.0 kW limit, battery SOC and charge power, tank maximum against 50 degC and the heater states</td>
+</tr>
+</tbody>
+</table>
+<p>Decisions: the first five have at least three KPI panels with real series (the outdoor-temperature ones are
+compressor-frequency approximations, and its forecast-error KPI is not measured). The two planned components have no
+metric of their own, only preconditions and baselines, so they share one dashboard with a titled row each instead of
+two near-empty ones. The thermal-model dashboard repeats the accuracy panels of <code>Battery optimizer climate shadow</code> on
+purpose (that one stays the job-level view) and adds the preregistered limits as dashed lines.</p>
+<p>Gaps (no metric exists): the MPC's planned comfort deficit and planned against actual heat-pump energy, the COP model's
+predicted COP and error, the outdoor temperature forecast error, the heat-pump consumption forecast error, boost
+activations and soak energy; the controller's decisions. The weather archive panels expose a real effect: while the
+<code>weather.forecast_home</code> entity does not answer, <code>weather_forecast_fetches_total{result="failed"}</code> grows and the MPC horizon
+holds the last reading.</p>
+<p><strong>Day-ahead and final plan (0.9.0).</strong> The service keeps, per 15-minute slot, the <em>day-ahead plan</em> (the first plan that covered the slot, usually made the previous afternoon) next to the <em>final plan</em> (the intent frozen when the slot opened) and scores both against what happened. The metrics are <code>battery_optimizer_slot_*{plan="day_ahead|final"}</code>, <code>load_forecast_*_total{plan}</code>, <code>plan_revision_kwh_total</code> and <code>shadow_day_ahead_energy_kwh_total</code>; they appear after the first slot opens and closes, and the day-ahead values after a restart are rebuilt from the plan files on the PVC (startup log <code>day-ahead rebuilt plan_files=N slots=M</code>). Home Assistant gets four more template sensors from <code>/plan</code> <code>current_slot</code> in <code>apps/home-assistant/config/integrations/battery_optimizer_plan.yaml</code>: <code>sensor.battery_optimizer_day_ahead_power</code> and <code>sensor.battery_optimizer_day_ahead_soc</code> (next to the planned power and SOC, which the Battery dashboard calls <em>Final plan</em>), and <code>sensor.battery_optimizer_day_ahead_load</code> / <code>sensor.battery_optimizer_final_load</code> (forecast house load in W). They keep the existing sign (+ discharging, - charging), are <code>unknown</code> while the slot has no such plan and unavailable when the service does not answer (a service older than 0.9.0 has no <code>current_slot</code>, so they stay unknown). The Battery dashboard (<code>dashboard-battery</code>, storage mode) charts them as <em>Day-ahead plan</em>, <em>Final plan</em> and <em>Actual</em> (power, SOC and house load).</p>
+<p><strong>Passive archives (0.3.0).</strong> The <code>archive:</code> block of <code>service.yaml</code> turns on two append-only
+collectors under <code>/data/service/v1/</code>: <code>pvpc_snapshots/</code> (every state change of the PVPC price sensor,
+to measure when next-day prices really appear) and <code>weather_forecasts/</code> (<code>weather.get_forecasts</code> for
+<code>weather.forecast_home</code>, hourly at HH:05 UTC). The weather query is the single <code>call_service</code> frame
+the HA guard lets through; every other service call is still refused in code. Watch
+<code>battery_optimizer_pvpc_snapshots_total</code>, <code>battery_optimizer_weather_forecast_fetches_total{result}</code>
+and <code>battery_optimizer_archive_last_success_timestamp_seconds</code>. There is no retention yet.</p>
+<p>The shadow store (<code>/data/service/v1/</code>) is private household data and is covered by the same PVC
+snapshots. Read the comparison with <code>battery-optimizer shadow-report</code> from a pod or a copy of the
+store; <code>comparison_basis</code> stays <code>no_battery_pre_commissioning</code> until battery telemetry is mapped, and
+that basis does not satisfy exit gate C.</p>
+<p>Checks without a port-forward:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import urllib.request as u; print(u.urlopen(&#39;http://127.0.0.1:8080/health/ready&#39;).read().decode())&quot;</span>
+</code></pre></div>
+<h2 id="climate-shadow-track-b2">Climate shadow (track B2)</h2>
+<p>From 0.4.0 the service also runs the climate shadow (<code>climate_shadow:</code> in <code>files/service.yaml</code>): the
+thermal model and the price-blind comfort MPC of the app repository on live data. Every hour at HH:10
+UTC, on its own worker thread, it reads, predicts, plans, records and scores. <strong>It is read-only and
+actuates nothing</strong>: the plan is written to the PVC and never sent anywhere, it uses no new credential,
+and the HA guard still refuses every service call but <code>weather.get_forecasts</code>. App-side reference:
+<code>docs/service.md#climate-shadow-track-b2</code> and the preregistration
+<code>docs/planning/climate-preregistration-2026-27.md</code> in the app repository.</p>
+<table>
+<thead>
+<tr>
+<th>Input</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Room temperatures and setpoints (four thermostats), Aquarea outdoor sensor, outlet target, compressor frequency, heat / DHW / cool power consumed and produced, force-DHW switch, legacy AppDaemon enable and minimum hours, PVPC</td>
+<td>long-term Prometheus (<code>hass_*</code> series), 30 days fetched at the first run and then incrementally</td>
+</tr>
+<tr>
+<td><code>input_boolean.comfort_control_enable</code> (regime), <code>input_text.comfort_dhw_plan</code>, <code>input_boolean.comfort_away</code></td>
+<td>Home Assistant, through the existing read-only session; each may be absent. Until the comfort controller is deployed they do not exist and every record is regime <code>legacy</code></td>
+</tr>
+<tr>
+<td>Outdoor forecast</td>
+<td>the service's own weather archive (<code>weather_forecasts/</code>, fetched at HH:05)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Failure isolation.</strong> A missing prior, site file or config, a Prometheus error or a solver failure is
+logged (<code>climate shadow not loaded: ...</code>, <code>climate shadow run failed</code>), counted, written as a
+<code>climate_shadow_error</code> event and retried the next hour. It never changes readiness and never touches
+the battery planner, which keeps solving every 15 minutes. A healthy job logs nothing; check <code>/status</code>.</p>
+<p><strong>Files.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>In git?</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/config/climate.yaml</code>, <code>/config/climate-mpc.yaml</code></td>
+<td>yes, <code>files/</code> (public in the app repo too)</td>
+<td>Comfort rooms, filters, MPC horizon and schedule. Keep them <strong>byte-identical</strong> to the app repository: their sha256 is part of every climate record's lineage</td>
+</tr>
+<tr>
+<td><code>/data/analysis/v1/climate-shadow/priors/&lt;prior&gt;/prior.json</code></td>
+<td><strong>no</strong>, PVC only</td>
+<td>The season prior (model parameters fitted on household data), content-addressed and write-once; <code>climate_shadow.prior</code> names it</td>
+</tr>
+<tr>
+<td><code>/data/climate/site.yaml</code></td>
+<td><strong>no</strong>, PVC only</td>
+<td>Private site file (coordinates, reference station). Never commit it or paste it anywhere</td>
+</tr>
+<tr>
+<td><code>/data/service/v1/climate_{decisions,scores,days,models}/</code></td>
+<td>no</td>
+<td>The shadow's records, written by the service; covered by the PVC snapshots and <code>just pull-store</code></td>
+</tr>
+</tbody>
+</table>
+<p>The prior and the site file stay out of this public repository and out of Vault: they are not
+credentials, and the job reads them from the data directory only. They are copied onto the PVC once
+from the owner's workstation, which keeps them in <code>~/data/battery-optimizer-cluster</code> (the
+<code>just pull-store</code> copy of the PVC).</p>
+<p><strong>Install or refresh the prior.</strong> In the app repository, on a clean checkout of the deployed commit,
+with <code>BATTERY_OPTIMIZER_DATA_DIR=~/data/battery-optimizer-cluster</code>:</p>
+<div class="highlight"><pre><span></span><code>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>hack/climate_shadow_prior.py<span class="w"> </span>--feature-set<span class="w"> </span>&lt;climate<span class="w"> </span>feature<span class="w"> </span><span class="nb">set</span><span class="w"> </span>id&gt;<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--dataset<span class="w"> </span>~/data/battery-optimizer-cluster/analysis/v1/&lt;dataset<span class="w"> </span>id&gt;<span class="w"> </span>--season<span class="w"> </span>S3
+<span class="c1"># prints the prior id and writes analysis/v1/climate-shadow/priors/&lt;id&gt;/prior.json</span>
+</code></pre></div>
+<p>Copy it and the site file onto the PVC through the running pod (the image has <code>tar</code>; <code>/data</code> is the
+only writable path):</p>
+<div class="highlight"><pre><span></span><code><span class="nv">PRIOR</span><span class="o">=</span>&lt;id&gt;<span class="p">;</span><span class="w"> </span><span class="nv">SRC</span><span class="o">=</span>~/data/battery-optimizer-cluster
+tar<span class="w"> </span>-C<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$SRC</span><span class="s2">&quot;</span><span class="w"> </span>-cf<span class="w"> </span>-<span class="w"> </span><span class="s2">&quot;analysis/v1/climate-shadow/priors/</span><span class="nv">$PRIOR</span><span class="s2">/prior.json&quot;</span><span class="w"> </span>climate/site.yaml<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span><span class="p">|</span><span class="w"> </span>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-i<span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>-c<span class="w"> </span>service<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">      </span>tar<span class="w"> </span>-xf<span class="w"> </span>-<span class="w"> </span>-C<span class="w"> </span>/data<span class="w"> </span>--no-same-owner
+</code></pre></div>
+<p>then set <code>climate_shadow.prior: "&lt;id&gt;"</code> in <code>files/service.yaml</code> and merge. A prior directory can stay on
+the PVC after it is replaced: only the configured one is loaded.</p>
+<p><strong>Go-live of the comfort controller.</strong> On the day the comfort controller takes over, set
+<code>climate_shadow.go_live: "YYYY-MM-DD"</code> (local date) in <code>files/service.yaml</code> and merge. Without it there is
+no new-window verdict (the first <code>comfort</code> record is only reported as a provisional date); the new
+window starts 7 days after <code>go_live</code>. Do not change the prior, the comfort rooms or <code>climate-mpc.yaml</code>
+around go-live: any of them starts a new lineage, which the gates evaluate apart.</p>
+<p><strong>Read the gate report</strong> (from the store on the PVC, no network; it prints private figures, keep the
+output local):</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>-c<span class="w"> </span>service<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>battery-optimizer<span class="w"> </span>climate-shadow-report<span class="w">            </span><span class="c1"># add --format json for the raw report</span>
+</code></pre></div>
+<p>Per window (<code>legacy</code>, <code>new</code>) it shows the valid heating days and weeks (6 weeks are needed, else every
+criterion is UNDETERMINED), each preregistered criterion with its value, threshold and PASS / FAIL /
+UNDETERMINED, RMSE, persistence RMSE, skill and bias at 1, 6, 12 and 24 h, the daily heat MdAPE, solver
+statuses and times and the top-offset share. <code>/status</code> (<code>climate_shadow</code>) shows the prior, model hash,
+last run, scoring queue, error, go-live and the two verdicts.</p>
+<p><strong>When to refit the prior.</strong> The weekly <code>ua</code>/<code>q0</code> re-estimation runs inside the service; the prior stays
+fixed through both preregistered windows. Fit a new one for the next heating season, or earlier only
+when a model input changes: the outdoor sensor or the heat measurement, the comfort rooms or their
+thermostats. A change of the schedule, the water curve or the machine limits is an edit of
+<code>climate-mpc.yaml</code> (vendor it from the app repository), not a refit. Record either in the app
+repository's regime log.</p>
+<p><strong>Expected after a deploy.</strong> The first run happens at the next HH:10 (or at once if the pod starts after
+HH:10). <code>battery_optimizer_climate_shadow_up</code> is 0 until then and 1 afterwards; <code>runs_total{result="planned"}</code>
+and <code>solves_total{status="optimal"}</code> grow every hour; <code>regime{regime="legacy"}</code> is 1; the first
+<code>refits_total</code> is counted at the first run. Accuracy series (<code>rmse_kelvin</code>, <code>skill_ratio</code>, ...) appear
+once the first origins are scored, 24 to 48 h later, and the gates stay UNDETERMINED until 6 valid
+heating weeks are in a window.</p>
+<p><strong>Alerts</strong> (<code>rules-service/climate-shadow.yaml</code>): <code>BatteryOptimizerClimateShadowDown</code> (<code>up == 0</code> for 2 h),
+<code>ClimateShadowNoRun</code> (no run for 2 h), <code>ClimateShadowRunErrors</code> (more than 2 errors in 6 h),
+<code>ClimateShadowSolveFailures</code> (infeasible or error solves) and <code>ClimateShadowNoState</code> (the climate series
+have gaps). <strong>Dashboard</strong>: <code>Battery optimizer climate shadow</code> (runs, solver, accuracy per horizon,
+valid weeks, gates, regime).</p>
+<h2 id="live-battery-control">Live battery control</h2>
+<p>ADR-0007 in the app repository (<code>docs/adr/0007-live-battery-control.md</code>, operations in
+<code>docs/service.md#live-control-dry_run-and-live</code>) adds <code>mode: dry_run | live</code> to <code>files/service.yaml</code>.
+The service then sets Omnibattery's direction switches, PD grid target and discharge cap through a
+narrow write allowlist; Omnibattery stays the only Modbus writer. The deployed mode is <code>shadow</code>
+until the owner changes it. The battery and its Omnibattery setup are in
+<a href="../../troubleshooting/home-assistant-omnibattery/"><code>home-assistant-omnibattery.md</code></a>.</p>
+<table>
+<thead>
+<tr>
+<th>Piece</th>
+<th>Where</th>
+<th>State</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Kill switch <code>input_boolean.battery_optimizer_live</code></td>
+<td><code>apps/home-assistant/config/integrations/battery_optimizer.yaml</code></td>
+<td>Read by the service only. Created off; restores its last state across HA restarts (no <code>initial:</code>)</td>
+</tr>
+<tr>
+<td>Heartbeat <code>input_datetime.battery_optimizer_heartbeat</code></td>
+<td>same file</td>
+<td>Written by every reconciled <code>live</code> tick (~30 s)</td>
+</tr>
+<tr>
+<td>Watchdog automation <code>battery_optimizer_watchdog</code></td>
+<td>same file</td>
+<td>Every minute: kill switch on and heartbeat older than 5 min -&gt; both direction switches and <code>switch.omnibattery_weekly_full_charge_enabled</code> off (the last in its own <code>continue_on_error</code> step, so an unavailable entity blocks nothing); also on the kill switch's <code>off</code> edge. Persistent notification <code>battery_optimizer_watchdog</code> (replaced, not stacked)</td>
+</tr>
+<tr>
+<td>Live token</td>
+<td><code>global.liveHomeAssistantToken</code> in <code>values.yaml</code> (default <code>false</code>)</td>
+<td>Off: nothing rendered. On: ExternalSecret <code>battery-optimizer-home-assistant-live</code>, mounted in the service at <code>/secrets/home-assistant/BATTERY_OPTIMIZER_HA_TOKEN</code> instead of the read-only token. The pipeline keeps the read-only token</td>
+</tr>
+<tr>
+<td>Alerts</td>
+<td><code>rules-service/actuator.yaml</code></td>
+<td>See <a href="#alerts">Alerts</a></td>
+</tr>
+<tr>
+<td>AC failsafe</td>
+<td><code>apps/esphome/config/smart-plug-v2-battery.yaml</code></td>
+<td>See <a href="#esphome-ac-failsafe">ESPHome AC failsafe</a>. Must be flashed by hand</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tokens.</strong> <code>shadow</code> and <code>dry_run</code> use the read-only <code>battery-optimizer</code> HA user. <code>live</code> uses the
+separate non-admin user <code>battery-optimizer-live</code> (group <code>system-users</code>, local only), whose long-lived
+token the owner keeps in <code>pass</code>. Home Assistant cannot restrict a token to entities, so the service's
+<code>ha_guard</code> allowlist is the restriction. Rendering fails when <code>files/service.yaml</code> says <code>mode: live</code>
+while <code>global.liveHomeAssistantToken</code> is <code>false</code> (ArgoCD then shows a <code>ComparisonError</code> and syncs
+nothing), so <code>live</code> never runs on the read-only token.</p>
+<p><strong>Watchdog in <code>dry_run</code>.</strong> <code>dry_run</code> keeps the kill switch on (rollout step 2) but sends no heartbeat,
+so the watchdog turns both direction switches off every minute and keeps its notification up. That is
+expected: nothing else should be driving the battery during the rehearsal. The heartbeat and
+kill-switch alerts exclude <code>dry_run</code> for that reason.</p>
+<p><strong>Omnibattery weekly full charge.</strong> <code>switch.omnibattery_weekly_full_charge_enabled</code> must stay off by
+default, and so must <code>switch.omnibattery_weekly_full_charge_delay</code>. When <code>full_charge.mode: live</code> the
+optimizer owns the weekly switch (it arms it for the periodic full charge), and the watchdog turns it
+off together with the direction switches, so a dead optimizer never leaves it armed.</p>
+<h3 id="live-token-in-vault">Live token in Vault</h3>
+<p>Once, before the first <code>live</code> rollout. Load the token from a <code>0600</code> file, never from the command line,
+and never print it:</p>
+<div class="highlight"><pre><span></span><code><span class="nb">export</span><span class="w"> </span><span class="nv">VAULT_ADDR</span><span class="o">=</span>https://vault.internal.grigri.cloud
+<span class="nb">umask</span><span class="w"> </span><span class="m">077</span>
+<span class="nv">TOKEN_FILE</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>mktemp<span class="k">)</span><span class="s2">&quot;</span>
+<span class="c1"># Put only the battery-optimizer-live user&#39;s long-lived token in &quot;$TOKEN_FILE&quot;, taken from</span>
+<span class="c1"># `pass iot/hass-battery-optimizer-live` (no trailing newline).</span>
+vault<span class="w"> </span>kv<span class="w"> </span>put<span class="w"> </span>secret/battery-optimizer/home-assistant-live<span class="w"> </span><span class="nv">token</span><span class="o">=</span>@<span class="s2">&quot;</span><span class="nv">$TOKEN_FILE</span><span class="s2">&quot;</span>
+shred<span class="w"> </span>-u<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$TOKEN_FILE</span><span class="s2">&quot;</span>
+vault<span class="w"> </span>kv<span class="w"> </span>metadata<span class="w"> </span>get<span class="w"> </span>secret/battery-optimizer/home-assistant-live<span class="w">   </span><span class="c1"># check it exists, no value shown</span>
+</code></pre></div>
+<p>The ExternalSecret only exists while the flag is on, so a missing Vault secret shows up at the <code>live</code>
+rollout: <code>SecretSyncedError</code> on <code>battery-optimizer-home-assistant-live</code> and the new service pod stuck
+in <code>ContainerCreating</code>. The kill switch is off at that point, so nothing reaches the battery; roll back.</p>
+<h3 id="esphome-ac-failsafe">ESPHome AC failsafe</h3>
+<p>The battery holds its last charge or discharge command while Home Assistant is down (commissioning
+test: outages of 23 s to 10.5 minutes, no device timeout). The watchdog and the service's safe idle
+both need HA, so the battery's AC plug (Athom Smart Plug V2 "Battery",
+<code>switch.smart_plug_v2_battery</code>) carries a failsafe in its own device file. The shared
+<code>packages/smart-plug-v2.yaml</code> is unchanged:</p>
+<ul>
+<li>after <strong>5 minutes</strong> without a Home Assistant API client (<code>api.connected</code> with
+  <code>state_subscription_only</code>, so a log viewer does not count; checked every 10 s), the relay turns
+  <strong>off</strong>. The battery then only powers its backup port and stops charging or discharging to the house;</li>
+<li>when HA reconnects, the relay turns back <strong>on</strong>, only if the failsafe turned it off. A global with
+  <code>restore_value</code> remembers that across reboots; any relay turn-on clears it. A relay the owner switched
+  off stays off;</li>
+<li><code>relay_restore_mode: RESTORE_DEFAULT_ON</code>: a reboot or OTA restores the last state, and ON when
+  nothing was saved. A failsafe OFF is restored as OFF and switched on again when HA returns;</li>
+<li>ESPHome's own <code>api</code> <code>reboot_timeout</code> (default 15 min) reboots the plug during a long HA outage. The
+  relay stays off through it.</li>
+</ul>
+<p>It also trips on a Wi-Fi loss of 5 minutes. When the AC comes back the inverter goes back to Bypass,
+and Omnibattery may report <code>backup_mode</code> for a few minutes; the optimizer holds safe idle meanwhile.</p>
+<p><strong>Flashing.</strong> Pushing changes only the ConfigMap that the ESPHome dashboard reads (Reloader restarts the
+<code>esphome</code> pod); the plug keeps its old firmware until it is flashed over OTA. Either use the dashboard at
+<code>esphome.internal.grigri.cloud</code> (<code>smart-plug-v2-battery</code> -&gt; Install -&gt; Wirelessly), or flash from
+<code>apps/esphome/config</code> (see its <code>README.md</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>apps/esphome/config
+make<span class="w"> </span>requirements
+<span class="nv">KUBE_CONTEXT</span><span class="o">=</span>grigri<span class="w"> </span>make<span class="w"> </span>secrets
+make<span class="w"> </span>smart-plug-v2-battery.yaml<span class="w">   </span><span class="c1"># esphome run: compile + OTA</span>
+</code></pre></div>
+<p>The plug reboots once (a few seconds) and restores the relay ON. The failsafe firmware has been on
+the plug since 2026-11-03 (ESPHome 2026.10.1) and passed the hardware
+<a href="#failsafe-test">test</a> on 2026-11-04. Flash while the
+battery is idle (direction switches off), then check <code>switch.smart_plug_v2_battery</code> is on.</p>
+<p><strong>Known limit.</strong> A manual relay ON (HA or the plug's button) during a long HA absence is undone within
+10 s: the absence counter is only reset by an HA reconnect or a reboot, not by a manual turn-on. To
+force AC while HA stays down, power-cycle the plug, then press the button (5 more minutes of grace).
+Fix candidate: let a manual turn-on suspend the failsafe until HA reconnects.</p>
+<p><strong>Servers on the backup port.</strong> Since 2026-11-03 the backup port feeds the servers (~250 W) that host
+Home Assistant. A trip makes them run from the battery: at 50 % SOC that is roughly 8 h before the
+battery's own cutoff. An HA outage longer than that drains the battery and stops the servers; the
+plug then has to be switched on by hand (power-cycle + button).</p>
+<h4 id="failsafe-test">Failsafe test</h4>
+<p>Passed on the flashed firmware on 2026-11-04 (see the result below). Repeat it after any change to the
+failsafe or the plug's firmware. It takes ~15 minutes and Home Assistant is really stopped for ~6
+minutes. The servers switch to battery power for the switchover and back, the same switchover the
+commissioning test passed with the TV (max ping gap 0.22 s).</p>
+<p>Preconditions:</p>
+<ul>
+<li>SOC above 30 %, battery in Bypass, Omnibattery <code>balanced</code>, backup-port load below the 500 W threshold.</li>
+<li>Kill switch <code>input_boolean.battery_optimizer_live</code> <strong>off</strong> (both direction switches off), so the
+  optimizer does not chase the battery while it is islanded. Note the time; turn it back on at the end.</li>
+<li>A second way to reach the plug if HA misbehaves: the relay button, and the ESPHome logs from a
+  workstation (<code>apps/esphome/config</code>: <code>KUBE_CONTEXT=grigri make secrets</code>, then
+  <code>make logs FILE=smart-plug-v2-battery.yaml</code>; a log subscription is not a state subscriber, so it does
+  not keep the relay on). Delete <code>secrets.yaml</code> afterwards.</li>
+<li>The Kubernetes API must stay reachable from the workstation: the servers host HA and the cluster.
+  Do not run it if a server reboot would be a problem.</li>
+</ul>
+<p>Steps (T = the moment HA is gone; the scaling only with the owner's explicit go):</p>
+<ol>
+<li>Start the ESPHome logs and note <code>switch.smart_plug_v2_battery</code> = on, <code>sensor.venus_inverter_state</code>
+   = Bypass, <code>sensor.venus_ac_offgrid_power</code> ≈ servers' load.</li>
+<li><strong>Stop HA for real</strong>, following
+   <a href="../../troubleshooting/stop-home-assistant-under-argocd/">Stopping Home Assistant under ArgoCD</a>: scale
+   <code>argocd/argocd-repo-server</code> to 0 first, then <code>home-assistant/home-assistant-hass</code> to 0. <strong>T:</strong> the
+   pod is gone and the plug logs the lost API connection (<code>Reading failed CONNECTION_CLOSED</code>). Lighter
+   alternative: Settings → Devices &amp; services → ESPHome → <code>smart-plug-v2-battery-9d9516</code> → ⋮ →
+   <strong>Disable</strong> drops only the plug's API connection and leaves HA running.</li>
+<li><strong>~T+5:00:</strong> the log shows <code>Battery failsafe: no Home Assistant for 5 min, relay OFF</code>. Within
+   seconds the battery reports <code>Backup Mode</code> (Omnibattery keeps polling it over Modbus) and the servers
+   keep running (check the Kubernetes API or a ping).</li>
+<li><strong>T+6:</strong> restore HA first, then <code>argocd-repo-server</code> (same doc). Within ~10 s
+   of the HA API reconnect the log shows <code>Battery failsafe: Home Assistant is back, relay ON</code>; the
+   switch is on in HA and the inverter returns to Bypass within 5–33 s. The <code>home-assistant</code> app shows
+   sync Unknown until Argo's next refresh (about 3 min); a hard refresh clears it.</li>
+<li>Manual-off check: with HA connected, turn <code>switch.smart_plug_v2_battery</code> off, wait 30 s: it must
+   stay off (the failsafe only restores what it turned off). Turn it on again; the battery returns to
+   Bypass.</li>
+<li>Turn the kill switch back on and check the optimizer takes control at the next 15-minute slot.</li>
+</ol>
+<p>Pass: relay off at about T+5:00 (up to ~10 s early, see the result), back on within 20 s of the HA
+reconnect, manual off respected, servers never lost power. Fail or abort:</p>
+<ul>
+<li>relay still on at T+6:00: the failsafe does not trip (likely <code>api.connected</code> still sees a state
+  subscriber). Restore HA and treat the battery as unprotected against HA outages until fixed;</li>
+<li>relay not back on 1 minute after HA is back: turn it on from HA; if HA cannot reach the plug, press
+  the button once;</li>
+<li>any server reboots during the switchover: put the servers back on mains and stop using the backup
+  port until the switchover is understood.</li>
+</ul>
+<p>Record the timings in this section and in the regime log of the optimizer repo.</p>
+<p><strong>Result 2026-11-04: PASS</strong> (HA really stopped, repo-server scaled to 0 as above; kill switch off
+08:29:35, SOC 45 %, backup-port load ~220 W):</p>
+<table>
+<thead>
+<tr>
+<th>Event</th>
+<th>Time (UTC)</th>
+<th>Timing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HA stopped / pod gone</td>
+<td>08:32:31 / 08:32:34</td>
+<td>T</td>
+</tr>
+<tr>
+<td>Plug relay OFF</td>
+<td>08:37:25</td>
+<td>4:52 after the plug lost the HA API connection, 4:51 after the pod was gone</td>
+</tr>
+<tr>
+<td>HA back (API connected)</td>
+<td>08:38:48</td>
+<td>HA down ~6:17</td>
+</tr>
+<tr>
+<td>Plug relay ON</td>
+<td>08:38:56</td>
+<td>8 s after reconnect (limit 20 s)</td>
+</tr>
+<tr>
+<td>Inverter back in Bypass</td>
+<td>~08:39:06</td>
+<td>~10 s after relay ON</td>
+</tr>
+<tr>
+<td>Manual OFF</td>
+<td>08:40:09</td>
+<td>respected for the 46 s observed, no failsafe restore</td>
+</tr>
+<tr>
+<td>Manual ON, then Bypass</td>
+<td>08:41:05</td>
+<td>~7 s</td>
+</tr>
+<tr>
+<td>Kill switch ON, optimizer in control</td>
+<td>08:41:44</td>
+<td><code>discharging</code> from 08:42:25 (~40 s)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>The trip is a few seconds before T+5:00 measured from the pod being gone: the 5-minute counter
+  starts when HA drops its state subscriptions, shortly before the TCP close. Not an early trip.</li>
+<li>The servers never rebooted: no pod restarts, the Kubernetes API answered <code>/readyz</code> throughout. One
+  Modbus sample at the switchover showed the backup output at 0 W for one ~6 s poll interval; that is
+  the inverter's reading during the mode change, not a 6 s outage.</li>
+<li>SOC 45 % -&gt; 44 % (live discharge resumed, ~254 W).</li>
+<li>Grid side (Shelly EM per-minute history, averages): ~450 W from the grid with the battery idle (kill
+  switch off). During the trip the servers' ~220 W moved to the battery (grid minute 08:38 averaged
+  241 W), back to ~450 W after the relay came on. No visible import spike at reconnection (minute
+  resolution only).</li>
+</ul>
+<h3 id="rollout-dry_run-then-live">Rollout: dry_run, then live</h3>
+<p>Preconditions (owner):</p>
+<ul>
+<li>The HA helpers and the watchdog are deployed. Pushing them restarts Home Assistant through Reloader,
+  so check the Shelly <code>GET /cit/d</code> first (see the CoIoT note above). In Developer tools, check that the
+  three entity IDs exist without a <code>_2</code> suffix and that the kill switch is <strong>off</strong>.</li>
+<li>The ESPHome failsafe is flashed and tested (passed 2026-11-04).</li>
+<li>Omnibattery: competing strategies off
+  (<a href="#device-facts-and-omnibattery-configuration">configuration</a>); the PD controller stays on <code>balanced</code>
+  (<code>number.omnibattery_pd_controller_max_power_change</code> 800 W; an earlier version of this page asked
+  for 2000 W, but the PD log shows 800 W since 2026-11-03 and it never bound). Note the backup threshold
+  <a href="../../troubleshooting/home-assistant-omnibattery/#workaround-active-since-2026-11-03">workaround</a>.</li>
+<li>At the time (2026-11-03) the system caps were 1000 W charge / 800 W discharge until go-live (steps 1-2
+  of the live phase), so in <code>dry_run</code> the charge clamping reflected the 1000 W cap minus the house
+  load. Current values: 2500 W / 2500 W since go-live, see <a href="#entities">Entities</a>.</li>
+</ul>
+<p><strong>dry_run (1-2 days):</strong></p>
+<ol>
+<li>Update the image to the optimizer release with live control (Renovate PR, or by hand) and vendor
+   its <code>config/service.yaml</code> changes (the <code>actuation:</code> section). Set <code>mode: dry_run</code> in
+   <code>files/service.yaml</code>. Merge; ArgoCD rolls the pod.</li>
+<li>Check <code>/status</code> (<code>mode: dry_run</code>, an <code>actuator</code> block) and <code>battery_optimizer_build_info{mode="dry_run"}</code>.</li>
+<li>Turn the kill switch <strong>on</strong>. Nothing is sent; the watchdog keeps the switches off (see above).</li>
+<li>Review <code>/data/service/v1/actuation/</code> and the <code>battery_optimizer_actuator_*</code> metrics: guard reasons,
+   the mapping at every slot, setpoint churn, how often a charge is clamped, and the house-load
+   estimate against the meter.</li>
+</ol>
+<p><strong>live, supervised:</strong></p>
+<p>Go-live steps first, with the battery idle. Above 800 W of discharge the Venus needs Premium mode, and
+with the system power limits on the PD target is bounded by the system caps (ADR-0007 commissioning
+findings):</p>
+<ol>
+<li>Turn both <em>Allow</em> switches (<code>switch.venus_battery_allow_charge</code>,
+   <code>switch.venus_battery_allow_discharge</code>) <strong>off</strong>, then switch <strong>Premium mode on</strong> in the Marstek app.
+   Change nothing else in the app.</li>
+<li>Set <code>number.omnibattery_system_max_charge_power</code> and <code>number.omnibattery_system_max_discharge_power</code>
+   to <strong>2500 W</strong> (2026-11-03: 1000 / 800 W). The Venus's own <code>number.venus_max_charge_power</code> /
+   <code>_max_discharge_power</code> are already 2500 W; check them.</li>
+</ol>
+<p>Then:</p>
+<ol>
+<li>Put the live token in Vault (<a href="#live-token-in-vault">above</a>).</li>
+<li>Turn the kill switch <strong>off</strong>.</li>
+<li>In one commit: <code>mode: live</code> in <code>files/service.yaml</code> (the app also requires
+   <code>planning.soc_source: entity</code> for <code>live</code>) and <code>global.liveHomeAssistantToken: true</code> in <code>values.yaml</code>.
+   Merge.</li>
+<li>Check <code>kubectl --context=grigri -n battery-optimizer get externalsecret</code> (both <code>SecretSynced</code>), the
+   new pod running, <code>/status</code> <code>mode: live</code>, and <code>battery_optimizer_build_info{mode="live"}</code>.</li>
+<li>Turn the kill switch <strong>on</strong> while watching the grid meter. Verify: writes confirmed
+   (<code>battery_optimizer_actuator_writes_total{result="ok"}</code>), the heartbeat entity advancing about every
+   30 s, a slot change in each direction, the import staying under 4500 W while charging, and the
+   charge and discharge reaching up to 2500 W (minus the house load for a charge).</li>
+<li>Watchdog test: pause ArgoCD auto-sync for the app, scale the Deployment to 0, and within about 6
+   minutes see both direction switches go off, the <code>battery_optimizer_watchdog</code> notification and
+   <code>BatteryOptimizerHeartbeatStale</code>. Scale back to 1 and resume auto-sync. (Run these <code>kubectl</code> writes only
+   with the owner's explicit go.)</li>
+<li>Graceful stop: delete the pod (ArgoCD recreates it) and check that the actuation records show a
+   safe idle with reason <code>shutdown</code> before the restart, and that the new pod holds safe idle until its
+   first fresh plan.</li>
+</ol>
+<p>Only then leave it unattended. HA host power loss is still untested (app repo TODO-5.4); the AC
+failsafe is the layer that does not depend on HA.</p>
+<h3 id="rollback">Rollback</h3>
+<ol>
+<li>Turn <code>input_boolean.battery_optimizer_live</code> <strong>off</strong>. This is immediate: the service sets safe idle
+   once and stops writing, and the watchdog repeats the safe idle in HA. In an emergency, also turn the
+   <em>Allow</em> switches off on the Battery dashboard, or the battery's AC plug.</li>
+<li>In one commit: <code>mode: shadow</code> (or <code>dry_run</code>) in <code>files/service.yaml</code> and
+   <code>global.liveHomeAssistantToken: false</code>. Merge. ArgoCD prunes the live ExternalSecret and its Secret
+   and the pod restarts on the read-only token. The flag cannot go off while the mode is still <code>live</code>
+   (rendering fails).</li>
+<li>Restore Omnibattery's native configuration by hand: safe idle leaves the PD target and the
+   discharge cap at their last values, so set them back before switching a direction on. Decide whether
+   the 2500 W system caps and Premium mode stay (both <em>Allow</em> switches off while changing them).</li>
+<li>To retire the live user for good: delete its long-lived token in HA (the user's profile, as an
+   admin) and <code>vault kv metadata delete secret/battery-optimizer/home-assistant-live</code>.</li>
+</ol>
+<h3 id="alerts">Alerts</h3>
+<p><code>rules-service/actuator.yaml</code>, long-term Prometheus. The <code>actuator_*</code> series exist only in <code>dry_run</code>
+and <code>live</code>; the HA-side rules read <code>hass_*</code> and only fire while the kill switch is on.</p>
+<table>
+<thead>
+<tr>
+<th>Alert</th>
+<th>Fires when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BatteryOptimizerActuatorAlert</code> (critical)</td>
+<td><code>actuator_alert == 1</code> for 2 m: a write was not confirmed after its retries</td>
+</tr>
+<tr>
+<td><code>BatteryOptimizerActuatorSafeIdle</code></td>
+<td>in control and the guard has held safe idle for 30 m (<code>actuator_guard_reason</code> says why)</td>
+</tr>
+<tr>
+<td><code>BatteryOptimizerImportOverCap</code> (critical)</td>
+<td>guard reason <code>import_over_cap</code>: import above 4700 W while charging</td>
+</tr>
+<tr>
+<td><code>BatteryOptimizerHeartbeatFailures</code></td>
+<td>a heartbeat write failed in the last 10 m</td>
+</tr>
+<tr>
+<td><code>BatteryOptimizerHeartbeatStale</code> (critical)</td>
+<td>the heartbeat entity is older than 5 m while the kill switch is on (not in <code>dry_run</code>); fires with the service down</td>
+</tr>
+<tr>
+<td><code>BatteryOptimizerKillSwitchOnNotLive</code></td>
+<td>the kill switch has been on for 15 m while the service is not <code>live</code> or <code>dry_run</code> (or is down)</td>
+</tr>
+<tr>
+<td><code>BatteryOptimizerChargePowerHigh</code></td>
+<td>measured battery charge above 2600 W for 2 m (the go-live caps are 2500 W): a cap or <code>battery_ac_power_sign</code> is wrong</td>
+</tr>
+<tr>
+<td><code>BatteryOptimizerChargeClamped</code></td>
+<td><code>battery_optimizer_actuator_clamped_watts &gt; 1000</code> for 30 m (sized for the 2500 W caps). <strong>Unconfirmed metric name</strong> from the unreleased optimizer change; check it against the released <code>/metrics</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="omnibattery-backup-cooldown-workaround">Omnibattery backup cooldown workaround</h3>
+<p><code>number.venus_backup_offgrid_threshold</code> is <strong>500 W</strong> (default 50 W) because of upstream bug
+ffunes/Omnibattery#660 (<code>backup_mode</code> latched after the grid returns while the backup port has a load).
+The fix is ffunes/Omnibattery#723. Once a release with #723 is installed, set the threshold back to
+50 W and check that the status returns to <code>balanced</code> within 5 minutes with a load on the backup port in
+Bypass. Side effects of the high threshold and the full procedure:
+<a href="../../troubleshooting/home-assistant-omnibattery/"><code>home-assistant-omnibattery.md</code></a>.</p>
+<h2 id="battery-settings-where-they-are-and-how-to-read-them">Battery settings: where they are and how to read them</h2>
+<p>The battery is a Marstek Venus E V3 driven by Omnibattery (v1.5.1b1 at the time of writing). Settings sit in
+three places: the device (Marstek app), Omnibattery's own entities in Home Assistant, and the optimizer's
+<code>files/service.yaml</code>. All reads below are read-only.</p>
+<h3 id="entities">Entities</h3>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Value on 2026-11-04</th>
+<th>Set by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>number.venus_max_discharge_power</code></td>
+<td>2500 W (range 800-2500)</td>
+<td>The device: Marstek app Premium mode. Never written by us</td>
+</tr>
+<tr>
+<td><code>number.venus_max_charge_power</code></td>
+<td>2500 W</td>
+<td>The device. Never written by us</td>
+</tr>
+<tr>
+<td><code>number.omnibattery_system_max_charge_power</code></td>
+<td>2500 W</td>
+<td>The owner, in the Omnibattery settings</td>
+</tr>
+<tr>
+<td><code>number.omnibattery_system_max_discharge_power</code></td>
+<td>varies per slot</td>
+<td><strong>Rewritten by the optimizer every slot</strong>: the per-slot discharge cap (<code>actuation.entities.max_discharge_power</code>; 0 = unlimited)</td>
+</tr>
+<tr>
+<td><code>number.omnibattery_pd_target_grid_power</code></td>
+<td>varies per slot</td>
+<td><strong>Written by the optimizer</strong>: the grid-import target</td>
+</tr>
+<tr>
+<td><code>switch.omnibattery_system_power_limits</code></td>
+<td>on</td>
+<td><strong>Written by the optimizer</strong></td>
+</tr>
+<tr>
+<td><code>number.omnibattery_max_contracted_power</code></td>
+<td>5000 W</td>
+<td>The owner</td>
+</tr>
+</tbody>
+</table>
+<p>Owned by the owner and read-only for the optimizer:</p>
+<ul>
+<li><code>select.omnibattery_pd_tuning_profile</code> (<code>balanced</code>) and the PD controller numbers (kp 0.35, kd 0.3, deadband
+  40 W, direction hysteresis 60 W, max power change 800 W). How they act, the baseline and the change log:
+  <a href="#omnibattery-pd-controller-settings-log">Omnibattery PD controller settings log</a>. Integration source:
+  <a href="https://github.com/ffunes/omnibattery">https://github.com/ffunes/omnibattery</a>.</li>
+<li>The temperature limit: <code>switch.omnibattery_temp_charge_limit</code> and its numbers. The owner toggles it; the
+  optimizer only reads it.</li>
+</ul>
+<p>Optimizer-side knobs live in the deployed <code>apps/battery-optimizer/files/service.yaml</code>, <code>actuation:</code> block:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Value</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>import_cap_w</code></td>
+<td>4500</td>
+<td>Upper bound of the PD grid-import target (the meter trips at 5 kW)</td>
+</tr>
+<tr>
+<td><code>import_guard_margin_w</code></td>
+<td>200</td>
+<td>Margin the guard keeps below the import cap</td>
+</tr>
+<tr>
+<td><code>discharge_margin_w</code></td>
+<td>100</td>
+<td>Import kept while discharging, never export. 100 W since 2026-11-05 (owner decision, optimizer 0.14.0, with <code>planning.discharge_margin_bound: true</code>). Steady-state error is about +-40 W (the PD deadband); export comes from 1-4 s transients when a large load stops while the battery is cap-pinned. 50 W gave brief exports</td>
+</tr>
+<tr>
+<td><code>min_discharge_cap_w</code></td>
+<td>100</td>
+<td>Smallest per-slot discharge cap written</td>
+</tr>
+<tr>
+<td><code>max_discharge_cap_w</code></td>
+<td>2500</td>
+<td>Largest per-slot discharge cap written</td>
+</tr>
+<tr>
+<td><code>neutral_pd_target_w</code></td>
+<td>0</td>
+<td>PD grid target in a planned idle</td>
+</tr>
+</tbody>
+</table>
+<h3 id="device-facts-and-omnibattery-configuration">Device facts and Omnibattery configuration</h3>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Venus E V3 firmware</td>
+<td>EMS 148, VMS 117, BMS 114 (as of commissioning, 2026-11-03)</td>
+</tr>
+<tr>
+<td>Marstek app</td>
+<td>Manual mode, empty schedule, no meter configured, Premium mode on (see the go-live steps). Never change it while Omnibattery runs</td>
+</tr>
+<tr>
+<td>Grid sensor</td>
+<td>The Shelly EM, channel 1</td>
+</tr>
+<tr>
+<td>SOC window</td>
+<td>20-95 %</td>
+</tr>
+<tr>
+<td>Contracted power</td>
+<td>5000 W. The meter trips instantly, so charge targets stay at most 4500 W (<code>import_cap_w</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Every Omnibattery feature that competes with the optimizer is off: predictive charging, charge delay,
+capacity protection, hourly balance and the weekly full charge. The weekly full charge is the one
+exception: <code>full_charge.mode</code> is <code>shadow</code> today, so its switches stay off; with <code>live</code> the optimizer arms
+it itself (see <a href="#live-battery-control">Live battery control</a>).</p>
+<h3 id="how-to-read-them">How to read them</h3>
+<ol>
+<li><strong>Prometheus</strong> (<code>prometheus-long-term</code>) exports HA switch states (<code>hass_switch_state</code>), sensors and, verified
+   2026-11-06, the Omnibattery and Venus <code>number</code> entities: <code>hass_number_state</code> (unitless, such as kp and kd, e.g.
+   <code>hass_number_state{entity="number.omnibattery_pd_controller_kp"}</code>) and the unit-suffixed <code>hass_number_state_w</code>,
+   <code>_s</code>, <code>_percent</code>, <code>_celsius</code>, <code>_kwh</code> and <code>_h</code>. The <code>select</code> entities have no value series, only
+   <code>hass_state_change_total</code>, <code>hass_entity_available</code> and <code>hass_last_updated_time_seconds</code>. Prometheus therefore
+   gives what changed and when; the <a href="#omnibattery-pd-controller-settings-log">settings log</a> gives why.</li>
+<li><strong><code>select</code> values and attributes (min/max)</strong>: run a short Python inside the optimizer pod. It uses the pod's own HA token
+   file (<code>BATTERY_OPTIMIZER_HA_TOKEN_FILE</code>) and URL (<code>BATTERY_OPTIMIZER_HA_URL</code>, a ws URL: the script converts
+   it to http and strips <code>/api/websocket</code>) with <code>GET /api/states</code>. The token never leaves the pod and is never
+   printed. Use a GET only, never a POST with it. Save the script as <code>hastates.py</code> and pipe it on stdin:</li>
+</ol>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>-i<span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>-c<span class="w"> </span>service<span class="w"> </span>--<span class="w"> </span>python<span class="w"> </span>-<span class="w"> </span>&lt;<span class="w"> </span>hastates.py
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">os</span><span class="o">,</span><span class="nn">json</span><span class="o">,</span><span class="nn">urllib.request</span><span class="o">,</span><span class="nn">re</span>
+<span class="n">tok</span><span class="o">=</span><span class="nb">open</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;BATTERY_OPTIMIZER_HA_TOKEN_FILE&#39;</span><span class="p">])</span><span class="o">.</span><span class="n">read</span><span class="p">()</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+<span class="n">base</span><span class="o">=</span><span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;BATTERY_OPTIMIZER_HA_URL&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span>
+<span class="n">base</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^ws&#39;</span><span class="p">,</span><span class="sa">r</span><span class="s1">&#39;http&#39;</span><span class="p">,</span><span class="n">base</span><span class="p">);</span> <span class="n">base</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;/api/websocket$&#39;</span><span class="p">,</span><span class="s1">&#39;&#39;</span><span class="p">,</span><span class="n">base</span><span class="p">)</span>
+<span class="n">req</span><span class="o">=</span><span class="n">urllib</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">Request</span><span class="p">(</span><span class="n">base</span><span class="o">+</span><span class="s1">&#39;/api/states&#39;</span><span class="p">,</span><span class="n">headers</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;Authorization&#39;</span><span class="p">:</span><span class="s1">&#39;Bearer &#39;</span><span class="o">+</span><span class="n">tok</span><span class="p">})</span>
+<span class="n">st</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">urllib</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">req</span><span class="p">,</span><span class="n">timeout</span><span class="o">=</span><span class="mi">20</span><span class="p">))</span>
+<span class="n">pat</span><span class="o">=</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^(number|select|switch|sensor)\.(omnibattery|venus)_.*(discharg|max_charge|power_limit|force_mode|work_mode|user_mode|manual|contracted|pd_|max_power|backup|premium|rs485|allow|set_charge|set_discharge|ac_power|battery_power|status)&#39;</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">st</span><span class="p">,</span><span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;entity_id&#39;</span><span class="p">]):</span>
+  <span class="k">if</span> <span class="n">pat</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;entity_id&#39;</span><span class="p">]):</span>
+    <span class="n">a</span><span class="o">=</span><span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;attributes&#39;</span><span class="p">,{})</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;entity_id&#39;</span><span class="p">],</span><span class="s1">&#39;=&#39;</span><span class="p">,</span><span class="n">s</span><span class="p">[</span><span class="s1">&#39;state&#39;</span><span class="p">],</span><span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;unit_of_measurement&#39;</span><span class="p">,</span><span class="s1">&#39;&#39;</span><span class="p">),(</span><span class="s1">&#39;min=</span><span class="si">%s</span><span class="s1"> max=</span><span class="si">%s</span><span class="s1">&#39;</span><span class="o">%</span><span class="p">(</span><span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;min&#39;</span><span class="p">),</span><span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;max&#39;</span><span class="p">)))</span> <span class="k">if</span> <span class="s1">&#39;max&#39;</span> <span class="ow">in</span> <span class="n">a</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span><span class="p">,</span> <span class="n">a</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s1">&#39;options&#39;</span><span class="p">,</span><span class="s1">&#39;&#39;</span><span class="p">)</span> <span class="k">if</span> <span class="n">s</span><span class="p">[</span><span class="s1">&#39;entity_id&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s1">&#39;select&#39;</span><span class="p">)</span> <span class="k">else</span> <span class="s1">&#39;&#39;</span><span class="p">)</span>
+</code></pre></div>
+<ol>
+<li><strong>The optimizer's own view</strong>, on port 8080 in the pod: <code>/status</code> (the <code>actuator</code>, <code>thermal</code> and <code>full_charge</code>
+   blocks) and <code>/plan</code>. <code>/metrics</code> has <code>battery_optimizer_actuator_desired_*</code>, <code>battery_optimizer_actuator_observed_*</code>
+   and <code>battery_optimizer_actuator_house_load_watts</code>.</li>
+</ol>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/battery-optimizer-service<span class="w"> </span>-c<span class="w"> </span>service<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import urllib.request;print(urllib.request.urlopen(&#39;http://127.0.0.1:8080/status&#39;).read().decode())&quot;</span>
+</code></pre></div>
+<ol>
+<li><strong>Planned against actual discharge, caps, PD target and house load over 24 h</strong>, hourly, as Prometheus
+   <code>query_range</code> calls run inside the pod (same <code>exec -i ... python - &lt; promr.py</code> pattern):</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">urllib.request</span><span class="o">,</span><span class="nn">urllib.parse</span><span class="o">,</span><span class="nn">json</span><span class="o">,</span><span class="nn">sys</span><span class="o">,</span><span class="nn">time</span>
+<span class="n">end</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">());</span> <span class="n">start</span><span class="o">=</span><span class="n">end</span><span class="o">-</span><span class="mi">24</span><span class="o">*</span><span class="mi">3600</span>
+<span class="n">qs</span><span class="o">=</span><span class="p">{</span><span class="s1">&#39;plan_dis&#39;</span><span class="p">:</span><span class="s1">&#39;sum(increase(battery_optimizer_shadow_planned_energy_kwh_total{direction=&quot;discharge&quot;}[1h]))&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;act_dis&#39;</span><span class="p">:</span><span class="s1">&#39;sum(increase(battery_optimizer_shadow_actual_battery_energy_kwh_total{direction=&quot;discharge&quot;}[1h]))&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;plan_w&#39;</span><span class="p">:</span><span class="s1">&#39;avg_over_time(max(battery_optimizer_slot_battery_power_watts{plan=&quot;final&quot;})[1h:1m])&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;maxdis&#39;</span><span class="p">:</span><span class="s1">&#39;avg_over_time(max(battery_optimizer_actuator_desired_max_discharge_watts)[1h:1m])&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;pdt&#39;</span><span class="p">:</span><span class="s1">&#39;avg_over_time(max(battery_optimizer_actuator_desired_pd_target_watts)[1h:1m])&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;load&#39;</span><span class="p">:</span><span class="s1">&#39;avg_over_time(max(battery_optimizer_actuator_house_load_watts)[1h:1m])&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;obs&#39;</span><span class="p">:</span><span class="s1">&#39;avg_over_time(max(battery_optimizer_actuator_observed_battery_power_watts)[1h:1m])&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;soc&#39;</span><span class="p">:</span><span class="s1">&#39;max(hass_sensor_battery_percent{entity=&quot;sensor.venus_battery_soc&quot;})&#39;</span><span class="p">,</span>
+    <span class="s1">&#39;grid&#39;</span><span class="p">:</span><span class="s1">&#39;avg_over_time(max(hass_sensor_power_w{entity=&quot;sensor.shellyem_grid_power&quot;})[1h:1m])&#39;</span><span class="p">}</span>
+<span class="n">data</span><span class="o">=</span><span class="p">{}</span>
+<span class="k">for</span> <span class="n">k</span><span class="p">,</span><span class="n">q</span> <span class="ow">in</span> <span class="n">qs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+  <span class="n">u</span><span class="o">=</span><span class="s1">&#39;http://prometheus-long-term.monitoring:9090/api/v1/query_range?&#39;</span><span class="o">+</span><span class="n">urllib</span><span class="o">.</span><span class="n">parse</span><span class="o">.</span><span class="n">urlencode</span><span class="p">({</span><span class="s1">&#39;query&#39;</span><span class="p">:</span><span class="n">q</span><span class="p">,</span><span class="s1">&#39;start&#39;</span><span class="p">:</span><span class="n">start</span><span class="p">,</span><span class="s1">&#39;end&#39;</span><span class="p">:</span><span class="n">end</span><span class="p">,</span><span class="s1">&#39;step&#39;</span><span class="p">:</span><span class="mi">3600</span><span class="p">})</span>
+  <span class="n">r</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">urllib</span><span class="o">.</span><span class="n">request</span><span class="o">.</span><span class="n">urlopen</span><span class="p">(</span><span class="n">u</span><span class="p">))[</span><span class="s1">&#39;data&#39;</span><span class="p">][</span><span class="s1">&#39;result&#39;</span><span class="p">]</span>
+  <span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span><span class="o">=</span><span class="p">{</span><span class="nb">int</span><span class="p">(</span><span class="n">t</span><span class="p">):</span><span class="nb">float</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span><span class="p">,</span><span class="n">v</span> <span class="ow">in</span> <span class="n">r</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s1">&#39;values&#39;</span><span class="p">]}</span> <span class="k">if</span> <span class="n">r</span> <span class="k">else</span> <span class="p">{}</span>
+<span class="n">ts</span><span class="o">=</span><span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">()</span><span class="o">.</span><span class="n">union</span><span class="p">(</span><span class="o">*</span><span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">keys</span><span class="p">()</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">data</span><span class="o">.</span><span class="n">values</span><span class="p">()]))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s1">&#39;hourUTC &#39;</span><span class="o">+</span><span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%8s</span><span class="s1">&#39;</span><span class="o">%</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">qs</span><span class="p">))</span>
+<span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">ts</span><span class="p">:</span>
+  <span class="nb">print</span><span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">strftime</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%d</span><span class="s1"> %H:%M&#39;</span><span class="p">,</span><span class="n">time</span><span class="o">.</span><span class="n">gmtime</span><span class="p">(</span><span class="n">t</span><span class="p">)),</span><span class="s1">&#39; &#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">&#39;</span><span class="si">%8.2f</span><span class="s1">&#39;</span><span class="o">%</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">][</span><span class="n">t</span><span class="p">]</span> <span class="k">if</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="k">else</span> <span class="s1">&#39;</span><span class="si">%8s</span><span class="s1">&#39;</span><span class="o">%</span><span class="s1">&#39;-&#39;</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="n">qs</span><span class="p">))</span>
+</code></pre></div>
+<ol>
+<li><strong>Grafana</strong> (folder <code>battery-optimizer</code>), by dashboard uid: <code>battery-plan-vs-actual</code>,
+   <code>battery-load-forecast</code>, <code>battery-model-actuation</code>, <code>battery-temperature</code>, <code>battery-tariff-prices</code>, and the
+   service dashboard <code>battery-optimizer-shadow</code>.</li>
+</ol>
+<p><code>kubectl exec</code> into the service pod is read-only use here. Never print or copy the token, and never reuse it
+for a write: writes are the actuator's job, through its allowlist.</p>
+<h3 id="omnibattery-pd-controller-settings-log">Omnibattery PD controller settings log</h3>
+<p><strong>Policy (owner decision 2026-11-06).</strong> The optimizer analyses the PD response and recommends values. The owner
+sets them by hand in HA, and every change gets a row in the log below with date, old -&gt; new, why and result. The
+optimizer does not write PD settings today. A later step may let it, which would need an ADR-0007 amendment in
+the app repo plus bounded allowlist entries and tests.</p>
+<p><strong>How the settings act</strong> (integration source at commit 2c94da9, manifest 1.5.0):</p>
+<ul>
+<li>Cycles run on each grid-sensor change plus a 2 s timer. Event-triggered cycles closer than
+  <code>pd_min_cycle_interval</code> are dropped; the timer is not. The timer resets the throttle clock, so a dropped
+  update waits up to about 2 s for the next cycle (see <a href="#loop-timing-and-the-grid-meter-measured-2026-11-07">loop timing</a>).</li>
+<li>The grid is filtered with an EMA of tau 2 s, which snaps on jumps over 200 W.</li>
+<li><strong>Load-down guard (corrects the earlier text, 2026-11-07).</strong> A load-down is corrected by the
+  <code>_apply_discharge_ceiling</code> guard (<code>control/residual_load.py</code>, Omnibattery 1.5.1b1), not by the feedforward. After
+  the rate limiter the guard caps the discharge at grid + battery AC power - target, so a step is removed in one
+  cycle. Three events matched its prediction within 1-2 W. kp, kd and <code>max_power_change</code> do not decide
+  load-downs.</li>
+<li>Nothing happens within <code>deadband</code> of the target.</li>
+<li>Feedforward (not the load-down path, see the guard above): an error jump above max(5 x deadband, 400 W) that is
+  confirmed on the next sample (80 %) issues one deadbeat command, bypassing the rate limit. It has a 10 s cooldown, and an opposite-sign step within 30 s is
+  treated as a pulsing load.</li>
+<li>Otherwise incremental PD: Kp is applied per 2 s, the derivative is filtered, and the change is clamped by
+  <code>max_power_change</code> per 2 s.</li>
+<li><code>direction_hysteresis</code> gates charge/discharge flips.</li>
+<li>Selecting a <code>pd_tuning_profile</code> overwrites only kp, kd and max_power_change. Profiles:</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>kp</th>
+<th>kd</th>
+<th>max_power_change (W)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>very_smooth</td>
+<td>0.22</td>
+<td>0.15</td>
+<td>400</td>
+</tr>
+<tr>
+<td>smooth</td>
+<td>0.30</td>
+<td>0.25</td>
+<td>600</td>
+</tr>
+<tr>
+<td>balanced</td>
+<td>0.35</td>
+<td>0.30</td>
+<td>800</td>
+</tr>
+<tr>
+<td>aggressive</td>
+<td>0.55</td>
+<td>0.45</td>
+<td>1200</td>
+</tr>
+<tr>
+<td>very_aggressive</td>
+<td>0.75</td>
+<td>0.45</td>
+<td>2000</td>
+</tr>
+</tbody>
+</table>
+<p>Editing a number by hand makes the select show <code>custom</code>. To revert, write the numbers, not the profile.
+- <code>relay_cooldown</code> must stay 0: it holds discharge at 100 W or more after demand falls, which causes export.</p>
+<p><strong>Baseline (2026-11-06):</strong></p>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Profile</td>
+<td>balanced</td>
+</tr>
+<tr>
+<td>kp</td>
+<td>0.35</td>
+</tr>
+<tr>
+<td>kd</td>
+<td>0.30</td>
+</tr>
+<tr>
+<td>deadband</td>
+<td>40 W</td>
+</tr>
+<tr>
+<td>max_power_change</td>
+<td>800 W</td>
+</tr>
+<tr>
+<td>direction_hysteresis</td>
+<td>60 W</td>
+</tr>
+<tr>
+<td>pd_min_cycle_interval</td>
+<td>1.0 s</td>
+</tr>
+<tr>
+<td>pd_min_charge_power</td>
+<td>0</td>
+</tr>
+<tr>
+<td>pd_min_discharge_power</td>
+<td>0</td>
+</tr>
+<tr>
+<td>pd_relay_cooldown</td>
+<td>0</td>
+</tr>
+<tr>
+<td>no_pd_command_delay</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<p>Since 2026-11-06 09:30 UTC the profile select reads <code>custom</code>, because kp no longer matches a profile row (see the
+change log).</p>
+<p><strong>Baseline measurement</strong>: 2 s HA history, 2026-11-03 to 2026-11-06, about 66 h, all at the baseline settings.</p>
+<ul>
+<li>Steady discharge error, grid minus target: std about 24 W, p1/p99 about -50/+60 W. No limit cycle.</li>
+<li>Charge at the 4500 W cap: p99 about +105 W over target.</li>
+<li>End-to-end dead time 1-4 s. It was first attributed to the feedforward confirm plus Modbus write and inverter
+  ramp; that was wrong for load-downs (the discharge-ceiling guard corrects them, see the correction above). The
+  parts are the grid meter's update lag, the cycle wait (<a href="#loop-timing-and-the-grid-meter-measured-2026-11-07">loop timing</a>),
+  the Modbus write and the inverter ramp. Gains cannot remove it.</li>
+<li>Export comes almost only from load-down steps while the battery is pinned at its per-slot cap: 2-4 s below 0 W,
+  worst about -290 W and about 0.27 Wh per event. That is about 0.05 Wh per discharge hour at the 100 W margin,
+  well below the 5 Wh/day <code>BatteryGridExport</code> alert.</li>
+<li><code>max_power_change</code> was never binding: the fastest setpoint change was about 190 W/s against the 400 W/s allowed.</li>
+<li><code>pd_control_quality</code> was <code>oscillating</code> for 0.35 h of 66 h, always with fast-changing loads.</li>
+</ul>
+<p><strong>Candidate changes, applied together on 2026-11-06 (kp 0.40 instead of the 0.45 candidate)</strong>:</p>
+<ol>
+<li><code>pd_min_cycle_interval</code> 1.0 -&gt; 0.5 s. It was expected to shorten the feedforward confirm by up to about 1 s;
+   per the correction above the confirm is not on the load-down path, and the interval instead sets how often
+   a dropped update waits for the timer (about 50% of updates at 1.0 s, about 25% at 0.5 s). Risk: more Modbus traffic, so watch <code>sensor.omnibattery_non_responsive_batteries</code>.</li>
+<li>kp 0.35 -&gt; 0.40, a cautious first step towards the 0.45 candidate. Do not go above 0.55, where oscillation
+   risk rises, so <code>aggressive</code>/<code>very_aggressive</code> are not recommended.</li>
+</ol>
+<p>Everything else stays at baseline.</p>
+<p><strong>Loop timing and the grid meter (measured 2026-11-07).</strong></p>
+<ul>
+<li>A cycle runs on every Shelly update plus the 2 s timer, and updates inside <code>pd_min_cycle_interval</code> are dropped.
+  Because the timer resets the throttle clock, a dropped update waits up to about 2 s: about 50% of updates at
+  1.0 s, about 25% at 0.5 s. The EMA snaps on jumps over 200 W.</li>
+<li>Without the guard (battery AC power unreadable) cutting 1.4 kW takes 5-6 cycles, about 10-12 s.</li>
+<li>Grid meter: Shelly EM Gen1 (SHEM, firmware v1.14.0). Mean update interval 1.69 s (2.0 s in 57% of intervals). On
+  load drops it sees the change 0.3-2.0 s after the heat pump's own sensor (median about 0.95 s).
+  Transport: the 2026-11-07 investigation read it as CoIoT UDP push to HA core, but the cutover record
+  in <a href="#design-notes-and-gotchas">Design notes</a> has the grid power entity on MQTT every 2 s (or sooner on a change), which fits
+  the 1.69 s mean better, and CoIoT multicast reaching HA core is not recorded anywhere. Unverified; check before
+  relying on either.</li>
+<li>Dropouts of 12-35 s happened about 20 times between 2026-11-03 and 11-05, none since the HA restart at 17:18 UTC
+  on 11-05. During a dropout Omnibattery holds its last command.</li>
+</ul>
+<p><strong>Evaluating a change</strong>:</p>
+<ul>
+<li>Compare at least a week of real events against the baseline: seconds below 0 W, export Wh per event, settle
+  time, 60 s steady std and <code>oscillating</code> time.</li>
+<li>Or run an owner-triggered test: switch a 1-1.6 kW load off about 10 times per setting, ABAB.</li>
+<li>Revert if any of these happens: <code>oscillating</code> for more than 2 min, an export episode over 5 s or 0.5 Wh,
+  <code>non_responsive_batteries</code> not <code>None</code>, or import above 4700 W while charging.</li>
+</ul>
+<p><strong>Interim verdict on the 2026-11-06 change (2026-11-07): keep, no revert criterion hit.</strong> Window: 2026-11-06 09:30 UTC
+to 2026-11-07, against the baseline above.</p>
+<ul>
+<li>Oscillation: 0 s after the change (6 episodes before, longest 120 s).</li>
+<li>Export episodes: 4, longest 2.0 s, largest 0.20 Wh.</li>
+<li><code>non_responsive_batteries</code> <code>None</code> throughout.</li>
+<li>Maximum import while charging 4563 W against the 4700 W limit. Only about 0.9 h of charging, so weak evidence.</li>
+<li>Steady 60 s std, median/p90/p99: 10/16/30 W after against 12/29/54 W before.</li>
+</ul>
+<p>The 7-day review is still due around 2026-11-13.</p>
+<p><strong>Measured load-down exports</strong> (3 evening hot-water stops of 1.9-2.3 kW):</p>
+<table>
+<thead>
+<tr>
+<th>When</th>
+<th>Export</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Before the change</td>
+<td>-251 W for 4.1 s (0.23 Wh); -289 W for 3.5 s (0.27 Wh)</td>
+</tr>
+<tr>
+<td>After the change</td>
+<td>-364 W for 2.0 s (0.20 Wh)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Expected export with load-following (optimizer 0.15.0, from 2026-11-07).</strong> With the discharge cap raised in
+planned discharge slots, the battery carries the real load, so a load-down step now leaves the battery
+discharging at the old load until the guard acts.</p>
+<ul>
+<li>Peak export of step - 100 W, so 1.3-1.8 kW for about 2 s: 1-2 Wh per event, 2-10 Wh per evening, under 1 EUR/year.</li>
+<li>Rare worst case: a load drop during a Shelly dropout, about 15 Wh.</li>
+<li>This exceeds the 0.5 Wh per-episode revert criterion above and may trip
+  <code>BatteryGridExport</code> (5 Wh/24 h). The owner chose to keep that alert at 5 Wh.</li>
+<li>Optional owner lever: <code>pd_min_cycle_interval</code> 0 cuts about 15-20% of the export, at the cost of more Modbus
+  traffic.</li>
+<li><strong>Open: the grid registration.</strong> If the installation is registered as self-consumption without surplus (zero export
+  required; RD 244/2019, UNE 217001-IN), any export matters beyond the alert. Check with the installer; it belongs to
+  TODO-0.6 in the app repository's <code>docs/planning/home-battery-optimizer-implementation.md</code>.</li>
+</ul>
+<p><strong>Change log:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Date</th>
+<th>Setting</th>
+<th>Old -&gt; new</th>
+<th>Why</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-11-06</td>
+<td>all PD settings</td>
+<td>-</td>
+<td>Baseline recorded, no change</td>
+<td>See baseline</td>
+</tr>
+<tr>
+<td>2026-11-06 09:30 UTC</td>
+<td><code>pd_min_cycle_interval</code>; <code>pd_controller_kp</code></td>
+<td>1.0 -&gt; 0.5 s; 0.35 -&gt; 0.40</td>
+<td>Shorten the feedforward confirm and the PD tail on load-down steps to cut export transients (the feedforward premise was corrected 2026-11-07, see above). Kp kept below the 0.45 candidate as a cautious first step. Both changed together (not one at a time), so the effects can't be separated</td>
+<td>Interim 2026-11-07: keep, no revert criterion hit (verdict above). Final: compare with the baseline after at least 7 days (about 2026-11-13)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="open-issue-planned-discharge-is-not-delivered">Open issue: planned discharge is not delivered</h3>
+<p>Status: <strong>monitoring</strong>. The planner bound <code>planning.discharge_margin_bound: true</code> has been live with optimizer
+0.14.0 since 2026-11-05 14:14 UTC, at <code>discharge_margin_w</code> 100. Next review about 2026-11-11, after 7 live days.</p>
+<p>The "Final plan energy not delivered" panel on <code>battery-model-actuation</code> shows a discharge shortfall. Diagnosis of
+2026-11-04, kept as history: part of it is an artefact of the shadow counters that ran before live control
+started (2026-11-03 22:45 UTC) and leaves the 24 h window after the first live day. The live part, in the
+morning discharge window, comes from the no-export rule, the import margin (200 W at that time) and a load
+forecast that ran high; the device limits and the per-slot cap are not involved. First evening at 100 W
+(2026-11-05): 2 s and 30 s data show the battery delivering exactly its per-slot cap whenever the house load
+allowed, with no temperature or actuator derating; the remaining gap was the load forecast, which placed the
+evening peak about 1 h late and overestimated it. 15-min means mix load-limited and cap-limited minutes, so do
+not use them to infer an actuator shortfall. Diagnosis, candidate fix and decision criteria: the app
+repository's <code>docs/known-issues.md</code>, section "Planned discharge is not delivered".</p>
+<h2 id="first-run-2026-10-25">First run (2026-10-25)</h2>
+<p>Manual Job from the CronJob on an empty PVC: success in 5m46s including the full Prometheus
+bootstrap (1028 parts, 5.84 M rows), peak working set about 1.15 GiB (requests 768 Mi, limit 2 Gi),
+about 0.54 core peak, 41.5 MiB on the volume afterwards. Steady-state runs only re-pull 8 days of
+HA history and 3 days of Prometheus. The PVC is the store of record. A migration of the manual
+<code>~/data/energy-baseline</code> store was checked on 2026-10-25 and is <strong>not needed</strong>: every HA row in it
+(39 distinct) is already in the PVC (54), Prometheus is re-extractable, and the OMIE backfill is
+public. The local store stays frozen as the record behind the offline evaluation runs.</p>
+<p>Container logs carry one <code>httpx</code> INFO line per request (roughly 1000 for the bootstrap), so
+kubelet log rotation can drop the early <code>step N/4</code> lines of a long run; Loki keeps the full stream.</p>
+<h2 id="operate">Operate</h2>
+<div class="highlight"><pre><span></span><code><span class="c1"># State</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span>get<span class="w"> </span>cronjob,job,pvc,externalsecret
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span>logs<span class="w"> </span>job/&lt;job-name&gt;<span class="w"> </span>-c<span class="w"> </span>pipeline
+
+<span class="c1"># Run one pipeline outside the schedule (e.g. after fixing a failure)</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>battery-optimizer<span class="w"> </span>create<span class="w"> </span>job<span class="w"> </span>--from<span class="o">=</span>cronjob/battery-optimizer-pipeline<span class="w"> </span>battery-optimizer-pipeline-manual-&lt;n&gt;
+</code></pre></div>
+<p>Local analysis copy (read-only on the cluster; streams the PVC out of the service pod, validates it,
+and syncs it into a separate directory — never into the frozen <code>~/data/energy-baseline</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/home-energy-optimizer<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">KUBE_CONTEXT</span><span class="o">=</span>grigri<span class="w"> </span>just<span class="w"> </span>pull-store<span class="w">   </span><span class="c1"># ~/data/battery-optimizer-cluster</span>
+</code></pre></div>
+<p>Bumping the image is a Renovate PR changing <code>tag</code> in <code>apps/battery-optimizer/values.yaml</code>. A new
+code version changes every dataset id, so expect one extra dataset on the next build.</p>
+<p>Growing the volume: raise <code>spec.resources.requests.storage</code> in <code>templates/pvc.yaml</code>
+(<code>allowVolumeExpansion</code> is on). Never delete the PVC; <code>Prune=false</code> and <code>Retain</code> protect it.</p>
+<h2 id="app-repository-notes">App Repository Notes</h2>
+<ul>
+<li>Code lives in <code>pando85/home-energy-optimizer</code> (moved history-preserving from <code>scripts/energy-baseline</code>
+  on 2026-10-24/25). Releases are cut with <code>just release</code>; the <code>auto-tag</code> workflow uses the repo
+  secrets <code>PAT</code> and <code>GPG_PRIVATE_KEY</code> (both set). Renovate (Mend app) automerges.</li>
+<li>Local analysis env: a gitignored <code>.envrc</code> (direnv) sets <code>UV</code>, <code>KUBE_CONTEXT=grigri</code> and
+  <code>BATTERY_OPTIMIZER_DATA_DIR=~/data/battery-optimizer-cluster</code>.</li>
+<li>The load-forecaster and price-outlook improvement plans (app repo <code>docs/planning/</code>) are <strong>parked
+  since 2026-10-25</strong>; resume triggers are in the load plan §6 (spring 2027 cooling season, battery
+  commissioning, household or rule change). Evaluation results stay in the private data directory.</li>
+<li>Owner decisions, do not re-raise: taxes in <code>tariff.yaml</code> (PVPC, not important); license, DCO and
+  GHCR bootstrap are done or not needed.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

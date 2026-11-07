@@ -1,0 +1,4333 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../velero-backup-failures/">
+      
+      
+        <link rel="next" href="../velero-zfs-stream-pipeline-deadlock/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Velero Truncated ZFS Backup Objects — Netcat Idle Timeout - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#velero-truncated-zfs-backup-objects-netcat-idle-timeout" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/webos-voice-satellite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    webOS voice satellite network requirement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-helm-hook-provisioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD Helm hooks: provisioning Jobs that never run, and hooks that silently stop running
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci-runner-amd64-disk-full/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ci-runner-amd64 fills the k8s-amd64-1 root disk
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-omnibattery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: Omnibattery and the house battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stop-home-assistant-under-argocd/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stopping Home Assistant under ArgoCD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#symptom-and-detection-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Symptom and Detection Signature
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Symptom and Detection Signature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#detection-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      Detection Recipe
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#root-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      Root Cause
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Root Cause">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-version-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-Version Behavior
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-recipe-zstream-dump" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification Recipe: zstream dump
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Verification Recipe: zstream dump">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#structural-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structural Verification
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#size-comparison-unreliable-for-small-streams" class="md-nav__link">
+    <span class="md-ellipsis">
+      Size Comparison (Unreliable for Small Streams)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recovery-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recovery Procedure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recovery Procedure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-a-prerequisite-the-fix-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (a): Prerequisite — the Fix Image
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-b-let-argocd-sync-the-pinned-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (b): Let ArgoCD Sync the Pinned Image
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-c-verify-the-running-image-and-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (c): Verify the Running Image and Behaviour
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-d-delete-post-oct-6-backup-crs-chain-aware-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (d): Delete Post-Oct-6 Backup CRs, Chain-Aware [MUTATING]
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-e-force-a-fresh-full-via-incrbackupcount-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (e): Force a Fresh FULL via incrBackupCount [MUTATING]
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step (e): Force a Fresh FULL via incrBackupCount [MUTATING]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#route-a-recommended-point-the-quarterly-schedule-at-zfspv-full-for-one-run-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Route A (recommended) — point the quarterly schedule at zfspv-full for one run [MUTATING]
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#route-b-temporarily-set-incrbackupcount-0-on-zfspv-incr-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Route B — temporarily set incrBackupCount: "0" on zfspv-incr [MUTATING]
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-f-verify-the-new-backup-is-completed-and-spot-check-drr_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (f): Verify the New Backup is Completed and Spot-Check DRR_END
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-g-restore-test-into-a-scratch-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (g): Restore Test into a Scratch Namespace
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#do-not-do-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      Do Not Do This
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#follow-ups-separate-defects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Follow-Ups (Separate Defects)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../voice-assistant/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Voice assistant
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_7" id="__nav_7_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Voice assistant
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/conversation-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation agent: where small local models fit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/data-register/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi data register
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/kiais-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kiais as the Kivi conversation agent in Home Assistant
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/lessons-learned/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lessons learned
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/model-registry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi model registry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/stt-hint-list-and-learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/whisper-image-build/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building the Kivi Whisper STT image on Forgejo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_7_10" id="__nav_7_10_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    experiments
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_7_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7_10">
+            <span class="md-nav__icon md-icon"></span>
+            experiments
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/conversation-agent-eval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conversation agent evaluation for "Kivi": Kiais gateway metrics, a reusable dry-run harness, and what Home Assistant's built-in intents already cover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/decision-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decision models for Kivi: can a small classifier rescue the commands the built-in intents miss?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/kivi-decider-poc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/kivi-wake-word/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/small-local-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/whisper-gpu-benchmark/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Whisper decoding settings on the GTX 1060: compute type, beam size, VAD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#symptom-and-detection-signature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Symptom and Detection Signature
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Symptom and Detection Signature">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#detection-recipe" class="md-nav__link">
+    <span class="md-ellipsis">
+      Detection Recipe
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#root-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      Root Cause
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Root Cause">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-version-behavior" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per-Version Behavior
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-recipe-zstream-dump" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification Recipe: zstream dump
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Verification Recipe: zstream dump">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#structural-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      Structural Verification
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#size-comparison-unreliable-for-small-streams" class="md-nav__link">
+    <span class="md-ellipsis">
+      Size Comparison (Unreliable for Small Streams)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recovery-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Recovery Procedure
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Recovery Procedure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-a-prerequisite-the-fix-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (a): Prerequisite — the Fix Image
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-b-let-argocd-sync-the-pinned-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (b): Let ArgoCD Sync the Pinned Image
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-c-verify-the-running-image-and-behaviour" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (c): Verify the Running Image and Behaviour
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-d-delete-post-oct-6-backup-crs-chain-aware-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (d): Delete Post-Oct-6 Backup CRs, Chain-Aware [MUTATING]
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-e-force-a-fresh-full-via-incrbackupcount-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (e): Force a Fresh FULL via incrBackupCount [MUTATING]
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step (e): Force a Fresh FULL via incrBackupCount [MUTATING]">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#route-a-recommended-point-the-quarterly-schedule-at-zfspv-full-for-one-run-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Route A (recommended) — point the quarterly schedule at zfspv-full for one run [MUTATING]
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#route-b-temporarily-set-incrbackupcount-0-on-zfspv-incr-mutating" class="md-nav__link">
+    <span class="md-ellipsis">
+      Route B — temporarily set incrBackupCount: "0" on zfspv-incr [MUTATING]
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-f-verify-the-new-backup-is-completed-and-spot-check-drr_end" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (f): Verify the New Backup is Completed and Spot-Check DRR_END
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-g-restore-test-into-a-scratch-namespace" class="md-nav__link">
+    <span class="md-ellipsis">
+      Step (g): Restore Test into a Scratch Namespace
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#do-not-do-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      Do Not Do This
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#follow-ups-separate-defects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Follow-Ups (Separate Defects)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      References
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="velero-truncated-zfs-backup-objects-netcat-idle-timeout">Velero Truncated ZFS Backup Objects — Netcat Idle Timeout</h1>
+<h2 id="summary">Summary</h2>
+<p>Every scheduled Velero backup since <strong>2026-10-13</strong> is <code>PartiallyFailed</code> with 0 successes. The node-side pipeline <code>zfs send -i &lt;prev&gt; &lt;snap&gt; | nc -w 3 &lt;velero-pod-ip&gt; 9011</code> uses OpenBSD netcat's <code>-w 3</code> <strong>idle</strong> timeout. When the receiver stops draining the socket for &gt;=3s (e.g., during S3 multipart upload backpressure), <code>nc</code> exits 0, <code>zfs send</code> dies with SIGPIPE (<code>exit status 141</code>), and the <code>clouduploader</code> receiver in <code>openebs/velero-plugin:3.6.0</code> treats the EOF as success and uploads a partial object while logging <code>successfully uploaded object</code>. Truncated objects have <code>DRR_BEGIN=1, DRR_END=0</code> when inspected with <code>zstream dump</code>.</p>
+<p><strong>Last known-good backup:</strong> <code>retain-quaterly-20261006023052</code> (Oct 6, phase <code>Completed</code>). Its whole incremental chain is structurally complete: Oct 6 → Sep 29 → Sep 28, and for 30 of 32 volumes further back through Sep 26 → Aug 25 → Aug 18 → Aug 11. All verified <code>DRR_END=1</code>.</p>
+<p><strong>Time-critical:</strong> <code>retain-quaterly-20260811023053</code> is the chain ROOT for at least one volume and <strong>expires 2026-11-09</strong>. With <code>incrBackupCount: 11</code> a full arrives every 12 runs; on a weekly schedule that is 84 days against a <code>2160h</code> (90-day) TTL — <strong>about 6 days of margin</strong>, and that margin only holds if every scheduled run succeeds. The Oct 13 – Nov 4 failures consumed it: no run succeeded, so no replacement full was ever produced, and the Aug 11 root aged out on schedule. This is a latent design flaw, independent of the nc bug.</p>
+<h2 id="symptom-and-detection-signature">Symptom and Detection Signature</h2>
+<ul>
+<li>Velero backups are <code>PartiallyFailed</code> with errors like:
+  <div class="highlight"><pre><span></span><code>error taking snapshot of volume: rpc error: code = Unknown desc =
+  zfs: error in uploading snapshot, status:{Failed}
+</code></pre></div></li>
+<li>Node agent logs show:
+  <div class="highlight"><pre><span></span><code>zfs: could not backup &lt;vol&gt; snap &lt;snap&gt; bkpname &lt;name&gt;
+  cmd [zfs send -i &lt;prevsnap&gt; &lt;cursnap&gt;] | [nc -w 3 &lt;receiver-ip&gt; 9011]
+  error: ... pipe source [...]: exit status 141
+</code></pre></div>
+  (SIGPIPE = 128 + 13)</li>
+<li>Velero plugin (receiver) logs show, for the <strong>same</strong> transfer:
+  <div class="highlight"><pre><span></span><code>Transfer done.. closing the server
+successfully uploaded object{...}
+</code></pre></div></li>
+<li>S3 objects are present but structurally incomplete: <code>zstream dump</code> shows <code>DRR_BEGIN=1</code> but <code>DRR_END=0</code> (missing end record).</li>
+</ul>
+<p><strong>Why this is dangerous:</strong> The sender (<code>exit status 141</code>), the receiver (<code>successfully uploaded object</code>) and the backup metadata disagree about the same transfer. The receiver logging success is why the truncation is silent — the object lands in S3 and looks complete unless you inspect its stream structure.</p>
+<h3 id="detection-recipe">Detection Recipe</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># List recent backups and their phase</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>get<span class="w"> </span>backups<span class="w"> </span>--sort-by<span class="o">=</span>.metadata.creationTimestamp<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-20
+
+<span class="c1"># Check ZFSBackup CRs for Failed or missing Done status</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>get<span class="w"> </span>zb<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span>custom-columns<span class="o">=</span><span class="s1">&#39;NAME:.metadata.name,VOLUME:.spec.volumeName,STATUS:.status,PREV:.spec.prevSnapName&#39;</span>
+
+<span class="c1"># Node agent logs for SIGPIPE</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>logs<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>openebs-zfs-node<span class="w"> </span>--tail<span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;exit status 141|pipe source&#39;</span>
+
+<span class="c1"># Velero plugin logs for &quot;successfully uploaded object&quot; on small objects</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>logs<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>velero<span class="w"> </span>--tail<span class="o">=</span><span class="m">500</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;successfully uploaded object&#39;</span>
+</code></pre></div>
+<p><strong>Note:</strong> <code>kubectl logs</code> only covers the current container lifetime. The node pods restarted ~16h before the last failing run (2026-11-04 03:30), so the commands above may return nothing for older runs. Loki (retention begins ~2026-10-06) is the place to look for older failures:</p>
+<div class="highlight"><pre><span></span><code>{job=&quot;systemd-journal&quot;, node_name=~&quot;.+&quot;} |~ &quot;exit status 141|pipe source&quot;
+</code></pre></div>
+<h2 id="root-cause">Root Cause</h2>
+<p>The OpenEBS ZFS driver <strong>v2.11.2</strong> runs the backup pipeline as <code>zfs send -i &lt;prev&gt; &lt;snap&gt; | nc -w 3 &lt;velero-pod-ip&gt; 9011</code>. The <code>-w 3</code> is an <strong>idle</strong> timeout: if no data flows through the socket for 3 seconds, <code>nc</code> exits 0. The receiver (Velero plugin's <code>clouduploader</code>) closes its object writer when the client disconnects, even if the ZFS stream is incomplete. The plugin polls <code>ZFSBackup.status</code> and treats the uploaded object as success, logging <code>successfully uploaded object</code>.</p>
+<h3 id="per-version-behavior">Per-Version Behavior</h3>
+<table>
+<thead>
+<tr>
+<th>Version</th>
+<th>Behavior</th>
+<th>Exit Code</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&lt;=2.10.1</td>
+<td>Masks truncation</td>
+<td>0</td>
+<td>Runs pipeline as <code>bash -c "zfs send \| nc"</code> without <code>pipefail</code>, so sender's SIGPIPE is lost and truncated objects are reported as success. <strong>Do not downgrade to this version</strong> — it hides the bug.</td>
+</tr>
+<tr>
+<td>2.11.0–2.11.1</td>
+<td>Hangs in <code>Init</code></td>
+<td>N/A</td>
+<td><code>runPipe</code> waits for <code>zfs send</code> before <code>nc</code>, so if <code>nc</code> exits early, <code>zfs send</code> blocks on its pipe indefinitely. <code>ZFSBackup</code> stays <code>Init</code>. See <code>velero-zfs-stream-pipeline-deadlock.md</code>.</td>
+</tr>
+<tr>
+<td>2.11.2</td>
+<td>Reports <code>Failed</code></td>
+<td>141</td>
+<td><code>runPipe</code> waits for both children concurrently and joins exit errors. Sender's SIGPIPE is detected and reported. <strong>This is the first version that surfaces the bug visibly.</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Upstream issue:</strong> <a href="https://github.com/openebs/zfs-localpv/issues/773">openebs/zfs-localpv#773</a> (reopened).</p>
+<p><strong>Fix:</strong> Branch <code>fix/configurable-netcat-timeout</code> (commit <code>28f9f96</code>) on <code>pando85/zfs-localpv</code> adds env var <code>ZFS_NETCAT_TIMEOUT</code>, default <strong>300s</strong>, applied to both <code>buildVolumeBackupArgs</code> and <code>buildVolumeRestoreArgs</code>. It cherry-picks cleanly onto tag <code>v2.11.2</code>. The fix image is published at <code>ghcr.io/pando85/zfs-driver:2.11.2-nc-timeout</code> (digest <code>sha256:c6a677d4665524408fe8de8e278ead3cb68419853d57200f4485332cc13fb02c</code>, linux/amd64) — see Recovery Procedure step (a).</p>
+<h2 id="verification-recipe-zstream-dump">Verification Recipe: <code>zstream dump</code></h2>
+<p><strong>WARNING:</strong> <code>zfs send -nvP</code> size comparison is <strong>unreliable below a few MB</strong>. We measured a 6.7x overshoot on a complete 624-byte object, and three false-positive "truncations" on sub-2 MB streams. Use <code>zstream dump</code> to count <code>DRR_BEGIN</code>/<code>DRR_END</code> records instead.</p>
+<h3 id="structural-verification">Structural Verification</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># List objects for a specific volume in a backup (the middle component is not trivially</span>
+<span class="c1"># reconstructable from the volume name alone, so list and grep rather than construct the key).</span>
+<span class="c1"># Every stream object has a .zfsvol sibling (~1.7 KB metadata), so filter it out or you will</span>
+<span class="c1"># try to zstream dump the metadata file.</span>
+<span class="c1"># Retrieve credentials from pass or Vault, not CLI args.</span>
+<span class="c1"># aws --endpoint-url=https://s3.internal.grigri.cloud --profile velero \</span>
+<span class="c1">#   s3 ls s3://velero/backups/&lt;backup-name&gt;/ | grep &lt;volume-name&gt; | grep -v &#39;\.zfsvol$&#39;</span>
+
+<span class="c1"># Download the stream object</span>
+<span class="c1"># aws --endpoint-url=https://s3.internal.grigri.cloud --profile velero \</span>
+<span class="c1">#   s3 cp s3://velero/backups/&lt;backup-name&gt;/&lt;object-key&gt; /tmp/&lt;volume&gt;.zfs</span>
+
+<span class="c1"># Count DRR records</span>
+zstream<span class="w"> </span>dump<span class="w"> </span>/tmp/&lt;volume&gt;.zfs<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;^DRR_BEGIN&#39;</span><span class="w">  </span><span class="c1"># Should be 1</span>
+zstream<span class="w"> </span>dump<span class="w"> </span>/tmp/&lt;volume&gt;.zfs<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;^DRR_END&#39;</span><span class="w">    </span><span class="c1"># Should be 1 for complete, 0 for truncated</span>
+
+<span class="c1"># A complete stream has DRR_BEGIN=1, DRR_END=1.</span>
+<span class="c1"># A truncated stream has DRR_BEGIN=1, DRR_END=0.</span>
+</code></pre></div>
+<p><strong>Object key layout:</strong> The VSL <code>prefix: zfs</code> does <strong>not</strong> create a <code>zfs/</code> directory — it prefixes the object <em>names</em> inside the per-backup directory. The bucket root has only <code>backups/</code> and <code>restores/</code>. The real key format is:</p>
+<div class="highlight"><pre><span></span><code>s3://velero/backups/&lt;backup-name&gt;/zfs-…-&lt;volume-name&gt;-&lt;backup-name&gt;          # ZFS send stream
+s3://velero/backups/&lt;backup-name&gt;/zfs-…-&lt;volume-name&gt;-&lt;backup-name&gt;.zfsvol   # ~1.7 KB metadata
+</code></pre></div>
+<p>Example real key: <code>zfs-retain-quaterly-antdroid-data-retain-quaterly-20261006023052</code>.</p>
+<h3 id="size-comparison-unreliable-for-small-streams">Size Comparison (Unreliable for Small Streams)</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Estimate the expected size (unreliable &lt; 2 MB)</span>
+ssh<span class="w"> </span>&lt;node&gt;<span class="w"> </span><span class="s1">&#39;zfs send -nvP -i &lt;prev-snap&gt; &lt;snap&gt;&#39;</span>
+
+<span class="c1"># Compare with the object size in S3 (list and grep, do not construct the key)</span>
+<span class="c1"># aws --endpoint-url=https://s3.internal.grigri.cloud --profile velero \</span>
+<span class="c1">#   s3 ls s3://velero/backups/&lt;backup-name&gt;/ | grep &lt;volume-name&gt;</span>
+</code></pre></div>
+<p>For small volumes (&lt; 2 MB), the estimate can overshoot by 6x or more. Do not use size comparison alone to declare truncation; use <code>zstream dump</code> for structural verification.</p>
+<h2 id="recovery-procedure">Recovery Procedure</h2>
+<p>All mutating commands are marked <strong>[MUTATING]</strong>. The owner should review and execute these steps manually.</p>
+<p>The <code>velero</code> CLI is installed at <code>/usr/bin/velero</code>. Every <code>velero</code> invocation below carries <code>--kubecontext grigri -n velero</code>.</p>
+<h3 id="step-a-prerequisite-the-fix-image">Step (a): Prerequisite — the Fix Image</h3>
+<p>The fix image is already built and published. No local build or manual push is required.</p>
+<ul>
+<li><strong>Image:</strong> <code>ghcr.io/pando85/zfs-driver:2.11.2-nc-timeout</code></li>
+<li><strong>Digest:</strong> <code>sha256:c6a677d4665524408fe8de8e278ead3cb68419853d57200f4485332cc13fb02c</code></li>
+<li><strong>Platform:</strong> linux/amd64, 5 layers, OCI manifest (<code>application/vnd.oci.image.manifest.v1+json</code>). All three cluster nodes are amd64, so single-arch is sufficient.</li>
+<li><strong>Public and anonymously pullable:</strong> an anonymous manifest GET returns HTTP 200. The cluster needs <strong>no <code>imagePullSecret</code></strong> — this is why the <code>values.yaml</code> pin works as-is.</li>
+<li><strong>Patch verified in the published artifact:</strong> extracting <code>/usr/local/bin/zfs-driver</code> (76,371,717 bytes) from the pulled image and grepping finds <code>ZFS_NETCAT_TIMEOUT</code> and <code>netCatTimeout</code>. The workflow performs this check as a post-push step and fails the run if the string is absent, so a silently unpatched image cannot be published.</li>
+<li><strong>Source:</strong> upstream tag <code>v2.11.2</code> (<code>24bbd89</code>) plus commit <code>7bb8c18</code> (<code>fix(backup): make the netcat idle timeout configurable</code>), which is a clean cherry-pick of <code>28f9f96</code> from branch <code>fix/configurable-netcat-timeout</code>.</li>
+<li><strong>Compiled default:</strong> <code>ZFS_NETCAT_TIMEOUT</code> defaults to 300s when the env var is unset. The chart exposes no <code>env</code> hook for the node plugin container, so the compiled default is what applies.</li>
+</ul>
+<p><strong>How it was built:</strong> Workflow <code>Fork image build</code> at <code>.github/workflows/fork-build-push.yml</code> in <code>pando85/zfs-localpv</code>, on branch <code>fork/2.11.2-nc-timeout</code>, run <code>41893612196</code> (conclusion <code>success</code>).</p>
+<p><strong>How to rebuild:</strong> Push any <code>fork/**</code> branch to the fork, or trigger the workflow manually via <code>workflow_dispatch</code> with the <code>image_tag</code> input (default <code>2.11.2-nc-timeout</code>). The tag is derived from the branch name with the <code>fork/</code> prefix stripped. Do <strong>not</strong> derive it from <code>deploy/helm/charts/Chart.yaml</code> — at tag <code>v2.11.2</code> that file reads <code>version: 2.11.2-prerelease</code>, which would produce the wrong tag.</p>
+<p><strong>CI credential requirement:</strong> <code>GITHUB_TOKEN</code> cannot push to <code>ghcr.io/pando85/*</code> from this repository because it is a fork; the push fails with <code>denied: permission_denied: write_package</code>. This was diagnosed empirically — repo Actions is enabled, repo workflow permissions are <code>write</code>, the workflow declares <code>permissions: packages: write</code>, the package pre-existed, was public and was linked to the repo, and both plain <code>docker push</code> and buildx push failed identically, which ruled out credential plumbing. Adding the <code>org.opencontainers.image.source</code> label did not fix it either. The workflow therefore authenticates with the repository secret <code>GHCR_PAT</code> (a classic PAT with <code>write:packages</code>). GitHub's Container registry docs state that GHCR only supports authentication with a <strong>classic</strong> PAT — fine-grained PATs do not work.</p>
+<p><strong>Leftover bootstrap tag:</strong> During package bootstrapping, an <code>alpine:3.23.5</code> image was pushed as tag <code>_bootstrap</code> purely to create the GHCR package and make it public. It is <strong>not</strong> a driver image and must not be used. It still exists and should be deleted from the package settings UI; the available token lacks <code>delete:packages</code>, so it cannot be removed via API. <strong>Hazard:</strong> pulling <code>ghcr.io/pando85/zfs-driver:_bootstrap</code> yields an Alpine shell, not a CSI driver.</p>
+<h3 id="step-b-let-argocd-sync-the-pinned-image">Step (b): Let ArgoCD Sync the Pinned Image</h3>
+<p>The chart change in this commit pins <code>zfsPlugin.image</code> to <code>ghcr.io/pando85/zfs-driver:2.11.2-nc-timeout</code>. ArgoCD will sync the new image automatically.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Verify the sync — confirm the DaemonSet pods are running the fork image</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-o<span class="w"> </span>wide
+
+<span class="c1"># Check the running container image (the openebs-zfs-plugin container, not the sidecar)</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>openebs-zfs-node<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*]}{.spec.nodeName}{&quot;\t&quot;}{.spec.containers[?(@.name==&quot;openebs-zfs-plugin&quot;)].image}{&quot;\n&quot;}{end}&#39;</span>
+</code></pre></div>
+<h3 id="step-c-verify-the-running-image-and-behaviour">Step (c): Verify the Running Image and Behaviour</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Confirm the fork image is running (image tag must be 2.11.2-nc-timeout)</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span><span class="nv">app</span><span class="o">=</span>openebs-zfs-node<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{range .items[*]}{.spec.nodeName}{&quot;\t&quot;}{.spec.containers[?(@.name==&quot;openebs-zfs-plugin&quot;)].image}{&quot;\n&quot;}{end}&#39;</span>
+
+<span class="c1"># The fork image uses a compiled default of 300s for ZFS_NETCAT_TIMEOUT.</span>
+<span class="c1"># There is no env var to inspect — the value is baked into the binary.</span>
+<span class="c1"># The real proof is behavioural: on the next scheduled run, confirm no</span>
+<span class="c1"># &quot;exit status 141&quot; in node agent logs and all zb CRs reach Done.</span>
+</code></pre></div>
+<p>If the image tag does not match <code>2.11.2-nc-timeout</code>, ArgoCD has not synced yet. Do not proceed to step (d) until the fork image is confirmed running on all eligible nodes.</p>
+<h3 id="step-d-delete-post-oct-6-backup-crs-chain-aware-mutating">Step (d): Delete Post-Oct-6 Backup CRs, Chain-Aware <strong>[MUTATING]</strong></h3>
+<p>Use <code>velero backup delete</code>, <strong>not</strong> <code>kubectl delete backup</code>. The Velero CLI creates a <code>DeleteBackupRequest</code>, which drives the openebs plugin's <code>DeleteSnapshot</code> so the ZFS snapshots and the S3 objects are actually reclaimed. <code>kubectl delete backup</code> removes only the CR and orphans both.</p>
+<p><strong>Note:</strong> The two stuck <code>Deleting</code> backups (<code>retain-quaterly-20260728023032</code>, <code>retain-quaterly-20260804023040</code>) are already covered by follow-up #1; deleting them again is not part of this recovery. The irony is that these stuck backups show <code>DeleteBackupRequest</code> can itself stall — confirm each deletion actually completes rather than assuming it.</p>
+<p><strong>Verified backup inventory</strong> (<code>kubectl --context=grigri -n velero get backups</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Backup name</th>
+<th>Phase</th>
+<th>Expiration</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>retain-quaterly-20260728023032</code></td>
+<td>Deleting (stuck ~99d)</td>
+<td>2026-10-26</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20260804023040</code></td>
+<td>Deleting (stuck ~92d)</td>
+<td>2026-11-02</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20260811023053</code></td>
+<td>Completed</td>
+<td><strong>2026-11-09</strong></td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20260818023002</code></td>
+<td>Completed</td>
+<td>2026-11-16</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20260825023011</code></td>
+<td>Completed</td>
+<td>2026-11-23</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20260926081711</code></td>
+<td>PartiallyFailed</td>
+<td>2026-12-25</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20260928135503</code></td>
+<td>Completed</td>
+<td>2026-12-27</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20260929023005</code></td>
+<td>Completed</td>
+<td>2026-12-28</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20261006023052</code></td>
+<td>Completed</td>
+<td>2027-01-04</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20261013023021</code></td>
+<td>Failed</td>
+<td>2027-01-11</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20261102042133</code></td>
+<td>PartiallyFailed</td>
+<td>2027-01-31</td>
+</tr>
+<tr>
+<td><code>retain-quaterly-20261104033038</code></td>
+<td>PartiallyFailed</td>
+<td>2027-02-02</td>
+</tr>
+<tr>
+<td><code>retain-weekly-20261013023021</code></td>
+<td>PartiallyFailed</td>
+<td>2026-11-12</td>
+</tr>
+<tr>
+<td><code>retain-weekly-20261020023030</code></td>
+<td>PartiallyFailed</td>
+<td>2026-11-12</td>
+</tr>
+<tr>
+<td><code>retain-weekly-20261027023038</code></td>
+<td>PartiallyFailed</td>
+<td>2026-11-12</td>
+</tr>
+<tr>
+<td><code>retain-weekly-20261103023034</code></td>
+<td>PartiallyFailed</td>
+<td>2026-11-13</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PRESERVE (7):</strong>
+- <code>retain-quaterly-20260811023053</code> — chain root for at least one volume, <strong>expires 2026-11-09</strong>
+- <code>retain-quaterly-20260818023002</code>
+- <code>retain-quaterly-20260825023011</code>
+- <code>retain-quaterly-20260926081711</code> — <strong>PartiallyFailed but MUST be preserved</strong> (see note below)
+- <code>retain-quaterly-20260928135503</code>
+- <code>retain-quaterly-20260929023005</code>
+- <code>retain-quaterly-20261006023052</code> — last known-good</p>
+<p><strong>DELETE (7)</strong> — all post-Oct-6, both schedules:
+- <code>retain-quaterly-20261013023021</code>
+- <code>retain-quaterly-20261102042133</code>
+- <code>retain-quaterly-20261104033038</code>
+- <code>retain-weekly-20261013023021</code>
+- <code>retain-weekly-20261020023030</code>
+- <code>retain-weekly-20261027023038</code>
+- <code>retain-weekly-20261103023034</code></p>
+<p><strong>Note on the four weekly targets:</strong> Because the weekly schedule is bound to <code>zfspv-full</code> (consequence #4 in step (e)), the four <code>retain-weekly-*</code> entries above are standalone fulls, not chain links — deleting them cannot break any restore path. Furthermore their TTL is only <code>240h</code> (10 days), so three expire <strong>2026-11-12</strong> and the fourth <strong>2026-11-13</strong>; they will self-clean within about a week of writing. Deleting them is optional tidiness. The part that actually matters is deleting the three post-Oct-6 <code>retain-quaterly-*</code> entries, because those are the ones whose truncated objects and stale <code>Done</code>/<code>Failed</code> CRs would otherwise be eligible as incremental parents.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Delete each post-Oct-6 backup **[MUTATING]**</span>
+<span class="c1"># velero backup delete --kubecontext grigri -n velero --confirm retain-quaterly-20261013023021</span>
+<span class="c1"># velero backup delete --kubecontext grigri -n velero --confirm retain-quaterly-20261102042133</span>
+<span class="c1"># velero backup delete --kubecontext grigri -n velero --confirm retain-quaterly-20261104033038</span>
+<span class="c1"># velero backup delete --kubecontext grigri -n velero --confirm retain-weekly-20261013023021</span>
+<span class="c1"># velero backup delete --kubecontext grigri -n velero --confirm retain-weekly-20261020023030</span>
+<span class="c1"># velero backup delete --kubecontext grigri -n velero --confirm retain-weekly-20261027023038</span>
+<span class="c1"># velero backup delete --kubecontext grigri -n velero --confirm retain-weekly-20261103023034</span>
+
+<span class="c1"># Verify the preserved backups are still present</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span>get<span class="w"> </span>backups<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;20260811|20260818|20260825|20260926|20260928|20260929|20261006&#39;</span>
+</code></pre></div>
+<p><strong>Chain topology note:</strong> <code>retain-quaterly-20260926081711</code> is <code>PartiallyFailed</code> but MUST still be preserved. Sep 28 is a FULL for only 2 volumes and an incremental off Sep 26 for the other 30, so Sep 26 is a load-bearing chain link despite its phase. Its one truncated object belongs to a volume that got a fresh full at Sep 28, so the truncated object is orphaned dead weight, not a broken link. Phase alone does not tell you whether a backup is safe to delete.</p>
+<p>Sep 28, Sep 29 and Oct 6 are 100% incremental for the remaining volumes. The chain is per-volume, so some volumes have longer chains than others.</p>
+<h3 id="step-e-force-a-fresh-full-via-incrbackupcount-mutating">Step (e): Force a Fresh FULL via <code>incrBackupCount</code> <strong>[MUTATING]</strong></h3>
+<p><strong>Do NOT delete <code>Done</code> ZFSBackup CRs to force a full.</strong> That destroys the underlying ZFS snapshots (see "Do Not Do This" below). The source-verified mechanism is to temporarily set <code>incrBackupCount: "0"</code> in the VolumeSnapshotLocation config.</p>
+<p><strong>Source:</strong> <code>getPrevSnap</code> in <code>pkg/zfs/plugin/backup.go</code> (openebs/velero-plugin <strong>v3.6.0</strong>, commit <code>cea57783</code>), lines 79–117:</p>
+<div class="highlight"><pre><span></span><code><span class="kd">func</span><span class="w"> </span><span class="p">(</span><span class="nx">p</span><span class="w"> </span><span class="o">*</span><span class="nx">Plugin</span><span class="p">)</span><span class="w"> </span><span class="nx">getPrevSnap</span><span class="p">(</span><span class="nx">volname</span><span class="p">,</span><span class="w"> </span><span class="nx">schdname</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">incremental</span><span class="w"> </span><span class="p">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="nx">schdname</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// not an incremental backup, take the full backup</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">listOptions</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">metav1</span><span class="p">.</span><span class="nx">ListOptions</span><span class="p">{</span>
+<span class="w">        </span><span class="nx">LabelSelector</span><span class="p">:</span><span class="w"> </span><span class="nx">VeleroSchdKey</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&quot;=&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">schdname</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&quot;,&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">VeleroVolKey</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="s">&quot;=&quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">volname</span><span class="p">,</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">bkpList</span><span class="p">,</span><span class="w"> </span><span class="nx">err</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">bkpbuilder</span><span class="p">.</span><span class="nx">NewKubeclient</span><span class="p">().</span><span class="nx">WithNamespace</span><span class="p">(</span><span class="nx">p</span><span class="p">.</span><span class="nx">namespace</span><span class="p">).</span><span class="nx">List</span><span class="p">(</span><span class="nx">listOptions</span><span class="p">)</span>
+<span class="w">    </span><span class="o">...</span>
+<span class="w">    </span><span class="nx">size</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nb">len</span><span class="p">(</span><span class="nx">bkpList</span><span class="p">.</span><span class="nx">Items</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">count</span><span class="w"> </span><span class="o">:=</span><span class="w"> </span><span class="nx">p</span><span class="p">.</span><span class="nx">incremental</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="nb">uint64</span><span class="p">(</span><span class="nx">size</span><span class="p">)</span><span class="o">%</span><span class="nx">count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="c1">// have to start the next snapshot incremental group, take the full backup</span>
+<span class="w">        </span><span class="k">return</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p">,</span><span class="w"> </span><span class="kc">nil</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">    </span><span class="c1">// otherwise: pick the lexicographically last SnapName among CRs with Status == Done</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>p.incremental</code> is set in <code>pkg/zfs/plugin/zfs.go</code> lines 68–74 from the VSL config key <code>incrBackupCount</code> (<code>ZfsPvIncr</code>), parsed as <code>uint64</code>.</p>
+<p><strong>Consequences:</strong></p>
+<ol>
+<li><strong><code>incrBackupCount: "0"</code> forces a FULL — VERIFIED.</strong> <code>0 &lt; 1</code> short-circuits <code>getPrevSnap</code> to <code>""</code> before any modulo arithmetic. No division by zero. If the key is <strong>absent</strong> entirely, <code>p.incremental</code> keeps Go's zero value <code>0</code>, so absent also means always-full.</li>
+<li>With the production value <code>"11"</code>, <code>count = 12</code>, so a full happens when <code>len(CR list) % 12 == 0</code> — i.e. <strong>11 incrementals between fulls</strong>. The count is <code>len(bkpList.Items)</code>, which <strong>includes CRs from Failed runs</strong>, and is filtered only by the labels <code>velero.io/schedule-name=&lt;schedule&gt;</code> and <code>velero.io/volname=&lt;volume&gt;</code> — <strong>not</strong> by status. Only the <code>prevSnapName</code> <em>selection</em> filters on <code>Status == Done</code>. The post-Oct-6 failed runs therefore shifted the modulo, which is part of why no natural full arrived. <strong>Caveat:</strong> step (d) deletes those failed backups via <code>velero backup delete</code>, which drives the plugin's <code>DeleteSnapshot</code> path; if that removes the corresponding ZFSBackup CRs (inferred from the plugin's delete path, <strong>not verified from source</strong> — the openebs/velero-plugin v3.6.0 source is not available locally to confirm), the CR count drops and the modulo position shifts again. Either way, the forced-full route below is the reliable fix.</li>
+<li><strong>A manual backup that is not triggered by a Schedule has an empty <code>schdname</code>, so it is ALWAYS a full</strong> — the <code>len(schdname) == 0</code> branch. But because the label selector includes <code>schedule-name</code>, a manual full is <strong>not</strong> visible to subsequent scheduled runs as a parent, so it creates a standalone restorable anchor without re-basing the scheduled chain. To re-base the scheduled chain, use Route A or Route B below.</li>
+<li><strong><code>zfspv-full</code> is special by design — the two schedules bind to different VSLs.</strong> <code>schedule-retain-quaterly.yaml</code> binds to <code>volumeSnapshotLocations: [zfspv-incr]</code> (which carries <code>incrBackupCount: "11"</code>), while <code>schedule-retain-weekly.yaml</code> binds to <code>volumeSnapshotLocations: [zfspv-full]</code> (which has no <code>incrBackupCount</code> key at all — verified by <code>grep -n "incrBackupCount" platform/velero/values.yaml</code>, single hit at line 74 inside the <code>zfspv-incr</code> block). Because <code>getPrevSnap</code> returns <code>""</code> (full) when <code>p.incremental &lt; 1</code>, and <code>p.incremental</code> defaults to Go's zero value <code>0</code> when the key is absent, <strong>every <code>retain-weekly-*</code> backup is a standalone FULL by construction</strong>, not a link in any incremental chain. Only <code>retain-quaterly-*</code> backups form an incremental chain. The VSL <code>zfspv-full</code> needs no change to produce a full — that is evidently its purpose.</li>
+</ol>
+<p><strong>Trade-off:</strong> A full backup costs on the order of the Sep 28 backup (~769 GB for all volumes). Continuing the incremental from Oct 6 would be cheaper but risks chain corruption if any intermediate is missing or if the Oct 6 chain root expires (Nov 9 for Aug 11). <strong>Forcing a fresh full is safer and simpler.</strong></p>
+<p><strong>Both routes below must go through git, not <code>kubectl patch</code>.</strong> This repo is GitOps with ArgoCD <code>selfHeal: true</code>; a <code>kubectl patch</code> on the VolumeSnapshotLocation or the Schedule would be reverted almost instantly.</p>
+<p><strong>Why either route re-bases the chain:</strong> <code>getPrevSnap</code> keys the CR lookup on the labels <code>velero.io/schedule-name=&lt;schdname&gt;</code> and <code>velero.io/volname=&lt;vol&gt;</code>, and <code>createBackup</code> sets those labels whenever <code>schdname</code> is non-empty — the VSL only supplies <code>p.incremental</code>. So a quarterly run performed through <code>zfspv-full</code> still creates a ZFSBackup CR labelled <code>schedule-name=retain-quaterly</code>, and the next quarterly run through <code>zfspv-incr</code> will select it as <code>prevSnapName</code> (it picks the lexicographically last <code>Done</code> <code>SnapName</code>). The chain re-bases onto the new full regardless of which VSL produced it.</p>
+<h4 id="route-a-recommended-point-the-quarterly-schedule-at-zfspv-full-for-one-run-mutating">Route A (recommended) — point the quarterly schedule at <code>zfspv-full</code> for one run <strong>[MUTATING]</strong></h4>
+<p>A one-line change to <code>platform/velero/templates/schedule-retain-quaterly.yaml</code>: <code>volumeSnapshotLocations: [zfspv-incr]</code> → <code>[zfspv-full]</code>. This uses the VSL that already exists for exactly this purpose (consequence #4 above) and changes no numeric value.</p>
+<p><strong>Commit 1 — switch VSL [MUTATING]:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Edit platform/velero/templates/schedule-retain-quaterly.yaml:</span>
+<span class="c1"># change volumeSnapshotLocations from [zfspv-incr] to [zfspv-full]</span>
+sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/- zfspv-incr/- zfspv-full/&#39;</span><span class="w"> </span>platform/velero/templates/schedule-retain-quaterly.yaml
+git<span class="w"> </span>add<span class="w"> </span>platform/velero/templates/schedule-retain-quaterly.yaml
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s1">&#39;velero: Force quarterly full via zfspv-full VSL for one run&#39;</span>
+git<span class="w"> </span>push
+<span class="c1"># Wait for ArgoCD to sync, then wait for the next scheduled quarterly run to complete.</span>
+<span class="c1"># Verify:</span>
+velero<span class="w"> </span>backup<span class="w"> </span>get<span class="w"> </span>--kubecontext<span class="w"> </span>grigri<span class="w"> </span>-n<span class="w"> </span>velero
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>get<span class="w"> </span>zb<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Done
+</code></pre></div>
+<p><strong>Commit 2 — revert VSL [MUTATING]:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># After the full backup lands (all zb CRs reach Done, backup phase is Completed):</span>
+sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/- zfspv-full/- zfspv-incr/&#39;</span><span class="w"> </span>platform/velero/templates/schedule-retain-quaterly.yaml
+git<span class="w"> </span>add<span class="w"> </span>platform/velero/templates/schedule-retain-quaterly.yaml
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s1">&#39;velero: Restore quarterly schedule to zfspv-incr VSL&#39;</span>
+git<span class="w"> </span>push
+</code></pre></div>
+<p>Prefer this route because reverting a <code>volumeSnapshotLocations</code> list is harder to get wrong than reverting a counter — there is no numeric value that could silently be left at the wrong setting and turn every future quarterly run into a 769 GB full.</p>
+<h4 id="route-b-temporarily-set-incrbackupcount-0-on-zfspv-incr-mutating">Route B — temporarily set <code>incrBackupCount: "0"</code> on <code>zfspv-incr</code> <strong>[MUTATING]</strong></h4>
+<p>Behaviourally identical to Route A (<code>p.incremental = 0</code> either way), but leaves a live numeric value that must be remembered and restored.</p>
+<p><strong>WARNING:</strong> Leaving <code>incrBackupCount</code> at <code>"0"</code> makes every scheduled quarterly run a full (~769 GB each). Revert immediately after the full lands. Forgetting to revert is the main risk of this route.</p>
+<p><strong>Commit 1 — set <code>incrBackupCount: "0"</code> [MUTATING]:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Edit platform/velero/values.yaml: under zfspv-incr.config, change incrBackupCount to &quot;0&quot;</span>
+sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/incrBackupCount: &quot;11&quot;/incrBackupCount: &quot;0&quot;/&#39;</span><span class="w"> </span>platform/velero/values.yaml
+git<span class="w"> </span>add<span class="w"> </span>platform/velero/values.yaml
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s1">&#39;velero: Force full backup by setting incrBackupCount to 0&#39;</span>
+git<span class="w"> </span>push
+<span class="c1"># Wait for ArgoCD to sync, then wait for the next scheduled run to complete.</span>
+<span class="c1"># Verify:</span>
+velero<span class="w"> </span>backup<span class="w"> </span>get<span class="w"> </span>--kubecontext<span class="w"> </span>grigri<span class="w"> </span>-n<span class="w"> </span>velero
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>get<span class="w"> </span>zb<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Done
+</code></pre></div>
+<p><strong>Commit 2 — revert to <code>"11"</code> [MUTATING]:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1"># After the full backup lands (all zb CRs reach Done, backup phase is Completed):</span>
+sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;s/incrBackupCount: &quot;0&quot;/incrBackupCount: &quot;11&quot;/&#39;</span><span class="w"> </span>platform/velero/values.yaml
+git<span class="w"> </span>add<span class="w"> </span>platform/velero/values.yaml
+git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s1">&#39;velero: Restore incrBackupCount to 11 after forced full&#39;</span>
+git<span class="w"> </span>push
+</code></pre></div>
+<h3 id="step-f-verify-the-new-backup-is-completed-and-spot-check-drr_end">Step (f): Verify the New Backup is <code>Completed</code> and Spot-Check <code>DRR_END</code></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Wait for the backup to complete</span>
+velero<span class="w"> </span>backup<span class="w"> </span>get<span class="w"> </span>--kubecontext<span class="w"> </span>grigri<span class="w"> </span>-n<span class="w"> </span>velero<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-5
+
+<span class="c1"># Check all ZFSBackup CRs reached Done</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>zfs-localpv<span class="w"> </span>get<span class="w"> </span>zb<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-v<span class="w"> </span>Done
+
+<span class="c1"># Download a few objects and verify DRR_END=1 (list and grep for the key, do not construct it)</span>
+<span class="c1"># aws --endpoint-url=https://s3.internal.grigri.cloud --profile velero \</span>
+<span class="c1">#   s3 ls s3://velero/backups/&lt;new-backup-name&gt;/ | grep &lt;volume-name&gt; | grep -v &#39;\.zfsvol$&#39;</span>
+<span class="c1"># aws --endpoint-url=https://s3.internal.grigri.cloud --profile velero \</span>
+<span class="c1">#   s3 cp s3://velero/backups/&lt;new-backup-name&gt;/&lt;object-key&gt; /tmp/&lt;volume&gt;.zfs</span>
+<span class="c1"># zstream dump /tmp/&lt;volume&gt;.zfs | grep -c &#39;^DRR_END&#39;  # Should be 1</span>
+</code></pre></div>
+<h3 id="step-g-restore-test-into-a-scratch-namespace">Step (g): Restore Test into a Scratch Namespace</h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Create a scratch namespace</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>restore-test
+
+<span class="c1"># Restore a few volumes into the scratch namespace **[MUTATING]**</span>
+<span class="c1"># velero restore create --kubecontext grigri -n velero \</span>
+<span class="c1">#   --from-backup &lt;new-backup-name&gt; \</span>
+<span class="c1">#   --namespace-mappings &#39;&lt;original-ns&gt;:restore-test&#39; \</span>
+<span class="c1">#   --include-resources persistentvolumes,persistentvolumeclaims</span>
+
+<span class="c1"># Verify the restored PVCs are bound and the data is intact</span>
+kubectl<span class="w"> </span>--context<span class="o">=</span>grigri<span class="w"> </span>-n<span class="w"> </span>restore-test<span class="w"> </span>get<span class="w"> </span>pvc
+<span class="c1"># kubectl --context=grigri -n restore-test exec -it &lt;pod&gt; -- ls -la /data</span>
+
+<span class="c1"># Clean up the scratch namespace when done **[MUTATING]**</span>
+<span class="c1"># kubectl --context=grigri delete namespace restore-test</span>
+</code></pre></div>
+<h2 id="do-not-do-this">Do Not Do This</h2>
+<ul>
+<li>
+<p><strong>Do NOT downgrade zfs-localpv to 2.10.1.</strong> That version runs the pipeline as <code>bash -c "zfs send | nc"</code> without <code>pipefail</code>, so the sender's SIGPIPE is masked and truncation is reported as success. It is the version that <strong>hid</strong> this bug, not the version that avoids it. See the per-version behavior table above.</p>
+</li>
+<li>
+<p><strong>Do NOT lower <code>multiPartChunkSize</code> below <code>100Mi</code>.</strong> MinIO's <code>MaxUploadParts=10000</code> caps object size at <code>chunkSize x 10000</code>. The largest full send already consumes most of that budget (~769 GB). Reducing <code>multiPartChunkSize</code> would break large fulls with <code>TotalPartsExceeded</code> (openebs/velero-plugin#185, openebs/velero-plugin#188). Keep it at <code>100Mi</code>.</p>
+</li>
+<li>
+<p><strong>Do NOT delete <code>Done</code> ZFSBackup CRs to force a full backup.</strong> The <code>ZFSBackup</code> resource carries the finalizer <code>zfs.openebs.io/finalizer</code>; on deletion the backup controller's <code>syncBkp</code> sees <code>DeletionTimestamp</code>, calls <code>zfs.DestoryBackup(bkp)</code> (upstream typo is real), which builds a <code>ZFSSnapshot</code> from <code>bkp.Spec.SnapName</code> and runs <code>zfs destroy &lt;pool&gt;/&lt;vol&gt;@&lt;snapname&gt;</code>, then removes the finalizer. <strong>Deleting a ZFSBackup CR destroys the underlying ZFS snapshot.</strong> Doing that for the Aug 11 → Oct 6 chain makes those backups permanently unrestorable. Use Route A (switch VSL) or Route B (<code>incrBackupCount: "0"</code>) in step (e) instead.</p>
+</li>
+</ul>
+<h2 id="follow-ups-separate-defects">Follow-Ups (Separate Defects)</h2>
+<p>These defects were found during the investigation and should be addressed separately:</p>
+<ol>
+<li>
+<p><strong>Two backups stuck in phase <code>Deleting</code> for 92-99 days</strong> (<code>retain-quaterly-20260728023032</code>, <code>retain-quaterly-20260804023040</code>) with no <code>deletionTimestamp</code> and no finalizers, despite their <code>DeleteBackupRequest</code> showing <code>Processed</code>. No clear recovery path; may require manual CR deletion and S3 cleanup.</p>
+</li>
+<li>
+<p><strong>~43 orphaned backup prefixes in the bucket</strong> with no corresponding Backup CR; 1008 objects total, 864 zfs-prefixed, 106 under 1 KB. Requires S3 cleanup with <code>mc rm --recursive --force --versions</code> or equivalent.</p>
+</li>
+<li>
+<p><strong>~739 leftover ZFS snapshots on the storage node</strong> dating to Aug 11. Requires manual cleanup with <code>zfs destroy</code> after verifying no ZFSBackup CR references them.</p>
+</li>
+<li>
+<p><strong>Prometheus serves no data at all</strong> (even <code>up</code> returns empty) and Grafana has <strong>zero alert rules</strong> — which is why a 3-week total backup outage was never paged. Requires Prometheus/Grafana investigation and alert rule creation.</p>
+</li>
+<li>
+<p><strong>13 stateful zfs-localpv PVCs have no <code>backup/retain</code> label</strong> and are silently excluded, including gitaly repo storage and several Spilo postgres volumes. Requires labeling the PVCs and verifying they are included in subsequent backups.</p>
+</li>
+<li>
+<p><strong>Retention margin is structurally fragile.</strong> The 34 PVCs labelled <code>backup/retain: quaterly</code> are the large volumes and they only ever receive incrementals except on every 12th run; the 14 PVCs labelled <code>backup/retain: weekly</code> receive a full every week but with a 10-day TTL, so those fulls expire before they can serve as an archive. The label is single-valued, so no volume is in both sets. The consequence is that the big data depends entirely on one incremental chain whose root expires at 90 days while a replacement full only arrives every 12 weekly runs (84 days) — about 6 days of margin, and that margin only holds if every run succeeds. The Oct 13 – Nov 4 failures consumed it: <code>retain-quaterly-20260811023053</code> is expiring on 2026-11-09 with no replacement full in place. This is a latent design flaw independent of the netcat bug. Consider shortening the full cycle, lengthening the TTL, or adding a second full anchor.</p>
+</li>
+</ol>
+<h2 id="references">References</h2>
+<ul>
+<li>General Velero recovery runbook: <code>docs/troubleshooting/velero-backup-failures.md</code></li>
+<li>Velero stream pipeline deadlock (2.11.0-2.11.1 hang): <code>docs/troubleshooting/velero-zfs-stream-pipeline-deadlock.md</code></li>
+<li>Velero schedules: <code>platform/velero/templates/schedule-retain-weekly.yaml</code>, <code>schedule-retain-quaterly.yaml</code></li>
+<li>Velero VolumeSnapshotLocation config: <code>platform/velero/values.yaml</code> (lines 44-80)</li>
+<li>Upstream issue: <a href="https://github.com/openebs/zfs-localpv/issues/773">openebs/zfs-localpv#773</a></li>
+<li>Fix branch: <code>pando85/zfs-localpv</code> branch <code>fix/configurable-netcat-timeout</code> (commit <code>28f9f96</code>)</li>
+<li>Fork image build workflow: <code>pando85/zfs-localpv</code> <code>.github/workflows/fork-build-push.yml</code>, branch <code>fork/2.11.2-nc-timeout</code></li>
+<li>Published fix image: <code>ghcr.io/pando85/zfs-driver:2.11.2-nc-timeout</code> (digest <code>sha256:c6a677d4665524408fe8de8e278ead3cb68419853d57200f4485332cc13fb02c</code>)</li>
+<li>MinIO architecture: <code>docs/deployment/minio-architecture.md</code></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
