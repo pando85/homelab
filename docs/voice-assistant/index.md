@@ -9,6 +9,10 @@ services.
 
 - [Kivi plan](plan.md): goal, live architecture, decisions, workstreams (wake word, Whisper, real-usage
   validation, decision model, fine-tuning) and the open decisions for the owner.
+- [Audio pipeline plan](audio-pipeline-plan.md) (proposal, 2026-11-07): the server half of the mid-term plan
+  shared with the satellite repository: what HA 2026.10.4 does with satellite audio, Whisper and openWakeWord
+  settings, false-wake labels and wake counts, diagnostics in Grafana, capability profiles and device-class
+  pipelines, XVF3800 and ESP32 onboarding, a design-only `kivi-audio` Wyoming proxy, and new data register rows.
 - [Conversation agent evaluation](experiments/conversation-agent-eval.md): Kiais gateway metrics,
   the dry-run harness in `scripts/voice-assistant/agent_eval/`, Spanish test phrases, and which
   requests Home Assistant's built-in intents already handle.
