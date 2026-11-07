@@ -250,3 +250,26 @@ commands twice: stop-to-transcript p50 0.91 s (max 0.95 s) against 0.86 s on 2.4
 the same day; the three differing transcripts (digits for number words, one "Con" for "Pon") were identical on
 2.4.0. GPU memory 1141 MiB before, 1101 MiB after. Not verified: the number of names in the hint list (logged at
 DEBUG only) and the 20-command spot check by the owner.
+
+## Change 2026-11-07: Silero VAD filter on
+
+Owner-approved 2026-11-07 to stop room noise being transcribed as words. Commit `5690fe717`
+(`home-assistant: Enable the Silero VAD filter on whisper`): one argument, `--vad-filter`, added to the whisper
+container in `apps/home-assistant/values.yaml`. Source of the choice: HA-side audio processing research
+(satellite repository, `docs/research/ha-side-audio-processing.md`, section 2.3). The flag is in the image's `--help`
+(3.8.1: "Enable Silero VAD to filter out non-speech which can reduce hallucinations", default off, faster-whisper only).
+
+- **Not enabled:** `--vad-endpointing` (it would replace Home Assistant's end-of-command logic and has no maximum
+  duration), `--vad-clip`. Thresholds stay at the defaults (`--vad-threshold` 0.5, `--vad-min-speech-ms` 250,
+  `--vad-min-silence-ms` 2000).
+- **Rollout:** only the `whisper` pod restarted (new ReplicaSet); `home-assistant-hass-0` did not restart as a result
+  of this change. Argo CD Synced and Healthy at `5690fe717`, pod Ready, args confirmed with `kubectl get pod -o jsonpath`.
+- **Smoke test (synthetic audio only, Piper `es_AR-daniela-high` through a port-forward, Wyoming client):** a 2.6 s
+  Spanish command sentence gave a full transcript (12 words, correct); 5 s of digital silence and 5 s of synthetic
+  white noise both gave an empty transcript. No before/after comparison was run on the old pod, and no household audio
+  was used.
+- **Not verified:** the effect on real room noise and on soft or short real commands (a high VAD threshold can cut
+  them; the defaults are used). Watch for new `stt-no-text-recognized` results on real commands; the Loki transcript
+  study (`data-register.md`) shows empty transcripts.
+- **Rollback:** remove the `--vad-filter` line (and its comment) from the whisper `args` in
+  `apps/home-assistant/values.yaml`, commit, push; Argo CD restarts only the whisper pod. No data or image change.
