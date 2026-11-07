@@ -63,7 +63,17 @@ def _bg_segment(rng, bgs, n):
     return b[k:k + n].astype(np.float64)
 
 
-def _level(rng, mean, sd):
+def parse_level(text):
+    """`MEAN,SD` (normal, clipped to [-45, -10] dBFS) or `u:LO,HI` (uniform, not clipped; v5 quiet sets)."""
+    if text.startswith("u:"):
+        lo, hi = (float(v) for v in text[2:].split(","))
+        return ("u", lo, hi)
+    return tuple(float(v) for v in text.split(","))
+
+
+def _level(rng, mean, sd, hi=None):
+    if mean == "u":
+        return float(rng.uniform(sd, hi))
     return float(np.clip(rng.normal(mean, sd), -45.0, -10.0))
 
 
@@ -170,7 +180,7 @@ def main():
     ap.add_argument("--eval-snr", type=float, help="eval mode: background at this SNR (default: clean)")
     ap.add_argument("--rir-dir")
     ap.add_argument("--p-rir", type=float, default=0.5)
-    ap.add_argument("--level-db", default="-23,5", help="mean,sd of the word's loudest-0.5 s RMS, dBFS")
+    ap.add_argument("--level-db", default="-23,5", help="mean,sd of the word's loudest-0.5 s RMS, dBFS, or u:LO,HI (uniform)")
     ap.add_argument("--long-level-db", type=float, default=-24.0, help="long mode: p90 80 ms RMS, dBFS")
     ap.add_argument("--floor-db", default="-62,-48")
     ap.add_argument("--frontend", default="none", help="path to aec_offline, or none")
@@ -185,7 +195,7 @@ def main():
         bgs += sorted(glob.glob(os.path.join(d, "*.wav"))) * int(wgt)
     cfg = {"bgs": bgs, "snr": tuple(float(v) for v in a.snr.split(",")), "p_bg": a.p_bg,
            "rirs": sorted(glob.glob(os.path.join(a.rir_dir, "*.wav"))) if a.rir_dir else [],
-           "p_rir": a.p_rir, "level": tuple(float(v) for v in a.level_db.split(",")),
+           "p_rir": a.p_rir, "level": parse_level(a.level_db),
            "floor": tuple(float(v) for v in a.floor_db.split(",")), "frontend": a.frontend,
            "long_level": a.long_level_db}
     import multiprocessing as mp

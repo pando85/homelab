@@ -41,7 +41,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kivi_real_common as C  # noqa: E402
-from v2_augment import LAST_AUDIO, LEAD, RATE, TOTAL, _bg_segment, _level, _loudest_rms, _read  # noqa: E402
+from v2_augment import LAST_AUDIO, LEAD, RATE, TOTAL, _bg_segment, _level, _loudest_rms, _read, parse_level  # noqa: E402
 
 PRE = 5 * RATE    # samples kept before the word end
 POST = RATE       # and after it
@@ -143,7 +143,7 @@ def _cfg(a):
         bgs += sorted(glob.glob(os.path.join(d, "*.wav"))) * int(wgt)
     return {"bgs": bgs, "snr": tuple(float(v) for v in a.snr.split(",")), "p_bg": a.p_bg,
             "p_bg_tv": a.p_bg_tv, "rirs": sorted(glob.glob(os.path.join(a.rir_dir, "*.wav"))) if a.rir_dir else [],
-            "p_rir": a.p_rir, "level": tuple(float(v) for v in a.level_db.split(",")),
+            "p_rir": a.p_rir, "level": parse_level(a.level_db),
             "tv_gain": tuple(float(v) for v in a.tv_gain_db.split(",")),
             "floor": tuple(float(v) for v in a.floor_db.split(",")), "frontend": a.frontend}
 

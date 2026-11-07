@@ -52,6 +52,15 @@ def clip_max(sess, z):
     return np.array([p.max() if len(p) else 0.0 for p in score_model(sess, z["data"], windows(z))])
 
 
+def _reals(a):
+    """[(label suffix, path)]: a plain path keeps v3's keys (real_...), LABEL=path gives realLABEL_..."""
+    out = []
+    for spec in a.real:
+        lab, f = spec.split("=", 1) if "=" in spec else ("", spec)
+        out.append((("_" + lab) if lab else "", f))
+    return out
+
+
 def evaluate(sess, a, cache):
     per = []
     for f in a.room:
@@ -69,11 +78,11 @@ def evaluate(sess, a, cache):
         lab, f = spec.split("=", 1)
         mx = cache[f]
         res[lab] = round(float(np.mean(mx > thr)), 4)
-    if a.real:
-        z = cache[a.real]
+    for lab_r, f in _reals(a):
+        z = cache[f]
         mx = z["max"]
         for grp, sel in z["groups"].items():
-            res["real_" + grp] = f"{int((mx[sel] > thr).sum())}/{int(sel.sum())}"
+            res[f"real{lab_r}_" + grp] = f"{int((mx[sel] > thr).sum())}/{int(sel.sum())}"
     res["fa_at"] = {f"{t}": int(fa_grid[np.argmin(np.abs(GRID - t))]) for t in (0.9, 0.95, 0.97, 0.98, 0.99)}
     return res
 
@@ -83,7 +92,8 @@ def main():
     ap.add_argument("--model", action="append", required=True)
     ap.add_argument("--room", action="append", required=True)
     ap.add_argument("--clips", action="append", default=[])
-    ap.add_argument("--real")
+    ap.add_argument("--real", action="append", default=[],
+                    help="v3_real.py eval npz, or LABEL=npz (keys real<LABEL>_...); repeatable (v5: one per speaker)")
     ap.add_argument("--max-fa", type=int, default=2)
     ap.add_argument("--json")
     a = ap.parse_args()
@@ -98,8 +108,8 @@ def main():
         for c in a.clips:
             f = c.split("=", 1)[1]
             cache[f] = clip_max(sess, load_server_exact(f))
-        if a.real:
-            z = load_server_exact(a.real)
+        for _, f_real in _reals(a):
+            z = load_server_exact(f_real)
             names = [n.split("|") for n in z["names"]]
             mx = clip_max(sess, z)
             g = {}
@@ -108,7 +118,7 @@ def main():
                 kind = lab_.split(":")[0]
                 for key in (f"{kind}_{split}_all", f"{kind}_{split}_{'tv' if srcn.startswith('tv') else 'desk'}"):
                     g.setdefault(key, np.zeros(len(names), bool))[i] = True
-            cache[a.real] = {"max": mx, "groups": dict(sorted(g.items()))}
+            cache[f_real] = {"max": mx, "groups": dict(sorted(g.items()))}
         out[lab] = evaluate(sess, a, cache)
         print(lab, json.dumps(out[lab]), flush=True)
     if a.json:

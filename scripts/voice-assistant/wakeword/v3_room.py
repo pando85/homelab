@@ -123,7 +123,8 @@ def cmd_score(a):
     from eval_stream import detections, poisson_ci
     sp = json.loads(Path(a.split).read_text())
     root = Path(sp["negatives"]).parent
-    thr = [float(t) for t in a.thresholds.split(",")]
+    # unique: a repeated threshold used to be counted once per repetition (v3 final passed 0.95 and 0.98 twice)
+    thr = sorted({float(t) for t in a.thresholds.split(",")})
     names = [s.split("=", 1)[0] for s in a.model]
     tasks, devs = [], []
     step = int(a.piece_min * 60 * RATE)
