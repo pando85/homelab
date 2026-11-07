@@ -40,6 +40,41 @@ happened, how it was found, what fixed it, and what now guards against a repeat.
 - **Guard:** the training history logs validation recall at fixed false accepts.
   [kivi wake word, Training](experiments/kivi-wake-word.md#training) records the choice.
 
+## Wake word: digital silence in the evaluation clips decides which model wins
+
+- **Symptom:** models trained on server-exact features (the "cheapest next step" of v1) scored
+  far below v1 on v1's held-out clips (clean recall 0.1 to 23 % against 67 % at the same false
+  accepts on MLS dev), whatever the negatives were. One of them reached 99.5 % on the same clips
+  once they had a noise floor.
+- **Root cause:** v1's evaluation clips (and v1's long-audio pads) contain exact zeros around the
+  word. The server clamps the log-mel per 80 ms chunk at max - 80 dB, so an all-zero chunk gives
+  features that no real microphone produces (the satellites' quietest 80 ms frames are -75 to
+  -50 dBFS after the front-end). A model that never saw digital silence misfires on it; v1 was
+  trained with batch features, where zeros are clamped against the loud part of the batch, and
+  happens to cope. The test measured the padding, not the word.
+- **How detected:** the same candidate scored 35/1 800 on the zero-padded clips and 1 791/1 800
+  on the same clips with a -62 to -48 dBFS white floor through the front-end
+  (`v2_augment.py eval`).
+- **Fix:** every v2 training and evaluation clip carries a mic floor calibrated on real satellite
+  audio and goes through the satellite front-end; v1 and v2 are compared on those features.
+  v1's zero-padded set is still reported, labelled as such.
+- **Guard:** `v2_augment.py` adds the floor by default; its docstring explains why.
+
+## Wake word: the server-exact training window cut the end of the word
+
+- **Symptom:** part of the same v2 shortfall; positives were labelled on a window that did not
+  contain the whole word.
+- **Root cause:** `augment_set.py --stream-onnx` places the word end 0-200 ms before the end of a
+  40 960-sample window, but the last of the 16 server embeddings only sees audio up to sample
+  39 360 (31 whole 1 280-sample chunks, the last embedding ending 4 mel frames before the chunk
+  end). About half of the positives lost up to 100 ms of the final vowel.
+- **How detected:** a 10 ms noise burst moved along the window changes the last embedding only
+  up to sample 39 360 (`v2` diagnostic `diag_rf.py`).
+- **Fix:** `v2_augment.py train` uses a 40 160-sample window and puts the word end 0-200 ms before
+  sample 39 280.
+- **Guard:** the constants `TOTAL` and `LAST_AUDIO` in `v2_augment.py`, with the measurement in
+  their comment.
+
 ## Whisper: `--debug` logs the whole argument namespace, including the Home Assistant token
 
 - **Symptom:** none yet. Found while designing how to log transcripts for the usage study.

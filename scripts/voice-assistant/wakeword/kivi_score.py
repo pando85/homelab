@@ -7,8 +7,8 @@
 Each raw audio file that `kivi_extract.py` stored is streamed from its sample 0 through
 `eval_stream.stream`, which is pyopen-wakeword (the library inside wyoming-openwakeword 2.x, TFLite C
 API) fed in 1280-sample chunks as 16-bit PCM, with the library's own 8 s startup autofill. No
-re-implemented features, no float16 cache. (The server handler's own re-chunking of the Wyoming audio
-could not be checked: its 2.1.0 source is not available here.) The score times are mapped to the
+re-implemented features, no float16 cache. (The 2.1.0 handler does not re-chunk: it resets on AudioStart and passes each
+converted AudioChunk straight to process_streaming; only HA's chunk size is unconfirmed.) The score times are mapped to the
 desk-mic clock through the stored alignment. Files whose alignment was not trusted are left out
 unless `--include-unaligned`. Use the **uncalibrated** kivi model: thresholds are raw (the deployed,
 calibrated file shifts 0.98 to 0.5).
