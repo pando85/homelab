@@ -1,0 +1,8 @@
+# Press this button just before saying "Kivi" to a satellite. The press time is stored in the
+# recorder database; scripts/voice-assistant/wakeword/kivi_extract.py --button-takes uses it to
+# find the word in the wake-stage audio. The button does nothing else.
+# Procedure and data rules: docs/voice-assistant/experiments/kivi-wake-word.md and data-register.md.
+input_button:
+  kivi_take:
+    name: Kivi take
+    icon: mdi:microphone-message
