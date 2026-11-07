@@ -5,7 +5,7 @@ model for the Spanish wake word "kivi" (/ˈki.βi/) and to compare it with the s
 offline on a PC. The method, the results and the deployment notes are in
 [docs/voice-assistant/experiments/kivi-wake-word.md](../../../docs/voice-assistant/experiments/kivi-wake-word.md).
 
-Nothing here plays or records audio. Datasets, generated clips, features and trained models stay in
+Nothing here plays audio, and no tool here records unless the owner runs `kivi_session.py` (the real-voice tools below; tested with synthetic signals only). Datasets, generated clips, features and trained models stay in
 a private work directory outside git (`$WORK`). They are not committed: the datasets and the Piper
 voices have their own licenses, and the negative features (ACAV100M) are CC BY-NC-SA 4.0, so a
 model trained with them carries non-commercial share-alike terms (the same as the stock
@@ -25,6 +25,13 @@ openWakeWord models).
 | `fast_report.py` | **Reported numbers:** recall per voice and word, false accepts per hour with intervals; refuses features that are not server-exact |
 | `eval_stream.py` | The server's runtime itself (`pyopen-wakeword`, TFLite C API): per-clip and long-audio streaming; slow, used for `alexa` and for checks |
 | `test_server_exact_features.py` | Regression test: server streaming vs batched server-exact features, and the report's refusal of other features |
+| `kivi_session.py` | **Owner-run:** text-only cues and a dual PC recording (desk mic, webcam mic) for a real-voice session; `session.json` |
+| `kivi_extract.py` | **Owner-run:** copies the satellite's wake files out of the HA pod, aligns them to the desk mic, cuts labelled clips of 3 sources into the private dataset and its manifest; `--button-takes` for takes marked by `input_button.kivi_take` |
+| `kivi_score.py` | Scores kivi (uncalibrated head) and alexa on a session through the server-exact path; markdown and JSON aggregates only |
+| `kivi_import_phone.py` | Imports a phone voice memo as `phone` takes (consent flag required) |
+| `kivi_negatives.py` | **Owner-triggered, not run yet:** copies about 30 h of closed wake files as real negatives |
+| `kivi_real_common.py`, `kivi_devices.json` | Shared helpers (WAV, GCC-PHAT alignment, energy takes, manifest schema, split policy); satellite name to HA device-id prefix |
+| `test_kivi_real.py` | Tests with synthetic signals (alignment, manifest, prompter dry-run, extraction, phone import, button takes, negatives, scorer) |
 
 **Never report numbers from batch features** (`AudioFeatures.embed_clips`, `fast_eval.py embed`
 without `--stream-onnx`): openWakeWord's melspectrogram clamps at max - 80 dB over its whole input,
@@ -112,3 +119,11 @@ single word (the MLS "low" Spanish voices and `ca_ES-upc_pau-x_low`) are exclude
 than their phoneme count allows are synthesized again. `eval_stream.py` runs the server's own
 runtime and is the reference for `alexa`; it is slow (about 14x real time per process on an idle
 machine, far slower under load).
+
+## Real-voice tools
+
+Procedure, split policy and data rules: [the experiment](../../../docs/voice-assistant/experiments/kivi-wake-word.md#real-voice-measurement-and-dataset-tools-built-2026-11-07-not-yet-run-on-a-person) and the [data register](../../../docs/voice-assistant/data-register.md). The dataset lives at `/work/workspaces/kivi-wakeword/datasets/real/` (mode 700, permanent: the tools contain no deletion code). Tests:
+
+```sh
+OMP_NUM_THREADS=4 $WORK/.venv/bin/python -m pytest $H/test_kivi_real.py -q     # light: 4 threads, CPU
+```

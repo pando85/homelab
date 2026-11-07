@@ -1,0 +1,5 @@
+{
+  "_comment": "Satellite name -> Home Assistant device-id prefix (the directory name under /voice-recordings starts with it). The dataset source label is derived from the name: c3-a -> tv-c3a. Add a satellite here, or pass --device-id-prefix.",
+  "c3-a": {"device_id_prefix": "bd8256"},
+  "c3-b": {"device_id_prefix": "fda18f"}
+}
