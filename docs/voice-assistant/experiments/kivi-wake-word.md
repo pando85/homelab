@@ -257,7 +257,7 @@ Pre-flight: `kivi_session.py` and `kivi_extract.py` read `.storage/assist_pipeli
 
 ### Trade-offs and doubts
 
-The alignment confidence is a peak-to-sidelobe ratio of GCC-PHAT in 15 s windows; unrelated audio can look sharp in one window, so a source is trusted only when several windows agree on one offset line (small residual, plausible drift). The Postgres read (`--button-takes` without `--presses-file`) is a single `SELECT` through `kubectl exec ... psql` with `default_transaction_read_only`; it was not run against the cluster, so the pod, user and container defaults (`home-assistant-postgres-0`, `postgres`) are unverified: if it fails, pass `--presses-file` with a JSON list of the press times from the HA logbook.
+The alignment confidence is a peak-to-sidelobe ratio of GCC-PHAT in 15 s windows; unrelated audio can look sharp in one window, so a source is trusted only when several windows agree on one offset line (small residual, plausible drift). The Postgres read (`--button-takes` without `--presses-file`) is a single `SELECT DISTINCT` of the button's state values through `kubectl exec ... psql` with `default_transaction_read_only`. Checked on 2026-11-07 against the cluster with read-only SELECTs: the defaults (`home-assistant-postgres-0`, container `postgres`, user `postgres`, database `home_assistant`) work, `input_button.kivi_take` exists in `states_meta` with state `unknown` (never pressed), and the query returns 0 presses. A real press has not been read yet.
 
 ## Decided training recipe (2026-11-07)
 
