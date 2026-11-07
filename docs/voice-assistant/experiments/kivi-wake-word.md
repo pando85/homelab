@@ -633,6 +633,12 @@ The v1 and v2 session-2 counts equal the earlier `kivi_score.py` runs (10/39 and
 blocks), so the path is unchanged. v2 has far more false accepts on the test part (2.17/h) than over
 all 33 h (0.69/h): the test part is daytime on 2026-11-06.
 
+**Correction (2026-11-07, found during v5):** the v1 and v2 room-test figures in this table are doubled.
+`v3/final.sh` passed 0.95 and 0.98 twice in `--thresholds`, and `v3_room.py score` counted each repetition
+(fixed: the thresholds are now made unique). The rerun in the v5 section gives v1 at 0.98: c3-a 1, c3-b 0,
+pooled **1 = 0.12/h [0.003, 0.67]**; v2 at 0.95: c3-a 5, c3-b 4, pooled **9 = 1.08/h [0.49, 2.06]**. The v3
+figures (0.8653, not repeated) and every other threshold are unchanged (re-checked: identical counts).
+
 **v3 trade-off on real audio** (tv-c3a session 2 against the room test part, pooled 8.31 h; c3-a /
 c3-b counts in brackets). A DET-style table, not a threshold choice:
 
@@ -729,6 +735,234 @@ Consent: relayed by the owner on 2026-11-07 (recorded in dataset 9 of the data r
 | v3 | raw 0.8653 | 4/21 = 0.19 [0.08, 0.40] | 1/3 [0.06, 0.79] | 1/3 [0.06, 0.79] | 2/15 [0.04, 0.38] | 2/21 = 0.10 [0.03, 0.29] | 0.71 |
 
 Per cluster at raw 0.9: v1 1/3, 3/3, 10/15; v2 1/3, 2/3, 8/15; v3 0/3, 1/3, 1/15. Sensitivity to the window (pooled, server-0.5 point): from press - 4 s to press + 1 s without the previous-press limit: v1 7/21, v2 10/21, v3 6/21; the tool's after-press window (press - 1 s to press + 7 s, which reaches the next take): v1 8/21, v2 11/21, v3 7/21. The no-speech take counts as a miss in every figure (without it, n is 20). The clusters are not independent samples of the voice (one speaker, one session, 2 minutes), and the intervals are wide. These are the same models that scored higher on the spk01 and synthetic sets; on this speaker the v3 server-0.5 point (chosen for a false-accept budget) recovers fewer takes than v1 and v2 at theirs.
+
+## v5 (2026-11-07, candidate, not deployed)
+
+**Status:** candidate model files, a one-shot comparison with v1, v2 and v3, and a leave-spk02-out
+ablation. **Not deployed**; no change in Home Assistant, the cluster, the TVs or kivi-models. PC only.
+Real numbers are **observed on c3-a and c3-b**, synthetic ones **observed-offline**. Nothing was listened to,
+transcribed or printed. **Verdict: v5 does not meet its goal.** At its false-accept point it is level with v3
+on synthetic voices (+5 points on quiet speech) and below v3 on spk01. On spk02 it is 2/4, which is too few
+takes to rank anything.
+
+**Why.** v3 fitted spk01: 33/39 on spk01's session 2, but 44 % on held-out synthetic voices (v2: 78 %) and
+5/21 on spk02's c3-b button takes. v5 adds spk02's real takes and aims at household voices in general:
+synthetic held-out recall close to v2's while gaining on both real speakers.
+
+### What changed against v3
+
+1. **spk02's real takes** (`v5_buttons.py`, revision `stp3`, tv-c3b only):
+   - 10 clean takes: `training_rows`, take 2 excluded (no speech). The word end is the row's clip minus the
+     1 s pad; a fresh energy-burst span agrees on all 10.
+   - 3 extra takes cut from the raw wake file, labelled separately (`s2x`). They were picked from the 8
+     `needs_review` takes and the 2 without a clip. The window is max(press - 4 s, previous take's last press +
+     0.3 s) to the last press + 1 s; bursts are measured against the file's 10th-percentile 20 ms floor. A burst
+     had to start before the press. Rule 1 (first to last such burst, at most 2.5 s) kept none. Rule 2 (the last
+     burst before the press alone, at most 1.2 s) kept takes 5, 11 and 14. Dropped: takes 1, 4 and 16 (speech
+     only after the press), 6 and 21 (span too long), 9 and 19 (no burst).
+   - Hold-out: 4 of the 10 clean takes (seed 2026, by take: 3, 7, 13, 15). That leaves 6 clean and 3 extra
+     takes for training. spk01's split is as in v3 (10 of 51 takes held out).
+   - Augmentation as v3's tv takes, 600 copies per take.
+2. **Speakers balanced:** per step, spk01 gets 32 real positives (16 tv-c3a, 16 desk sources) and spk02 gets 32
+   (22 clean, 10 extra).
+3. **Real share lowered** from 27 % (v3) to **17 %**: 64 real positives against 256 synthetic and 64 quiet
+   synthetic. Tuned on validation in round 1 (below).
+4. **Level widened down to quiet speech.**
+   - Measured on the TV channel (`v5/levels.py`, numbers only), as the loudest 0.5 s RMS, which is the unit of
+     `v2_augment.py --level-db` (post-gain, the level after the front end): spk02's 20 speech takes are
+     -35.1 to -17.1 dBFS (median -30.3; sample peaks -20.8 to -3.1). spk01's tv-c3a takes are -28.5 to
+     -19.3 (median -23.7).
+   - The old level, N(-23, 5) dBFS, reaches spk02's 25th percentile in about 3 % of draws.
+   - Added: 20 000 quiet synthetic positives and 12 000 quiet synthetic near-words, at uniform -45 to -28 dBFS
+     (`--level-db u:-45,-28`, new). -45 dBFS RMS is about -31 dBFS sample peak, close to the brief's "about
+     -35 dBFS peak".
+   - Real tv takes of both speakers get -12 to +6 dB of gain (v3: ±6). spk01's desk takes get N(-27, 7).
+5. **Warm start from v2** (2 000 steps, lr 1e-4, layer 64, the v3 batch otherwise). Validation said v2: the v3
+   warm start lost 8 points of synthetic clean recall at equal room false accepts (35.9 against 43.6 %).
+6. **Validation (selection only):**
+   - Each model's threshold for at most 2 false accepts on the room selection part (8.38 h, 0.24/h).
+   - Held-out synthetic voices: clean, TV at 10 and 0 dB, and a new quiet set (the same 1 800 clips at
+     -35 dBFS, spk02's quietest take).
+   - Synthetic near-words: the v1 set, the v3 set and a quiet copy of the v3 set.
+   - Real held-out takes: spk01's 10 (6 "kivi" on tv-c3a) and spk02's 4.
+   - The room test part and spk01's session 2 were not used for any choice.
+
+### Candidates (validation only)
+
+At each model's own threshold for at most 2 false accepts in 8.38 h of the room selection part. "spk01 tv" is
+spk01's held-out "kivi" takes on tv-c3a (6); "spk02" is the 4 held-out takes (features path, `v3_select.py`).
+
+| Variant | Raw threshold | Synthetic clean / 10 dB / 0 dB / quiet | Near-words, v3 set | spk01 tv | spk02 |
+| --- | --- | --- | --- | --- | --- |
+| v2 | 0.974 | 54.2 / 20.3 / 8.7 / 48.3 % | 13.7 % | 1/6 | 0/4 |
+| v3 | 0.865 | 44.0 / 21.1 / 8.7 / 36.2 % | 8.8 % | 6/6 | 2/4 |
+| no real positives (quiet synthetic only) | 0.909 | 29.8 / 14.8 / 5.8 / 27.6 % | 4.7 % | 0/6 | 0/4 |
+| real 9 % (32 per step) | 0.887 | 43.5 / 20.3 / 8.6 / 40.8 % | 10.9 % | 4/6 | 1/4 |
+| **real 17 % (64)** | 0.895 | 43.6 / 21.2 / 8.4 / 40.2 % | 12.0 % | 5/6 | 2/4 |
+| real 23 % (96) | 0.918 | 39.0 / 18.2 / 7.4 / 35.2 % | 10.0 % | 5/6 | 2/4 |
+| 17 %, no quiet synthetic | 0.903 | 46.5 / 20.4 / 8.5 / 40.8 % | 12.6 % | 5/6 | 2/4 |
+| 17 %, v3 warm start | 0.919 | 35.9 / 15.6 / 7.2 / 30.8 % | 6.2 % | 6/6 | 2/4 |
+| 17 %, real near-words 64 + 64 at weight 15 (v3) | 0.886 | 42.1 / 19.2 / 7.7 / 39.4 % | 8.0 % | 5/6 | 1/4 |
+| 17 % + spk02 extras, synthetic near weight 3, seeds 1 / 2 / 3 | 0.881 / 0.918 / **0.893** | 48.2 / 39.4 / **45.6** clean, **41.6** quiet (seed 3) | 14.4 / 11.2 / **13.7** % | 5/6 each | 2/4 each |
+| 17 % + extras, synthetic near weight 1, seeds 1-3 | 0.906-0.938 | 46.2-58.9 clean, 38.3-50.5 quiet | 13.2-20.5 % | 6/6 | 2/4 |
+| 17 % without extras, near weight 1, seeds 1-3 | 0.887-0.932 | 46.7-65.8 clean, 39.8-57.1 quiet | 12.2-23.1 % | 6/6 | 2/4 |
+| 17 %, no synthetic near-words | 0.952 | 60.7 / 25.7 / 11.4 / 46.2 % | 20.2 % | 6/6 | 2/4 |
+| 17 %, 512 synthetic positives per step | 0.943 | 59.1 / 27.3 / 13.3 / 46.9 % | 19.7 % | 6/6 | 2/4 |
+| weight average of the 3 near-weight-1 seeds without extras (`soup_nox_sn1`) | 0.894 | 63.9 / 29.4 / 13.4 / 54.8 % | 21.3 % | 6/6 | 2/4 |
+| weight average of the 3 near-weight-3 seeds with extras | 0.896 | 45.1 / 20.9 / 8.8 / 40.5 % | 13.4 % | 5/6 | 2/4 |
+
+Findings (validation only):
+
+- **The real share** moves the real takes: with none, 0/6 and 0/4; at 9 %, 4/6 and 1/4; at 17 %, 5/6 and 2/4.
+  At 23 %, synthetic recall drops. The evidence review's 5-10 % was too low for spk02 here.
+- **Seeds dominate.** One configuration ranges over 20 points of synthetic clean recall across 3 seeds. The
+  threshold rests on the third-highest room peak in 8.4 h. Synthetic recall and near-word acceptance rise
+  together, so seeds mostly change the operating point, not how well the model separates.
+- **Synthetic near-words are the main cost** to synthetic recall, as in v3. At near-word weight 1, or with
+  none, synthetic recall reaches or passes v2 at the same room budget (59-66 % clean against 54 %), but
+  near-word acceptance rises to 19-23 % (v2 13.7 %).
+- **spk02's extra takes** made no difference on held-out takes: 2/4 with and without them at every seed.
+- **Rule, fixed before round 2:** keep candidates with spk01 tv at least 5/6, spk02 at least 2/4 and v3-set
+  near-words no higher than v2's 13.7 %; then take the highest mean synthetic recall (clean, 10 dB, 0 dB,
+  quiet). Passing: extras + near weight 3, seed 3 (mean 29.5); without extras, near weight 1, seed 1 (29.3);
+  the averaged model with extras (28.8). These are equal within the seed spread. **Chosen by the rule:
+  `x_sn3_s3`, raw 0.89283.** It does not reach v2's synthetic recall at equal false accepts (45.6 against
+  54.2 % clean).
+- **Not tested on the test data:** `soup_nox_sn1` (weight average, near weight 1). On validation it meets the
+  brief's criterion on synthetic and real voices (63.9 % clean, 54.8 % quiet, 6/6 and 2/4), but it accepts more
+  near-words (21.3 % against v2's 13.7 % at the same budget). It is kept in `v5/alt/` to score on spk02's
+  fresh test takes. That set is new data, so it can decide between the two without reusing a test.
+
+### Final evaluation (one shot)
+
+`v5/final.sh`, run once after the choice:
+
+- spk01's session 2 through `kivi_score.py` (B4c7 excluded).
+- spk02's 4 held-out takes through `kivi_score.py --button-takes`, with every other take excluded.
+- The room test part through `v3_room.py score`.
+- The synthetic sets through the server-exact ONNX path.
+
+Each model is at its own server-0.5 point. Intervals: Wilson 95 % for recall, exact Poisson 95 % for false
+accepts.
+
+| | v1 (0.98) | v2 (0.95) | v3 (0.8653) | **v5 (0.89283)** |
+| --- | --- | --- | --- | --- |
+| spk01 S2 tv-c3a, 1.5 m TV silent | 3/10 | 8/10 | 10/10 | 10/10 |
+| 1.5 m TV on | 2/10 | 6/10 | 9/10 | 9/10 |
+| 3 m TV silent | 2/10 | 2/10 | 7/10 | 6/10 |
+| 3 m TV on | 3/9 | 5/9 | 7/9 | 5/9 |
+| TV silent (pooled) | 5/20, 25 % [11, 47] | 10/20, 50 % [30, 70] | 17/20, 85 % [64, 95] | 16/20, 80 % [58, 92] |
+| TV on (pooled) | 5/19, 26 % [12, 49] | 11/19, 58 % [36, 77] | 16/19, 84 % [62, 94] | 14/19, 74 % [51, 88] |
+| All | 10/39, 26 % [15, 41] | 21/39, 54 % [39, 68] | 33/39, 85 % [70, 93] | 30/39, 77 % [62, 87] |
+| S2 near-word hits (of 12): tv-c3a / pc-mic / webcam-mic | 4 / 4 / 6 | 6 / 5 / 9 | 7 / 2 / 4 | 6 / 2 / 4 |
+| tv-c3a near-word hits (2 each): "aquí vi", kili, kiri, kiwi, Pipi, tivi | 0, 0, 2, 1, 1, 0 | 0, 2, 2, 1, 1, 0 | 0, 1, 2, 1, 1, 2 | 1, 0, 2, 1, 1, 1 |
+| S2 "kivi" recall, pc-mic / webcam-mic (of 39) | 2 / 3 | 5 / 12 | 28 / 34 | 27 / 30 |
+| **spk02 c3-b, 4 held-out takes (too few to rank)** | 3/4 | 3/4 | 1/4 | 2/4 |
+| Room test part, c3-a (4.11 h) | 1 = 0.24/h [0.01, 1.36] | 5 = 1.22/h [0.40, 2.84] | 1 = 0.24/h [0.01, 1.36] | 0 (< 0.90/h) |
+| Room test part, c3-b (4.20 h) | 0 (< 0.88/h) | 4 = 0.95/h [0.26, 2.44] | 1 = 0.24/h [0.01, 1.33] | 3 = 0.71/h [0.15, 2.09] |
+| Room test part, pooled (8.31 h) | 1 = 0.12/h [0.003, 0.67] | 9 = 1.08/h [0.49, 2.06] | 2 = 0.24/h [0.03, 0.87] | 3 = 0.36/h [0.07, 1.05] |
+| Synthetic held-out voices, clean (n = 1 800) | 45.7 % [43.4, 48.0] | 77.9 % [75.9, 79.8] | 44.0 % [41.7, 46.3] | 45.6 % [43.3, 47.9] |
+| TV content at 10 dB | 24.9 % [22.9, 26.9] | 32.4 % [30.3, 34.6] | 21.1 % [19.3, 23.1] | 21.3 % [19.4, 23.2] |
+| TV content at 0 dB | 11.0 % [9.6, 12.5] | 14.5 % [13.0, 16.2] | 8.7 % [7.5, 10.1] | 9.3 % [8.1, 10.8] |
+| Quiet, -35 dBFS (spk02's quietest take) | 37.9 % [35.7, 40.2] | 69.4 % [67.3, 71.5] | 36.2 % [34.0, 38.5] | 41.6 % [39.4, 43.9] |
+| Near-words, held-out voices: v1 set (1 799) / v3 set (1 220) / v3 set quiet | 3.2 / 9.9 / 7.9 % | 9.3 / 27.1 / 24.8 % | 3.3 / 8.8 / 7.3 % | 5.5 / 13.7 / 11.3 % |
+
+The v1, v2 and v3 session-2 counts equal the v3 run, so the path is unchanged. **spk02's real check is too
+small:** 4 takes from one 2-minute session; a single take moves the rate by 25 points. The synthetic held-out
+voices were used for the choice, so their numbers are not independent of it.
+
+**v5 trade-off** (DET-style, not a threshold choice). spk01 session 2 on tv-c3a; spk02's 4 held-out takes; the
+room test part pooled over 8.31 h (c3-a / c3-b in brackets); synthetic held-out clean / quiet.
+
+| Raw threshold | S2 recall (of 39) | TV silent (of 20) | TV on (of 19) | Near-word hits (of 12) | spk02 (of 4) | Room false accepts | Per hour [95 %] | Synthetic clean / quiet |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0.5 | 35 | 19 | 16 | 10 | 4 | 131 (50 / 81) | 15.8 [13.2, 18.7] | 94.8 / 92.5 % |
+| 0.7 | 34 | 18 | 16 | 10 | 4 | 35 (14 / 21) | 4.21 [2.93, 5.86] | 82.5 / 77.6 % |
+| 0.8 | 34 | 18 | 16 | 8 | 4 | 14 (5 / 9) | 1.68 [0.92, 2.83] | 67.1 / 62.6 % |
+| 0.85 | 32 | 17 | 15 | 7 | 4 | 5 (1 / 4) | 0.60 [0.20, 1.40] | 56.2 / 52.6 % |
+| 0.8653 | 31 | 16 | 15 | 6 | 3 | 4 (0 / 4) | 0.48 [0.13, 1.23] | 52.1 / 48.4 % |
+| **0.89283** | **30** | **16** | **14** | **6** | **2** | **3 (0 / 3)** | **0.36 [0.07, 1.05]** | **45.6 / 41.6 %** |
+| 0.9 | 30 | 16 | 14 | 5 | 2 | 2 (0 / 2) | 0.24 [0.03, 0.87] | 43.8 / 39.7 % |
+| 0.93 | 27 | 14 | 13 | 4 | 2 | 0 | 0 (< 0.44) | 34.4 / 30.1 % |
+| 0.95 | 25 | 13 | 12 | 1 | 1 | 0 | 0 (< 0.44) | 27.1 / 22.7 % |
+| 0.97 | 14 | 8 | 6 | 1 | 1 | 0 | 0 (< 0.44) | 17.2 / 14.3 % |
+| 0.98 | 5 | 4 | 1 | 0 | 1 | 0 | 0 (< 0.44) | 9.6 / 8.6 % |
+
+**Server runtime check:** the 12 v2 check clips went through pyopen-wakeword 1.1.0 with the TFLite files. The
+maximum scores matched the ONNX path to 0.0006, and the calibrated file at 0.5 decided like the raw file at
+0.89283 on all 12.
+
+### Leave-spk02-out ablation
+
+The chosen recipe without any spk02 draws, seeds 1-3, each at its own room-selection threshold (0.872, 0.866,
+0.866). Scored with the server runtime (`kivi_score.py --button-takes`). These models never saw spk02, so all 20
+of her speech takes are unseen (take 2 has no speech).
+
+| Model | spk02, 4 held-out takes | spk02, all 20 speech takes | Median max score (21 takes) | Synthetic clean (validation) |
+| --- | --- | --- | --- | --- |
+| without spk02, seeds 1 / 2 / 3 | 0/4, 0/4, 0/4 | 2/20, 2/20, 2/20 | 0.66 / 0.64 / 0.66 | 46.9 / 49.3 / 51.0 % |
+| v5 (with spk02) | 2/4 | not a test (trained on 9 of them) | 0.96 | 45.6 % |
+| v1 / v2 / v3 (never saw spk02) | 3/4, 3/4, 1/4 | 5/20, 10/20, 5/20 | 0.95 / 0.94 / 0.71 | 46.6 / 54.2 / 44.0 % |
+
+- spk02's takes are what move spk02, at a small cost in synthetic recall.
+- **The recipe does not generalise to an unseen speaker at this false-accept budget.** Without her takes it
+  gets 2/20, below v1 and v2. Training on spk01, the room negatives and the near-words makes the model stricter
+  on unknown voices than v1 or v2 were. Inferred: a third household voice will do about as badly unless its
+  takes are added.
+- spk02's 3 extra takes: no effect on her held-out takes (2/4 with and without at 3 seeds, validation path).
+
+### Deviations from the brief, with the evidence
+
+- **Real share 17 %, not lower.** 9 % lost spk01 (4/6) and spk02 (1/4) on validation, with the same synthetic
+  recall.
+- **The success criterion is not met** under the near-word rule fixed before round 2. Dropping that rule
+  meets it on validation (`soup_nox_sn1`), at about twice v2's near-word rate at equal false accepts. This is
+  the owner's call.
+- **"-35 dBFS peak"** was read in the augmentation's own unit (loudest 0.5 s RMS): -45 to -28 dBFS RMS covers
+  spk02's quietest take (-35.1) with 10 dB of margin.
+- **Selection was by validation, not retrained:** the final model is the validated one; the hold-out takes
+  were not added back.
+
+### Scoring the fresh spk02 test takes
+
+After `kivi_extract.py --button-takes --device c3-b --speaker spk02 --split test --since ... --until ...`
+(say, then press), one command from `/work/workspaces/kivi-wakeword` gives recall per model at its server-0.5
+point and at the default thresholds. Add `--exclude-take N` for a take with no speech; the reports go into the
+session's `scores/` directory:
+
+```sh
+systemd-run --user --scope -p MemoryMax=12G -p CPUQuota=800% nice -n 10 .venv/bin/python -I \
+  ~/homelab/scripts/voice-assistant/wakeword/kivi_score.py --button-takes datasets/real/<new button session> \
+  --model v1=final/kivi_uncalibrated.tflite --model v2=v2/final/kivi_uncalibrated.tflite \
+  --model v3=v3/final/kivi_uncalibrated.tflite --model v5=v5/final/kivi_uncalibrated.tflite \
+  --model v5alt=v5/alt/soup_nox_sn1/kivi_uncalibrated.tflite \
+  --calibration v1=0.98 --calibration v2=0.95 --calibration v3=0.8653 --calibration v5=0.89283 --calibration v5alt=0.89379
+```
+
+### Artifacts (private, not committed)
+
+In `/work/workspaces/kivi-wakeword/v5/`:
+
+- `final/`: model files, `SHA256SUMS`, `kivi_uncalibrated.calibration.json`, training history.
+- `alt/soup_nox_sn1/` and `abl/nos2_s{1,2,3}/`: uncalibrated files with calibration sidecars; for scoring only,
+  not a release.
+- `results/`: selection JSON, session-2, spk02, room-test, synthetic and ablation reports, `summary.md`,
+  `parity.txt`.
+- `runs/`: 23 trained candidates and 3 weight averages.
+- `feat/`: quiet synthetic sets.
+- `real/` (mode 700, see the [data register](../data-register.md), row 14).
+- Scripts: `levels.py`, `feats1.sh`, `feats2.sh`, `runs.sh`, `runs1.sh`, `runs2.sh`, `soup.py`, `abl.sh`,
+  `abl_score.sh`, `select.sh`, `final.sh`, `export.sh`, `summ.py`.
+
+Wall clock about 40 min (features 6 min, 23 training runs of about 25 s, selection, final 9 min). Other agents
+ran on the same PC at the same time.
+
+| File | SHA-256 | Use |
+| --- | --- | --- |
+| `kivi.tflite` | `94ad1fba38ee55b526d36a44738aa4fdaade30742b168a07a20f5bd3a598ae03` | calibrated: server 0.5 = raw 0.89283 |
+| `kivi.onnx` | `16bb0f19aefab5201bcd606407a1c17f229cca4b88a89ef6c7f2f311ee06dd78` | same, ONNX |
+| `kivi_uncalibrated.tflite` | `50ffba74b2e602002b0fa4824cb1d401365281084d0daf337571e69b33065e63` | raw output (`kivi_score.py`, threshold sweeps) |
+| `kivi_uncalibrated.onnx` | `177ae3e76a2cd1ec09d5a8a9b5a8547825d114670cc7e2cd1b23d0538ffc50e6` | raw output (`fast_report.py`, `v3_select.py`) |
 
 ## Alternatives if the owner test fails
 
