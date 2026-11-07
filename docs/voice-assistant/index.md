@@ -9,6 +9,9 @@ services.
 
 - [Kivi plan](plan.md): goal, live architecture, decisions, workstreams (wake word, Whisper, real-usage
   validation, decision model, fine-tuning) and the open decisions for the owner.
+- [Conversation capabilities roadmap](conversation-capabilities-roadmap.md) (proposal, 2026-11-07):
+  safe MCP/data tools, natural Spanish voice replies, end-to-end streaming, truthful progress
+  announcements, optional asynchronous jobs and memory/RAG, and evaluation/rollout gates.
 - [Audio pipeline plan](audio-pipeline-plan.md) (proposal, 2026-11-07): the server half of the mid-term plan
   shared with the satellite repository: what HA 2026.10.4 does with satellite audio, Whisper and openWakeWord
   settings, false-wake labels and wake counts, diagnostics in Grafana, capability profiles and device-class
