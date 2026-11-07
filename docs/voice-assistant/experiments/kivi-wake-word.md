@@ -1,6 +1,6 @@
 # Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
 
-**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run. A **v2 candidate** (server-exact features, front-end emulation; [v2](#v2-2026-11-07-candidate-not-deployed)) exists, not deployed.
+**Status:** DONE offline (model trained and measured on synthetic voices and public recordings). **Deployed on 2026-11-05** as the wake word of the "Kiwi" pipeline (see [Deployment](#deployment)). Real-voice recall is unknown until the owner test below is run. A **v2 candidate** (server-exact features, front-end emulation; [v2](#v2-2026-11-07-candidate-not-deployed)) exists, not deployed. A **v3 candidate** (v2 plus real takes of one speaker and real room negatives; [v3](#v3-2026-11-07-candidate-not-deployed)) passes the owner gate on point estimates for that speaker on c3-a, not deployed.
 **Date:** 2026-11-05
 **Device alias / model / firmware / webOS / architecture:** none. PC only (x86_64, RTX 4060 Ti 16 GB, 32 threads). No TV, no microphone, no speaker, no change in Home Assistant, the cluster or the GitOps tree.
 **Power and playback state:** not applicable
@@ -474,6 +474,237 @@ tables), `feat/` (server-exact front-end features), `runs/` (the 18 candidates) 
 | `kivi.onnx` | `0cd09be2622c5853f515f9300279e4e631de605a78e962d0fcbdf6bf6af2951d` | same, ONNX |
 | `kivi_uncalibrated.tflite` | `aeab0360089b4805a4833009f2aeee108aa8807bd7803fae573f6ad861a4a627` | raw output, threshold sweeps |
 | `kivi_uncalibrated.onnx` | `531cbe78f41fb895de992e6d00ca3590f16bbb634815b2a7087e6c6fc30e5584` | raw output (`kivi_score.py`, `fast_report.py`) |
+
+## v3 (2026-11-07, candidate, not deployed)
+
+**Status:** candidate model files and a one-shot comparison with v1 and v2 on real audio. **Not
+deployed**, no change in Home Assistant, the cluster, the TVs or kivi-models. PC only. v3 adds the
+real data of the recipe (items 2 and 5): spk01's session-1 takes and the room negatives. Real
+numbers below are **observed on c3-a**, synthetic ones **observed-offline**. One speaker only.
+
+### What changed against v2
+
+1. **Real positives** (`v3_real.py takes`): every session-1 cue take of all three sources
+   (`training_rows(read_manifest(...))`, split `train` / `train-only`; superseded rows, `needs_review`
+   and B4c5 left out).
+   - Each take is re-cut from its raw file with 5 s before and 1 s after the word end. The cut uses
+     the manifest row's window (`start_s`) and offset (`align_offset_s`), and is checked sample for
+     sample against the stored clip (144 of 144 identical).
+   - The word end comes from the desk-mic energy burst (`kivi_score.word_span_from_ref`; median
+     word 0.54 s). v2's score peaks a median 0.11 s after it (p10 -0.05, p90 0.43 s) on the 27
+     tv-c3a takes, inside the training jitter.
+   - 141 take-sources kept. 3 tv-c3a takes were dropped: their STT-stage files hold less than 5 s
+     before the word. Only full-coverage cues have clips, so no partial cue is used.
+   - **Validation hold-out:** 10 of 51 takes (20 %, 2 per block, all sources of a take together,
+     seed 2026). They stay out of the final model too; it was **not** retrained on them.
+   - Augmentation, 200 copies per take-source, word end -50 to +250 ms before the end of the
+     window:
+     - tv-c3a (already through the real front end): gain -6 to +6 dB, and TV-like interference at
+       10-30 dB on the word with p 0.4. The interference alone goes through the front-end emulation
+       and is then added; the take gets no second front-end pass.
+     - pc-mic and webcam-mic: RIR with p 0.5; level N(-23, 5) dBFS on the word; interference at
+       10-30 dB with p 0.5; the calibrated mic floor (-62 to -48 dBFS; the desk mic gates to digital
+       zero); then the front-end emulation.
+   - Windows: "kivi" 4 200 tv (21 take-sources) and 12 400 desk (62); near-words 2 000 tv (10) and
+     4 000 desk (20).
+   - **Ratio:** per step 256 synthetic positives plus 48 tv and 48 desk real windows, so 27 % of the
+     positives are real. Per take-source, a real take is drawn about 535 times (tv) and 180 times
+     (desk) as often as one synthetic clip.
+2. **Near-words** (`kivi_v3_near.yaml`, `gen_clips.py`, Piper training voices):
+   - 40 000 training and 3 000 validation clips of 31 words and 10 short sentences, weighted toward
+     the measured confusers (kili, kiri, Pipi, tivi and kiwi at 3; "aquí vi" at 2; quizá, Kiki,
+     tipi, chivi, Vivi, Fifi, tevé, la tele, and other C-iβi / kˈi-C-i words at 0.5-2).
+   - 1 220 clips by the held-out voices for evaluation.
+   - The same interference (10-30 dB, p 0.5) and front end as the positives, so the noise level
+     cannot predict the label.
+   - Real near-words: the session-1 near-word takes of all sources, augmented as above.
+3. **Room negatives** (`v3_room.py split`): per TV, ordered by start time and cut by duration
+   into three parts:
+
+   | Part | c3-a | c3-b | Use |
+   | --- | --- | --- | --- |
+   | train (first 50 %) | 8.22 h | 8.40 h | training and mining |
+   | sel (next 25 %) | 4.11 h | 4.20 h | threshold selection |
+   | test (latest 25 %) | 4.11 h, from 2026-11-06 09:52Z | 4.20 h, from 11:42Z | final evaluation only |
+
+   Server-exact features of the audio as recorded: no front end, level or floor. The train part
+   gives 92 723 windows (every 8th frame, 128 per step) and 8 816 hard negatives (v2 score above
+   0.02, at most one per 0.4 s; 128 per step). No session window is in the negatives
+   (`kivi_negatives.py` already removed them).
+4. **Warm start from v2**: 2 000 steps, lr 1e-4, layer 64, the v2 batch (256 synthetic positives,
+   512 ACAV, 128 MLS, 64 v1 adversarial, 128 MLS hard; weight 3) plus the above. From scratch
+   (6 000 steps) did worse on synthetic voices at the same room false accepts (24.9 % against 35.1 %
+   clean) and the same on real takes (21/22 against 20/22).
+5. **Selection:** the threshold is the lowest raw threshold with at most 2 false accepts on the
+   selection room part (8.38 h scored, 0.24/h). It was never chosen on session 2 or on the test
+   part. At that threshold, candidates were compared on:
+   - the held-out synthetic voices (clean, 10 dB, 0 dB; both near-word sets);
+   - the 10 held-out real takes.
+
+   **Rule, fixed before round 3:** keep candidates with at least 20/22 real held-out "kivi" and
+   held-out-voice near-word acceptance no higher than v2's at the same false-accept rate (13.7 %);
+   then take the highest mean synthetic recall.
+
+### Candidates (selection room part and validation only)
+
+At each model's own threshold for ≤ 2 false accepts in 8.38 h of the selection part. "Real
+held-out" counts the 10 held-out takes over all sources (8 "kivi" takes = 22 take-sources, 2
+near-word takes = 6).
+
+| Variant | Raw threshold | Synthetic clean / 10 dB / 0 dB | Near-words, v1 set / v3 set | Real held-out "kivi" | Real held-out near-words |
+| --- | --- | --- | --- | --- | --- |
+| v1 | 0.979 | 46.6 / 25.3 / 11.1 % | 3.5 / 10.4 % | 5/22 | 3/6 |
+| v2 | 0.974 | 54.2 / 20.3 / 8.7 % | 5.0 / 13.7 % | 3/22 | 3/6 |
+| real positives, no room, synthetic near-words weight 6 | 0.911 | 24.7 / 12.8 / 5.7 % | 1.8 / 3.7 % | 20/22 | 3/6 |
+| + room train windows + room hard negatives (`ws1`) | 0.863 | 35.1 / 18.3 / 7.9 % | 2.8 / 6.5 % | 20/22 | 3/6 |
+| same, from scratch | 0.967 | 24.9 / 14.2 / 7.1 % | 1.6 / 2.9 % | 21/22 | 2/6 |
+| room, near weight 6, no real positives | 0.865 | 32.0 / 14.7 / 5.8 % | 2.3 / 5.2 % | 2/22 | 1/6 |
+| room, real, no synthetic or real near-words | 0.962 | 75.3 / 31.8 / 14.3 % | 10.1 / 29.2 % | 22/22 | 5/6 |
+| room, real, synthetic near weight 10 | 0.854 | 26.8 / 13.6 / 5.3 % | 1.6 / 3.0 % | 20/22 | 2/6 |
+| room, real, synthetic near weight 3 (3 seeds) | 0.894-0.920 | 36.1-43.6 / 17.0-21.5 / 7.5-9.3 % | 3.4-4.3 / 7.5-10.1 % | 20/22 | 3-4/6 |
+| room, real, synthetic near weight 1, real near weight 15 | 0.918 | 55.6 / 23.2 / 9.7 % | 5.1 / 14.4 % | 21/22 | 3/6 |
+| **room, real, synthetic near weight 3, real near weight 15 (`r3_nw3_rn15`, chosen)** | **0.8653** | **44.0 / 21.1 / 8.7 %** | **3.3 / 8.8 %** | **22/22** | **3/6** |
+| same, layer 128 from scratch | 0.986 | 32.3 / 15.2 / 7.2 % | 2.1 / 5.2 % | 22/22 | 3/6 |
+
+Findings (observed-offline, selection data only):
+
+- Real positives are what moves the real takes: 2-5/22 without them, 20-22/22 with them.
+- The room negatives do not cost synthetic recall. With the rest fixed, clean recall was 24.7 %
+  without room data, 24.9 % with the room windows, 29.7 % with the room hard negatives and 35.1 %
+  with both.
+- The synthetic near-words cost the synthetic voices' recall: 75 % clean without them, 44 % at
+  weight 3, 35 % at weight 6, 27 % at weight 10. Real near-word discrimination barely changed
+  (3/6 held out at every weight).
+- Seeds of one configuration differ by up to 7.5 points of clean recall, mostly through the
+  threshold, which rests on the 3rd-highest room peak.
+- **Choice:** by the rule, weight 1 / real 15 fails the near-word bound (14.4 %). Synthetic near
+  weight 2 (44.1 / 21.6 / 9.1 %), weight 3 (43.6 / 21.5 / 9.3 %) and weight 3 with real
+  near-words at 15 (44.0 / 21.1 / 8.7 %) are equal within the seed spread. The tie went to the
+  last: 22/22 real held-out and the lowest near-word acceptance.
+
+### Deviations from the brief, with the evidence
+
+- **"kibi" is not a near-word.** Spanish espeak gives `kˈiβi` for "kivi", "quivi" and "kibi" (checked
+  2026-11-07; also noted in `kivi_data.yaml`), and the positives use `kˈibi` on purpose. "TV" is read
+  as letters by espeak (`tˌeˈuβe`), so "tevé" and "la tele" stand for it.
+- **The synthetic near-word weight is 3, not "high".** At weight 6 or 10 the held-out synthetic
+  voices lost 9 to 17 more points of clean recall for no gain on the real near-words. The real
+  near-words carry the high weight instead (15, 64 + 64 per step).
+- **tv-c3a interference is added after the front end** (the interference alone goes through the
+  emulation) rather than passing the take through a second front end.
+- **The final model is the validated one.** It was not retrained with the 20 % hold-out.
+- **Synthetic held-out voices were used for selection,** as instructed, so the synthetic numbers
+  below are not independent of the choice.
+
+### Final evaluation (one shot)
+
+Run once, after the choice (`v3/final.sh`):
+
+- Session 2 through `kivi_score.py`: pyopen-wakeword with the uncalibrated TFLite files, B4c7
+  excluded.
+- The test room part through the same runtime (`v3_room.py score`, pieces of at most 15 min, each
+  streamed from its first sample).
+- The synthetic sets through the server-exact ONNX path.
+
+Each model is at its own server-0.5 point: v1 raw 0.98, v2 raw 0.95, v3 raw 0.8653. Intervals:
+Wilson 95 % for recall, exact Poisson 95 % for false accepts.
+
+| | v1 (0.98) | v2 (0.95) | **v3 (0.8653)** |
+| --- | --- | --- | --- |
+| Session 2, tv-c3a, 1.5 m TV silent | 3/10 | 8/10 | **10/10** |
+| 1.5 m TV on | 2/10 | 6/10 | **9/10** |
+| 3 m TV silent | 2/10 | 2/10 | **7/10** |
+| 3 m TV on | 3/9 | 5/9 | **7/9** |
+| TV silent (pooled) | 5/20, 25 % [11, 47] | 10/20, 50 % [30, 70] | **17/20, 85 % [64, 95]** |
+| TV on (pooled) | 5/19, 26 % [12, 49] | 11/19, 58 % [36, 77] | **16/19, 84 % [62, 94]** |
+| All | 10/39, 26 % [15, 41] | 21/39, 54 % [39, 68] | **33/39, 85 % [70, 93]** |
+| Session 2 near-word hits (of 12): tv-c3a / pc-mic / webcam-mic | 4 / 4 / 6 | 6 / 5 / 9 | **7 / 2 / 4** |
+| tv-c3a near-word hits by word (2 each): kili, kiri, kiwi, Pipi, tivi, "aquí vi" | 0, 2, 1, 1, 0, 0 | 2, 2, 1, 1, 0, 0 | 1, 2, 1, 1, 2, 0 |
+| Session 2 "kivi" recall, pc-mic / webcam-mic (of 39) | 2 / 3 | 5 / 12 | 28 / 34 |
+| Room test part, c3-a (4.11 h) | 2 = 0.49/h [0.06, 1.76] | 10 = 2.43/h [1.17, 4.48] | **1 = 0.24/h [0.006, 1.36]** |
+| Room test part, c3-b (4.20 h) | 0 (< 0.88/h) | 8 = 1.90/h [0.82, 3.75] | **1 = 0.24/h [0.006, 1.33]** |
+| Room test part, pooled (8.31 h) | 2 = 0.24/h [0.03, 0.87] | 18 = 2.17/h [1.28, 3.42] | **2 = 0.24/h [0.03, 0.87]** |
+| Synthetic held-out voices, clean (n = 1 800) | 45.7 % [43.4, 48.0] | 77.9 % [75.9, 79.8] | 44.0 % [41.7, 46.3] |
+| TV content at 10 dB | 24.9 % [22.9, 26.9] | 32.4 % [30.3, 34.6] | 21.1 % [19.3, 23.1] |
+| TV content at 0 dB | 11.0 % [9.6, 12.5] | 14.5 % [13.0, 16.2] | 8.7 % [7.5, 10.1] |
+| Near-words, held-out voices, v1 set (1 799) / v3 set (1 220) | 3.2 / 9.9 % | 9.3 / 27.1 % | 3.3 / 8.8 % |
+
+The v1 and v2 session-2 counts equal the earlier `kivi_score.py` runs (10/39 and 21/39 with the same
+blocks), so the path is unchanged. v2 has far more false accepts on the test part (2.17/h) than over
+all 33 h (0.69/h): the test part is daytime on 2026-11-06.
+
+**v3 trade-off on real audio** (tv-c3a session 2 against the room test part, pooled 8.31 h; c3-a /
+c3-b counts in brackets). A DET-style table, not a threshold choice:
+
+| Raw threshold | Recall (of 39) | TV silent (of 20) | TV on (of 19) | Near-word hits (of 12) | Room false accepts | Per hour [95 %] |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0.5 | 36 | 19 | 17 | 8 | 87 (46 / 41) | 10.5 [8.4, 12.9] |
+| 0.7 | 35 | 19 | 16 | 8 | 20 (9 / 11) | 2.41 [1.47, 3.72] |
+| 0.8 | 34 | 18 | 16 | 7 | 11 (6 / 5) | 1.32 [0.66, 2.37] |
+| 0.85 | 34 | 18 | 16 | 7 | 3 (2 / 1) | 0.36 [0.07, 1.06] |
+| **0.8653** | **33** | **17** | **16** | **7** | **2 (1 / 1)** | **0.24 [0.03, 0.87]** |
+| 0.9 | 32 | 17 | 15 | 6 | 1 (0 / 1) | 0.12 [0.003, 0.67] |
+| 0.93 | 28 | 16 | 12 | 5 | 0 | 0 (< 0.44) |
+| 0.95 | 27 | 16 | 11 | 4 | 0 | 0 (< 0.44) |
+| 0.97 | 21 | 14 | 7 | 2 | 0 | 0 (< 0.44) |
+| 0.98 | 15 | 11 | 4 | 1 | 0 | 0 (< 0.44) |
+
+For comparison at matched room false accepts: v1 needs 0.98 for 2 (10/39), and v2 0.97 for 2
+(14/39).
+
+**Server runtime check:** the 12 v2 check clips (held-out voices through the front end, 6 clean,
+6 with TV at 10 dB) went through pyopen-wakeword 1.1.0 with the TFLite files. The maximum scores
+matched the ONNX path to 0.001. The calibrated file at 0.5 decided like the raw file at 0.8653 on
+all 12.
+
+### Gate verdict
+
+| Gate | v3 | Verdict |
+| --- | --- | --- |
+| Recall with the TV silent, at least 80 % | 17/20 = 85 % [64, 95] | met on the point estimate |
+| Recall with the TV on, at least 60 % | 16/19 = 84 % [62, 94] | met on the point estimate |
+| At most 1 false wake per evening (about 0.25/h) | 2 in 8.31 h = 0.24/h [0.03, 0.87] | met on the point estimate |
+
+**v3 passes the gate on point estimates. The intervals do not prove it:** the TV-silent lower bound
+is 64 %, and the false-accept upper bound is 0.87/h, about 3.5 per 4 h evening. The weakest block
+is still 3 m with the TV silent (7/10). Near-words on the TV channel did not improve (7/12; "tivi"
+2/2).
+
+**What this test is and is not:**
+
+- It covers **one speaker**, spk01, who is also the training speaker.
+- Session 2 is **one other recording** of the same person, the same TV (c3-a) and the same day.
+- On held-out synthetic voices, v3 is level with v1 and well below v2 (44 % against 78 % clean). It
+  has become a better detector of spk01 on this TV, not of voices in general. Other household
+  voices are likely to do worse than spk01 (inferred).
+- spk02's c3-b button takes (test split, never trained on) are the next decisive measurement, with
+  the unseen-speaker ablation of the split policy.
+
+**Data caveat:** the room negatives (2026-11-05 17:18Z to 2026-11-06 20:37Z) were mostly recorded
+while `kivi` v1 was the live wake word (deployed about 2026-11-05 20:16Z).
+
+- A real "kivi" that v1 missed would sit unlabelled in the negatives. Without listening this cannot
+  be checked.
+- A test-part "false accept" could then be a correct detection, so the reported rate is
+  conservative, not optimistic.
+- The ablation above showed no recall cost from training on the room data.
+
+### Artifacts (private, not committed)
+
+In `/work/workspaces/kivi-wakeword/v3/`: `final/` (model files, `SHA256SUMS`,
+`kivi_uncalibrated.calibration.json`, training history), `results/` (aggregates: selection JSON,
+session-2 and room-test reports, synthetic reports), `runs/` (the 19 candidates), `near/` (synthetic
+near-word clips), `feat/` and `real/` (mode 700, see [data register](../data-register.md) row 13),
+and the run scripts (`gen_near.sh`, `feats.sh`, `runs1-3.sh`, `select.sh`, `final.sh`,
+`export.sh`). Wall clock about 40 min, including generation (8 min), features (7 min), 19 training
+runs (about 30 s each warm, 1 min from scratch) and the final evaluation (6 min).
+
+| File | SHA-256 | Use |
+| --- | --- | --- |
+| `kivi.tflite` | `9c3ffb58bf641b03132fe67d1f3253529397843c379b30b3ed930b24c9de9a31` | calibrated: server 0.5 = raw 0.8653 |
+| `kivi.onnx` | `650be56a7465b29ba3a50b87b5941644e08035281f581b9d739b5f08b7e556ab` | same, ONNX |
+| `kivi_uncalibrated.tflite` | `beda360612183fe58f22cf062cdaed6c805105bbf523d17d3b5c32cc71c1ab10` | raw output (`kivi_score.py`, threshold sweeps) |
+| `kivi_uncalibrated.onnx` | `0444db525743dee9a8bf07a1058bcabe17d6241b8981955a4c49537a2366be51` | raw output (`fast_report.py`, `v3_select.py`) |
 
 ## Alternatives if the owner test fails
 

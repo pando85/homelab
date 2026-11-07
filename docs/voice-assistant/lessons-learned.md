@@ -228,3 +228,18 @@ happened, how it was found, what fixed it, and what now guards against a repeat.
 - **Guard:** prefer a private image pulled with the existing node credential for any
   licence-restricted file the cluster needs. Keep the owner `agil` limited (or private) and check an
   anonymous pull is refused after every release (the `agil/kivi-models` README says so).
+
+## Wake word: indexing an `.npz` inside a loop re-reads the whole array and ran out of memory
+
+- **Symptom:** the first Kivi v3 feature job was killed about 30 s after it started, with no
+  Python error in its log. The user journal showed `The kernel OOM killer killed some processes in
+  this unit` for the `systemd-run` scope (20 GB cap, 20 GB peak).
+- **Root cause:** `np.load("takes.npz")` returns an `NpzFile`, and each `T["audio"][i]` decompresses
+  the whole 27 MB array again. The slice is a view, so every one of the 16 600 augmentation items
+  kept its own full copy alive.
+- **How detected:** `journalctl --user` for the scope (`Failed with result 'oom-kill'`), then the
+  one `T["audio"][i]` per item in the list comprehension.
+- **Fix:** load the arrays once (`{k: v.copy() for k, v in np.load(...).items()}`) and copy each
+  take out.
+- **Guard:** the comment on that line in `v3_real.py feats`. Jobs run under `MemoryMax`, so a
+  repeat stops the job, not the shared workstation.
