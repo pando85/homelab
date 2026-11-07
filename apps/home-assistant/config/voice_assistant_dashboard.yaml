@@ -93,6 +93,21 @@ views:
             grid_options:
               columns: 6
           - type: tile
+            entity: switch.office_a_lg_c3_c3_a_voice_satellite_remote_mic_button
+            name: Remote mic button
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: switch.office_a_lg_c3_c3_a_voice_satellite_on_screen_assistant
+            name: On-screen assistant
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: markdown
+            content: |
+              Turning **Remote mic button** on hands the remote's mic key over from LG's assistant to this satellite (push to talk); turning it off gives the key back to LG. Both switches stay off until the owner's hands-on check.
+          - type: tile
             entity: select.lg_c3_c3_a_voice_satellite_assistant
             name: Pipeline
             vertical: false
@@ -143,6 +158,8 @@ views:
                 name: Microphone self-check
               - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_lg_hands_free
                 name: LG hands-free
+              - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_lg_voice_key
+                name: LG voice key
               - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_always_ready
                 name: Always ready
               - entity: sensor.office_a_lg_c3_c3_a_voice_satellite_compatibility
@@ -197,6 +214,21 @@ views:
             grid_options:
               columns: 6
           - type: tile
+            entity: switch.living_room_lg_c3_c3_b_voice_satellite_remote_mic_button
+            name: Remote mic button
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: tile
+            entity: switch.living_room_lg_c3_c3_b_voice_satellite_on_screen_assistant
+            name: On-screen assistant
+            vertical: false
+            grid_options:
+              columns: 6
+          - type: markdown
+            content: |
+              Turning **Remote mic button** on hands the remote's mic key over from LG's assistant to this satellite (push to talk); turning it off gives the key back to LG. Both switches stay off until the owner's hands-on check.
+          - type: tile
             entity: select.lg_c3_c3_b_voice_satellite_assistant
             name: Pipeline
             vertical: false
@@ -247,6 +279,8 @@ views:
                 name: Microphone self-check
               - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_lg_hands_free
                 name: LG hands-free
+              - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_lg_voice_key
+                name: LG voice key
               - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_always_ready
                 name: Always ready
               - entity: sensor.living_room_lg_c3_c3_b_voice_satellite_compatibility
