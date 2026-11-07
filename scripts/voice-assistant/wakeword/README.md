@@ -24,6 +24,11 @@ openWakeWord models).
 | `fast_eval.py` | Embedding cache (`embed --stream-onnx`: server-exact, GPU), model ranking (`score`), hard-negative mining (`mine`) |
 | `fast_report.py` | **Reported numbers:** recall per voice and word, false accepts per hour with intervals; refuses features that are not server-exact |
 | `eval_stream.py` | The server's runtime itself (`pyopen-wakeword`, TFLite C API): per-clip and long-audio streaming; slow, used for `alexa` and for checks |
+| `v2_frontend.py` | **v2:** runs audio through the satellite's own front-end (`aec_offline` from webos-voice-satellite: HPF, AEC3 with a silent reference, NS, +24 dB, S16), latency removed |
+| `v2_augment.py` | **v2:** TV-like interference at an SNR on the word, calibrated level and mic floor, front-end, server-exact features; `train` windows, `eval` clip sequences and `long` audio for `fast_report.py` |
+| `v2_prep_bg.py` | **v2:** TV-like AudioSet backgrounds (music, speech, TV, ...), stationary-noise labels excluded |
+| `v2_acav_check.py` | **v2:** batch vs server-exact features on the same proxy audio (embedding gap, score gap, domain probe), to decide whether the ACAV100M batch features can stay |
+| `v2_rank.py`, `v2_summary.py` | **v2:** candidate ranking on the selection set and training-voice validation only; comparison tables from `fast_report.py` JSON |
 | `test_server_exact_features.py` | Regression test: server streaming vs batched server-exact features, and the report's refusal of other features |
 | `kivi_session.py` | **Owner-run:** text-only cues and a dual PC recording (desk mic, webcam mic) for a real-voice session; `session.json` |
 | `kivi_extract.py` | **Owner-run:** copies the satellite's wake files out of the HA pod, aligns them to the desk mic, cuts labelled clips of 3 sources into the private dataset and its manifest; `--button-takes` for takes marked by `input_button.kivi_take` |
