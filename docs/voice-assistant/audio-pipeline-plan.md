@@ -236,3 +236,12 @@ MT-8 runs alongside. Diagram and dates: satellite plan, section 4.
 | A global `--threshold` change for one model | Changes every model; per-model points go in the files |
 | A `data2` stream and Whisper image patch now | No WER evidence that lighter processing helps STT |
 | Live recall or WER dashboards | No ground truth in live runs |
+
+## Pending (2026-11-07)
+
+Written at the close-out of the 2026-11-07 session; nothing here has been run. Stage numbers are those of the satellite repository's [HA-side audio processing](https://github.com/pando85/webos-voice-satellite/blob/main/docs/research/ha-side-audio-processing.md#6-recommendation-a-staged-plan); the offline replay result is in its section 10.
+
+- **Stage 3, STT-only denoise measurement.** Denoise the audio in front of speech-to-text only, with RNNoise first and WebRTC NS for comparison, and compare it with Whisper's `--vad-filter` (on since `5690fe717`). First measure the VAD filter's own effect on noise-only runs (MT-6: counts of `stt-no-text-recognized` and of non-empty transcripts after labelled false wakes, two weeks before and after). Counts only; no audio or text kept. Needs: the false-wake labels (MT-2) and the owner's go for any HA or Whisper change.
+- **Stage 4, VAD gate or wake word proxy, simulated first.** Simulate a voice-activity gate, or a second check, in front of the wake word decision in the offline scorer, on the existing real takes and room audio. It leaves the model's input unchanged. Build a proxy only if the simulation shows fewer false accepts per hour at the same recall (MT-8 decision).
+- **Stage 5 is rejected.** Denoising in front of the wake word did not lower the deployed model's false accepts and cost recall in models trained for this front-end ([results](https://github.com/pando85/webos-voice-satellite/blob/main/docs/research/ha-side-audio-processing.md#10-results-of-the-offline-replay-2026-11-07)). Revisit only if the wake word is replaced by a stock model.
+- **HA pipeline select caveat.** A Home Assistant restart can restore a TV's pipeline select from an older saved state, in both directions, so check the selects after any restart. Any change under `apps/home-assistant/config/` (a dashboard edit too) restarts Home Assistant through Reloader, about 10 s. Batch such edits and check the selects afterwards.
