@@ -730,11 +730,17 @@ the app repo plus bounded allowlist entries and tests.
 **How the settings act** (integration source at commit 2c94da9, manifest 1.5.0):
 
 - Cycles run on each grid-sensor change plus a 2 s timer. Event-triggered cycles closer than
-  `pd_min_cycle_interval` are dropped; the timer is not.
-- The grid is filtered with an EMA of tau 2 s, which snaps on big deviations.
+  `pd_min_cycle_interval` are dropped; the timer is not. The timer resets the throttle clock, so a dropped
+  update waits up to about 2 s for the next cycle (see [loop timing](#loop-timing-and-the-grid-meter-measured-2026-11-07)).
+- The grid is filtered with an EMA of tau 2 s, which snaps on jumps over 200 W.
+- **Load-down guard (corrects the earlier text, 2026-11-07).** A load-down is corrected by the
+  `_apply_discharge_ceiling` guard (`control/residual_load.py`, Omnibattery 1.5.1b1), not by the feedforward. After
+  the rate limiter the guard caps the discharge at grid + battery AC power - target, so a step is removed in one
+  cycle. Three events matched its prediction within 1-2 W. kp, kd and `max_power_change` do not decide
+  load-downs.
 - Nothing happens within `deadband` of the target.
-- Feedforward: an error jump above max(5 x deadband, 400 W) that is confirmed on the next sample (80 %) issues one
-  deadbeat command, bypassing the rate limit. It has a 10 s cooldown, and an opposite-sign step within 30 s is
+- Feedforward (not the load-down path, see the guard above): an error jump above max(5 x deadband, 400 W) that is
+  confirmed on the next sample (80 %) issues one deadbeat command, bypassing the rate limit. It has a 10 s cooldown, and an opposite-sign step within 30 s is
   treated as a pulsing load.
 - Otherwise incremental PD: Kp is applied per 2 s, the derivative is filtered, and the change is clamped by
   `max_power_change` per 2 s.
@@ -775,8 +781,10 @@ change log).
 
 - Steady discharge error, grid minus target: std about 24 W, p1/p99 about -50/+60 W. No limit cycle.
 - Charge at the 4500 W cap: p99 about +105 W over target.
-- End-to-end dead time 1-4 s: about 1.4 s is the feedforward confirm, the rest is Modbus write plus inverter
-  ramp. Gains cannot remove it.
+- End-to-end dead time 1-4 s. It was first attributed to the feedforward confirm plus Modbus write and inverter
+  ramp; that was wrong for load-downs (the discharge-ceiling guard corrects them, see the correction above). The
+  parts are the grid meter's update lag, the cycle wait ([loop timing](#loop-timing-and-the-grid-meter-measured-2026-11-07)),
+  the Modbus write and the inverter ramp. Gains cannot remove it.
 - Export comes almost only from load-down steps while the battery is pinned at its per-slot cap: 2-4 s below 0 W,
   worst about -290 W and about 0.27 Wh per event. That is about 0.05 Wh per discharge hour at the 100 W margin,
   well below the 5 Wh/day `BatteryGridExport` alert.
@@ -785,12 +793,28 @@ change log).
 
 **Candidate changes, applied together on 2026-11-06 (kp 0.40 instead of the 0.45 candidate)**:
 
-1. `pd_min_cycle_interval` 1.0 -> 0.5 s. It may shorten the feedforward confirm by up to about 1 s; this is an
-   estimate. Risk: more Modbus traffic, so watch `sensor.omnibattery_non_responsive_batteries`.
+1. `pd_min_cycle_interval` 1.0 -> 0.5 s. It was expected to shorten the feedforward confirm by up to about 1 s;
+   per the correction above the confirm is not on the load-down path, and the interval instead sets how often
+   a dropped update waits for the timer (about 50% of updates at 1.0 s, about 25% at 0.5 s). Risk: more Modbus traffic, so watch `sensor.omnibattery_non_responsive_batteries`.
 2. kp 0.35 -> 0.40, a cautious first step towards the 0.45 candidate. Do not go above 0.55, where oscillation
    risk rises, so `aggressive`/`very_aggressive` are not recommended.
 
 Everything else stays at baseline.
+
+**Loop timing and the grid meter (measured 2026-11-07).**
+
+- A cycle runs on every Shelly update plus the 2 s timer, and updates inside `pd_min_cycle_interval` are dropped.
+  Because the timer resets the throttle clock, a dropped update waits up to about 2 s: about 50% of updates at
+  1.0 s, about 25% at 0.5 s. The EMA snaps on jumps over 200 W.
+- Without the guard (battery AC power unreadable) cutting 1.4 kW takes 5-6 cycles, about 10-12 s.
+- Grid meter: Shelly EM Gen1 (SHEM, firmware v1.14.0). Mean update interval 1.69 s (2.0 s in 57% of intervals). On
+  load drops it sees the change 0.3-2.0 s after the heat pump's own sensor (median about 0.95 s).
+  Transport: the 2026-11-07 investigation read it as CoIoT UDP push to HA core, but the cutover record
+  in [Design notes](#design-notes-and-gotchas) has the grid power entity on MQTT every 2 s (or sooner on a change), which fits
+  the 1.69 s mean better, and CoIoT multicast reaching HA core is not recorded anywhere. Unverified; check before
+  relying on either.
+- Dropouts of 12-35 s happened about 20 times between 2026-11-03 and 11-05, none since the HA restart at 17:18 UTC
+  on 11-05. During a dropout Omnibattery holds its last command.
 
 **Evaluating a change**:
 
@@ -800,12 +824,44 @@ Everything else stays at baseline.
 - Revert if any of these happens: `oscillating` for more than 2 min, an export episode over 5 s or 0.5 Wh,
   `non_responsive_batteries` not `None`, or import above 4700 W while charging.
 
+**Interim verdict on the 2026-11-06 change (2026-11-07): keep, no revert criterion hit.** Window: 2026-11-06 09:30 UTC
+to 2026-11-07, against the baseline above.
+
+- Oscillation: 0 s after the change (6 episodes before, longest 120 s).
+- Export episodes: 4, longest 2.0 s, largest 0.20 Wh.
+- `non_responsive_batteries` `None` throughout.
+- Maximum import while charging 4563 W against the 4700 W limit. Only about 0.9 h of charging, so weak evidence.
+- Steady 60 s std, median/p90/p99: 10/16/30 W after against 12/29/54 W before.
+
+The 7-day review is still due around 2026-11-13.
+
+**Measured load-down exports** (3 evening hot-water stops of 1.9-2.3 kW):
+
+| When | Export |
+|---|---|
+| Before the change | -251 W for 4.1 s (0.23 Wh); -289 W for 3.5 s (0.27 Wh) |
+| After the change | -364 W for 2.0 s (0.20 Wh) |
+
+**Expected export with load-following (optimizer 0.15.0, from 2026-11-07).** With the discharge cap raised in
+planned discharge slots, the battery carries the real load, so a load-down step now leaves the battery
+discharging at the old load until the guard acts.
+
+- Peak export of step - 100 W, so 1.3-1.8 kW for about 2 s: 1-2 Wh per event, 2-10 Wh per evening, under 1 EUR/year.
+- Rare worst case: a load drop during a Shelly dropout, about 15 Wh.
+- This exceeds the 0.5 Wh per-episode revert criterion above and may trip
+  `BatteryGridExport` (5 Wh/24 h). The owner chose to keep that alert at 5 Wh.
+- Optional owner lever: `pd_min_cycle_interval` 0 cuts about 15-20% of the export, at the cost of more Modbus
+  traffic.
+- **Open: the grid registration.** If the installation is registered as self-consumption without surplus (zero export
+  required; RD 244/2019, UNE 217001-IN), any export matters beyond the alert. Check with the installer; it belongs to
+  TODO-0.6 in the app repository's `docs/planning/home-battery-optimizer-implementation.md`.
+
 **Change log:**
 
 | Date | Setting | Old -> new | Why | Result |
 |---|---|---|---|---|
 | 2026-11-06 | all PD settings | - | Baseline recorded, no change | See baseline |
-| 2026-11-06 09:30 UTC | `pd_min_cycle_interval`; `pd_controller_kp` | 1.0 -> 0.5 s; 0.35 -> 0.40 | Shorten the feedforward confirm and the PD tail on load-down steps to cut export transients. Kp kept below the 0.45 candidate as a cautious first step. Both changed together (not one at a time), so the effects can't be separated | Pending: compare with the baseline after at least 7 days (about 2026-11-13) |
+| 2026-11-06 09:30 UTC | `pd_min_cycle_interval`; `pd_controller_kp` | 1.0 -> 0.5 s; 0.35 -> 0.40 | Shorten the feedforward confirm and the PD tail on load-down steps to cut export transients (the feedforward premise was corrected 2026-11-07, see above). Kp kept below the 0.45 candidate as a cautious first step. Both changed together (not one at a time), so the effects can't be separated | Interim 2026-11-07: keep, no revert criterion hit (verdict above). Final: compare with the baseline after at least 7 days (about 2026-11-13) |
 
 ### Open issue: planned discharge is not delivered
 

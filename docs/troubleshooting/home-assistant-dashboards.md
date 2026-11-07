@@ -183,6 +183,39 @@ anchor hour is the current one; check monthly totals against the source series a
 is queued in the recorder, so re-check after a few seconds. Login-flow access tokens expire after 30
 minutes.
 
+### Grafana energy dashboard: counter functions (`iot-energy.json`)
+
+`apps/home-assistant/dashboards/iot-energy.json` is a Grafana dashboard (provisioned from git, unlike the Lovelace
+dashboards above) that sums energy counters from `hass_sensor_energy_kwh` in `prometheus-long-term`.
+
+**Restart merge.** Each Home Assistant pod restart changes the `instance` and `pod` labels and starts a new series,
+so summing `increase()` per series loses the energy accrued in the gap between the old and the new series (commits
+`c0295b0ce` and `64472d1a0`). Every energy panel therefore first merges the series with
+`max without(instance, pod)` and takes the function over a 1 m subquery (the scrape interval), for example
+`increase((max without(instance, pod) (hass_sensor_energy_kwh{entity="..."}))[$__interval:1m])`.
+
+**Which function per counter.** Checked against the history since 2023-11-07:
+
+| Counter | Function | Why |
+|---|---|---|
+| Shelly EM channels 1 and 2, Z800 (`sensor.shellypmmini_z800_energy`), Venus charging and discharging totals | `increase` | Never dipped or reset |
+| Snapmaker plug | `increase` | The device really resets to 0 (44 times) |
+| Aquarea heat, hot water and cool, and `sensor.servers_energy` | `delta` | They dip after a restart restores a stale value (81 dips on Aquarea; on 2024-04-29 two dips of 5.5 and 11.7 kWh never recovered) |
+
+**Rule.** Never use `increase` on a counter that dips: `increase` takes a drop for a counter reset and adds the whole
+counter value (for example +2198 kWh instead of 8.2 for one Aquarea dip of 0.13 kWh). Never use `delta` on a counter
+that resets, because it subtracts the reset. When adding a panel for a new counter, look up its history for dips and
+resets first and pick the function from the table.
+
+**Rejected alternative.** Summing clamped per-minute increases is safe for both cases, but it loses the energy that
+accrues in data gaps longer than 5 minutes (about 1.5 to 2%).
+
+**Rename.** `sensor.shellypmmini_servers_energy` was renamed `sensor.shellypmmini_z800_energy` on 2026-11-03, when
+the servers moved to the battery's backup port and that Shelly PM mini began metering the Z800 workstation. The
+servers are now `sensor.servers_energy`, the integral of `sensor.venus_ac_offgrid_power`
+(see [Battery and circuit 1](#battery-and-circuit-1)). The old id no longer exists, so a panel or
+query that still uses it must be pointed at the new one.
+
 ### Where history lives
 
 - The recorder keeps **10 days**.
