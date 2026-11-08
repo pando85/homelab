@@ -155,6 +155,7 @@ Full pitfall index (75 entries grouped by subsystem): `docs/troubleshooting/INDE
 
 - **Cilium:** `docs/conventions/cilium.md` — BGP, TCX, bandwidth limiting
 - **Deploying new apps:** `docs/conventions/deploying-new-apps.md` — decision-making, patterns, checklist
+- **Kanidm:** `docs/user-guide/kanidm.md` — Kaniop CRDs, OAuth2 clients, group membership rules (person membership manual, never via CRD)
 - **Documenting learnings:** `docs/conventions/documenting-learnings.md` — when/how to write troubleshooting docs
 - **prusik storage:** `docs/conventions/prusik-fast-storage-tier.md` — ZFS pool sizing, SSD selection, PVC migration. Hardware: `docs/hardware/prusik.md`, `docs/hardware/k8s-amd64-1.md`
 - **Adding a node:** `docs/user-guide/add-or-remove-nodes.md` (runbook), `planning/k8s-amd64-1-node-addition.md` (worked example)

@@ -136,6 +136,18 @@ Users must be added manually by an admin after the group is created:
 kanidm group add-members <app>-users ${USER} -D idm_admin
 ```
 
+### Group membership rules
+
+**Critical constraint**: Person account membership must never be encoded or reconciled through CRDs or Git.
+
+- **Group creation**: Kanidm groups may be created declaratively through `KanidmGroup` CRDs
+- **Person membership**: Must be added manually via `kanidm group add-members`. Never encode person accounts in CRD specs or reconcile through Git
+- **Service-account-only groups**: If a group consists ONLY of service account users (no person accounts), those memberships may be managed via CRD
+- **Mixed groups** (persons + service accounts): Must not use authoritative CRD member reconciliation that could remove manual person memberships. Before managing any service membership in a mixed group, determine whether the operator has additive or preserve semantics. Do not invent support — verify operator behavior first
+- **Public repo hygiene**: Do not commit person names, account privilege mappings, or membership lists to public documentation
+
+**Rationale**: CRD reconciliation may remove members not in the spec. Person accounts require manual lifecycle management (hiring, departure, role changes) that cannot be safely automated through GitOps.
+
 ### 5. Verify
 
 After ArgoCD syncs, check the client is ready:
