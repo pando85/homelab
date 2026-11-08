@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" role="img" aria-labelledby="title desc">
+<title id="title">With Athom: permanent mains supply to relay, isolated two-way switches on S1 and S2</title>
+<desc id="desc">The Athom receives permanent live and neutral. Its L-OUT and N-OUT feed the light. Two conmutator switches retain their travellers but the commons connect only to dry contact terminals S1 and S2. Diagram is conceptual, not a literal cable-routing plan.</desc>
+<rect width="1200" height="700" rx="20" fill="#F8FAFC"/>
+<rect x="20" y="20" width="1160" height="58" rx="13" fill="#E0F5F0"/>
+<rect x="36" y="35" width="7" height="28" rx="3" fill="#0B8B78"/>
+<text x="58" y="58" font-size="25" fill="#23344D" font-weight="800">AFTER  /  Athom Mini Switch installed</text>
+<rect x="190" y="99" width="837" height="386" rx="19" fill="#FFFFFF" stroke="#98ADC6" stroke-dasharray="9 7" stroke-width="2"/>
+<text x="210" y="126" font-size="16" fill="#64748B" font-weight="650">JUNCTION BOX  ·  conceptual conductor connections</text>
+<rect x="21" y="161" width="140" height="175" rx="16" fill="#FFFFFF" stroke="#BECBDD" stroke-width="2"/>
+<text x="91" y="185" font-size="18" fill="#23344D" font-weight="800" text-anchor="middle">230 V AC</text>
+<text x="91" y="199" font-size="12" fill="#64748B" text-anchor="middle">supply</text>
+<text x="42" y="220" font-size="15" fill="#2975BC" font-weight="750">N</text><text x="42" y="270" font-size="15" fill="#A45D2A" font-weight="750">L</text>
+<text x="91" y="316" font-size="11" fill="#64748B" text-anchor="middle">PE not shown</text>
+<rect x="1047" y="166" width="134" height="170" rx="16" fill="#FFFFFF" stroke="#BECBDD" stroke-width="2"/>
+<circle cx="1120" cy="233" r="31" fill="#FEF3C7" stroke="#E0AE45" stroke-width="2.5"/>
+<path d="M1104 217 L1136 249 M1136 217 L1104 249" fill="none" stroke="#B7791F" stroke-width="2.5"/>
+<text x="1120" y="297" font-size="17" fill="#23344D" font-weight="800" text-anchor="middle">LUMINAIRE</text>
+<text x="1056" y="210" font-size="12" fill="#2975BC" font-weight="700">N</text><text x="1056" y="266" font-size="12" fill="#9C4D9B" font-weight="700">L</text>
+<rect x="239" y="507" width="188" height="130" rx="14" fill="#fff" stroke="#B8C8D9" stroke-width="2"/>
+    <text x="333" y="585" font-size="17" fill="#23344D" text-anchor="middle" font-weight="750">SWITCH A</text>
+    <text x="333" y="607" font-size="12" fill="#64748B" text-anchor="middle">Two-way switch (SPDT)</text>
+    <circle cx="297" cy="507" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/><circle cx="337" cy="507" r="5.5" fill="#fff" stroke="#C18A16" stroke-width="2.4"/><circle cx="377" cy="507" r="5.5" fill="#fff" stroke="#E2AD25" stroke-width="2.4"/>
+    <text x="297" y="533" font-size="11" fill="#64748B" text-anchor="middle">COM</text><text x="337" y="533" font-size="11" fill="#64748B" text-anchor="middle">1</text><text x="377" y="533" font-size="11" fill="#64748B" text-anchor="middle">2</text>
+    <path d="M377 560 H345" fill="none" stroke="#C4D0DF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M297 548 L337 559" fill="none" stroke="#475569" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="297" cy="548" r="3.5" fill="#475569"/><rect x="786" y="507" width="188" height="130" rx="14" fill="#fff" stroke="#B8C8D9" stroke-width="2"/>
+    <text x="880" y="585" font-size="17" fill="#23344D" text-anchor="middle" font-weight="750">SWITCH B</text>
+    <text x="880" y="607" font-size="12" fill="#64748B" text-anchor="middle">Two-way switch (SPDT)</text>
+    <circle cx="844" cy="507" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/><circle cx="884" cy="507" r="5.5" fill="#fff" stroke="#C18A16" stroke-width="2.4"/><circle cx="924" cy="507" r="5.5" fill="#fff" stroke="#E2AD25" stroke-width="2.4"/>
+    <text x="844" y="533" font-size="11" fill="#64748B" text-anchor="middle">COM</text><text x="884" y="533" font-size="11" fill="#64748B" text-anchor="middle">1</text><text x="924" y="533" font-size="11" fill="#64748B" text-anchor="middle">2</text>
+    <path d="M844 560 H876" fill="none" stroke="#C4D0DF" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M844 548 L884 559" fill="none" stroke="#475569" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="844" cy="548" r="3.5" fill="#475569"/>
+
+    <path d="M161 215 H450 V209" fill="none" stroke="#2975BC" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M161 265 H450 V263" fill="none" stroke="#A45D2A" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M750 209 H1023 V215 H1047" fill="none" stroke="#2975BC" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M750 263 H1047 V265" fill="none" stroke="#9C4D9B" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M450 314 H218 V483 H297 V507" fill="none" stroke="#0B8B78" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M750 314 H1010 V483 H844 V507" fill="none" stroke="#0B8B78" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M337 507 V389 H884 V507" fill="none" stroke="#C18A16" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M377 507 V439 H924 V507" fill="none" stroke="#E2AD25" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="602" y="377" font-size="15" fill="#C18A16" text-anchor="middle" font-weight="650">Traveller 1  /  unchanged</text>
+<text x="602" y="427" font-size="15" fill="#E2AD25" text-anchor="middle" font-weight="650">Traveller 2  /  unchanged</text>
+    <rect x="450" y="151" width="300" height="205" rx="17" fill="#E7F6F1" stroke="#0B8B78" stroke-width="2.8"/>
+    <rect x="470" y="162" width="260" height="35" rx="9" fill="#CDEBE0"/>
+    <text x="600" y="186" font-size="20" fill="#23344D" font-weight="800" text-anchor="middle">ATHOM MINI SWITCH</text>
+    <text x="468" y="214" font-size="15" fill="#23344D" font-weight="700">N-IN</text>
+    <text x="468" y="268" font-size="15" fill="#23344D" font-weight="700">L-IN</text>
+    <text x="468" y="321" font-size="15" fill="#0B8B78" font-weight="800">S1</text>
+    <text x="732" y="214" font-size="15" fill="#23344D" font-weight="700" text-anchor="end">N-OUT</text>
+    <text x="732" y="268" font-size="15" fill="#23344D" font-weight="700" text-anchor="end">L-OUT</text>
+    <text x="732" y="321" font-size="15" fill="#0B8B78" font-weight="800" text-anchor="end">S2</text>
+    <circle cx="450" cy="209" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/><circle cx="750" cy="209" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/><circle cx="450" cy="263" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/><circle cx="750" cy="263" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/><circle cx="450" cy="314" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/><circle cx="750" cy="314" r="5.5" fill="#fff" stroke="#0B8B78" stroke-width="2.4"/>
+    <text x="256" y="475" font-size="14" fill="#0B8B78" font-weight="750">S1 → COM A</text>
+    <text x="870" y="475" font-size="14" fill="#0B8B78" font-weight="750">S2 → COM B</text>
+  <rect x="21" y="649" width="1159" height="36" rx="9" fill="#E9EFF5"/>
+  <text x="37" y="672" font-size="14" fill="#A45D2A" font-weight="700">L = live</text>
+  <text x="167" y="672" font-size="14" fill="#2975BC" font-weight="700">N = neutral</text>
+  <text x="334" y="672" font-size="14" fill="#C18A16" font-weight="700">Travellers</text>
+  <text x="491" y="672" font-size="14" fill="#0B8B78" font-weight="700">S1/S2 = voltage-free contact</text>
+  <text x="1170" y="672" font-size="13" fill="#64748B" text-anchor="end">PE continuity required; omitted for clarity</text>
+  </svg>

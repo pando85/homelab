@@ -50,6 +50,8 @@ web UI are ephemeral — they will be overwritten on next ArgoCD sync.
 | Smart Plug Battery | `smart-plug-v2-battery.yaml` | ESP8266 | Power meter | House battery AC input; battery AC failsafe |
 | Smart Plug Snapmaker | `smart-plug-v2-snapmaker.yaml` | ESP8266 | Power meter | Snapmaker 3D printer plug |
 
+**Athom Mini Switch wiring:** [installation guide with before/after two-way switch diagrams](mini-switch/README.md) for the ESP8285/ESP8266 six-terminal relay.
+
 ## Package System
 
 Devices use `!include` to pull in shared packages. Each device YAML only defines `substitutions`
