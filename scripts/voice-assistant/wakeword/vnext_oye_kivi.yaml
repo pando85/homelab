@@ -1,0 +1,164 @@
+# Experimental vNext data plan for "oye Kivi": NOT a trained or deployed model.
+# Fork of v4_oye_kivi.yaml. Keep the historical v4 recipe immutable for reproducibility.
+# Hypotheses: remove "oiga" from positive labels, upweight high-scoring confusers.
+# Compare at a matched selection-set false-wake budget; do not release without real-voice holdout.
+# Voices are Piper ONNX voices (rhasspy/piper-voices). Every clip is rendered from Spanish phonemes
+# (espeak-ng "es" / "es-419"), also for the other languages' voices, for speaker and accent variety.
+# Speakers are split by role: "train" voices make the training and validation clips, "heldout" voices
+# only the evaluation sets (eval_*). The held-out voices of v1-v3 stay held out, plus three new groups.
+
+voices:
+  # name: [model file stem, role, speaker ids ("all" or [first, last] inclusive), weight, phonemizer]
+  # native Spanish (Spain, Mexico) first
+  sharvard_m: [es_ES-sharvard-medium, train, [0, 0], 2.0, es]
+  sharvard_f: [es_ES-sharvard-medium, train, [1, 1], 2.0, es]
+  davefx: [es_ES-davefx-medium, train, all, 2.0, es]
+  ald: [es_MX-ald-medium, train, all, 2.0, es-419]
+  # multi-speaker English corpora, fed Spanish phonemes
+  libritts_tr: [en_US-libritts_r-medium, train, [0, 799], 3.5, mix]
+  vctk_tr: [en_GB-vctk-medium, train, [0, 89], 1.5, mix]
+  l2arctic_tr: [en_US-l2arctic-medium, train, [0, 17], 1.2, mix]   # non-native English accents
+  arctic: [en_US-arctic-medium, train, all, 0.8, mix]
+  aru: [en_GB-aru-medium, train, all, 0.6, mix]                     # regional British accents
+  semaine: [en_GB-semaine-medium, train, all, 0.3, mix]
+  # multi-speaker voices of other languages
+  thorsten_emo: [de_DE-thorsten_emotional-medium, train, all, 0.3, mix]
+  upmc: [fr_FR-upmc-medium, train, all, 0.2, mix]
+  # Iberian and Romance single voices
+  antton: [eu_ES-antton-medium, train, all, 0.5, es]
+  ona: [ca_ES-upc_ona-medium, train, all, 0.4, es]
+  paola: [it_IT-paola-medium, train, all, 0.4, mix]
+  riccardo: [it_IT-riccardo-x_low, train, all, 0.3, mix]
+  serena: [it_IT-serena-medium, train, all, 0.3, mix]
+  faber: [pt_BR-faber-medium, train, all, 0.3, mix]
+  cadu: [pt_BR-cadu-medium, train, all, 0.3, mix]
+  jeff: [pt_BR-jeff-medium, train, all, 0.3, mix]
+  tugao: [pt_PT-tugão-medium, train, all, 0.3, mix]
+  mihai: [ro_RO-mihai-medium, train, all, 0.3, mix]
+  siwis: [fr_FR-siwis-medium, train, all, 0.15, mix]
+  # single English voices
+  ryan: [en_US-ryan-medium, train, all, 0.15, mix]
+  hfc_f: [en_US-hfc_female-medium, train, all, 0.15, mix]
+  hfc_m: [en_US-hfc_male-medium, train, all, 0.15, mix]
+  kristin: [en_US-kristin-medium, train, all, 0.15, mix]
+  joe: [en_US-joe-medium, train, all, 0.15, mix]
+  cori: [en_GB-cori-medium, train, all, 0.15, mix]
+  alba: [en_GB-alba-medium, train, all, 0.15, mix]
+  north_m: [en_GB-northern_english_male-medium, train, all, 0.15, mix]
+  south_f: [en_GB-southern_english_female-low, train, all, 0.15, mix]
+  # held-out speakers (never in training or validation): the v1-v3 set ...
+  claude: [es_MX-claude-high, heldout, all, 1.0, es-419]
+  daniela: [es_AR-daniela-high, heldout, all, 1.0, es-419]
+  carlfm: [es_ES-carlfm-x_low, heldout, all, 1.0, es]
+  libritts_ho: [en_US-libritts_r-medium, heldout, [800, 903], 1.0, mix]
+  vctk_ho: [en_GB-vctk-medium, heldout, [90, 108], 0.5, mix]
+  # ... plus a Basque-Spanish voice and non-native English speakers
+  maider: [eu_ES-maider-medium, heldout, all, 1.0, es]
+  l2arctic_ho: [en_US-l2arctic-medium, heldout, [18, 23], 0.5, mix]
+# Not used: es_ES-mls_9972-low, es_ES-mls_10246-low and ca_ES-upc_pau-x_low babble on short inputs (v1);
+# en_US-lessac (Blizzard research licence), fr_FR-tom (AGPLv3), en_US-amy and en_GB-jenny_dioco (licence
+# "see URL") are left out for unclear terms. fr_FR-mls, de_DE-mls and nl_NL-mls (multi-speaker MLS) and
+# en_US-norman babble or repeat on this phrase (40 clips per voice, 2026-11-07: 38 % / 5 % / 0 % / 27 %
+# dropped by the length check, and 20 % / 24 % / 10 % / 3 % of the kept clips with 4 or more energy
+# bursts, against 0 % for the kept voices; es_MX ald is slow, median 1.55 s per unit length, but has
+# no extra bursts and stays).
+
+# Target positives MUST say "oye Kivi", never "oiga Kivi". Do not train ambiguous near-phonemes
+# as hard negatives unless the voice-level DTW check and real recordings confirm they differ.
+oye_phonemes:          # yeismo variants of "oye", incl. rioplatense /ʒ/ and /ʃ/ and the lleista /ʎ/
+  "ˈoʝe": 0.61
+  "ˈoje": 0.20
+  "ˈoʒe": 0.09
+  "ˈoʃe": 0.04
+  "ˈoʎe": 0.06
+kivi_phonemes:         # as v1-v3: "kivi", "quivi" and "kibi" all phonemize to kˈiβi
+  "kˈiβi": 0.45
+  "kˈibi": 0.20
+  "kˈivi": 0.20
+  "kˈiːβi": 0.10
+  "kˈiːbi": 0.05
+# How the two words are joined: one utterance with a space, with a comma (pause), run together
+# (one word, "oye" unstressed), or two separate renderings with a gap of gap_s seconds.
+joiners: {space: 0.5, comma: 0.2, together: 0.1, gap: 0.2}
+gap_s: [0.08, 0.45]
+gap_rel_db: [-4, 4]    # level of "kivi" against "oye" in the gap mode
+endings: {"": 0.35, ".": 0.2, "!": 0.2, ",": 0.15, "?": 0.1}
+length_scale: [0.75, 1.35]
+noise_scale: [0.4, 1.0]
+noise_w_scale: [0.4, 1.0]
+# Pitch and formant variety: resample by a factor (changes pitch, formants and tempo together), with p.
+warp: [0.5, 0.9, 1.1]
+
+# Near-phrases (negatives). `KIVI` alone is rendered from kivi_phonemes + an ending, like the positives'
+# second word, so the model must hear "oye" to fire. Others are phonemized text. Weights are relative.
+# Left out: "oye kibi" and "oye quivi" phonemize to the target (ˈoʝe kˈiβi). `v4_gen.py check` (DTW of
+# log-mel against the target, as a ratio to two renderings of the target itself; 62 train-voice
+# renderings, 2026-11-07): the target's own variants score 6.0 ("oje"), 6.5 (comma) and 7.8 ("oiga");
+# "oye quiví" 5.7 (stress shift only) and "hoy Kivi" 6.8 sit inside that range and are left out;
+# "oye kiri" 5.4 with 14 % of renderings below 1.5 (collapses in some voices) is kept at a lower weight.
+# "oye kiwi" (the pipeline's name is "Kiwi"), "ey Kivi" and "hey Kivi" (the alternative phrase) are
+# neither positive nor negative.
+near_phrases:
+  KIVI: 8
+  "oye kili": 3
+  "oye kiri": 1.5
+  "oye tivi": 3
+  "oye pipi": 3
+  "oye chivi": 3
+  "oye Fifi": 3
+  "oye Vivi": 2
+  "oye Kiki": 2
+  "oye Titi": 1.5
+  "oye Lili": 1.5
+  "oye Gigi": 1
+  "oye Gibi": 1
+  "oye kilo": 1
+  "oye Kiva": 1
+  "oye Kevi": 1.5
+  "oye Kuvi": 1
+  "oye Kibo": 1
+  "oye bici": 1
+  "oye mira": 2
+  "oye tú": 2
+  "oye ti": 1
+  "oye": 3
+  "oye, oye": 1
+  "oye y vi": 1.5
+  "oye que vi": 3     # v4: 15/approx. 46 held-out synthetic near-phrases
+  "oye aquí": 2       # v4: 15/approx. 46
+  "oye chica": 1
+  "oye cariño": 1
+  "oye mi vida": 1
+  "oye guapi": 1
+  "oye quiere": 1
+  "oiga": 1.5
+  "oiga mira": 1
+  "hoy vi": 3
+  "yo vi": 1.5
+  "o y vi": 1
+  "o sea": 2
+  "y Kivi": 3
+  "ve Kivi": 3
+  "que Kivi": 2
+  "mi Kivi": 1.5
+  "el Kivi": 1.5
+  "ojo Kivi": 3       # v4: 19/approx. 46
+  "fue Kivi": 3       # v4: 21/approx. 46
+  "joven": 1
+near_sentences:          # context: "oye" and "Kivi" used apart, as people will say them
+  "Kivi, enciende la luz": 2
+  "Kivi, apaga la tele": 2
+  "Kivi, ¿qué hora es?": 2
+  "oye, ¿qué hora es?": 1
+  "oye, enciende la luz": 1
+  "oye, mira esto": 1
+  "oye, ven aquí": 1
+  "oye, ¿has visto eso?": 1
+  "oye, pásame el mando": 1
+  "hoy vi una película": 1
+  "hoy vi a Kiko": 1
+  "y Kivi no contesta": 1
+  "ve a ver a Kivi": 1
+  "le dije a Kivi que no": 1
+  "o sea, que no viene": 1
+  "oye tío, ¿qué pasa?": 1
