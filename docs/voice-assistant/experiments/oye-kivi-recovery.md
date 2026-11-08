@@ -1,6 +1,14 @@
 # Recovery plan: unreliable "oye Kivi" wake word
 
-**Status (2026-11-08): implementation plan + offline guardrails, not a new model or a deployment.** Owner-run collection and acceptance are still required. The v4 model remains the household wake word until the owner deliberately changes Home Assistant. Source of measured baselines: [v4 experiment](kivi-wake-word.md#v4-oye-kivi-2026-11-07-candidate-not-deployed), [promotion and rollback](kivi-wake-word.md#promotion-to-the-household-wake-word-2026-11-07-1959-utc), and [model registry](../model-registry.md).
+**Status (2026-11-08): P0-P3 executed; the new candidate is on a one-device trial.** [P0](oye-kivi-p0-baseline.md)
+measured the deployed baseline, [P1/P2](oye-kivi-vnext-ablations.md) closed the filter replay and the
+ablations, and P3 ran the gate: **incomplete** — every number the gate can measure passes (room false
+wakes 0.12/h against a 0.25/h budget, 0/36 confuser takes, 75 % recall on the held-out session against
+v4's 25 %), and what it cannot measure is real data: one speaker and no `test`-split takes. Per this plan,
+that means **a trial on one device, not promotion**: `oye_kivi_next` `v5-oye-kivi-2026-11-08` is live on
+c3-a since 11:56 UTC, c3-b and the household "Kiwi" pipeline still run v4, and rollback is one command.
+What is left is data, not modelling: a later-day `--split test` session, spk02, and ~15 h per device of
+fresh room exposure. Source of measured baselines: [v4 experiment](kivi-wake-word.md#v4-oye-kivi-2026-11-07-candidate-not-deployed), [promotion and rollback](kivi-wake-word.md#promotion-to-the-household-wake-word-2026-11-07-1959-utc), and [model registry](../model-registry.md).
 
 ## Why this is a recovery, not a threshold tweak
 

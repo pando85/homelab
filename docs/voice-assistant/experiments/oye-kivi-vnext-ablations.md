@@ -3,14 +3,17 @@
 Source: [recovery plan](oye-kivi-recovery.md) P1 (source attribution) and P2 (candidates), run ahead of
 schedule because the real recordings arrived the same morning, plus the first room evidence for P3.
 Follows the [P0 real-voice baseline](oye-kivi-p0-baseline.md). Everything ran offline on the workstation
-(`/work/workspaces/kivi-wakeword/vnext/`); no model, threshold, Helm value or Home Assistant state was
-changed.
+(`/work/workspaces/kivi-wakeword/vnext/`). The result of this note **is now deployed on one TV**: the
+chosen head is `h_c120_w64`, released as `oye_kivi_next` `v5-oye-kivi-2026-11-08` and trialling on c3-a
+([Deployment](#deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv)); the rest of the household is
+untouched.
 
-**Bottom line:** consented real positive takes move recall on *unseen* real takes from 25 % to 70 % on the
-satellite at the same false-wake budget, and the real confusers go from 10/54 to 0/54. No front-end filter
-helps (the model was the problem), and more augmentation of the same 40 cues does nothing — the next
-improvement has to come from new recordings: a `test`-split session on a later day, spk02, and ~15 h per
-device of fresh room exposure.
+**Bottom line:** consented real positive takes move recall on *unseen* real takes from 25 % to 75 % on the
+satellite at a *lower* measured room false-wake rate (0.12/h against 0.96/h), and the real confusers go
+from 10/54 to 0/54. No front-end filter helps (the model was the problem), and more augmentation of the
+same 40 cues does nothing — the next improvement has to come from new recordings: a `test`-split session on
+a later day, spk02, and ~15 h per device of fresh room exposure. The head that shows this (`h_c120_w64`)
+is released as `oye_kivi_next` `v5-oye-kivi-2026-11-08` and trialling on one TV.
 
 ## Arms
 
@@ -147,6 +150,59 @@ c3-b is 0.48/h [0.06, 1.72]. Roughly 15 h per device with no events would be nee
 fall under 0.25/h, so the room exposure has to be collected over the coming days, not squeezed out of the
 existing pieces.
 
+## Result 7: the three heads side by side, and the one that shipped
+
+Session 2 was held out of training for all three heads, so the satellite channel of that session is the
+honest generalisation number. Each head is scored at its own selection threshold (`v4_select.py`,
+<= 2 false accepts in 8.377 h of room selection part):
+
+| Head | raw thr | TV off | TV on | ALL (40 takes) | Confuser takes (36) | Room test part (8.31 h) |
+| --- | --- | --- | --- | --- | --- | --- |
+| v4 (deployed) | 0.9437 | 7/20 = 35 % | 3/20 = 15 % | 10/40 = 25 % | 8/36 = 22 % | 8 = 0.96/h [0.42, 1.90] |
+| `rn_rp_h` | 0.97125 | 14/20 = 70 % | 14/20 = 70 % | 28/40 = 70 % | 0/36 | 3 = 0.36/h [0.07, 1.06] |
+| `rn_rp_h3` | 0.96408 | 15/20 = 75 % | 13/20 = 65 % | 28/40 = 70 % | 0/36 | 3 = 0.36/h [0.07, 1.06] |
+| **`h_c120_w64`** | **0.9754** | **15/20 = 75 %** | **15/20 = 75 %** | **30/40 = 75 %** | **0/36** | **1 = 0.12/h [0.003, 0.67]** |
+
+Per cell for the chosen head (10 takes each): 1.5 m TV off 10/10, 1.5 m TV on 7/10, **3 m TV off 5/10**,
+3 m TV on 8/10. On the session's other microphones it is 32/40 (pc-mic) and 31/40 (webcam-mic).
+
+**Why this one.** `rn_rp_h3` is marginally ahead on the window-level all-microphone measure (82/113
+against 80/113) while `h_c120_w64` is ahead on the deployment channel (30/40 against 28/40): two takes out
+of 40, which is noise. The tie-break was behaviour at the operating point that would actually be served —
+one room event in 8.31 h against three. The heads are inside the margin that Result 4 measured for these
+recipe knobs (one or two takes out of 113), so this is a choice among near-equals, not evidence that the
+knobs matter; and the room part had already been inspected for v4 and `rn_rp_h`, so using it as the
+tie-break costs a little of its independence.
+
+**The threshold is not transferable.** At v4's raw 0.9437 this head accepts 8 events in the same room test
+audio (and `rn_rp_h` accepts 10): their score distributions sit above v4's. The artefact is the pair
+(model, threshold), which is why `calibrate` bakes 0.9754 into the final bias.
+
+## Deployment: `oye_kivi_next` v5-oye-kivi-2026-11-08, one TV
+
+`wake_release.py` ran the full flow for `h_c120_w64` as model id **`oye_kivi_next`**, version
+`v5-oye-kivi-2026-11-08`, raw threshold **0.9754** = the server's default 0.5, served
+`oye_kivi_next.tflite` sha256 `3101e61eb8d55faa37623c8fe7eda30cc1b9f3982c37bf393c85bce49fac93ae`, image
+`git.grigri.cloud/agil/kivi-models:v5-oye-kivi-2026-11-08@sha256:3a198f7d4958` (anonymous pull refused, CI
+run checked). The release state keeps the score and gate JSON:
+`/work/workspaces/kivi-wakeword/releases/v5-oye-kivi-2026-11-08/`.
+
+- **Gate: INCOMPLETE**, exactly as the data predicts — the room checks pass at the point estimate
+  (0.12/h pooled, 0.0/h on c3-a, 0.238/h on c3-b) and the recall checks have no rows because all three
+  real sessions are `train` split and there is only one speaker. Released with the owner's reason
+  (`--accept-gate-fail`), not as a pass.
+- **New id, not an overwrite.** v4's `oye_kivi` file is still served: the household pipeline "Kiwi" keeps
+  `oye_kivi`, and the recovery plan's rule for a gate that does not pass — trial on one device — is only
+  possible because the candidate has its own id. A trial pipeline "oye Kivi" (a copy of the preferred
+  one, wake word `oye_kivi_next`) is live on **c3-a only** since 2026-11-08 11:56 UTC; c3-b is unchanged.
+- **Rollback**: `wake_release.py rollback --version v5-oye-kivi-2026-11-08 --tv c3-a` (no approval needed).
+  Promotion to both TVs (`promote`) is deliberately not done; it needs the evidence in "Next".
+- **Model card** in kivi-models records the numbers, `notes.md` the caveats; licence notes were re-issued
+  for this version because it is the first model here trained on a household member's **positives**.
+- The three dataset sessions were adopted into the release state
+  (`extract --adopt-session <session>`) instead of re-extracting already-aligned audio, which would have
+  made a new revision and superseded the marks the training data refers to.
+
 ## What this does not prove
 
 - **One speaker, one day.** Sessions 1 and 2 are 14 minutes apart, so the holdout measures continuity
@@ -158,8 +214,11 @@ existing pieces.
   inspected for v4, so it is not a fresh unbiased test either.
 - The `--holdout-session` windows still let session 2's 6 background segments per source into the negative
   pool (room noise, no speech); its takes and near-words do not (its near block is marked excluded).
-- Selection thresholds come from the room *selection* parts at 2 events / 8.38 h; no candidate is frozen,
-  hashed or packaged, and nothing was deployed.
+- Selection thresholds come from the room *selection* parts at 2 events / 8.38 h. Session 2 has now
+  informed a pick (Result 7), so it is a **holdout that has been looked at**, not a fresh test set: it
+  estimates generalisation to an unseen session, but the *choice among* close heads used it, so the 75 %
+  is mildly optimistic as a promise about tomorrow. The `test`-split session on a later day is the number
+  that settles it.
 
 ## Reproduce
 
@@ -197,16 +256,46 @@ SO=emb_s_melrow.onnx,src/openWakeWord/openwakeword/resources/models/embedding_mo
 .venv/bin/python -I $H/v3_room.py embed --split v3/room_split.json --parts test --stream-onnx $SO --out-dir vnext/roomtest
 .venv/bin/python -I $H/v3_room.py score --split v3/room_split.json --part test $M \
   --thresholds 0.9437,0.95435,0.97125 --jobs 4 --json vnext/room_test_cand.json
+
+# Result 7: the other two heads on the same two measures (exports h_c120_w64; room replay ~20 min at 4 jobs)
+bash vnext/cand2.sh        # v3_room.py score --part test for v4 / h / h3 / c120 at their own thresholds
+bash vnext/cand3.sh        # kivi_score.py of the three real sessions for the same four models
+
+# the release flow for the chosen head (v5-oye-kivi-2026-11-08, model id oye_kivi_next)
+cd $H
+R="python3 wake_release.py"
+$R init   --version v5-oye-kivi-2026-11-08 --model-id oye_kivi_next --phrase "oye Kivi" \
+  --candidate /work/workspaces/kivi-wakeword/vnext/runs/vn_h_c120_w64
+$R pick-threshold --version v5-oye-kivi-2026-11-08 --max-fa 2          # raw 0.9754
+$R calibrate --version v5-oye-kivi-2026-11-08 --check-features /work/workspaces/kivi-wakeword/vnext/feat/pos_test.npy
+$R extract  --version v5-oye-kivi-2026-11-08 --adopt-session 20261108T092940Z-spk01-tv-c3a \
+  --adopt-session 20261108T094310Z-spk01-tv-c3a --adopt-session 20261108T095130Z-spk01-tv-c3a
+$R score    --version v5-oye-kivi-2026-11-08 --jobs 4
+$R gate     --version v5-oye-kivi-2026-11-08                            # INCOMPLETE
+$R package  --version v5-oye-kivi-2026-11-08 --license-notes <LICENSE-NOTES.md for this version>
+$R release  --version v5-oye-kivi-2026-11-08 --yes-owner-approved --accept-gate-fail "<owner reason>"
+$R deploy   --version v5-oye-kivi-2026-11-08
+$R enable   --version v5-oye-kivi-2026-11-08 --tv c3-a --yes-owner-approved
 ```
 
 ## Next
 
-1. **More real positives, more days** — recipe tuning is exhausted (Result 4), the 3 m TV-off cell and
-   the 80 % gate need data: a `--split test` session on a later day is what turns this into a gate run.
+1. **More real positives, more days** — recipe tuning is exhausted (Result 4), the 3 m TV-off cell (5/10)
+   and the 80 % gate need data: a `--split test` session on a later day is what turns this into a gate run.
+   Record it with `--split test` at recording time and adopt the older sessions with
+   `extract --adopt-session` rather than re-extracting them.
 2. **spk02 on c3-b** (gate needs >= 2 speakers; today's real data is one speaker).
-3. ~~Re-measure room false wakes for the best candidate on the room test parts~~ — done (Result 6):
-   0.36/h [0.07, 1.06], under v4's 0.96/h but not yet a provable 0.25/h. **Collect ~15 h per device of
-   fresh chronological room exposure** (dataset 5 records continuously, so this is a waiting task) and
-   re-replay before any promotion.
-4. ~~Re-score session 3's real confuser takes against the candidates, per word~~ — done (Result 5):
-   0/54 for the candidate against 10/54 deployed.
+3. **Fresh room exposure, as a new part.** The chosen head is at 0.12/h [0.003, 0.67] on the 8.31 h test
+   part, but that part has now been inspected for v4, `rn_rp_h`, `rn_rp_h3` and `h_c120_w64` and was even
+   the tie-break in Result 7, so it cannot also carry the 0.25/h proof. Extend `v3/room_split.json` with
+   the days recorded *after* the trial started, keep the old test part as history, and require ~15 h per
+   device before claiming the budget. Count only confirmed false wakes from the live event log.
+4. ~~Re-score session 3's real confuser takes against the candidates, per word~~ — done (Results 5 and 7):
+   0/54 for the candidate against 10/54 deployed. Still 4 takes per word: repeat the near-word block on a
+   later day if the trial ever wakes on a real Spanish word.
+5. **Watch the trial** (c3-a): daily glance at the satellite's wake events, and compare against c3-b, which
+   still runs v4 in the same room. If the new model mispredicts in a way the offline numbers did not show,
+   roll back — that is information, not a failure.
+6. If a *confirmed* false wake ever appears on c3-a, mine it into the real negative pool at confuser weight
+   (`--extra-neg <npy>:64:6`) and re-run the head: that is the loop that actually reduces false wakes per
+   hour, and it needs no new recordings.
