@@ -9,8 +9,9 @@ manifest or any audio.
 `split` appends to `<dataset>/splits.jsonl` (the last record for a session wins). `supersede` appends to
 `<dataset>/superseded.jsonl`: rows of that session and extraction revision (and, with `--source`, only that
 source) are wrong and are skipped by `read_manifest` consumers (`training_rows`, the scorers). Both files are
-`exclude` appends to `<dataset>/excluded.jsonl`: one cue (`--cue-index`, of a revision) is not usable (for example a
-take with no speech); `read_manifest` sets `excluded` on it and `training_rows` skips it. All three files are
+`exclude` appends to `<dataset>/excluded.jsonl`: one cue (`--cue-index`, of a revision) or a whole block
+(`--block`, the block name) is not usable (for example a take with no speech, or a near-word block that was
+never spoken); `read_manifest` sets `excluded` on it and `training_rows` skips it. All three files are
 append-only, mode 600; nothing is deleted or rewritten. `--dry-run` prints the rows it would cover.
 """
 import argparse
@@ -30,7 +31,10 @@ def now():
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("what", choices=["split", "supersede", "exclude"])
-    ap.add_argument("--cue-index", type=int, action="append", help="(exclude) the cue_index of the row (repeatable)")
+    ap.add_argument("--cue-index", type=int, action="append", default=[],
+                    help="(exclude) the cue_index of the row (repeatable)")
+    ap.add_argument("--block", help="(exclude) the block_name of the rows, e.g. near-words: every cue of that block, "
+                                    "with --cue-index only those indices of it")
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
     ap.add_argument("--session", required=True)
     ap.add_argument("--split", choices=C.SPLITS, help="(split) the split of the whole session")
@@ -50,14 +54,16 @@ def main(argv=None):
         rec = {"session": a.session, "split": a.split, "reason": a.reason, "set_utc": now()}
         target, covered = root / "splits.jsonl", len(rows)
     elif a.what == "exclude":
-        if not a.cue_index:
-            raise SystemExit("--cue-index is required")
-        covered = sum(1 for r in rows if (r.get("revision") or "") == a.revision and r.get("cue_index") in a.cue_index
-                      and a.source in (None, r["source"]))
+        if not a.cue_index and not a.block:
+            raise SystemExit("--cue-index or --block is required")
+        covered = sum(1 for r in rows if C.excluded_match(
+            {"session": a.session, "revision": a.revision, "source": a.source, "block": a.block,
+             "cue_index": sorted(a.cue_index)}, r))
         if not covered:
-            raise SystemExit(f"no rows of session {a.session!r} with revision {a.revision!r} and cue index {a.cue_index}")
-        rec = {"session": a.session, "revision": a.revision, "source": a.source, "cue_index": sorted(a.cue_index),
-               "reason": a.reason, "set_utc": now()}
+            raise SystemExit(f"no rows of session {a.session!r} with revision {a.revision!r}, block {a.block!r}, "
+                             f"cue index {a.cue_index}")
+        rec = {"session": a.session, "revision": a.revision, "source": a.source, "block": a.block,
+               "cue_index": sorted(a.cue_index), "reason": a.reason, "set_utc": now()}
         target = root / "excluded.jsonl"
     else:
         if a.by is None:

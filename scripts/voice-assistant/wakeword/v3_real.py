@@ -74,6 +74,12 @@ def _raw_for(sdir, label, al, run):
     raise SystemExit(f"{label}: raw file {name} not found")
 
 
+def take_slot(label, phrase):
+    """The training slot of a cue take: "kivi" = a take of the target `phrase`, "near" = a near-word take.
+    The slot names are historical (v1-v5 file names and cmd_feats); they do not depend on the phrase."""
+    return "kivi" if str(label).lower() == str(phrase).lower() else "near"
+
+
 def cmd_takes(a):
     from kivi_score import word_span_from_ref
     root = Path(a.dataset)
@@ -81,7 +87,8 @@ def cmd_takes(a):
     excl = {(int(x[1:].split("c")[0]), int(x.split("c")[1])) for x in a.exclude_cue}
     out = {"audio": [], "we": [], "wl": [], "source": [], "label": [], "word": [], "block": [], "cue": [],
            "session": [], "stage": []}
-    stats = {"rows": 0, "excluded": 0, "no_burst": 0, "no_context": 0, "recut_mismatch": 0, "kept": 0}
+    stats = {"rows": 0, "excluded": 0, "not_positive": 0, "no_burst": 0, "no_context": 0, "recut_mismatch": 0,
+             "kept": 0}
     for sid in a.session:
         sdir = root / sid
         session = json.loads((sdir / "session.json").read_text(encoding="utf-8"))
@@ -94,6 +101,9 @@ def cmd_takes(a):
             stats["rows"] += 1
             if (r["block"], r["cue_index"]) in excl:
                 stats["excluded"] += 1
+                continue
+            if a.only_positive and take_slot(r["label"], a.phrase) != "kivi":
+                stats["not_positive"] += 1
                 continue
             tau0, tau1 = float(to_ref(r["start_s"])), float(to_ref(r["end_s"]))
             g = word_span_from_ref(pc, tau0, tau1)
@@ -119,7 +129,9 @@ def cmd_takes(a):
             out["we"].append(PRE)
             out["wl"].append(int(round((g[1] - g[0]) * RATE)))
             out["source"].append(r["source"])
-            out["label"].append("kivi" if r["label"] == "kivi" else "near")
+            # the two stored label slots are "kivi" (a take of the target phrase) and "near" (a near-word
+            # take), whatever the phrase: the file names and cmd_feats keep the historical slot names
+            out["label"].append(take_slot(r["label"], a.phrase))
             out["word"].append(r.get("word") or "")
             out["block"].append(r["block"])
             out["cue"].append(r["cue_index"])
@@ -275,6 +287,12 @@ def main():
     p = sp.add_parser("takes")
     p.add_argument("--dataset", default=C.DEFAULT_DATASET_ROOT)
     p.add_argument("--session", action="append", required=True)
+    p.add_argument("--phrase", default=C.DEFAULT_PHRASE,
+                   help="the wake phrase whose positive cues are the target takes (labels equal to it are "
+                        "positives, 'near:*' labels are near-word takes); default kivi")
+    p.add_argument("--only-positive", action="store_true",
+                   help="skip the 'near:*' cue rows of the session: use when the near-words are taken as "
+                        "negatives by v4_realneg.py instead, or when some of them were not spoken")
     p.add_argument("--exclude-cue", action="append", default=[])
     p.add_argument("--out", required=True)
     p = sp.add_parser("feats")

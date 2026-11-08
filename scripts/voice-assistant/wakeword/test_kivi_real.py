@@ -774,6 +774,38 @@ def session_ns(tmp_path, **kw):
     return Namespace(**d)
 
 
+def test_near_word_rows_of_the_target_phrase_are_negatives_for_it():
+    """A session recorded FOR "oye kivi" carries its own confusers: `near:*` cues must become negatives
+    for that phrase (they are what the model wakes on by mistake), while the session's positive takes
+    never do. Takes of another phrase (the old "kivi" ones) keep working as before."""
+    rows = [
+        {"speaker": "spk01", "split": "train", "phrase": "oye kivi", "label": "oye kivi", "word": ""},
+        {"speaker": "spk01", "split": "train", "phrase": "oye kivi", "label": "near:kiri", "word": "kiri"},
+        {"speaker": "spk01", "split": "train", "phrase": "oye kivi", "label": "near:kivi", "word": "kivi"},
+        {"speaker": "spk01", "split": "train", "phrase": "kivi", "label": "kivi", "word": ""},
+        {"speaker": "spk01", "split": "test", "phrase": "oye kivi", "label": "near:kili", "word": "kili"},
+        {"speaker": "spk01", "split": "train", "phrase": "oye kivi", "label": "near:oye kivi", "word": "oye kivi"},
+    ]
+    neg = C.negative_rows_for_phrase(rows, "oye kivi")
+    labels = sorted(r["label"] for r in neg)
+    assert labels == ["kivi", "near:kiri", "near:kivi"]        # own positives and test-split rows stay out
+    assert all(r["negative_for"] == "oye kivi" and "label_original" in r for r in neg)
+    # the same function for the old phrase: today's confuser rows of "oye kivi" are negatives for "kivi",
+    # the "kivi" positives are not; and "near:kivi" is not either — its spoken word is that phrase itself
+    neg_k = C.negative_rows_for_phrase(rows, "kivi")
+    assert sorted(r["label"] for r in neg_k) == ["near:kiri", "near:oye kivi", "oye kivi"]
+
+
+def test_v3_real_take_slot_names_the_target_phrase_take():
+    """`takes` labels a cue by its label against the session's wake phrase, not by a hardcoded "kivi"."""
+    import v3_real as R
+
+    assert R.take_slot("oye kivi", "oye kivi") == "kivi"
+    assert R.take_slot("Kivi", "kivi") == "kivi"
+    assert R.take_slot("near:kiri", "oye kivi") == "near"
+    assert R.take_slot("near:kivi", "kivi") == "near"          # a near-word take, not a positive
+
+
 def test_session_json_is_written_at_start_and_updated(tmp_path):
     (tmp_path / "blocks.json").write_text(json.dumps(SMALL_BLOCKS))
     seen = []
@@ -1359,9 +1391,11 @@ def test_training_rows_filter_by_phrase_and_old_rows_are_kivi():
     assert [r["label"] for r in C.training_rows(rows, phrase="kivi")] == ["kivi", "near:kili", "background", "negative"]
     assert [r["label"] for r in C.training_rows(rows, phrase=" Oye  Kivi ")] == ["oye kivi", "near:kivi", "negative"]
     neg = C.negative_rows_for_phrase(rows, "oye kivi")
-    assert [r["label"] for r in neg] == ["kivi", "near:kili", "background"]          # old kivi takes are negatives now
+    assert [r["label"] for r in neg] == ["kivi", "near:kili", "background", "near:kivi"]   # old kivi takes, and now also the
+    # oye-kivi session's own near-word cue ("kivi" spoken alone) are negatives for "oye kivi"
     assert {r["negative_for"] for r in neg} == {"oye kivi"} and neg[0]["label_original"] == "kivi"
-    assert [r["label"] for r in C.negative_rows_for_phrase(rows, "kivi")] == ["oye kivi"]   # near:kivi of the other phrase: the word itself is skipped
+    assert [r["label"] for r in C.negative_rows_for_phrase(rows, "kivi")] == ["near:kili", "background", "oye kivi"]   # its own
+    # "kivi" takes stay out; the near-word cue whose word IS "kivi" stays out too (the word check)
     assert C.negative_rows_for_phrase(rows, "oye kivi", exclude_speakers=["spk01"]) == []
     assert rows[0] == {"speaker": "spk01", "split": "train", "label": "kivi", "kind": "cue"}   # inputs are not modified
 
@@ -1402,6 +1436,33 @@ def test_split_mark_reaches_button_rows_and_superseded_rows_are_skipped(tmp_path
     assert C.training_rows(rows) == []
     with pytest.raises(SystemExit):
         M.main(["exclude", "--dataset-root", str(ds), "--session", sid, "--revision", "nope", "--cue-index", "1", "--reason", "x"])
+
+
+def test_exclude_mark_can_target_a_whole_block(tmp_path):
+    """A near-word block whose cues were never spoken: `cue_index` alone would also hit the positive blocks
+    (they number their cues from 1), so `--block` names the block instead. Segments are never covered."""
+    import kivi_dataset_marks as M
+    rows = [{"session": "s", "kind": "cue", "block_name": "oye-kivi-1.5m-tvoff", "cue_index": 1, "split": "train"},
+            {"session": "s", "kind": "cue", "block_name": "oye-kivi-1.5m-tvoff", "cue_index": 2, "split": "train"},
+            {"session": "s", "kind": "cue", "block_name": "near-words", "cue_index": 1, "split": "train"},
+            {"session": "s", "kind": "cue", "block_name": "near-words", "cue_index": 2, "split": "train"},
+            {"session": "s", "kind": "segment", "block_name": "near-words", "cue_index": None, "split": "train"},
+            {"session": "other", "kind": "cue", "block_name": "near-words", "cue_index": 1, "split": "train"}]
+    (tmp_path / "manifest.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    assert not any(r["excluded"] for r in C.read_manifest(tmp_path))          # no marks file yet
+    M.main(["exclude", "--dataset-root", str(tmp_path), "--session", "s", "--block", "near-words",
+            "--reason", "not spoken"])
+    kept = [(r["block_name"], r["cue_index"], r["excluded"]) for r in C.read_manifest(tmp_path)]
+    assert kept == [("oye-kivi-1.5m-tvoff", 1, False), ("oye-kivi-1.5m-tvoff", 2, False),
+                    ("near-words", 1, True), ("near-words", 2, True), ("near-words", None, False),
+                    ("near-words", 1, False)]                        # the other session is untouched
+    M.main(["exclude", "--dataset-root", str(tmp_path), "--session", "s", "--block", "oye-kivi-1.5m-tvoff",
+            "--cue-index", "2", "--reason", "one take"])
+    assert [r["excluded"] for r in C.read_manifest(tmp_path)] == [False, True, True, True, False, False]
+    with pytest.raises(SystemExit):                                  # a block that does not exist
+        M.main(["exclude", "--dataset-root", str(tmp_path), "--session", "s", "--block", "nope", "--reason", "x"])
+    with pytest.raises(SystemExit):                                  # and neither filter
+        M.main(["exclude", "--dataset-root", str(tmp_path), "--session", "s", "--reason", "x"])
 
 
 def test_score_button_takes_uses_the_extraction_windows(tmp_path, monkeypatch):

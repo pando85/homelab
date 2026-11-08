@@ -308,19 +308,20 @@ def training_rows(rows, exclude_speakers=(), include_unassigned=False, phrase=No
 
 
 def negative_rows_for_phrase(rows, phrase, **kw):
-    """Rows recorded for ANOTHER phrase that may train as negatives for `phrase` (same filters as
+    """Rows whose spoken content is NOT `phrase`, usable as negatives for it (same filters as
     `training_rows`: split, needs_review, superseded, `exclude_speakers=`, `include_unassigned=`): the old
-    "kivi" takes become negatives for "oye kivi" (and the reverse), together with that session's near-words
-    and background. A row whose label or word is the target phrase itself is left out. Each row is a copy
-    with `negative_for` set and its own label kept in `label_original`; the audio is the same file."""
+    "kivi" takes become negatives for "oye kivi" (and the reverse), together with the background segments
+    and the near-word takes of every session — including a session recorded FOR `phrase`, whose `near:*`
+    cues are exactly the confusers to push down. A row whose label or word is the target phrase itself
+    (that session's positive takes) is left out. Each row is a copy with `negative_for` set and its own
+    label kept in `label_original`; the audio is the same file."""
     want = normalize_phrase(phrase)
     out = []
     for r in training_rows(rows, **kw):
-        p = row_phrase(r)
-        if p is None or p == want:
+        if row_phrase(r) is None:
             continue
-        if want in (str(r.get("label", "")).lower(), str(r.get("label", "")).lower().removeprefix("near:"),
-                    str(r.get("word", "")).lower()):
+        label = str(r.get("label", "")).lower()
+        if want in (label, label.removeprefix("near:"), str(r.get("word", "")).lower()):
             continue
         out.append({**r, "negative_for": want, "label_original": r.get("label")})
     return out
@@ -338,8 +339,21 @@ def read_marks(root):
 
 
 def read_excluded(root):
-    """excluded.jsonl records: {session, revision, source (optional), cue_index [..], reason, set_utc}."""
+    """excluded.jsonl records: {session, revision, source (optional), block (optional), cue_index [..] (optional),
+    reason, set_utc}. A record with `block` covers the cue rows of that block name; one with `cue_index` covers
+    those indices; both together must match both. A row with no `cue_index` (a segment) is never excluded."""
     return read_jsonl(Path(root) / "excluded.jsonl")
+
+
+def excluded_match(m, r):
+    """Whether an excluded.jsonl record `m` covers manifest row `r`. Segments and room negatives have no
+    `cue_index` and are never covered; `block` is matched against the row's `block_name`, and a record with
+    no `cue_index` list covers every cue of the block."""
+    if r.get("kind") != "cue" or m["session"] != r.get("session"):
+        return False
+    idx = m.get("cue_index") or []
+    return ((m.get("revision") or "") == (r.get("revision") or "") and m.get("source") in (None, r.get("source"))
+            and m.get("block") in (None, r.get("block_name")) and (not idx or r.get("cue_index") in idx))
 
 
 def read_manifest(root):
@@ -358,9 +372,7 @@ def read_manifest(root):
             r["split"] = channel_split(splits[r["session"]], r.get("source"))
         r["superseded"] = any(m["session"] == r.get("session") and (m.get("revision") or "") == (r.get("revision") or "")
                               and m.get("source") in (None, r.get("source")) for m in sup)
-        r["excluded"] = any(m["session"] == r.get("session") and (m.get("revision") or "") == (r.get("revision") or "")
-                            and m.get("source") in (None, r.get("source")) and r.get("cue_index") in m["cue_index"]
-                            for m in exc)
+        r["excluded"] = any(excluded_match(m, r) for m in exc)
         out.append(r)
     return out
 
