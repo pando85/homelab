@@ -1,9 +1,16 @@
 # vnext ablations: real voice is what moves the needle (2026-11-08)
 
-Source: [recovery plan](oye-kivi-recovery.md) P2, run ahead of schedule because the real recordings
-arrived the same morning. Follows the [P0 real-voice baseline](oye-kivi-p0-baseline.md). Everything ran
-offline on the workstation (`/work/workspaces/kivi-wakeword/vnext/`); no model, threshold, Helm value or
-Home Assistant state was changed.
+Source: [recovery plan](oye-kivi-recovery.md) P1 (source attribution) and P2 (candidates), run ahead of
+schedule because the real recordings arrived the same morning, plus the first room evidence for P3.
+Follows the [P0 real-voice baseline](oye-kivi-p0-baseline.md). Everything ran offline on the workstation
+(`/work/workspaces/kivi-wakeword/vnext/`); no model, threshold, Helm value or Home Assistant state was
+changed.
+
+**Bottom line:** consented real positive takes move recall on *unseen* real takes from 25 % to 70 % on the
+satellite at the same false-wake budget, and the real confusers go from 10/54 to 0/54. No front-end filter
+helps (the model was the problem), and more augmentation of the same 40 cues does nothing — the next
+improvement has to come from new recordings: a `test`-split session on a later day, spk02, and ~15 h per
+device of fresh room exposure.
 
 ## Arms
 
@@ -66,20 +73,6 @@ room-false-wake budget as the selection gate. The TV-on gate (>= 60 %) is met at
 (>= 80 %) is not** — 1.5 m is saturated (10/10 both seeds) and the deficit is entirely at **3 m with the
 TV off** (4/10 and 5/10), which is the odd-cell-out and the thing to attack next.
 
-## What this does not prove
-
-- **One speaker, one day.** Session 1 and session 2 are 14 minutes apart. This measures within-session
-  continuity, not across-day or across-speaker robustness. spk02 is absent from the real data entirely
-  (the gate needs >= 2 speakers).
-- **20 takes per condition** — intervals are +-19 points wide.
-- **No room false-wake re-measurement.** The candidates were *selected* at 0.24/h on the room selection
-  parts; the deployed v4 measured 0.96/h on the room test parts, and no candidate has been replayed
-  through those yet.
-- Near-word acceptance for the candidates is only the aggregate confuser-window number (0.0001-0.0006);
-  the real confuser *takes* of session 3 were not re-scored per word.
-- The `--holdout-session` windows still let session 2's 6 background segments per source into the negative
-  pool (room noise, no speech); its takes and near-words do not (its near block is marked excluded).
-
 ## Result 3: the mic chain is not the bottleneck (P1 source attribution)
 
 The same session-2 takes, scored on the satellite's own raw wake stream, and on filtered copies of that
@@ -114,28 +107,96 @@ deterministic — and tripling the augmentation variety or doubling the real sam
 holdout by one or two takes out of 113. **The limit is the diversity of the 40 cues, not the recipe.**
 More recordings, not more tuning.
 
+## Result 5: the confusers are fixed on real speech
+
+All 54 consented real near-word takes (sessions 1 and 3, satellite, each model at its own selection
+threshold):
+
+| Near-word | v4 (deployed) | control (v4's real negatives) | `rn_rp_h` |
+| --- | --- | --- | --- |
+| oye Fifi | 4/6 | 0/6 | 0/6 |
+| oye kiri | 3/6 | 2/6 | 0/6 |
+| oye kili | 2/6 | 1/6 | 0/6 |
+| oye tivi | 1/6 | 1/6 | 0/6 |
+| **kivi (alone)** | 0/6 | 0/6 | **0/6** |
+| oye mira / oye tú / o sea / hoy vi | 0/6 each | 0/6 each | 0/6 each |
+| **ALL** | **10/54 = 18.5 %** | 4/54 = 7.4 % | **0/54** |
+
+The core phrase goal still holds ("kivi" alone never triggers), and the candidate's confuser acceptance
+is zero in 54 trials — with 0 events the 95 % upper bound is still ~5.6 %, so this is not a room
+false-wake rate: that needs the room test replay (Next item 3), not 54 prompted takes.
+
+## Result 6: the same candidate on the untouched room test part
+
+`v3_room.py score --part test` (8.31 h: 4.11 h c3-a, 4.20 h c3-b; never used for selection, each model at
+its own threshold, 2 s refractory, exact Poisson intervals):
+
+| Model | c3-a | c3-b | pooled | per hour [95 % CI] |
+| --- | --- | --- | --- | --- |
+| v4 (deployed) at 0.9437 | 2 | 6 | 8 | **0.96/h [0.42, 1.90]** |
+| control at 0.95435 | 1 | 2 | 3 | 0.36/h [0.07, 1.06] |
+| `rn_rp_h` at 0.97125 | 1 | 2 | 3 | **0.36/h [0.07, 1.06]** |
+
+The v4 row reproduces the published room figure exactly, which validates the replay chain. The candidate
+is 3x under it in point estimate (**and 10 events at 0.9437, one event more than v4**: its score
+distribution sits higher, so it is not a model you may leave at the old threshold — the threshold comes
+with the model).
+
+**This does not meet the gate yet.** 0.36/h [0.07, 1.06] cannot exclude the 0.25/h budget, and per device
+c3-b is 0.48/h [0.06, 1.72]. Roughly 15 h per device with no events would be needed for the upper bound to
+fall under 0.25/h, so the room exposure has to be collected over the coming days, not squeezed out of the
+existing pieces.
+
+## What this does not prove
+
+- **One speaker, one day.** Sessions 1 and 2 are 14 minutes apart, so the holdout measures continuity
+  within a morning, not across-day or across-speaker robustness. spk02 is absent from the real data
+  entirely (the gate needs >= 2 speakers).
+- **20 takes per held-out condition** — intervals are +-19 points wide.
+- **The 0/54 confuser result and the room replay are different evidence.** 54 prompted takes say nothing
+  about rate per hour; 8.3 h of room audio cannot exclude 0.25/h (Result 6), and that part was already
+  inspected for v4, so it is not a fresh unbiased test either.
+- The `--holdout-session` windows still let session 2's 6 background segments per source into the negative
+  pool (room noise, no speech); its takes and near-words do not (its near block is marked excluded).
+- Selection thresholds come from the room *selection* parts at 2 events / 8.38 h; no candidate is frozen,
+  hashed or packaged, and nothing was deployed.
+
 ## Reproduce
 
 ```sh
 cd /work/workspaces/kivi-wakeword
-bash vnext/feats.sh && bash vnext/real.sh && bash vnext/runs.sh   # synthetic + real features, 5 arms, selection
+H=$HOME/homelab/scripts/voice-assistant/wakeword
+bash vnext/feats.sh && bash vnext/real.sh && bash vnext/runs.sh    # synthetic + real features, 5 arms, selection
 bash vnext/real3.sh && bash vnext/runs3.sh                         # session 2 held out, two seeds + report
 bash vnext/runs4.sh                                               # copies x weight ablation on the holdout
-# candidates on the held-out session, comparable to the P0 baseline
-.venv-tf/bin/python $H/export_tflite.py vnext/runs/vn_ws4k_rn_rp_h/kivi.onnx vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite \
-  --check-features vnext/feat/pos_test.npy
-.venv/bin/python -I $H/kivi_score.py --session datasets/real/20261108T094310Z-spk01-tv-c3a \
-  --model oye_kivi=v4/final/oye_kivi_uncalibrated.tflite --model h=vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite \
-  --thresholds 0.9437,0.97125 --also-pc --jobs 4 --json vnext/score_s2_holdout.json
+
+# the candidate heads, exported for the server's own runtime
+for n in vn_ws4k_v4real vn_ws4k_rn_rp_h vn_ws4k_rn_rp_h3; do
+  .venv-tf/bin/python $H/export_tflite.py vnext/runs/$n/kivi.onnx vnext/runs/$n/oye_kivi_uncalibrated.tflite \
+    --check-features vnext/feat/pos_test.npy
+done
+M="--model oye_kivi=v4/final/oye_kivi_uncalibrated.tflite --model ctrl=vnext/runs/vn_ws4k_v4real/oye_kivi_uncalibrated.tflite --model h=vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite"
+
+# held-out positives (comparable to the P0 baseline) and the 54 real confuser takes
+for s in 20261108T094310Z 20261108T092940Z 20261108T095130Z; do
+  .venv/bin/python -I $H/kivi_score.py --session datasets/real/$s-spk01-tv-c3a $M \
+    --thresholds 0.9437,0.95435,0.97125 --also-pc --jobs 4 --json vnext/score_$s_cand.json
+done
+
 # P1: extend the HA-side filter mirrors with the new sessions, then score the same session on each mirror
 for f in rnnoise webrtc-ns; do
   systemd-run --user --scope -p MemoryMax=6G -p CPUQuota=400% nice -n 10 \
     .venv/bin/python -I $H/ha_filter_mirror.py build --src datasets/real --dst datasets/derived/$f --filter $f \
     --tool v2/fe_build/release/examples/aec_offline
-  .venv/bin/python -I $H/kivi_score.py --session datasets/derived/$f/20261108T094310Z-spk01-tv-c3a \
-    --model oye_kivi=v4/final/oye_kivi_uncalibrated.tflite --model h=vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite \
-    --thresholds 0.9437,0.97125 --jobs 3 --json vnext/p1_mirror_$f.json
+  .venv/bin/python -I $H/kivi_score.py --session datasets/derived/$f/20261108T094310Z-spk01-tv-c3a $M \
+    --thresholds 0.9437,0.95435 --jobs 3 --json vnext/p1_mirror_$f.json
 done
+
+# the untouched room test part (Result 6)
+SO=emb_s_melrow.onnx,src/openWakeWord/openwakeword/resources/models/embedding_model.onnx
+.venv/bin/python -I $H/v3_room.py embed --split v3/room_split.json --parts test --stream-onnx $SO --out-dir vnext/roomtest
+.venv/bin/python -I $H/v3_room.py score --split v3/room_split.json --part test $M \
+  --thresholds 0.9437,0.95435,0.97125 --jobs 4 --json vnext/room_test_cand.json
 ```
 
 ## Next
@@ -143,6 +204,9 @@ done
 1. **More real positives, more days** — recipe tuning is exhausted (Result 4), the 3 m TV-off cell and
    the 80 % gate need data: a `--split test` session on a later day is what turns this into a gate run.
 2. **spk02 on c3-b** (gate needs >= 2 speakers; today's real data is one speaker).
-3. Re-measure room false wakes for the best candidate on the room **test** parts (nothing of it is in
-   training) before any threshold or deployment proposal.
-4. Re-score session 3's 36 real confuser takes against the candidates, per word.
+3. ~~Re-measure room false wakes for the best candidate on the room test parts~~ — done (Result 6):
+   0.36/h [0.07, 1.06], under v4's 0.96/h but not yet a provable 0.25/h. **Collect ~15 h per device of
+   fresh chronological room exposure** (dataset 5 records continuously, so this is a waiting task) and
+   re-replay before any promotion.
+4. ~~Re-score session 3's real confuser takes against the candidates, per word~~ — done (Result 5):
+   0/54 for the candidate against 10/54 deployed.
