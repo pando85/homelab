@@ -246,6 +246,25 @@ def test_pick_threshold_never_uses_the_test_part(releases, tmp_path):
     assert W.load_state(V)["steps"]["pick-threshold"]["source"] == "owner"
 
 
+def test_adopt_session_records_a_release_that_reuses_old_recordings(releases, tmp_path, monkeypatch):
+    make_state(releases, tmp_path)
+    ds = tmp_path / "dataset"
+    (ds / "S1").mkdir(parents=True)
+    (ds / "manifest.jsonl").write_text(
+        json.dumps({"session": "S1", "kind": "take", "phrase": "oye kivi", "source": "tv-c3a",
+                    "speaker": "spk01", "split": "train"}) + "\n" +
+        json.dumps({"session": "S2", "kind": "take", "phrase": "kivi", "source": "tv-c3a"}) + "\n")
+    (ds / "S2").mkdir()
+    monkeypatch.setattr(W, "DATASET", ds)
+    monkeypatch.setattr(W, "run", lambda *a, **k: (_ for _ in ()).throw(AssertionError("re-extracted")))
+    assert W.main(["extract", "--version", V, "--adopt-session", "nope"]) == 2               # not a session dir
+    assert W.main(["extract", "--version", V, "--adopt-session", "S2"]) == 2                 # another phrase
+    assert W.main(["extract", "--version", V, "--adopt-session", "S1"]) == 0
+    assert W.load_state(V)["sessions"] == [{"id": "S1", "kind": "session", "condition": None}]
+    assert W.main(["extract", "--version", V, "--adopt-session", "S1"]) == 0                 # idempotent
+    assert len(W.load_state(V)["sessions"]) == 1
+
+
 def test_plan_writes_nothing(releases, tmp_path):
     cand = tmp_path / "cand"
     cand.mkdir()

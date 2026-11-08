@@ -8,7 +8,8 @@ Steps (each idempotent; each prints what it will do and records its result in
 
     init            create the release state: model id, phrase, candidate directory
     record-check    prerequisites, and the exact owner commands for a PC session and c3-b button takes
-    extract         kivi_extract.py for one PC session or one button-take window (records the session id)
+    extract         kivi_extract.py for one PC session or one button-take window (records the session id),
+                    or --adopt-session to record sessions an earlier release already extracted
     pick-threshold  v4_select.py on the room SELECTION part only (or an owner-given threshold)
     calibrate       export the calibrated TFLite/ONNX pair, calibration sidecar and SHA256SUMS
     score           kivi_score.py per session (recall per speaker, source, condition) and v3_room.py on
@@ -652,9 +653,35 @@ def dataset_sessions():
     return {p.name for p in DATASET.iterdir() if p.is_dir()} if DATASET.is_dir() else set()
 
 
+def cmd_adopt(a, st, cfg):
+    """Record dataset sessions extracted by an earlier release into this release's state.
+
+    Releases reuse the same real recordings: re-running `kivi_extract.py` would only make another revision
+    of audio that is already aligned and marked. `score` reads the stored clips, so adopting is enough.
+    """
+    sys.path.insert(0, str(HERE))
+    import kivi_real_common as C
+    ids = []
+    for sid in a.adopt_session:
+        if not (DATASET / sid).is_dir():
+            raise Refused(f"--adopt-session: {DATASET / sid} is not an extracted dataset session")
+        rows = [r for r in C.read_manifest(DATASET)
+                if r.get("session") == sid and not r.get("superseded") and C.row_phrase(r) == cfg["phrase_norm"]]
+        if not rows:
+            raise Refused(f"--adopt-session: {sid} has no rows for the phrase {cfg['phrase_norm']!r}")
+        entry = {"id": sid, "kind": "session", "condition": None}
+        st["sessions"] = [s for s in st["sessions"] if s["id"] != sid] + [entry]
+        ids.append(sid)
+        say(f"extract: adopted session {sid} ({len(rows)} rows of {cfg['phrase_norm']!r}, no re-extraction)")
+    if will(f"record {len(ids)} already-extracted session(s): {', '.join(ids)}"):
+        record(st, "extract", summary=f"adopted {', '.join(ids)}", sessions=ids)
+
+
 def cmd_extract(a):
     st = load_state(a.version)
     cfg = st["config"]
+    if a.adopt_session:
+        return cmd_adopt(a, st, cfg)
     if a.button_takes:
         for k in ("device", "speaker", "since", "until", "split", "condition"):
             if not getattr(a, k):
@@ -1568,6 +1595,9 @@ def build_parser():
     p.add_argument("--no-ha", action="store_true", help="skip the Home Assistant read")
 
     p = sub("extract", cmd_extract)
+    p.add_argument("--adopt-session", action="append", metavar="SESSION",
+                   help="record an already-extracted dataset session (by its directory name) without "
+                        "re-running kivi_extract.py")
     p.add_argument("--session-dir")
     p.add_argument("--button-takes", action="store_true")
     p.add_argument("--device")
