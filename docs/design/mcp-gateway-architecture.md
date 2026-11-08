@@ -1,6 +1,9 @@
 # MCP Gateway Architecture
 
-**Status:** Agreed baseline (implementation validation pending)
+**Status:** Agreed baseline (implementation validation pending). First live attempt of the
+disabled-only foundation was deployed and reverted on 2026-11-08: the NetworkPolicy set denies the
+node path, so kubelet probes never passed - see
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Second occurrence").
 **Date:** 2026-11-08
 **Implementation plan:** [`planning/mcp-gateway-implementation.md`](https://github.com/pando85/homelab/blob/master/planning/mcp-gateway-implementation.md)
 

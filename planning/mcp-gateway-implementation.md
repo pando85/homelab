@@ -1,12 +1,16 @@
 # MCP Gateway Implementation Plan
 
-**Status:** Task 1 implemented locally and verified against the pinned binary. **Nothing is
-committed, pushed, applied or synced** - no gateway, Kanidm, Grafana or Vault resource exists
-live yet, and the Hermes sidecar keeps serving Grafana until parity is proven.
-**Every backend route ships disabled, and the platform is not end-to-end ready.** The Firecrawl
-fetcher-egress change that was meant to carry its SSRF gate was deployed and rolled back
-(`0b16b31b9` -> `8fff4f224`) with the root cause still unknown; see
-`docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
+**Status:** Task 1 was committed (`9049af3bf`) and auto-deployed by ArgoCD on 2026-11-08 with
+**every backend route disabled**, and is **reverted again**: both planes reached `Degraded` because
+the attached NetworkPolicies made the gateway pods unreachable from the node on every port, so the
+kubelet startup probes on `:15021/healthz/ready` timed out and each container was killed on the probe
+threshold while the process itself logged `marking server ready` within ~6 ms. No backend was ever
+reachable (routes rendered empty), no existing workload was disturbed, and the two charts plus the
+`test/mcp-gateway` foundation suite are back to local/uncommitted work. Measurement and reasoning:
+"Second occurrence" in `docs/troubleshooting/mcp-firecrawl-egress-regression.md`. The Hermes sidecar
+keeps serving Grafana until parity is proven. The earlier Firecrawl fetcher-egress change
+(`0b16b31b9` -> `8fff4f224`) is the same failure class; its exact packet-level cause is still not
+captured.
 **Date:** 2026-11-08
 **Architecture:** [docs/design/mcp-gateway-architecture.md](../docs/design/mcp-gateway-architecture.md)
 **Owner approval required before any live deployment**
@@ -19,9 +23,14 @@ renders); B2 both charts now ship `kanidm.humanScopeMap: []` - no human grant is
 choice is a separate gate on the grant only; B3 the Grafana delegation candidate moved back to the
 **public** plane where the approved architecture puts it (the admin plane is Vault only) and its
 backend namespace is its own `grafana-mcp`, not `mcp-gateway-admin`; the NetworkPolicy comments no
-longer claim that `enable-host-firewall=false` guarantees kubelet probe traffic is unaffected - the
-Firecrawl incident is precisely the counter-example, so replies are assumed unresolved and no blanket
-host/remote-node allow is added. All routes stay off; the initial rollout scope, if deployment is ever
+longer claim that `enable-host-firewall=false` guarantees kubelet probe traffic is unaffected - that
+assumption is now **measured false** on the live cluster: a pod carrying these policies answers no
+port from the node (host-sourced dial times out at 6.14 s on every port, including a port with no
+listener), while a policy-free pod answers in 0.07 s. No blanket host/remote-node allow is added,
+because Kubernetes NetworkPolicy cannot express a node peer - the open question for re-land is a
+Cilium-native mechanism (for example a CiliumNetworkPolicy with `fromEntities: host` /
+`toEntities: host`, or `enable-host-firewall` plus an explicit node allow) proven by a bounded
+host-sourced dial or Hubble verdicts. All routes stay off; the initial rollout scope, if deployment is ever
 approved separately, is the public plane first, and the new pods' exact label selectors mean a NotReady
 gateway pod cannot disturb an existing workload.
 
@@ -116,12 +125,16 @@ per plane; both render fail-closed and both were booted with the pinned binary.
 
 ### 1.3 NetworkPolicy
 
-- [x] **Both directions**: gateway ingress only from its own ingress controller + Prometheus;
+- [ ] **Both directions**: gateway ingress only from its own ingress controller + Prometheus;
   backend pods get ingress only from the gateway workload (dedicated pod per backend,
   `namespace`/`workloadName`/`port` from values); gateway egress limited to DNS, Kanidm/JWKS and
   enabled backends. Service is ClusterIP: no NodePort, no load balancer, no hostPort. Ops access
   is a separate **port** (metrics 15020, readiness 15021) and `adminAddr: "off"`, verified: nothing
   listens on 15000.
+  **Not safe as written - live result:** the policy set is self-consistent for pod-to-pod peers but
+  the kubelet probe path is node-sourced and dies with any restrictive policy attached, so the pods
+  never became Ready and the release was reverted. Re-land needs the node path expressed in a
+  Cilium-native way and proven live (see the incident doc), not inferred from `helm template`.
 
 ### 1.4 Auth Validation + Discovery Tests
 
@@ -591,7 +604,9 @@ NOT STARTED
 chart-rendered configs. Cluster-level verification has **not** run (no gateway/Kanidm resource exists;
 live checks need an approved deployment).
 
-Executed locally (all green, 2026-11-08):
+Executed locally (all green, 2026-11-08). The files in the paths below are the local working-copy
+test suite: after the first-deploy revert they are **not committed**, so treat each path as local
+evidence until the foundation re-lands:
 
 | suite | what it proves | result |
 |---|---|---|

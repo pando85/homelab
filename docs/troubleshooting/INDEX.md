@@ -467,11 +467,17 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `api`/`worker`/`nuq` across two nodes within ~12 s of attach (selected endpoints' BPF reloaded 1 s
   after the apply), while `browser` stayed `Ready`; reverted (`8fff4f224`) and the **same** `api`
   process recovered readiness **without a restart**. Root cause unknown. Denied counters read `0` but
-  are cumulative and unattributable, so they prove nothing either way; "probe requests timed out" is
-  **not** a confirmed node↔pod network denial (no packet/eBPF/exec capture), and app logs showing the
-  process alive with background DB work prove neither handler responsiveness nor packet location. The
-  browser policy shares the **byte-identical** DNS/internet anchors (all 14 `except` CIDRs) and SearXNG
-  is covered by an api-only `search` policy, so browser-vs-fetcher rule shape is not a discriminator —
-  only extra peers/rule count on the selected side. The live SSRF check never ran. Re-land only with
-  deny/CT/capture evidence, a single-workload canary, and no blanket host-allow workaround.
+  are cumulative and unattributable, so they prove nothing either way, and app logs showing the process
+  alive with background DB work prove neither handler responsiveness nor packet location. The browser
+  policy shares the **byte-identical** DNS/internet anchors (all 14 `except` CIDRs) and SearXNG is
+  covered by an api-only `search` policy, so browser-vs-fetcher rule shape is not a discriminator —
+  only extra peers/rule count on the selected side; note also that the Firecrawl policies were
+  **Egress-only**, and the browser's only network probe is a liveness `httpGet`. The node↔pod denial
+  itself is since **demonstrated** by a same-node A/B dial: an endpoint carrying an **Ingress** policy
+  that cannot name the node answers no port to the node (SYN unanswered for 6.1 s, even on a closed
+  port) while a policy-free neighbour on the same node answers in 0.07 s — see the gateway occurrence
+  in the same doc, which is a different proximate trigger and does not explain this one. The live SSRF
+  check never ran. Re-land only with
+  deny/CT/capture evidence, a single-workload canary, and the node probe path proven open before the
+  policy attaches (bounded host-sourced dial, or a Cilium-native `fromEntities: host` peer).
   See `docs/troubleshooting/mcp-firecrawl-egress-regression.md`
