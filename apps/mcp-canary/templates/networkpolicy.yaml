@@ -1,0 +1,115 @@
+{{- if not (has .Values.policyMode (list "none" "ingress" "egress")) }}
+{{- fail (printf "policyMode must be one of: none, ingress, egress (got: %s)" .Values.policyMode) }}
+{{- end }}
+{{- if ne .Values.policyMode "none" }}
+---
+{{- if eq .Values.policyMode "ingress" }}
+# Ingress-only policy: mirrors the foundation's ingress rules exactly.
+# TCP3000 from ingress-nginx-external namespace+controller pod labels.
+# TCP15020 from monitoring namespace+prometheus pod label.
+# NO 15021 rule: the kubelet probe port stays unlisted, mirroring the foundation.
+# Selector note: podSelector matches this release's own labels (instance+name), so
+# the policy cannot capture any pre-existing workload.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # MCP endpoint: only through the EXTERNAL ingress controller.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx-external
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Prometheus scrapes the metrics port (L3/4 separation: ops access is a
+    # distinct port, not a path on the MCP port).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 15020
+{{- else if eq .Values.policyMode "egress" }}
+# Egress-only policy: mirrors the foundation's egress rules exactly.
+# DNS UDP+TCP53 to node-local-dns and kube-dns in kube-system.
+# TCP443 to ingress-nginx-external (JWKS fetch path).
+# TCP8443 to kanidm namespace (direct Kanidm service path).
+# No backend peers: the canary has no backends enabled.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/name: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS. nodelocaldns answers at 169.254.25.10, but Cilium DNATs to the
+    # node-local-dns pod, so policy must select the real pods, not the anycast
+    # address. Scoped to the two DNS workloads instead of all of kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: node-local-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Cluster DNS fallback (CoreDNS) for lookups that reach the Service instead.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # JWKS fetch path (even though the canary has no routes, the foundation
+    # includes this; mirroring it exactly).
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx-external
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 443
+    # Same path, in case Kanidm is reached directly by service instead of URL.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kanidm
+      ports:
+        - protocol: TCP
+          port: 8443
+{{- end }}
+{{- end }}
