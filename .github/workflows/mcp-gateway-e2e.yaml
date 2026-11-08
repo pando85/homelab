@@ -1,0 +1,58 @@
+---
+name: MCP Gateway Public E2E
+
+# Manual-only probe of the internet-facing MCP boundary, from a GitHub-hosted
+# runner: public DNS -> TLS -> edge -> auth gate, with no secrets and no route
+# through the cluster. It checks that
+#   - the MCP route answers 401 and advertises the protected-resource metadata,
+#   - that document names the canonical resource and the exact Kanidm issuer,
+#   - a garbage bearer token is also refused with 401,
+#   - the admin plane stays silent to the internet (404 / no answer; a 401 or 403
+#     from the gateway itself counts as exposure).
+#
+# Targets live in test/mcp-gateway/public_probe.py so this workflow cannot be
+# pointed at anything else. Run it once the authenticated route is deployed: until
+# then it fails with "no MCP route published", which is the correct answer and not
+# a placeholder health check. Authorised sessions (real tokens, real tools) are
+# verified in-cluster, since credentials must not leave the cluster.
+#
+# yamllint disable-line rule:truthy
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mcp-gateway-public-e2e
+  cancel-in-progress: false
+
+jobs:
+  probe:
+    name: Probe the public MCP boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # If the decision logic is broken, a green run below would mean nothing.
+      - name: Self-test the probe logic
+        run: python3 test/mcp-gateway/public_probe.py --self-test
+
+      - name: Probe from the public internet
+        run: |
+          # Without pipefail the step would report tee's status, not the probe's.
+          set -euo pipefail
+          python3 test/mcp-gateway/public_probe.py | tee probe-output.txt
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo '### MCP gateway public boundary'
+            echo ''
+            echo '```text'
+            cat probe-output.txt 2>/dev/null || echo 'the probe did not run'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

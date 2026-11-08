@@ -464,3 +464,160 @@ app-template:
       fsGroupChangePolicy: OnRootMismatch
       seccompProfile:
         type: RuntimeDefault
+
+  # Egress isolation for the parts of Firecrawl that fetch URLs chosen by the
+  # caller. Upstream has no private-address filter (`validateUrl.ts` checks the
+  # shape of the URL only, the `threat-protection` and `blocklist` features are
+  # domain reputation lists and need USE_DB_AUTHENTICATION), so the destination
+  # range is enforced here instead. Egress only: ingress behaviour is unchanged,
+  # cluster-wide ingress isolation stays off (docs/conventions/deploying-new-apps.md).
+  #
+  # Cilium checks pod egress *after* service DNAT, so an in-cluster peer has to be a
+  # pod/namespace selector matching the backend, never a ClusterIP. The selectors below
+  # spell out the pod labels instead of using the chart's controller sugar so they stay
+  # readable; test/mcp-gateway/firecrawl-egress-test.py asserts they still match the
+  # pods this chart renders.
+  networkpolicies:
+    # api serves synchronous scrapes in-process (processJobInternal), the two
+    # worker kinds drain the queues. They share the same dependency set.
+    fetchers:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: firecrawl
+          app.kubernetes.io/instance: firecrawl
+        matchExpressions:
+          - key: app.kubernetes.io/controller
+            operator: In
+            values:
+              - api
+              - worker
+              - nuq-worker
+      policyTypes:
+        - Egress
+      rules:
+        egress:
+          # DNS. The Cilium LocalRedirectPolicy turns the kube-dns cluster address
+          # into the node-local cache pod, so that pod is what policy sees; plain
+          # kube-dns pods are allowed for the fallback path.
+          - &egressDns
+            to:
+              - namespaceSelector:
+                  matchLabels:
+                    kubernetes.io/metadata.name: kube-system
+                podSelector:
+                  matchLabels:
+                    k8s-app: node-local-dns
+              - namespaceSelector:
+                  matchLabels:
+                    kubernetes.io/metadata.name: kube-system
+                podSelector:
+                  matchLabels:
+                    k8s-app: kube-dns
+            ports:
+              - protocol: UDP
+                port: 53
+              - protocol: TCP
+                port: 53
+          # Rate limiting and cache (REDIS_URL, REDIS_RATE_LIMIT_URL)
+          - to:
+              - podSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: firecrawl
+                    app.kubernetes.io/instance: firecrawl
+                    app.kubernetes.io/controller: redis
+            ports:
+              - protocol: TCP
+                port: 6379
+          # Queue + job storage: the Spilo pods behind the firecrawl-postgres service
+          # (DATABASE_HOST). Selected by cluster-name so it survives a role promotion.
+          - to:
+              - podSelector:
+                  matchLabels:
+                    cluster-name: firecrawl-postgres
+            ports:
+              - protocol: TCP
+                port: 5432
+          # Browser rendering (PLAYWRIGHT_MICROSERVICE_URL)
+          - to:
+              - podSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: firecrawl
+                    app.kubernetes.io/instance: firecrawl
+                    app.kubernetes.io/controller: playwright
+            ports:
+              - protocol: TCP
+                port: 3000
+          # Public internet, web ports only. Anything routable inside the cluster,
+          # the home LAN/VLANs, link-local (including the 169.254.169.254 metadata
+          # address) and reserved space is excluded. No IPv6 is allowed: these
+          # ipBlock peers are IPv4, so every IPv6 destination stays denied.
+          - &egressInternet
+            to:
+              - ipBlock:
+                  cidr: 0.0.0.0/0
+                  except:
+                    - 0.0.0.0/8
+                    # Pods and services: k3s keeps both inside 10.0.0.0/8
+                    # (ipv4NativeRoutingCIDR, kube-dns at 10.43.0.10)
+                    - 10.0.0.0/8
+                    # Loopback
+                    - 127.0.0.0/8
+                    # Carrier-grade NAT / tailnet space
+                    - 100.64.0.0/10
+                    # RFC1918: nodes, home LAN and its VLANs
+                    - 172.16.0.0/12
+                    - 192.168.0.0/16
+                    # Link-local, cloud metadata endpoints
+                    - 169.254.0.0/16
+                    # IANA reserved, documentation, benchmarking, multicast
+                    - 192.0.0.0/24
+                    - 192.0.2.0/24
+                    - 198.18.0.0/15
+                    - 198.51.100.0/24
+                    - 203.0.113.0/24
+                    - 224.0.0.0/4
+                    - 240.0.0.0/4
+            ports:
+              - protocol: TCP
+                port: 80
+              - protocol: TCP
+                port: 443
+
+    # SearXNG backs web_search, and only the API process calls it (executeSearch is
+    # reached from controllers/v2/search.ts, not from a job worker).
+    search:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: firecrawl
+          app.kubernetes.io/instance: firecrawl
+          app.kubernetes.io/controller: api
+      policyTypes:
+        - Egress
+      rules:
+        egress:
+          - to:
+              - namespaceSelector:
+                  matchLabels:
+                    kubernetes.io/metadata.name: searxng
+                podSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: searxng
+                    app.kubernetes.io/instance: searxng
+            ports:
+              - protocol: TCP
+                port: 8080
+
+    # The browser fetches arbitrary pages and their subresources, and needs no
+    # in-cluster dependency besides DNS.
+    browser:
+      podSelector:
+        matchLabels:
+          app.kubernetes.io/name: firecrawl
+          app.kubernetes.io/instance: firecrawl
+          app.kubernetes.io/controller: playwright
+      policyTypes:
+        - Egress
+      rules:
+        egress:
+          - *egressDns
+          - *egressInternet
