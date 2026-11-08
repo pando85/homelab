@@ -3,7 +3,14 @@
 **Status:** Agreed baseline (implementation validation pending). First live attempt of the
 disabled-only foundation was deployed and reverted on 2026-11-08: the NetworkPolicy set denies the
 node path, so kubelet probes never passed - see
-`docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Second occurrence").
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Second occurrence"). **Both planes never
+reached Ready at `9049af3bf`, so session-key stability across reconciles, RFC 9728 discovery, and
+disabled-backend 404 were NEVER observed live; they are local render/boot evidence only. No live
+gateway or parity claim exists.** The next gate before re-land is an approved GitOps canary isolating
+ingress-only vs egress-only probe failure.
+**Provisional placement:** both planes and the diagnostic canary are pinned to node `prusik` via
+`nodeSelector: kubernetes.io/hostname=prusik` for diagnosis and initial rollout, accepting a
+single-node failure domain. Placement will be revisited after the node→pod probe/datapath gate.
 **Date:** 2026-11-08
 **Implementation plan:** [`planning/mcp-gateway-implementation.md`](https://github.com/pando85/homelab/blob/master/planning/mcp-gateway-implementation.md)
 
@@ -147,7 +154,11 @@ unchanged) must be settled before any delegation route is enabled:
   is forwarded verbatim. Grafana identifies the person from a stable claim (`sub`), not from a
   username it has never seen, and a person who already exists as an OAuth user is linked once by a
   bootstrap token that carries both `sub` and the identity claims. Live Grafana settings, per-person
-  bootstraps and the two-person parity run remain owner gates; the local route stays disabled.
+  bootstraps and the two-person parity run remain owner gates; the local route stays disabled. **The
+alias bootstrap is local positive but unapproved while the live settings
+`allow_insecure_email_lookup=true` and `auto_sign_up=true` remain in place.** The local fixture
+measured that a foreign `sub` carrying an existing email claim attached an existing JWT alias; **no
+real compromise is alleged or observed**, and the live settings are untouched by this work.
   Details, measurements and the alternatives that were costed and rejected:
   `planning/mcp-gateway-implementation.md` (Task 2)
 
@@ -155,6 +166,8 @@ unchanged) must be settled before any delegation route is enabled:
 - Backend currently lacks caller auth — gateway audit is the identity boundary
 - No wrapper invented; deploy the existing `firecrawl-mcp` package
 - Backend may observe MCP network source, not authenticated caller identity
+- **Firecrawl reload/reapply remain blockers; the policies are absent; live SSRF verification was
+  never run; the root cause is unknown and distinct from the later gateway event.**
 
 **SearXNG / Context7**: Candidate centralized MCP packages. Context7 is NOT excluded because
   upstream is external — evaluate during spike
@@ -164,10 +177,15 @@ behind the gateway: stateful mode caches the backend credential per MCP session,
 alone behaves like a bearer and rotation is ignored — stateful cannot carry per-caller secrets.
 Per-request (stateless) forwarding of the caller's own native token does preserve Vault's own ACLs
 and audit identity, at the cost of a deliberate per-route header allow plus a stateless route, which
-is an owner decision. That support rests on **local fixture evidence only** (21 REQUIRED + 4 CONTROLS +
-11 OBSERVED + 1 NOT TESTED, security negatives incomplete); **TLS is not established** - the valid-CA
-positive and the invalid-CA controlled negative are both pending, and the only measured TLS fact is that
-native Vault denies an invalid certificate. `planning/mcp-gateway-implementation.md` (Task 4)
+is an owner decision. That support rests on **local fixture evidence only** (28/28 REQUIRED held, 4/4
+known-bad CONTROLS reproduced, 12 OBSERVED, 2 NOT-TESTED; security negatives incomplete); **TLS now has
+a real positive (valid-CA success) and a real negative (untrusted-CA exact x509 failure with connection
+evidence), but this is still LOCAL/test-only and no route is ready.** **CRITICAL:** agentgateway info
+logs the full request path including the query string; the probe observed a synthetic credential in
+`?VAULT_TOKEN=`. Durable rule: never place credentials in query strings; gateway logs are a
+credential-bearing surface; caller `X-Vault-Token` header only; any future route must redact/avoid
+secrets in URLs. No real credential or user data was exposed; synthetic fixture only.
+`planning/mcp-gateway-implementation.md` (Task 4)
 
 **Unsupported delegation**: If a backend does not support delegation or the exchange chain is
   blocked, do NOT silently weaken identity or impose a new broker. Decide per-MCP using the shared

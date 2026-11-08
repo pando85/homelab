@@ -4,11 +4,21 @@
 **every backend route disabled**, and is **reverted again**: both planes reached `Degraded` because
 the attached NetworkPolicies made the gateway pods unreachable from the node on every port, so the
 kubelet startup probes on `:15021/healthz/ready` timed out and each container was killed on the probe
-threshold while the process itself logged `marking server ready` within ~6 ms. No backend was ever
-reachable (routes rendered empty), no existing workload was disturbed, and the two charts plus the
-`test/mcp-gateway` foundation suite are back to local/uncommitted work. Measurement and reasoning:
-"Second occurrence" in `docs/troubleshooting/mcp-firecrawl-egress-regression.md`. The Hermes sidecar
-keeps serving Grafana until parity is proven. The earlier Firecrawl fetcher-egress change
+threshold while the process itself logged `marking server ready` within ~6 ms. **Both planes never
+reached Ready at `9049af3bf`, so session-key stability across reconciles, RFC 9728 discovery, and
+disabled-backend 404 were NEVER observed live; they are local render/boot evidence only. No live
+gateway or parity claim exists.** The next gate before re-land is an approved GitOps canary isolating
+ingress-only vs egress-only probe failure. No backend was ever reachable (routes rendered empty), no
+existing workload was disturbed, and the two charts plus the `test/mcp-gateway` foundation suite are
+back to local/uncommitted work. Measurement and reasoning: "Second occurrence" in
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md`. The Hermes sidecar
+keeps serving Grafana until parity is proven.
+**Provisional placement decision (2026-11-09):** both MCP gateway planes (and the diagnostic canary)
+are pinned to node `prusik` via `nodeSelector: kubernetes.io/hostname=prusik` for diagnosis and
+initial rollout. Accepted trade-off: single-node failure domain means the gateway is unavailable when
+prusik is down, which is acceptable for a disabled-only foundation and a diagnostic canary where the
+goal is controlled observation, not production availability. Placement will be revisited after the
+node→pod probe/datapath gate is proven and the canary demonstrates stable Ready state. The earlier Firecrawl fetcher-egress change
 (`0b16b31b9` -> `8fff4f224`) is the same failure class; its exact packet-level cause is still not
 captured.
 **Date:** 2026-11-08
@@ -135,6 +145,14 @@ per plane; both render fail-closed and both were booted with the pinned binary.
   the kubelet probe path is node-sourced and dies with any restrictive policy attached, so the pods
   never became Ready and the release was reverted. Re-land needs the node path expressed in a
   Cilium-native way and proven live (see the incident doc), not inferred from `helm template`.
+  **Diagnostic A/B used `kubectl get --raw /api/v1/namespaces/<ns>/pods/<pod>:<port>/proxy/...`
+  (apiserver pod-proxy), not a direct node/kubelet path; the source identity through the K3s proxy
+  is unproven. Both Ingress and Egress were co-attached, so the neighbour comparison alone does not
+  isolate which policy type drops the traffic. Native K8S NetworkPolicy typically leaves node-local
+  traffic permitted, but Cilium's actual enforcement may differ (runtime 1.20.2 vs docs 1.20.4 patch
+  difference). Prior stale-datapath incidents are hypothesis, not causal proof. Timeout alone is not
+  proof of drop. No privileged capture or restart was performed. Do not recommend blanket
+  host/remote-node allow; a future port-15021-only candidate, L3/L4 not HTTP-path claim.
 
 ### 1.4 Auth Validation + Discovery Tests
 
@@ -345,6 +363,10 @@ a merged key set is unsafe and dual-client trust is unsupported) and **alias lif
 `('jwt', sub)` binding is created, re-pointed and revoked over time, which the fixture never exercised).
 A positive bootstrap on a fixture is therefore not delegation support, and the Grafana-side audience
 behaviour beside it was printed without assertions, so it is an observation, not a verified negative.
+**The alias bootstrap is local positive but unapproved while the live settings
+`allow_insecure_email_lookup=true` and `auto_sign_up=true` remain in place.** The local fixture
+measured that a foreign `sub` carrying an existing email claim attached an existing JWT alias; **no
+real compromise is alleged or observed**, and the live settings are untouched by this work.
 Reviewer-flagged and recorded here so nobody reads the 16/16 as production integration proof:
 
 | step | measured on 13.3.0 |
@@ -561,16 +583,22 @@ configuration change", not "unknown".
    `x-vault-token` is stripped plane-wide today as well: a real Vault route must instead pass the
    caller's **own** token through, which needs an explicit per-route allow - deliberately not built
    while the route is blocked.
+   **CRITICAL operational finding:** agentgateway info logs the full request path including the query
+   string. The probe observed a synthetic credential in `?VAULT_TOKEN=`. Durable rule: **never place
+   credentials in query strings; gateway logs are a credential-bearing surface; caller `X-Vault-Token`
+   header only; any future route must redact/avoid secrets in URLs.** No real credential or user data
+   was exposed; synthetic fixture only.
 6. **Session protection is required but is not the fix.** `SESSION_KEY` must be a real AES key from
    the chart-generated Secret (never `session.key: disabled`, never a committed literal), because
    without it the pods run base64 session IDs and lose even the issuing-backend guard. That still
    does not satisfy the two-user gate - do not mark Vault safe because sessions are encrypted or
    time-limited.
 7. **The official product was run behind the pinned gateway - measured support for option (a)**
-   (`vault-official-stateless-probe.py`, a local uncommitted probe, re-run after review: **21 REQUIRED
-   cases, 4 known-bad CONTROLS, 11 OBSERVED (informational, not asserted), 1 NOT TESTED**. These counts
-   replace the earlier "24 cases" framing; the security negatives are still **incomplete**, so nothing
-   here is a pass claim. `hashicorp/vault-mcp-server:0.2.0`
+   (`vault-official-stateless-probe.py`, a local uncommitted probe, re-run after review: **28/28
+   REQUIRED held, 4/4 known-bad CONTROLS reproduced, 12 OBSERVED, 2 NOT-TESTED** (live two-human
+   A/B; production per-route `X-Vault-Token` allow not wired). These counts replace the earlier
+   "24 cases" framing; the security negatives are still **incomplete**, so nothing here is a pass
+   claim. `hashicorp/vault-mcp-server:0.2.0`
    digest `sha256:e4e8df2fb7d27f12c5cb8d1c5b37663a9569ad5ce0047fa0281c56a1769222aa`, a `hashicorp/vault:1.15`
    dev fixture, agentgateway `v1.7.0` with the chart-rendered config). Mock backends are not product
    proof, so this used the real server, with two ACL identities and **no ambient `VAULT_TOKEN`** in
@@ -594,15 +622,11 @@ configuration change", not "unknown".
    here), so this proves ACL/session semantics on a local dev fixture - **not** version parity with the
    production Vault, and not a complete isolation proof: cross-caller session-id swap and credential
    rotation under `stateless` were not both exercised as asserted negatives.
-   **TLS is explicitly not established by this work.** The fixture is plain HTTP on loopback, and the
-   long-running HTTPS observation is only "HTTP 200, no recognised leakage signal, marker absent", which
-   is **not** certificate-verification evidence. Correct label: **no read-through observed, certificate
-   verification not established; the valid-CA positive AND the invalid-CA controlled negative are both
-   PENDING**. The only TLS fact measured is that the native Vault server **denies an invalid
-   certificate** - that is Vault's own behaviour, not gateway delegation behaviour. Still open too: the
-   route patch is test-only (the per-route `x-vault-token` allow is not wired in production shape) and no
-   human A/B run exists. Read the stateless ACL result as a LOCAL positive that supports investigating
-   option (a), never as approval to enable the route.
+   **TLS now has a real positive (valid-CA success) and a real negative (untrusted-CA exact x509
+   failure with connection evidence), but this is still LOCAL/test-only and no route is ready.**
+   Still open: the route patch is test-only (the per-route `x-vault-token` allow is not wired in
+   production shape) and no human A/B run exists. Read the stateless ACL result as a LOCAL positive
+   that supports investigating option (a), never as approval to enable the route.
 
 ### Options for the owner (cheapest first)
 
