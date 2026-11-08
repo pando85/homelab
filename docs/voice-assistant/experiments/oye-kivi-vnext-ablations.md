@@ -9,8 +9,9 @@ chosen head is `h_c120_w64`, released as `oye_kivi_next` `v5-oye-kivi-2026-11-08
 untouched.
 
 **Bottom line:** consented real positive takes move recall on *unseen* real takes from 25 % to 75 % on the
-satellite at a *lower* measured room false-wake rate (0.12/h against 0.96/h), and the real confusers go
-from 10/54 to 0/54. No front-end filter helps (the model was the problem), and more augmentation of the
+satellite at a *lower* measured room false-wake rate (0.12/h against 0.96/h), and the real confuser takes
+drop from 10/54 to 1/54 (0/54 for `rn_rp_h`, the head that got closest on synthetic data). No front-end
+filter helps (the model was the problem), and more augmentation of the
 same 40 cues does nothing — the next improvement has to come from new recordings: a `test`-split session on
 a later day, spk02, and ~15 h per device of fresh room exposure. The head that shows this (`h_c120_w64`)
 is released as `oye_kivi_next` `v5-oye-kivi-2026-11-08` and trialling on one TV.
@@ -156,15 +157,23 @@ Session 2 was held out of training for all three heads, so the satellite channel
 honest generalisation number. Each head is scored at its own selection threshold (`v4_select.py`,
 <= 2 false accepts in 8.377 h of room selection part):
 
-| Head | raw thr | TV off | TV on | ALL (40 takes) | Confuser takes (36) | Room test part (8.31 h) |
+| Head | raw thr | TV off | TV on | ALL (40 takes) | Confuser takes, satellite (54) | Room test part (8.31 h) |
 | --- | --- | --- | --- | --- | --- | --- |
-| v4 (deployed) | 0.9437 | 7/20 = 35 % | 3/20 = 15 % | 10/40 = 25 % | 8/36 = 22 % | 8 = 0.96/h [0.42, 1.90] |
-| `rn_rp_h` | 0.97125 | 14/20 = 70 % | 14/20 = 70 % | 28/40 = 70 % | 0/36 | 3 = 0.36/h [0.07, 1.06] |
-| `rn_rp_h3` | 0.96408 | 15/20 = 75 % | 13/20 = 65 % | 28/40 = 70 % | 0/36 | 3 = 0.36/h [0.07, 1.06] |
-| **`h_c120_w64`** | **0.9754** | **15/20 = 75 %** | **15/20 = 75 %** | **30/40 = 75 %** | **0/36** | **1 = 0.12/h [0.003, 0.67]** |
+| v4 (deployed) | 0.9437 | 7/20 = 35 % | 3/20 = 15 % | 10/40 = 25 % | 10/54 = 19 % | 8 = 0.96/h [0.42, 1.90] |
+| `rn_rp_h` | 0.97125 | 14/20 = 70 % | 14/20 = 70 % | 28/40 = 70 % | 0/54 | 3 = 0.36/h [0.07, 1.06] |
+| `rn_rp_h3` | 0.96408 | 15/20 = 75 % | 13/20 = 65 % | 28/40 = 70 % | 1/54 | 3 = 0.36/h [0.07, 1.06] |
+| **`h_c120_w64`** | **0.9754** | **15/20 = 75 %** | **15/20 = 75 %** | **30/40 = 75 %** | **1/54** | **1 = 0.12/h [0.003, 0.67]** |
 
 Per cell for the chosen head (10 takes each): 1.5 m TV off 10/10, 1.5 m TV on 7/10, **3 m TV off 5/10**,
 3 m TV on 8/10. On the session's other microphones it is 32/40 (pc-mic) and 31/40 (webcam-mic).
+
+The confuser column pools both near-word sessions on the satellite (session 1: 18 cues, session 3: 36), as
+Result 5 does. In the dedicated confuser session alone (session 3, 36 takes) the new heads are **0/36**
+against v4's 8/36; the single acceptance of `h_c120_w64` in the pooled 54 is **"oye kili"** once on session
+1's near block, which was in its own training data — a fitting gap rather than a generalisation failure.
+The same word also reaches the trigger once on each of the two PC reference microphones of session 3, so
+"oye kili" stays in the negative pool at confuser weight. The held-out session's own near block is 0/9 on
+every channel and every model.
 
 **Why this one.** `rn_rp_h3` is marginally ahead on the window-level all-microphone measure (82/113
 against 80/113) while `h_c120_w64` is ahead on the deployment channel (30/40 against 28/40): two takes out
@@ -209,7 +218,7 @@ run checked). The release state keeps the score and gate JSON:
   within a morning, not across-day or across-speaker robustness. spk02 is absent from the real data
   entirely (the gate needs >= 2 speakers).
 - **20 takes per held-out condition** — intervals are +-19 points wide.
-- **The 0/54 confuser result and the room replay are different evidence.** 54 prompted takes say nothing
+- **The confuser result (0-1/54) and the room replay are different evidence.** 54 prompted takes say nothing
   about rate per hour; 8.3 h of room audio cannot exclude 0.25/h (Result 6), and that part was already
   inspected for v4, so it is not a fresh unbiased test either.
 - The `--holdout-session` windows still let session 2's 6 background segments per source into the negative
@@ -291,8 +300,9 @@ $R enable   --version v5-oye-kivi-2026-11-08 --tv c3-a --yes-owner-approved
    the days recorded *after* the trial started, keep the old test part as history, and require ~15 h per
    device before claiming the budget. Count only confirmed false wakes from the live event log.
 4. ~~Re-score session 3's real confuser takes against the candidates, per word~~ — done (Results 5 and 7):
-   0/54 for the candidate against 10/54 deployed. Still 4 takes per word: repeat the near-word block on a
-   later day if the trial ever wakes on a real Spanish word.
+   1/54 satellite for the shipped head against 10/54 deployed (0/54 for `rn_rp_h`). Still 2 to 4 takes per
+   word per session: repeat the near-word block on a later day, and give "oye kili" more takes in the
+   negative pool, since it is the one word that still reaches the trigger.
 5. **Watch the trial** (c3-a): daily glance at the satellite's wake events, and compare against c3-b, which
    still runs v4 in the same room. If the new model mispredicts in a way the offline numbers did not show,
    roll back — that is information, not a failure.
