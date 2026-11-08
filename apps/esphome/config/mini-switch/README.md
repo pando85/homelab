@@ -18,8 +18,8 @@ either **one wall switch** or **two mechanical two-way switches** (also called
 > neutral, or any external supply to S1/S2.** Isolate both switch commons from
 > all former live/load connections before wiring them to the Athom.
 >
-> This page is for the **six-terminal ESP8285/ESP8266 Mini Switch pictured in
-> the hardware inventory**, **not** the ESP32-C3 Mini Relay V2. Verify the exact
+> This page is for the **six-terminal ESP8285/ESP8266 Mini Switch with L-IN, N-IN,
+> L-OUT, N-OUT, S1, and S2 terminals**, **not** the ESP32-C3 Mini Relay V2. Verify the exact
 > model's markings and manufacturer wiring documentation first.
 
 ## Where the module belongs
