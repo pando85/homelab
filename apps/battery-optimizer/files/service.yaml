@@ -62,7 +62,8 @@ entities:
   battery_discharge_power: null
   # Cumulative kWh, AC side (verified 2026-11-03: a supervised charge read 0.180 kWh against
   # 0.182 kWh of integrated AC power and 0.165 kWh DC; the discharge agreed with AC within the
-  # 0.01 kWh resolution).  The V3 discharge counter excludes the backup-port output.  The live
+  # 0.01 kWh resolution).  The discharge counter includes what the battery supplies to the
+  # backup (EPS) port (measured 2026-11-03, docs/components/data-pipeline.md).  The live
   # service history and the offline `build` (gross = grid - charge + discharge) read these two.
   battery_charge_energy: sensor.venus_total_charging_energy
   battery_discharge_energy: sensor.venus_total_discharging_energy
@@ -95,11 +96,13 @@ freshness_s:
   # its last value when Modbus fails, which actuation.entities.battery_liveness catches instead.
   # A number restores the age test.
   battery_soc: null
-  battery_power: 300
-  # The battery's AC energy counters are also reported only on change: null (the default since
-  # 0.6.1) is availability only, as battery_soc; battery_liveness catches a dead Modbus link.
+  # The battery AC energy counters: null (the default) for the same reason, verified at go-live
+  # on 2026-11-03 (an idle battery's counters never re-report, so the former inherited 900 s of
+  # grid_energy marked them stale in /status and battery_optimizer_input_stale).  They gate
+  # neither planning nor actuation.  A number restores the age test.
   battery_charge_energy: null
   battery_discharge_energy: null
+  battery_power: 300
 
 planning:
   # entity:    plan from the live battery SOC entity (refuses to plan when it is missing,
@@ -129,29 +132,52 @@ planning:
   # saving within 5% of the 0-cost saving in S2 winter, S3 winter and summer);
   # see docs/components/battery-model.md.  Re-run hack/throughput_sweep.py on real battery data.
   throughput_cost_eur_per_kwh: 0.01
-  # High-SOC dwell cost: EUR per kWh of SOC above the threshold per hour held (planning only).
+  # High-SOC dwell cost: EUR per kWh of SOC above high_soc_threshold_frac, per hour held (planning
+  # only, never in reported cost; LFP calendar aging is worse at high SOC).  0 = off, today's
+  # behaviour.  Applies on a full-charge day too, so the 100% checkpoint finishes close to the
+  # discharge.  Value chosen by hack/high_soc_dwell_sweep.py, see docs/planning/high-soc-dwell-cost.md.
   high_soc_threshold_frac: 0.90
-  high_soc_cost_eur_per_kwh_h: 0.01
-  # Thermal soft cap: EUR per AC kWh charged above charge_soft_cap_kw (planning only).
+  high_soc_cost_eur_per_kwh_h: 0.0
+  # Thermal soft cap on charge power: EUR per AC kWh charged above charge_soft_cap_kw in a slot
+  # (planning only, never in reported cost; the battery's internal temperature rises with charge
+  # power and LFP ageing is worse hot).  0 = off, today's behaviour.  Composes with the dwell cost and
+  # the full-charge checkpoint.  Value chosen by hack/charge_soft_cap_sweep.py, see
+  # docs/planning/thermal-charge-soft-cap.md.
   charge_soft_cap_kw: 1.5
-  charge_soft_cap_eur_per_kwh: 0.005
-  # Bound each slot's planned discharge by the forecast load minus actuation.discharge_margin_w,
-  # since the actuator keeps that import (owner decision 2026-11-05).
-  discharge_margin_bound: true
-  # Read-only thermal state and derate prediction (observability only: no plan, hash or actuation
-  # change, nothing here is ever written).  Needs actuation.entities.battery_ac_power and its sign;
-  # the temperature entity must equal battery_health.entities.temperature.
+  charge_soft_cap_eur_per_kwh: 0.0
+  # Bound each slot's planned discharge by forecast load - actuation.discharge_margin_w (floored
+  # at 0), the most the live actuator can deliver because it keeps that much grid import.  false =
+  # off, today's plan (discharge bounded by the load alone).  See docs/known-issues.md, "Planned
+  # discharge is not delivered".
+  discharge_margin_bound: false
+  # Read-only thermal state and derate prediction (docs/planning/thermal-derate-aware-planning.md,
+  # docs/service.md "Thermal shadow").  off (default): nothing is read, recorded or exposed, today's
+  # service byte for byte.  shadow: reads Omnibattery's Temperature Charge Limit entities and the
+  # battery temperature and AC power, keeps a first-order thermal model (daily guarded refit,
+  # persisted under service/v1/state/), and records beside every plan the predicted temperature and
+  # achievable charge power per slot, scored when the slot closes.  Observability only: no plan, hash
+  # or actuation changes in either mode, and no entity here is ever written (nothing joins the
+  # ha_guard allowlist).  Needs actuation.entities.battery_ac_power and its sign.
   thermal:
-    mode: shadow
+    mode: "off"                  # off | shadow (quote it: bare YAML off is a boolean)
     entities:
+      # Shared with battery_health.entities.temperature (they must agree; either may be omitted).
       temperature: sensor.venus_internal_temperature
       limit_switch: switch.omnibattery_temp_charge_limit
+      # Optional: without it the discharge side is never derated in the prediction.
       discharge_switch: switch.omnibattery_temp_charge_limit_discharge
       limit_c: number.omnibattery_temp_charge_limit_c
       band_c: number.omnibattery_temp_charge_limit_band_c
       floor_pct: number.omnibattery_temp_charge_limit_floor_pct
+      # Optional: the curve scales with min(system cap, Venus cap); without them charge_limit_kw.
       system_max_charge_power: number.omnibattery_system_max_charge_power
       venus_max_charge_power: number.venus_max_charge_power
+    charge_limit_kw: 2.5         # min(system cap, Venus cap) when the cap entities are not read
+    driver_min_kw: 0.8           # Omnibattery never derates below the driver minimum
+    # The model before any accepted refit (docs/components/battery-thermal.md): tau in minutes, the
+    # idle level in degC, the charge and discharge gains in degC per kW.
+    prior: {tau_min: 44.0, t_amb_c: 32.6, k_c: 11.0, k_d: 6.9}
+    refit_hour_local: 4          # the daily refit runs at (or after) this local hour, and at start-up
   replan:
     soc_change_frac: 0.05
     debounce_s: 30
@@ -220,11 +246,8 @@ actuation:
   import_trip_hold_s: 300
   neutral_pd_target_w: 0          # PD grid target in a planned idle
   # > 0: small import while discharging, never export.  Omnibattery's PD loop swings about
-  # +-150..200 W on a ~2 s period; 50 W gave brief exports (-10..-94 W) on 2026-11-03.
-  # 200 W (2026-11-04/05, 2 s grid samples over ~17 h of discharge): median import 192-195 W,
-  # 1st percentile 131-151 W, below 0 W in 0-0.04% of samples.  Replaying 100 W on that data:
-  # ~0.2% of the time below 0 W, ~1 Wh/day exported, 0.5-1.2 kWh/day more discharge in low-load
-  # hours.  BatteryGridExport alerts above 5 Wh/day.
+  # +-150..200 W on a ~2 s period; 50 W gave brief exports (-10..-94 W) on 2026-11-03.  200 W until
+  # 2026-11-05 (median import 192-195 W, rarely below 0 W); 100 W since, see docs/known-issues.md.
   discharge_margin_w: 100
   min_discharge_cap_w: 100        # the discharge cap is never written below this (0 = unlimited)
   # Venus E V3 limit: its own max charge/discharge is 2500 W (number.venus_max_charge_power /
@@ -232,12 +255,32 @@ actuation:
   # Go-live: the system caps are 2500/2500 W and Premium mode is on in the Marstek app; without
   # Premium the firmware limits discharge to 800 W, below what this cap and the planner assume.
   max_discharge_cap_w: 2500       # <= 2500
-  # Load-following discharge (owner decision 2026-11-07, optimizer 0.15.0): in a planned discharge
-  # slot, while the measured SOC is at or above the plan's end-of-slot SOC, the system discharge
-  # cap is raised from the planned power to max_w so the battery covers the real house load.
+  # Load-following discharge (ADR-0007 amendment 2026-11-07), OFF by default.  In a planned
+  # discharge slot, while the measured SOC is at or above the plan's end-of-slot SOC, the discharge
+  # cap above is raised from the plan's power to max_w, so the battery covers the real load (an
+  # evening heat-pump hot-water cycle the forecast placed an hour off) instead of the forecast
+  # one; the PD target stays discharge_margin_w, so no export.  It engages at plan SOC +
+  # soc_hysteresis_pct and releases below the plan SOC.  max_w: null = max_discharge_cap_w; it
+  # must lie in [min_discharge_cap_w, max_discharge_cap_w], the guard's bound on the cap.
   load_following:
-    enabled: true
-    max_w: 2500
+    enabled: false
+    max_w: null
+    soc_hysteresis_pct: 1
+  # Reserve protection (ADR-0007 amendment 2026-11-08).  While the MEASURED SOC sits at or below
+  # the tariff's floor, a tick the plan maps to idle or discharge becomes a bounded recovery charge
+  # of this many W through the existing charge row (the PD target is house load + this, inside
+  # min(import_cap_w, entity max)); a planned charge at or above it is kept, a weaker one is raised
+  # to it.  Forcing idle is not enough: the measured residual drain continues in idle (about 26 W on
+  # 2026-11-08).  The floor is NOT set here: it is battery.soc_window_min of config/tariff.yaml, the
+  # value the planner clamps to.  Hysteresis: engages at the floor, releases at floor + this many SOC
+  # points (0 < soc_floor_hysteresis_pct <= 10).  No enable flag: inert in shadow (no actuator),
+  # recorded in dry_run, sent in live under the kill switch; the guard and the settle hold keep
+  # priority.  During the import trip's import_trip_hold_s above the recovery sends no charge AND
+  # refuses the planned discharge (the guard scopes that refusal to charge intents): the tick holds
+  # idle with both directions off.  Likewise it does not raise the setpoint to the ceiling when the
+  # headroom above the house load is below this power.  Must be <= import_cap_w.
+  soc_floor_recovery_w: 200
+  soc_floor_hysteresis_pct: 1
   # Omnibattery integration_status values in which the intent may be applied; any other
   # (manual, grid_charging, backup_mode, initializing, a competing strategy...) holds safe idle.
   healthy_states: [balanced, charging, discharging]
@@ -257,23 +300,58 @@ actuation:
     battery_soc: null
     battery_ac_power: null
 
-# Periodic full charge for cell balancing (docs/planning/periodic-full-charge.md).  mode: shadow
-# decides and records with the simulated writer: nothing about the real control path changes and
-# the guard keeps refusing the two weekly entities.  Never `live` without the owner's decision.
+# Periodic full charge for cell balancing (docs/planning/periodic-full-charge.md).  OFF by
+# default: false means no decision, no state and no read or write of the entities below.  It
+# works in every mode (shadow: decisions only; dry_run: plus the would-be writes; live: sends).
+# Only in `mode: live` with `enabled: true` does the guard admit switch.turn_on/off on
+# `entities.enable_switch` and select.select_option (the seven weekdays) on
+# `entities.day_select`: Omnibattery's own weekly full charge is the self-limiting enabler
+# (ADR-0007 amendment 2026-11-04).  Needs planning.soc_source: entity.
 full_charge:
-  enabled: true
+  enabled: false
+  # The feature's own switch.  shadow (default): decides and records with the simulated writer and a
+  # simulated state file; beside a live service nothing about the real control path changes (the
+  # regular plan stays the plan of record, the actuator hears nothing, the two weekly entities stay
+  # refused by the guard).  live: arms Omnibattery's weekly full charge; needs the service mode: live.
   mode: shadow
-  entities:
-    enable_switch: switch.omnibattery_weekly_full_charge_enabled
-    day_select: select.omnibattery_weekly_full_charge_day
-    delay_switch: switch.omnibattery_weekly_full_charge_delay
-    charge_delay_switch: switch.omnibattery_charge_delay
-    last_balance_read: sensor.venus_last_balance_read
-    balancing_mode: binary_sensor.venus_balancing_mode
-    cell_delta: sensor.venus_cell_delta
-    balance_status: sensor.venus_balance_status
-    delta_trend: sensor.venus_delta_trend
-    delta_avg_4w: sensor.venus_delta_avg_4w
+  # Days since the last full charge, by the class of the latest valid balance readings (worst
+  # class first): unknown also means fewer than min_comparable_readings; green needs that many
+  # green readings and a trend that is not rising; yellow also covers a single orange or red;
+  # alert is orange or red on alert_consecutive readings in a row (and an owner alert).
+  cadence:
+    unknown: {min_days: 10, max_days: 14}
+    green: {min_days: 14, max_days: 28}
+    yellow: {min_days: 7, max_days: 14}
+    alert: {min_days: 5, max_days: 7}
+  min_comparable_readings: 4
+  alert_consecutive: 2
+  settle_timeout_s: 300               # idle hold after completion, waiting for the balance reading
+  threshold_min_eur: 0.01             # threshold at the row's min_days, EUR per run (pre-tax, objective unit)
+  threshold_scale_eur: 0.01           # hyperbolic growth towards the row's max_days
+  fixed_cost_eur: 0.0                 # added to the forcing cost (wear / time at 100%)
+  target_soc_frac: 1.0
+  reached_soc_pct: 99                 # SOC at or above: "reached" (only a new balance reading counts as done)
+  shortfall_penalty_eur_per_kwh: 10.0
+  completion_margin_slots: 2          # checkpoint at least this many slots before local midnight
+  arm_lead_slots: 1
+  arm_before_soc_frac: 0.93
+  ack_timeout_s: 90
+  top_hold_timeout_min: 120
+  taper: {start_soc_frac: 0.90, power_kw: 0.2}   # provisional; start_soc_frac: null disables it
+  max_consecutive_failures: 3
+  failure_pause_days: 5
+  bootstrap_last_full: null           # ISO date, explicit override; null: eligible as soon as enabled
+  entities:                           # required when enabled
+    enable_switch: switch.omnibattery_weekly_full_charge_enabled   # written (live only)
+    day_select: select.omnibattery_weekly_full_charge_day          # written (live only)
+    delay_switch: switch.omnibattery_weekly_full_charge_delay      # read only, must be off
+    charge_delay_switch: switch.omnibattery_charge_delay           # read only, logged
+    last_balance_read: sensor.venus_last_balance_read              # read only, a new value = success
+    balancing_mode: binary_sensor.venus_balancing_mode             # read only, evidence
+    cell_delta: sensor.venus_cell_delta                            # read only, evidence
+    balance_status: sensor.venus_balance_status                    # read only, selects the cadence row
+    delta_trend: sensor.venus_delta_trend                          # read only: rising | stable | falling
+    delta_avg_4w: sensor.venus_delta_avg_4w                        # read only, evidence
 
 # Read-only battery health telemetry (docs/service.md): temperature exposure, charge sessions,
 # cell voltages and Omnibattery's balance monitor, in /status and battery_optimizer_battery_*
@@ -304,10 +382,10 @@ battery_health:
 # hack/climate_shadow_prior.py in <data_dir>/analysis/v1/climate-shadow/priors/<prior>/ and the
 # private <data_dir>/climate/site.yaml.  The weather forecast is the archive above (hourly).
 climate_shadow:
-  enabled: true
+  enabled: false
   climate_config: climate.yaml        # relative to this file's directory
   mpc_config: climate-mpc.yaml        # horizon, cadence, schedule, refit: as in the B1 replay
-  prior: "2311c010392f"                         # prior id (hex prefix); required when enabled
+  prior: null                         # prior id (hex prefix); required when enabled
   offset_minutes: 10                  # after the weather fetch at :05
   forecast_max_age_minutes: 180       # older archive records: the last outdoor reading is held
   score_lookback_days: 7              # unscored decisions older than this are dropped
@@ -316,10 +394,15 @@ climate_shadow:
   # amendment 2026-10-31).  The new window starts 7 days later.  The gate room-mean is fixed by
   # the preregistration: comfort.rooms of climate.yaml (bedroom, hall_kitchen, office_t).
   go_live: null
-  # Advisory ClimatePlan export (GET /climate/plan).  The owner's control is the HA select
-  # entities.mode below; this is the FALLBACK while that helper is missing or unavailable.
-  # Quoted: a bare YAML off is a boolean.
-  optimizer_mode: "shadow"
+  # Advisory ClimatePlan export (docs/climate-plan-contract.md, ADR-0008 proposed): GET /climate/plan.
+  # The owner's control is the HA select entities.mode below ("off" / "shadow" / "live"); this is the
+  # FALLBACK used while that helper is missing, unavailable or holds anything else.  QUOTE it: a bare
+  # YAML off is a boolean.  "off" (default): /climate/plan answers 404, nothing is published.
+  # "shadow": the plan is published (advisory; nothing in the optimizer acts on it, it stays
+  # read-only toward Home Assistant).  "live" is only a request: the effective mode is never live in
+  # this code version (live_locked).  The shadow's own hourly run and scoring are unaffected.
+  optimizer_mode: "off"
+  plan_ttl_minutes: 90                # a plan is absent for consumers this long after its decision t0
   # Read-only Home Assistant helpers of the homelab comfort controller
   # (config/integrations/appdaemon_comfort.yaml); each may be absent until it is deployed.
   entities:
@@ -331,5 +414,6 @@ climate_shadow:
     dhw_plan: input_text.comfort_dhw_plan
     # Away (design section 5): every room at 21.5 degC.
     away: input_boolean.comfort_away
-    # The owner's mode select (off / shadow / live), read only like the battery kill switch.
+    # The owner's mode select, options exactly off / shadow / live (input_select, created by the
+    # homelab).  Read only, like the battery kill switch; absent or unreadable: optimizer_mode.
     mode: input_select.climate_optimizer_mode
