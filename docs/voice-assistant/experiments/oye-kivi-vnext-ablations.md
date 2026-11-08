@@ -80,26 +80,69 @@ TV off** (4/10 and 5/10), which is the odd-cell-out and the thing to attack next
 - The `--holdout-session` windows still let session 2's 6 background segments per source into the negative
   pool (room noise, no speech); its takes and near-words do not (its near block is marked excluded).
 
+## Result 3: the mic chain is not the bottleneck (P1 source attribution)
+
+The same session-2 takes, scored on the satellite's own raw wake stream, and on filtered copies of that
+stream (`ha_filter_mirror.py`, the trees extended with today's sessions: 3 files written, 50 skipped):
+
+| Path (identical takes) | v4 (deployed) at 0.9437 | `rn_rp_h` at 0.97125 |
+| --- | --- | --- |
+| satellite, as recorded | 10/40 = 25 % | 28/40 = 70 % |
+| + RNNoise | 12/40 = 30 % | 26/40 = 65 % |
+| + second WebRTC NS pass | 7/40 = 18 % | 28/40 = 70 % |
+| desk mic (clean reference, no satellite) | 11/40 = 28 % | 27/40 = 68 % |
+
+Every difference is inside the noise of 40 takes (+-2 to +-3 cues, intervals +-15 points wide), and the
+clean desk mic is no better than the satellite. **No front-end profile change is indicated**: the plan's
+"no signal-processing change without a matched-model replay result" holds — the matched replay shows the
+model explains the gap, the chain does not. Not re-run here: the `speex` mirror (its Nov 7 result stands);
+`pyspeex_noise` is not installed in either workstation venv anymore.
+
+## Result 4: recipe knobs on the same 40 cues do not help
+
+Both knobs were tried with session 2 still held out (4 arms, `vnext/runs4.sh`):
+
+| Arm | Real windows per take | Real share of positives/step | Holdout accepted | Train accepted |
+| --- | --- | --- | --- | --- |
+| `vn_h_c40_w32` (= `rn_rp_h`, re-run) | 4,760 | 64/256 | 79/113 | 114/119 |
+| `vn_h_c40_w64` | 4,760 | 128/256 | 78/113 | 116/119 |
+| `vn_h_c120_w32` | 14,280 | 64/256 | 78/113 | 105/119 |
+| `vn_h_c120_w64` | 14,280 | 128/256 | 80/113 | 117/119 |
+
+The re-run reproduced the original arm exactly (same threshold 0.97125, same 79/113), so the pipeline is
+deterministic — and tripling the augmentation variety or doubling the real sampling weight moves the
+holdout by one or two takes out of 113. **The limit is the diversity of the 40 cues, not the recipe.**
+More recordings, not more tuning.
+
 ## Reproduce
 
 ```sh
 cd /work/workspaces/kivi-wakeword
 bash vnext/feats.sh && bash vnext/real.sh && bash vnext/runs.sh   # synthetic + real features, 5 arms, selection
-bash vnext/real3.sh                                               # session 1 only + session 2 held out
-bash vnext/runs3.sh                                               # two seeds + the real-take report
+bash vnext/real3.sh && bash vnext/runs3.sh                         # session 2 held out, two seeds + report
+bash vnext/runs4.sh                                               # copies x weight ablation on the holdout
 # candidates on the held-out session, comparable to the P0 baseline
 .venv-tf/bin/python $H/export_tflite.py vnext/runs/vn_ws4k_rn_rp_h/kivi.onnx vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite \
   --check-features vnext/feat/pos_test.npy
 .venv/bin/python -I $H/kivi_score.py --session datasets/real/20261108T094310Z-spk01-tv-c3a \
   --model oye_kivi=v4/final/oye_kivi_uncalibrated.tflite --model h=vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite \
   --thresholds 0.9437,0.97125 --also-pc --jobs 4 --json vnext/score_s2_holdout.json
+# P1: extend the HA-side filter mirrors with the new sessions, then score the same session on each mirror
+for f in rnnoise webrtc-ns; do
+  systemd-run --user --scope -p MemoryMax=6G -p CPUQuota=400% nice -n 10 \
+    .venv/bin/python -I $H/ha_filter_mirror.py build --src datasets/real --dst datasets/derived/$f --filter $f \
+    --tool v2/fe_build/release/examples/aec_offline
+  .venv/bin/python -I $H/kivi_score.py --session datasets/derived/$f/20261108T094310Z-spk01-tv-c3a \
+    --model oye_kivi=v4/final/oye_kivi_uncalibrated.tflite --model h=vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite \
+    --thresholds 0.9437,0.97125 --jobs 3 --json vnext/p1_mirror_$f.json
+done
 ```
 
 ## Next
 
-1. **More real positives, more days** — the 3 m TV-off cell and the 80 % gate are the target; a
-   `--split test` session on a later day is what turns this into a gate run.
-2. **spk02 on c3-b** (gate needs >= 2 speakers).
+1. **More real positives, more days** — recipe tuning is exhausted (Result 4), the 3 m TV-off cell and
+   the 80 % gate need data: a `--split test` session on a later day is what turns this into a gate run.
+2. **spk02 on c3-b** (gate needs >= 2 speakers; today's real data is one speaker).
 3. Re-measure room false wakes for the best candidate on the room **test** parts (nothing of it is in
    training) before any threshold or deployment proposal.
 4. Re-score session 3's 36 real confuser takes against the candidates, per word.
