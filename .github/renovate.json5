@@ -343,5 +343,18 @@
       commitMessagePrefix: 'silo: ',
       versioning: 'regex:^RELEASE\\.(?<major>\\d{4})-(?<minor>\\d{2})-(?<patch>\\d{2})T(?<build>\\d{2})-(?<revision>\\d{2})-(?<patch2>\\d{2})Z$',
     },
+    {
+      description: 'Update renovate pre-commit hook once a month and automerge',
+      matchPackageNames: [
+        'renovatebot/pre-commit-hooks',
+      ],
+      automerge: true,
+      automergeType: 'pr',
+      platformAutomerge: true,
+      ignoreTests: false,
+      schedule: [
+        'after 4am and before 10am on the first day of the month',
+      ],
+    },
   ],
 }
