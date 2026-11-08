@@ -16,7 +16,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
 - [Desktop & Home](#desktop--home) (12 entries)
-- [Applications](#applications) (10 entries)
+- [Applications](#applications) (11 entries)
 
 ---
 
@@ -462,3 +462,16 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - Stump v0.1.5+ migration `m20260519_192218_reading_sessions_v2` can fail mid-way, leaving legacy
   tables. Restore from snapshot and complete migration manually.
   See `docs/troubleshooting/stump-migration-failure.md`
+
+- Firecrawl egress NetworkPolicies (`0b16b31b9`) produced kubelet **probe timeouts** on
+  `api`/`worker`/`nuq` across two nodes within ~12 s of attach (selected endpoints' BPF reloaded 1 s
+  after the apply), while `browser` stayed `Ready`; reverted (`8fff4f224`) and the **same** `api`
+  process recovered readiness **without a restart**. Root cause unknown. Denied counters read `0` but
+  are cumulative and unattributable, so they prove nothing either way; "probe requests timed out" is
+  **not** a confirmed node↔pod network denial (no packet/eBPF/exec capture), and app logs showing the
+  process alive with background DB work prove neither handler responsiveness nor packet location. The
+  browser policy shares the **byte-identical** DNS/internet anchors (all 14 `except` CIDRs) and SearXNG
+  is covered by an api-only `search` policy, so browser-vs-fetcher rule shape is not a discriminator —
+  only extra peers/rule count on the selected side. The live SSRF check never ran. Re-land only with
+  deny/CT/capture evidence, a single-workload canary, and no blanket host-allow workaround.
+  See `docs/troubleshooting/mcp-firecrawl-egress-regression.md`

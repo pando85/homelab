@@ -1,0 +1,32 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: {{ .Values.kanidm.oauth2Client.name }}
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+  displayname: {{ .Values.kanidm.oauth2Client.displayname }}
+  origin: {{ .Values.kanidm.oauth2Client.origin }}
+  # Native MCP clients (OpenCode, Hermes) use auth-code + PKCE from the user's
+  # browser/CLI. No shared secret can be embedded safely in a desktop client,
+  # so this MUST be public. Same shape as platform/vault/templates/kanidm-oauth2-client.yaml.
+  public: true
+  allowLocalhostRedirect: true
+  redirectUrl:
+    {{- toYaml .Values.kanidm.oauth2Client.redirectUrls | nindent 4 }}
+  # scopeMap: group -> scopes. Kanidm writes each scope into the JWT `scope`
+  # claim as a SINGLE space-separated STRING (RFC 9068 array form not used).
+  # Gateway CEL must therefore split the string; do NOT assume a `groups`
+  # claim (verified against Kanidm v1.11.2 source).
+  scopeMap:
+    {{- $sm := concat (default (list) .Values.kanidm.oauth2Client.scopeMap) (default (list) .Values.kanidm.oauth2Client.humanScopeMap) }}
+    {{- if $sm }}
+    {{- toYaml $sm | nindent 4 }}
+    {{- else }}
+    # No groups mapped yet -> no scope is ever granted; fail closed.
+    []
+    {{- end }}
+  preferShortUsername: true
+  strictRedirectUrl: true

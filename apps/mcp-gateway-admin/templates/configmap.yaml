@@ -1,0 +1,176 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-config
+  # Same two labels the NetworkPolicy selects the gateway pods by, so the config
+  # and its workload are findable together. The repo's auxiliary templates carry
+  # no helper-generated labels (see apps/antdroid/templates/configmap.yaml).
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+data:
+  config.yaml: |
+    config:
+      adminAddr: "off"
+      logging:
+        format: json
+        level: {{ .Values.logLevel }}
+
+    gateways:
+      default:
+        port: {{ .Values.gateway.port }}
+
+    {{- $enabled := list }}
+    {{- range $name, $backend := .Values.backends }}
+    {{- if $backend.enabled }}
+    {{- $enabled = append $enabled (dict "name" $name "backend" $backend) }}
+    {{- end }}
+    {{- end }}
+    # Fail closed: no routes until a backend is enabled. A route with no enabled
+    # backend would still fetch a JWKS, and routes are only useful together with the
+    # Kanidm OAuth2 client and a scopeMap group, so the gateway boots with `routes: []`
+    # and answers 404 for everything.
+    #
+    # Vault MCP BACKEND BLOCKER (why this plane renders no route today): vault-mcp
+    # v0.2.0 caches the Vault credential by MCP session, and the pinned gateway only
+    # re-checks a resumed session against the issuing backend and its target
+    # conditions, never against the caller's identity. That fails the owner's
+    # two-user isolation gate, so the vault route stays `enabled: false` until the
+    # upstream fix or a per-request Vault path exists. Firecrawl and Grafana are not
+    # affected: they take their credential per request.
+    {{- if not $enabled }}
+    routes: []
+    {{- else }}
+    routes:
+    {{- range $entry := $enabled }}
+    {{- $b := $entry.backend }}
+      - name: {{ $entry.name }}
+        matches:
+          - path:
+              exact: {{ $b.path }}
+          # RFC 9728 protected-resource metadata has to be reachable on its own path.
+          # Without this match the gateway answers 404 for the very URL its 401
+          # challenge points clients at, so an MCP client cannot discover the
+          # authorization server (measured against the pinned binary).
+          - path:
+              exact: /.well-known/oauth-protected-resource{{ $b.path }}
+        policies:
+          # No CORS policy on purpose: callers here are native clients (OpenCode,
+          # Hermes), not browser pages, so a wildcard origin would only widen the
+          # attack surface. If a browser-based MCP client is ever approved, add an
+          # explicit allowOrigins list for that origin.
+          mcpAuthentication:
+            mode: strict
+            issuer: {{ $.Values.auth.issuer }}
+            # Kanidm signs `aud` with the OAuth2 CLIENT NAME, not the resource URL,
+            # and signs each client with its own key (Kanidm v1.11.2
+            # server/lib/src/idm/oauth2.rs, access_token_data; kids differ per
+            # client). So this plane validates only tokens issued to its own client.
+            audiences:
+              - {{ $.Values.auth.audience }}
+            jwks:
+              # Kanidm publishes the signing key here, not at .well-known/jwks.json.
+              url: {{ $.Values.auth.jwksUrl }}
+            resourceMetadata:
+              resource: {{ $b.resource }}
+              scopesSupported:
+                - {{ $b.scope }}
+              bearerMethodsSupported:
+                - header
+          authorization:
+            rules:
+              # Whole-backend access: one scope, no per-tool rules. Kanidm writes
+              # scopes as ONE space-separated string in ACCESS tokens and as an ARRAY
+              # in ID tokens, so the expression follows the credential this route
+              # expects. Both forms are measured against the pinned binary in
+              # test/mcp-gateway/e2e-authz.py (cases F/G and the delegation cases).
+              # Whole-value equality only: a substring match would let
+              # `{{ $b.scope }}_admin` through.
+              - require: >-
+                  {{- if eq $b.credential "idToken" }}
+                  jwt.scopes.exists(s, s == '{{ $b.scope }}')
+                  {{- else }}
+                  jwt.scope.split(' ').exists(s, s == '{{ $b.scope }}')
+                  {{- end }}
+        backends:
+          - mcp:
+              targets:
+                - name: {{ $entry.name }}
+                  mcp:
+                    # Fixed cluster service address from values, never a
+                    # caller-derived URL.
+                    host: {{ $b.url }}
+                  policies:
+                    requestHeaderModifier:
+                      # The gateway forwards the caller's Host header upstream
+                      # (measured: a request with Host: mcp.grigri.cloud reached the
+                      # backend with that same Host). Backends that enforce a Host
+                      # allowlist - firecrawl-mcp 3.38.0 answers 403 "Forbidden: Host
+                      # ... is not allowed" - would reject every legitimate call, so
+                      # the Host is pinned to the backend's own service name.
+                      set:
+                        host: {{ $b.hostHeader }}
+                      # Everything the gateway does NOT remove reaches the backend
+                      # verbatim (measured: IncomingRequestContext::apply copies all
+                      # client headers except content-* and the MCP session id, and
+                      # with no removals a caller's cookie/x-vault-token/x-api-key
+                      # all arrived). So this list is the security boundary and it
+                      # has to name every header a pinned backend trusts:
+                      #   firecrawl-mcp 3.38.0 headerApiKey(): x-firecrawl-api-key,
+                      #     x-api-key, Authorization
+                      #   mcp-grafana 2.1.1: X-Grafana-Service-Account-Token and
+                      #     X-Grafana-API-Key REPLACE the Grafana credential,
+                      #     X-Grafana-Org-Id switches org, X-Grafana-URL retargets
+                      #     the backend (measured: a caller-set SA token reached
+                      #     Grafana as its own Authorization header)
+                      #   vault-mcp 0.2.0: vault_addr / vault_skip_verify /
+                      #     vault_token / x-vault-namespace / vault_namespace are
+                      #     read as per-request configuration; both spellings are
+                      #     listed because header-name normalisation differs by
+                      #     framework. The query string itself is dropped at the
+                      #     edge (measured), so `?vault_addr=` is not a path in.
+                      # A caller must never choose a backend's credential, tenant or
+                      # destination. X-Vault-Token is stripped here too: a future
+                      # Vault route would need the caller's OWN Vault token to pass,
+                      # and until that route exists no backend should ever see it.
+                      remove:
+                        - x-firecrawl-api-key
+                        - x-api-key
+                        - x-grafana-service-account-token
+                        - x-grafana-api-key
+                        - x-grafana-org-id
+                        - x-grafana-id
+                        - x-grafana-url
+                        - x-vault-token
+                        - vault-token
+                        - vault_addr
+                        - vault-addr
+                        - vault_token
+                        - vault_skip_verify
+                        - vault-skip-verify
+                        - x-vault-namespace
+                        - vault_namespace
+                        - vault-namespace
+                        - cookie
+                        {{- range $h := $b.stripRequestHeaders }}
+                        - {{ $h }}
+                        {{- end }}
+                        {{- if eq $b.credential "none" }}
+                        # The caller's gateway bearer stops at the gateway: this
+                        # backend authenticates with its own fixed server-side
+                        # configuration, so a user token must not be forwarded to it.
+                        - authorization
+                        {{- end }}
+                    {{- if ne $b.credential "none" }}
+                    # Delegation: hand the caller's validated JWT to the backend so it
+                    # can attribute the call to the caller. Placement is the target's
+                    # `policies` (schema/config.json at tag v1.7.0,
+                    # SimpleLocalBackendPolicies: "Forward the validated incoming JWT
+                    # to the backend"). Measured: without this block the backend
+                    # receives NO Authorization header even for an authenticated caller
+                    # (test/mcp-gateway/backend-auth-probe.py, B1/B2 vs C1).
+                    backendAuth:
+                      passthrough: {}
+                    {{- end }}
+    {{- end }}
+    {{- end }}

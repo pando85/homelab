@@ -134,6 +134,13 @@ Admin gateway does not grant Hermes automatic admin.
 - Current: SA API token → exchange → Grafana `id_token`. This is the proven service-account flow,
   not a target for human delegation or proof of `client_credentials` exchange
 - Gateway presents backend bearer/header credential; isolation gate between caller and backend
+- Caller-preserving delegation on this plane: the edge bearer stays the Kanidm **access** token and
+  is forwarded verbatim. Grafana identifies the person from a stable claim (`sub`), not from a
+  username it has never seen, and a person who already exists as an OAuth user is linked once by a
+  bootstrap token that carries both `sub` and the identity claims. Live Grafana settings, per-person
+  bootstraps and the two-person parity run remain owner gates; the local route stays disabled.
+  Details, measurements and the alternatives that were costed and rejected:
+  `planning/mcp-gateway-implementation.md` (Task 2)
 
 **Firecrawl MCP** (hosted existing MCP package):
 - Backend currently lacks caller auth — gateway audit is the identity boundary
@@ -143,7 +150,12 @@ Admin gateway does not grant Hermes automatic admin.
 **SearXNG / Context7**: Candidate centralized MCP packages. Context7 is NOT excluded because
   upstream is external — evaluate during spike
 
-**Vault MCP** (planned): Official MCP exists; behavior with static/session credentials needs spike
+**Vault MCP** (planned, private plane): Official MCP exists. Measured with the official product
+behind the gateway: stateful mode caches the backend credential per MCP session, so the session id
+alone behaves like a bearer and rotation is ignored — stateful cannot carry per-caller secrets.
+Per-request (stateless) forwarding of the caller's own native token does preserve Vault's own ACLs
+and audit identity, at the cost of a deliberate per-route header allow plus a stateless route, which
+is an owner decision. `planning/mcp-gateway-implementation.md` (Task 4)
 
 **Unsupported delegation**: If a backend does not support delegation or the exchange chain is
   blocked, do NOT silently weaken identity or impose a new broker. Decide per-MCP using the shared
@@ -188,6 +200,27 @@ Admin gateway does not grant Hermes automatic admin.
   DNS resolution, and bound duration/concurrency. Gateway-only validation is insufficient.
   Before public onboarding either verify controls or record explicit owner acceptance of
   remaining homelab risk
+
+- **Status (as of this writing): attempted, rolled back, blocker open.** Fetcher egress isolation was
+  committed and pushed (`0b16b31b9`), auto-deployed by ArgoCD, and within ~12 s of attach the Firecrawl
+  `api`, `worker` and both `nuq` pods began timing out kubelet health probes across two nodes (selected
+  endpoints' BPF reloaded 1 s after the apply) while `browser` stayed `Ready`. A scoped revert
+  (`8fff4f224`) synced at 19:08:11 and the **same** `api` process regained readiness **without a
+  restart**; the baseline stayed stable for 30 min with the new policies absent. **Root cause is not
+  established**: denied-packet counters read `0` but are cumulative and unattributable to a
+  namespace/policy/port (not exoneration); no packet/eBPF/exec capture was taken, so "probe requests
+  timed out" is not a confirmed node↔pod network denial; the live SSRF verification never ran, so no
+  destination was ever demonstrated blocked; and the browser policy shares the byte-identical DNS and
+  internet anchors with the fetchers, so rule shape is not a discriminator — only extra peers and rule
+  count on the selected side. Full record, including retracted intermediate hypotheses and the capture
+  gates required before any re-attempt:
+  `docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
+
+  Consequence for this design: the gateway's `firecrawl` backend route stays **disabled**, and
+  gateway-side NetworkPolicy (which only restricts who may reach the MCP pod directly) is not a
+  substitute for fetcher egress control. Firecrawl exposure therefore remains blocked on two
+  independent gates: this SSRF gate, and the group-membership decision that grants the
+  service-only `mcp-gateway-agents` workload access.
 
 ### Ingress
 
