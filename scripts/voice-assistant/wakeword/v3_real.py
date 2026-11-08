@@ -23,10 +23,12 @@ directory (mode 700/600). Takes whose context is not inside the raw file are dro
   emulation, as v2_augment.py does for synthetic clips.
 Word end in the window 0-200 ms (plus 50 ms either side for the energy-burst uncertainty) before the
 last embedding's audio, as v2. `--holdout-file` lists takes (block, cue) kept out of the training
-windows (validation); evaluation sequences are written for every take, tagged server-exact.
+windows; `--holdout-session` keeps out every take of a session (the unit that does not collide across
+sessions, because each block numbers its cues from 1). Evaluation sequences are written for every take,
+tagged server-exact.
 
-    v3_real.py takes --dataset ROOT --session SID --exclude-cue B4c5 --out v3/real/takes.npz
-    v3_real.py feats --takes v3/real/takes.npz --holdout-file v3/real/holdout.json --copies 200 \
+    v3_real.py takes --dataset ROOT --session SID --phrase "oye kivi" --only-positive --out v3/real/takes.npz
+    v3_real.py feats --takes v3/real/takes.npz --holdout-session SID2 --copies 200 \
         --bg data/bg_tv:3 --bg data/bg_mls_es:2 --rir-dir data/mit_rirs --frontend FE --stream-onnx MEL,EMB \
         --out-prefix v3/feat/real
 """
@@ -224,6 +226,13 @@ def _eval_audio(x, is_tv, fe, rng, level_db=-23.0, floor_db=-55.0, wl=8000):
     return fe.process_batch([y])[0]
 
 
+def holdout_mask(sessions, keys, hold=(), hold_sessions=()):
+    """Per-take training exclusion: a take is held out if its (block, cue) pair is in `hold` or its session is
+    in `hold_sessions`. Sessions are the safe unit: every block numbers its cues from 1, so (block, cue) alone
+    collides between sessions."""
+    return [bool(keys[i] in hold or str(sessions[i]) in hold_sessions) for i in range(len(sessions))]
+
+
 def cmd_feats(a):
     import multiprocessing as mp
     import torch  # noqa: F401
@@ -235,12 +244,13 @@ def cmd_feats(a):
     if a.holdout_file:
         hold = {(b, c) for b, c in json.load(open(a.holdout_file))["takes"]}
     keys = [(int(b), int(c)) for b, c in zip(T["block"], T["cue"])]
+    is_hold = holdout_mask(T["session"], keys, hold, set(a.holdout_session or []))
     is_tv = np.array([s.startswith("tv-") for s in T["source"]])
     cfg = _cfg(a)
     F = StreamFeatures(*a.stream_onnx.split(","))
     rng = np.random.default_rng(a.seed)
     # training windows: copies per take, train takes only
-    tr = [i for i in range(n) if keys[i] not in hold]
+    tr = [i for i in range(n) if not is_hold[i]]
     for lab in ("kivi", "near"):
         for grp in ("tv", "desk"):
             idx = [i for i in tr if T["label"][i] == lab and bool(is_tv[i]) == (grp == "tv")]
@@ -273,7 +283,7 @@ def cmd_feats(a):
         e_lo = int(np.ceil((we - 0.2 * RATE - 12640) / 1280))
         e_hi = int(np.floor((we + 0.6 * RATE - 12640) / 1280))
         seqs.append(emb[e_lo - 15:e_hi + 1].astype(np.float16))
-        split = "holdout" if keys[i] in hold else "train"
+        split = "holdout" if is_hold[i] else "train"
         names.append(f"{T['session'][i]}:B{keys[i][0]}c{keys[i][1]}|{T['source'][i]}:{split}|{T['label'][i]}:{T['word'][i]}")
     out = f"{a.out_prefix}_eval.npz"
     np.savez(out, names=np.array(names), lengths=np.array([len(s) for s in seqs]), data=np.concatenate(seqs),
@@ -298,6 +308,10 @@ def main():
     p = sp.add_parser("feats")
     p.add_argument("--takes", required=True)
     p.add_argument("--holdout-file")
+    p.add_argument("--holdout-session", action="append", default=[], metavar="SESSION",
+                   help="keep every take of this session out of the training windows (it stays in the "
+                        "evaluation sequences as `holdout`); sessions are the safe unit, (block, cue) "
+                        "collides between sessions")
     p.add_argument("--copies", type=int, default=200)
     p.add_argument("--bg", action="append", default=[])
     p.add_argument("--snr", default="10,30")

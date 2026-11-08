@@ -52,6 +52,12 @@ services.
 - [Oye Kivi recovery plan](experiments/oye-kivi-recovery.md) (2026-11-08): baseline failures,
   a strict-target experimental data profile, real-speaker/room evaluation, DSP replay, release gates
   and next steps. No model or Home Assistant change is deployed by this plan.
+- [P0 real-voice baseline](experiments/oye-kivi-p0-baseline.md) (2026-11-08): deployed v4 recognises
+  22.5 % of 80 consented real takes (30 % TV off, 15 % TV on) and false-accepts 18.5 % of 54 real
+  near-word takes; the desk mic scores the same, so the gap is the model, not the satellite.
+- [vnext ablations](experiments/oye-kivi-vnext-ablations.md) (2026-11-08): real positive takes lift
+  unseen-take recall from 25 % to 70 % on the satellite at the same false-wake budget; confuser
+  negatives without them collapse it to 1 %. TV on meets the gate, TV off at 3 m does not.
 - [Custom wake word "kivi"](experiments/kivi-wake-word.md): openWakeWord model for the lone word
   "kivi", trained on synthetic Spanish voices, measured against `alexa` with the server's exact
   features (recall, false accepts per hour, near-words), deployment notes (`--custom-model-dir`,

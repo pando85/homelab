@@ -806,6 +806,19 @@ def test_v3_real_take_slot_names_the_target_phrase_take():
     assert R.take_slot("near:kivi", "kivi") == "near"          # a near-word take, not a positive
 
 
+def test_holdout_mask_holds_out_a_whole_session_and_not_its_renumbered_twins():
+    """`--holdout-session` is the unit that does not collide: both sessions number their cues from 1, so a
+    (block, cue) holdout taken from one session would silently hold out the other's takes too."""
+    import v3_real as R
+
+    sessions = np.array(["s1", "s1", "s1", "s2", "s2"])
+    keys = [(1, 1), (1, 2), (2, 1), (1, 1), (2, 1)]                # (1,1) and (2,1) exist in both sessions
+    assert R.holdout_mask(sessions, keys) == [False] * 5
+    assert R.holdout_mask(sessions, keys, hold={(1, 1)}) == [True, False, False, True, False]
+    assert R.holdout_mask(sessions, keys, hold_sessions={"s2"}) == [False, False, False, True, True]
+    assert R.holdout_mask(sessions, keys, hold={(1, 2)}, hold_sessions={"s2"}) == [False, True, False, True, True]
+
+
 def test_session_json_is_written_at_start_and_updated(tmp_path):
     (tmp_path / "blocks.json").write_text(json.dumps(SMALL_BLOCKS))
     seen = []
