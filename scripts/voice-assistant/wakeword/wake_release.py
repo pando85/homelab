@@ -70,7 +70,8 @@ SSH_REMOTE = "ssh://git@git.grigri.cloud:29518/agil/kivi-models.git"
 FJ_KEYS = Path.home() / ".local/share/forgejo-cli/keys.json"
 NAME = "cand"                                   # the model's name inside kivi_score / v3_room / v4_select
 GRID = [0.5, 0.7, 0.8, 0.9, 0.93, 0.95, 0.97, 0.98, 0.99]
-GATE = {"tv-off": 0.80, "tv-on": 0.60, "fa_per_h": 0.25}
+GATE = {"tv-off": 0.80, "tv-on": 0.60, "fa_per_h": 0.25, "min_takes_per_condition": 10,
+        "min_speakers": 2, "min_room_devices": 2}
 ACCEPT = ",".join(["application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
                    "application/vnd.docker.distribution.manifest.v2+json",
                    "application/vnd.docker.distribution.manifest.list.v2+json"])
@@ -917,42 +918,60 @@ def cmd_score(a):
 
 
 def gate_eval(summary, targets=GATE, split="test"):
-    """The owner gate on a score summary. Pooled and per speaker, satellite channel, test split only."""
-    rows = [r for r in summary["recall"] if r["eval_channel"] and r.get("split") == split and r["condition"] in ("tv-off", "tv-on")]
-    checks = []
+    """Household gate: real held-out recall for every speaker/TV condition plus independent room negatives.
 
-    def add(name, k, n, target, ci, what="recall"):
+    A pooled good score cannot compensate for an untested speaker, an untested TV condition or one
+    noisy device. This gate checks point estimates; its 'confident' field separately records whether
+    the whole 95% interval meets every target. Owner overrides are handled by the release driver.
+    """
+    rows = [r for r in summary["recall"] if r["eval_channel"] and r.get("split") == split
+            and r["condition"] in ("tv-off", "tv-on")]
+    speakers = sorted({r["speaker"] for r in rows if r.get("speaker")})
+    checks, missing = [], []
+    min_takes = targets.get("min_takes_per_condition", 10)
+    if len(speakers) < targets.get("min_speakers", 2):
+        missing.append(f"at least {targets.get('min_speakers', 2)} distinct test speakers required")
+    if any(not r.get("speaker") for r in rows):
+        missing.append("test takes without a speaker id")
+
+    def add(name, k, n, target, ci):
         rate = k / n if n else None
-        ok = rate is not None and (rate >= target if what == "recall" else rate <= target)
-        conf = (ci[0] >= target) if what == "recall" else (ci[1] <= target)
+        ok = rate is not None and rate >= target
         checks.append({"check": name, "k": k, "n": n, "value": None if rate is None else round(rate, 4),
-                       "ci95": ci, "target": target, "pass": bool(ok), "confident": bool(ok and conf)})
+                       "ci95": ci, "target": target, "pass": bool(ok), "confident": bool(ok and ci[0] >= target)})
 
     for cond in ("tv-off", "tv-on"):
         sel = [r for r in rows if r["condition"] == cond]
         k, n = sum(r["k"] for r in sel), sum(r["n"] for r in sel)
         add(f"recall {cond}, pooled", k, n, targets[cond], wilson(k, n))
-        for spk in sorted({r["speaker"] for r in sel}):
-            ks = sum(r["k"] for r in sel if r["speaker"] == spk)
-            ns = sum(r["n"] for r in sel if r["speaker"] == spk)
+        if not n:
+            missing.append(f"no real test takes with the TV {'silent' if cond == 'tv-off' else 'on'}")
+        for spk in speakers:
+            group = [r for r in sel if r["speaker"] == spk]
+            ks, ns = sum(r["k"] for r in group), sum(r["n"] for r in group)
             add(f"recall {cond}, {spk}", ks, ns, targets[cond], wilson(ks, ns))
-    room = (summary.get("room_test") or {}).get("pooled")
-    if room:
-        checks.append({"check": "room false wakes/h, test part, pooled", "k": room["k"], "hours": room["hours"],
-                       "value": room["per_hour"], "ci95": room["ci95"], "target": targets["fa_per_h"],
-                       "pass": room["per_hour"] <= targets["fa_per_h"],
-                       "confident": room["ci95"][1] <= targets["fa_per_h"]})
-    missing = []
-    if not any(c["check"].startswith("recall tv-off, pooled") and c["n"] for c in checks):
-        missing.append("no real test takes with the TV silent")
-    if not any(c["check"].startswith("recall tv-on, pooled") and c["n"] for c in checks):
-        missing.append("no real test takes with the TV on")
-    if not room:
+            if ns < min_takes:
+                missing.append(f"{spk}: {cond} has {ns} test takes, need >= {min_takes}")
+
+    room = summary.get("room_test") or {}
+    pooled = room.get("pooled")
+    if not pooled or not pooled.get("hours"):
         missing.append("no room test part score")
-    verdict = "pass" if not missing and all(c["pass"] for c in checks) else ("incomplete" if missing else "fail")
+    else:
+        scopes = [(name, v) for name, v in sorted(room.items()) if name != "pooled" and v.get("hours")]
+        if len(scopes) < targets.get("min_room_devices", 2):
+            missing.append(f"room test requires >= {targets.get('min_room_devices', 2)} distinct devices")
+        for name, v in [("pooled", pooled), *scopes]:
+            if v.get("per_hour") is None or not v.get("ci95"):
+                missing.append(f"room test {name}: missing rate or confidence interval")
+                continue
+            checks.append({"check": f"room false wakes/h, test part, {name}", "k": v["k"],
+                           "hours": v["hours"], "value": v["per_hour"], "ci95": v["ci95"],
+                           "target": targets["fa_per_h"], "pass": v["per_hour"] <= targets["fa_per_h"],
+                           "confident": v["ci95"][1] <= targets["fa_per_h"]})
+    verdict = "incomplete" if missing else ("pass" if all(c["pass"] for c in checks) else "fail")
     return {"verdict": verdict, "confident": verdict == "pass" and all(c["confident"] for c in checks),
             "missing": missing, "checks": checks, "threshold": summary["threshold"], "targets": targets}
-
 
 def gate_text(g):
     lines = [f"| Check | Measured | 95 % interval | Target | Result |", "| --- | --- | --- | --- | --- |"]

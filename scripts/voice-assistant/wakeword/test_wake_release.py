@@ -114,9 +114,14 @@ def test_intervals():
 
 
 def summary(rows, room_k=1, hours=8.0):
+    def cell(k, h):
+        return {"hours": h, "k": k, "per_hour": round(k / h, 3),
+                "ci95": [round(x / h, 3) for x in W.poisson_ci(k)]}
+    half = hours / 2
     return {"threshold": 0.95, "recall": rows,
-            "room_test": {"pooled": {"hours": hours, "k": room_k, "per_hour": round(room_k / hours, 3),
-                                     "ci95": [round(x / hours, 3) for x in W.poisson_ci(room_k)]}}}
+            "room_test": {"pooled": cell(room_k, hours),
+                          "c3-a": cell(room_k // 2, half),
+                          "c3-b": cell(room_k - room_k // 2, half)}}
 
 
 def row(spk, cond, k, n, split="test", eval_channel=True):
@@ -136,8 +141,41 @@ def test_gate_pass_fail_incomplete():
     g = W.gate_eval(summary(bad))
     assert g["verdict"] == "fail" and any(c["check"] == "recall tv-on, spk02" and not c["pass"] for c in g["checks"])
     g = W.gate_eval({"threshold": 0.95, "recall": [], "room_test": None})
-    assert g["verdict"] == "incomplete" and len(g["missing"]) == 3
+    assert g["verdict"] == "incomplete" and len(g["missing"]) >= 3
     assert "MISSING" in W.gate_text(g)
+
+
+def test_gate_does_not_hide_missing_speaker_or_condition():
+    complete = [row("spk01", "tv-off", 18, 20), row("spk01", "tv-on", 15, 20),
+                row("spk02", "tv-off", 10, 10), row("spk02", "tv-on", 8, 10)]
+    one_speaker = W.gate_eval(summary(complete[:2]))
+    assert one_speaker["verdict"] == "incomplete"
+    assert any("2 distinct test speakers" in x for x in one_speaker["missing"])
+
+    missing_condition = W.gate_eval(summary(complete[:-1]))
+    assert missing_condition["verdict"] == "incomplete"
+    assert any("spk02: tv-on" in x for x in missing_condition["missing"])
+
+    few_takes = W.gate_eval(summary(complete[:3] + [row("spk02", "tv-on", 4, 4)]))
+    assert few_takes["verdict"] == "incomplete"
+    assert any("need >= 10" in x for x in few_takes["missing"])
+
+    unassigned = W.gate_eval(summary(complete + [row(None, "tv-off", 1, 1)]))
+    assert unassigned["verdict"] == "incomplete"
+
+
+def test_gate_checks_room_per_device_and_requires_both():
+    complete = [row("spk01", "tv-off", 18, 20), row("spk01", "tv-on", 15, 20),
+                row("spk02", "tv-off", 10, 10), row("spk02", "tv-on", 8, 10)]
+    mixed = summary(complete, room_k=2, hours=8)
+    # Pooled 0.25/h appears acceptable, but both wakes occur on c3-b: 0.5/h.
+    mixed["room_test"]["c3-a"] = {"hours": 4, "k": 0, "per_hour": 0, "ci95": [0, 0.9]}
+    mixed["room_test"]["c3-b"] = {"hours": 4, "k": 2, "per_hour": 0.5, "ci95": [0.06, 1.8]}
+    assert W.gate_eval(mixed)["verdict"] == "fail"
+    del mixed["room_test"]["c3-b"]
+    g = W.gate_eval(mixed)
+    assert g["verdict"] == "incomplete"
+    assert any("2 distinct devices" in x for x in g["missing"])
 
 
 # ----------------------------------------------------------------------------------- score summaries
