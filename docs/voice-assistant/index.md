@@ -49,6 +49,9 @@ services.
   itself (Dockerfile, Forgejo workflow, Pascal sm_61 checks, runner disk, risks) lives in
   `agil/wyoming-whisper` on `git.grigri.cloud` (private).
 
+- [Oye Kivi recovery plan](experiments/oye-kivi-recovery.md) (2026-11-08): baseline failures,
+  a strict-target experimental data profile, real-speaker/room evaluation, DSP replay, release gates
+  and next steps. No model or Home Assistant change is deployed by this plan.
 - [Custom wake word "kivi"](experiments/kivi-wake-word.md): openWakeWord model for the lone word
   "kivi", trained on synthetic Spanish voices, measured against `alexa` with the server's exact
   features (recall, false accepts per hour, near-words), deployment notes (`--custom-model-dir`,
