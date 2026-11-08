@@ -133,7 +133,13 @@ Admin gateway does not grant Hermes automatic admin.
 
 ### Backend Credential Patterns
 
-**Grafana MCP** (historical proven flow, `apps/hermes/values.yaml:23-91`):
+**Grafana MCP** (historical proven flow, `apps/hermes/values.yaml:23-91`). Delegation status after
+live review: Grafana `13.3.0` trusts **one** JWT client - per-client JWKS with exact `iss` and `aud`. A
+merged `jwk_set_file` covering both Kanidm clients is **retracted as unsafe** (pinning `iss` rejects the
+second client, an `iss` array fails startup, and merging without `iss` pinning trusts any issuer holding
+a listed key), so caller-preserving access-token delegation to the live instance is **blocked** until
+compatible dual-client trust exists upstream, and `allow_insecure_email_lookup = true` (live value,
+unchanged) must be settled before any delegation route is enabled:
 - Current: SA API token → exchange → Grafana `id_token`. This is the proven service-account flow,
   not a target for human delegation or proof of `client_credentials` exchange
 - Gateway presents backend bearer/header credential; isolation gate between caller and backend
@@ -158,7 +164,10 @@ behind the gateway: stateful mode caches the backend credential per MCP session,
 alone behaves like a bearer and rotation is ignored — stateful cannot carry per-caller secrets.
 Per-request (stateless) forwarding of the caller's own native token does preserve Vault's own ACLs
 and audit identity, at the cost of a deliberate per-route header allow plus a stateless route, which
-is an owner decision. `planning/mcp-gateway-implementation.md` (Task 4)
+is an owner decision. That support rests on **local fixture evidence only** (21 REQUIRED + 4 CONTROLS +
+11 OBSERVED + 1 NOT TESTED, security negatives incomplete); **TLS is not established** - the valid-CA
+positive and the invalid-CA controlled negative are both pending, and the only measured TLS fact is that
+native Vault denies an invalid certificate. `planning/mcp-gateway-implementation.md` (Task 4)
 
 **Unsupported delegation**: If a backend does not support delegation or the exchange chain is
   blocked, do NOT silently weaken identity or impose a new broker. Decide per-MCP using the shared

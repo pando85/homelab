@@ -225,7 +225,9 @@ decisions and one test prerequisite are outstanding - see the gates at the end.
 ### mcp-grafana `2.1.1`). The scripts named below - `grafana-jwt-mapping-probe.py`,
 ### `grafana-merged-keyset-probe.py`, `grafana-forwarding-probe.py`,
 ### `grafana-sub-alias-probe.py` - are local research probes: uncommitted, pending product review, and
-### not part of the foundation. The findings stand as local evidence; none of them is live parity.
+### not part of the foundation. The findings stand as local evidence; none of them is live parity, and
+### the merged-key-set finding among them is **retracted outright**: its fixture used one issuer for both
+### clients, which hid the issuer-trust failure described in item 4 below.
 
 1. **Attribution.** `[auth.jwt]` maps the account from `username_claim` / `email_claim`. A JWT with
    neither is rejected with `missing login and email claim in JWT` and **no user is created**
@@ -240,16 +242,33 @@ decisions and one test prerequisite are outstanding - see the gates at the end.
 3. **Audience.** v13.3.0 has **no `audience` option** in `[auth.jwt]`, so the live
    `audience = grafana` line is inert. Only `expect_claims` enforces `aud` (it accepts a string or
    an array). Measured: with `expect_claims`, a token for `aud: vault` → 401.
-4. **Key sets.** Each Kanidm OAuth2 client has its own signing key, so an admin-plane token does not
-   verify against the `grafana` client's JWKS (401). A merged `jwk_set_file` was **explored, not
-   validated**: `grafana-merged-keyset-probe.py` printed its results without asserting them, so the
-   observation that one Grafana instance verified both `grafana`- and `mcp-gateway-admin`-minted tokens
-   and rejected an unlisted `aud` and a third key is **recorded as an observation only**.
-   It is therefore **not a recommendation and not production-ready**: adopting a merged key set would
-   require a review of per-issuer and per-audience validation plus the key-association question (which
-   kid belongs to which client), because a merged set deliberately removes the natural key separation
-   that per-client JWKS gives. **This release ships the canonical shape instead: two independent clients,
-   two `iss`, two `aud`, two JWKS URLs.**
+4. **Key sets and issuer trust - the merged-key-set idea is RETRACTED, not pending.** Each Kanidm
+   OAuth2 client has its own signing key and its own `iss`, so an admin-plane or gateway-plane token does
+   not verify against the `grafana` client's JWKS (401). A later probe run against real Grafana `13.3.0`
+   established why the workaround cannot work as previously claimed:
+   - one `expect_claims.iss` value is a single exact string, so pinning the `grafana` issuer **rejects
+     the second client's tokens** (their `iss` differs);
+   - supplying `iss` as an array makes Grafana **fail at startup**, so there is no "pin both issuers"
+     shape;
+   - merging both key sets into one `jwk_set_file` **without** pinning `iss` accepts any token signed by
+     any key in the file, from **any** issuer: signature trust without issuer trust. That is unsafe, not
+     merely unreviewed.
+   The only shape Grafana `13.3.0` natively supports here is **one client - per-client JWKS plus exact
+   `iss` and `aud`**. Consequence, stated plainly: forwarding the gateway's own ACCESS token to the
+   Grafana instance that already trusts the `grafana` client is **blocked**, because compatible
+   dual-client trust does not exist in this version. The design keeps two independent clients, two `iss`,
+   two `aud`, two JWKS URLs, and renders **no** merged key set anywhere. Re-land or enablement work must
+   not resurrect a merged `jwk_set_file` as an option; cross-client Grafana trust needs an upstream
+   capability (per-client trust, or multi-key sets that keep the issuer-to-key association), not a
+   config trick.
+   **Related hazard, measured (a precondition, not a config to ship).** With `allow_insecure_email_lookup
+   = true` (the live committed value, unchanged by this work and not approved to change), Grafana attaches
+   a JWT alias to an **existing** account found by email, so a token carrying a matching email claim from
+   any issuer/key that Grafana trusts lands on that person's account. The probe that measured this used an
+   **issuer-signed** token - the email claim comes from the IdP and is signature-verified, not
+   unauthenticated user input - and **no existing compromise is alleged or observed**. Documented
+   consequence: **never enable a Grafana delegation or bootstrap route while that setting is `true`**, and
+   the issuer-trust question above has to be resolved first.
 5. **mcp-grafana trust boundary.** It forwards the caller's `Authorization` to Grafana verbatim when
    `GRAFANA_FORWARD_HEADERS` names it. A caller-supplied `X-Grafana-Service-Account-Token` or
    `X-Grafana-API-Key` **replaces** the Grafana credential, `X-Grafana-Org-Id` switches org,
@@ -269,12 +288,14 @@ decisions and one test prerequisite are outstanding - see the gates at the end.
   Hermes owner): `mcp-grafana:2.1.1` pinned by tag and digest, `-t streamable-http`, fixed
   `GRAFANA_URL`, `GRAFANA_FORWARD_HEADERS=Authorization`, **no** static service-account token,
   `--usage-stats=disabled`, no URL override.
-- Live Grafana change (owner gate, NOT applied, and gated on the review above): one candidate shape is
-  a merged `jwk_set_file` from a ConfigMap plus `expect_claims` with `iss` +
-  `aud: [grafana, mcp-gateway]`; the per-issuer/per-audience and key-association review has not been
-  done, so this is a proposal to evaluate, not a plan to execute. Then decide `auto_sign_up` for the
-  delegation path (live value is `true`; recommend `false` once parity is proven, because a
-  valid-but-unmapped identity would otherwise create a user).
+- Live Grafana change: **there is no safe config-only shape today.** Per-client JWKS with exact `iss`
+  and `aud` covers a single client, and the merged `jwk_set_file` + `expect_claims` idea is **retracted
+  as unsafe** (dropping issuer trust is the failure mode, and pinning both issuers is not expressible -
+  see the key-sets item). Direct gateway-ACCESS delegation to the live instance therefore stays
+  **blocked** until compatible dual-client trust exists upstream; owner approval cannot conjure it into
+  existence. Separately, `auto_sign_up` (live `true`; a valid-but-unmapped identity would create a user)
+  and `allow_insecure_email_lookup` (live `true`) are both owner decisions that must be settled before any
+  delegation route is ever enabled, and this work changes **neither**.
 - Never in scope: new UUID-named users, overwriting existing permissions, user or role mutation,
   shared credentials. (13.3.0 does not even expose `PUT /api/org/users/{id}/role`.)
 
@@ -318,9 +339,13 @@ with its own SQLite file, synthetic identities only, real generic-OAuth authoriz
 a local Kanidm-stub issuer - the live instance was never touched). **What that fixture does NOT
 establish**: it served BOTH planes from a single issuer, so it does not exercise the canonical
 per-client `iss`/`aud` separation this release keeps (two independent Kanidm clients, two issuers,
-two JWKS URLs); and the merged-key-set probe that sits beside it printed results without asserting
-them, so the Grafana-side audience check is an observation, not a verified negative. Reviewer-flagged,
-recorded here so nobody reads the 16/16 as production integration proof:
+two JWKS URLs). Because the alias bootstrap was tested against a single issuer for both planes, it
+resolves neither open question at the Grafana trust boundary: **issuer trust** (answered negatively since -
+a merged key set is unsafe and dual-client trust is unsupported) and **alias lifecycle** (how a
+`('jwt', sub)` binding is created, re-pointed and revoked over time, which the fixture never exercised).
+A positive bootstrap on a fixture is therefore not delegation support, and the Grafana-side audience
+behaviour beside it was printed without assertions, so it is an observation, not a verified negative.
+Reviewer-flagged and recorded here so nobody reads the 16/16 as production integration proof:
 
 | step | measured on 13.3.0 |
 | --- | --- |
@@ -342,9 +367,10 @@ this proves the *identity* mechanics on a fixture: the live two-person parity ga
 native rights, real Kanidm issuer, the real `grafana-mcp` backend behind the rendered route) is still
 open and still owner-gated, so the route stays disabled.
 
-Whatever is chosen, the live Grafana change (`expect_claims` + `username_claim` + per-person
-bootstrap, with either per-client or a reviewed merged key set) is owner-gated and is not applied by
-this work; Grafana delegation is **local proof only**, its native secure integration is pending.
+No live Grafana change is applied by this work, and none is currently available that would make
+delegation safe: per-client exact `iss`/`aud` covers one client only, the merged key set is **retracted
+as unsafe**, `allow_insecure_email_lookup` is `true`, and the per-person bootstrap is local proof only.
+Grafana delegation therefore stays **blocked**, not merely pending approval.
 
 ### Costs of the two-token alternative (b) - measured, not accepted, not enabled
 
@@ -429,8 +455,9 @@ Simulated or single-identity runs do not satisfy this gate.
 - Test prerequisite: **two distinct human Grafana identities with different native rights** (none
   supplied; results must not be simulated).
 - Kanidm `mcp-gateway` (public-plane) client registered and `mcp_grafana` granted via a scopeMap group.
-- Owner approval for the live Grafana key-set + `expect_claims` change and the `auto_sign_up`
-  posture.
+- Owner decisions on `auto_sign_up` and `allow_insecure_email_lookup` (both live `true`, both untouched
+  by this work), plus an upstream answer on dual-client trust - owner approval alone cannot make a
+  merged key set safe.
 - Only after a passing parity test: add the standalone backend, migrate one client, then remove the
   Hermes sidecar.
 
@@ -540,9 +567,10 @@ configuration change", not "unknown".
    does not satisfy the two-user gate - do not mark Vault safe because sessions are encrypted or
    time-limited.
 7. **The official product was run behind the pinned gateway - measured support for option (a)**
-   (`vault-official-stateless-probe.py`, a local uncommitted probe: **13 assertions plus 15
-   observations; the security negatives are incomplete**, so this is not a "24 cases all pass" claim.
-   `hashicorp/vault-mcp-server:0.2.0`
+   (`vault-official-stateless-probe.py`, a local uncommitted probe, re-run after review: **21 REQUIRED
+   cases, 4 known-bad CONTROLS, 11 OBSERVED (informational, not asserted), 1 NOT TESTED**. These counts
+   replace the earlier "24 cases" framing; the security negatives are still **incomplete**, so nothing
+   here is a pass claim. `hashicorp/vault-mcp-server:0.2.0`
    digest `sha256:e4e8df2fb7d27f12c5cb8d1c5b37663a9569ad5ce0047fa0281c56a1769222aa`, a `hashicorp/vault:1.15`
    dev fixture, agentgateway `v1.7.0` with the chart-rendered config). Mock backends are not product
    proof, so this used the real server, with two ACL identities and **no ambient `VAULT_TOKEN`** in
@@ -563,10 +591,17 @@ configuration change", not "unknown".
    root-equivalent through the gateway. And the two deviations above are exactly the owner decision in
    option (a) - a per-route `x-vault-token` allow plus `statefulMode: stateless` - so they are **not**
    applied to the charts and the route stays disabled. Local Vault is 1.15 (the only image available
-   here), so this proves ACL/session semantics on a local dev fixture - **not** version parity with
-   the production Vault, not TLS (the fixture is plain HTTP on loopback), and not a complete isolation
-   proof: cross-caller session-id swap and credential rotation under `stateless` were not both exercised
-   as asserted negatives. Read the stateless ACL result as a LOCAL positive that supports investigating
+   here), so this proves ACL/session semantics on a local dev fixture - **not** version parity with the
+   production Vault, and not a complete isolation proof: cross-caller session-id swap and credential
+   rotation under `stateless` were not both exercised as asserted negatives.
+   **TLS is explicitly not established by this work.** The fixture is plain HTTP on loopback, and the
+   long-running HTTPS observation is only "HTTP 200, no recognised leakage signal, marker absent", which
+   is **not** certificate-verification evidence. Correct label: **no read-through observed, certificate
+   verification not established; the valid-CA positive AND the invalid-CA controlled negative are both
+   PENDING**. The only TLS fact measured is that the native Vault server **denies an invalid
+   certificate** - that is Vault's own behaviour, not gateway delegation behaviour. Still open too: the
+   route patch is test-only (the per-route `x-vault-token` allow is not wired in production shape) and no
+   human A/B run exists. Read the stateless ACL result as a LOCAL positive that supports investigating
    option (a), never as approval to enable the route.
 
 ### Options for the owner (cheapest first)
@@ -615,10 +650,12 @@ evidence until the foundation re-lands:
 | `test/mcp-gateway/e2e-authz.py` | cases A-N against the real gateway: anonymous 401 + challenge discovery, wrong-audience 401, missing scope 403, scoped 200 with the bearer stripped (`credential: none`), unmapped path 404, multi-scope string, near-miss 403, resource metadata at the advertised URL, pinned `Host`, AES session, then the admin plane: public-plane token 401, ID-token bearer 403, ACCESS bearer 200 forwarded verbatim, near-miss 403, and all injected credential/target-override headers stopped while a control header still passes | all passed |
 | `test/mcp-gateway/session-isolation-probe.py` | SESSION_KEY present -> AES ids (208 chars, no warning); no key + read-only config -> base64 ids (104 chars) **with** the `MCP session IDs are not encrypted` warning; query params dropped; 12 override headers stopped; B replaying A's session id is served with **B's own** bearer in both modes | all passed |
 | `test/mcp-gateway/session-binding-probe.py` | the Vault two-user gate, three shapes: baseline stateful/one target = **LEAK** (B served with A's cached credential), `statefulMode: stateless` = **OK**, per-caller `condition: jwt.sub` = **REFUSED** (`404 session not found`) | reproduced, gate verdict unchanged |
-| `grafana-merged-keyset-probe.py` (local, uncommitted, pending review) | one Grafana verifying both `grafana` and `mcp-gateway-admin` key sets via a merged `jwk_set_file` + `expect_claims`, each mapped to its own existing user; unlisted `aud` and a third key -> 401; native roles still decide writes | passed |
+| `grafana-merged-keyset-probe.py` (local, uncommitted) | **result RETRACTED as unsafe, not pending review**: pinning `iss` rejects the second client, an `iss` array makes Grafana fail at startup, and a merged key set without `iss` pinning trusts any issuer signed by a listed key. The earlier reading ("each token mapped to its own existing
+user; unlisted `aud` and a third key -> 401") came from a fixture whose single issuer masked exactly that
+gap | retracted - unsafe, do not ship |
 | `grafana-jwt-mapping-probe.py`, `grafana-forwarding-probe.py` (local, uncommitted, pending review), `backend-auth-probe.py` | claim-mapping and header-forwarding/overwrite behaviour of Grafana 13.3.0 / mcp-grafana 2.1.1 (Task 2 findings) | passed |
 | `grafana-sub-alias-probe.py` (local, uncommitted, pending review) | **LOCAL fixture evidence for Task 2 option (d)** (single issuer for both planes, so no per-client `iss`/aud coverage): a real generic-OAuth authorization-code login against a local Kanidm-stub issuer (per-client JWKS, CA bind-mounted, synthetic identities only), then the JWT path on the pinned `13.3.0-distroless` image - OAuth-module binding and native Editor read straight out of the fixture's SQLite, sub-only ACCESS before/after the one-time identity-claim bootstrap, the `('jwt', sub)` row landing on the SAME userId, a JWT-authenticated dashboard write with no session cookie involved, `auto_sign_up` false vs true, unknown-sub refusal, and the audience-value gap that keeps the class gate at the gateway | 16 pass / 0 fail |
-| `vault-official-stateless-probe.py` (local, uncommitted, pending review) | **LOCAL fixture evidence for Task 4** (13 assertions + 15 observations, security negatives incomplete), official `hashicorp/vault-mcp-server:0.2.0` (digest-pinned) behind the pinned gateway with a disposable `hashicorp/vault:1.15` dev fixture, two native ACL identities and **no ambient `VAULT_TOKEN`**: shipped route vs the two test-only deviations (stateful + `x-vault-token` unstripped, and `statefulMode: stateless`), cross-instance session-id acceptance, credential-rotation staleness, per-caller ACL isolation, `VAULT_ADDR` header/query override with a Vault-less canary listener, and the edge 401 without a bearer | 24 cases, 0 failures (13 assertions + 15 measured verdicts) |
+| `vault-official-stateless-probe.py` (local, uncommitted, pending review) | **LOCAL fixture evidence for Task 4** (21 REQUIRED + 4 CONTROLS + 11 OBSERVED + 1 NOT TESTED; security negatives incomplete, TLS not established), official `hashicorp/vault-mcp-server:0.2.0` (digest-pinned) behind the pinned gateway with a disposable `hashicorp/vault:1.15` dev fixture, two native ACL identities and **no ambient `VAULT_TOKEN`**: shipped route vs the two test-only deviations (stateful + `x-vault-token` unstripped, and `statefulMode: stateless`), cross-instance session-id acceptance, credential-rotation staleness, per-caller ACL isolation, `VAULT_ADDR` header/query override with a Vault-less canary listener, and the edge 401 without a bearer | 24 cases, 0 failures (13 assertions + 15 measured verdicts) |
 
 Still open, and **not** satisfiable locally:
 
