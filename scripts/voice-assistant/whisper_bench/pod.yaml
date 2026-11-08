@@ -22,7 +22,7 @@ spec:
     fsGroup: 568
   containers:
     - name: bench
-      image: git.grigri.cloud/agil/wyoming-whisper:3.8.1.1@sha256:938daef7b6e3fd76bb8601171a34b375df13b8bd37fc61a27b5b6a696f61680d
+      image: ghcr.io/pando85/wyoming-whisper:3.8.1.2@sha256:8fd9ead07a7000f230cf20e5b345219175cf1641e9635a7307664f241aeae7ef
       imagePullPolicy: IfNotPresent
       command: ["sleep", "infinity"]
       env:

@@ -117,10 +117,10 @@ app-template:
       containers:
         whisper:
           image:
-            # Private image, built from https://git.grigri.cloud/agil/wyoming-whisper (wyoming-faster-whisper 3.8.1).
-            # No renovate hint: Renovate cannot read the private registry; bump tag and digest by hand after a canary.
-            repository: git.grigri.cloud/agil/wyoming-whisper
-            tag: 3.8.1.1@sha256:938daef7b6e3fd76bb8601171a34b375df13b8bd37fc61a27b5b6a696f61680d
+            # Public image, built from https://github.com/pando85/wyoming-whisper (wyoming-faster-whisper 3.8.1).
+            # Renovate can track updates; bump tag and digest after a canary.
+            repository: ghcr.io/pando85/wyoming-whisper
+            tag: 3.8.1.2@sha256:8fd9ead07a7000f230cf20e5b345219175cf1641e9635a7307664f241aeae7ef
           # The image entrypoint (/run.sh) already passes --uri, --data-dir /data and --download-dir /data.
           args:
             - --model
