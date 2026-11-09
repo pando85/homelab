@@ -1,0 +1,39 @@
+# Envoy Gateway route (ingress-nginx migration), alongside the operator-generated Ingress
+# (`spec.ingress` in vault.yaml), which stays until the switch. The operator never deletes an
+# Ingress it created, so `spec.ingress` is not removed here. Internal route: no external-dns
+# annotation until the internal switch.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: vault
+spec:
+  hostnames:
+    - vault.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: vault
+          port: 8200
+---
+# Vault listens on TLS with an operator-generated certificate (SANs: vault, vault.vault,
+# vault.vault.svc.cluster.local). Same trust as nginx `backend-protocol: HTTPS` plus validation
+# against the operator CA (`ca.crt` of the `vault-tls` Secret, rotated by the operator).
+apiVersion: gateway.networking.k8s.io/v1
+kind: BackendTLSPolicy
+metadata:
+  name: vault
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: vault
+      sectionName: api-port
+  validation:
+    hostname: vault.vault.svc.cluster.local
+    caCertificateRefs:
+      - group: ""
+        kind: Secret
+        name: vault-tls
