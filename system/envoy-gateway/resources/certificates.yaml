@@ -1,6 +1,7 @@
 # Listener certificates, issued by the letsencrypt-prod-dns ClusterIssuer (DNS-01, Cloudflare).
 # They live next to the Gateways so listeners need no ReferenceGrant. One Certificate per
-# listener group keeps the number of Let's Encrypt orders small.
+# listener: listeners must not share a cert with overlapping SANs (Envoy Gateway flags
+# OverlappingTLSConfig because of HTTP/2 connection coalescing).
 ---
 # internal Gateway, listener https-internal-grigri-cloud
 apiVersion: cert-manager.io/v1
@@ -50,7 +51,7 @@ spec:
     - "*.m.rajoy.grigri.cloud"
     - "*.isidoro.grigri.cloud"
 ---
-# external Gateway, listeners https-staging-forkline-dev and https-wildcard-staging-forkline-dev
+# external Gateway, listener https-staging-forkline-dev
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -64,9 +65,8 @@ spec:
     kind: ClusterIssuer
   dnsNames:
     - staging.forkline.dev
-    - "*.staging.forkline.dev"
 ---
-# external Gateway, listeners https-mintpsicologia-es and https-mintpsicologia-es-www
+# external Gateway, listener https-mintpsicologia-es
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -80,4 +80,33 @@ spec:
     kind: ClusterIssuer
   dnsNames:
     - mintpsicologia.es
+---
+# external Gateway, listener https-wildcard-staging-forkline-dev
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: wildcard-staging-forkline-dev
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: wildcard-staging-forkline-dev-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.staging.forkline.dev"
+---
+# external Gateway, listener https-mintpsicologia-es-www
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: www-mintpsicologia-es
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: www-mintpsicologia-es-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
     - www.mintpsicologia.es

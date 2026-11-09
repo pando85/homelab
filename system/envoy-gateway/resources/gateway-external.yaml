@@ -57,7 +57,7 @@ spec:
         mode: Terminate
         certificateRefs:
           - kind: Secret
-            name: staging-forkline-dev-tls
+            name: wildcard-staging-forkline-dev-tls
       allowedRoutes:
         namespaces:
           from: All
@@ -99,7 +99,7 @@ spec:
         mode: Terminate
         certificateRefs:
           - kind: Secret
-            name: mintpsicologia-es-tls
+            name: www-mintpsicologia-es-tls
       allowedRoutes:
         namespaces:
           from: All
