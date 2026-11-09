@@ -64,6 +64,11 @@ oauth2-proxy:
                 operator: In
                 values:
                   - authentication-proxy
+          # Spread only among pods of the SAME ReplicaSet (own pod-template-hash).
+          # Without this, rolling updates deadlock: the surge pod cannot coexist
+          # with an old-version pod on any schedulable node.
+          matchLabelKeys:
+            - pod-template-hash
           topologyKey: "kubernetes.io/hostname"
 
 app-template:
