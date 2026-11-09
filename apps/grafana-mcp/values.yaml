@@ -205,4 +205,4 @@ grafana-mcp:
 # the one that feeds them) - a CNP-only sync attaches ingress rules to the RUNNING pod
 # and liveness is what turns a transient into a restart. Rollback is template-only:
 # false again, no pod churn, no Deployment nonce.
-networkIsolation: false
+networkIsolation: true
