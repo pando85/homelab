@@ -75,6 +75,12 @@ spec:
     redirectURL: https://navidrome.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
+    # nginx-external served `/api` from its own Ingress without `auth-signin`: 401, no redirect
+    denyRedirect:
+      headers:
+        - name: ":path"
+          type: RegularExpression
+          value: "/api([/?].*)?"
     scopes: [openid, profile, email, groups]
     cookieNames:
       accessToken: oidc-access-token
