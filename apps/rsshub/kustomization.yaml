@@ -4,7 +4,6 @@ namespace: rsshub
 
 resources:
   - resources/httproute.yaml
-  - resources/backendtrafficpolicy.yaml
   # - resources/external-secrets.yaml
 
 helmCharts:
