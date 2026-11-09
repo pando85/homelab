@@ -12,7 +12,7 @@ Nothing here touches a cluster, a production credential, or a non-loopback liste
   * every bearer is minted by a self-signed ES256 stub issuer on loopback;
   * credentials are reported as sha256[:12] fingerprints only.
 
-Three runs:
+Five runs:
   A  the production config, verbatim except port/bindAddress, against the REAL Kanidm JWKS -
      proves the exact committed YAML boots and answers the public surface (discovery 200,
      MCP 401 with the advertised resource_metadata URL, disabled backend 404).
@@ -23,6 +23,14 @@ Three runs:
   C  the same process as B with the config file rewritten (grafana route removed) - proves
      route changes are picked up WITHOUT restarting the pod, which is what makes this chart's
      "edit values.yaml, ArgoCD syncs" workflow actually take effect.
+  D  the passthrough route with `Authorization` in its own strip list - proves header
+     modification runs BEFORE backendAuth, so the credential the backend sees is the
+     gateway's, whatever the client sent.
+  E  duplicated credential LINES (two `Authorization`, two `Cookie`, two URL overrides),
+     present-but-falsy identity claims (`email: ""`, `email: null`, `email: []`) and
+     leading-substring / array / non-string scopes, asserted on what the backend captured and
+     on the gateway's status code, never on the config text. A-D send one value per header
+     name, so they cannot show that `remove` deletes EVERY occurrence of a header.
 
     python3 test/mcp-gateway/local-boot-checks.py
 
@@ -97,13 +105,17 @@ def jwk(key, kid):
             "alg": "ES256", "use": "sig", "kid": kid}
 
 
-def token(key, kid, **over):
+def token(key, kid, json_null=(), **over):
     now = int(time.time())
     claims = {"iss": ISSUER_URL, "sub": f"acct-{uuid.uuid4().hex[:6]}", "aud": AUD,
               "client_id": AUD, "scope": "openid email profile mcp_context7",
               "iat": now, "nbf": now, "exp": now + 3600}
     claims.update(over)
     claims = {k: v for k, v in claims.items() if v is not None}
+    # a claim that is PRESENT but null is not the same as an absent one: `scope=None` above
+    # means "no scope claim", while json_null=("email",) writes "email": null into the JWT.
+    for name in json_null:
+        claims[name] = None
     return pyjwt.encode(claims, key, algorithm="ES256", headers={"kid": kid})
 
 
@@ -128,6 +140,12 @@ class Issuer(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def hdr_lines(msg, name):
+    """Every value of `name`, in wire order, case-insensitively. A dict of headers keeps one,
+    which is exactly what a duplicated credential line hides."""
+    return [v for v in (msg.get_all(name) or []) if v is not None]
+
+
 class Capture(BaseHTTPRequestHandler):
     """Minimal stateless streamable-HTTP MCP server: answers, and records what it received."""
 
@@ -139,9 +157,20 @@ class Capture(BaseHTTPRequestHandler):
     def _rec(self, raw):
         hdrs = {k.lower(): v for k, v in self.headers.items()}
         auth = hdrs.get("authorization")
+        # EVERY occurrence, in wire order: a dict keeps only one value per name, so the
+        # duplicated credential line run E sends would be invisible if it arrived.
+        auth_lines = hdr_lines(self.headers, "Authorization")
         rec = {"path": self.path, "auth": auth, "bearer": fp(auth.split(" ", 1)[1])
                if auth and auth.lower().startswith("bearer ") else None,
                "auth_raw": fp(auth) if auth else None,
+               "auth_n": len(auth_lines),
+               "bearer_fps": [fp(v.split(" ", 1)[1]) for v in auth_lines
+                              if v.lower().startswith("bearer ")],
+               "cookie_n": len(hdr_lines(self.headers, "Cookie")),
+               "sid_n": len(hdr_lines(self.headers, "X-Session-Id"))
+                        + len(hdr_lines(self.headers, "Mcp-Session-Id")),
+               "url_n": len(hdr_lines(self.headers, "X-Grafana-URL")),
+               "sa_n": len(hdr_lines(self.headers, "X-Grafana-Service-Account-Token")),
                "cookie": hdrs.get("cookie"), "x_grafana_url": hdrs.get("x-grafana-url"),
                "x_sa_token": hdrs.get("x-grafana-service-account-token"),
                "session_id_hdr": hdrs.get("mcp-session-id") or hdrs.get("x-session-id"),
@@ -255,7 +284,85 @@ def rpc(path, token_value=None, method="initialize", port=None, extra=None):
                 extra=extra)
 
 
+def dechunk(data):
+    """Decode HTTP/1.1 chunked framing (the gateway answers the capture with it)."""
+    out = b""
+    while data:
+        line, sep, data = data.partition(b"\r\n")
+        if not sep:
+            break
+        try:
+            n = int(line.split(b";")[0], 16)
+        except ValueError:
+            break
+        if n == 0:
+            break
+        out += data[:n]
+        data = data[n + 2:]
+    return out
+
+
+def raw_rpc(path, header_lines, port=None):
+    """POST an initialize with an EXACT, ordered header list, duplicates intact.
+
+    urllib.request.Request stores headers in a dict keyed by name, so add_header("Authorization",
+    ...) a second time silently REPLACES the first - it cannot put two credential lines on the
+    wire. This writes the bytes, because "what does the backend actually receive when the client
+    sends two" is only answerable by sending two.
+    """
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+        "protocolVersion": "2025-06-18", "clientInfo": {"name": "boot-checks", "version": "0"},
+        "capabilities": {}}}).encode()
+    lines = [f"POST {path} HTTP/1.1", f"Host: {HOST}", "Content-Type: application/json",
+             f"Content-Length: {len(body)}", "Accept: application/json, text/event-stream",
+             "MCP-Protocol-Version: 2025-06-18", "Connection: close"]
+    lines += [f"{k}: {v}" for k, v in header_lines]
+    s = socket.create_connection(("127.0.0.1", port or GW["port"]), timeout=15)
+    try:
+        s.sendall(("\r\n".join(lines) + "\r\n\r\n").encode() + body)
+        s.settimeout(10)
+        chunks = []
+        while True:
+            try:
+                d = s.recv(65536)
+            except socket.timeout:
+                break
+            if not d:
+                break
+            chunks.append(d)
+    finally:
+        s.close()
+    head, _, rest = b"".join(chunks).partition(b"\r\n\r\n")
+    hl = head.decode(errors="replace").split("\r\n")
+    code = 0
+    parts = hl[0].split(" ") if hl else []
+    if len(parts) > 1 and parts[1].isdigit():
+        code = int(parts[1])
+    hdrs = {}
+    for line in hl[1:]:
+        k, sep, v = line.partition(":")
+        if sep:
+            hdrs[k.strip().lower()] = v.strip()
+    if "chunked" in hdrs.get("transfer-encoding", "").lower():
+        rest = dechunk(rest)
+    return code, hdrs, rest[:2000]
+
+
 # --------------------------------------------------------------------------- config building
+def stubbed_cfg(text, grafana_route, ip, gp, cp):
+    """Run B's config, shared so a second boot cannot drift from the first: the issuer and
+    both MCP targets point at loopback fixtures, and the commented grafana route is
+    un-commented and appended. Uses GW["port"] and ISSUER_URL, so set those first."""
+    cfg = retarget(use_stub_authn(base_cfg(text, GW["port"])), "context7", "127.0.0.1", cp)
+    graf = json.loads(json.dumps(grafana_route))
+    graf["policies"]["mcpAuthentication"]["issuer"] = ISSUER_URL
+    graf["policies"]["mcpAuthentication"]["jwks"] = {"url": f"{ISSUER_URL}/jwks"}
+    graf["backends"][0]["mcp"]["targets"][0]["mcp"] = {
+        "host": "127.0.0.1", "port": gp, "path": "/mcp"}
+    cfg["routes"].append(graf)
+    return cfg
+
+
 def rendered_config():
     out = subprocess.run(
         ["helm", "template", CHART, f"apps/{CHART}", "--namespace", CHART, "--include-crds"],
@@ -409,13 +516,7 @@ def run_b(text, grafana_route):
     globals()["ISSUER_URL"] = f"http://127.0.0.1:{ip}"
     serve(GrafanaCapture, gp)
     serve(CtxCapture, cp)
-    cfg = retarget(use_stub_authn(base_cfg(text, port)), "context7", "127.0.0.1", cp)
-    graf = json.loads(json.dumps(grafana_route))
-    graf["policies"]["mcpAuthentication"]["issuer"] = ISSUER_URL
-    graf["policies"]["mcpAuthentication"]["jwks"] = {"url": f"{ISSUER_URL}/jwks"}
-    graf["backends"][0]["mcp"]["targets"][0]["mcp"] = {
-        "host": "127.0.0.1", "port": gp, "path": "/mcp"}
-    cfg["routes"].append(graf)
+    cfg = stubbed_cfg(text, grafana_route, ip, gp, cp)
     path = f"{WORK}/configB.yaml"
     write(cfg, path)
     proc, fh = boot(path, f"{WORK}/B.log")
@@ -555,6 +656,173 @@ def run_d(text, grafana_route):
         stop(proc, fh)
 
 
+def run_e(text, grafana_route):
+    """Duplicated credential lines, present-but-falsy identity claims, leading-substring scopes.
+
+    Runs A-D send at most one value per header name, so they cannot show what a client that
+    sends TWO `Authorization` lines (or two `Cookie` lines) achieves: a `remove` list that
+    deleted only the FIRST occurrence would let the second through to an upstream. Everything
+    here is asserted on what the loopback backend captured plus the gateway's own status code -
+    never on the config text. Measured, pinned to this binary version:
+
+      * context7: no Authorization line and no Cookie line ever arrives, in any duplicate
+        shape (same-case, mixed-case, empty second value, comma-joined in one line);
+      * grafana: exactly ONE Authorization line arrives, holding the validated (gateway-set)
+        credential - a client-supplied duplicate never reaches it;
+      * a spoofed FIRST line is what decides the outcome: the edge authenticates the first
+        credential, so spoofed-first + legit-second is 401, while legit-first + spoofed-second
+        is served and the spoof is stripped;
+      * present-but-falsy identity claims are refused with 403 (the AUTHORIZATION rule fires,
+        the JWT itself is valid), not 401 - refusal is what matters and the backend is untouched;
+      * scope is matched token-for-token: `xmcp_context7` (a leading substring) is refused while
+        `read mcp_context7` (the real scope plus another) is served, and every non-string shape
+        fails closed with 403 rather than a 5xx or a pass.
+    """
+    print("\n=== E: duplicated credentials, falsy claims, scope substrings ===")
+    port, ip, gp, cp = free_port(), free_port(), free_port(), free_port()
+    GW.update({"port": port})
+    globals()["ISSUER_URL"] = f"http://127.0.0.1:{ip}"
+    serve(type("I", (Issuer,), {}), ip)
+    serve(GrafanaCapture, gp)
+    serve(CtxCapture, cp)
+    cfg = stubbed_cfg(text, grafana_route, ip, gp, cp)
+    path = f"{WORK}/configE.yaml"
+    write(cfg, path)
+    proc, fh = boot(path, f"{WORK}/E.log")
+    try:
+        up = wait_port(port) and proc.poll() is None
+        check("E boots the identical stubbed config run B uses (nothing here is a new surface)",
+              up, "" if up else "config rejected or process died")
+        if not up:
+            return
+        cap_c, cap_g = CAPTURES["context7"], CAPTURES["grafana"]
+        c0, g0 = len(cap_c), len(cap_g)
+
+        def send(route, hdrs, cap):
+            before = len(cap)
+            code, _, body = raw_rpc(route, hdrs)
+            return code, cap[before:], body
+
+        tk = token(KEY, KID, scope="mcp_context7")
+        tkg = token(KEY, KID, scope="mcp_grafana")
+        spoof = token(OTHER, KID, scope="mcp_context7")  # same shape, untrusted signing key
+        A, S, G = f"Bearer {tk}", f"Bearer {spoof}", f"Bearer {tkg}"
+
+        code, hits, _ = send("/context7/mcp", [("Authorization", S), ("Authorization", A)], cap_c)
+        check("E context7: spoofed-first + legit-second is 401 and never reaches the backend",
+              code == 401 and not hits, f"code={code} backend_hits={len(hits)}")
+        code, hits, _ = send("/context7/mcp", [("Authorization", A), ("Authorization", S)], cap_c)
+        check("E context7: legit-first + spoofed-second is served with NO Authorization line",
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
+              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+        check("E context7: the spoofed duplicate did not smuggle through (fingerprint absent)",
+              all(fp(spoof) not in r["bearer_fps"] for r in hits),
+              f"backend bearers={[r['bearer_fps'] for r in hits]} spoof={fp(spoof)}")
+        code, hits, _ = send("/context7/mcp", [("Authorization", A), ("Authorization", A)], cap_c)
+        check("E context7: two identical legit lines do not survive either",
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
+              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+        code, hits, _ = send("/context7/mcp", [("authorization", A), ("AUTHORIZATION", S)], cap_c)
+        check("E context7: the strip is case-insensitive across EVERY duplicate",
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
+              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+        code, hits, _ = send("/context7/mcp", [("Authorization", A), ("Authorization", "")], cap_c)
+        check("E context7: an empty second Authorization line is removed too",
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
+              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+        code, hits, _ = send("/context7/mcp", [("Authorization", f"{S}, {A}")], cap_c)
+        check("E context7: two bearers comma-joined in ONE line is 401, not split-and-accept",
+              code == 401 and not hits, f"code={code} backend_hits={len(hits)}")
+        code, hits, _ = send("/context7/mcp", [("Authorization", A), ("Cookie", "s=evil1"),
+                                               ("Cookie", "s=evil2"),
+                                               ("X-Session-Id", "sess-a"),
+                                               ("X-Session-Id", "sess-b")], cap_c)
+        check("E context7: BOTH Cookie lines are removed (a second line is not a leak path)",
+              code == 200 and len(hits) == 1 and hits[0]["cookie_n"] == 0,
+              f"code={code} cookie_n={[r['cookie_n'] for r in hits]}")
+        check("E context7: both X-Session-Id lines are removed (no forged session fixation)",
+              code == 200 and len(hits) == 1 and hits[0]["sid_n"] == 0,
+              f"code={code} sid_n={[r['sid_n'] for r in hits]}")
+
+        code, hits, _ = send("/grafana/mcp", [("Authorization", G), ("Authorization", S)], cap_g)
+        check("E grafana: the backend gets EXACTLY ONE Authorization line, never two",
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 1,
+              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+        check("E grafana: that line is the gateway-set validated credential, not a client value",
+              [fp_ for r in hits for fp_ in r["bearer_fps"]] == [fp(tkg)],
+              f"backend={[r['bearer_fps'] for r in hits]} want={[fp(tkg)]} spoof={fp(spoof)}")
+        code, hits, _ = send("/grafana/mcp", [("Authorization", S), ("Authorization", G)], cap_g)
+        check("E grafana: spoofed-first + legit-second is 401 and the backend is untouched",
+              code == 401 and not hits, f"code={code} backend_hits={len(hits)}")
+        code, hits, _ = send("/grafana/mcp", [("Authorization", G), ("Cookie", "a=1"),
+                                              ("Cookie", "a=2"), ("X-Grafana-URL", "http://e1"),
+                                              ("X-Grafana-URL", "http://e2"),
+                                              ("X-Grafana-Service-Account-Token", "l1"),
+                                              ("X-Grafana-Service-Account-Token", "l2")], cap_g)
+        check("E grafana: every duplicate Cookie/URL/service-account line is stripped",
+              code == 200 and len(hits) == 1 and hits[0]["cookie_n"] == 0
+              and hits[0]["url_n"] == 0 and hits[0]["sa_n"] == 0,
+              f"code={code} cookie_n={[r['cookie_n'] for r in hits]} "
+              f"url_n={[r['url_n'] for r in hits]} sa_n={[r['sa_n'] for r in hits]}")
+        code, hits, _ = send("/grafana/mcp", [("Authorization", S), ("Authorization", "")], cap_g)
+        check("E grafana: two spoofed lines still never yield a credential at the backend",
+              code == 401 and not hits, f"code={code} backend_hits={len(hits)}")
+
+        for label, over, nulls in (("email=\"\"", {"email": ""}, ()),
+                                   ("preferred_username=\"\"", {"preferred_username": ""}, ()),
+                                   ("email=[]", {"email": []}, ()),
+                                   ("preferred_username=[]", {"preferred_username": []}, ()),
+                                   ("email=false", {"email": False}, ()),
+                                   ("email=null", {}, ("email",)),
+                                   ("preferred_username=null", {}, ("preferred_username",))):
+            t = token(KEY, KID, json_null=nulls, scope="mcp_context7", **over)
+            code, hits, body = send("/context7/mcp", [("Authorization", f"Bearer {t}")], cap_c)
+            check(f"E context7: present-but-falsy {label} is refused (403), backend untouched",
+                  code == 403 and not hits,
+                  f"code={code} hits={len(hits)} body={body[:40]!r} - a null/empty claim is "
+                  "PRESENT to CEL has(), so the edge does not treat it as absent")
+        t = token(KEY, KID, email="", scope="mcp_grafana")
+        code, hits, body = send("/grafana/mcp", [("Authorization", f"Bearer {t}")], cap_g)
+        check("E grafana: the same falsy email claim is refused there too (rules are per-route)",
+              code == 403 and not hits, f"code={code} hits={len(hits)} body={body[:40]!r}")
+
+        for sc, want in (("mcp_context7", 200), ("read mcp_context7", 200),
+                         ("mcp_context7 read", 200), ("xmcp_context7", 403),
+                         ("mcp_context7x", 403), ("foo xmcp_context7", 403),
+                         (["mcp_context7"], 403), (["read", "mcp_context7"], 403),
+                         (["xmcp_context7"], 403)):
+            t = token(KEY, KID, scope=sc)
+            code, hits, _ = send("/context7/mcp", [("Authorization", f"Bearer {t}")], cap_c)
+            check(f"E scope {sc!r} -> {want} (whole-token match, no leading substring)",
+                  code == want and len(hits) == (1 if want == 200 else 0),
+                  f"code={code} backend_hits={len(hits)}")
+
+        weird = {"absent": token(KEY, KID, scope=None),
+                 "null": token(KEY, KID, json_null=("scope",), scope=None),
+                 "empty string": token(KEY, KID, scope=""),
+                 "one space": token(KEY, KID, scope=" "),
+                 "number": token(KEY, KID, scope=42),
+                 "object": token(KEY, KID, scope={"x": 1})}
+        seen = []
+        for label, t in weird.items():
+            code, hits, _ = send("/context7/mcp", [("Authorization", f"Bearer {t}")], cap_c)
+            seen.append((label, code, len(hits)))
+        check("E a weird scope shape (array/null/number/object/empty) fails CLOSED: 403, no hit, "
+              "never a 5xx", all(c == 403 and h == 0 for _, c, h in seen), str(seen))
+
+        check("E context7 captured ZERO Authorization, Cookie or session-id lines across every "
+              "case in this run",
+              all(r["auth_n"] == 0 and r["cookie_n"] == 0 and r["sid_n"] == 0
+                  for r in cap_c[c0:]),
+              f"per hit={[(r['auth_n'], r['cookie_n'], r['sid_n']) for r in cap_c[c0:]]}")
+        check("E grafana captured exactly one Authorization line per served request, always "
+              "the validated credential",
+              all(r["auth_n"] == 1 and r["bearer_fps"] == [fp(tkg)] for r in cap_g[g0:]),
+              f"per hit={[(r['auth_n'], r['bearer_fps']) for r in cap_g[g0:]]} want={[fp(tkg)]}")
+    finally:
+        stop(proc, fh)
+
+
 def ensure_binary():
     if os.path.exists(BIN):
         return True
@@ -587,6 +855,7 @@ def main():
     got = run_b(text, grafana_route)
     run_c(*got, grafana_route)
     run_d(text, grafana_route)
+    run_e(text, grafana_route)
     print(f"\nlog files: {WORK}")
     if not os.environ.get("KEEP"):
         shutil.rmtree(WORK, ignore_errors=True)
