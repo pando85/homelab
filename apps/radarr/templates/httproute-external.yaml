@@ -1,0 +1,115 @@
+# External Envoy Gateway routes (ingress-nginx migration); the Ingresses stay until the switch.
+# The internal routes and the movie list Lua live in httproute.yaml. Same-host routes merge:
+# - radarr-external, radarr-external-movie-list: behind the OIDC SecurityPolicy
+#   (security-policy.yaml);
+# - radarr-external-apikey*: the nginx `auth-snippet` skip (`^/api/v3/.*[?&]apiKey=[^&]+`), no
+#   policy, radarr checks the key. They win over the protected routes because they carry one
+#   more query match on the same path match.
+# The two movie list routes carry the excludeLocalCovers Lua (envoy-extension-policy.yaml).
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr-external
+  annotations:
+    # the target (grigri.cloud) comes from the external Gateway
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - radarr.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: radarr
+          port: 7878
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr-external-movie-list
+spec:
+  hostnames:
+    - radarr.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - matches:
+        - path:
+            type: RegularExpression
+            value: "(?i)/api/v3/movie"
+      backendRefs:
+        - name: radarr
+          port: 7878
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr-external-apikey
+spec:
+  hostnames:
+    - radarr.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - matches:
+        - path:
+            type: RegularExpression
+            value: "/api/v3/.*"
+          queryParams:
+            - type: RegularExpression
+              name: apiKey
+              value: ".+"
+      filters:
+        # no SecurityPolicy on this route: never pass client-sent identity headers
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove:
+              - X-Auth-Request-User
+              - X-Auth-Request-Email
+              - X-Auth-Request-Preferred-Username
+              - X-Auth-Request-Groups
+              - X-Auth-Request-Access-Token
+      backendRefs:
+        - name: radarr
+          port: 7878
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr-external-apikey-movie-list
+spec:
+  hostnames:
+    - radarr.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - matches:
+        - path:
+            type: RegularExpression
+            value: "(?i)/api/v3/movie"
+          queryParams:
+            - type: RegularExpression
+              name: apiKey
+              value: ".+"
+      filters:
+        # no SecurityPolicy on this route: never pass client-sent identity headers
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            remove:
+              - X-Auth-Request-User
+              - X-Auth-Request-Email
+              - X-Auth-Request-Preferred-Username
+              - X-Auth-Request-Groups
+              - X-Auth-Request-Access-Token
+      backendRefs:
+        - name: radarr
+          port: 7878

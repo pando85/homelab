@@ -1,0 +1,30 @@
+---
+# Radarr/Radarr#11557 workaround on the external movie list routes: the same Lua as the internal
+# `radarr-movie-list` policy in httproute.yaml (keep both in sync).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: radarr-external-movie-list
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: radarr-external-movie-list
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: radarr-external-apikey-movie-list
+  lua:
+    - type: Inline
+      inline: |
+        function envoy_on_request(handle)
+          local path = handle:headers():get(":path")
+          local query = path:match("^[^?]*%??(.*)$")
+          if query:lower():find("excludelocalcovers=", 1, true) then
+            return
+          end
+          local sep = "&"
+          if query == "" then
+            sep = path:find("?", 1, true) and "" or "?"
+          end
+          handle:headers():replace(":path", path .. sep .. "excludeLocalCovers=true")
+        end
