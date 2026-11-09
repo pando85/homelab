@@ -1,0 +1,23 @@
+---
+# Per-route timeouts (nginx-internal Ingress annotations proxy-read-timeout, proxy-send-timeout and
+# proxy-connect-timeout were all 3600; proxy-body-size 20G and the buffering annotations need
+# nothing: Envoy has no body limit and streams). nginx timeouts are idle timeouts:
+# `streamIdleTimeout` is the Envoy equivalent, never `timeouts.request` (a total limit). A cluster
+# Service connects in milliseconds or fails, so the 3600 s connect timeout is capped at 60 s.
+# `mergeType: StrategicMerge` keeps the gateway-wide defaults (requestTimeout 0s) for the rest.
+# Reference: docs/conventions/gateway-api-routes.md ("Timeouts").
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: transcoder-internal-timeouts
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: transcoder-internal
+  mergeType: StrategicMerge
+  timeout:
+    tcp:
+      connectTimeout: 60s
+    http:
+      streamIdleTimeout: 3600s
