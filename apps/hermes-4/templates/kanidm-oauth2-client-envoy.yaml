@@ -1,0 +1,26 @@
+---
+# OIDC client for the Envoy Gateway SecurityPolicy (replaces the shared oauth2-proxy client for the
+# dashboard route). Separate from the `hermes-4` client, which is the dashboard's own login
+# (redirect `/auth/callback`). Kanidm only issues tokens to the scope map group below.
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: hermes-4-envoy
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+  displayname: hermes-4-envoy
+  origin: https://hermes-4.internal.grigri.cloud/
+  redirectUrl:
+    - https://hermes-4.internal.grigri.cloud/oauth2/callback
+  # same group nginx allows today (`allowed_groups=hermes-users@idm.grigri.cloud`)
+  scopeMap:
+    - group: hermes-users
+      scopes: [openid, profile, email, groups]
+  preferShortUsername: true
+  strictRedirectUrl: true
+  # Envoy Gateway reads the client secret from the `client-secret` key
+  secretKeyAliases:
+    clientSecret:
+      - client-secret
