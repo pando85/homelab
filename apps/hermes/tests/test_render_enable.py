@@ -106,6 +106,14 @@ def test_disabled_render_is_head_baseline():
                 # Remove it for comparison
                 del pod_spec["hostAliases"]
 
+    # The Envoy Gateway migration added a route, its SecurityPolicy and the OIDC client for it:
+    # none of them exists in the baseline, and none touches the Hermes pod.
+    envoy_additions = {("HTTPRoute", "hermes-internal"), ("SecurityPolicy", "hermes-internal"),
+                       ("KanidmOAuth2Client", "hermes-envoy")}
+    disabled_docs = [d for d in disabled_docs
+                     if not (isinstance(d, dict) and d.get("kind")
+                             and (d["kind"], d["metadata"]["name"]) in envoy_additions)]
+
     # Re-serialize and compare
     baseline_normalized = yaml.safe_dump_all(baseline_docs, sort_keys=True)
     disabled_normalized = yaml.safe_dump_all(disabled_docs, sort_keys=True)
@@ -166,7 +174,10 @@ def test_enabled_changes_only_the_two_cutover_scripts():
         if key == ("StatefulSet", "hermes"):
             continue
         assert on_docs_equal(key, base, on), f"pre-existing object {key} changed unexpectedly"
-    added = sorted(set(_docs(on)) - set(_docs(base)))
+    # the Envoy Gateway route, its policy and OIDC client are in both renders, not part of this feature
+    envoy_additions = {("HTTPRoute", "hermes-internal"), ("SecurityPolicy", "hermes-internal"),
+                       ("KanidmOAuth2Client", "hermes-envoy")}
+    added = sorted(set(_docs(on)) - set(_docs(base)) - envoy_additions)
     assert added == [("ConfigMap", "hermes-mcp-gateway"), ("Deployment", "hermes-mcp-gateway")], added
     print("✓ enabled state: only the 2 cutover scripts differ + hostAliases DNS override, nothing else in the agent pod")
 
