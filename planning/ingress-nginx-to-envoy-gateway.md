@@ -99,8 +99,13 @@ Step 2 notes:
   Ingress: needs an explicit `Certificate` before Phase 6.
 - Fourth Ingress source: **kiais/gitops** (`tea.millaguie.net`, third-party owner) owns `isidoro`
   (external) and `isidoro-keycloak` (internal + external, operator-generated). multivara/gitops owns
-  calypso (5 + vault), keycloak (2), gitlab. These need routes in their repos (or stay on
-  nginx-external) before the corresponding switch.
+  calypso (5 + vault), keycloak (2), gitlab. These need routes in their repos before the
+  corresponding switch: only the runner wildcard is bridged, so a host without a route 404s on
+  `.14` after P5.1. Full analysis: [Tenant repos on grigri](#tenant-repos-on-grigri-multivara-kiais).
+- The alpha key is not limited to the three internal hosts: **every tenant Ingress** (external
+  ones included) uses `external-dns.alpha.kubernetes.io/*`, so their records are frozen. The
+  external ones are CNAMEs to the apex and need no move; `idm.isidoro.grigri.cloud` is the one
+  external tenant record that is an **A to `.4`** and must be moved by the route annotation at P5.
 
 #### Envoy Gateway and Gateway API (researched 2026-11-09, read-only)
 
@@ -294,7 +299,8 @@ No Gateway API CRDs, no Envoy Gateway. cert-manager 1.21.3 without Gateway API s
 98-99 Ingresses live (53-54 external, 45 internal; runner Ingresses come and go).
 
 - **This repo:** 85 (43 ext, 42 int).
-- **multivara/gitops** (`grigri.cloud/apps/`), 11 incl. one runtime runner:
+- **multivara/gitops** (`grigri.cloud/apps/`), 10 incl. one runtime runner (9 static; per-app
+  analysis in the tenant section below):
 
 | Ingress                                     | Class | Host                                                      | Notable                                                                                                                                                                                                       |
 | ------------------------------------------- | ----- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -309,8 +315,9 @@ No Gateway API CRDs, no Envoy Gateway. cert-manager 1.21.3 without Gateway API s
 | keycloak-admin-ingress                      | int   | `idm.staging.internal.forkline.dev`                       | backend HTTPS                                                                                                                                                                                                 |
 | **runners** (created by calypso at runtime) | ext   | `<runner>.app.staging.forkline.dev`                       | nginx `auth-url` to calypso-auth-proxy `?runner_id=`, Authorization passthrough, 3600s, buffering off; wildcard cert `calypso-runners/runners-subdomain`; DNS from the wildcard on the nginx-external Service |
 
-- **Unknown owner:** `isidoro`, `isidoro-keycloak`, `mcp-gateway` namespaces (probably this repo
-  or `kiais/gitops`; Phase 0).
+- **kiais/gitops** (`tea.millaguie.net`, third party), 3: `isidoro` (ext), `isidoro-keycloak`
+  `keycloak-ingress` (ext, operator-generated) and `keycloak-admin-ingress` (int). The
+  `mcp-gateway` namespaces are this repo (`apps/mcp-gateway`, `apps/mcp-gateway-admin`).
 
 Calypso builds runner Ingresses in
 `crates/calypso-control-plane/src/runner_controller/k8s/runner/ingress.rs` with nginx-only auth
@@ -354,6 +361,13 @@ How Ingresses are defined in this repo (decides how routes get written):
   `apps/hermes/tests/test_hostaliases_mcp_dns.py`, `test_render_enable.py`.
 - NetworkPolicies admitting the nginx namespaces: `apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml:65-72`,
   `apps/mcp-gateway-admin/templates/ciliumnetworkpolicy.yaml` (moved from `networkpolicy.yaml` by work in progress on 2026-11-09), `test/mcp-gateway/jobs/*.yaml`.
+  **Live check 2026-11-09:** both render only with `networkIsolation: true` (off), so no active
+  homelab policy admits only nginx today; they must gain the Envoy proxy selector before that
+  flag is ever enabled. Cluster-wide, the only live policies naming the nginx namespaces are
+  tenant ones: the operator-generated Keycloak NetworkPolicies in `keycloak` and
+  `isidoro-keycloak` (8443 only from `ingress-nginx*`: Envoy gets 503 `UF`) and
+  `calypso-runners/calypso-control-plane-runner-policy` (egress hairpin to
+  `ingress-nginx-external`). Details and fixes in the tenant section.
 - Monitoring: dashboards in `system/ingress-nginx/dashboards/`, alerts in
   `system/ingress-nginx-external/rules/alerts.yaml`, OTel tail sampling keyed on
   `service.name == "nginx-external"` (`system/otel-collector/values.yaml:58-111`), Loki trace id
@@ -366,11 +380,179 @@ How Ingresses are defined in this repo (decides how routes get written):
 - Ingress-owned certificates: cert-manager runs with `--enable-certificate-owner-ref=true`, so
   deleting an Ingress deletes its `Certificate` **and the TLS Secret**. Any workload mounting an
   ingress TLS secret breaks (suspect: kanidm `ldaps.idm.internal...` SAN on the ingress cert).
+- Tenant coupling (multivara, kiais; section above): a frozen **A `.4`** record for
+  `idm.isidoro.grigri.cloud` and frozen A `.1` records for three internal hosts (alpha key), nginx
+  metrics in tenant alerts and dashboards, literal `192.168.193.4` and nginx pod labels in the
+  unmerged calypso network policies.
 - The external-dns wildcard `*.app.staging.forkline.dev` lives as annotations on the
   nginx-external **Service**; runner hosts depend on it.
 - Docs that still teach nginx: `AGENTS.md` tech stack, `docs/conventions/helm.md:48-66`,
   `docs/conventions/deploying-new-apps.md:155-173`, README network section,
   `docs/conventions/bandwidth-protection.md` (names `.4`).
+
+### Tenant repos on grigri (multivara, kiais)
+
+Read-only analysis 2026-11-09: both repos at `origin/main`, the live cluster, `dig @1.1.1.1`.
+The owners are "the multivara owner" and "the kiais owner (third party)". Every change below is an
+**owner action in their repo**: the agent never writes to either repo, its forge or its issues
+without that owner's explicit yes (Autonomy Scope). Unmerged work in progress in multivara
+(`apps/calypso`, chart 0.52 rc, managed remote MCP and a test fixture) was read but is not
+counted as deployed; where it matters it is marked WIP.
+
+**How they are deployed**
+
+|                                                                                                      | multivara/gitops                                                                                                                                                                                                                                                                                                                                                                                                      | kiais/gitops                                                                                                            |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Forge                                                                                                | Forgejo `git.grigri.cloud` (our own `git` app: Argo and the OCI chart pulls go through the ingress path)                                                                                                                                                                                                                                                                                                              | `tea.millaguie.net` (external, not touched by this migration)                                                           |
+| Argo objects (ours, `bootstrap/root/templates/stack-*.yaml`, values in `bootstrap/root/values.yaml`) | ApplicationSets `multivara-apps` (`grigri.cloud/apps/*`: `calypso`, `gitlab`, `keycloak`) and `multivara-platform` (`grigri.cloud/platform/*`: `redis-operator`, `keycloak-operator`, no ingress)                                                                                                                                                                                                                     | ApplicationSet `kiais-apps` (`grigri.cloud/apps/*`: `isidoro`, `isidoro-config`, `isidoro-keycloak`)                    |
+| Namespaces                                                                                           | directory name; calypso also owns `calypso-runners`                                                                                                                                                                                                                                                                                                                                                                   | directory name                                                                                                          |
+| Sync                                                                                                 | automated `prune` + `selfHeal`, retry 10, `CreateNamespace`, project `default` (no restriction): a push to the tenant `main` is applied within minutes with no review on our side. An agent may only trigger the sync of an already pushed commit                                                                                                                                                                     | same                                                                                                                    |
+| Ingress source                                                                                       | calypso chart `oci://git.grigri.cloud/multivara/helm-charts` (0.51 deployed, Ingress only, no route support), oauth2-proxy chart 10.7.2 (native `gatewayApi`), vendored gitlab chart 9.10.3 (native `gatewayRoute`), Keycloak and Vault (bank-vaults) operator CRs                                                                                                                                                    | isidoro chart `oci://tea.millaguie.net/kiais/helm-charts` 0.22.x (Ingress only, no route support), Keycloak operator CR |
+| Env layout                                                                                           | `grigri.cloud/` is the **promotion source** for `nbg1-c01` (production, Hetzner, still ingress-nginx, not part of this plan): promrail copies everything outside `custom/` verbatim and `kustomization.yaml` must stay identical in both. Gateway API changes therefore go in `custom/resources` + `custom/patches` (with an empty placeholder file in `nbg1-c01`), never in the shared `values.yaml` or `resources/` | staging overrides live in `custom/patches` (same convention); whether kiais promotes elsewhere is unknown               |
+
+Trust boundary, unchanged by this migration: any tenant commit can create routes on our Gateways
+(`allowedRoutes.from: All`) for any hostname its listener matches, exactly as it can create an
+Ingress today. The kiais owner is a third party, so a hostname lint (see Target Design) is cheap
+insurance.
+
+**Every ingress dependency (live and in git)**
+
+| Repo | App (namespace)                                                                                      | Host -> backend                                                                                        | Today (class nginx-external unless noted)                                                                                                                                                                                               | Target                                                                                                                                                                                                                                                                                                                                     | Owner action                                                                                                                                 | By       |
+| ---- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| m    | calypso `calypso`                                                                                    | `app.staging.forkline.dev` `/` -> `calypso-web:80`                                                     | `auth-url` `http://oauth2-proxy.calypso.svc/oauth2/auth` + `auth-signin` redirect + `auth-response-headers` (`X-Auth-Request-*`), CSP `add_header`; cert `staging-forkline-dev-tls` (LE); DNS CNAME                                     | external `https-wildcard-staging-forkline-dev`; HTTPRoute, auth policy (decision A below), CSP via `ResponseHeaderModifier`                                                                                                                                                                                                                | routes in `custom/resources`; `ingress.enabled: false` in `custom/patches` (this flag also removes the next two Ingresses: one commit)       | P3       |
+| m    | calypso `calypso-api`                                                                                | same host `/api`, `/webhooks`, `/public` -> `calypso-control-plane:8080`                               | as above, plus `auth-snippet` skips (`/api/v1/health`, `/webhook*`, `/public*`, `device-auth/start` and `/poll`), body 6m                                                                                                               | same listener; the skip paths as more specific rules without the auth policy, `/api` under it                                                                                                                                                                                                                                              | as above                                                                                                                                     | P3       |
+| m    | calypso `calypso-external-api`                                                                       | `api.staging.forkline.dev` `/v1(/\|$)(.*)` -> `calypso-control-plane:8080`                             | regex rewrite to `/public-api/v1/$2`, `proxy-redirect` `/public-api/` -> `/`, `limit-rps 20` x5 burst, body 6m; cert `api-staging-forkline-dev-tls`                                                                                     | same listener; `HTTPRouteFilter` regex rewrite + local rate limit (recipe 13). `proxy-redirect` has no Envoy equivalent: confirm the API never redirects                                                                                                                                                                                   | as above                                                                                                                                     | P3       |
+| m    | calypso `calypso-landing-page`                                                                       | `staging.forkline.dev` `/` -> `calypso-landing-page:80`, `/public` -> control plane                    | auth (staging is not public) + CSP; cert `landing-page-tls`; DNS CNAME to `ddns.staging.forkline.dev`                                                                                                                                   | external `https-staging-forkline-dev` (apex), HTTPRoute + auth + CSP                                                                                                                                                                                                                                                                       | `landingPage.ingress.enabled: false` + route                                                                                                 | P3       |
+| m    | oauth2-proxy (`calypso`, **its own instance**, Keycloak realm `forkline`; not `system/oauth2-proxy`) | `app.staging.forkline.dev` `/oauth2` -> `oauth2-proxy:80`                                              | buffer 16k, no TLS block (host cert by SNI)                                                                                                                                                                                             | external wildcard listener; chart `gatewayApi` (`PathPrefix /oauth2`)                                                                                                                                                                                                                                                                      | `ingress.enabled: false` + `gatewayApi`                                                                                                      | P3       |
+| m    | keycloak `keycloak-ingress` (CR `spec.ingress`)                                                      | `idm.staging.forkline.dev` -> `keycloak-service:8443` HTTPS                                            | backend TLS without verify, buffer 128k; cert `keycloak-external-ingress-tls`; DNS CNAME                                                                                                                                                | external wildcard listener; HTTPRoute + `BackendTLSPolicy` (hostname `keycloak.keycloak.svc`, the only SAN match; CA secret `keycloak-ca`)                                                                                                                                                                                                 | `spec.ingress.enabled: false` (confirm the operator deletes it: Vault's does not), NetworkPolicy fix (below)                                 | P3       |
+| m    | keycloak `keycloak-admin-ingress` (static, class nginx-internal)                                     | `idm.staging.internal.forkline.dev` -> same backend                                                    | same, internal; DNS A `.1`, alpha key: **frozen**                                                                                                                                                                                       | internal `https-staging-internal-forkline-dev`, same `BackendTLSPolicy`                                                                                                                                                                                                                                                                    | route; non-alpha annotation on the route in the Phase 4 window                                                                               | P4       |
+| m    | calypso `vault` (bank-vaults CR `spec.ingress`, nginx-internal)                                      | `vault.staging.internal.forkline.dev` -> `vault:8200` HTTPS                                            | backend TLS; cert `vault-tls-certificate`; DNS A `.1`, alpha: **frozen**                                                                                                                                                                | internal `https-staging-internal-forkline-dev`; HTTPRoute + `BackendTLSPolicy` (hostname `vault.calypso.svc.cluster.local`, CA = `vault-tls` key `ca.crt`)                                                                                                                                                                                 | remove `spec.ingress`; the operator leaves an **orphan Ingress** (owner-approved delete, as for our vault); annotation in the Phase 4 window | P4       |
+| m    | gitlab `gitlab-webservice-default`                                                                   | `gitlab.grigri.cloud` -> `gitlab-webservice-default:8181`                                              | body 35G, 3600s, buffering off; cert `gitlab-wildcard-tls`; DNS CNAME to `grigri.cloud`; on the pfSense override list; in-cluster runner uses `https://gitlab.grigri.cloud`; SSH is not exposed (ClusterIP only)                        | external `https-grigri-cloud`; `gitlab.webservice.gatewayRoute` (`enabled: true`, `gatewayName: external`, `gatewayNamespace: envoy-gateway`, `sectionName: https-grigri-cloud`, per-rule `timeouts`), `global.ingress.enabled: false`; keep `global.gatewayApi.installEnvoy: false` so the chart creates no Envoy policies on our Gateway | values change, verify with `helm template`                                                                                                   | P3       |
+| m    | runners (runtime, `calypso-runners`, 1 live)                                                         | `<runner>.app.staging.forkline.dev` -> `<runner>:opencode`                                             | Ingress built by the control plane: `auth-url` `calypso-auth-proxy:8080/auth?runner_id=`, `Authorization` passthrough, 3600s, no buffering, websockets; wildcard cert `runners-subdomain-tls`; DNS wildcard CNAME (ours, nginx Service) | now: passthrough bridge to nginx-external (**homelab-owned** `TLSRoute`, dies with nginx). Later: `https-runners-staging-forkline-dev` + per-runner HTTPRoute + ext auth (decision B)                                                                                                                                                      | calypso code emits HTTPRoute, RBAC for `httproutes` and policies                                                                             | P6       |
+| m    | calypso `mcp-fixture` (**WIP**, unmerged)                                                            | `mcp-fixture.staging.forkline.dev` -> fixture:8080                                                     | new Ingress, non-alpha key, target `staging.forkline.dev`; no DNS record yet                                                                                                                                                            | external wildcard listener; HTTPRoute; DNS by `DNSEndpoint` (a route's `target` is not read)                                                                                                                                                                                                                                               | write the route in the same change as the Ingress                                                                                            | P3       |
+| m    | Remote (#199, not deployed)                                                                          | `remote-relay.staging.forkline.dev` (HTTPRoute), `*.remote.staging.forkline.io` (TLSRoute passthrough) | none yet                                                                                                                                                                                                                                | `https-wildcard-staging-forkline-dev`, `tls-remote-staging-forkline-io`, namespace `calypso-remote`                                                                                                                                                                                                                                        | per #199: zone `forkline.io` has no NS yet, no ZeroSSL issuer                                                                                | after P5 |
+| k    | isidoro `isidoro`                                                                                    | `isidoro.grigri.cloud` -> `isidoro:8080` (LLM gateway, SSE)                                            | read/send 1800s, connect 10s, buffering off, body 50m, `least_conn`, OTel snippet; cert `isidoro-tls`; DNS CNAME to `grigri.cloud`; on the override list; clients incl. hermes and the voice assistant (`/v1`)                          | external `https-grigri-cloud`; raw HTTPRoute (chart has no route support) + `BackendTrafficPolicy` (idle >= 1800s, `LeastRequest`) + tracing tag `peer.service`                                                                                                                                                                            | route in `custom/resources`, `ingress.enabled: false`; replace the nginx alerts (below)                                                      | P3       |
+| k    | isidoro-keycloak `keycloak-ingress` (CR)                                                             | `idm.isidoro.grigri.cloud` -> `keycloak-service:8443` HTTPS                                            | as multivara keycloak, plus OTel annotations; DNS **A `.4`**, alpha: frozen, the only tenant external record that is not a CNAME                                                                                                        | external `https-grigri-cloud` (cert already has SAN `*.isidoro.grigri.cloud`); HTTPRoute + `BackendTLSPolicy`                                                                                                                                                                                                                              | as multivara keycloak; the A record moves with the route annotation at P5                                                                    | P5       |
+| k    | isidoro-keycloak `keycloak-admin-ingress` (static, nginx-internal)                                   | `idm-internal.isidoro.grigri.cloud` -> same                                                            | internal; DNS A `.1`, alpha: **frozen**                                                                                                                                                                                                 | internal gateway has **no listener or cert** for this name (gap, see below)                                                                                                                                                                                                                                                                | route; annotation in the Phase 4 window                                                                                                      | P4       |
+
+(m = multivara, k = kiais, By = latest phase that needs it done. P3 means routes verified
+against `.13`/`.14` before Gate 3.) Counts match the live inventory: 10 multivara Ingresses (9
+static, 1 runner) and 3 kiais, all 13 on nginx.
+
+**Gaps in our side of the contract**
+
+- **`idm-internal.isidoro.grigri.cloud`** is internal but two labels under `grigri.cloud`; no
+  internal listener or certificate covers it. Homelab adds an internal listener
+  `https-isidoro-grigri-cloud` (hostname `*.isidoro.grigri.cloud`, its own Certificate from
+  `letsencrypt-prod-dns`, one Certificate per listener) before Phase 4.
+- A new Certificate `*.app.staging.forkline.dev` in `envoy-gateway` is needed for
+  `https-runners-staging-forkline-dev` (the `*.staging.forkline.dev` wildcard does not cover two
+  labels). Not needed while the bridge passes TLS through.
+- The bridge `TLSRoute` (`*.app.staging.forkline.dev` -> `ingress-nginx-external:443`) is ours,
+  not multivara's: its backend is our nginx and it is deleted with it.
+
+**Non-Ingress coupling found**
+
+| What                                                                                                                                                                                     | Where                                                                                                                                                                                                                                                                                                                                                                                          | Effect when Envoy replaces nginx                                                                           | Fix                                                                                                                                                                                                                    | By                    |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| NetworkPolicy `keycloak/keycloak-network-policy` and `isidoro-keycloak/keycloak-network-policy`, generated by the operator from Keycloak CR `spec.networkPolicy.https`                   | port 8443 only from namespaces `ingress-nginx`, `ingress-nginx-external` and the import job (8080, 9000 open)                                                                                                                                                                                                                                                                                  | Envoy proxies are dropped: 503 `UF` on every idm host (OIDC for calypso and isidoro)                       | add `envoy-gateway` to the list in the grigri `custom/patches` (a list patch replaces the whole list: write all entries); drop the nginx namespaces in Phase 6. Alternative: backend the plain `http` port 8080 (open) | P3 (needed to verify) |
+| CiliumNetworkPolicy `calypso-runners/calypso-control-plane-runner-policy` (chart `networkPolicy.ingressNamespaceSelector: ingress-nginx-external`, `allowIngressControllerEgress: true`) | ingress to runner :3000 from that namespace (also open to `cluster`/`host`/`world` entities, so unaffected); **egress** from runners to that namespace on 80/443 (hairpin: names that resolve to the LB VIP)                                                                                                                                                                                   | after P5.2 `idm`, `git`, `app`/`api` names resolve to `.14` (Envoy pods): runner egress to them is dropped | add an egress rule for the Envoy proxies (chart `additionalEgress` or selector); keep the nginx-external rule while runners are bridged                                                                                | before P5.2           |
+| WIP: `custom/patches/values.yaml` of calypso                                                                                                                                             | `mcpNetworkPolicy.gateway/broker.additionalEgress` to `192.168.193.4/32:443` and the nginx-external pod labels, `fixture.additionalIngress` from nginx-external pods on 8080, `mcp.egress.allowlist` hairpin                                                                                                                                                                                   | same failure; literal `.4`                                                                                 | author the Envoy equivalents (`.14`, namespace `envoy-gateway`, labels `app.kubernetes.io/name=envoy`, `app.kubernetes.io/component=proxy`, `gateway.envoyproxy.io/owning-gateway-name=external`) in the same change   | P3 / P5               |
+| chart values `gitProxyNetworkPolicy.ingressNamespaceSelector` (calypso), `networkPolicy.ingressNamespaceSelector` (isidoro), default `ingress-nginx`                                     | both policies `enabled: false` on grigri today                                                                                                                                                                                                                                                                                                                                                 | none now; a trap if enabled later                                                                          | note for the owners                                                                                                                                                                                                    | n/a                   |
+| In-cluster callers of tenant names, through the pfSense override (move at P5.2, no repo change)                                                                                          | calypso control plane and its oauth2-proxy -> `idm.staging.forkline.dev`; gitlab-runner -> `https://gitlab.grigri.cloud`; hermes and the voice assistant -> `isidoro.grigri.cloud/v1`; Argo and chart pulls from `git.grigri.cloud/multivara`; isidoro -> its Keycloak (issuer is in a Secret, not read: assumed `idm.isidoro.grigri.cloud`, an A `.4` record that never goes through pfSense) | none if routes are live                                                                                    | verify at P5 (Phase 5 step 6); blackbox probes for `app.staging.forkline.dev` and `api.staging.forkline.dev` already exist in `system/monitoring`                                                                      | P5                    |
+| nginx metrics in tenant monitoring                                                                                                                                                       | kiais `isidoro/resources/prometheusrule-ingress-edge.yaml` (`nginx_ingress_controller_requests{exported_service="isidoro"}`: the 5xx and 413 alerts go silent), multivara `calypso/dashboards/landing-analytics.json` (8 nginx queries, also promoted to prod: query both)                                                                                                                     | silent alerts, empty panels                                                                                | rewrite on Envoy metrics, keep nginx series via `or` where the file is promoted                                                                                                                                        | P6 gate               |
+| `hostAliases`, `ingress-nginx` Service references, `192.168.193.1`                                                                                                                       | none in either repo (only the WIP `.4` above)                                                                                                                                                                                                                                                                                                                                                  |                                                                                                            |                                                                                                                                                                                                                        |                       |
+| cert-manager ownership                                                                                                                                                                   | no pod mounts an ingress TLS secret in any tenant namespace (checked live, with a positive control `vault-tls`)                                                                                                                                                                                                                                                                                | deleting the Ingresses deletes their Certificates and Secrets safely                                       | none                                                                                                                                                                                                                   | n/a                   |
+
+**Certificates and DNS per zone**
+
+| Zone / names                                        | DNS today                                                                                                                                                                                                                                                                                         | Certificate today                                                                                        | On our gateway                                                    | Result                                                            |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `staging.forkline.dev` apex, `app.`, `api.`, `idm.` | CNAME chain to `ddns.staging.forkline.dev` -> WAN. Written earlier by our external-dns (TXT owner `default`) under the alpha key, now **frozen** (the filter only matches `external-dns.kubernetes.io/enabled`); `upsert-only` keeps them. In the LAN: override `.4` for `app`/`auth`/`idm`/`api` | LE `letsencrypt-prod-dns` (our ClusterIssuer, Cloudflare DNS-01) by ingress-shim in `calypso`/`keycloak` | `staging-forkline-dev-tls`, `wildcard-staging-forkline-dev-tls`   | terminated by us; tenant TLS secrets become unused                |
+| `*.app.staging.forkline.dev`                        | wildcard CNAME to `app.staging...`, from the nginx-external **Service** annotations (ours). Survives their removal (`upsert-only`)                                                                                                                                                                | `runners-subdomain` in `calypso-runners` (LE)                                                            | bridge: passthrough, nginx keeps terminating with that secret     | keep Certificate and nginx-external until runners emit HTTPRoutes |
+| `*.staging.internal.forkline.dev`                   | A `.1` from Cloudflare, alpha key: **frozen**                                                                                                                                                                                                                                                     | LE                                                                                                       | `staging-internal-forkline-dev-tls`                               | records flip only when a route carries the non-alpha key          |
+| `gitlab.`, `isidoro.grigri.cloud`                   | CNAME to `grigri.cloud`, frozen                                                                                                                                                                                                                                                                   | LE                                                                                                       | `grigri-cloud-tls`                                                | covered                                                           |
+| `idm.isidoro.grigri.cloud`                          | **A `.4`**, frozen                                                                                                                                                                                                                                                                                | LE                                                                                                       | `grigri-cloud-tls` (SAN `*.isidoro.grigri.cloud`)                 | must move to `.14`                                                |
+| `idm-internal.isidoro.grigri.cloud`                 | A `.1`, frozen                                                                                                                                                                                                                                                                                    | LE                                                                                                       | none on the internal gateway                                      | gap above                                                         |
+| `forkline.io` (Remote, #199)                        | zone has no NS yet                                                                                                                                                                                                                                                                                | none; ZeroSSL issuer pending                                                                             | passthrough: the relay terminates TLS with per-user ZeroSSL certs | maintainer items in #199                                          |
+| cluster-internal CAs                                | n/a                                                                                                                                                                                                                                                                                               | `keycloak-ca` (both Keycloaks), `vault-tls` (bank-vaults CA), `calypso-root-ca` (git-proxy)              | never exposed                                                     | only used as `BackendTLSPolicy` CA                                |
+
+DNS rules for tenant routes:
+
+1. **External tenant routes carry no external-dns annotation.** The CNAMEs are already right; a
+   route-sourced record would be an A to `.14` (a private address), replacing the public CNAME
+   path and breaking internet access.
+2. **Frozen internal records and `idm.isidoro` (A)** flip when the route carries
+   `external-dns.kubernetes.io/enabled: "true"` (target defaults to the Gateway address,
+   `.13` / `.14`). Add it in the same window as the switch (Phase 4 for the three internal
+   names, Phase 5 for `idm.isidoro`) and keep the alpha key on the Ingress, so the two sources
+   never overlap. Rollback: `upsert-only` never reverts a record, so set it back by hand (the
+   owner) and keep serving from nginx.
+3. **New names** (`mcp-fixture`, `remote-relay`, per-user `*.remote.staging.forkline.io`) use
+   `DNSEndpoint` (the `crd` source, Phase 1 step 5).
+
+**Decisions for the multivara owner (spike in Phase 2, before Phase 3 routes are written)**
+
+- **A. Web auth.** Today nginx `auth_request` to the in-cluster oauth2-proxy, which answers 401
+  and nginx redirects to `/oauth2/start`. Envoy `extAuth` returns the auth service's 401 to the
+  browser: there is no `auth-signin` equivalent. Options: (1) `SecurityPolicy.extAuth.http` to
+  `oauth2-proxy.calypso:80` with oauth2-proxy in auth-only mode so its own sign-in redirect is
+  what the browser sees (unproven: spike), `headersToBackend` for the four `X-Auth-Request-*`
+  headers and the access token header; (2) the native `SecurityPolicy` OIDC against the
+  Keycloak realm (same pattern as recipe 1; array claims need a CSV mapper; one re-login;
+  oauth2-proxy and its Redis go away). Recommended: spike (1), fall back to (2). The auth must
+  also be skipped on the `/api` skip paths and `/public`.
+- **B. Runner auth and routes.** Per runner: HTTPRoute (host -> runner Service `opencode` port) and
+  ext auth to `calypso-auth-proxy`. One `SecurityPolicy` can cover all runner routes with
+  `targetSelectors` on a route label if the auth proxy derives `runner_id` from the `Host`
+  header (today it comes from the Ingress annotation query string). Needs the control plane to
+  create and delete HTTPRoutes (RBAC), websockets/SSE verified, timeout `0s`.
+- **C. Keycloak backend.** BackendTLS (parity, needs the NetworkPolicy fix and
+  `BackendTLSPolicy`) or plain `http` 8080 (already open in the NetworkPolicy, no TLS policy,
+  but an unencrypted in-cluster hop and `proxy.headers: xforwarded` trusts what reaches 8080).
+  Envoy does not add `X-Forwarded-Host`; the CRs pin `hostname` with `strict: true`, so
+  verify login and redirects on a test host first.
+- **D. If the kiais owner cannot act in time**, fallback (needs the homelab owner's decision):
+  homelab-owned HTTPRoutes plus a `ReferenceGrant` in the tenant namespace, removed when the
+  tenant takes over. Not planned.
+
+**What each tenant must land, in order**
+
+| Before                | multivara                                                                                                                                                                                                                                        | kiais                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| Gate 3 (Phase 3)      | routes + policies for every row marked P3 in `custom/resources` (with matching placeholders in `nbg1-c01`); Keycloak NetworkPolicy fix; `BackendTLSPolicy`s; decision A and C taken; WIP netpols and fixture route authored for both controllers | route for `isidoro` + policies; Keycloak NetworkPolicy fix; `BackendTLSPolicy` for `idm.isidoro` |
+| Phase 4 (internal)    | internal routes for `idm.staging.internal`, `vault.staging.internal` verified on `.13`; non-alpha annotation on them in the window; vault orphan Ingress deleted (owner yes)                                                                     | route for `idm-internal.isidoro` (after our listener exists) + annotation in the window          |
+| Phase 5 (external)    | runner egress rule for Envoy; calypso `mcp` hairpin rules (WIP); landing/CSP/auth verified from the LAN on `.14`                                                                                                                                 | `idm.isidoro` route + annotation (A record to `.14`) in the window                               |
+| Phase 6 (remove both) | `ingress.enabled: false` everywhere, Keycloak `spec.ingress` and Vault `spec.ingress` off, runners on HTTPRoute (calypso), nginx namespaces out of every netpol, nginx metrics replaced; **runners are the only thing still bridged**            | `ingress.enabled: false`, nginx namespaces out of the Keycloak NetworkPolicy, alerts rewritten   |
+
+What stays bridged: only `*.app.staging.forkline.dev` (TLS passthrough to nginx-external, which
+then sees Envoy pod IPs as clients; no PROXY protocol). It keeps `ingress-nginx-external`, the
+Certificate `calypso-runners/runners-subdomain`, the runner CiliumNetworkPolicy selector and the
+control plane's `ingressClass: nginx-external` until the control plane emits HTTPRoutes. Nothing
+else may stay on nginx past P5: unbridged hosts without a route would 404 on `.14`.
+
+**Owner checklist (asks, in this order; none is done by the agent)**
+
+multivara owner:
+
+- [ ] Take decisions A and C; agree the runner design B (calypso work, not covered by #199).
+- [ ] Routes and policies in `custom/` for every P3 row; Keycloak NetworkPolicy and WIP netpol
+      fixes; placeholders in `nbg1-c01`.
+- [ ] Non-alpha annotation on the internal routes in the Phase 4 window; approve the orphan
+      vault Ingress delete.
+- [ ] Runner egress to the Envoy proxies before P5.2; #199 items (zone, ZeroSSL, relay).
+- [ ] Phase 6 cleanup: `ingress.enabled: false`, nginx references, landing analytics queries.
+
+kiais owner (third party; ask through the homelab owner, lead time unknown, so ask before Phase 3):
+
+- [ ] Route (and `idm.isidoro`, `idm-internal.isidoro` routes) in `custom/`, Keycloak
+      NetworkPolicy fix, replace the nginx alert rule.
+- [ ] Non-alpha annotation on the two Keycloak routes in the Phase 4 and Phase 5 windows.
+- [ ] Phase 6: `ingress.enabled: false`, nginx namespace out of the NetworkPolicy.
+
+Homelab (us, autonomous): internal listener for `*.isidoro.grigri.cloud`, the bridge `TLSRoute`,
+`*.app.staging.forkline.dev` Certificate when the runner listener is added, the Gate 3 diff
+script over tenant hosts, the blackbox probes.
 
 ## Target Design
 
@@ -418,6 +600,7 @@ How Ingresses are defined in this repo (decides how routes get written):
 | internal | `http`                                | 80 HTTP             |                                              | redirect route                                                                                                              |
 | internal | `https-internal-grigri-cloud`         | 443 HTTPS           | `*.internal.grigri.cloud`                    | wildcard                                                                                                                    |
 | internal | `https-staging-internal-forkline-dev` | 443 HTTPS           | `*.staging.internal.forkline.dev`            | wildcard (multivara vault, keycloak admin)                                                                                  |
+| internal | `https-isidoro-grigri-cloud`          | 443 HTTPS           | `*.isidoro.grigri.cloud`                     | own wildcard Certificate (kiais `idm-internal.isidoro`; **to add before Phase 4**, not deployed)                            |
 | external | `http`                                | 80 HTTP             |                                              | redirect route                                                                                                              |
 | external | `https-grigri-cloud`                  | 443 HTTPS           | `*.grigri.cloud`                             | wildcards `*.grigri.cloud`, `*.rajoy.grigri.cloud`, `*.m.rajoy.grigri.cloud`, `*.isidoro.grigri.cloud` (Envoy picks by SNI) |
 | external | `https-staging-forkline-dev`          | 443 HTTPS           | `staging.forkline.dev`                       | apex cert                                                                                                                   |
@@ -872,21 +1055,34 @@ Per app, in one PR (or one per gateway if it is easier to review):
    Gateway, see Open Items): safe now, because external records are CNAMEs to the apex and do
    not change.
 4. verify against `.14` the same way, from the LAN.
-5. tick the app in the tracking list below. The Ingresses stay untouched.
+5. NetworkPolicies: if the app, or the namespace it lives in, has a policy that admits the nginx
+   namespaces (grep `ingress-nginx` in the app and `kubectl get netpol,cnp -n <ns>`), it must
+   also admit the Envoy proxies (namespace `envoy-gateway`, labels
+   `app.kubernetes.io/name=envoy`, `app.kubernetes.io/component=proxy`,
+   `gateway.envoyproxy.io/owning-gateway-name=<gateway>`) **before** step 2: a missing rule
+   shows as 503 `UF` only on the Envoy path. Egress policies of pods that call hairpin names
+   (resolving to `.14` after P5.2) need the same rule.
+6. tick the app in the tracking list below. The Ingresses stay untouched.
 
 Order: plain apps, then timeouts/body, then auth, then snippets, then the control-plane names
 (argocd, vault, s3/minio, kanidm, oauth2-proxy-dependent apps last).
 
-multivara (their repo, in parallel, against the contract): calypso web/api/landing,
-calypso-external-api, oauth2-proxy, keycloak (+ admin), vault, gitlab; the `DNSEndpoint` for
-`*.app.staging.forkline.dev`; the bridge `TLSRoute` for runners.
+Tenants (their repos, in parallel, against the contract; per-app table, DNS rules and owner
+checklist in [Tenant repos on grigri](#tenant-repos-on-grigri-multivara-kiais)): multivara
+calypso web/api/external-api/landing, oauth2-proxy, keycloak (+ admin), vault, gitlab; kiais
+isidoro and isidoro-keycloak (+ admin). The routes live in their `custom/` directories
+(multivara promotes `grigri.cloud/` to production), external tenant routes carry **no**
+external-dns annotation, and the Keycloak NetworkPolicies must admit `envoy-gateway` before
+those routes can be verified. Ours: the bridge `TLSRoute` for runners and the internal
+`*.isidoro.grigri.cloud` listener.
 
 Tracking list (fill during Phase 3): one row per app, columns `internal route` / `verified .13` /
 `external route` / `verified .14`.
 
 **Gate 3 (before any switch):**
 
-- every Ingress in the cluster has a route on the matching gateway, verified (compare
+- every Ingress in the cluster, **tenant ones included** (10 multivara, 3 kiais, plus the WIP
+  `mcp-fixture`), has a route on the matching gateway, verified (compare
   `kubectl get ingress -A` hosts against `kubectl get httproute -A` hosts with a script; the
   runner hosts are covered by the bridge);
 - scripted diff of every host: `curl -sk -o /dev/null -w '%{http_code} %{redirect_url}'` with
@@ -894,7 +1090,14 @@ Tracking list (fill during Phase 3): one row per app, columns `internal route` /
 - functional list from the LAN against the Envoy IPs: nextcloud sync (WebDAV), immich mobile
   upload of a large video, `git push` over HTTPS and SSH, `mc ls` against s3-public, Home
   Assistant app (websocket), jellyfin playback, navidrome Subsonic client, calypso login and SSE
-  stream, one runner host through the bridge, calypso-external-api returns 429 over 20 rps;
+  stream, one runner host through the bridge, calypso-external-api returns 429 over 20 rps,
+  calypso `/api` skip paths open and the rest behind auth, Keycloak login on `idm.staging` and
+  `idm.isidoro` (checks the NetworkPolicy fix), gitlab clone and push over HTTPS (large body,
+  3600s), an isidoro streaming completion longer than 60 s, the Vault UI on
+  `vault.staging.internal.forkline.dev`;
+- tenant prerequisites of the "Gate 3" row in the owner checklist are done (NetworkPolicy fixes,
+  `BackendTLSPolicy`s, decisions A and C), and the existing blackbox probes for
+  `app.staging.forkline.dev` and `api.staging.forkline.dev` pass against the Envoy path;
 - no `UF`/`URX` response flags in Envoy access logs;
 - prepared, unmerged: the internal switch commit, the hermes hostAliases/tests commit
   (`.4 -> .14`), and the commit removing the external-dns annotations from the nginx-external
@@ -910,8 +1113,12 @@ IP, so external-dns rewrites every internal record in one sync. nginx-internal k
 1. Pre-checks: break-glass ready (`kubectl port-forward` to argocd-server and vault), Envoy
    internal pods ready.
 2. Merge `ingress-nginx: Publish the internal Envoy gateway address` (`publishService.enabled:
-false`, `--publish-status-address=192.168.193.13`). This includes multivara's
-   `*.staging.internal.forkline.dev` Ingresses, which use the same controller.
+false`, `--publish-status-address=192.168.193.13`). This changes the status address of
+   multivara's `*.staging.internal.forkline.dev` and kiais's internal Ingresses too, but their
+   Cloudflare records use the alpha key and **do not follow it**: the three frozen internal names
+   (`idm.staging.internal`, `vault.staging.internal`, `idm-internal.isidoro`) flip only when
+   the tenant adds the non-alpha annotation to their internal route in this window (owner
+   action, see the tenant section). Verify them in step 4 against `.13`.
 3. pfSense P4.1 (`k8s.grigri`).
 4. Verify: `kubectl get ingress -A` internal ones show `.13`; external-dns log shows the
    updates; `dig @1.1.1.1 argocd.internal.grigri.cloud` = .13; the records from the Phase 0
@@ -933,23 +1140,32 @@ P4.1.
 Low-traffic time. The owner does the pfSense steps; an agent watches and verifies.
 
 1. Pre-checks: Gate 3 diff script re-run against `.14`, external Envoy pods ready, nginx
-   healthy (rollback target), multivara routes and the bridge `Accepted`.
+   healthy (rollback target), tenant routes (multivara, kiais) and the bridge `Accepted`,
+   runner egress to the Envoy proxies in place in multivara (before P5.2: the hairpin names
+   resolve to `.14`), the WIP calypso `mcp` rules updated from `.4` to `.14`.
 2. pfSense **P5.1** (alias `k8s_external_ingress` -> .14), apply.
 3. pfSense **P5.2** (3 host overrides -> .14), apply.
 4. Merge the prepared commits (hermes hostAliases/tests, nginx-external Service annotations
-   removed).
+   removed; the `*.app.staging` wildcard record stays, `upsert-only`). In the same window the
+   kiais owner adds the non-alpha annotation to the `idm.isidoro.grigri.cloud` route (its A
+   record is the one external tenant record that goes to `.14` only this way); the Ingress keeps
+   its alpha key until Phase 6.
 5. Check that every OIDC `SecurityPolicy` is still `Accepted` (the explicit
    `authorizationEndpoint`/`tokenEndpoint` mean no discovery against the moved `idm.grigri.cloud`,
    so no controller restart is needed).
 6. Verify from outside (phone on mobile data) and from the LAN: the Gate 3 functional list,
    OIDC login on argocd/grafana/forgejo/freshrss/dawarich (in-cluster OIDC clients reach idm
    through the override, now `.14`), argocd webhook delivery from GitHub, Argo still syncing
-   `multivara/gitops` from `git.grigri.cloud`, external-dns healthy, the Forkline Remote
-   passthrough listener reachable on public 443 (#199).
+   `multivara/gitops` from `git.grigri.cloud` (kiais is pulled from `tea.millaguie.net`,
+   unaffected), external-dns healthy, the Forkline Remote passthrough listener reachable on
+   public 443 (#199), from a runner: `git` and `idm.staging.forkline.dev` reachable (egress
+   rule), `idm.isidoro.grigri.cloud` resolves to `.14` and isidoro logins work.
 7. Watch one week: Envoy 5xx/latency alerts; nginx-external request rate drops to bridge
    traffic only. Then P5.3.
 
-Rollback: P5.1 and P5.2 back to `.4` (seconds), revert the hermes commit. Routes stay in place.
+Rollback: P5.1 and P5.2 back to `.4` (seconds), revert the hermes commit, and set the
+`idm.isidoro.grigri.cloud` A record back to `.4` by hand (`upsert-only` never reverts it). Routes
+stay in place.
 
 **Gate 5:** one week without regressions.
 
@@ -959,14 +1175,22 @@ Separate commits, in order:
 
 1. Explicit `Certificate`s for any TLS secret found in Phase 0.5, then delete every `ingress:`
    block, raw Ingress template and chart `ingress.enabled` (grep templates for each removed
-   values key so nothing falls back to a chart default). multivara does the same in its repo.
-2. Remove `system/oauth2-proxy`, its Kanidm client and Vault paths (D3).
+   values key so nothing falls back to a chart default). multivara and kiais do the same in
+   their repos (owner actions; `ingress.enabled: false`, Keycloak and Vault `spec.ingress` off,
+   the orphan Vault Ingress deleted with the owner's yes). Gate it with
+   `grep -rn 'nginx\|192.168.193.[14]'` over both tenant `grigri.cloud/` trees (no hits left
+   except the runner path while bridged).
+2. Remove `system/oauth2-proxy`, its Kanidm client and Vault paths (D3). This is ours only: the
+   oauth2-proxy in the `calypso` namespace is multivara's and follows decision A in the tenant
+   section.
 3. Remove `system/ingress-nginx`. Remove `system/ingress-nginx-external` **only after** calypso
    runners use HTTPRoutes and the bridge listener is replaced; until then it serves runners
-   only. Then clean what Argo does not prune: IngressClasses, admission webhook configs,
+   only (it also needs the `runners-subdomain` Certificate and the runner network policy
+   selector, both multivara-owned, to stay). Then clean what Argo does not prune: IngressClasses, admission webhook configs,
    leader-election Leases, ClusterRoles, leftover Secrets.
-4. Drop nginx references from NetworkPolicies, otel-collector rules, Loki/Tempo configs,
-   dashboards and alerts.
+4. Drop nginx references from NetworkPolicies (ours and the tenants': Keycloak
+   NetworkPolicies, runner policy), otel-collector rules, Loki/Tempo configs, dashboards and
+   alerts (including the isidoro edge alerts and the calypso landing analytics queries).
 5. Docs: `AGENTS.md` tech stack, `docs/conventions/helm.md`, `deploying-new-apps.md` decision
    tree, README network section, `docs/network/pfsense.md`; an ADR for the Gateway API choice.
 6. pfSense P6.1-P6.3.
@@ -1012,8 +1236,10 @@ ADR. Changed: `system/external-dns/values.yaml`, `system/cert-manager` (ZeroSSL 
 app in the inventory, `apps/hermes/values.yaml` + tests, mcp-gateway(-admin) network policies,
 `system/otel-collector/values.yaml`, `system/loki/...`, `system/tempo/...`, monitoring alerts,
 docs. Removed (Phase 6): `system/ingress-nginx/`, `system/oauth2-proxy/`, later
-`system/ingress-nginx-external/`. Other repos: multivara/gitops routes, `DNSEndpoint`, bridge
-`TLSRoute`; calypso runner HTTPRoute support. Manual: pfSense table above.
+`system/ingress-nginx-external/`. Other repos (owner actions): multivara/gitops routes in
+`custom/`, Keycloak NetworkPolicy and runner egress fixes, `DNSEndpoint`s for new names; kiais/gitops
+routes and Keycloak NetworkPolicy; calypso runner HTTPRoute support. Ours for tenants: bridge
+`TLSRoute`, internal `*.isidoro.grigri.cloud` listener and Certificate. Manual: pfSense table above.
 
 ## Execution Order
 
@@ -1025,6 +1251,11 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
 
 - Calypso HTTPRoute support for runners (multivara/calypso work, not covered by #199); gates
   the removal of ingress-nginx-external and of the bridge listener.
+- Tenant open points (details in the tenant section): web auth design for calypso (ext auth vs
+  OIDC, spike), runner auth and RBAC for HTTPRoutes, Keycloak backend TLS vs plain port, the
+  missing internal listener for `idm-internal.isidoro.grigri.cloud`, whether the operators
+  delete their Ingress when `spec.ingress` is turned off (Vault's does not), the kiais owner's
+  lead time, and the unmerged calypso network policies that hard-code `.4`.
 - kroki: caching sidecar image and config (recipe 6).
 - Envoy Gateway issue #10075 (Envoy 1.39 OAuth2 SDS watch issue): fix is Envoy PR 47631, not
   confirmed in 1.39.6. Test OIDC on the pilot (esphome, http-echo) before scaling.
