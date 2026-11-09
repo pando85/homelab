@@ -161,3 +161,12 @@ grafana-mcp:
 # Reaching Grafana is the gateway's job only: a NetworkPolicy/CNP must restrict Grafana
 # ingress to this backend plus the browser path, otherwise a caller could bypass the
 # gateway's claim checks. That CNP lives in system/monitoring and apps/mcp-gateway, not here.
+
+# ---------------------------------------------------------------------------
+# Wrapper-chart own resources (templates/ciliumnetworkpolicy.yaml)
+# ---------------------------------------------------------------------------
+# Health-first sequence: baseline deployed and proven Ready 180s WITHOUT any
+# network policy (2026-11-09 07:04:35Z..07:07:35Z, zero restarts, Normal events
+# only). This flag now enables the scoped CNP. Rollback = set false (template
+# only; no Deployment nonce, no pod churn).
+networkIsolation: true
