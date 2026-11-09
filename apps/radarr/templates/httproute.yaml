@@ -1,0 +1,68 @@
+# Envoy Gateway routes (ingress-nginx migration), alongside the app-template Ingresses, which stay
+# until the switch. Internal route only: no external-dns annotation until the internal switch.
+# The external route (oauth2 auth, apiKey bypass) is added with the auth pattern.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr
+spec:
+  hostnames:
+    - radarr.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: radarr
+          port: 7878
+---
+# Radarr/Radarr#11557 workaround (nginx configuration-snippet): append `excludeLocalCovers=true`
+# to the movie list request when the query does not already carry the parameter. nginx matched
+# `^/api/v3/movie(\?...)?$` case-insensitively, so the path match is a case-insensitive full match
+# and the Lua leaves any request that already names the parameter alone. Same-host routes merge;
+# this one wins over the catch-all above and only this route carries the Lua filter.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: radarr-movie-list
+spec:
+  hostnames:
+    - radarr.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - matches:
+        - path:
+            type: RegularExpression
+            value: "(?i)/api/v3/movie"
+      backendRefs:
+        - name: radarr
+          port: 7878
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: radarr-movie-list
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: radarr-movie-list
+  lua:
+    - type: Inline
+      inline: |
+        function envoy_on_request(handle)
+          local path = handle:headers():get(":path")
+          local query = path:match("^[^?]*%??(.*)$")
+          if query:lower():find("excludelocalcovers=", 1, true) then
+            return
+          end
+          local sep = "&"
+          if query == "" then
+            sep = path:find("?", 1, true) and "" or "?"
+          end
+          handle:headers():replace(":path", path .. sep .. "excludeLocalCovers=true")
+        end
