@@ -12,13 +12,13 @@ spec:
       name: tanque-external
   oidc:
     provider:
-      issuer: https://idm.grigri.cloud/oauth2/openid/tanque
+      issuer: https://idm.grigri.cloud/oauth2/openid/tanque-envoy
       # explicit endpoints: no OIDC discovery at translation time
       authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
       tokenEndpoint: https://idm.grigri.cloud/oauth2/token
-    clientID: tanque
+    clientID: tanque-envoy
     clientSecret:
-      name: tanque-kanidm-oauth2-credentials
+      name: tanque-envoy-kanidm-oauth2-credentials
     redirectURL: https://tanque.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
@@ -29,12 +29,12 @@ spec:
   jwt:
     providers:
       - name: kanidm
-        issuer: https://idm.grigri.cloud/oauth2/openid/tanque
-        audiences: [tanque]
+        issuer: https://idm.grigri.cloud/oauth2/openid/tanque-envoy
+        audiences: [tanque-envoy]
         extractFrom:
           cookies: [oidc-id-token]
         remoteJWKS:
-          uri: https://idm.grigri.cloud/oauth2/openid/tanque/public_key.jwk
+          uri: https://idm.grigri.cloud/oauth2/openid/tanque-envoy/public_key.jwk
         # nginx passes no identity headers to tanque: no claimToHeaders
   authorization:
     defaultAction: Deny
@@ -74,13 +74,13 @@ spec:
       name: tanque-stream-external
   oidc:
     provider:
-      issuer: https://idm.grigri.cloud/oauth2/openid/tanque
+      issuer: https://idm.grigri.cloud/oauth2/openid/tanque-envoy
       # explicit endpoints: no OIDC discovery at translation time
       authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
       tokenEndpoint: https://idm.grigri.cloud/oauth2/token
-    clientID: tanque
+    clientID: tanque-envoy
     clientSecret:
-      name: tanque-kanidm-oauth2-credentials
+      name: tanque-envoy-kanidm-oauth2-credentials
     redirectURL: https://tanque-stream.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
@@ -91,12 +91,12 @@ spec:
   jwt:
     providers:
       - name: kanidm
-        issuer: https://idm.grigri.cloud/oauth2/openid/tanque
-        audiences: [tanque]
+        issuer: https://idm.grigri.cloud/oauth2/openid/tanque-envoy
+        audiences: [tanque-envoy]
         extractFrom:
           cookies: [oidc-id-token]
         remoteJWKS:
-          uri: https://idm.grigri.cloud/oauth2/openid/tanque/public_key.jwk
+          uri: https://idm.grigri.cloud/oauth2/openid/tanque-envoy/public_key.jwk
         # nginx passes no identity headers to tanque: no claimToHeaders
   authorization:
     defaultAction: Deny

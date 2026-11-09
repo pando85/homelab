@@ -1,15 +1,18 @@
 ---
-# OIDC client for the Envoy Gateway SecurityPolicy (external routes; replaces the shared oauth2-proxy
-# client for this app). Kanidm only issues tokens to the scope map group below.
+# OIDC client for the Envoy Gateway SecurityPolicies (external routes; replaces the shared
+# oauth2-proxy client for this app). Kanidm only issues tokens to the scope map group below.
+# Named tanque-envoy: the first client, `tanque`, was created during a Kanidm replica race and its
+# Kubernetes Secret is not the secret Kanidm holds (token exchange: "Invalid OAuth2 client_id
+# secret"). A fresh client under another name avoids deleting the Secret by hand.
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmOAuth2Client
 metadata:
-  name: tanque
+  name: tanque-envoy
 spec:
   kanidmRef:
     name: kanidm
     namespace: kanidm
-  displayname: tanque
+  displayname: tanque-envoy
   origin: https://tanque.grigri.cloud/
   redirectUrl:
     - https://tanque.grigri.cloud/oauth2/callback
