@@ -33,6 +33,22 @@ spec:
   dnsNames:
     - "*.staging.internal.forkline.dev"
 ---
+# internal Gateway, listener https-isidoro-grigri-cloud (the external Gateway serves
+# *.isidoro.grigri.cloud from the grigri-cloud certificate; one Certificate per listener)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: isidoro-grigri-cloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: isidoro-grigri-cloud-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.isidoro.grigri.cloud"
+---
 # external Gateway, listener https-grigri-cloud (Envoy picks the cert by SNI)
 apiVersion: cert-manager.io/v1
 kind: Certificate

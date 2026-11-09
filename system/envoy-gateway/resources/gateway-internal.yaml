@@ -45,3 +45,15 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - name: https-isidoro-grigri-cloud
+      port: 443
+      protocol: HTTPS
+      hostname: "*.isidoro.grigri.cloud"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: isidoro-grigri-cloud-tls
+      allowedRoutes:
+        namespaces:
+          from: All
