@@ -1,0 +1,17 @@
+# Envoy Gateway route (ingress-nginx migration). The Ingress in rsshub.yaml stays until the switch.
+# Internal route: no external-dns annotation until the internal switch.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: rsshub
+spec:
+  hostnames:
+    - rsshub.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: rsshub
+          port: 80
