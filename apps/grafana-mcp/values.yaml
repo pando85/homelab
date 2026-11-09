@@ -1,0 +1,163 @@
+# Grafana MCP backend for the public MCP gateway plane.
+# Wraps the official grafana-community grafana-mcp chart (0.34.0).
+#
+# Upstream endorsement is cited from the project's own docs, not an ArtifactHub label:
+#   https://github.com/grafana/mcp-grafana/blob/main/docs/sources/set-up/deploy-with-helm.md
+#   https://github.com/grafana/mcp-grafana/blob/main/docs/sources/set-up/client-configuration-examples.md
+# both name the grafana-community helm-charts grafana-mcp chart as the Kubernetes install path.
+#
+# STATUS: candidate. Not committed, not applied. Coupled to the Grafana auth.jwt cutover
+# and the Hermes token change; nothing here is live.
+#
+# Auth model, each point measured locally against grafana:13.3.0-distroless + mcp-grafana:2.1.1
+# (see test/mcp-gateway/grafana-backend-checks.py):
+#   - No ambient credential. GRAFANA_SERVICE_ACCOUNT_TOKEN is deliberately absent. A caller
+#     sending no bearer got 401 Unauthorized FROM GRAFANA, proving the backend holds no
+#     fallback identity of its own.
+#   - Per-request delegation. GRAFANA_FORWARD_HEADERS=Authorization copies each caller's
+#     bearer onto every outbound Grafana request. Through one server process, an Editor
+#     caller's update_dashboard succeeded while a Viewer caller's identical call got
+#     [403] "Permissions needed: any of dashboards:create, dashboards:write".
+#   - Caller auth is NOT done here, and cannot be: the server refuses to start when
+#     MCP_GRAFANA_SERVER_TOKEN is set while Authorization is forwarded (measured error:
+#     "refusing to start: caller authentication is enabled (...) while
+#     GRAFANA_FORWARD_HEADERS forwards the Authorization header").
+#     Upstream's "the validated Authorization header is stripped before requests reach
+#     Grafana" describes the server-auth path only; enabling it here would defeat
+#     per-user propagation. The gateway must validate and forward.
+
+# Release name is `grafana-mcp` in namespace `grafana-mcp`, so the chart default would
+# render the service as `grafana-mcp-grafana-mcp`. Pin it to a predictable, canonical name
+# so the gateway's Host and this pod's allowlist agree exactly.
+grafana-mcp:
+  fullnameOverride: "grafana-mcp"
+  # Namespace must equal the directory name for the FQDN below to hold.
+  namespaceOverride: "grafana-mcp"
+
+  image:
+    registry: docker.io
+    repository: grafana/mcp-grafana
+    # Renovate: docker image
+    # Pinned to the version verified by these checks. Chart 0.34.0 declares appVersion 2.2.0,
+    # so this is deliberately one minor behind the chart default; bump only together with a
+    # re-run of the checks, never implicitly.
+    tag: "2.1.1"
+    pullPolicy: IfNotPresent
+
+  replicas: 1
+
+  grafana:
+    # Fixed in-cluster URL; not caller-controllable (GRAFANA_ALLOW_URL_OVERRIDE is unset,
+    # so X-Grafana-URL overrides stay inert).
+    url: "http://grafana.monitoring.svc.cluster.local:80"
+    # No API key. The caller's bearer is forwarded instead.
+    apiKey: ""
+
+  serverAuth:
+    token: null
+
+  # The image bakes ENTRYPOINT=[/app/mcp-grafana --transport sse --address 0.0.0.0:8000] and
+  # the chart appends extraArgs under `args:`, i.e. AFTER those entrypoint flags. Passing only
+  # `-t streamable-http` would leave `--transport sse` on the command line, so override the
+  # entrypoint and state every flag explicitly. (measured)
+  command:
+    - /app/mcp-grafana
+
+  extraArgs:
+    - "--transport"
+    - "streamable-http"
+    - "--address"
+    - "0.0.0.0:8000"
+    # Probes must not go through the main listener: it wraps all routes in Host/Origin
+    # validation and kubelet sends Host: <pod-ip>:<port>, which is refused with
+    # "forbidden: host not allowed". The --healthz-address side listener is exempt.
+    # (measured: GET /healthz -> "ok" 200; /health on the main listener -> 404)
+    - "--healthz-address"
+    - ":8081"
+    # Exact canonical backend Host the gateway will rewrite to, INCLUDING port. No wildcard.
+    # Measured: a request with Host 127.0.0.1:<port> against this allowlist is refused 403.
+    - "--allowed-hosts"
+    - "grafana-mcp.grafana-mcp.svc.cluster.local:8000"
+
+  # MVP is read-only. Verified to be a complete guard, not a partial one:
+  #   tool count 79 -> 62; update_dashboard and 16 other writers disappear;
+  #   grafana_api_request loses its `body` argument and its method enum collapses to
+  #   ["GET"]; a body-less DELETE is refused with "method DELETE is not allowed in
+  #   read-only mode; only GET requests are permitted"; the seeded dashboard survived.
+  # That generic tool is the only escape hatch that could have bypassed a naive guard.
+  disableWrite: true
+
+  env:
+    # Comma-separated allowlist, streamable-http only: caller-preserving delegation.
+    GRAFANA_FORWARD_HEADERS: "Authorization"
+    GRAFANA_USAGE_STATS: "disabled"
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 256Mi
+
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    # Read-only root filesystem is workable: verified with --read-only + a writable /tmp,
+    # both listeners come up and serve.
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+
+  # /tmp is the only writable path the server needs.
+  volumeMounts:
+    - name: tmp
+      mountPath: /tmp
+
+  volumes:
+    - name: tmp
+      emptyDir:
+        sizeLimit: 64Mi
+
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+    # The /healthz side listener needs no Service: kubelet probes the numeric port directly.
+
+  ingress:
+    enabled: false
+
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8081
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /healthz
+      port: 8081
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+  serviceMonitor:
+    enabled: false
+
+# Reaching Grafana is the gateway's job only: a NetworkPolicy/CNP must restrict Grafana
+# ingress to this backend plus the browser path, otherwise a caller could bypass the
+# gateway's claim checks. That CNP lives in system/monitoring and apps/mcp-gateway, not here.

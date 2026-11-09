@@ -1,0 +1,8 @@
+apiVersion: v2
+name: grafana-mcp
+version: 0.0.0
+description: Grafana MCP server backend for the MCP gateway (official chart wrapper)
+dependencies:
+  - name: grafana-mcp
+    version: 0.34.0
+    repository: https://grafana-community.github.io/helm-charts
