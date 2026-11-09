@@ -112,6 +112,35 @@ agentgateway-standalone:
           name: mcp-gateway-session-key
           key: SESSION_KEY
 
+  # Context7's upstream API key, delivered as a FILE rather than an env var or a config value.
+  # Consumed by the context7 route's `backendAuth.key.value.file` below; produced by
+  # templates/context7-key-externalsecret.yaml.
+  #
+  # `optional: false` is load-bearing, not tidiness: the pinned v1.7.0 binary aborts at startup
+  # when the referenced file cannot be read (measured: "failed to read from file ... No such file
+  # or directory", exit 1), so the kubelet must not be able to start the container before the
+  # Secret exists. A pending pod is a visible, recoverable sync state.
+  #
+  # `defaultMode: 0444` because the published image runs as uid 65532 (measured: docker inspect
+  # cr.agentgateway.dev/agentgateway:v1.7.0 -> Config.User = "65532"), secret-volume files are
+  # root-owned, and this pod declares NO `podSecurityContext.fsGroup` (chart default `{}`, live
+  # pod agrees). A 0400 or 0440 file would therefore be unreadable to the process that has to
+  # read it, which the paragraph above makes a startup failure rather than a silent gap.
+  # Readable-but-only-inside-this-pod is the trade, and it matches this repo's existing mount for
+  # a non-root container (apps/hermes/templates/deployment-mcp-gateway.yaml, 0444). Tightening it
+  # means adding fsGroup 65532 here, which is a deliberate, separate change.
+  extraVolumes:
+    - name: context7-credential
+      secret:
+        secretName: mcp-gateway-context7
+        defaultMode: 0444
+        optional: false
+
+  extraVolumeMounts:
+    - name: context7-credential
+      mountPath: /etc/agentgateway/secrets/context7
+      readOnly: true
+
   # No OIDC (admin UI disabled)
   oidc:
     enabled: false
@@ -235,8 +264,9 @@ agentgateway-standalone:
               cache-control: "'public, max-age=300'"
 
       # ---------------------------------------------------------------------
-      # context7: LIVE. No upstream credential exists, so the caller's bearer is
-      # STRIPPED (no backendAuth) - the backend provably sees no Authorization.
+      # context7: LIVE. The upstream is authenticated with OUR Context7 API key,
+      # injected by the gateway from a mounted file. The CALLER'S bearer is still
+      # stripped and still provably never reaches mcp.context7.com.
       # ---------------------------------------------------------------------
       - name: context7
         gateways:
@@ -269,8 +299,14 @@ agentgateway-standalone:
               - require: "!has(jwt.preferred_username)"
               - require: "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_context7')"
           # Every inbound credential and every caller-controlled URL override is
-          # removed: without `remove`, a Cookie traverses the edge (measured), and
-          # with no backendAuth the caller's bearer must not reach the upstream.
+          # removed: without `remove`, a Cookie traverses the edge (measured). This
+          # list stays exactly as it was when `backendAuth` below was added - the
+          # removal runs first, so the credential the upstream finally sees is the
+          # one THIS gateway wrote, never whatever the client sent. A duplicated
+          # inbound `Authorization` header was measured to bypass a single removal,
+          # which is exactly why `Authorization` must stay here: with it removed, the
+          # duplicate attempt produced one upstream header, the injected key
+          # (test/mcp-gateway/access-gate-checks.py; re-measured for this change).
           requestHeaderModifier:
             remove:
               - Authorization
@@ -278,6 +314,52 @@ agentgateway-standalone:
               - X-Grafana-URL
               - X-Grafana-Service-Account-Token
               - X-Session-Id
+          # Context7's own API key, so upstream calls are attributed and stay inside
+          # a quota instead of answering anonymous callers.
+          #
+          # NOT `passthrough`, and it must stay that way: passthrough would forward
+          # the CALLER'S homelab bearer to a third party. `passthrough: {}` belongs
+          # only on the grafana route, where per-user delegation is the point.
+          #
+          # Field names read out of the pinned version, not guessed:
+          #   schema/config.json at tag v1.7.0 -> `BackendAuth` oneOf `key`
+          #     {value, expression, location}, and `FileOrInline` = {file} | string;
+          #   crates/core/src/serdes.rs `enum FileOrInline { File { file: PathBuf }, Inline(String) }`;
+          #   crates/agentgateway/src/types/local.rs LocalBackendAuthKind::Key, whose
+          #     doc comment reads "File references are watched, so rotating the file
+          #     reloads it without a restart", and `load_secret()` trims the value
+          #     ("a file written by `echo` or a Kubernetes Secret commonly carries a
+          #     trailing newline");
+          #   crates/agentgateway/src/http/auth/mod.rs `DEFAULT_AUTHORIZATION_LOCATION
+          #     = bearer_header()` and `insert()` writes `format!("{prefix}{value}")`.
+          # `location` is spelled out instead of riding on that default: the header
+          # form is a contract with Context7, and a config that states it can be
+          # reviewed and asserted. Context7 documents exactly this - "use the Context7
+          # server URL `https://mcp.context7.com/mcp` with your MCP client and pass
+          # your API key via the `Authorization: Bearer YOUR_API_KEY` header"
+          # (https://context7.com/docs/resources/all-clients; API guide:
+          # https://context7.com/docs/api-guide). No query-parameter form is
+          # documented for the remote MCP endpoint, so none is used.
+          #
+          # The VALUE is a path, never the key: the chart renders this block verbatim
+          # into a ConfigMap, so an inline secret here would be committed to git and
+          # readable by anyone with ConfigMap read. kubelet mounts it from the Secret
+          # this chart's ExternalSecret produces (extraVolumes/extraVolumeMounts
+          # above). Measured against the pinned v1.7.0 binary with a loopback capture
+          # (/home/agil/wt/probes-ctx7/backend-auth-key-probe.py, 11/12): the upstream
+          # receives exactly one `Authorization: Bearer <file contents>`, newline
+          # trimmed; the caller's bearer never appears; a duplicated inbound header
+          # still yields only the injected value; rewriting the file changes what the
+          # upstream sees WITHOUT a restart; and a missing file aborts startup rather
+          # than sending an unauthenticated call.
+          backendAuth:
+            key:
+              value:
+                file: /etc/agentgateway/secrets/context7/api-key
+              location:
+                header:
+                  name: Authorization
+                  prefix: "Bearer "
         backends:
           - mcp:
               targets:
@@ -471,8 +553,12 @@ backends:
     path: /context7/mcp
     scope: mcp_context7
     resource: https://mcp.grigri.cloud/context7/mcp
-    # No upstream credential: the bearer is stripped at the edge.
-    credential: none
+    # Upstream credential: this deployment's own Context7 API key, held in the
+    # `mcp-gateway-context7` Secret and mounted as a file, injected by the gateway as
+    # `Authorization: Bearer <key>`. Never `passthrough` - the caller's bearer stays
+    # stripped at the edge (measured: the upstream sees exactly one Authorization
+    # header, and it is the key).
+    credential: apiKeyFile
 
 # Session key generation (ESO) - used by templates/session-key-*.yaml
 # These values are consumed by wrapper templates, NOT by the official chart
