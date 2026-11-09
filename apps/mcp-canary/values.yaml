@@ -15,7 +15,7 @@
 # (policyMode flip) MUST bump the nonce so the pod is recreated with the policy
 # ALREADY present - applying a NetworkPolicy to a running pod does not reproduce
 # the startup-probe timeout the foundation saw.
-policyMode: none
+policyMode: ingress
 rolloutNonce: "0"
 
 app-template:
