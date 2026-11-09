@@ -36,6 +36,15 @@ forgejo:
         hosts:
           - *host
 
+  # SSH (29518) through the Envoy Gateway external Gateway (192.168.193.14), next to the nginx tcp
+  # passthrough, until the external switch. Renders TCPRoute git-forgejo-ssh -> git-forgejo-ssh:22.
+  tcpRoute:
+    enabled: true
+    parentRefs:
+      - name: external
+        namespace: envoy-gateway
+        sectionName: tcp-forgejo-ssh
+
   replicaCount: 1
 
   resources:
