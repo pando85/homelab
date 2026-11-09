@@ -27,6 +27,10 @@ the plan. All certificates live in `envoy-gateway`; an app never creates a Certi
 secret, and routes carry no `cert-manager.io/*` annotation. A route whose host contains `.internal.`
 must never reference the `external` Gateway (the host has no certificate there).
 
+A host with more than one label below `internal.grigri.cloud` (today only `m.rajoy.internal` and
+`api.m.rajoy.internal`) is not covered by the `*.internal.grigri.cloud` wildcard certificate: those
+routes use the listener `https-rajoy-internal-grigri-cloud` (own certificate). Ask before adding more.
+
 ## Writing the route
 
 Mirror the live Ingress hosts and paths exactly (`kubectl get ingress -n <ns> -o yaml`), including
