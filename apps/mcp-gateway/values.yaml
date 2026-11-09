@@ -483,7 +483,7 @@ agentgateway-standalone:
 # transient. Applying the CNP before the endpoint exists is also safe (measured:
 # attached 6 m 32 s earlier, Ready in 6 s, zero probe failures). Rollback is
 # template-only: set the flag back to false, no pod churn, no Deployment nonce.
-networkIsolation: false
+networkIsolation: true
 
 # Kanidm OAuth2 client configuration (used by templates/kanidm-*.yaml)
 # These resources keep their original names (not affected by fullnameOverride)
