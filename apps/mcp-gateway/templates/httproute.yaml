@@ -1,0 +1,31 @@
+{{- /*
+Envoy Gateway route for the public plane (mcp.grigri.cloud), ingress-nginx migration. The
+Ingress (ingress.yaml) stays until the switch. Same host and backend as the Ingress:
+Service mcp-gateway-standalone port 3000. The Ingress sets no timeout or body annotations
+(nginx defaults), so the Gateway defaults apply: 60 s stream idle (no bytes either way, SSE
+and streamable-HTTP streams with traffic are never cut), no total request limit. External-dns
+annotation as on the other external routes (the record exists, the target comes from the
+external Gateway). The CiliumNetworkPolicy admits the `external` Envoy proxies on port 3000.
+*/ -}}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-gateway
+  namespace: mcp-gateway
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/instance: mcp-gateway
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - mcp.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: mcp-gateway-standalone
+          port: 3000

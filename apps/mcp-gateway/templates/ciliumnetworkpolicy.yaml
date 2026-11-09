@@ -70,6 +70,15 @@ spec:
             app.kubernetes.io/name: ingress-nginx
             app.kubernetes.io/component: controller
             io.kubernetes.pod.namespace: ingress-nginx-external
+        # Envoy Gateway migration: the proxies of the `external` Gateway (HTTPRoute
+        # mcp-gateway -> Service mcp-gateway-standalone port 3000). Same port, same L3/L4
+        # shape as the nginx rule; without it the route answers 503 `UF`. The nginx rule
+        # stays until ingress-nginx is decommissioned.
+        - matchLabels:
+            app.kubernetes.io/name: envoy
+            app.kubernetes.io/component: proxy
+            gateway.envoyproxy.io/owning-gateway-name: external
+            io.kubernetes.pod.namespace: envoy-gateway
       toPorts:
         - ports:
             - port: "3000"
