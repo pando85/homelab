@@ -60,6 +60,26 @@ app-template:
             - *host
           secretName: jellyseerr-external-tls-certificate
 
+  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # The route has a stable name: the BackendTrafficPolicy (templates/backend-traffic-policy.yaml) targets it.
+  route:
+    external:
+      kind: HTTPRoute
+      forceRename: jellyseerr-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - requests.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: jellyseerr
+              port: 5055
+
   defaultPodOptions:
     securityContext:
       runAsUser: 568

@@ -1,0 +1,23 @@
+---
+# Per-route timeouts of the external route (nginx-external Ingress annotations proxy-read-timeout
+# 1800, proxy-send-timeout 600, proxy-connect-timeout 600). nginx timeouts are idle timeouts:
+# `streamIdleTimeout` (the larger of read and send) is the Envoy equivalent, never
+# `timeouts.request` (a total limit). A cluster Service connects in milliseconds or fails, so the
+# 600 s connect timeout is capped at 60 s. `mergeType: StrategicMerge` keeps the gateway-wide
+# defaults (requestTimeout 0s) for the rest.
+# Reference: docs/conventions/gateway-api-routes.md ("Timeouts").
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: jellyseerr-external-timeouts
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: jellyseerr-external
+  mergeType: StrategicMerge
+  timeout:
+    tcp:
+      connectTimeout: 60s
+    http:
+      streamIdleTimeout: 1800s
