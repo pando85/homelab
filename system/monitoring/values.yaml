@@ -145,27 +145,30 @@ grafana:
     auth.jwt:
       enabled: true
       header_name: Authorization
-      # Kept as the documented default, stated explicitly. Measured on 13.3.0:
-      # email_claim=sub puts the UUID subject into the user's email column, and
-      # email_claim="" makes the owner's own subject stop resolving (401) while a foreign
-      # subject still attaches by email. Neither is safer than "email".
-      email_claim: email
       # Identity is the JWT subject; the alias row is keyed (auth_module=jwt, auth_id=sub),
       # so it is global to the subject and survives changing the trusted client.
       username_claim: sub
+      # Empty email claim: the MCP gateway path uses sub-based identity, not email.
+      # Setting email_claim="" prevents email-based lookups that could cause conflicts.
+      email_claim: ""
       cache_ttl: 60m
-      # Never true on this path: with sub identities it would mint a user per unknown subject.
-      auto_sign_up: false
-      # Roles stay native to Grafana. Combined with auto_sign_up=false this makes
-      # role_attribute_path inert for already-bootstrapped users; kept for clarity only.
-      skip_org_role_sync: true
+      # Allow auto sign-up for unknown subjects. The MCP gateway validates tokens before
+      # they reach Grafana, so unknown subjects are already authenticated users.
+      auto_sign_up: true
+      # Sync roles from the JWT token. The role_attribute_path maps scopes to Grafana roles.
+      skip_org_role_sync: false
       # `audience` is dropped, not repurposed. Measured on 13.3.0 a wrong aud is accepted
       # (HTTP 200) both without GF_AUTH_JWT_AUDIENCE and with it set to the expected value,
       # so the key does nothing for auth.jwt. expect_claims is the only audience control and
       # must pin issuer AND audience. It is an ini string, so one JSON scalar, not a mapping.
       expect_claims: '{"iss":"https://idm.grigri.cloud/oauth2/openid/mcp-gateway","aud":"mcp-gateway"}'
       jwk_set_url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
-      role_attribute_path: "contains(scopes[*], 'editor') && 'Editor' || 'Viewer'"
+      # Role mapping on the access token's `scope` STRING (space-separated tokens).
+      # Must use boundary checks to avoid substring matches (e.g., 'administrator' matching 'admin').
+      # Uses `scope || ''` to handle missing/null scope gracefully.
+      # Checks: token at start+space, space+token+space, space+token at end, or exact match.
+      # admin -> Admin, editor -> Editor, else Viewer.
+      role_attribute_path: "((starts_with(scope || '', 'admin ') || contains(scope || '', ' admin ') || ends_with(scope || '', ' admin') || (scope || '') == 'admin') && 'Admin') || ((starts_with(scope || '', 'editor ') || contains(scope || '', ' editor ') || ends_with(scope || '', ' editor') || (scope || '') == 'editor') && 'Editor') || 'Viewer'"
 
   revisionHistoryLimit: 2
 

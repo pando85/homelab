@@ -369,7 +369,9 @@ def stubbed_cfg(text, grafana_route, ip, gp, cp):
     graf["policies"]["mcpAuthentication"]["issuer"] = ISSUER_URL
     graf["policies"]["mcpAuthentication"]["jwks"] = {"url": f"{ISSUER_URL}/jwks"}
     graf["backends"][0]["mcp"]["targets"][0]["mcp"] = {
-        "host": "127.0.0.1", "port": gp, "path": "/mcp"}
+        # DNS (not a literal IP) exercises auto-hostname rewriting exactly as
+        # the production Service target does; auto rewriting drops its port.
+        "host": "localhost", "port": gp, "path": "/mcp"}
     cfg["routes"].append(graf)
     return cfg
 
