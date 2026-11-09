@@ -44,7 +44,7 @@ helm lint apps/<name>/
 ## Code Style
 
 - **YAML:** 2-space indent, `---` for multi-doc, yamllint via pre-commit (ignores `templates/`)
-- **Helm:** `app-template` from bjw-s. See `docs/conventions/helm.md`
+- **Helm:** Prefer maintained official/first-party charts; use `app-template` only when none exists. See `docs/conventions/helm.md`
 - **Ansible:** `safety` profile. See `docs/conventions/ansible.md`
 - **Renovate:** Add hints above image refs — `docs/conventions/helm.md#renovate-integration`
 - **Docs:** Troubleshooting in `docs/troubleshooting/`; `AGENTS.md` for links/reminders. See `docs/conventions/documenting-learnings.md`

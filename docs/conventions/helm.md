@@ -1,5 +1,9 @@
 # Helm Chart Conventions
 
+## Chart Selection
+
+Prefer maintained official/first-party Helm charts when available. Use `app-template` from bjw-s only when no maintained official chart exists for the application. If an official chart cannot support the needed deployment mode, document the limitation and obtain owner approval rather than silently falling back to a generic wrapper. Always pin chart versions and use wrapper charts for homelab-specific additions (Ingress, ESO, Kanidm, etc.).
+
 ## Chart.yaml Pattern
 
 ```yaml
@@ -14,7 +18,7 @@ dependencies:
 
 ## values.yaml Patterns
 
-- Use `app-template` from bjw-s as the standard wrapper
+- Use `app-template` from bjw-s only when no maintained official chart exists
 - Always define `resources.requests` and `resources.limits`
 - Use YAML anchors for repeated probe definitions (`&probes`, `*probes`)
 - Set `enableServiceLinks: false` in `defaultPodOptions`

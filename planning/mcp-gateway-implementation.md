@@ -56,6 +56,10 @@ Every "measured" statement below comes from the local suites in `test/mcp-gatewa
 pinned v1.7.0 binary (and pinned Grafana/mcp-grafana/firecrawl images) against chart-rendered
 configs - not from assumptions or from the live cluster.
 
+## MCP Gateway Follow-up Tasks
+
+- [ ] **Migrate to official agentgateway-standalone chart**: Currently using `app-template` wrapper; migrate to official `oci://cr.agentgateway.dev/charts/agentgateway-standalone`. Verify and pin exact artifact version from official source before migration.
+
 ## Task 0: Architecture & Inventory
 
 **Architecture:** done | **agentgateway pin:** done | **Kanidm inventory:** pending (identity agent)
