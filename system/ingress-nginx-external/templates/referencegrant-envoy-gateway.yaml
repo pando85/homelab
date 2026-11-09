@@ -1,6 +1,7 @@
 # Lets the TLSRoute runners-bridge in envoy-gateway (passthrough bridge of
 # *.app.staging.forkline.dev, D4) use the nginx-external controller Service as backend.
-# Remove together with the bridge.
+# The runners now use the HTTPS listener https-runners-staging-forkline-dev. Kept until this
+# chart is removed (Phase 6), so reverting that one envoy-gateway commit restores the bridge.
 apiVersion: gateway.networking.k8s.io/v1
 kind: ReferenceGrant
 metadata:

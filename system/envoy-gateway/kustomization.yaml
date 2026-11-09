@@ -10,7 +10,6 @@ resources:
   - resources/gateway-internal.yaml
   - resources/gateway-external.yaml
   - resources/http-redirect-routes.yaml
-  - resources/tlsroute-runners-bridge.yaml
   - resources/policies.yaml
   - resources/monitoring.yaml
   - resources/prometheus-rules.yaml

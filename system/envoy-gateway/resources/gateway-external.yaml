@@ -1,6 +1,5 @@
 # External Gateway on 192.168.193.14. The listener names are the contract other repos use as
-# parentRefs.sectionName: do not rename. https-runners-staging-forkline-dev is left out until
-# calypso emits HTTPRoutes for the runners (tls-bridge-runners owns *.app.staging.forkline.dev).
+# parentRefs.sectionName: do not rename.
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -61,15 +60,26 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-    - name: tls-bridge-runners
+    # Calypso runners: one HTTPRoute and one ext auth SecurityPolicy per runner, created by the
+    # calypso control plane in calypso-runners (calypso ADR-0069). Replaced the TLS passthrough
+    # bridge tls-bridge-runners (D4): a hostname on 443 is either passthrough or terminate.
+    - name: https-runners-staging-forkline-dev
       port: 443
-      protocol: TLS
+      protocol: HTTPS
       hostname: "*.app.staging.forkline.dev"
       tls:
-        mode: Passthrough
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: app-staging-forkline-dev-tls
       allowedRoutes:
         namespaces:
-          from: All
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: calypso-runners
+        kinds:
+          - kind: HTTPRoute
     - name: tls-remote-staging-forkline-io
       port: 443
       protocol: TLS
