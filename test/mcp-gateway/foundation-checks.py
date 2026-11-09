@@ -1,31 +1,27 @@
 #!/usr/bin/env python3
-"""Foundation-specific checks for the policy-free public gateway baseline.
+"""Foundation-specific checks for the public gateway deployment.
 
-Validates the Phase A foundation that is ready for deployment:
+Validates the parts of the foundation that must stay true no matter which routes are
+enabled - the pod, the probes, the session key, the ingress, the identity client:
   * nodeSelector is prusik (the only approved node for initial rollout);
-  * all backend routes disabled (mcp.targets: []) - gateway answers 404 before auth;
-  * session key lifecycle is ESO CreatedOnce + immutable;
-  * probes are correct (startup/readiness on 15021);
-  * JWT validation values are correct (issuer, audience, jwksUrl) for future use;
-  * image pinned to v1.7.0;
-  * ingress is nginx-external with TLS;
-  * humanScopeMap is empty (no human grants wired);
-  * adminAddr is "off";
-  * service is ClusterIP only;
-  * SESSION_KEY is a required secretKeyRef (fail-closed);
-  * Deployment structural fields are correct (securityContext, resources, etc.).
+  * the gateway's only MCP surface is `routes` (the `mcp:` convenience block is gone,
+    so nothing can serve that this chart did not write out in full);
+  * session key lifecycle is ESO CreatedOnce + immutable, and the Secret reference is
+    unchanged (a rotated key invalidates live sessions, so it is asserted, not assumed);
+  * probes are correct (startup/readiness on 15021 /healthz/ready);
+  * JWT validation values in the RENDERED config are the exact Kanidm per-client
+    issuer/audience/JWKS (the config is the only source - there is no second copy);
+  * image pinned to v1.7.0, ingress nginx-external with TLS, service ClusterIP only,
+    adminAddr "off" (no admin listener), hardened container;
+  * human scope grants carry no identity scopes and no person membership is declared;
+  * SESSION_KEY is a required secretKeyRef (fail-closed).
 
-NOTE: With mcp.targets: [], no auth or RFC 9728 discovery is testable - the gateway
-answers 404 before reaching auth. This phase validates health/TLS/fail-closed-404
-only. Actual auth/discovery tests require enabling a route in a later phase.
-
-This complements chart-checks.py (which covers broader invariants) and focuses
-on the deployment-ready foundation state.
+Which routes exist, what they enforce, and the enabled-flag contract are covered by
+route-checks.py (structure) and local-boot-checks.py (runtime, pinned binary).
 
     python3 test/mcp-gateway/foundation-checks.py
 """
 import json
-import re
 import subprocess
 import sys
 
@@ -69,6 +65,7 @@ def main():
     text = config_text(docs)
     cfg = yaml.safe_load(text)
     vals = open(f"apps/{CHART}/values.yaml").read()
+    values = yaml.safe_load(vals)
 
     # ---- nodeSelector ----
     dep = find(docs, "Deployment")
@@ -77,14 +74,18 @@ def main():
           node_sel.get("kubernetes.io/hostname") == "prusik",
           str(node_sel))
 
-    # ---- all backends disabled ----
-    check("mcp.targets: [] in config (all backends disabled)",
-          cfg.get("mcp", {}).get("targets") == [],
-          f"mcp.targets={cfg.get('mcp', {}).get('targets')!r}")
-    check("grafana backend disabled in values",
-          re.search(r"^\s{2}grafana:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
-    check("context7 backend disabled in values",
-          re.search(r"^\s{2}context7:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
+    # ---- the only MCP surface is explicit routes ----
+    check("no `mcp:` convenience block: every MCP route is written out in values.yaml",
+          "mcp" not in cfg or not (cfg.get("mcp") or {}).get("targets"),
+          f"mcp={cfg.get('mcp')!r}")
+    prefixes = [next(iter(m["path"].items()))[1] for r in cfg.get("routes", [])
+                for m in r["matches"] if "pathPrefix" in m["path"]]
+    enabled = sorted(n for n, s in values["backends"].items() if s["enabled"])
+    check("enabled backends in values match the MCP routes that exist",
+          set(prefixes) == {values["backends"][n]["path"] for n in enabled},
+          f"routes={prefixes} enabled={enabled}")
+    check("grafana backend stays disabled until the Grafana JWT cutover",
+          values["backends"]["grafana"]["enabled"] is False)
 
     # ---- session key ESO lifecycle ----
     es = find(docs, "ExternalSecret")
@@ -122,19 +123,22 @@ def main():
               startup.get("httpGet", {}).get("path") == "/healthz/ready" and
               startup.get("httpGet", {}).get("port") == 15021)
 
-    # ---- JWT validation ----
-    # JWT settings are in values.yaml but only render into config when routes are enabled.
-    # Foundation baseline has mcp.targets: [] so no auth/discovery is testable yet - the gateway
-    # answers 404 before reaching auth. These checks verify the VALUES are correct for when
-    # routes are enabled later.
-    check("issuer is exact Kanidm per-client path in values",
-          "issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway" in vals)
-    check("audience is the OAuth2 client name in values",
-          "audience: mcp-gateway" in vals)
-    check("jwksUrl is Kanidm public_key.jwk in values",
-          "jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk" in vals)
-    check("mcp.targets: [] means no auth/discovery testable yet (404 before auth)",
-          cfg.get("mcp", {}).get("targets") == [])
+    # ---- JWT validation, read from the config that actually runs ----
+    authns = [r["policies"]["mcpAuthentication"] for r in cfg.get("routes", [])
+              if (r.get("policies") or {}).get("mcpAuthentication")]
+    check("every MCP route authenticates against the exact Kanidm per-client issuer",
+          authns and all(a["issuer"] == "https://idm.grigri.cloud/oauth2/openid/mcp-gateway"
+                         for a in authns), f"{len(authns)} route(s)")
+    check("every MCP route pins the audience to the OAuth2 client name",
+          all(a["audiences"] == ["mcp-gateway"] for a in authns))
+    check("every MCP route uses Kanidm's public_key.jwk (there is no /.well-known/jwks.json)",
+          all(a["jwks"] == {"url": "https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk"}
+              for a in authns))
+    check("every MCP route is strict (no anonymous path through the gate)",
+          all(a.get("mode") == "strict" for a in authns))
+    check("every MCP route is stateless at the backend (no gateway-issued session id)",
+          all(b["mcp"]["statefulMode"] == "stateless" for r in cfg.get("routes", [])
+              for b in r.get("backends", []) if "mcp" in b))
 
     # ---- image pin ----
     check("image tag is empty (use chart appVersion)",
@@ -164,13 +168,22 @@ def main():
                   f"got {svc_name}")
 
     # ---- RFC 9728 metadata paths ----
-    check("RFC 9728 well-known path is in config (for future routes)",
-          "/.well-known/oauth-protected-resource" in text or cfg.get("mcp", {}).get("targets") == [],
-          "targets are empty so no paths needed yet")
+    exacts = [next(iter(m["path"].items()))[1] for r in cfg.get("routes", [])
+              for m in r["matches"] if "exact" in m["path"]]
+    check("RFC 9728 discovery is gateway-served for every backend, enabled or not",
+          set(exacts) == {"/.well-known/oauth-protected-resource/grafana/mcp",
+                          "/.well-known/oauth-protected-resource/context7/mcp"},
+          str(exacts))
 
-    # ---- humanScopeMap empty ----
-    check("humanScopeMap is empty (no human grants)",
-          re.search(r"humanScopeMap:\s*\[\]", vals) is not None)
+    # ---- human scope grants: scopes only, never membership, never identity ----
+    smap = {e["group"]: list(e["scopes"]) for e in
+            values["kanidm"]["oauth2Client"]["humanScopeMap"]}
+    check("human scope map grants MCP scopes and no identity scopes (openid/email/profile)",
+          smap and all(not set(s) & {"openid", "email", "profile", "groups"} for s in smap.values()),
+          str(smap))
+    check("human scope map declares NO membership (people are managed in Kanidm, not in git)",
+          not any(k in e for e in values["kanidm"]["oauth2Client"]["humanScopeMap"]
+                  for k in ("members", "users", "persons")))
 
     # ---- adminAddr off ----
     check("adminAddr is 'off' (no admin listener)",
@@ -218,10 +231,14 @@ def main():
     check("KanidmGroup exists (mcp-gateway-agents)",
           grp is not None and grp["metadata"]["name"] == "mcp-gateway-agents")
     if grp:
-        # When serviceMembers is empty, the template omits the members field entirely
-        # (owner-managed membership, no authoritative assertion)
-        check("KanidmGroup has no members field when serviceMembers is empty",
-              "members" not in grp.get("spec", {}))
+        # `members` on the Kanidm CRD is AUTHORITATIVE, so what renders here is the
+        # whole membership of the group. It must stay exactly the declared list of
+        # service accounts - no person, and nothing invented by this chart.
+        declared = values["kanidm"]["workloadGroup"]["serviceMembers"]
+        check("group members equal the declared service-account list",
+              grp["spec"].get("members") == declared, str(grp["spec"].get("members")))
+        check("the only member is the EXISTING grafana-mcp service account (no new SA)",
+              declared == ["grafana-mcp"])
 
     # ---- security context ----
     if main_container:
