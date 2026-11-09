@@ -93,11 +93,14 @@ app-template:
             - *host
           secretName: bazarr-external-tls-certificate
   # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
-  # The internal route has no external-dns annotation until the internal switch. The external
+  # The internal route carries the external-dns annotation (the Gateway address is published in DNS). The external
   # route is behind the OIDC SecurityPolicy (templates/security-policy.yaml).
   route:
     internal:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       forceRename: bazarr-internal
       hostnames:
         - bazarr.internal.grigri.cloud

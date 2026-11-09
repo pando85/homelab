@@ -55,10 +55,12 @@ alertmanager:
           - alertmanager.internal.grigri.cloud
 
   # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
-  # Internal route: no external-dns annotation until the internal switch.
+  # Internal route: the external-dns annotation publishes its name (the Gateway address).
   route:
     main:
       enabled: true
+      annotations:
+        external-dns.kubernetes.io/enabled: "true"
       hostnames:
         - alertmanager.internal.grigri.cloud
       parentRefs:
@@ -330,10 +332,12 @@ prometheus:
           - prometheus.internal.grigri.cloud
 
   # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
-  # Internal route: no external-dns annotation until the internal switch.
+  # Internal route: the external-dns annotation publishes its name (the Gateway address).
   route:
     main:
       enabled: true
+      annotations:
+        external-dns.kubernetes.io/enabled: "true"
       hostnames:
         - prometheus.internal.grigri.cloud
       parentRefs:

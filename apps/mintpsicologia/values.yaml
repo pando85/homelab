@@ -58,10 +58,13 @@ wordpress:
   volumePermissions:
     enabled: false
   # Envoy Gateway route (ingress-nginx migration); the Ingress below stays until the switch.
-  # No external-dns annotation before the internal switch. Parent refs are mandatory: the chart
-  # default is a Gateway named `gateway`. The external routes are in templates/httproute-external.yaml.
+  # The external-dns annotation publishes the name (the Gateway address). Parent refs are mandatory:
+  # the chart default is a Gateway named `gateway`. The external routes are in
+  # templates/httproute-external.yaml.
   httpRoute:
     enabled: true
+    annotations:
+      external-dns.kubernetes.io/enabled: "true"
     parentRefs:
       - name: internal
         namespace: envoy-gateway

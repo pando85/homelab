@@ -86,10 +86,13 @@ app-template:
           secretName: telegram-external-tls-certificate
 
   # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
-  # Internal routes carry no external-dns annotation until the internal switch.
+  # Internal routes carry the external-dns annotation (the Gateway address is published in DNS).
   route:
     internal:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       hostnames:
         - telegram.internal.grigri.cloud
       parentRefs:

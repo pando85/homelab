@@ -1,11 +1,13 @@
 # Envoy Gateway route (ingress-nginx migration), alongside the operator-generated Ingress
 # (`spec.ingress` in vault.yaml), which stays until the switch. The operator never deletes an
-# Ingress it created, so `spec.ingress` is not removed here. Internal route: no external-dns
-# annotation until the internal switch.
+# Ingress it created, so `spec.ingress` is not removed here. Internal route: the external-dns
+# annotation publishes its name (the Gateway address).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: vault
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
 spec:
   hostnames:
     - vault.internal.grigri.cloud

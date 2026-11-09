@@ -468,7 +468,7 @@ app-template:
           secretName: hass-valetudopng-tls-certificate
 
   # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
-  # Internal routes carry no external-dns annotation until the internal switch.
+  # Internal routes carry the external-dns annotation (the Gateway address is published in DNS).
   route:
     # hass.grigri.cloud: no auth. Prometheus scrapes the Service directly, so the nginx
     # server-snippet `location = /api/prometheus { deny all; }` becomes a 403 direct response
@@ -518,6 +518,9 @@ app-template:
               port: 5050
     valetudopng:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       forceRename: home-assistant-valetudopng
       hostnames:
         - valetudopng.internal.grigri.cloud

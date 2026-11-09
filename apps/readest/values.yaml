@@ -477,6 +477,9 @@ app-template:
   route:
     internal:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       forceRename: readest-internal
       hostnames:
         - readest.internal.grigri.cloud
@@ -529,6 +532,9 @@ app-template:
               port: 3000
     internal-authorize:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       forceRename: readest-internal-authorize
       hostnames:
         - readest.internal.grigri.cloud

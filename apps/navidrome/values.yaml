@@ -143,6 +143,9 @@ app-template:
   route:
     internal:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       forceRename: navidrome-internal
       hostnames:
         - navidrome.internal.grigri.cloud
@@ -156,6 +159,9 @@ app-template:
               port: 4533
     internal-subsonic:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       forceRename: navidrome-internal-subsonic
       hostnames:
         - navidrome.internal.grigri.cloud

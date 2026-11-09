@@ -1,11 +1,13 @@
 # Envoy Gateway routes (ingress-nginx migration). The Ingresses in searxng.yaml stay until the
 # switch. Rendered by kustomize `helmCharts` (no cluster capabilities), so they are raw files.
-# The internal route has no external-dns annotation until the internal switch; the external route
+# The internal route carries the external-dns annotation (the Gateway address is published in DNS); the external route
 # is behind the OIDC SecurityPolicy (security-policy.yaml).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: searxng-internal
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
 spec:
   hostnames:
     - searxng.internal.grigri.cloud

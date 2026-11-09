@@ -5,6 +5,8 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: minio
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
 spec:
   hostnames:
     - s3.internal.grigri.cloud
@@ -40,6 +42,8 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: minio-console
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
 spec:
   hostnames:
     - mc-s3.internal.grigri.cloud

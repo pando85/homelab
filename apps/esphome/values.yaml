@@ -74,6 +74,9 @@ app-template:
   route:
     internal:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       # stable name: the SecurityPolicy targets it
       forceRename: esphome-internal
       hostnames:

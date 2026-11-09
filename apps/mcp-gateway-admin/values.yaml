@@ -145,12 +145,15 @@ app-template:
           secretName: mcp-gateway-admin-tls-certificate
 
   # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
-  # Internal route: no external-dns annotation until the internal switch. The Ingress sets no
+  # Internal route: the external-dns annotation publishes its name (the Gateway address). The Ingress sets no
   # timeout annotations (nginx defaults: 60 s idle), so the Gateway defaults (60 s stream idle,
   # no total limit) are the same behaviour for MCP streams.
   route:
     mcp:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       hostnames:
         - mcp.internal.grigri.cloud
       parentRefs:

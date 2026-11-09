@@ -212,11 +212,14 @@ app-template:
           secretName: immich-external-tls-certificate
 
   # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
-  # Internal routes carry no external-dns annotation until the internal switch. Stable names: the
+  # Internal routes carry the external-dns annotation (the Gateway address is published in DNS). Stable names: the
   # BackendTrafficPolicy (templates/backend-traffic-policy.yaml) targets both routes.
   route:
     internal:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       forceRename: immich-internal
       hostnames:
         - photos.internal.grigri.cloud

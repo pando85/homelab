@@ -75,11 +75,14 @@ app-template:
           secretName: hermes-3-dashboard-tls-certificate
 
   # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
-  # No external-dns annotation until the internal switch. Behind the OIDC SecurityPolicy
+  # The external-dns annotation publishes the name (the Gateway address). Behind the OIDC SecurityPolicy
   # (templates/security-policy.yaml); the dashboard keeps its own OIDC login on top, as with nginx.
   route:
     dashboard:
       kind: HTTPRoute
+      annotations:
+        # internal names are published in DNS by external-dns (the Gateway address)
+        external-dns.kubernetes.io/enabled: "true"
       # stable name: the SecurityPolicy targets it
       forceRename: hermes-3-internal
       hostnames:

@@ -1,0 +1,25 @@
+# Envoy Gateway route (ingress-nginx migration), replacing the chart's `httpRoute` (disabled in
+# values.yaml: it has no annotations key). Same name and spec as the chart rendered, plus the
+# external-dns annotation that publishes the name (the Gateway address). The Ingress stays until the
+# switch.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ollama
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - ollama.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: ollama
+          port: 11434
