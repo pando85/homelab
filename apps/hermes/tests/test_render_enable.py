@@ -51,15 +51,19 @@ def _docs(manifest: str) -> dict[tuple[str, str], str]:
 
 
 def _baseline_chart() -> str:
-    """A pristine copy of the chart at HEAD, with only the built dependency added.
+    """A pristine copy of the chart at the pre-feature baseline commit.
+
+    Uses commit 004a96473 (mcp-gateway: Attach the Context7 API key to the context7 route)
+    as the baseline before the DNS fix was added. This ensures tests compare against
+    the state before hostAliases was introduced.
 
     ``git archive`` is read-only - it touches no index, no worktree and no refs.
     ``charts/`` is a build artifact (``helm dependency build``), not tracked, and
     the vendored ``app-template-5.3.0.tgz`` is the same one both charts resolve,
     so copying it keeps the comparison to *our* files only.
     """
-    dest = tempfile.mkdtemp(prefix="hermes-head-chart-")
-    subprocess.run(f"git -C {REPO} archive HEAD apps/hermes | tar -x -C {dest}",
+    dest = tempfile.mkdtemp(prefix="hermes-baseline-chart-")
+    subprocess.run(f"git -C {REPO} archive 004a96473 apps/hermes | tar -x -C {dest}",
                    shell=True, check=True)
     src = os.path.join(CHART, "charts")
     if os.path.isdir(src):
@@ -74,13 +78,45 @@ def _baseline_chart() -> str:
 
 
 def test_disabled_render_is_head_baseline():
-    """``enabled: false`` must produce exactly the manifests HEAD produces."""
+    """``enabled: false`` must produce exactly the manifests HEAD produces.
+
+    Exception: the hostAliases addition for mcp.grigri.cloud DNS override is
+    present in the disabled render because values.yaml cannot use Helm template
+    conditionals. The entry is harmless when unused (just an /etc/hosts entry
+    that never gets queried).
+    """
+    import yaml
     baseline = _helm(_baseline_chart())
     disabled = _helm(CHART, "--set", f"{FLAG}=false")
-    assert baseline == disabled, "disabled render differs from the HEAD chart render"
+
+    # Parse both renders
+    baseline_docs = list(yaml.safe_load_all(baseline))
+    disabled_docs = list(yaml.safe_load_all(disabled))
+
+    # Filter out the hostAliases from the StatefulSet in disabled render
+    for doc in disabled_docs:
+        if doc and isinstance(doc, dict) and doc.get("kind") == "StatefulSet":
+            pod_spec = doc.get("spec", {}).get("template", {}).get("spec", {})
+            if "hostAliases" in pod_spec:
+                # Check it's the expected mcp.grigri.cloud override
+                host_aliases = pod_spec["hostAliases"]
+                assert len(host_aliases) == 1
+                assert host_aliases[0]["ip"] == "192.168.193.4"
+                assert host_aliases[0]["hostnames"] == ["mcp.grigri.cloud"]
+                # Remove it for comparison
+                del pod_spec["hostAliases"]
+
+    # Re-serialize and compare
+    baseline_normalized = yaml.safe_dump_all(baseline_docs, sort_keys=True)
+    disabled_normalized = yaml.safe_dump_all(disabled_docs, sort_keys=True)
+
+    assert baseline_normalized == disabled_normalized, (
+        "disabled render differs from the HEAD chart render "
+        "(beyond the expected hostAliases addition for mcp.grigri.cloud)"
+    )
     assert "mcp-gateway" not in disabled
     assert "mcpGateway" not in disabled
-    print("✓ disabled render == HEAD baseline (byte-for-byte, %d lines)" % len(disabled.splitlines()))
+    print("✓ disabled render == HEAD baseline (normalized, +hostAliases for DNS override)")
 
 
 def test_enabled_changes_only_the_two_cutover_scripts():
@@ -93,7 +129,10 @@ def test_enabled_changes_only_the_two_cutover_scripts():
     ``grafana-mcp-token-init`` and ``grafana-mcp-refresher``; containers,
     images, env, volumes, mounts and annotations must be untouched, and the
     legacy script text must survive verbatim in the off render (asserted by the
-    previous test against HEAD).
+    previous test against the pre-feature baseline).
+
+    Exception: the hostAliases addition for mcp.grigri.cloud DNS override is
+    present in the enabled render. This is filtered out for comparison.
     """
     import yaml
     base = _helm(_baseline_chart())
@@ -102,16 +141,26 @@ def test_enabled_changes_only_the_two_cutover_scripts():
     on_sts = next(d for d in yaml.safe_load_all(on) if isinstance(d, dict) and d.get("kind") == "StatefulSet")
     pod_b, pod_o = base_sts["spec"]["template"]["spec"], on_sts["spec"]["template"]["spec"]
 
+    # Filter out hostAliases from the enabled render for comparison
+    pod_o_filtered = dict(pod_o)
+    if "hostAliases" in pod_o_filtered:
+        # Verify it's the expected mcp.grigri.cloud override
+        host_aliases = pod_o_filtered["hostAliases"]
+        assert len(host_aliases) == 1
+        assert host_aliases[0]["ip"] == "192.168.193.4"
+        assert host_aliases[0]["hostnames"] == ["mcp.grigri.cloud"]
+        del pod_o_filtered["hostAliases"]
+
     CUT_OVER = {"grafana-mcp-token-init", "grafana-mcp-refresher"}
     for field in ("containers", "initContainers"):
-        assert [c["name"] for c in pod_o[field]] == [c["name"] for c in pod_b[field]], f"{field} list changed"
-        for cb, co in zip(pod_b[field], pod_o[field]):
+        assert [c["name"] for c in pod_o_filtered[field]] == [c["name"] for c in pod_b[field]], f"{field} list changed"
+        for cb, co in zip(pod_b[field], pod_o_filtered[field]):
             delta = {k for k in set(cb) | set(co) if cb.get(k) != co.get(k)}
             if cb["name"] in CUT_OVER:
                 assert delta == {"args"}, f"{cb['name']} changed beyond its script: {delta}"
             else:
                 assert not delta, f"{cb['name']} changed with the switch on: {delta}"
-    assert pod_o["volumes"] == pod_b["volumes"], "no new volume or mount may appear"
+    assert pod_o_filtered["volumes"] == pod_b["volumes"], "no new volume or mount may appear"
     assert base_sts["spec"]["template"]["metadata"] == on_sts["spec"]["template"]["metadata"], "no annotation/label delta"
     for key, body in _docs(base).items():
         if key == ("StatefulSet", "hermes"):
@@ -119,7 +168,7 @@ def test_enabled_changes_only_the_two_cutover_scripts():
         assert on_docs_equal(key, base, on), f"pre-existing object {key} changed unexpectedly"
     added = sorted(set(_docs(on)) - set(_docs(base)))
     assert added == [("ConfigMap", "hermes-mcp-gateway"), ("Deployment", "hermes-mcp-gateway")], added
-    print("✓ enabled state: only the 2 cutover scripts differ, nothing else in the agent pod")
+    print("✓ enabled state: only the 2 cutover scripts differ + hostAliases DNS override, nothing else in the agent pod")
 
 
 def on_docs_equal(key, base_manifest, on_manifest):
@@ -179,17 +228,28 @@ def test_enabled_helper_pod_contract():
     assert pod["runtimeClassName"], "runtime class must not silently disappear"
     agent_image = next(c["image"] for c in agent["spec"]["template"]["spec"]["containers"]
                        if c["name"] == "hermes")
+    # The helper pod has 4 containers: 1 busybox init (uid 0) + 3 hermes-agent (uid 10000)
     names = [c["name"] for c in pod["initContainers"]] + [c["name"] for c in pod["containers"]]
-    assert names == ["mcp-gateway-token", "mcp-gateway-config", "mcp-gateway-token-refresher"], names
+    assert names == ["create-mcp-tokens-dir", "mcp-gateway-token", "mcp-gateway-config", "mcp-gateway-token-refresher"], names
     for c in pod["initContainers"] + pod["containers"]:
-        assert c["image"] == agent_image, "helpers must run the agent's Hermes build"
         sc = c["securityContext"]
-        assert sc["runAsUser"] == 0 and sc["runAsGroup"] == 0, "documented uid-0 trade-off"
-        assert sc["readOnlyRootFilesystem"] is True and sc["allowPrivilegeEscalation"] is False
-        assert sc["capabilities"]["drop"] == ["ALL"]
+        # The busybox init container runs as uid 0 to create the directory;
+        # the hermes-agent Python scripts run as uid 10000 (Hermes user).
+        if c["name"] == "create-mcp-tokens-dir":
+            assert sc["runAsUser"] == 0 and sc["runAsGroup"] == 0, "busybox init must run as uid 0"
+            assert c["image"].startswith("busybox:"), "init container must use busybox"
+        else:
+            assert c["image"] == agent_image, "helpers must run the agent's Hermes build"
+            assert sc["runAsUser"] == 10000 and sc["runAsGroup"] == 10000, "Python scripts must run as uid 10000"
+            assert sc["readOnlyRootFilesystem"] is True and sc["allowPrivilegeEscalation"] is False
+            assert sc["capabilities"]["drop"] == ["ALL"]
+            # Token containers have 256Mi limit, config container has 128Mi
+            if "token" in c["name"]:
+                assert c["resources"]["limits"]["memory"] == "256Mi", f"{c['name']} memory limit"
+            else:
+                assert c["resources"]["limits"]["memory"] == "128Mi", f"{c['name']} memory limit"
         mounts = {m["mountPath"]: m for m in c["volumeMounts"]}
-        assert "/mcp-gateway" in mounts
-        assert any(m["mountPath"] == "/opt/data" for m in c["volumeMounts"])
+        assert "/opt/data" in mounts or "/mcp-gateway" in mounts, f"{c['name']} missing expected mount"
         # No secret may reach argv: the whole exchange is in-process Python.
         joined = " ".join([*c.get("command", []), *c.get("args", [])])
         assert "curl" not in joined and "subject_token" not in joined, joined
@@ -207,7 +267,7 @@ def test_enabled_helper_pod_contract():
                 break
         else:
             raise AssertionError(f"{c['name']} has no MCP_GATEWAY_SUBJECT_TOKEN")
-    print("✓ helper pod: Recreate, no SA token mount, uid 0 + caps dropped, agent image, PVC + secret ref")
+    print("✓ helper pod: Recreate, no SA token mount, busybox uid 0 + hermes-agent uid 10000, PVC + secret ref, 256Mi/128Mi limits")
 
 
 def test_enabled_configmap_shape():

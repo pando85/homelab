@@ -212,6 +212,9 @@ def main():
               "mcp_grafana" in json.dumps(gpol["authorization"]))
         check("grafana forwards the caller's validated bearer (per-caller backend auth)",
               gpol.get("backendAuth") == {"passthrough": {}})
+        check("grafana disables automatic port-dropping authority rewrite",
+              gpol.get("urlRewrite") == {"authority": {
+                  "full": "grafana-mcp.grafana-mcp.svc.cluster.local:8000"}})
         gremoved = gpol["requestHeaderModifier"]["remove"]
         check("grafana strips the URL/credential overrides mcp-grafana honours",
               all(h in gremoved for h in ("Cookie", "X-Grafana-URL", "X-Grafana-Service-Account-Token")),
