@@ -300,6 +300,60 @@ def main():
           "mcp_vault" not in config_text(helm("mcp-gateway",
                                               ["backends.grafana.enabled=true"])))
 
+    # ---- networkIsolation gating: baseline must be policy-free
+    # Default render (networkIsolation not set, defaults to false): no NetworkPolicy/CNP
+    adm_default_docs = helm("mcp-gateway-admin")
+    adm_np_default = [d for d in adm_default_docs if d.get("kind") == "NetworkPolicy"]
+    adm_cnp_default = [d for d in adm_default_docs if d.get("kind") == "CiliumNetworkPolicy"]
+    check("mcp-gateway-admin: default render has no NetworkPolicy (networkIsolation defaults false)",
+          len(adm_np_default) == 0,
+          f"found {len(adm_np_default)} NetworkPolicy resources")
+    check("mcp-gateway-admin: default render has no CiliumNetworkPolicy",
+          len(adm_cnp_default) == 0,
+          f"found {len(adm_cnp_default)} CiliumNetworkPolicy resources")
+
+    # Explicit false: no NetworkPolicy/CNP
+    adm_false_docs = helm("mcp-gateway-admin", ["networkIsolation=false"])
+    adm_np_false = [d for d in adm_false_docs if d.get("kind") == "NetworkPolicy"]
+    adm_cnp_false = [d for d in adm_false_docs if d.get("kind") == "CiliumNetworkPolicy"]
+    check("mcp-gateway-admin: networkIsolation=false renders no NetworkPolicy",
+          len(adm_np_false) == 0,
+          f"found {len(adm_np_false)} NetworkPolicy resources")
+    check("mcp-gateway-admin: networkIsolation=false renders no CiliumNetworkPolicy",
+          len(adm_cnp_false) == 0,
+          f"found {len(adm_cnp_false)} CiliumNetworkPolicy resources")
+
+    # Explicit true: existing native NetworkPolicies rendered unchanged
+    adm_true_docs = helm("mcp-gateway-admin", ["networkIsolation=true"])
+    adm_np_true = [d for d in adm_true_docs if d.get("kind") == "NetworkPolicy"]
+    check("mcp-gateway-admin: networkIsolation=true renders both legacy NetworkPolicies",
+          len(adm_np_true) == 2,
+          f"expected 2, found {len(adm_np_true)}")
+    adm_np_names = {d["metadata"]["name"] for d in adm_np_true}
+    check("mcp-gateway-admin: networkIsolation=true renders ingress and egress policies",
+          adm_np_names == {"mcp-gateway-admin-ingress", "mcp-gateway-admin-egress"},
+          f"names: {adm_np_names}")
+    # Verify the ingress policy still allows only 3000 and 15020 (not 15021)
+    adm_np_ingress = next((d for d in adm_np_true if d["metadata"]["name"] == "mcp-gateway-admin-ingress"), None)
+    if adm_np_ingress:
+      ingress_ports = set()
+      for rule in adm_np_ingress.get("spec", {}).get("ingress", []):
+          for port in rule.get("ports", []):
+              ingress_ports.add(port.get("port"))
+      check("mcp-gateway-admin: legacy ingress policy allows only 3000 and 15020 (not 15021)",
+            ingress_ports == {3000, 15020},
+            f"ports: {ingress_ports}")
+    # Verify values.yaml documents the gating and the legacy status
+    adm_vals_text = open("apps/mcp-gateway-admin/values.yaml").read()
+    check("mcp-gateway-admin: values.yaml documents networkIsolation gating",
+          "networkIsolation: false" in adm_vals_text and
+          "policy-free" in adm_vals_text,
+          "missing documentation")
+    check("mcp-gateway-admin: values.yaml warns that true is NOT production-ready",
+          "NOT production-ready" in adm_vals_text or
+          "not production-ready" in adm_vals_text,
+          "missing warning")
+
     # ---- services: ClusterIP only, ops port separate from the MCP port
     svc = find(pub_on, "Service")
     check("service is ClusterIP with no NodePort/hostPort",

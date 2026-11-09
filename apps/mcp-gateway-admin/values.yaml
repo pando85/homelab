@@ -14,6 +14,21 @@
 # makes an authz decision readable in a log line; token material is never logged.
 logLevel: info
 
+# --------------------------------------------------------------------------
+# Network isolation - OFF by default. The native NetworkPolicies in
+# templates/networkpolicy.yaml block kubelet httpGet probes on port 15021
+# because native NP cannot express `fromEntities: [world]` (measured on this
+# cluster, see docs/conventions/cilium.md and
+# docs/troubleshooting/mcp-firecrawl-egress-regression.md). The baseline stays
+# policy-free until those policies are replaced with a CiliumNetworkPolicy in
+# the split-port shape documented in docs/conventions/cilium.md.
+#
+# Setting networkIsolation: true renders the legacy native NetworkPolicies
+# as-is. This is NOT production-ready: it will break kubelet probes and cause
+# the pod to restart in a loop. Do not enable without replacing the native NPs
+# with a measured CNP first.
+networkIsolation: false
+
 # MCP session-protection key (agentgateway AES-256-GCM session IDs). Produced by the
 # External Secrets Operator's own Password generator and pulled into a Secret exactly
 # once; the chart renders NO key material, so renders are deterministic. Full source

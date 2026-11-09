@@ -1,3 +1,4 @@
+{{- if .Values.networkIsolation }}
 ---
 # Admin-plane ingress: private by construction.
 #   - MCP endpoint reachable only through the INTERNAL ingress controller
@@ -11,6 +12,14 @@
 #     replies are exempt, and no blanket host / remote-node allow is added to "fix"
 #     a probe path.
 #   - Service is ClusterIP only: no NodePort, loadBalancer or hostPort.
+#
+# GATED by .Values.networkIsolation (default false). These native NetworkPolicies
+# block kubelet httpGet probes on port 15021 because native NP cannot express
+# `fromEntities: [world]` - the only entity matching the probe source on this
+# cluster (measured, see docs/conventions/cilium.md). The baseline stays
+# policy-free until this set is replaced with a CiliumNetworkPolicy in the
+# split-port shape from docs/conventions/cilium.md. Setting networkIsolation: true
+# renders these legacy policies as-is; it is NOT production-ready.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -130,3 +139,4 @@ spec:
           port: {{ $b.port }}
     {{- end }}
     {{- end }}
+{{- end }}
