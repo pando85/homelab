@@ -10,9 +10,15 @@ ingress-nginx:
         enabled: false
 
     replicaCount: 2
+    # Internal switch (planning/ingress-nginx-to-envoy-gateway.md, Phase 4 step 2): report the
+    # internal Envoy Gateway address in the Ingress status instead of this controller's own LB
+    # Service IP, so external-dns moves every internal record to it in one sync.
+    publishService:
+      enabled: false
     extraArgs:
       # Disable until PR merged: https://github.com/kubernetes/ingress-nginx/pull/12626
       enable-annotation-validation: "false"
+      publish-status-address: "192.168.193.13"
 
     config:
       # auto value takes all nodes in cgroups v2
