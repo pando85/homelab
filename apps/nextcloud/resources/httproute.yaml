@@ -1,0 +1,141 @@
+# Envoy Gateway route (ingress-nginx migration), alongside the chart Ingress, which stays until the
+# switch. Port of the nginx annotations of `nextcloud.grigri.cloud`:
+#   - server-snippet `location` blocks: the redirects and the two 404 groups below (nginx matches
+#     the regex blocks case-sensitively, like Gateway API paths);
+#   - `proxy_hide_header X-Powered-By`: the response header modifier on the catch-all rule;
+#   - body 35G, request and response buffering off: Envoy defaults (no body limit, streaming);
+#   - read/send/connect timeouts 3600: BackendTrafficPolicy below.
+# `robots.txt` (`location = /robots.txt { allow all; log_not_found off; access_log off; }`): nginx
+# answered it with its own static 404 (the location has no proxy_pass); here it reaches Nextcloud,
+# which serves its robots.txt. `server_tokens off` is the gateway-wide `Server` removal.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: nextcloud
+  annotations:
+    # the target (grigri.cloud) comes from the external Gateway
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - nextcloud.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    # `location = / { if ($http_user_agent ~ ^DavClnt) { return 302 /remote.php/webdav/$is_args$args; } }`
+    - matches:
+        - path:
+            type: Exact
+            value: /
+          headers:
+            - name: User-Agent
+              type: RegularExpression
+              value: "^DavClnt.*"
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            statusCode: 302
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /remote.php/webdav/
+    # `location = /.well-known/carddav|caldav { return 301 /remote.php/dav/; }`
+    - matches:
+        - path:
+            type: Exact
+            value: /.well-known/carddav
+        - path:
+            type: Exact
+            value: /.well-known/caldav
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            statusCode: 301
+            path:
+              type: ReplaceFullPath
+              replaceFullPath: /remote.php/dav/
+    # `location ^~ /.well-known { return 301 /index.php$uri; }`
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /.well-known
+      filters:
+        - type: RequestRedirect
+          requestRedirect:
+            statusCode: 301
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /index.php/.well-known
+    # `location ~ ^/(?:build|tests|config|lib|3rdparty|templates|data)(?:$|/) { return 404; }`
+    - matches:
+        - path: {type: PathPrefix, value: /build}
+        - path: {type: PathPrefix, value: /tests}
+        - path: {type: PathPrefix, value: /config}
+        - path: {type: PathPrefix, value: /lib}
+        - path: {type: PathPrefix, value: /3rdparty}
+        - path: {type: PathPrefix, value: /templates}
+        - path: {type: PathPrefix, value: /data}
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: nextcloud-not-found
+    # `location ~ ^/(?:\.|autotest|occ|issue|indie|db_|console) { return 404; }` (a prefix without a
+    # segment boundary; `/.well-known` is excluded by the redirect rule above, like nginx `^~`)
+    - matches:
+        - path:
+            type: RegularExpression
+            value: "/(\\.|autotest|occ|issue|indie|db_|console).*"
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: nextcloud-not-found
+    - filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            remove:
+              - X-Powered-By
+      backendRefs:
+        - name: nextcloud
+          port: 8080
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: nextcloud-not-found
+spec:
+  directResponse:
+    statusCode: 404
+    contentType: text/html
+    body:
+      type: Inline
+      inline: |
+        <html>
+        <head><title>404 Not Found</title></head>
+        <body>
+        <center><h1>404 Not Found</h1></center>
+        </body>
+        </html>
+---
+# nginx proxy-read-timeout / proxy-send-timeout 3600 are idle timeouts: `streamIdleTimeout` (never
+# `timeouts.request`, a total limit, so a multi-GB upload keeps going while data moves).
+# proxy-connect-timeout 3600 is a copy-paste value: a cluster Service connects in milliseconds or
+# fails, so it is capped at 60 s. `mergeType: StrategicMerge` keeps the gateway-wide defaults.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: nextcloud-timeouts
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: nextcloud
+  mergeType: StrategicMerge
+  timeout:
+    tcp:
+      connectTimeout: 60s
+    http:
+      streamIdleTimeout: 3600s
