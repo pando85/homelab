@@ -82,11 +82,17 @@ spec:
             kind: HTTPRouteFilter
             name: nextcloud-not-found
     # `location ~ ^/(?:\.|autotest|occ|issue|indie|db_|console) { return 404; }` (a prefix without a
-    # segment boundary; `/.well-known` is excluded by the redirect rule above, like nginx `^~`)
+    # segment boundary). nginx keeps `/.well-known` out of it with `^~`; Envoy Gateway tries regex
+    # paths before prefix paths and RE2 has no lookahead, so the dot alternative below is spelled
+    # out as "a dot followed by anything that is not `well-known`" (the redirect rule above then
+    # keeps `/.well-known` and `/.well-known/...`).
     - matches:
         - path:
             type: RegularExpression
-            value: "/(\\.|autotest|occ|issue|indie|db_|console).*"
+            value: "/(autotest|occ|issue|indie|db_|console).*"
+        - path:
+            type: RegularExpression
+            value: "/\\.(|[^w].*|w|w[^e].*|we|we[^l].*|wel|wel[^l].*|well|well[^-].*|well-|well-[^k].*|well-k|well-k[^n].*|well-kn|well-kn[^o].*|well-kno|well-kno[^w].*|well-know|well-know[^n].*)"
       filters:
         - type: ExtensionRef
           extensionRef:
