@@ -1,0 +1,83 @@
+# Listener certificates, issued by the letsencrypt-prod-dns ClusterIssuer (DNS-01, Cloudflare).
+# They live next to the Gateways so listeners need no ReferenceGrant. One Certificate per
+# listener group keeps the number of Let's Encrypt orders small.
+---
+# internal Gateway, listener https-internal-grigri-cloud
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: internal-grigri-cloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: internal-grigri-cloud-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.internal.grigri.cloud"
+---
+# internal Gateway, listener https-staging-internal-forkline-dev
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staging-internal-forkline-dev
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: staging-internal-forkline-dev-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.staging.internal.forkline.dev"
+---
+# external Gateway, listener https-grigri-cloud (Envoy picks the cert by SNI)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: grigri-cloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: grigri-cloud-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "*.grigri.cloud"
+    - "*.rajoy.grigri.cloud"
+    - "*.m.rajoy.grigri.cloud"
+    - "*.isidoro.grigri.cloud"
+---
+# external Gateway, listeners https-staging-forkline-dev and https-wildcard-staging-forkline-dev
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staging-forkline-dev
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: staging-forkline-dev-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - staging.forkline.dev
+    - "*.staging.forkline.dev"
+---
+# external Gateway, listeners https-mintpsicologia-es and https-mintpsicologia-es-www
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: mintpsicologia-es
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: mintpsicologia-es-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - mintpsicologia.es
+    - www.mintpsicologia.es

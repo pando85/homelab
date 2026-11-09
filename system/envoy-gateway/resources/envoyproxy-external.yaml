@@ -1,0 +1,100 @@
+---
+# Data plane of the "external" Gateway: own Deployment, PDB, LB Service (192.168.193.14), 2 replicas.
+# Placement mirrors system/ingress-nginx (prefer prusik, then amd64). No tolerations on
+# purpose: the CI node k8s-amd64-1 (dedicated=ci:NoSchedule) must never run these pods.
+# Cilium BGP advertises every LoadBalancer Service without the cilium.io/bgp-skip label
+# (system/kube-system/resources/cilium/bgp-advertisement.yaml), so no extra label is needed.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: external
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  telemetry:
+    accessLog:
+      settings:
+        - format:
+            type: JSON
+            json:
+              start_time: "%START_TIME%"
+              method: "%REQ(:METHOD)%"
+              path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+              protocol: "%PROTOCOL%"
+              response_code: "%RESPONSE_CODE%"
+              response_flags: "%RESPONSE_FLAGS%"
+              response_code_details: "%RESPONSE_CODE_DETAILS%"
+              bytes_received: "%BYTES_RECEIVED%"
+              bytes_sent: "%BYTES_SENT%"
+              duration: "%DURATION%"
+              upstream_host: "%UPSTREAM_HOST%"
+              upstream_cluster: "%UPSTREAM_CLUSTER%"
+              x_forwarded_for: "%REQ(X-FORWARDED-FOR)%"
+              user_agent: "%REQ(USER-AGENT)%"
+              request_id: "%REQ(X-REQUEST-ID)%"
+              authority: "%REQ(:AUTHORITY)%"
+              client_address: "%DOWNSTREAM_REMOTE_ADDRESS%"
+              traceID: "%TRACE_ID%"
+          sinks:
+            - type: File
+              file:
+                path: /dev/stdout
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 2
+        container:
+          # eMudhra CA fix: same pin as global.images.envoyProxy in values.yaml (this field replaces it)
+          # renovate: datasource=docker versioning=regex:^distroless-v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
+          image: docker.io/envoyproxy/envoy:distroless-v1.39.6
+          resources:
+            requests:
+              cpu: 40m
+              memory: 150Mi
+            limits:
+              memory: 328Mi
+        strategy:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+        pod:
+          affinity:
+            nodeAffinity:
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  preference:
+                    matchExpressions:
+                      - key: kubernetes.io/hostname
+                        operator: In
+                        values:
+                          - prusik
+                - weight: 50
+                  preference:
+                    matchExpressions:
+                      - key: kubernetes.io/arch
+                        operator: In
+                        values:
+                          - amd64
+          topologySpreadConstraints:
+            - maxSkew: 4
+              topologyKey: kubernetes.io/hostname
+              whenUnsatisfiable: DoNotSchedule
+              matchLabelKeys:
+                - pod-template-hash
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: envoy
+                  app.kubernetes.io/component: proxy
+                  app.kubernetes.io/managed-by: envoy-gateway
+                  gateway.envoyproxy.io/owning-gateway-name: external
+                  gateway.envoyproxy.io/owning-gateway-namespace: envoy-gateway
+      envoyPDB:
+        minAvailable: 1
+      envoyService:
+        type: LoadBalancer
+        loadBalancerClass: io.cilium/bgp-control-plane
+        externalTrafficPolicy: Local
+        annotations:
+          lbipam.cilium.io/ips: "192.168.193.14"

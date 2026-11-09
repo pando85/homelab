@@ -1,0 +1,111 @@
+# External Gateway on 192.168.193.14. The listener names are the contract other repos use as
+# parentRefs.sectionName: do not rename. https-runners-staging-forkline-dev is left out until
+# calypso emits HTTPRoutes for the runners (tls-bridge-runners owns *.app.staging.forkline.dev).
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: external
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    # external-dns reads the target from the Gateway, never from routes. Every homelab-owned
+    # external name targets grigri.cloud (the public name of the router).
+    external-dns.kubernetes.io/target: grigri.cloud
+spec:
+  gatewayClassName: envoy
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: external
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-grigri-cloud
+      port: 443
+      protocol: HTTPS
+      hostname: "*.grigri.cloud"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: grigri-cloud-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-staging-forkline-dev
+      port: 443
+      protocol: HTTPS
+      hostname: "staging.forkline.dev"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: staging-forkline-dev-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-wildcard-staging-forkline-dev
+      port: 443
+      protocol: HTTPS
+      hostname: "*.staging.forkline.dev"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: staging-forkline-dev-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: tls-bridge-runners
+      port: 443
+      protocol: TLS
+      hostname: "*.app.staging.forkline.dev"
+      tls:
+        mode: Passthrough
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: tls-remote-staging-forkline-io
+      port: 443
+      protocol: TLS
+      hostname: "*.remote.staging.forkline.io"
+      tls:
+        mode: Passthrough
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-mintpsicologia-es
+      port: 443
+      protocol: HTTPS
+      hostname: "mintpsicologia.es"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: mintpsicologia-es-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-mintpsicologia-es-www
+      port: 443
+      protocol: HTTPS
+      hostname: "www.mintpsicologia.es"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: mintpsicologia-es-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: tcp-forgejo-ssh
+      port: 29518
+      protocol: TCP
+      allowedRoutes:
+        namespaces:
+          from: All

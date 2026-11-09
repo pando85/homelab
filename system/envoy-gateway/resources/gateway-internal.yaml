@@ -1,0 +1,47 @@
+# Internal Gateway on 192.168.193.13. The listener names are the contract other repos use as
+# parentRefs.sectionName: do not rename.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: internal
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  gatewayClassName: envoy
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: internal
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-internal-grigri-cloud
+      port: 443
+      protocol: HTTPS
+      hostname: "*.internal.grigri.cloud"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: internal-grigri-cloud-tls
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-staging-internal-forkline-dev
+      port: 443
+      protocol: HTTPS
+      hostname: "*.staging.internal.forkline.dev"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: staging-internal-forkline-dev-tls
+      allowedRoutes:
+        namespaces:
+          from: All

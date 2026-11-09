@@ -1,0 +1,134 @@
+---
+# Gateway-wide defaults of the internal Gateway, matching ingress-nginx so apps do not notice.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: internal-defaults
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: internal
+  tls:
+    # Mandatory: hostname-scoped TLS listeners silently drop h2 gateway-wide otherwise
+    alpnProtocols:
+      - h2
+      - http/1.1
+  http1:
+    http10: {}
+  path:
+    # nginx forwards %2F untouched; Envoy would redirect by default
+    escapedSlashesAction: KeepUnchanged
+  # nginx-internal runs with use-forwarded-headers: true (LAN clients and in-cluster proxies)
+  clientIPDetection:
+    xForwardedFor:
+      numTrustedHops: 1
+  timeout:
+    http:
+      idleTimeout: 600s
+  tcpKeepalive:
+    idleTime: 300s
+    interval: 60s
+    probes: 3
+  headers:
+    lateResponseHeaders:
+      set:
+        - name: Strict-Transport-Security
+          value: max-age=31536000; includeSubDomains
+        - name: Referrer-Policy
+          value: strict-origin-when-cross-origin
+        - name: X-Frame-Options
+          value: DENY
+        - name: X-Content-Type-Options
+          value: nosniff
+        - name: Permissions-Policy
+          value: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+      remove:
+        - Server
+---
+# Envoy Gateway defaults to 15s; nginx proxy timeouts are 60s. Long-running apps (immich,
+# forgejo, nextcloud, transcoder, gitlab, minio/s3, runners) override per route with
+# mergeType: StrategicMerge. No compressor here on purpose: compression is per route only and
+# never on MinIO/S3 hosts (it rewrites the signed Accept-Encoding).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: internal-defaults
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: internal
+  timeout:
+    http:
+      requestTimeout: 60s
+---
+# Gateway-wide defaults of the external Gateway, matching ingress-nginx so apps do not notice.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: external-defaults
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: external
+  tls:
+    # Mandatory: hostname-scoped TLS listeners silently drop h2 gateway-wide otherwise
+    alpnProtocols:
+      - h2
+      - http/1.1
+  http1:
+    http10: {}
+  path:
+    # nginx forwards %2F untouched; Envoy would redirect by default
+    escapedSlashesAction: KeepUnchanged
+  # No clientIPDetection: like nginx-external, trust no X-Forwarded-For. externalTrafficPolicy
+  # Local keeps the real client IP on the TCP connection.
+  timeout:
+    http:
+      idleTimeout: 600s
+  tcpKeepalive:
+    idleTime: 300s
+    interval: 60s
+    probes: 3
+  headers:
+    lateResponseHeaders:
+      set:
+        - name: Strict-Transport-Security
+          value: max-age=31536000; includeSubDomains
+        - name: Referrer-Policy
+          value: strict-origin-when-cross-origin
+        - name: X-Frame-Options
+          value: DENY
+        - name: X-Content-Type-Options
+          value: nosniff
+        - name: Permissions-Policy
+          value: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
+      remove:
+        - Server
+---
+# Envoy Gateway defaults to 15s; nginx proxy timeouts are 60s. Long-running apps (immich,
+# forgejo, nextcloud, transcoder, gitlab, minio/s3, runners) override per route with
+# mergeType: StrategicMerge. No compressor here on purpose: compression is per route only and
+# never on MinIO/S3 hosts (it rewrites the signed Accept-Encoding).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: external-defaults
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: external
+  timeout:
+    http:
+      requestTimeout: 60s
