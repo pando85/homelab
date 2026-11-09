@@ -42,6 +42,8 @@ spec:
             claim: preferred_username
   authorization:
     defaultAction: Deny
+    # parity with nginx (`allowed_groups=navidrome-users`, plus a group of the oauth2-proxy client
+    # scope map): `navidrome-users` is itself in that scope map, so both are one group check.
     rules:
       - name: allowed-groups
         action: Allow
@@ -101,6 +103,8 @@ spec:
             claim: preferred_username
   authorization:
     defaultAction: Deny
+    # parity with nginx (`allowed_groups=navidrome-users`, plus a group of the oauth2-proxy client
+    # scope map): `navidrome-users` is itself in that scope map, so both are one group check.
     rules:
       - name: allowed-groups
         action: Allow
