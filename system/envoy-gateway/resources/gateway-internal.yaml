@@ -69,3 +69,23 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    # Verification listener for calypso runner routes (same name and spec as on the external
+    # Gateway): curl --resolve <runner>.app.staging.forkline.dev:443:192.168.193.13 tests a runner
+    # through Envoy while public traffic still uses the external path. No DNS points here.
+    - name: https-runners-staging-forkline-dev
+      port: 443
+      protocol: HTTPS
+      hostname: "*.app.staging.forkline.dev"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: internal-app-staging-forkline-dev-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              kubernetes.io/metadata.name: calypso-runners
+        kinds:
+          - kind: HTTPRoute
