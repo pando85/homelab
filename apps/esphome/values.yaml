@@ -70,6 +70,23 @@ app-template:
             - *host
           secretName: esphome-tls-certificate
 
+  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  route:
+    internal:
+      kind: HTTPRoute
+      # stable name: the SecurityPolicy targets it
+      forceRename: esphome-internal
+      hostnames:
+        - esphome.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: esphome
+              port: 6052
+
   defaultPodOptions:
     nodeSelector:
       # Required
