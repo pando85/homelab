@@ -11,7 +11,7 @@ This also delivers the grigri (staging) platform part of
 Forkline Remote): experimental-channel Gateway API CRDs, a shared external Gateway with HTTPS
 listeners plus a TLS passthrough listener, and the router 443 switch away from `192.168.193.4`.
 
-**Status: Phase 0 in progress (2026-11-09). See Execution Status and Autonomy Scope.**
+**Status: Phase 1 in progress (2026-11-09). See Execution Status and Autonomy Scope.**
 
 Strategy in one paragraph: run Envoy Gateway **side by side** on two new Cilium LB VIPs
 (`.13` internal, `.14` external). Every app gets its internal and external routes and is verified
@@ -45,10 +45,11 @@ Work happens in a dedicated worktree (`git worktree add -b envoy-gateway <dir> o
 committed and pushed **directly to master** (`git push origin envoy-gateway:master`, after
 `git pull --rebase origin master`). No PRs in this repo.
 
-| Phase | State       | Notes                                                                                                                                                                                                                                                                                                                   |
-| ----- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | in progress | P0.1 done (`docs/network/pfsense.md`). DNS map, TLS secret consumers, ownership: done (findings below). Pending: Envoy Gateway chart/API research (versions, CRD channel, EnvoyProxy/policy field paths, Kanidm PKCE, external-dns gateway source, Argo health), chart route support + `--publish-status-address` check |
-| 1-6   | not started |                                                                                                                                                                                                                                                                                                                         |
+| Phase | State       | Notes                                                                                                                             |
+| ----- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | done        | All steps done except step 7 (post the listener contract on multivara#199): owner action, does not block Phase 1. Findings below. |
+| 1     | in progress | Step 1 (controller and CRDs) first.                                                                                               |
+| 2-6   | not started |                                                                                                                                   |
 
 ### Phase 0 findings (2026-11-09)
 
@@ -77,6 +78,77 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
   calypso (5 + vault), keycloak (2), gitlab. These need routes in their repos (or stay on
   nginx-external) before the corresponding switch.
 
+#### Envoy Gateway and Gateway API (researched 2026-11-09, read-only)
+
+| Topic                  | Result                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Envoy Gateway version  | **v1.9.3** (2026-10-26, supported until 2027-02-14, tested on k8s 1.33-1.36; live is 1.35.8). v1.10.0 (2026-11-06) is too new                                                                                                                                                                                                                                                                                                                                 |
+| Envoy image            | v1.9.3 defaults to `distroless-v1.39.5`, which still trusts the compromised eMudhra CAs. Pin `docker.io/envoyproxy/envoy:distroless-v1.39.6` (`global.images.envoyProxy.image`, and `envoyDeployment.container.image` on each EnvoyProxy, which replaces)                                                                                                                                                                                                     |
+| Gateway API            | v1.6.1 bundled. TCPRoute, UDPRoute GA in 1.6, TLSRoute standard since 1.5                                                                                                                                                                                                                                                                                                                                                                                     |
+| CRD install            | `oci://docker.io/envoyproxy/gateway-crds-helm` (`crds.gatewayAPI.enabled`, `.channel: experimental`, `crds.envoyGateway.enabled`) plus `gateway-helm` with `crds.enabled: false`. CRDs are in `templates/`, so no `includeCRDs`                                                                                                                                                                                                                               |
+| CRD channel            | Experimental kept: standard would be enough for `v1` TCPRoute/TLSRoute, but experimental also serves `v1alpha2` (needed by calypso and the Forkline Remote relay)                                                                                                                                                                                                                                                                                             |
+| Safe-upgrades policy   | The main chart's `ValidatingAdmissionPolicy` (`failurePolicy: Fail` on all CRD writes) goes away with `crds.enabled: false`                                                                                                                                                                                                                                                                                                                                   |
+| ServerSideApply        | Required: `envoyproxies` 649 KB, `securitypolicies` 275 KB, `httproutes` 299 KB (experimental) exceed the 262144-byte last-applied limit. Same as `system/tempo/kustomization.yaml:36`. Upstream's Argo guide uses it too                                                                                                                                                                                                                                     |
+| Chart values           | `config.envoyGateway.extensionApis.enableBackend` and `enableLua` (Lua is off by default since v1.9.0). `topologyInjector.enabled` defaults true (turn off). No ServiceMonitor in the chart (metrics on controller Service port 19001)                                                                                                                                                                                                                        |
+| Argo CD 3.6.1 health   | Built in for Gateway, GatewayClass, HTTPRoute, GRPCRoute, TLSRoute, BackendTLSPolicy, ListenerSet and the Envoy Backend, BackendTrafficPolicy, ClientTrafficPolicy, EnvoyExtensionPolicy, EnvoyPatchPolicy, SecurityPolicy. **None** for TCPRoute, UDPRoute, ReferenceGrant, EnvoyProxy, HTTPRouteFilter (they show Healthy without a check; fine)                                                                                                            |
+| publish-status-address | Confirmed on the forkline chart: `controller.publishService.enabled: false` plus `extraArgs.publish-status-address=192.168.193.13` renders `--publish-status-address`. The two flags are mutually exclusive (controller exits if both are set); `--update-status` must stay true; the leader syncs status every 60s, so expect about 1 minute after a rollout; `--update-status-on-shutdown` only clears status with a single pod                             |
+| app-template `route:`  | Supports HTTPRoute, GRPCRoute, TCPRoute, TLSRoute, UDPRoute, several routes per release, `tpl` in hostnames. It picks `v1` only if `gateway.networking.k8s.io/v1/HTTPRoute` is in `Capabilities.APIVersions`: local renders need `--api-versions gateway.networking.k8s.io/v1/HTTPRoute` (`scripts/deploy-dir.rh:26-31` passes only the Ingress one); Argo's discovery is expected to give `v1` (unchecked). A `RequestRedirect` rule cannot have backendRefs |
+
+Native route support per component (B group); everything else is a raw `HTTPRoute` template:
+
+| Component                              | Native key                                                                                       | Gotcha                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| argo-cd 10.17.0                        | `server.httproute.*`                                                                             | Shared hostnames: native for `argocd.internal`, raw route for the external `/api/webhook` on `argocd-server:80` (`server.insecure` is set)                                                                                                                                                                                |
+| forgejo 17.3.2                         | `httpRoute.*`, `tcpRoute.*` (creates `<fullname>-ssh`, `v1alpha2`)                               | `httpRoute.matches.timeouts` renders invalid: do not use it, set timeouts in Envoy policies. Values sit under `forgejo:`                                                                                                                                                                                                  |
+| minio 5.4.0                            | none (raw)                                                                                       | Disable chart `ingress` and `consoleIngress`                                                                                                                                                                                                                                                                              |
+| kube-prometheus-stack 92.22.0, grafana | `prometheus.route.main`, `alertmanager.route.main`, `grafana.route.main`                         | Disable the matching `ingress` blocks; grafana is external today                                                                                                                                                                                                                                                          |
+| loki 20.4.1, prometheus-long-term      | raw                                                                                              | Replace both raw Ingresses; ports are named `http-metrics` and `http-web`                                                                                                                                                                                                                                                 |
+| oauth2-proxy 10.7.2                    | `gatewayApi.*`                                                                                   | Single `gatewayRef`; set `rules[].matches` to `PathPrefix /oauth2` (default is `/`). Removed in Phase 6 anyway                                                                                                                                                                                                            |
+| ollama 1.95.0                          | `httpRoute.*`                                                                                    | No `annotations` key; `hostnames` defaults to `ollama.local`, always override                                                                                                                                                                                                                                             |
+| open-webui 17.5.0                      | `route.*`                                                                                        | `httpsRedirect` adds a second route defaulting to `sectionName: http`                                                                                                                                                                                                                                                     |
+| bitnami wordpress 34.2.6               | `wordpress.httpRoute.*` (internal host)                                                          | `parentRefs` defaults to a Gateway named `gateway`: always set. Pulling from `charts.bitnami.com` fails (pre-existing); OCI `registry-1.docker.io/bitnamicharts/wordpress` works. External and www redirect stay raw                                                                                                      |
+| cilium 1.20.4 (hubble UI)              | none (raw)                                                                                       | Set `hubble.ui.ingress.enabled: false`                                                                                                                                                                                                                                                                                    |
+| Kaniop Kanidm CR 0.21.1                | `spec.gateway.*` (HTTPRoute `kanidm`, optional `backendTlsPolicy`), coexists with `spec.ingress` | Default backend port 8443 hard-coded; no BackendTrafficPolicy/ClientTrafficPolicy, so the source-IP hash is a separate raw CR. Before removing `spec.ingress`: set `spec.tlsSecretName: idm-external-tls-certificate` and add an explicit `Certificate` (keeps the `ldaps.idm.internal` SAN), else the pods fail to start |
+| Vault operator CR 1.24.1               | none (`spec.ingress` only)                                                                       | Remove `spec.ingress`, add raw HTTPRoute and `BackendTLSPolicy`. The operator has no delete path: removing `spec.ingress` **leaves an orphan Ingress** that Argo will not prune                                                                                                                                           |
+
+Backend Service and port per host (confirmed against live Ingresses and Services):
+
+| Host                                                         | Service : port                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `argocd.internal`, `argocd.grigri.cloud` `/api/webhook`      | `argocd/argocd-server` : 80                                                                      |
+| `git.grigri.cloud`                                           | `git/git-forgejo-http` : 3000 (`http`); SSH `git-forgejo-ssh` : 22                               |
+| `s3` / `mc-s3` internal                                      | `minio/minio` : 9000, `minio-console` : 9001                                                     |
+| `s3` / `mc-s3` external                                      | `s3-public/s3-public-minio` : 9000, `s3-public-minio-console` : 9001                             |
+| `cross-backups` / `mc-cross-backups`                         | `cross-backups/cross-backups-minio` : 9000, `cross-backups-minio-console` : 9001                 |
+| `prometheus.internal`, `alertmanager.internal`               | `monitoring/monitoring-kube-prometheus-prometheus` : 9090, `...-alertmanager` : 9093             |
+| `prometheus-long-term.internal`                              | `monitoring/prometheus-long-term` : 9090                                                         |
+| `grafana.grigri.cloud`                                       | `monitoring/monitoring-grafana` : 80                                                             |
+| `loki.internal`                                              | `loki/loki` : 3100 (`http-metrics`)                                                              |
+| `auth.grigri.cloud` `/oauth2`                                | `oauth2-proxy/oauth2-proxy` : 80                                                                 |
+| `ollama.internal`                                            | `ollama/ollama` : 11434                                                                          |
+| `open-webui.grigri.cloud`                                    | `open-webui/open-webui` : 80                                                                     |
+| `mintpsicologia.internal`, `mintpsicologia.es`, `www.` (301) | `mintpsicologia/mintpsicologia-wordpress` : 80 (www: `RequestRedirect` route, no backend)        |
+| `hubble.internal`                                            | `kube-system/hubble-ui` : 80                                                                     |
+| `idm.grigri.cloud`                                           | `kanidm/kanidm` : 8443 (`https`, headless, backend TLS required; ldaps 3636 on the same Service) |
+| `vault.internal`                                             | `vault/vault` : 8200 (`api-port`), TLS backend (hostname = in-cluster FQDN)                      |
+
+Auth, Kanidm and external-dns results (applied in recipe 1 and the Target Design below):
+
+| Topic                | Result                                                                                                                                                                                                                                                                                                         |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PKCE                 | No field; Envoy always sends S256 (verifier cookie `CodeVerifier-<suffix>`), Kanidm accepts it: no PKCE opt-out anywhere. Token auth is `client_secret_basic`                                                                                                                                                  |
+| OIDC discovery       | Runs on every translation, no cache between rounds. A failure marks the policy not accepted and routes return 500 until a later reconcile; the last-good fallback arrives in v1.10. Set `provider.authorizationEndpoint` and `tokenEndpoint` explicitly: discovery is skipped                                  |
+| Kanidm URLs          | Issuer `https://idm.grigri.cloud/oauth2/openid/<client>`, JWKS `.../<client>/public_key.jwk`, authorize `https://idm.grigri.cloud/ui/oauth2`, token `https://idm.grigri.cloud/oauth2/token`, ID tokens ES256, no `end_session_endpoint` (Kanidm 1.11.2, Kaniop 0.21.1)                                         |
+| Groups claim         | Scope `groups` emits UUIDs and SPNs (`name@idm.grigri.cloud`) in one flat `groups` array; `groups_spn` emits SPNs only. Authorization rules match the SPN values                                                                                                                                               |
+| ID token from cookie | The oauth2 filter runs before jwt_authn and decrypts the cookies. Set `oidc.cookieNames.idToken: <fixed>` and `jwt.providers[].extractFrom.cookies: [<fixed>]` (default name has a random suffix)                                                                                                              |
+| Client secret        | EG wants key `client-secret`; Kaniop's secret has `CLIENT_ID`/`CLIENT_SECRET`: use `secretKeyAliases.clientSecret: [client-secret]`. Cross-namespace needs a `ReferenceGrant` from `SecurityPolicy` (group `gateway.envoyproxy.io`)                                                                            |
+| `claimToHeaders`     | Array claims are not supported. If a groups header is needed, `claimMap[].joinStrategy: csv` on the Kaniop client makes a string claim                                                                                                                                                                         |
+| directResponse       | `directResponse.header.set`/`add` work (`Location` included); `remove` is ignored                                                                                                                                                                                                                              |
+| queryParams regex    | `RegularExpression` supported (full match), maps to Envoy `safe_regex`                                                                                                                                                                                                                                         |
+| BackendTrafficPolicy | `compression` is deprecated: use `compressor: [{type: Brotli}, {type: Gzip}]` (mutually exclusive with `compression`). `timeout.http.requestTimeout: 0s` works; a route's own `timeouts.request` wins. Local rate limit has no burst field (bucket = `requests`)                                               |
+| external-dns v0.23.0 | `--annotation-filter` applies to routes. `target` is read only from Gateways/ListenerSets, never routes. Default target is Gateway `status.addresses` (`.13`/`.14`, from the LB Service). Chart RBAC follows `sources`. Do not add `gateway-tcproute` (reads `v1alpha2`; forgejo SSH shares the `git.` record) |
+| cert-manager 1.21.3  | Nothing needed: explicit Certificates in `envoy-gateway` issued by `letsencrypt-prod-dns`, same-namespace `certificateRefs` need no `ReferenceGrant`                                                                                                                                                           |
+
 ## Autonomy Scope (agreed with the owner 2026-11-09)
 
 **Autonomous, no check-backs** (no real traffic moves; nginx keeps serving `.1`/`.4`):
@@ -91,10 +163,11 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 - Stop and alert the owner when: Argo stays Degraded after a revert, an existing app's error rate
   moves on nginx, an alert fires that could be ours, or a CRD conflicts.
 
-**Needs the owner's explicit yes, each time:** disabling PKCE on a Kanidm client; comments on
-multivara#199 or any change in multivara/kiais repos or calypso; the Phase 4 internal switch
-commit (then executed, verified and rolled back autonomously); Phase 6 decommission; anything
-outside this plan.
+**Needs the owner's explicit yes, each time:** comments on multivara#199 or any change in
+multivara/kiais repos or calypso; the manual delete of the orphan Ingress the Vault operator
+leaves behind after `spec.ingress` is removed (it has no delete path); the Phase 4 internal
+switch commit (then executed, verified and rolled back autonomously); Phase 6 decommission;
+anything outside this plan.
 
 **Owner only:** pfSense edits (P4.1, P5.x, P6.x). The agent prepares exact steps and verifies
 read-only before and after.
@@ -288,15 +361,18 @@ How Ingresses are defined in this repo (decides how routes get written):
        HTTPRoutes / TLSRoutes / TCPRoute in app namespaces (parentRef picks gateway + listener)
 ```
 
-- **One app** `system/envoy-gateway` (namespace `envoy-gateway`): official OCI chart
-  `oci://docker.io/envoyproxy/gateway-helm` via kustomize `helmCharts`, version pinned with a
-  Renovate hint, CRDs patched like the repo already does for big CRDs (`Replace=true` or
-  `ServerSideApply=true`). **Gateway API experimental channel** (#199 needs `TLSRoute`; it also
-  gives `TCPRoute`). If the chart's bundled CRDs are not the experimental channel, install CRDs
-  from `gateway-crds-helm` or the upstream release manifest instead and skip the chart's.
-  Controller config: `extensionApis.enableBackend: true` (unifi), Lua enabled for
-  `EnvoyExtensionPolicy` (readest, radarr, navidrome, tanque). Sync waves: CRDs/controller, then
-  GatewayClass, EnvoyProxy, Certificates, Gateways, global policies.
+- **One app** `system/envoy-gateway` (namespace `envoy-gateway`), two OCI charts at **v1.9.3**
+  via kustomize `helmCharts`, each with a Renovate hint: `gateway-crds-helm` (experimental channel,
+  Gateway API v1.6.1 plus the Envoy Gateway CRDs) and `gateway-helm` with `crds.enabled: false`
+  (this also drops the safe-upgrades `ValidatingAdmissionPolicy`). CRDs sync with
+  `ServerSideApply=true` (several exceed 262144 bytes). **Gateway API experimental channel**: it
+  keeps serving `v1alpha2` for calypso compatibility (the standard channel would be enough for
+  `v1` `TCPRoute`/`TLSRoute`). Envoy image pinned to `docker.io/envoyproxy/envoy:distroless-v1.39.6`
+  (eMudhra CA fix). Controller config: `extensionApis.enableBackend: true` (unifi), `enableLua: true`
+  for `EnvoyExtensionPolicy` (readest, radarr, navidrome), `topologyInjector.enabled: false`. Sync
+  waves: CRDs/controller, then GatewayClass, EnvoyProxy, Certificates, Gateways, global policies.
+  Argo CD 3.6.1 has no health check for `TCPRoute`, `UDPRoute`, `ReferenceGrant`, `EnvoyProxy`,
+  `HTTPRouteFilter` (they show Healthy unchecked; read their status by hand).
 - **One `GatewayClass` (`envoy`), two `Gateway`s** (`internal`, `external`) in `envoy-gateway`,
   each with its own `EnvoyProxy` (via `spec.infrastructure.parametersRef`), so each gets its own
   Deployment and LB Service:
@@ -345,7 +421,7 @@ reference `external`).
   - `tls.alpnProtocols: [h2, http/1.1]` pinned (**mandatory here**: hostname-scoped TLS
     listeners silently drop h2 gateway-wide otherwise), `http1.http10` enabled, path
     `escapedSlashesAction: KeepUnchanged`, idle timeouts and TCP keepalive set explicitly;
-  - compression (Brotli + Gzip) **only per route, never on MinIO/S3 hosts** (compression rewrites
+  - compression (`compressor: [{type: Brotli}, {type: Gzip}]`; the older `compression` field is deprecated) **only per route, never on MinIO/S3 hosts** (compression rewrites
     `Accept-Encoding`, which breaks SigV4-signed requests);
   - every route-level `BackendTrafficPolicy` uses `mergeType: StrategicMerge`, otherwise it
     replaces the gateway one instead of extending it.
@@ -355,7 +431,10 @@ reference `external`).
   `release: monitoring`), Envoy Gateway's Grafana dashboards, external proxy tracing via
   `EnvoyProxy.telemetry.tracing` to `otel-collector...:4317`, JSON access logs with trace id.
 - **DNS**: external-dns gains sources `gateway-httproute` and `crd`, and `forkline.io` in
-  `domainFilters` (#199). The runner wildcard moves from the nginx Service annotations to a
+  `domainFilters` (#199). Not `gateway-tcproute` (v0.23 reads `v1alpha2`; forgejo SSH shares the
+  `git.` record). `--annotation-filter` applies to routes, so every route carries
+  `external-dns.kubernetes.io/enabled=true`; the `target` annotation is read **only from the
+  Gateway** (never routes) and defaults to its `status.addresses` (`.13`/`.14`). The runner wildcard moves from the nginx Service annotations to a
   `DNSEndpoint` owned by multivara.
 - **Forgejo SSH (D2)**: `TCPRoute` on the external gateway, sharing `git.grigri.cloud`, the
   pfSense port alias and the unbound override with HTTPS; no pfSense rule of its own.
@@ -389,15 +468,21 @@ spec:
   targetRefs:
     [{ group: gateway.networking.k8s.io, kind: HTTPRoute, name: <app> }]
   oidc:
-    provider: { issuer: https://idm.grigri.cloud/oauth2/openid/<client> }
+    provider:
+      issuer: https://idm.grigri.cloud/oauth2/openid/<client>
+      # explicit endpoints: discovery is skipped (no dependency on idm at translation time)
+      authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
+      tokenEndpoint: https://idm.grigri.cloud/oauth2/token
     clientID: <client>
-    clientSecret: { name: oidc-client, namespace: envoy-gateway } # + ReferenceGrant per app ns
+    clientSecret: { name: oidc-client, namespace: envoy-gateway } # key `client-secret`; + ReferenceGrant per app ns
     redirectURL: https://<app-host>/oauth2/callback
     scopes: [openid, email, profile, groups]
+    cookieNames: { idToken: <fixed-name> }
   jwt:
     providers:
       - name: kanidm
         issuer: https://idm.grigri.cloud/oauth2/openid/<client>
+        extractFrom: { cookies: [<fixed-name>] }
         remoteJWKS:
           {
             uri: https://idm.grigri.cloud/oauth2/openid/<client>/public_key.jwk,
@@ -434,15 +519,24 @@ spec:
   because Kanidm keeps its own session, so each new app is a silent redirect. Don't rely on
   `cookieDomain`.
 - Replicate exactly which claim oauth2-proxy put in which header for http-echo, navidrome and
-  searxng (`X-Auth-Request-User`, `-Email`, `-Groups`, `Authorization`). Array claims arrive
-  base64(JSON); flatten with Lua only if an app needs CSV.
-- **OIDC discovery is fetched once and not retried.** The controller reaches
-  `idm.grigri.cloud` through the pfSense override (`.4` until the external switch): after
-  P5.1/P5.2, restart the Envoy Gateway controller or touch one SecurityPolicy. Migrate and verify
-  the kanidm route itself before applying any OIDC policy.
-- Unproven for Kanidm: per-client issuer and JWKS URLs, PKCE requirements (Kanidm enforces PKCE
-  by default; if Envoy Gateway does not send it, the client needs Kanidm's PKCE opt-out),
-  `logoutPath`. Check with `kubectl explain securitypolicy.spec.oidc` during the pilot.
+  searxng (`X-Auth-Request-User`, `-Email`, `-Groups`, `Authorization`). `claimToHeaders` does not
+  support array claims: if an app needs a groups header, make Kanidm emit a string claim
+  (`claimMap[].joinStrategy: csv` on the Kaniop client).
+- **OIDC discovery**: with `provider.authorizationEndpoint` and `tokenEndpoint` set explicitly,
+  discovery is skipped entirely, so the controller does not need `idm.grigri.cloud` at
+  translation time and nothing has to be restarted after the pfSense switch. (Without them a
+  failed discovery marks the policy not accepted and the routes return 500 until a later
+  reconcile; v1.9.3 has no last-good fallback.) Still migrate and verify the kanidm route itself
+  before applying any OIDC policy.
+- **Kanidm facts (verified 2026-11-09):** Envoy always sends PKCE S256 and Kanidm accepts it, so
+  there is no PKCE opt-out anywhere. Per-client issuer and JWKS (`.../<client>/public_key.jwk`),
+  ID tokens ES256, no `end_session_endpoint` (so no `endSessionEndpoint`; `logoutPath` only clears
+  the Envoy cookie). The `groups` scope emits UUIDs and SPNs in one flat array: authorization
+  rules match the SPN values (or request `groups_spn`). The Kaniop secret has `CLIENT_ID` and
+  `CLIENT_SECRET`: set `secretKeyAliases.clientSecret: [client-secret]`. The ID token comes from a
+  fixed-name cookie (`cookieNames.idToken` + `extractFrom.cookies`).
+- Still to prove on the pilot: EG issue #10075 (Envoy 1.39 OAuth2 SDS watch issue; not confirmed
+  fixed in 1.39.6), see Open Items.
 - Verify: `curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://<app>/` is a 302 to
   Kanidm; after login a user outside the group gets 403; `-H 'X-Auth-Request-User: spoofed'`
   is not echoed by http-echo.
@@ -452,7 +546,7 @@ spec:
 | nginx                                                                                              | Envoy Gateway                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `more_set_headers` security headers, HSTS (`max-age=31536000; includeSubDomains`), `server_tokens` | `ClientTrafficPolicy.headers.lateResponseHeaders.set` (Referrer-Policy, X-Frame-Options, X-Content-Type-Options, Permissions-Policy, Strict-Transport-Security) and `remove: [Server]`                                                                                      |
-| brotli                                                                                             | `BackendTrafficPolicy.compression: [{type: Brotli}, {type: Gzip}]` on routes only, never on S3 or navidrome routes                                                                                                                                                          |
+| brotli                                                                                             | `BackendTrafficPolicy.compressor: [{type: Brotli}, {type: Gzip}]` on routes only, never on S3 or navidrome routes                                                                                                                                                           |
 | `use-forwarded-headers: true` (internal)                                                           | internal `ClientTrafficPolicy.clientIPDetection.xForwardedFor.numTrustedHops: 1` (or `trustedCIDRs`); external: none                                                                                                                                                        |
 | OTel tracing, trace_id in access log                                                               | `EnvoyProxy.telemetry.tracing` (`provider.type: OpenTelemetry`, backendRef to the otel-collector Service :4317, `samplingRate: 100`) + `ReferenceGrant`; JSON access log with `"traceID": "%TRACE_ID%"`; service name via `customTags` or check what the collector receives |
 | `limit-req-status-code: 429`                                                                       | default for Envoy local rate limits                                                                                                                                                                                                                                         |
@@ -543,10 +637,9 @@ max-age=604800` if the sidecar does not set it.
 **7. tanque-stream** (`apps/tanque/templates/stream-ingress.yaml`)
 
 - nginx: `/` 302 to `/stream.html?src=tcp_magic`, before auth.
-- Envoy: `directResponse` cannot carry a `Location` header, and `RequestRedirect` cannot set a
-  query reliably. Rule `Exact /` on a route **without** the SecurityPolicy (keeps "redirect before
-  login") with Lua `if h:headers():get(":path") == "/" then h:respond({[":status"] = "302",
-["location"] = "/stream.html?src=tcp_magic"}, "") end`.
+- Envoy: `HTTPRouteFilter.directResponse` with `statusCode: 302` and `header.set: [{name:
+Location, value: /stream.html?src=tcp_magic}]` (`set` works, `remove` is ignored; no Lua needed).
+  Rule `Exact /` on a route **without** the SecurityPolicy (keeps "redirect before login").
 - Verify: `curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://tanque-stream.grigri.cloud/`.
 
 **8. nextcloud** (`apps/nextcloud/nextcloud.yaml` server-snippet)
@@ -582,11 +675,15 @@ Allow` if clients send underscore headers (`ignore_invalid_headers off`); **no c
 
 **12. Backend TLS**
 
-- kanidm: `BackendTLSPolicy` (CA from the kanidm cert, `hostname` = a SAN of it, same namespace
-  as the Service) + `BackendTrafficPolicy.loadBalancer: {type: ConsistentHash, consistentHash:
-{type: SourceIP}}` (needs `Local`, kept).
+- kanidm: the Kaniop CR's native `spec.gateway` (HTTPRoute `kanidm`, optional `backendTlsPolicy`,
+  coexists with `spec.ingress`, backend port 8443) + a separate raw
+  `BackendTrafficPolicy.loadBalancer: {type: ConsistentHash, consistentHash: {type: SourceIP}}`
+  (needs `Local`, kept). Before removing `spec.ingress`: `spec.tlsSecretName:
+idm-external-tls-certificate` and an explicit `Certificate` (keeps the LDAPS SAN), otherwise
+  the pods fail to start. Check the `BackendTLSPolicy` apiVersion the operator emits.
 - vault: operator CR `ingress` off, standalone HTTPRoute, `BackendTLSPolicy` with the
-  operator's TLS secret CA and the in-cluster Service FQDN as `hostname`.
+  operator's TLS secret CA and the in-cluster Service FQDN as `hostname`. The operator never
+  deletes the Ingress it created: delete it by hand (needs the owner's yes, Autonomy Scope).
 - unifi (self-signed): EG `Backend` (`enableBackend: true`) with `tls.insecureSkipVerify: true`,
   same trust as nginx today (don't tighten unasked).
 - Verify: policies `Accepted=True`, 200 not 503 with response flag `UF`.
@@ -662,25 +759,30 @@ Each phase ends at a gate. Do not start the next phase until the gate passes.
    before Phase 6 removes its Ingress.
 6. Find the owner repo of the `isidoro`, `isidoro-keycloak`, `mcp-gateway` Ingresses.
 7. Post the listener contract on #199 (owner action) so multivara writes routes against it.
-8. Verify the remaining assumptions (doc read or Phase 1 spike):
-   - Cilium BGP advertises a `Local` VIP only from nodes with a ready local endpoint;
-   - external-dns `gateway-httproute` honours the annotation filter and `target` on routes;
-   - which Gateway API channel the pinned `gateway-helm` bundles;
-   - Argo CD 3.6 health checks for Gateway API kinds;
-   - which upstream charts in group B support `HTTPRoute` natively;
-   - Kanidm with Envoy Gateway OIDC: per-client issuer/JWKS URLs, PKCE (recipe 1);
-   - `queryParams` regex matching (radarr, wallabag).
+8. Verify the remaining assumptions (done 2026-11-09, see Phase 0 findings; the Cilium BGP
+   `Local` advertisement is verified by the Gate 1 roll test):
+   - Cilium BGP advertises a `Local` VIP only from nodes with a ready local endpoint: Gate 1;
+   - external-dns `gateway-httproute`: the annotation filter applies to routes, `target` is read
+     only from the Gateway;
+   - Gateway API channel bundled with the pinned `gateway-helm`: v1.6.1 experimental, but the
+     CRDs come from `gateway-crds-helm`;
+   - Argo CD 3.6 health checks for Gateway API kinds: none for TCPRoute, UDPRoute,
+     ReferenceGrant, EnvoyProxy, HTTPRouteFilter;
+   - which upstream charts in group B support `HTTPRoute` natively: table in the findings;
+   - Kanidm with Envoy Gateway OIDC: per-client issuer/JWKS, PKCE S256 accepted (recipe 1);
+   - `queryParams` regex matching: supported (full match), confirm in the radarr spike.
 
-**Gate 0:** pfSense export committed, DNS map recorded here, publish-status-address confirmed,
-contract posted.
+**Gate 0:** met except the #199 contract post (owner action, does not block Phase 1): pfSense
+export committed, DNS map recorded here, publish-status-address confirmed.
 
 ### Phase 1 - Platform (both gateways live, no app traffic)
 
 Commits, in order, each synced and checked before the next:
 
-1. `envoy-gateway: Add Envoy Gateway controller and Gateway API CRDs` (experimental channel,
-   CRD patch, Renovate hint, Backend and Lua enabled). Restart the Argo CD
-   application controller if it keeps reporting unknown kinds after the CRDs land.
+1. `envoy-gateway: Add Envoy Gateway controller and Gateway API CRDs` (`gateway-crds-helm` and
+   `gateway-helm` v1.9.3, experimental channel, ServerSideApply, Renovate hints, Backend and Lua
+   enabled, Envoy image pinned). Restart the Argo CD application controller if it keeps reporting
+   unknown kinds after the CRDs land.
 2. `envoy-gateway: Add internal and external gateways` (GatewayClass, 2 EnvoyProxy with the
    nginx placement, 2 Gateways on `.13`/`.14` with the listener table, Certificates, HTTP->HTTPS
    redirect route, gateway-wide ClientTrafficPolicy and BackendTrafficPolicy).
@@ -742,8 +844,9 @@ Per app, in one PR (or one per gateway if it is easier to review):
 2. verify against `.13`: `curl --resolve <host>:443:192.168.193.13`, browser with an
    `/etc/hosts` entry, the per-route checklist, the app's special case recipe.
 3. external route (`parentRefs: external`) with the definitive external-dns annotations
-   (`enabled`, `target: grigri.cloud`): safe now, because external records are CNAMEs to the
-   apex and do not change.
+   (`enabled` only on the route; the `target: grigri.cloud` annotation lives on the external
+   Gateway, see Open Items): safe now, because external records are CNAMEs to the apex and do
+   not change.
 4. verify against `.14` the same way, from the LAN.
 5. tick the app in the tracking list below. The Ingresses stay untouched.
 
@@ -811,8 +914,9 @@ Low-traffic time. The owner does the pfSense steps; an agent watches and verifie
 3. pfSense **P5.2** (3 host overrides -> .14), apply.
 4. Merge the prepared commits (hermes hostAliases/tests, nginx-external Service annotations
    removed).
-5. Restart the Envoy Gateway controller (or touch the OIDC SecurityPolicies): it fetches OIDC
-   discovery from `idm.grigri.cloud`, which just moved, and may not retry a failure.
+5. Check that every OIDC `SecurityPolicy` is still `Accepted` (the explicit
+   `authorizationEndpoint`/`tokenEndpoint` mean no discovery against the moved `idm.grigri.cloud`,
+   so no controller restart is needed).
 6. Verify from outside (phone on mobile data) and from the LAN: the Gate 3 functional list,
    OIDC login on argocd/grafana/forgejo/freshrss/dawarich (in-cluster OIDC clients reach idm
    through the override, now `.14`), argocd webhook delivery from GitHub, Argo still syncing
@@ -871,7 +975,7 @@ apps Synced/Healthy.
 | h2 lost on all hosts                    | hostname-scoped TLS listener without pinned ALPN                                                         |
 | intermittent 503 `UF`                   | backend expects TLS (missing `BackendTLSPolicy`) or a NetworkPolicy still admits only nginx              |
 | VIP unreachable during roll             | `maxSurge 0` with `Local`; BGP withdraws before the new pod is ready                                     |
-| OIDC 500 after the external switch      | controller cached a failed OIDC discovery; restart controller                                            |
+| OIDC 500 on a route                     | policy not `Accepted`: endpoints not set explicitly and discovery failed; set them (no restart needed)   |
 | internal record not moved after Phase 4 | Ingress has a `target` annotation or is not `nginx-internal`; or the name is a Service record (expected) |
 | app lost TLS secret                     | Ingress deleted with owner-ref'd Certificate still mounted elsewhere                                     |
 | LAN works, outside fails (or reverse)   | P5.1 and P5.2 out of step: LAN uses the override, outside uses the alias                                 |
@@ -898,3 +1002,16 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
 - Calypso HTTPRoute support for runners (multivara/calypso work, not covered by #199); gates
   the removal of ingress-nginx-external and of the bridge listener.
 - kroki: caching sidecar image and config (recipe 6).
+- Envoy Gateway issue #10075 (Envoy 1.39 OAuth2 SDS watch issue): fix is Envoy PR 47631, not
+  confirmed in 1.39.6. Test OIDC on the pilot (esphome, http-echo) before scaling.
+- Helm hooks (the `gateway-helm` certgen Job, RBAC) under kustomize `helmCharts` become Argo
+  hooks; they need the namespace first. Verify in the Phase 1 step 1 sync.
+- Untested live until step 2: Gateway `status.addresses` (external-dns default target) and the
+  tracing `ReferenceGrant`.
+- external-dns `target` is per Gateway: the external Gateway needs `target: grigri.cloud`, but
+  `mintpsicologia.es` and the forkline hosts use other targets today. Decide in step 2 (extra
+  `DNSEndpoint`s, or a second external Gateway/ListenerSet); internal records use the default.
+- bitnami wordpress: `charts.bitnami.com` pull fails (pre-existing); use OCI
+  `registry-1.docker.io/bitnamicharts/wordpress`; run `helm dependency build` on the real chart
+  before the mintpsicologia step.
+- forgejo chart `httpRoute.matches.timeouts` renders invalid: timeouts only via Envoy policies.
