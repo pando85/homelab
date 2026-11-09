@@ -23,6 +23,26 @@ oauth2-proxy:
           - *host
         secretName: oauth2-proxy-tls-certificate
 
+  # Envoy Gateway route (ingress-nginx migration); the Ingress above stays until the switch.
+  # Single gatewayRef: external only. Explicit `matches`: the chart default is PathPrefix `/`,
+  # the Ingress only exposes `/oauth2`. External-dns annotation as on the other external routes
+  # (the record exists already, target comes from the external Gateway).
+  gatewayApi:
+    enabled: true
+    gatewayRef:
+      name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+    hostnames:
+      - auth.grigri.cloud
+    annotations:
+      external-dns.kubernetes.io/enabled: "true"
+    rules:
+      - matches:
+          - path:
+              type: PathPrefix
+              value: /oauth2
+
   proxyVarsAsSecrets: true
 
   deploymentAnnotations:
