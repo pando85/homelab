@@ -1,0 +1,121 @@
+{{- if .Values.networkIsolation }}
+---
+# CiliumNetworkPolicy for the admin MCP gateway plane (release `mcp-gateway-admin`).
+#
+# WHY CILIUM AND NOT A NATIVE NetworkPolicy
+# -----------------------------------------
+# Native Kubernetes NetworkPolicy cannot express what this cluster needs: it has no
+# entities, and a node `ipBlock` does not match the kubelet probe source. Measured on
+# `grigri` (Cilium v1.20.4, `enable-policy: default`, `enable-host-firewall: false`,
+# `allow-localhost` unset): ANY policy set carrying an INGRESS section on a pod probed
+# with `httpGet` denies the kubelet probe unless the probe source is matched, and the
+# only entity that matches it here is `world` - `host`, `remote-node`, `cluster` and a
+# node-subnet `fromCIDR` each measured `context deadline exceeded` plus restarts.
+# Egress-only sets never broke a probe. Full matrix and caveats:
+# `docs/conventions/cilium.md`, section "Kubelet probes under enforced policies".
+# Do not "improve" this shape from general Cilium advice; it is the one that measured
+# safe here (rows S2/S3, and S5 reproduces the outage in 6 s when the `world` rule is
+# removed from an otherwise identical policy).
+#
+# PORTS - read off the rendered manifests, not assumed
+# ---------------------------------------------------
+#   3000   MCP app listener (`gateway.port`, Service `http`, Ingress backend)
+#   15020  metrics (Service `metrics`, ServiceMonitor `port: metrics`)
+#   15021  health (`/healthz/ready`) - liveness + readiness + startupProbe, on a
+#          listener that serves NOTHING else (adminAddr: "off")
+#
+# The probe port is therefore DEDICATED: allowing it does not expose the app or the
+# metrics port. This is what makes the `world` allowance below usable.
+#
+# ACCEPTED RESIDUAL EXPOSURE (owner-approved): `world` may reach 15021 only. That
+# listener serves the readiness body and no secrets, and pod IPs (10.0.0.0/16) are not
+# routable from outside the cluster, so in practice `world` here means "identities the
+# endpoint-scoped rules below do not name", not "the internet".
+#
+# NEW MEASURED FACT: with `world` on the health port, an in-cluster pod that is NOT
+# named in `fromEndpoints` is DENIED on the health port as well. So `world` does not
+# admit cluster-identity pods; the residual exposure is only world-identity traffic
+# reaching a readiness body on a non-routable pod IP.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mcp-gateway-admin
+  labels:
+    app.kubernetes.io/name: mcp-gateway-admin
+    app.kubernetes.io/instance: mcp-gateway-admin
+spec:
+  # Pod labels verified against the rendered Deployment:
+  # app.kubernetes.io/name=mcp-gateway-admin, instance=mcp-gateway-admin,
+  # controller=agentgateway (added by app-template).
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: mcp-gateway-admin
+      app.kubernetes.io/instance: mcp-gateway-admin
+      app.kubernetes.io/controller: agentgateway
+  ingress:
+    # (1) Kubelet startup/readiness/liveness probes on the dedicated health listener.
+    # `world` ONLY - and `cluster` stays OFF this port: in one measured run a rule list
+    # that also contained `cluster` leaked the app port.
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "15021"
+              protocol: TCP
+    # (2) MCP traffic arrives only through the INTERNAL ingress controller
+    # (ingress-nginx, namespace `ingress-nginx`, class `nginx-internal`). The Ingress
+    # for mcp.internal.grigri.cloud uses class nginx-internal -> Service mcp-gateway-admin
+    # port 3000. Nothing else is allowed to call the gateway. Labels verified against
+    # system/ingress-nginx/values.yaml (controller admissionWebhooks.selector).
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/component: controller
+            io.kubernetes.pod.namespace: ingress-nginx
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # (3) Metrics are an ops-only port, separated at L3/L4 rather than by path. Covers
+    # both prometheus servers in `monitoring` (prometheus-monitoring-kube-prometheus-…
+    # and prometheus-long-term-…); they share app.kubernetes.io/name=prometheus.
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            io.kubernetes.pod.namespace: monitoring
+      toPorts:
+        - ports:
+            - port: "15020"
+              protocol: TCP
+  egress:
+    # Proven baseline: everything inside the cluster (DNS, the API, Kanidm JWKS fetch
+    # through the in-cluster external ingress VIP). Bare `cluster` with NO toPorts -
+    # attaching ports to this rule would restrict all cluster traffic to them.
+    - toEntities:
+        - cluster
+    # Kept explicit as a guard for the DNS anycast path: nodelocaldns answers at
+    # 169.254.25.10 and Cilium DNATs that to the node-local-dns POD, so a cidr rule
+    # would be wrong and a pod rule names the real endpoints. Redundant with `cluster`,
+    # which already covers both DNS workloads; harmless because egress rules are unioned.
+    - toEndpoints:
+        - matchLabels:
+            k8s-app: kube-dns
+            io.kubernetes.pod.namespace: kube-system
+        - matchLabels:
+            k8s-app: node-local-dns
+            io.kubernetes.pod.namespace: kube-system
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # NO `world` egress rule, and that is deliberate. The admin plane has:
+    #   - routes: [] (fail-closed, no backends enabled)
+    #   - Vault backend disabled (upstream SSRF, see values.yaml)
+    #   - JWKS URL https://idm.grigri.cloud/... is served by the in-cluster
+    #     ingress-nginx-external controller, reachable through `cluster` already
+    # There is no live admin route or OIDC/JWKS path that requires an internet address.
+    # If a future change adds an external target, it must add an explicit, narrow
+    # egress rule here rather than widening `cluster`.
+{{- end }}

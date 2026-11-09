@@ -15,18 +15,20 @@
 logLevel: info
 
 # --------------------------------------------------------------------------
-# Network isolation - OFF by default. The native NetworkPolicies in
-# templates/networkpolicy.yaml block kubelet httpGet probes on port 15021
-# because native NP cannot express `fromEntities: [world]` (measured on this
-# cluster, see docs/conventions/cilium.md and
-# docs/troubleshooting/mcp-firecrawl-egress-regression.md). The baseline stays
-# policy-free until those policies are replaced with a CiliumNetworkPolicy in
-# the split-port shape documented in docs/conventions/cilium.md.
-#
-# Setting networkIsolation: true renders the legacy native NetworkPolicies
-# as-is. This is NOT production-ready: it will break kubelet probes and cause
-# the pod to restart in a loop. Do not enable without replacing the native NPs
-# with a measured CNP first.
+# Network isolation - OFF by default. When enabled, renders a CiliumNetworkPolicy
+# (templates/ciliumnetworkpolicy.yaml) in the proven split-port shape:
+#   - `world` on the dedicated health port 15021 only (kubelet probes; the only
+#     entity matching the probe source on this cluster, measured)
+#   - app port 3000 from the internal ingress-nginx controller pods only
+#   - metrics port 15020 from Prometheus pods in `monitoring`
+#   - egress: bare `toEntities: [cluster]` (no toPorts) plus explicit DNS pod rules
+#   - no `world` egress (no live admin route requires internet; JWKS is in-cluster)
+# See docs/conventions/cilium.md, section "Kubelet probes under enforced policies".
+# The baseline stays policy-free; enabling is a separate reviewed change.
+# TO ENABLE: set `networkIsolation: true`. The CNP attaches to the running pod;
+# failureThreshold on probes is >= 6 (startup 30) so the transient attach window
+# is safe (measured: policy attached 6m32s before endpoint => Ready in 6s).
+# Rollback: set false again, no pod churn.
 networkIsolation: false
 
 # MCP session-protection key (agentgateway AES-256-GCM session IDs). Produced by the
