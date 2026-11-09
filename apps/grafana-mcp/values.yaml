@@ -47,9 +47,31 @@ grafana-mcp:
   replicas: 1
 
   grafana:
-    # Fixed in-cluster URL; not caller-controllable (GRAFANA_ALLOW_URL_OVERRIDE is unset,
-    # so X-Grafana-URL overrides stay inert).
-    url: "http://grafana.monitoring.svc.cluster.local:80"
+    # Values key (subchart `grafana.url`, rendered verbatim into GRAFANA_URL by
+    # grafana-mcp-0.34.0 templates/deployment.yaml). Fixed in-cluster URL; not caller-controllable
+    # (GRAFANA_ALLOW_URL_OVERRIDE is unset, so X-Grafana-URL overrides stay inert).
+    #
+    # NAME: `monitoring-grafana` is that Service's real name, read off the cluster.
+    # `kubectl get svc -n monitoring` lists `monitoring-grafana` (ClusterIP, 80/TCP, targetPort
+    # named `grafana`) and there is NO Service called `grafana` in `monitoring`. The value this
+    # replaces (`http://grafana.monitoring.svc.cluster.local:80`) combined the subchart's
+    # placeholder default (`http://grafana:3000`) with this cluster's namespace, so as committed
+    # every Grafana request from this backend failed at name resolution - silently, because
+    # /healthz never touches Grafana and the pod stays Ready.
+    #
+    # IN-CLUSTER SERVICE, not the public `grafana.grigri.cloud` host - measured, not assumed:
+    #   * per-user tokens survive the direct path. Grafana validates the bearer itself
+    #     (`[auth.jwt] enabled = true`, `header_name = Authorization`), and the live
+    #     nginx-external Ingress carries no auth or header-rewrite annotation at all (only
+    #     cert-manager, external-dns and ArgoCD tracking), so it adds TLS and host routing and
+    #     nothing else. The same `Authorization` header arrives either way.
+    #   * on the Service path itself: `/api/health` -> 200 (Grafana 13.3.0, database ok) and an
+    #     unauthenticated `/api/dashboards/uid/x` -> 401 rather than a redirect to `root_url`,
+    #     so the API is served and gated there exactly as through the ingress.
+    #   * the public host would hairpin out through the ingress and need a `world` egress rule
+    #     that templates/ciliumnetworkpolicy.yaml deliberately does not grant ("the only upstream
+    #     is the in-cluster Grafana").
+    url: "http://monitoring-grafana.monitoring.svc.cluster.local:80"
     # No API key. The caller's bearer is forwarded instead.
     apiKey: ""
 
