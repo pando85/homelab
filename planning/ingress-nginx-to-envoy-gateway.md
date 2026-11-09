@@ -48,8 +48,32 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | Phase | State       | Notes                                                                                                                             |
 | ----- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | done        | All steps done except step 7 (post the listener contract on multivara#199): owner action, does not block Phase 1. Findings below. |
-| 1     | in progress | Step 1 (controller and CRDs) first.                                                                                               |
+| 1     | in progress | Steps 1-3 done (below); step 4 (monitoring) next.                                                                                 |
 | 2-6   | not started |                                                                                                                                   |
+
+### Phase 1 progress (2026-11-09)
+
+| Step | Commit                                                                                                             | Result                                                                                                                                                                                  |
+| ---- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `68de320f4` `envoy-gateway: Add Envoy Gateway controller and Gateway API CRDs`                                     | Controller and experimental CRDs live, Synced Healthy.                                                                                                                                  |
+| 2    | `205cb6710` + `94f45bd35` `envoy-gateway: Add internal and external gateways` / `Use one certificate per listener` | Both Gateways Accepted and Programmed on `.13` / `.14`, 7 Certificates Ready (all `letsencrypt-prod-dns`), 2 proxies per Gateway on `prusik`, `.13/32` and `.14/32` learned by pfSense. |
+| 3    | `eef9c8613` `git: Add forgejo SSH TCPRoute on the external gateway`                                                | TCPRoute `git-forgejo-ssh` Accepted and ResolvedRefs; SSH through `.14` shows the same host keys as through nginx.                                                                      |
+
+Step 2 notes:
+
+- **Left out: listener `https-runners-staging-forkline-dev`** (replaces `tls-bridge-runners` only
+  once calypso emits HTTPRoutes). All other listeners of the contract are deployed.
+- One Certificate per listener (7). A first version shared one Certificate between two
+  listeners (apex plus wildcard, `mintpsicologia.es` plus `www`): Envoy Gateway then sets
+  `OverlappingTLSConfig` (HTTP/2 coalescing risk), so they were split. `https-grigri-cloud`
+  keeps one Certificate with the four wildcard SANs.
+- Gateway-wide `BackendTrafficPolicy` carries only the 60s request timeout: no `compressor`
+  gateway-wide on purpose (per route, never on S3 hosts). `ClientTrafficPolicy`: ALPN, `http10`,
+  `KeepUnchanged`, idle timeout 600s, TCP keepalive, HSTS and security headers, `Server` removed;
+  internal adds `xForwardedFor.numTrustedHops: 1`.
+- JSON access log to stdout is already on (with `traceID`, empty until step 4 adds tracing).
+- Internal HPA uses `ContainerResource` metrics on the `envoy` container (the pod also runs the
+  shutdown-manager sidecar, which has no requests).
 
 ### Phase 0 findings (2026-11-09)
 
@@ -1006,11 +1030,14 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
   confirmed in 1.39.6. Test OIDC on the pilot (esphome, http-echo) before scaling.
 - Helm hooks (the `gateway-helm` certgen Job, RBAC) under kustomize `helmCharts` become Argo
   hooks; they need the namespace first. Verify in the Phase 1 step 1 sync.
-- Untested live until step 2: Gateway `status.addresses` (external-dns default target) and the
-  tracing `ReferenceGrant`.
-- external-dns `target` is per Gateway: the external Gateway needs `target: grigri.cloud`, but
-  `mintpsicologia.es` and the forkline hosts use other targets today. Decide in step 2 (extra
-  `DNSEndpoint`s, or a second external Gateway/ListenerSet); internal records use the default.
+- Gateway `status.addresses` confirmed live (`.13` / `.14`, step 2). Still untested: the tracing
+  `ReferenceGrant`.
+- ~~external-dns `target` is per Gateway~~ **Resolved (2026-11-09, step 2):** the external
+  Gateway carries `external-dns.kubernetes.io/target: grigri.cloud` (every homelab-owned external
+  Ingress targets it today); the internal Gateway has no target (records default to `.13`).
+  `mintpsicologia.es` routes carry no external-dns annotation (records already exist and
+  external-dns runs upsert-only); multivara's forkline hosts are their concern. Inert until the
+  `gateway-httproute` source is added (step 5).
 - bitnami wordpress: `charts.bitnami.com` pull fails (pre-existing); use OCI
   `registry-1.docker.io/bitnamicharts/wordpress`; run `helm dependency build` on the real chart
   before the mintpsicologia step.
