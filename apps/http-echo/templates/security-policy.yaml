@@ -45,6 +45,8 @@ spec:
             claim: preferred_username
   authorization:
     defaultAction: Deny
+    # parity with nginx: the Ingress has no `allowed_groups`, so only the oauth2-proxy client scope
+    # map groups are required (the list below is that scope map).
     rules:
       - name: allowed-groups
         action: Allow
