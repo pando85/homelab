@@ -2,9 +2,10 @@
 # The internal routes and the movie list Lua live in httproute.yaml. Same-host routes merge:
 # - radarr-external, radarr-external-movie-list: behind the OIDC SecurityPolicy
 #   (security-policy.yaml);
-# - radarr-external-apikey*: the nginx `auth-snippet` skip (`^/api/v3/.*[?&]apiKey=[^&]+`), no
-#   policy, radarr checks the key. They win over the protected routes because they carry one
-#   more query match on the same path match.
+# - radarr-external-apikey*: the nginx `auth-snippet` skip (`^/api/v3/.*[?&]apiKey=[^&]+`,
+#   case-sensitive), no policy, radarr checks the key. Envoy Gateway orders regex matches by
+#   regex length, then by query match count: the `(?-i)` keeps the movie list skip
+#   case-sensitive and ahead of the protected `(?i)/api/v3/movie`.
 # The two movie list routes carry the excludeLocalCovers Lua (envoy-extension-policy.yaml).
 ---
 apiVersion: gateway.networking.k8s.io/v1
@@ -95,7 +96,7 @@ spec:
     - matches:
         - path:
             type: RegularExpression
-            value: "(?i)/api/v3/movie"
+            value: "(?-i)/api/v3/movie"
           queryParams:
             - type: RegularExpression
               name: apiKey
