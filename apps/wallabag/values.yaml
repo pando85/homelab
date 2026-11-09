@@ -108,6 +108,26 @@ app-template:
             - *host
           secretName: wallabag-external-tls-certificate
 
+  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # The PHP_SESSION_UPLOAD_PROGRESS block is an EnvoyExtensionPolicy (templates/envoy-extension-policy.yaml).
+  route:
+    external:
+      kind: HTTPRoute
+      forceRename: wallabag-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - wallabag.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: wallabag
+              port: 80
+
   configMaps:
     php-cve-mitigation:
       enabled: true

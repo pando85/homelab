@@ -1,0 +1,22 @@
+# Port of the nginx server-snippet (PHP2Shell, CVE-2026-109619): 403 for any request whose query
+# string contains PHP_SESSION_UPLOAD_PROGRESS. nginx matched `$args ~*`, a case-insensitive
+# substring of the raw query, so this is a plain lowercase `find` on the raw `:path` query.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: wallabag-external
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: wallabag-external
+  lua:
+    - type: Inline
+      inline: |
+        function envoy_on_request(handle)
+          local path = handle:headers():get(":path") or ""
+          local query = path:match("^[^?]*%?(.*)$")
+          if query ~= nil and query:lower():find("php_session_upload_progress", 1, true) then
+            handle:respond({[":status"] = "403"}, "")
+          end
+        end
