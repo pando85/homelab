@@ -29,10 +29,15 @@ Measured 2026-11-09 on `grigri` (Cilium `v1.20.4`, `enable-policy: default`,
   NetworkPolicy and CiliumNetworkPolicy alike. Egress-only policy sets did not break a single probe in
   any run. A `context deadline exceeded` therefore means the **request was denied on ingress**, not that
   a reply was lost on egress; ingress is stateful and probe replies traverse it unharmed.
-- **The kubelet probe source cannot be matched by `host`, `remote-node`, `cluster` or a node-subnet
-  `fromCIDR`** while `enable-host-firewall: false`. Only `world` matched. Any advice of the form "allow
-  the node with `fromEntities`/`toEntities: [host, remote-node]`" is **falsified** — that cure does not
-  work here, and it is not what the one long-lived policy-covered workload relies on:
+- **The kubelet probe source cannot be matched by `host`, `remote-node`, `cluster` or any `fromCIDR`**
+  while `enable-host-firewall: false`. The proven probe source address is **10.0.4.252**, the node's
+  `cilium_host` link address (`ip route get <podIP>` => `dev cilium_host src 10.0.4.252`); node pod
+  CIDRs are prusik 10.0.4.0/24, grigri 10.0.1.0/24, k8s-amd64-1 10.0.0.0/24. S6a `fromCIDR:
+  ["10.0.4.252/32"]` and S6b `fromCIDR: ["10.0.4.0/24"]` were both accepted by the CNP validator
+  (`Valid=True`, no warning about overlapping the cluster range) yet the probe was still **DENIED**
+  in both cases. Only `world` matched. Any advice of the form "allow the node with
+  `fromEntities`/`toEntities: [host, remote-node]`" is **falsified** — that cure does not work here,
+  and it is not what the one long-lived policy-covered workload relies on:
   `calypso-runners/calypso-control-plane-runner-policy` (273 d, `VALID=True`) survives because its
   ingress `fromEntities` also lists `world` (verified live, not inferred).
 - **Production-safe shape (proven):** keep the probe on a **dedicated health port**; allow that port from
@@ -44,9 +49,15 @@ Measured 2026-11-09 on `grigri` (Cilium `v1.20.4`, `enable-policy: default`,
   Use a CiliumNetworkPolicy in the shape above, or make the probes `exec`, which is immune by
   construction.
 - **Accepted residual exposure:** `world` opens only that dedicated health port to anything routable to
-  the pod IP, and only the health body. If the owner rejects that, the alternatives are `exec` probes or
-  `enable-host-firewall=true` — cluster-wide and **untested here**, and the only thing that would make
-  `host`/`remote-node` matching meaningful.
+  the pod IP, and only the health body. S6c proved that `world` does **not** admit cluster-identity
+  pods: an in-cluster client pod whose labels were not in the `fromEndpoints` rule was denied on the
+  health port (timeout), while a client pod with the permitted labels was allowed on the app port 8080
+  and denied on 8081. So the residual exposure is narrower than it first appears: a compromised pod
+  inside the cluster cannot reach the health port; only world-identity traffic (the node's kubelet,
+  and anything unclassified) can. If the owner rejects even that, the alternatives are `exec` probes
+  or `enable-host-firewall=true` — cluster-wide, **untested here**, and **not a proven cure for
+  probes** because the probe source is a pod-network link address (10.0.4.252 via `cilium_host`)
+  rather than a node address, so enabling the host firewall may reclassify nothing; still untested.
 - **Timing is safe:** applying the CNP *before* the endpoint exists works (attached 6 m 32 s earlier →
   Ready in 6 s, zero probe failures). Apply at or before the workload and keep
   `failureThreshold >= 6` anyway.

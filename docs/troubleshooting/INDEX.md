@@ -475,7 +475,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `9049af3bf`, grafana-mcp `838031375`): any policy set carrying an **ingress** rule on an
   `httpGet`/`tcpSocket`-probed pod denies the probe (native NetworkPolicy and CNP alike), and while
   `enable-host-firewall: false` the probe source matches **only** `world` — `host`, `remote-node`,
-  `cluster` and a node-subnet `fromCIDR` all fail. Both explanations published earlier here ("cannot name
+  `cluster` and any `fromCIDR` (including the exact /32 of the probe source) all fail. Both explanations published earlier here ("cannot name
   the node on ingress", then "pod→node response dropped by enforced egress") are **falsified**; the
   same-node A/B dial's direction was right, its reasoning was not. Safe shape: dedicated health port from
   `fromEntities: [world]`, app/metrics ports from `fromEndpoints`, egress `toEntities: [cluster]`

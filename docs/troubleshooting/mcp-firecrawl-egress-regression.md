@@ -187,6 +187,23 @@ startup/readiness/liveness on 8080. All objects deleted afterwards; baseline ver
 - **S5** — S2 minus the `world` rule, everything else identical: NotReady, first failure 6 s after
   attach, container killed, +1 restart. Restoring `world` returned it to Ready and all assertions were
   re-established.
+- **S6a** — S2 shape but health port 8081 restricted to `fromCIDR: ["10.0.4.252/32"]` (the exact
+  `cilium_host` probe source address): CNP accepted (`Valid=True`, no warning about overlapping the
+  cluster range), probe **DENIED** — NotReady, 6 liveness + 11 readiness `context deadline exceeded`,
+  1 restart.
+- **S6b** — S6a but `fromCIDR: ["10.0.4.0/24"]` (the whole prusik pod CIDR): same result — accepted,
+  `Valid=True`, probe **DENIED**.
+- **S6c** — S2 shape with `fromEntities: [world]` on the health port (control): Ready, stable, 0
+  restarts (only the normal initial startup failure). An in-cluster client pod whose labels were not
+  in the `fromEndpoints` rule was **DENIED on the health port** (timeout), while a client pod with
+  the permitted labels was **ALLOWED on the app port 8080 and DENIED on 8081**. So `world` does
+  **not** admit cluster-identity pods; the residual exposure is narrower than it first appears: only
+  world-identity traffic (the node's kubelet, and anything unclassified) can reach the health port.
+
+**What S6a/S6b/S6c close:** the "tighter than world" question. Even a `fromCIDR` that names the
+exact probe source address (the /32) or the whole pod subnet does not match; CIDR rules are accepted
+as `Valid` yet do not match the probe. The only proven match remains `world`, and its residual
+exposure is limited to world-identity traffic, not in-cluster pods.
 
 **What is now established:**
 
