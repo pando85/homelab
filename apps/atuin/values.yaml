@@ -115,6 +115,37 @@ app-template:
             - *host
           secretName: atuin-external-tls-certificate
 
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # Internal routes carry no external-dns annotation until the internal switch.
+  route:
+    internal:
+      kind: HTTPRoute
+      hostnames:
+        - atuin.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: atuin
+              port: 8080
+    external:
+      kind: HTTPRoute
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - atuin.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: atuin
+              port: 8080
+
   persistence:
     config:
       type: emptyDir
