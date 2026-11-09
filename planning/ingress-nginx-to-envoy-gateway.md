@@ -205,8 +205,8 @@ Findings:
   embedded in iframes). Decide: keep (new hardening, check iframe users), or `addIfAbsent`, or drop.
 - **Kanidm replica restarts during a reindex** (pre-existing, not caused by the route):
   `kanidm-default-1` started a replication-triggered `System reindex` at 21:16:29, failed probes and
-  was liveness-killed 4 times until 21:21:04; `kanidm-default-0` served throughout, no 5xx on the
-  nginx path. Consumer reindexes run 10-28 times per hour per replica since at least 2026-11-08.
+  was liveness-killed 6 times between 21:17 and 21:24:18 (Ready at 21:21:04, again killed at
+  21:24:18, stable since); `kanidm-default-0` served throughout, no 5xx on the nginx path. Consumer reindexes run 10-28 times per hour per replica since at least 2026-11-08.
   The StatefulSet has no startupProbe and a 1 s probe timeout. Owner follow-up.
 - Envoy logs the raw cookie value when it cannot decrypt a token cookie (`failed to decrypt
   token:`): treat proxy logs as sensitive.
