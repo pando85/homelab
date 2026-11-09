@@ -41,7 +41,7 @@ grafana-mcp:
     # Pinned to the version verified by these checks. Chart 0.34.0 declares appVersion 2.2.0,
     # so this is deliberately one minor behind the chart default; bump only together with a
     # re-run of the checks, never implicitly.
-    tag: "2.1.1"
+    tag: "2.2.0"
     pullPolicy: IfNotPresent
 
   replicas: 1
