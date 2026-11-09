@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: envoy-gateway
+
+helmCharts:
+  # CRDs (Gateway API experimental channel + Envoy Gateway). Keep the version
+  # in lockstep with gateway-helm below.
+  - name: gateway-crds-helm
+    repo: oci://docker.io/envoyproxy
+    version: v1.9.3
+    releaseName: envoy-gateway-crds
+    namespace: envoy-gateway
+    valuesFile: crds-values.yaml
+  - name: gateway-helm
+    repo: oci://docker.io/envoyproxy
+    version: v1.9.3
+    releaseName: envoy-gateway
+    namespace: envoy-gateway
+    includeCRDs: false
+    valuesFile: values.yaml
+
+patches:
+  # CRDs are larger than the 262144 byte client-side last-applied annotation limit
+  - patch: |-
+      - op: add
+        path: "/metadata/annotations/argocd.argoproj.io~1sync-options"
+        value: "ServerSideApply=true"
+    target:
+      group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+  # Drop the Gateway API safe-upgrades ValidatingAdmissionPolicy bundled with the CRD chart: it
+  # gates every CRD write cluster-wide (failurePolicy Fail) and this repo owns the only install
+  - patch: |-
+      $patch: delete
+      apiVersion: admissionregistration.k8s.io/v1
+      kind: ValidatingAdmissionPolicy
+      metadata:
+        name: safe-upgrades.gateway.networking.k8s.io
+  - patch: |-
+      $patch: delete
+      apiVersion: admissionregistration.k8s.io/v1
+      kind: ValidatingAdmissionPolicyBinding
+      metadata:
+        name: safe-upgrades.gateway.networking.k8s.io

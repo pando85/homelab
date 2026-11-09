@@ -1,0 +1,7 @@
+crds:
+  gatewayAPI:
+    enabled: true
+    # experimental also serves v1alpha2 (TCPRoute, TLSRoute) for calypso compatibility
+    channel: experimental
+  envoyGateway:
+    enabled: true

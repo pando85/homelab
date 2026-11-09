@@ -1,0 +1,45 @@
+global:
+  images:
+    envoyProxy:
+      # v1.9.3 defaults to distroless-v1.39.5, which still trusts the compromised eMudhra CAs
+      # renovate: datasource=docker versioning=regex:^distroless-v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
+      image: docker.io/envoyproxy/envoy:distroless-v1.39.6
+
+# CRDs come from the gateway-crds-helm chart (see kustomization.yaml)
+crds:
+  enabled: false
+
+config:
+  envoyGateway:
+    extensionApis:
+      # EG Backend resource (unifi self-signed backend)
+      enableBackend: true
+      # EnvoyExtensionPolicy Lua (readest, radarr, navidrome)
+      enableLua: true
+
+# Zone topology injector webhook is not needed on this cluster
+topologyInjector:
+  enabled: false
+
+deployment:
+  replicas: 1
+  pod:
+    # Same placement as ingress-nginx: prefer prusik, then amd64.
+    # No tolerations: the CI node (k8s-amd64-1, dedicated=ci:NoSchedule) must not get these pods.
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: kubernetes.io/hostname
+                  operator: In
+                  values:
+                    - prusik
+          - weight: 50
+            preference:
+              matchExpressions:
+                - key: kubernetes.io/arch
+                  operator: In
+                  values:
+                    - amd64
