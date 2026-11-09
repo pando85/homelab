@@ -53,11 +53,30 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 
 ### Phase 1 progress (2026-11-09)
 
-| Step | Commit                                                                                                             | Result                                                                                                                                                                                  |
-| ---- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1    | `68de320f4` `envoy-gateway: Add Envoy Gateway controller and Gateway API CRDs`                                     | Controller and experimental CRDs live, Synced Healthy.                                                                                                                                  |
-| 2    | `205cb6710` + `94f45bd35` `envoy-gateway: Add internal and external gateways` / `Use one certificate per listener` | Both Gateways Accepted and Programmed on `.13` / `.14`, 7 Certificates Ready (all `letsencrypt-prod-dns`), 2 proxies per Gateway on `prusik`, `.13/32` and `.14/32` learned by pfSense. |
-| 3    | `eef9c8613` `git: Add forgejo SSH TCPRoute on the external gateway`                                                | TCPRoute `git-forgejo-ssh` Accepted and ResolvedRefs; SSH through `.14` shows the same host keys as through nginx.                                                                      |
+| Step | Commit                                                                                                             | Result                                                                                                                                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | `68de320f4` `envoy-gateway: Add Envoy Gateway controller and Gateway API CRDs`                                     | Controller and experimental CRDs live, Synced Healthy.                                                                                                                                                           |
+| 2    | `205cb6710` + `94f45bd35` `envoy-gateway: Add internal and external gateways` / `Use one certificate per listener` | Both Gateways Accepted and Programmed on `.13` / `.14`, 7 Certificates Ready (all `letsencrypt-prod-dns`), 2 proxies per Gateway on `prusik`, `.13/32` and `.14/32` learned by pfSense.                          |
+| 3    | `eef9c8613` `git: Add forgejo SSH TCPRoute on the external gateway`                                                | TCPRoute `git-forgejo-ssh` Accepted and ResolvedRefs; SSH through `.14` shows the same host keys as through nginx.                                                                                               |
+| 5    | `9bfc7a781` `external-dns: Add gateway-httproute and crd sources and forkline.io`                                  | Sources `service ingress gateway-httproute crd`, domain filters plus `forkline.io`. Pod 0 restarts, no RBAC or watch errors, every cycle "All records are already up to date"; `dig` before and after identical. |
+| 6    | pending                                                                                                            | `cert-manager: Add ZeroSSL ClusterIssuer for forkline.io` waits for the owner's EAB credentials in Vault (can trail).                                                                                            |
+| 7    | `874727b4a` `scripts: ...` + `9ad8e1404` `http-echo: Add HTTPRoutes on both gateways`                              | Both routes Accepted and ResolvedRefs, 200 over h2 on `.13` and `.14`, real client IP preserved; no DNS record moved. Gate 1 evidence below.                                                                     |
+
+Steps 5 and 7 notes (2026-11-09):
+
+- external-dns v0.23.0, chart 1.23.0: adding the two sources made the chart add `gateways`,
+  `httproutes` and `namespaces` RBAC by itself. The `DNSEndpoint` CRD already existed. Policy stays
+  `upsert-only`, annotation filter unchanged. After the sync the route-bearing cycle (routes created
+  20:52:14, cycles 20:52:44 and 20:54:44) planned no change: the `http-echo.grigri.cloud` route
+  (annotation `enabled` only, target `grigri.cloud` from the external Gateway) renders the record
+  that already exists. `dig @1.1.1.1` on 4 internal (`.1`), 5 external and 2 forkline staging names is identical before and after; `http-echo.internal.grigri.cloud` still answers `.1`.
+- app-template 5.3.0 renders `gateway.networking.k8s.io/v1` HTTPRoutes when the helm template gets
+  `--api-versions gateway.networking.k8s.io/v1/HTTPRoute`; `scripts/deploy-dir.rh` now passes it.
+  Live (Argo's own render) the routes are `v1` too.
+- http-echo: `route.internal` (`internal` / `https-internal-grigri-cloud`, no annotation) and
+  `route.external` (`external` / `https-grigri-cloud`, annotation `enabled`). Both Ingresses
+  unchanged: nginx `.1` still 200, nginx `.4` still 302 to `auth.grigri.cloud` (oauth2-proxy), and
+  the Envoy external route has no auth yet (Phase 2 SecurityPolicy).
 
 Step 2 notes:
 
@@ -1007,13 +1026,21 @@ pfSense: P1.1 (optional).
 
 **Gate 1:**
 
-- both Gateways `Programmed=True` with the right address; pfSense learns .13 and .14 via BGP;
+- both Gateways `Programmed=True` with the right address; pfSense learns .13 and .14 via BGP (done, step 2);
 - `curl --resolve http-echo.internal.grigri.cloud:443:192.168.193.13 ...` and the external
   equivalent: 200, valid wildcard cert, h2, HSTS and security headers, no `Server`; `http://`
   redirects;
+  **done 2026-11-09 (step 7):** 200, valid Let's Encrypt wildcard (`*.internal.grigri.cloud` /
+  `*.grigri.cloud`), ALPN h2, HSTS plus the security headers, no `Server`, `http://` 301 to the
+  https URL, on both VIPs;
 - `ssh -p 29518 -o HostKeyAlias=git.grigri.cloud git@192.168.193.14` authenticates with the same
   host key as through nginx;
-- http-echo sees the real LAN client IP;
+- http-echo sees the real LAN client IP: **done 2026-11-09:** `ip` and `x-forwarded-for` are the
+  client's own address (routed LAN, no SNAT) on both VIPs;
+- no-SNI behaviour (recorded, not a gate): Envoy `.13` and `.14` reset the TCP connection on a
+  ClientHello without SNI (`errno=104`, no certificate); nginx `.4` and `.1` answer with the
+  self-signed "Kubernetes Ingress Controller Fake Certificate" and a 404. Nothing in the
+  migration depends on the nginx behaviour; revisit only if a health check or client connects by IP;
 - roll test: continuous `curl` against both VIPs during `kubectl rollout restart` of each Envoy
   deployment, zero failures (or a measured gap, tuned before going further);
 - metrics in Grafana, a test trace in Tempo;
