@@ -1,0 +1,54 @@
+---
+# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim.
+# Pattern: docs/conventions/gateway-api-routes.md ("Authentication")
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: hermes-2-internal
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: hermes-2-internal
+  oidc:
+    provider:
+      issuer: https://idm.grigri.cloud/oauth2/openid/hermes-2-envoy
+      # explicit endpoints: no OIDC discovery at translation time
+      authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
+      tokenEndpoint: https://idm.grigri.cloud/oauth2/token
+    clientID: hermes-2-envoy
+    clientSecret:
+      name: hermes-2-envoy-kanidm-oauth2-credentials
+    redirectURL: https://hermes-2.internal.grigri.cloud/oauth2/callback
+    # the default `/logout` would shadow the app's own path
+    logoutPath: /oauth2/logout
+    scopes: [openid, profile, email, groups]
+    cookieNames:
+      accessToken: oidc-access-token
+      idToken: oidc-id-token
+  jwt:
+    providers:
+      - name: kanidm
+        issuer: https://idm.grigri.cloud/oauth2/openid/hermes-2-envoy
+        audiences: [hermes-2-envoy]
+        extractFrom:
+          cookies: [oidc-id-token]
+        remoteJWKS:
+          uri: https://idm.grigri.cloud/oauth2/openid/hermes-2-envoy/public_key.jwk
+        # nginx passes no identity headers to hermes-2: no claimToHeaders
+  authorization:
+    defaultAction: Deny
+    # parity with nginx: `hermes-users` is itself in the oauth2-proxy client scope map, so the
+    # scope map condition and `allowed_groups` are the same single group check.
+    rules:
+      - name: allowed-groups
+        action: Allow
+        principal:
+          jwt:
+            provider: kanidm
+            claims:
+              # nginx `allowed_groups=hermes-users@idm.grigri.cloud` (SPN form)
+              - name: groups
+                valueType: StringArray
+                values:
+                  - hermes-users@idm.grigri.cloud
