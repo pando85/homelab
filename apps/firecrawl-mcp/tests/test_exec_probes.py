@@ -199,6 +199,110 @@ def test_negative_cases():
     print("✓ Negative cases handled correctly (non-2xx, error, timeout)")
 
 
+def test_ingress_selector_matches_real_gateway_labels():
+    """Verify the ingress NetworkPolicy selects the actual gateway pod labels.
+
+    The live public gateway pods are labelled:
+      app.kubernetes.io/name=agentgateway-standalone
+      app.kubernetes.io/instance=mcp-gateway
+      app.kubernetes.io/component=standalone
+    The old selector (app.kubernetes.io/name: mcp-gateway) matched nothing and would
+    fail CLOSED if the disabled Firecrawl route were ever enabled.
+    """
+    result = subprocess.run(
+        ["helm", "template", "--namespace", "firecrawl-mcp", "--include-crds", "firecrawl-mcp", "../"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    manifests = [m for m in yaml.safe_load_all(result.stdout) if m is not None]
+    ingress_policy = next(
+        m for m in manifests
+        if m.get("kind") == "NetworkPolicy" and m["metadata"]["name"] == "firecrawl-mcp-ingress"
+    )
+
+    ingress_rules = ingress_policy["spec"]["ingress"]
+    assert len(ingress_rules) == 1, f"Expected 1 ingress rule, found {len(ingress_rules)}"
+
+    from_selectors = ingress_rules[0]["from"]
+    assert len(from_selectors) == 1, f"Expected 1 from selector, found {len(from_selectors)}"
+
+    selector = from_selectors[0]
+
+    # Verify namespace selector
+    ns_selector = selector["namespaceSelector"]
+    assert ns_selector["matchLabels"]["kubernetes.io/metadata.name"] == "mcp-gateway", \
+        "Ingress namespace selector doesn't target mcp-gateway namespace"
+
+    # Verify pod selector matches the real gateway labels
+    pod_selector = selector["podSelector"]
+    match_labels = pod_selector["matchLabels"]
+
+    assert match_labels.get("app.kubernetes.io/name") == "agentgateway-standalone", \
+        f"Ingress podSelector app.kubernetes.io/name is '{match_labels.get('app.kubernetes.io/name')}', expected 'agentgateway-standalone'"
+    assert match_labels.get("app.kubernetes.io/instance") == "mcp-gateway", \
+        f"Ingress podSelector app.kubernetes.io/instance is '{match_labels.get('app.kubernetes.io/instance')}', expected 'mcp-gateway'"
+    assert match_labels.get("app.kubernetes.io/component") == "standalone", \
+        f"Ingress podSelector app.kubernetes.io/component is '{match_labels.get('app.kubernetes.io/component')}', expected 'standalone'"
+
+    # Verify port 3000
+    ports = ingress_rules[0]["ports"]
+    assert len(ports) == 1, f"Expected 1 port, found {len(ports)}"
+    assert ports[0]["port"] == 3000, f"Ingress port is {ports[0]['port']}, expected 3000"
+    assert ports[0]["protocol"] == "TCP", f"Ingress protocol is {ports[0]['protocol']}, expected TCP"
+
+    print("✓ Ingress selector matches real gateway labels (agentgateway-standalone, mcp-gateway, standalone)")
+    print("✓ Ingress port is 3000/TCP")
+
+
+def test_egress_rules_unchanged():
+    """Verify the egress NetworkPolicy rules are unchanged: DNS (node-local-dns + kube-dns) and firecrawl-api:3002."""
+    result = subprocess.run(
+        ["helm", "template", "--namespace", "firecrawl-mcp", "--include-crds", "firecrawl-mcp", "../"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    manifests = [m for m in yaml.safe_load_all(result.stdout) if m is not None]
+    egress_policy = next(
+        m for m in manifests
+        if m.get("kind") == "NetworkPolicy" and m["metadata"]["name"] == "firecrawl-mcp-egress"
+    )
+
+    egress_rules = egress_policy["spec"]["egress"]
+    assert len(egress_rules) == 3, f"Expected 3 egress rules, found {len(egress_rules)}"
+
+    # Rule 1: node-local-dns DNS
+    rule1 = egress_rules[0]
+    assert rule1["to"][0]["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"] == "kube-system"
+    assert rule1["to"][0]["podSelector"]["matchLabels"]["k8s-app"] == "node-local-dns"
+    rule1_ports = {(p["port"], p["protocol"]) for p in rule1["ports"]}
+    assert (53, "UDP") in rule1_ports and (53, "TCP") in rule1_ports, \
+        f"node-local-dns rule missing DNS ports, got {rule1_ports}"
+
+    # Rule 2: kube-dns fallback
+    rule2 = egress_rules[1]
+    assert rule2["to"][0]["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"] == "kube-system"
+    assert rule2["to"][0]["podSelector"]["matchLabels"]["k8s-app"] == "kube-dns"
+    rule2_ports = {(p["port"], p["protocol"]) for p in rule2["ports"]}
+    assert (53, "UDP") in rule2_ports and (53, "TCP") in rule2_ports, \
+        f"kube-dns rule missing DNS ports, got {rule2_ports}"
+
+    # Rule 3: firecrawl-api:3002
+    rule3 = egress_rules[2]
+    assert rule3["to"][0]["namespaceSelector"]["matchLabels"]["kubernetes.io/metadata.name"] == "firecrawl"
+    assert rule3["to"][0]["podSelector"]["matchLabels"]["app.kubernetes.io/name"] == "firecrawl"
+    assert rule3["to"][0]["podSelector"]["matchLabels"]["app.kubernetes.io/instance"] == "firecrawl"
+    assert rule3["to"][0]["podSelector"]["matchLabels"]["app.kubernetes.io/controller"] == "api"
+    rule3_ports = {(p["port"], p["protocol"]) for p in rule3["ports"]}
+    assert (3002, "TCP") in rule3_ports, \
+        f"firecrawl-api rule missing port 3002/TCP, got {rule3_ports}"
+
+    print("✓ Egress rules unchanged: node-local-dns DNS, kube-dns fallback, firecrawl-api:3002")
+
+
 if __name__ == "__main__":
     print("=== Firecrawl MCP Exec Probe Regression Tests ===\n")
 
@@ -209,6 +313,8 @@ if __name__ == "__main__":
         test_environment_variables_preserved()
         test_probe_timeouts_aligned()
         test_negative_cases()
+        test_ingress_selector_matches_real_gateway_labels()
+        test_egress_rules_unchanged()
 
         print("\n=== All regression tests passed ===")
         sys.exit(0)

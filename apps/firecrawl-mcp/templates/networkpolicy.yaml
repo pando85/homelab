@@ -1,6 +1,8 @@
 ---
 # Backend isolation. Verified live:
-#   gateway pods  -> mcp-gateway   / app.kubernetes.io/name=mcp-gateway
+#   gateway pods  -> mcp-gateway ns / app.kubernetes.io/name=agentgateway-standalone,
+#                                     app.kubernetes.io/instance=mcp-gateway,
+#                                     app.kubernetes.io/component=standalone
 #   Firecrawl API -> firecrawl     / service firecrawl-api:3002
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -22,7 +24,9 @@ spec:
               kubernetes.io/metadata.name: mcp-gateway
           podSelector:
             matchLabels:
-              app.kubernetes.io/name: mcp-gateway
+              app.kubernetes.io/name: agentgateway-standalone
+              app.kubernetes.io/instance: mcp-gateway
+              app.kubernetes.io/component: standalone
       ports:
         - protocol: TCP
           port: 3000
