@@ -1,0 +1,38 @@
+# Envoy Gateway routes (ingress-nginx migration). The Ingresses in searxng.yaml stay until the
+# switch. Rendered by kustomize `helmCharts` (no cluster capabilities), so they are raw files.
+# The internal route has no external-dns annotation until the internal switch; the external route
+# is behind the OIDC SecurityPolicy (security-policy.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: searxng-internal
+spec:
+  hostnames:
+    - searxng.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: searxng
+          port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: searxng-external
+  annotations:
+    # the target (grigri.cloud) comes from the external Gateway
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - searxng.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: searxng
+          port: 8080

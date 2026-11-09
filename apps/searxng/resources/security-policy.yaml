@@ -1,0 +1,67 @@
+---
+# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim.
+# Pattern: docs/conventions/gateway-api-routes.md ("Authentication")
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: searxng-external
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: searxng-external
+  oidc:
+    provider:
+      issuer: https://idm.grigri.cloud/oauth2/openid/searxng
+      # explicit endpoints: no OIDC discovery at translation time
+      authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
+      tokenEndpoint: https://idm.grigri.cloud/oauth2/token
+    clientID: searxng
+    clientSecret:
+      name: searxng-kanidm-oauth2-credentials
+    redirectURL: https://searxng.grigri.cloud/oauth2/callback
+    # the default `/logout` would shadow the app's own path
+    logoutPath: /oauth2/logout
+    scopes: [openid, profile, email, groups]
+    cookieNames:
+      accessToken: oidc-access-token
+      idToken: oidc-id-token
+  jwt:
+    providers:
+      - name: kanidm
+        issuer: https://idm.grigri.cloud/oauth2/openid/searxng
+        audiences: [searxng]
+        extractFrom:
+          cookies: [oidc-id-token]
+        remoteJWKS:
+          uri: https://idm.grigri.cloud/oauth2/openid/searxng/public_key.jwk
+        # nginx `auth-response-headers`: jwt_authn removes client-sent copies before adding these
+        claimToHeaders:
+          - header: X-Auth-Request-User
+            claim: email
+          - header: X-Auth-Request-Email
+            claim: email
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: allowed-groups
+        action: Allow
+        principal:
+          jwt:
+            provider: kanidm
+            claims:
+              # nginx `allowed_groups=searxng-users@idm.grigri.cloud` (SPN form)
+              - name: groups
+                valueType: StringArray
+                values:
+                  - searxng-users@idm.grigri.cloud
+              # BEGIN parity (a): nginx also required a group of the oauth2-proxy client scope map
+              # (k8s-oauth2-proxy-users, navidrome-users, hermes-users). Claims are ANDed, values ORed.
+              # Drop this block to allow every member of searxng-users@idm.grigri.cloud.
+              - name: groups
+                valueType: StringArray
+                values:
+                  - k8s-oauth2-proxy-users@idm.grigri.cloud
+                  - navidrome-users@idm.grigri.cloud
+                  - hermes-users@idm.grigri.cloud
+              # END parity
