@@ -48,7 +48,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | Phase | State       | Notes                                                                                                                             |
 | ----- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | done        | All steps done except step 7 (post the listener contract on multivara#199): owner action, does not block Phase 1. Findings below. |
-| 1     | in progress | Steps 1-5 and 7 done, step 6 pending (below); roll test and metrics/trace items of Gate 1 satisfied.                            |
+| 1     | done        | All steps done except step 6 (ZeroSSL, waits for the owner's EAB credentials) and P1.1 (optional pfSense). Gate 1 satisfied.     |
 | 2-6   | not started |                                                                                                                                   |
 
 ### Phase 1 progress (2026-11-09)
@@ -62,6 +62,28 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 5    | `9bfc7a781` `external-dns: Add gateway-httproute and crd sources and forkline.io`                                  | Sources `service ingress gateway-httproute crd`, domain filters plus `forkline.io`. Pod 0 restarts, no RBAC or watch errors, every cycle "All records are already up to date"; `dig` before and after identical. |
 | 6    | pending                                                                                                            | `cert-manager: Add ZeroSSL ClusterIssuer for forkline.io` waits for the owner's EAB credentials in Vault (can trail).                                                                                            |
 | 7    | `874727b4a` `scripts: ...` + `9ad8e1404` `http-echo: Add HTTPRoutes on both gateways`                              | Both routes Accepted and ResolvedRefs, 200 over h2 on `.13` and `.14`, real client IP preserved; no DNS record moved. Gate 1 evidence below.                                                                     |
+| 8    | `09d6fd1f8` `envoy-gateway: Add the runner passthrough bridge TLSRoute`                                            | TLSRoute `runners-bridge` (`tls-bridge-runners`, `*.app.staging.forkline.dev` -> `ingress-nginx-external-controller:443`) Accepted and ResolvedRefs, 1 attached route; ReferenceGrant in `ingress-nginx-external` (chart template). G11 below.                                                                  |
+| 9    | `192d1d3ee` `envoy-gateway: Add internal isidoro listener`                                                         | Listener `https-isidoro-grigri-cloud` on `internal` Programmed, own Certificate Ready; `.13` serves `*.isidoro.grigri.cloud` over h2 for `idm-internal.isidoro.grigri.cloud`; no `OverlappingTLSConfig` on either Gateway. |
+
+Steps 8 and 9 notes, G11 evidence (2026-11-09, from the workstation, runner host
+`autonomous-runner-issue-603-09.app.staging.forkline.dev`, whose backend has no endpoints, so nginx
+answers 503 on both paths):
+
+- Bridge, `--resolve ...:443:192.168.193.14` vs `.4`: same certificate (`CN=*.app.staging.forkline.dev`,
+  Let's Encrypt, sha256 `1F:98:04:6E:...:44:5F`, serial `0660DCF9...`), ALPN h2 and `HTTP/2 503` on both:
+  TLS is terminated by nginx, not by Envoy.
+- Wildcard depth: SNI `x.y.app.staging.forkline.dev` (two labels) **also passes through**: Envoy `.14`
+  and nginx `.4` return the same "Kubernetes Ingress Controller Fake Certificate" (sha256
+  `AE:95:5F:B6:...:3E:A3`), so the Gateway API wildcard matches several labels as documented.
+- Coexistence with the HTTPS listeners on 443: SNI `foo.staging.forkline.dev` gets the Envoy
+  `*.staging.forkline.dev` certificate, ALPN h2 (curl: `HTTP/2 404`, no route); apex
+  `staging.forkline.dev` gets its own cert, h2; `http-echo.grigri.cloud` gets `*.grigri.cloud`, h2,
+  `HTTP/2 200`. No passthrough leakage into the terminating listeners.
+- Not covered: a runner with a live backend (none exists today), websocket upgrades and long
+  streams through the bridge. The bridge hides the client address from nginx (no PROXY protocol).
+- Isidoro: `openssl s_client -connect 192.168.193.13:443 -servername idm-internal.isidoro.grigri.cloud`
+  returns `CN=*.isidoro.grigri.cloud` (SAN only that, Let's Encrypt, verification OK), ALPN h2;
+  `curl` through `.13` gets `HTTP/2 404` (no route yet).
 
 Steps 5 and 7 notes (2026-11-09):
 
@@ -82,7 +104,8 @@ Steps 5 and 7 notes (2026-11-09):
 Step 2 notes:
 
 - **Left out: listener `https-runners-staging-forkline-dev`** (replaces `tls-bridge-runners` only
-  once calypso emits HTTPRoutes). All other listeners of the contract are deployed.
+  once calypso emits HTTPRoutes). All other listeners of the contract are deployed (the internal
+  `https-isidoro-grigri-cloud` came in step 9).
 - One Certificate per listener (7). A first version shared one Certificate between two
   listeners (apex plus wildcard, `mintpsicologia.es` plus `www`): Envoy Gateway then sets
   `OverlappingTLSConfig` (HTTP/2 coalescing risk), so they were split. `https-grigri-cloud`
@@ -506,14 +529,16 @@ static, 1 runner) and 3 kiais, all 13 on nginx.
 **Gaps in our side of the contract**
 
 - **`idm-internal.isidoro.grigri.cloud`** is internal but two labels under `grigri.cloud`; no
-  internal listener or certificate covers it. Homelab adds an internal listener
-  `https-isidoro-grigri-cloud` (hostname `*.isidoro.grigri.cloud`, its own Certificate from
-  `letsencrypt-prod-dns`, one Certificate per listener) before Phase 4.
+  internal listener or certificate covers it. **Closed (2026-11-09, Phase 1 step 9):** internal
+  listener `https-isidoro-grigri-cloud` (hostname `*.isidoro.grigri.cloud`, its own Certificate
+  from `letsencrypt-prod-dns`, one Certificate per listener) is deployed.
 - A new Certificate `*.app.staging.forkline.dev` in `envoy-gateway` is needed for
   `https-runners-staging-forkline-dev` (the `*.staging.forkline.dev` wildcard does not cover two
   labels). Not needed while the bridge passes TLS through.
 - The bridge `TLSRoute` (`*.app.staging.forkline.dev` -> `ingress-nginx-external:443`) is ours,
-  not multivara's: its backend is our nginx and it is deleted with it.
+  not multivara's: its backend is our nginx and it is deleted with it. **Deployed (2026-11-09,
+  Phase 1 step 8):** `TLSRoute runners-bridge` in `envoy-gateway`, its `ReferenceGrant` is a
+  chart template of `system/ingress-nginx-external`.
 
 **Non-Ingress coupling found**
 
@@ -614,7 +639,8 @@ kiais owner (third party; ask through the homelab owner, lead time unknown, so a
 - [ ] Non-alpha annotation on the two Keycloak routes in the Phase 4 and Phase 5 windows.
 - [ ] Phase 6: `ingress.enabled: false`, nginx namespace out of the NetworkPolicy.
 
-Homelab (us, autonomous): internal listener for `*.isidoro.grigri.cloud`, the bridge `TLSRoute`,
+Homelab (us, autonomous): internal listener for `*.isidoro.grigri.cloud` and the bridge
+`TLSRoute` (both deployed, Phase 1),
 `*.app.staging.forkline.dev` Certificate when the runner listener is added, the Gate 3 diff
 script over tenant hosts, the blackbox probes.
 
@@ -664,7 +690,7 @@ script over tenant hosts, the blackbox probes.
 | internal | `http`                                | 80 HTTP             |                                              | redirect route                                                                                                              |
 | internal | `https-internal-grigri-cloud`         | 443 HTTPS           | `*.internal.grigri.cloud`                    | wildcard                                                                                                                    |
 | internal | `https-staging-internal-forkline-dev` | 443 HTTPS           | `*.staging.internal.forkline.dev`            | wildcard (multivara vault, keycloak admin)                                                                                  |
-| internal | `https-isidoro-grigri-cloud`          | 443 HTTPS           | `*.isidoro.grigri.cloud`                     | own wildcard Certificate (kiais `idm-internal.isidoro`; deployed 2026-11-09)                                       |
+| internal | `https-isidoro-grigri-cloud`          | 443 HTTPS           | `*.isidoro.grigri.cloud`                     | own wildcard Certificate (kiais `idm-internal.isidoro`; deployed 2026-11-09)                                                |
 | external | `http`                                | 80 HTTP             |                                              | redirect route                                                                                                              |
 | external | `https-grigri-cloud`                  | 443 HTTPS           | `*.grigri.cloud`                             | wildcards `*.grigri.cloud`, `*.rajoy.grigri.cloud`, `*.m.rajoy.grigri.cloud`, `*.isidoro.grigri.cloud` (Envoy picks by SNI) |
 | external | `https-staging-forkline-dev`          | 443 HTTPS           | `staging.forkline.dev`                       | apex cert                                                                                                                   |
@@ -1079,7 +1105,8 @@ pfSense: P1.1 (optional).
   `*.grigri.cloud`), ALPN h2, HSTS plus the security headers, no `Server`, `http://` 301 to the
   https URL, on both VIPs;
 - `ssh -p 29518 -o HostKeyAlias=git.grigri.cloud git@192.168.193.14` authenticates with the same
-  host key as through nginx;
+  host key as through nginx; **done 2026-11-09 (step 3):** identical host keys and authentication
+  on `.14:29518`;
 - http-echo sees the real LAN client IP: **done 2026-11-09:** `ip` and `x-forwarded-for` are the
   client's own address (routed LAN, no SNAT) on both VIPs;
 - no-SNI behaviour (recorded, not a gate): Envoy `.13` and `.14` reset the TCP connection on a
@@ -1091,7 +1118,13 @@ pfSense: P1.1 (optional).
   (pod-template roll through git instead of `rollout restart`, 0 failures, see step 4 notes);
 - metrics in Grafana, a test trace in Tempo; **done 2026-11-09** (step 4 notes);
 - #199 gate G11 on this deployment (wildcard `TLSRoute` matches two labels, passthrough coexists
-  with the HTTPS listeners, h2 still negotiated on `https-grigri-cloud`).
+  with the HTTPS listeners, h2 still negotiated on `https-grigri-cloud`); **done 2026-11-09 (step
+  8, evidence in the steps 8 and 9 notes):** same certificate and same response through the bridge
+  as directly via `.4`, two-label SNI passes through, h2 on `https-grigri-cloud` and
+  `https-wildcard-staging-forkline-dev`, terminating hosts never reach passthrough.
+
+**Phase 1 closed 2026-11-09** except step 6 (ZeroSSL ClusterIssuer, owner credentials) and P1.1
+(optional pfSense). Neither blocks Phase 2.
 
 Rollback: delete the app dir; nothing depends on it.
 
@@ -1146,8 +1179,8 @@ calypso web/api/external-api/landing, oauth2-proxy, keycloak (+ admin), vault, g
 isidoro and isidoro-keycloak (+ admin). The routes live in their `custom/` directories
 (multivara promotes `grigri.cloud/` to production), external tenant routes carry **no**
 external-dns annotation, and the Keycloak NetworkPolicies must admit `envoy-gateway` before
-those routes can be verified. Ours: the bridge `TLSRoute` for runners and the internal
-`*.isidoro.grigri.cloud` listener.
+those routes can be verified. Ours (both deployed in Phase 1): the bridge `TLSRoute` for runners
+and the internal `*.isidoro.grigri.cloud` listener.
 
 Tracking list (fill during Phase 3): one row per app, columns `internal route` / `verified .13` /
 `external route` / `verified .14`.
@@ -1324,9 +1357,11 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
 
 - Calypso HTTPRoute support for runners (multivara/calypso work, not covered by #199); gates
   the removal of ingress-nginx-external and of the bridge listener.
+- Phase 1 leftovers: step 6 (ZeroSSL ClusterIssuer, waits for the owner's EAB credentials in
+  Vault) and P1.1 (optional pfSense).
 - Tenant open points (details in the tenant section): web auth design for calypso (ext auth vs
   OIDC, spike), runner auth and RBAC for HTTPRoutes, Keycloak backend TLS vs plain port, the
-  missing internal listener for `idm-internal.isidoro.grigri.cloud`, whether the operators
+  whether the operators
   delete their Ingress when `spec.ingress` is turned off (Vault's does not), the kiais owner's
   lead time, and the unmerged calypso network policies that hard-code `.4`.
 - kroki: caching sidecar image and config (recipe 6).
