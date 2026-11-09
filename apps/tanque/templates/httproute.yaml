@@ -1,9 +1,32 @@
 # Envoy Gateway routes (ingress-nginx migration). The Ingresses (ingress.yaml, stream-ingress.yaml)
-# stay until the switch. The backend is the ExternalName Service `tanque` (tanque.iot.grigri).
+# stay until the switch. The backend is the ExternalName Service `tanque` (tanque.iot.grigri):
+# Envoy Gateway rejects an ExternalName Service as a backendRef (`ResolvedRefs=False`,
+# UnsupportedValue), so the routes reference Envoy Gateway `Backend`s with the same FQDN
+# (`extensionApis.enableBackend`, on). The Service stays for the Ingresses.
 # tanque-external and tanque-stream-external are behind the OIDC SecurityPolicies
 # (security-policy.yaml). Same-host routes merge: `tanque-stream-root` (Exact `/`) wins over the
 # protected catch-all and has no policy, because nginx answered `/` with its snippet redirect
 # before the auth check.
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: tanque-http
+spec:
+  endpoints:
+    - fqdn:
+        hostname: tanque.iot.grigri
+        port: 80
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: tanque-stream
+spec:
+  endpoints:
+    - fqdn:
+        hostname: tanque.iot.grigri
+        port: 1984
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -21,8 +44,9 @@ spec:
       sectionName: https-grigri-cloud
   rules:
     - backendRefs:
-        - name: tanque
-          port: 80
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: tanque-http
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
@@ -39,8 +63,9 @@ spec:
       sectionName: https-grigri-cloud
   rules:
     - backendRefs:
-        - name: tanque
-          port: 1984
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: tanque-stream
 ---
 # nginx configuration-snippet: `if ($request_uri = "/") { return 302 /stream.html?src=tcp_magic; }`
 apiVersion: gateway.networking.k8s.io/v1
