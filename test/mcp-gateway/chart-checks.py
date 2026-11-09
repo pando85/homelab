@@ -369,10 +369,16 @@ def main():
               and d["metadata"]["name"].endswith("-egress")]
         return json.dumps(np[0]["spec"]["egress"]) if np else ""
 
-    # With networkIsolation=false (default), no policy is rendered
-    pub_eg_off = cnp_egress_json(helm("mcp-gateway"))
-    adm_eg_off = cnp_egress_json(helm("mcp-gateway-admin"))
-    check("no egress policy while networkIsolation is false (default)",
+    # networkIsolation defaults to true (measured CNP is live): the default render carries
+    # the same egress as the explicit true render; an explicit false renders no policy.
+    pub_eg_def = cnp_egress_json(helm("mcp-gateway"))
+    adm_eg_def = cnp_egress_json(helm("mcp-gateway-admin"))
+    pub_eg_off = cnp_egress_json(helm("mcp-gateway", ["networkIsolation=false"]))
+    adm_eg_off = cnp_egress_json(helm("mcp-gateway-admin", ["networkIsolation=false"]))
+    check("egress policy is rendered by default (networkIsolation defaults true)",
+          pub_eg_def != "" and adm_eg_def != "",
+          f"public={pub_eg_def[:50] if pub_eg_def else 'none'}, admin={adm_eg_def[:50] if adm_eg_def else 'none'}")
+    check("no egress policy while networkIsolation is explicitly false",
           pub_eg_off == "" and adm_eg_off == "",
           f"public={pub_eg_off[:50] if pub_eg_off else 'none'}, admin={adm_eg_off[:50] if adm_eg_off else 'none'}")
 
@@ -396,16 +402,16 @@ def main():
           "mcp_vault" not in config_text(helm("mcp-gateway",
                                               ["backends.grafana.enabled=true"])))
 
-    # ---- networkIsolation gating: baseline must be policy-free
-    # Default render (networkIsolation not set, defaults to false): no NetworkPolicy/CNP
+    # ---- networkIsolation gating: the measured CNP is enabled by default, false is the rollback
+    # Default render (networkIsolation not set, defaults to true): exactly one CNP, no native NP
     adm_default_docs = helm("mcp-gateway-admin")
     adm_np_default = [d for d in adm_default_docs if d.get("kind") == "NetworkPolicy"]
     adm_cnp_default = [d for d in adm_default_docs if d.get("kind") == "CiliumNetworkPolicy"]
-    check("mcp-gateway-admin: default render has no NetworkPolicy (networkIsolation defaults false)",
+    check("mcp-gateway-admin: default render has no native NetworkPolicy",
           len(adm_np_default) == 0,
           f"found {len(adm_np_default)} NetworkPolicy resources")
-    check("mcp-gateway-admin: default render has no CiliumNetworkPolicy",
-          len(adm_cnp_default) == 0,
+    check("mcp-gateway-admin: default render has exactly one CiliumNetworkPolicy (networkIsolation defaults true)",
+          len(adm_cnp_default) == 1,
           f"found {len(adm_cnp_default)} CiliumNetworkPolicy resources")
 
     # Explicit false: no NetworkPolicy/CNP
@@ -431,15 +437,16 @@ def main():
           f"expected 1, found {len(adm_cnp_true)}")
     # Verify values.yaml documents the gating
     adm_vals_text = open("apps/mcp-gateway-admin/values.yaml").read()
-    check("mcp-gateway-admin: values.yaml documents networkIsolation gating",
-          "networkIsolation: false" in adm_vals_text and
-          "policy-free" in adm_vals_text,
-          "missing documentation")
+    check("mcp-gateway-admin: values.yaml enables networkIsolation and documents the false rollback",
+          re.search(r"^networkIsolation: true$", adm_vals_text, re.M) is not None and
+          "Rollback: set false again" in adm_vals_text,
+          "missing networkIsolation: true or rollback documentation")
 
     # ---- CNP shape verification for all three charts
     # Helper to verify the proven CNP shape: world on health port only, app port from
     # specific endpoints, egress bare cluster + DNS, no native NP.
-    def verify_cnp_shape(chart_name, docs_with_isolation, pod_labels, health_port, app_port, metrics_port=None):
+    def verify_cnp_shape(chart_name, docs_with_isolation, pod_labels, health_port, app_port, metrics_port=None,
+                         envoy_gateway=None):
         """Verify CiliumNetworkPolicy matches the proven shape."""
         cnps = [d for d in docs_with_isolation if d.get("kind") == "CiliumNetworkPolicy"]
         nps = [d for d in docs_with_isolation if d.get("kind") == "NetworkPolicy"]
@@ -509,6 +516,26 @@ def main():
               not any(str(app_port) in str(r.get("toPorts", [])) for r in world_rules),
               "app port must not be exposed via world entity")
 
+        # Edge admission (mcp-gateway planes only): ingress-nginx and the Envoy Gateway proxies
+        # of the owning Gateway are both named on the app port while ingress-nginx is migrated away.
+        if envoy_gateway:
+            app_sel = [ep.get("matchLabels", {})
+                       for r in app_port_rules for ep in r.get("fromEndpoints", [])]
+            check(f"{chart_name}: app port {app_port} admits ingress-nginx controller pods",
+                  any(m.get("app.kubernetes.io/name") == "ingress-nginx" and
+                      m.get("app.kubernetes.io/component") == "controller" for m in app_sel),
+                  f"selectors={app_sel}")
+            check(f"{chart_name}: app port {app_port} admits the {envoy_gateway} Envoy Gateway proxies",
+                  any(m.get("app.kubernetes.io/name") == "envoy" and
+                      m.get("app.kubernetes.io/component") == "proxy" and
+                      m.get("gateway.envoyproxy.io/owning-gateway-name") == envoy_gateway and
+                      m.get("io.kubernetes.pod.namespace") == "envoy-gateway" for m in app_sel),
+                  f"selectors={app_sel}")
+            check(f"{chart_name}: only the {envoy_gateway} Gateway proxies are admitted (no other Envoy gateway)",
+                  all(m.get("gateway.envoyproxy.io/owning-gateway-name") == envoy_gateway
+                      for m in app_sel if m.get("app.kubernetes.io/name") == "envoy"),
+                  f"selectors={app_sel}")
+
         # Metrics port (if present) must be from Prometheus endpoints only
         if metrics_port:
             metrics_rules = []
@@ -567,6 +594,7 @@ def main():
         health_port=15021,
         app_port=3000,
         metrics_port=15020,
+        envoy_gateway="internal",
     )
 
     # Test mcp-gateway (public) CNP
@@ -582,6 +610,7 @@ def main():
         health_port=15021,
         app_port=3000,
         metrics_port=15020,
+        envoy_gateway="external",
     )
 
     # Test grafana-mcp CNP
@@ -603,9 +632,13 @@ def main():
     graf_default_docs = helm("grafana-mcp")
     graf_cnp_default = [d for d in graf_default_docs if d.get("kind") == "CiliumNetworkPolicy"]
     graf_np_default = [d for d in graf_default_docs if d.get("kind") == "NetworkPolicy"]
-    check("grafana-mcp: default render has no CiliumNetworkPolicy (networkIsolation defaults false)",
-          len(graf_cnp_default) == 0,
+    check("grafana-mcp: default render has exactly one CiliumNetworkPolicy (networkIsolation defaults true)",
+          len(graf_cnp_default) == 1,
           f"found {len(graf_cnp_default)} CNP resources")
+    graf_false_docs = helm("grafana-mcp", ["networkIsolation=false"])
+    check("grafana-mcp: networkIsolation=false renders no CiliumNetworkPolicy",
+          not [d for d in graf_false_docs if d.get("kind") == "CiliumNetworkPolicy"],
+          "rollback switch must remove the policy")
     check("grafana-mcp: default render has no NetworkPolicy",
           len(graf_np_default) == 0,
           f"found {len(graf_np_default)} NetworkPolicy resources")

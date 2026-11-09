@@ -22,8 +22,8 @@ Covers:
      CEL-quoted headers, resource = the absolute route URL, authorization_servers = the
      Kanidm per-client issuer, per-route scopes_supported, and paths disjoint from the MCP
      pathPrefix (a prefix collision would silently swallow the MCP route or the metadata);
-  5. isolation is NOT a prerequisite: networkIsolation stays false and no policy object is
-     rendered, so this release cannot fail closed on the network;
+  5. isolation: networkIsolation is true and exactly one CiliumNetworkPolicy (no native
+     NetworkPolicy) is rendered, admitting ingress-nginx and the external Envoy proxies;
   6. what must NOT have moved: prusik pin, session-key Secret/ExternalSecret/Password,
      probes, ingress, ClusterIP-only service, no admin listener.
 """
@@ -270,12 +270,25 @@ def main():
               dr["headers"] == {"content-type": "'application/json'",
                                 "cache-control": "'public, max-age=300'"}, str(dr["headers"]))
 
-    # ---------------- 5. isolation is NOT a prerequisite ----------------
-    check("networkIsolation is false (this release must not depend on it)",
-          values["networkIsolation"] is False)
+    # ---------------- 5. isolation: the measured CNP is enabled ----------------
+    check("networkIsolation is true (measured CiliumNetworkPolicy is live)",
+          values["networkIsolation"] is True)
     kinds = {d["kind"] for d in docs}
-    check("no CiliumNetworkPolicy rendered", "CiliumNetworkPolicy" not in kinds, str(sorted(kinds)))
-    check("no NetworkPolicy rendered", "NetworkPolicy" not in kinds)
+    cnps = [d for d in docs if d["kind"] == "CiliumNetworkPolicy"]
+    check("exactly one CiliumNetworkPolicy rendered", len(cnps) == 1, str(sorted(kinds)))
+    check("no native NetworkPolicy rendered", "NetworkPolicy" not in kinds)
+    if cnps:
+        app_sel = [ep.get("matchLabels", {})
+                   for r in cnps[0]["spec"].get("ingress", [])
+                   if any(str(p.get("port")) == "3000"
+                          for tp in r.get("toPorts", []) for p in tp.get("ports", []))
+                   for ep in r.get("fromEndpoints", [])]
+        check("CNP admits ingress-nginx and the external Envoy Gateway proxies on 3000",
+              any(m.get("app.kubernetes.io/name") == "ingress-nginx" for m in app_sel) and
+              any(m.get("app.kubernetes.io/name") == "envoy" and
+                  m.get("gateway.envoyproxy.io/owning-gateway-name") == "external" and
+                  m.get("io.kubernetes.pod.namespace") == "envoy-gateway" for m in app_sel),
+              str(app_sel))
 
     # ---------------- 6. what did not move ----------------
     dep = find(docs, "Deployment")
