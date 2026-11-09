@@ -94,6 +94,23 @@
 
 **Final cleanup**: `git rm -r apps/mcp-canary/` (only owned tracked paths), Argo app prune (no `kubectl delete namespace`), docs retain results.
 
+## Independent Audit Corrections
+
+### Valid Render Gap
+Initial commit `5c0a882d5` contained invalid string nodeSelector at controller level, causing ArgoCD ComparisonError. Fixed in subsequent commits `4c68ca7ac` (removed template expression) and `c6c0a64f0` (removed top-level nodeSelector). Baseline window 01:07-01:10 reported in execution cannot substantiate 180s stability with valid manifest; actual valid baseline began after `c6c0a64f0` synced at 01:09:09.
+
+### Actual Commit Times vs Reported
+Ingress commit `54cc30531` actual time 01:13:37 UTC, not 01:10 as reported. First readiness probe failure at 01:16:22 is ~2min 45s after policy apply, not ~6min as timeline suggested. No authoritative apply/watch timestamps captured during execution; relative event ages converted to absolute times without precision.
+
+### Unverified Watch Windows
+Phase 0 and rollback 180s stability watches executed but timestamps not captured with precision. Watch output shows pod status at intervals but no continuous verification of probe success/failure counts. Restart timing not captured; rollback pod recreation (nonce bump 0→1) means recovery not isolated to policy removal alone.
+
+### Recovery Mechanism Not Isolated
+Rollback changed both policyMode (ingress→none) AND rolloutNonce (0→1), causing pod recreation with new UID. Cannot attribute recovery solely to NetworkPolicy removal; pod recreation itself may have resolved probe failures. Same-pod-UID recovery (policy removal without recreation) not tested.
+
+### Source Conclusion
+Ingress-associated kubelet probe failure reproduced on prusik. Missing explicit node allow is CANDIDATE mechanism, not proven root cause. No BPF verdict captured, no source host identity captured. Chronology, stability windows, and recovery mechanism INCONCLUSIVE. No egress phase executed; cannot clear egress/Firecrawl.
+
 ## Fixed File List
 
 ### Chart Files
