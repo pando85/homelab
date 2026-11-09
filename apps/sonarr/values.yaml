@@ -97,6 +97,40 @@ app-template:
         - hosts:
             - *host
           secretName: sonarr-external-tls-certificate
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # The internal route has no external-dns annotation until the internal switch. The external
+  # route is behind the OIDC SecurityPolicy (templates/security-policy.yaml).
+  route:
+    internal:
+      kind: HTTPRoute
+      forceRename: sonarr-internal
+      hostnames:
+        - sonarr.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: sonarr
+              port: 8989
+    external:
+      kind: HTTPRoute
+      # stable name: the SecurityPolicy targets it
+      forceRename: sonarr-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - sonarr.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: sonarr
+              port: 8989
   defaultPodOptions:
     securityContext:
       runAsUser: 995
