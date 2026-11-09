@@ -1,13 +1,15 @@
 # MCP Gateway Implementation Plan
 
-**Status:** The foundation is **live, policy-free, and now serving one real route**. `a146c5ee9` restored
-the public plane without any NetworkPolicy, `5d314c648` moved it to the **official**
-`agentgateway-standalone` chart, `0b63d06ab` fixed the startup config nesting, `de20f415e` put the
-**context7 route live plus both RFC 9728 discovery routes** on the public plane, and `3a1e2d19e` added
-render/boot route checks. The pod is `Ready` with `restarts=0` on `prusik` (routes reload in place, no
-restart). The grafana route is fully specified but stays commented out until Grafana's `auth.jwt` trusts
-the `mcp-gateway` client. The Grafana MCP backend is live and healthy at `1c28157e2` (its CNP rolled
-back), also `restarts=0`, currently on `grigri`. **Neither namespace carries a NetworkPolicy or CNP.**
+**Status:** The foundation is **live, network-isolated, and serving real routes**. `a146c5ee9` restored
+the public plane, `5d314c648` moved it to the **official** `agentgateway-standalone` chart,
+`0b63d06ab` fixed the startup config nesting, `de20f415e` put the **context7 route live plus both RFC
+9728 discovery routes** on the public plane, and `3a1e2d19e` added render/boot route checks. Network
+isolation is now **enabled and verified** on all three planes: `c1543aa13` (admin), `cdcf4a0a2`
+(public), `044d45669` (grafana-mcp) — each a one-line `networkIsolation: true`. Three
+CiliumNetworkPolicies live in `mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`, all `Valid=True`.
+The Grafana MCP backend is live and healthy, `restarts=0`. Restart counts unchanged across every
+flip: admin 17 (pre-existing baseline, no new restarts), public gateway 0, grafana-mcp 0. Stability
+watched ≥180s per step, no rollbacks needed.
 
 The 2026-11-08 revert of `9049af3bf` is now **measured, not argued**. Both planes reached `Degraded`
 because the kubelet startup probes on `:15021/healthz/ready` timed out while the process logged `marking
@@ -63,7 +65,7 @@ Phased implementation of centralized MCP gateway using upstream agentgateway (Ru
 Two deployments: `apps/mcp-gateway` (public) and `apps/mcp-gateway-admin` (private), each with
 its own Kanidm OAuth2 client so a token minted for one plane cannot be replayed on the other.
 Native OAuth resource-server auth (signed JWT + JWKS, no oauth2-proxy, no cookie redirect),
-CiliumNetworkPolicy isolation (not yet applied - see the split-port shape above), one dedicated pod per
+CiliumNetworkPolicy isolation (applied in the measured split-port shape — see the isolation section below), one dedicated pod per
 backend. Routes render from values; `de20f415e` enabled the **context7** route and the RFC 9728 discovery
 routes on the public plane, while the **grafana** route stays commented out until Grafana's `auth.jwt`
 trusts the `mcp-gateway` client - a live route answers 401 to an unauthenticated caller and a
@@ -127,8 +129,8 @@ Repository clean at pushed `dba5343a3`. No new push; changes local only.
   `14:23:22.582393Z` / `.740913Z` / `23.047972Z`.
 - HTTP 200 at the gateway does not imply backend success; assertions verify result JSON.
 - **Verified**: route-level authorization (401/403 boundaries), caller subject isolation, scope enforcement,
-  Grafana native permissions (admin→Admin, editor→Editor, else Viewer). **Not deployed**: network isolation
-  (`networkIsolation: false` on both public and admin planes). No network-level isolation claims.
+  Grafana native permissions (admin→Admin, editor→Editor, else Viewer), and network isolation enabled
+  and verified on all three planes (admin `c1543aa13`, public `cdcf4a0a2`, grafana-mcp `044d45669`).
 
 ### Hermes live acceptance
 
@@ -171,35 +173,33 @@ All four apps — `hermes`, `mcp-gateway`, `grafana-mcp`, `monitoring` — **Syn
 | `hermes-live-acceptance.py` | 25 pass |
 | existing `PytestReturnNotNoneWarning` | 1 (pre-existing, not a failure) |
 
-### Network isolation audit (reconfirmed read-only, ~15:05Z 2026-11-09)
+### Network isolation audit (measured 2026-11-09, post-enablement)
 
 **Individual namespace queries** (not comma-separated):
 
 | Namespace | Native NetworkPolicy | CiliumNetworkPolicy | CiliumClusterwideNetworkPolicy |
 |-----------|---------------------|---------------------|-------------------------------|
-| `mcp-gateway` | 0 | 0 | 0 |
-| `mcp-gateway-admin` | 0 | 0 | 0 |
-| `grafana-mcp` | 0 | 0 | 0 |
+| `mcp-gateway` | 0 | **1 CNP** (`Valid=True`) | 0 |
+| `mcp-gateway-admin` | 0 | **1 CNP** (`Valid=True`) | 0 |
+| `grafana-mcp` | 0 | **1 CNP** (`Valid=True`) | 0 |
 | `firecrawl-mcp` | **2 preserved** | 0 | 0 |
 | `firecrawl` (backend) | 0 | 0 | 0 |
 
 **Global:** 0 CiliumClusterwideNetworkPolicies.
 
 **Isolation status:**
-- `mcp-gateway`: **unisolated** (no policy selects workload)
-- `mcp-gateway-admin`: **unisolated** (native NPs removed at `c75fae8f0`, owner-approved, due to health probe blocking on port 15021; no replacement CNP deployed)
-- `grafana-mcp`: **unisolated** (no policy selects workload)
-- `firecrawl-mcp`: **configured and verified** (2 native NPs preserved by exec probe fix; durable test 10/10 passed; see selector mismatch below)
-- `firecrawl` backend: **unisolated** (no policy selects workload)
+- `mcp-gateway`: **isolated** (CNP deployed at `cdcf4a0a2`, `Valid=True`)
+- `mcp-gateway-admin`: **isolated** (CNP deployed at `c1543aa13`, `Valid=True`)
+- `grafana-mcp`: **isolated** (CNP deployed at `044d45669`, `Valid=True`)
+- `firecrawl-mcp`: **configured and verified** (2 native NPs preserved by exec probe fix; durable test 13/13 passed; ingress selector corrected at `0c1aee0b9` to the real gateway labels `agentgateway-standalone`/`instance=mcp-gateway`/`component=standalone`; pod Running 0 restarts; exec probes)
+- `firecrawl` backend: **unisolated** (no pod-level policy; only `firecrawl-mcp` is isolated)
 
-**Configured vs. measured:** firecrawl-mcp NPs verified by durable test (exec probes work, NPs
-preserved). No positive or negative cross-pod connectivity test has been performed for any namespace.
+**Configured vs. measured:** All three CNPs verified live — HTTP 404 through `https://mcp.internal.grigri.cloud/` (ingress path works), TCP to pod IPs on app and health ports from unlisted pods timed out, acceptance tests passed through the isolated gateways.
 
-**Firecrawl ingress selector mismatch (CONFIRMED):**
-- Policy `firecrawl-mcp-ingress` expects: `app.kubernetes.io/name: mcp-gateway`
-- Actual `mcp-gateway` pod labels: `app.kubernetes.io/name: agentgateway-standalone`, `app.kubernetes.io/instance: mcp-gateway`, `app.kubernetes.io/component: standalone`
-- **Labels do not match.** If the firecrawl route were enabled, the ingress policy would not select the gateway pod and would fail closed (deny traffic) rather than permit it.
-- **Runtime impact:** Firecrawl route is currently disabled (`backends.firecrawl.enabled: false`), so this is not an active runtime blocker. No fix approved.
+**Firecrawl ingress selector (CORRECTED at `0c1aee0b9`):**
+- Policy `firecrawl-mcp-ingress` selector corrected to the real gateway labels: `app.kubernetes.io/name: agentgateway-standalone`, `app.kubernetes.io/instance: mcp-gateway`, `app.kubernetes.io/component: standalone`.
+- Pod Running, 0 restarts, exec probes.
+- **Runtime impact:** Firecrawl route is currently disabled (`backends.firecrawl.enabled: false`), so this path remains unexercised end to end.
 
 ### Admin plane — recovered and stable
 
@@ -222,7 +222,7 @@ Argo revision `914c1868969f30ac815978ba7bc8a927bfef0a1d` **Synced / Healthy**. P
 `firecrawl-mcp-8885f568b-72j8v` **Running Ready** (0 restarts, 8m18s on prusik, ~15:05Z
 2026-11-09). No OOM, no previous termination.
 
-**Durable test verified:** `apps/firecrawl-mcp/tests/test_exec_probes.py` **10/10 passed**. Three
+**Durable test verified:** `apps/firecrawl-mcp/tests/test_exec_probes.py` **13/13 passed**. Three
 exec probes, 2 NPs/env preserved, timeouts aligned (K8s 5s, Node 3s buffer 2s). Real read-only
 health check inside pod: `127.0.0.1:3000 /health` response ok.
 
@@ -237,20 +237,69 @@ definitive proof). Exec probes bypass NetworkPolicy (local pod communication).
 Not a four-path blocker for the public routes. Broader "all healthy" claim now valid for Firecrawl
 MCP pod health.
 
-### Network isolation — outstanding, separate approval required
+### Network isolation — ENABLED and verified on all three planes
 
-Network isolation remains **outstanding**, requires separate owner approval. The designed split-port
-CNP shape (dedicated health port from `world`, app/metrics from `fromEndpoints`, egress
-`toEntities: [cluster]`) is **not yet deployed** for any namespace.
+Network isolation is now **enabled and verified** on all three planes. The designed split-port CNP
+shape (dedicated health port from `world`, app/metrics from `fromEndpoints`, egress
+`toEntities: [cluster]`) is **deployed and live** for `mcp-gateway`, `mcp-gateway-admin`, and
+`grafana-mcp`.
 
-**Current state:**
-- `mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`, `firecrawl` backend: **no policies** (unisolated)
-- `firecrawl-mcp`: **2 native NPs configured** (preserved by exec probe fix), but selector mismatch with gateway pod labels (see audit above); untested
-- Admin native NPs removed at `c75fae8f0` (owner-approved) due to health probe blocking; no replacement CNP deployed
+**Pushed commits:** `c1543aa13` mcp-gateway-admin, `cdcf4a0a2` mcp-gateway, `044d45669` grafana-mcp
+— each a one-line `networkIsolation: true`.
 
-**Rollout plan:** After baseline stabilization (including Firecrawl final verification), deploy CNPs
-in the measured split-port shape. Rollback via git (breaking policies committed and reverted), never
-`kubectl`.
+**Live state:** Three CiliumNetworkPolicies in `mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`,
+all `Valid=True`.
+
+**Shape per component:**
+- `fromEntities: [world]` on the dedicated health port ONLY (admin 15021, public 15021, grafana-mcp 8081)
+- App port from the ingress controller pods (`fromEndpoints`)
+- Metrics port (15020) from Prometheus pods in `monitoring` where the chart exposes metrics
+- Egress bare `toEntities: [cluster]` plus explicit kube-dns/node-local-dns port-53 rules
+- `toEntities: [world]` on 443 only for the public gateway (context7 upstream)
+- Admin has NO world egress — in-cluster DNS resolves `idm.grigri.cloud` to the internal VIP
+  192.168.193.4, so the JWKS fetch stays in cluster; no startup JWKS/OIDC error was observed
+
+**S6 probe-source measurements** (cross-reference: `docs/conventions/cilium.md` and
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md` for the full matrix):
+- The kubelet probe source is the node's `cilium_host` address: `ip route get <podIP>` =>
+  `dev cilium_host src 10.0.4.252` on prusik; a disposable pod with no policy logged exactly that
+  peer address for its probe requests.
+- `fromCIDR: ["10.0.4.252/32"]` (S6a) and `fromCIDR: ["10.0.4.0/24"]` (S6b) were both accepted by
+  the validator (`Valid=True`, no warning about overlapping the cluster range) yet the probe was
+  DENIED with restarts. Only `fromEntities: [world]` matched (S6c control: Ready, 0 restarts). This
+  supersedes the earlier reading that E4 failed because the tested subnet was wrong.
+- With `world` on the dedicated health port, an in-cluster pod NOT named in `fromEndpoints` was
+  DENIED on the health port too. So `world` does not admit cluster-identity pods; the residual
+  exposure is world-identity traffic reaching a readiness body on a non-routable pod IP. A permitted
+  client pod was allowed on the app port and denied on the health port.
+
+**Per-step measured evidence:**
+- **Admin:** HTTP 404 through `https://mcp.internal.grigri.cloud/` (ingress path works), TCP to pod
+  IP :3000 and :15021 from an unlisted pod both timed out
+- **Public gateway:** `hermes-live-acceptance.py` => `ACCEPTANCE_PASS`, servers=2, context7
+  resolve+query success, TCP to pod IP :3000 and :15021 timed out
+- **Grafana-mcp:** acceptance again `ACCEPTANCE_PASS` with identity subject match and
+  `list_datasources` success, TCP to pod IP :8000 timed out
+
+**Restart counts unchanged across every flip:** admin 17 (pre-existing baseline, no new restarts),
+public gateway 0, grafana-mcp 0. Stability watched ≥180s per step. No rollbacks needed.
+
+**Independent post-enablement check through the isolated public gateway:** OpenCode `query-docs` on
+`/expressjs/express` returned real upstream docs with code, and OpenCode `list_datasources` returned
+the live Grafana datasource list (alertmanager, loki, prometheus, prometheus-long-term).
+
+**Remaining gaps (stated plainly, no broad hardening claims):**
+- The `firecrawl` backend namespace has no pod-level policy; only `firecrawl-mcp` is isolated.
+- The public Firecrawl route is still disabled, so that path is unexercised end to end.
+- The CNPs restrict the app port to the current ingress-nginx controller pods. The in-flight Envoy
+  Gateway migration is a separate workstream; at switchover its data-plane pods will be the new
+  source and the CNP `fromEndpoints` will need updating or the routes will fail closed. This is a
+  dependency to hand to that workstream, not work done here.
+- `enable-host-firewall` stays `false` and remains untested; it is not needed for the measured shape
+  and is explicitly not a proven probe cure.
+
+**Test counts:** `test/mcp-gateway/chart-checks.py` 172/172;
+`apps/firecrawl-mcp/tests/test_exec_probes.py` 13/13.
 
 ### Deferred / out of scope (unchanged)
 
@@ -903,7 +952,7 @@ evidence until the foundation re-lands:
 | suite | what it proves | result |
 |---|---|---|
 | `local-render.sh` (local runner, **not committed**: as written it trips the repo's shellcheck pre-commit hook - SC2155 at line 50 plus three SC2015 infos - so it stays out of the foundation until fixed) | renders both charts, boots the pinned v1.7.0 binary per plane: readiness on 15021, metrics on 15020, nothing listening on 15000, `404` on every backend path with `routes: []`, AES session active | 19 pass / 0 fail |
-| `test/mcp-gateway/chart-checks.py` | structural invariants on the rendered objects: fail-closed default, per-plane issuer/audience, CEL shape per `credential`, `backendAuth.passthrough` placement, no `session:` block in config, egress rules absent while disabled and added per enabled backend, ClusterIP only with separate metrics/healthz ports, every shipped backend disabled, no backend *setting* `credential: idToken`, scopeMap/groups render, plus review B1/B2/B3: the charts render **no Secret** and no `randAlphaNum`/`lookup` in template logic, the ESO `Password` + `ExternalSecret(CreatedOnce, target.immutable)` pair with a required `secretKeyRef`, byte-identical repeated renders, a 64-hex/32-byte key arithmetic check, `humanScopeMap: []` on both planes, Grafana's candidate on the **public** plane only, and no admin egress path to it | 106 pass / 0 fail |
+| `test/mcp-gateway/chart-checks.py` | structural invariants on the rendered objects: fail-closed default, per-plane issuer/audience, CEL shape per `credential`, `backendAuth.passthrough` placement, no `session:` block in config, egress rules absent while disabled and added per enabled backend, ClusterIP only with separate metrics/healthz ports, every shipped backend disabled, no backend *setting* `credential: idToken`, scopeMap/groups render, plus review B1/B2/B3: the charts render **no Secret** and no `randAlphaNum`/`lookup` in template logic, the ESO `Password` + `ExternalSecret(CreatedOnce, target.immutable)` pair with a required `secretKeyRef`, byte-identical repeated renders, a 64-hex/32-byte key arithmetic check, `humanScopeMap: []` on both planes, Grafana's candidate on the **public** plane only, and no admin egress path to it | 172 pass / 0 fail |
 | `test/mcp-gateway/e2e-authz.py` | cases A-N against the real gateway: anonymous 401 + challenge discovery, wrong-audience 401, missing scope 403, scoped 200 with the bearer stripped (`credential: none`), unmapped path 404, multi-scope string, near-miss 403, resource metadata at the advertised URL, pinned `Host`, AES session, then the admin plane: public-plane token 401, ID-token bearer 403, ACCESS bearer 200 forwarded verbatim, near-miss 403, and all injected credential/target-override headers stopped while a control header still passes | all passed |
 | `test/mcp-gateway/session-isolation-probe.py` | SESSION_KEY present -> AES ids (208 chars, no warning); no key + read-only config -> base64 ids (104 chars) **with** the `MCP session IDs are not encrypted` warning; query params dropped; 12 override headers stopped; B replaying A's session id is served with **B's own** bearer in both modes | all passed |
 | `test/mcp-gateway/session-binding-probe.py` | the Vault two-user gate, three shapes: baseline stateful/one target = **LEAK** (B served with A's cached credential), `statefulMode: stateless` = **OK**, per-caller `condition: jwt.sub` = **REFUSED** (`404 session not found`) | reproduced, gate verdict unchanged |
