@@ -160,16 +160,27 @@ grafana-mcp:
 
 # Reaching Grafana is the gateway's job only: a NetworkPolicy/CNP must restrict Grafana
 # ingress to this backend plus the browser path, otherwise a caller could bypass the
-# gateway's claim checks. That CNP lives in system/monitoring and apps/mcp-gateway, not here.
+# gateway's claim checks. This chart owns ONLY the backend's own policy
+# (templates/ciliumnetworkpolicy.yaml, gated by networkIsolation below); the Grafana-side
+# ingress restriction is a separate change in system/monitoring and is NOT done here.
 
 # ---------------------------------------------------------------------------
 # Wrapper-chart own resources (templates/ciliumnetworkpolicy.yaml)
 # ---------------------------------------------------------------------------
-# ROLLED BACK after a real incident: enabling this CNP (838031375) broke the
-# kubelet liveness path — probes to the :8081 healthz listener timed out
-# ("context deadline exceeded") and the container restart loop started within
-# ~4 minutes of the policy landing (2026-11-09, 6 restarts by 07:16Z). The
-# fromEntities host/remote-node allowance for :8081 is therefore NOT proven on
-# this cluster's datapath; health-first ordering means the flag stays OFF until
-# a corrected policy is validated. Template-only rollback, no pod churn.
+# The first version of that policy (838031375) restart-looped this backend and was
+# rolled back by 1c28157e2. Cause, now MEASURED rather than guessed: it allowed :8081
+# from `fromEntities: [host, remote-node]`, and with `enable-host-firewall: false`
+# neither entity matches the kubelet probe source, so the policy denied its own probes
+# ("context deadline exceeded"). The rewritten policy uses the shape that measured safe
+# on this cluster - `world` on the dedicated healthz port 8081 only, `fromEndpoints` for
+# the app port 8000, egress `toEntities: [cluster]`. See docs/conventions/cilium.md,
+# section "Kubelet probes under enforced policies".
+#
+# Still OFF in this release: the baseline stays policy-free and enabling is a separate
+# reviewed change.
+# TO ENABLE (one line, `true`): in the SAME commit raise livenessProbe and
+# readinessProbe `failureThreshold` above from 3 to >= 6 (the values block right here is
+# the one that feeds them) - a CNP-only sync attaches ingress rules to the RUNNING pod
+# and liveness is what turns a transient into a restart. Rollback is template-only:
+# false again, no pod churn, no Deployment nonce.
 networkIsolation: false

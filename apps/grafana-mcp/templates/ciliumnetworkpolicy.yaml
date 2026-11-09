@@ -1,15 +1,30 @@
 {{- if .Values.networkIsolation }}
 ---
-# CiliumNetworkPolicy for the Grafana MCP backend.
+# CiliumNetworkPolicy for the Grafana MCP backend (release `grafana-mcp`).
 #
-# Applies to the mcp-grafana pods created by the subchart (rendered pod labels
-# verified live: app.kubernetes.io/name=grafana-mcp,
-# app.kubernetes.io/instance=grafana-mcp, app.kubernetes.io/component=mcp-server).
+# This SUPERSEDES 838031375 (rolled back by 1c28157e2). That version allowed :8081 from
+# `fromEntities: [host, remote-node]`; with `enable-host-firewall: false` neither entity
+# matches the kubelet probe source, so the policy denied its own probes and the
+# container restart-looped. The shape below is the one measured safe on this cluster -
+# `docs/conventions/cilium.md`, section "Kubelet probes under enforced policies"
+# (rows S2/S3/S5). Native NetworkPolicy cannot express it: no entities, and a node
+# ipBlock does not match the probe source.
 #
-# Health-first rollout: this policy is only added AFTER the backend baseline was
-# proven healthy without network isolation (2026-11-09, 180s Ready window,
-# zero restarts). If it breaks probes or health, set values.networkIsolation
-# back to false (template-only rollback; no Deployment nonce needed).
+# PORTS - read off the rendered subchart output, not assumed
+# ---------------------------------------------------------
+#   8000  MCP app listener (`--address 0.0.0.0:8000`, the only containerPort, Service
+#         `mcp-http`)
+#   8081  health listener (`--healthz-address :8081`), readiness + liveness on
+#         `/healthz` - DEDICATED, so allowing it exposes nothing else
+#   metrics: none. `serviceMonitor.enabled` is false and the pod declares no metrics
+#          port, so there is no metrics rule to write and nothing for prometheus to
+#          reach here.
+#
+# `world` on 8081 is owner-accepted residual exposure: that listener serves the health
+# body only, pod IPs are not routable from outside the cluster, and unlike the app
+# listener it has no Host/Origin validation to trip over (`--healthz-address` is exempt
+# - measured). It also survives rescheduling: this pod has no nodeSelector, and `world`
+# matches whichever node ends up probing it, which `host`/`remote-node` did not.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
@@ -18,13 +33,29 @@ metadata:
     app.kubernetes.io/name: grafana-mcp
     app.kubernetes.io/instance: grafana-mcp
 spec:
+  # Rendered pod labels, identical to the live pod and to the Service selector:
+  # app.kubernetes.io/name=grafana-mcp, instance=grafana-mcp, component=mcp-server.
   endpointSelector:
     matchLabels:
       app.kubernetes.io/name: grafana-mcp
       app.kubernetes.io/instance: grafana-mcp
       app.kubernetes.io/component: mcp-server
   ingress:
-    # MCP traffic arrives ONLY from the public gateway plane pods.
+    # (1) Kubelet probes on the dedicated healthz side listener. `world` only, and
+    # `cluster` deliberately stays off this port - a rule list containing `cluster`
+    # leaked the app port in an earlier measured stage.
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "8081"
+              protocol: TCP
+    # (2) The MCP listener is reachable from the gateway plane and nothing else. One
+    # shared process forwards each caller's own bearer, so the network path is what
+    # makes "no direct backend access" true: a pod outside this allowlist cannot even
+    # open the connection, let alone present a credential. Labels are the gateway's
+    # rendered + live pod labels; the service name the gateway dials is
+    # grafana-mcp.grafana-mcp.svc.cluster.local:8000, matching --allowed-hosts.
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: agentgateway-standalone
@@ -35,34 +66,15 @@ spec:
         - ports:
             - port: "8000"
               protocol: TCP
-    # Kubelet liveness/readiness hit the --healthz-address side listener on
-    # :8081. Probe sources are the node's kubelet (host) and, if the pod moves,
-    # a remote-node kubelet; both are explicit entities here. This is NOT the
-    # main :8000 listener (Host/Origin validation would refuse kubelet's
-    # Host: <pod-ip> anyway - measured: 403 "forbidden: host not allowed").
-    - fromEntities:
-        - host
-        - remote-node
-      toPorts:
-        - ports:
-            - port: "8081"
-              protocol: TCP
   egress:
-    # Grafana itself: the exact pods behind monitoring-grafana (svc port 80
-    # targets container port 3000; selectors verified live via
-    # kubectl -n monitoring get svc monitoring-grafana).
-    - toEndpoints:
-        - matchLabels:
-            app.kubernetes.io/name: grafana
-            app.kubernetes.io/instance: monitoring
-            io.kubernetes.pod.namespace: monitoring
-      toPorts:
-        - ports:
-            - port: "3000"
-              protocol: TCP
-    # DNS via the kube-dns service backends and the node-local DNS pods
-    # (LRP-steered). Selectors verified live: k8s-app=kube-dns and
-    # k8s-app=node-local-dns in kube-system, both serving port 53.
+    # Proven baseline. Covers Grafana (reached by cluster Service in `monitoring`) and
+    # both DNS workloads. Bare `cluster`, no toPorts - ports on this rule would restrict
+    # all cluster egress to them.
+    - toEntities:
+        - cluster
+    # Guard for the DNS anycast path (nodelocaldns answers at 169.254.25.10 and Cilium
+    # DNATs to the node-local-dns pod, so the real pods are named, not the cidr).
+    # Redundant with `cluster`; harmless, rules are unioned.
     - toEndpoints:
         - matchLabels:
             k8s-app: kube-dns
@@ -76,4 +88,8 @@ spec:
               protocol: UDP
             - port: "53"
               protocol: TCP
+    # NO `world` egress rule, and that is deliberate: the only upstream is the in-cluster
+    # Grafana and telemetry is off (GRAFANA_USAGE_STATS=disabled), so this plane has no
+    # reason to reach outside. If a future change adds an external target, it must add an
+    # explicit, narrow egress rule here rather than widening `cluster`.
 {{- end }}
