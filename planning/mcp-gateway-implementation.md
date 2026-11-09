@@ -1,18 +1,26 @@
 # MCP Gateway Implementation Plan
 
-**Status:** Task 1 was committed (`9049af3bf`) and auto-deployed by ArgoCD on 2026-11-08 with
-**every backend route disabled**, and is **reverted again**: both planes reached `Degraded` because
-the attached NetworkPolicies made the gateway pods unreachable from the node on every port, so the
-kubelet startup probes on `:15021/healthz/ready` timed out and each container was killed on the probe
-threshold while the process itself logged `marking server ready` within ~6 ms. **Both planes never
-reached Ready at `9049af3bf`, so session-key stability across reconciles, RFC 9728 discovery, and
-disabled-backend 404 were NEVER observed live; they are local render/boot evidence only. No live
-gateway or parity claim exists.** The next gate before re-land is an approved GitOps canary isolating
-ingress-only vs egress-only probe failure. No backend was ever reachable (routes rendered empty), no
-existing workload was disturbed, and the two charts plus the `test/mcp-gateway` foundation suite are
-back to local/uncommitted work. Measurement and reasoning: "Second occurrence" in
-`docs/troubleshooting/mcp-firecrawl-egress-regression.md`. The Hermes sidecar
-keeps serving Grafana until parity is proven.
+**Status:** The foundation is **live again and policy-free**. `a146c5ee9` restored the public plane
+without any NetworkPolicy, `5d314c648` moved it to the **official** `agentgateway-standalone` chart and
+`0b63d06ab` fixed the startup config nesting; the pod is `Ready` with `restarts=0` on `prusik`,
+`networkIsolation: false` and `routes: []` in the committed values. The Grafana MCP backend is live and
+healthy at `1c28157e2` (its CNP rolled back), also `restarts=0`, currently on `grigri`.
+
+The 2026-11-08 revert of `9049af3bf` is now understood differently than this plan first said. Both planes
+reached `Degraded` because the kubelet startup probes on `:15021/healthz/ready` timed out while the
+process logged `marking server ready` within ~6 ms, and each container was killed on the probe threshold.
+The explanation "the policy set denies the node path because a NetworkPolicy cannot name the node" is
+**retracted**: on 2026-11-09 `838031375` attached a Cilium-native policy that allowed the node
+explicitly on its probe port (`fromEntities: host, remote-node` on `:8081`) and it still failed liveness
+and restarted 6 times before `1c28157e2` removed it, while that policy's **egress** named only Grafana
+pods and DNS - no node/host. The current **probable** mechanism is the pod→node **response** being
+dropped by an enforced egress policy that never permits the node. It is not proven; a disposable
+probe/policy matrix is measuring it now. **Both planes never reached Ready at `9049af3bf`, so session-key
+stability across reconciles, RFC 9728 discovery, and disabled-backend 404 were NEVER observed live; they
+are local render/boot evidence only. No live gateway or parity claim exists.** Measurement and reasoning:
+"Second occurrence" and "Third occurrence" in
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md`; durable rule in `docs/conventions/cilium.md`.
+The Hermes sidecar keeps serving Grafana until parity is proven.
 **Provisional placement decision (2026-11-09):** both MCP gateway planes (and the diagnostic canary)
 are pinned to node `prusik` via `nodeSelector: kubernetes.io/hostname=prusik` for diagnosis and
 initial rollout. Accepted trade-off: single-node failure domain means the gateway is unavailable when
@@ -21,26 +29,29 @@ goal is controlled observation, not production availability. Placement will be r
 node→pod probe/datapath gate is proven and the canary demonstrates stable Ready state. The earlier Firecrawl fetcher-egress change
 (`0b16b31b9` -> `8fff4f224`) is the same failure class; its exact packet-level cause is still not
 captured.
-**Date:** 2026-11-08
+**Date:** 2026-11-08 (resumption state 2026-11-09)
 **Architecture:** [docs/design/mcp-gateway-architecture.md](../docs/design/mcp-gateway-architecture.md)
 **Owner approval required before any live deployment**
 
 ## Overview
 
-**Review corrections applied (2026-11-08, foundation review):** B1 session key moved off
+**Review corrections applied (2026-11-08, foundation review; revised 2026-11-09):** B1 session key moved off
 Helm random/`lookup` onto the ESO native generator with `CreatedOnce` + immutable target (deterministic
 renders); B2 both charts now ship `kanidm.humanScopeMap: []` - no human grant is wired, and the group
 choice is a separate gate on the grant only; B3 the Grafana delegation candidate moved back to the
 **public** plane where the approved architecture puts it (the admin plane is Vault only) and its
 backend namespace is its own `grafana-mcp`, not `mcp-gateway-admin`; the NetworkPolicy comments no
-longer claim that `enable-host-firewall=false` guarantees kubelet probe traffic is unaffected - that
-assumption is now **measured false** on the live cluster: a pod carrying these policies answers no
-port from the node (host-sourced dial times out at 6.14 s on every port, including a port with no
-listener), while a policy-free pod answers in 0.07 s. No blanket host/remote-node allow is added,
-because Kubernetes NetworkPolicy cannot express a node peer - the open question for re-land is a
-Cilium-native mechanism (for example a CiliumNetworkPolicy with `fromEntities: host` /
-`toEntities: host`, or `enable-host-firewall` plus an explicit node allow) proven by a bounded
-host-sourced dial or Hubble verdicts. All routes stay off; the initial rollout scope, if deployment is ever
+longer claim that `enable-host-firewall=false` guarantees kubelet probe traffic is unaffected. What was
+then called "measured false" - the same-node A/B dial showing a policy-covered pod answering no port
+from a node-sourced dial - is a real measurement, but its reading was **over-stated**: Ingress and Egress
+were attached together and the dial went through the apiserver pod proxy, so it does not isolate a
+direction and its source identity is unproven. The related claim that "Kubernetes NetworkPolicy cannot
+express a node peer, therefore no host/remote-node allow was added" explains only the native API, not
+Cilium, which names the node with `host` / `remote-node` / `cluster` entities - and it was falsified as a
+cause by `838031375`, which allowed the node on its probe port and still killed the pod. The open question
+for policy re-land is therefore **which leg drops the probe**, and it is being answered by the disposable
+matrix, not by argument: the leading candidate is the pod→node **response** under an enforced egress
+policy that omits the node. All routes stay off; the initial rollout scope, if deployment is ever
 approved separately, is the public plane first, and the new pods' exact label selectors mean a NotReady
 gateway pod cannot disturb an existing workload.
 
@@ -54,11 +65,81 @@ default render is `routes: []`, so the shipped foundation answers 404 everywhere
 
 Every "measured" statement below comes from the local suites in `test/mcp-gateway/` running the
 pinned v1.7.0 binary (and pinned Grafana/mcp-grafana/firecrawl images) against chart-rendered
-configs - not from assumptions or from the live cluster.
+configs - not from assumptions or from the live cluster. Two of those suites are in the tree and were
+re-run against `origin/master` on 2026-11-09: `foundation-checks.py` **51/51 passed** and
+`grafana-backend-checks.py` **18/18 passed**. Numbers quoted from other suites (access-gate, discovery,
+stateless-backend) come from agent reports of untracked local work and are **not** repo-verified; do not
+carry them forward as evidence until the files land and are re-run.
 
 ## MCP Gateway Follow-up Tasks
 
-- [ ] **Migrate to official agentgateway-standalone chart**: Currently using `app-template` wrapper; migrate to official `oci://cr.agentgateway.dev/charts/agentgateway-standalone`. Verify and pin exact artifact version from official source before migration.
+- [x] **Migrate to official agentgateway-standalone chart**: done by `5d314c648`
+  (`mcp-gateway: Use official standalone Helm chart`, dependency
+  `agentgateway-standalone:1.7.0`, digest `8c3fcfb7f353…` pulled from the official OCI repo) and
+  completed by `0b63d06ab` (`mcp-gateway: Fix startup config nesting for agentgateway schema`) after the
+  live pod crashed on `unknown field 'adminAddr'`. `apps/mcp-gateway` is no longer an `app-template`
+  wrapper.
+- [ ] **Correct the reverted chart's probe-port rationale in source**: the deleted
+  `apps/mcp-gateway/templates/networkpolicy.yaml` (at `9049af3bf`) stated 15021 was "deliberately NOT
+  allowed" because a policy cannot name the node. That rationale is wrong (Cilium entities do name it)
+  and dangerous if it is copied back. The gateway owner must fix or drop it when the policy set is
+  redesigned — not a doc change.
+
+## 2026-11-09 Resumption State
+
+Read this first in a fresh session. Verified read-only against `origin/master` and the live cluster on
+2026-11-09; nothing below authorises a deployment.
+
+**What is live (policy-free):**
+
+- Public foundation: official `agentgateway-standalone` chart — `5d314c648` (migration, dependency
+  `agentgateway-standalone:1.7.0`) then `0b63d06ab` (startup config nesting fix) are the tip. Pod
+  `mcp-gateway-standalone-…` is `Ready`, `restarts=0`, on `prusik`; a 180 s stability window
+  06:45:50Z–06:48:50Z is reported for it. `networkIsolation: false`, `routes: []` in committed values.
+- Grafana MCP backend: healthy at tip `1c28157e2` (CNP rolled back, template renders none), `Ready`,
+  `restarts=0`, observed on `grigri`. Its baseline 180 s window 07:04:35Z–07:07:35Z is in the commit
+  messages.
+- Admin plane / Vault MCP, Firecrawl route: not deployed, routes stay empty. Nothing else was disturbed.
+
+**Repo-verified local proofs (re-run 2026-11-09 on this tree):** `test/mcp-gateway/foundation-checks.py`
+**51/51**, `test/mcp-gateway/grafana-backend-checks.py` **18/18** (per-user RBAC, delegation, no ambient
+credential). **Not repo-verified** — do not restate as evidence: the 39 access-gate, 21 discovery and
+11/13 stateless-backend figures come from agent reports of untracked local work, and
+`test/mcp-gateway/e2e-authz.py` (cases A-N in 1.4) is **not in the committed tree** — it was carried by
+`9049af3bf` and removed by the revert.
+
+**Remaining gates, in order:**
+
+1. **Probe/policy matrix result.** Disposable probe pods plus per-policy-mode CNPs are running now
+   (observed in the `default` namespace). Nothing about the mechanism may be written as proven until it
+   reports.
+2. **Fix the policies in source** — `apps/mcp-gateway` and `apps/grafana-mcp` — per
+   `docs/conventions/cilium.md`: probe ingress from the node **and** pod→node egress, port-scoped. This
+   includes deleting the "15021 deliberately not allowed because the node cannot be named" rationale from
+   any re-landed chart copy (see Follow-up Tasks).
+3. **Deploy routes + scope grants**: reuse the existing `grafana-mcp` service account and the existing
+   `grafana-users` human group; workload grants go through `mcp-gateway-agents` scopeMap membership, never
+   `client_credentials`. Person membership stays manual — never set by CRD.
+4. **Bootstrap/verify Grafana JWT aliases** (the `('jwt', sub)` binding) against the real two-issuer
+   setup, not the single-issuer fixture.
+5. **Coordinated `system/monitoring` Grafana JWT config + Hermes `global.mcpGateway.enabled`** as two
+   separate GitOps phases: the helper/config merge lands first, then the StatefulSet restart annotation.
+   Never both in one commit.
+6. **OpenCode client**: fixed public `client_id` `mcp-gateway`, callback
+   `http://127.0.0.1:15000/callback`, `/mcps` behind user auth; no shared broker token store.
+7. **Real tool calls from both clients** (OpenCode and Hermes) end-to-end, then
+8. **CNP positive/negative verification** once the corrected policy set exists.
+
+**Deferred / out of scope:** Vault MCP (Task 4, blocked), SearXNG (not counted toward parity), browser
+OAuth flows (unaffected by the gateway), and any public Firecrawl exposure (two independent gates: the
+SSRF gate above and the group-membership decision).
+
+**Chart policy note:** the official-chart preference rule is committed (`b5c84c8c4`:
+`docs/conventions/helm.md` plus `AGENTS.md`) — `AGENTS.md` is owned by the main session, not edited here.
+
+**Untracked work in the shared tree:** the root-level reports and probe scripts from this incident are
+unauthorised, untracked, build-scope incident-containment evidence. They are **not** a claim of a
+credential leak (none was verified) and they have **not** been cleaned up; cleanup is the owner's call.
 
 ## Task 0: Architecture & Inventory
 
@@ -139,24 +220,33 @@ per plane; both render fail-closed and both were booted with the pinned binary.
 
 ### 1.3 NetworkPolicy
 
-- [ ] **Both directions**: gateway ingress only from its own ingress controller + Prometheus;
+- [ ] **Both directions (still open)**: gateway ingress only from its own ingress controller + Prometheus;
   backend pods get ingress only from the gateway workload (dedicated pod per backend,
   `namespace`/`workloadName`/`port` from values); gateway egress limited to DNS, Kanidm/JWKS and
   enabled backends. Service is ClusterIP: no NodePort, no load balancer, no hostPort. Ops access
   is a separate **port** (metrics 15020, readiness 15021) and `adminAddr: "off"`, verified: nothing
   listens on 15000.
-  **Not safe as written - live result:** the policy set is self-consistent for pod-to-pod peers but
-  the kubelet probe path is node-sourced and dies with any restrictive policy attached, so the pods
-  never became Ready and the release was reverted. Re-land needs the node path expressed in a
-  Cilium-native way and proven live (see the incident doc), not inferred from `helm template`.
-  **Diagnostic A/B used `kubectl get --raw /api/v1/namespaces/<ns>/pods/<pod>:<port>/proxy/...`
-  (apiserver pod-proxy), not a direct node/kubelet path; the source identity through the K3s proxy
-  is unproven. Both Ingress and Egress were co-attached, so the neighbour comparison alone does not
-  isolate which policy type drops the traffic. Native K8S NetworkPolicy typically leaves node-local
-  traffic permitted, but Cilium's actual enforcement may differ (runtime 1.20.2 vs docs 1.20.4 patch
-  difference). Prior stale-datapath incidents are hypothesis, not causal proof. Timeout alone is not
-  proof of drop. No privileged capture or restart was performed. Do not recommend blanket
-  host/remote-node allow; a future port-15021-only candidate, L3/L4 not HTTP-path claim.
+  **Not safe as written - two live results, one corrected explanation.** The policy set is
+  self-consistent for pod-to-pod peers, but every version tried so far has killed kubelet probes on a
+  healthy process: `9049af3bf` (native NetworkPolicies, reverted) and `838031375` (Cilium-native, with
+  `fromEntities: host, remote-node` on the probe port, reverted by `1c28157e2`). The second one falsifies
+  the "node cannot be named on ingress" story, so the design gap is now read as **the egress side never
+  permitting the node/host**, dropping the probe response. The rule this plan adopts is in
+  `docs/conventions/cilium.md`: allow the node on the probe port **and** allow pod→node egress
+  (`host`/`remote-node`, or port-scoped `toEntities: [cluster]` as the working
+  `calypso-runners/calypso-control-plane-runner-policy` does), scoped to the probe port rather than a
+  blanket allow, and prove it with a disposable test before anything is re-landed — never inferred from
+  `helm template`.
+  **Evidence hygiene (why the earlier reading was wrong):** the diagnostic A/B used
+  `kubectl get --raw /api/v1/namespaces/<ns>/pods/<pod>:<port>/proxy/...` (apiserver pod-proxy), not a
+  direct node/kubelet path, so the source identity through the K3s proxy is unproven; Ingress and Egress
+  were co-attached, so the neighbour comparison cannot isolate a policy type; a timeout alone is not
+  proof of a drop; and denied-packet counters are aggregate and unattributable. Cilium docs state local
+  host→pod traffic is allowed implicitly unless `--allow-localhost=policy`, and `cilium-config` measured
+  on 2026-11-09 has `enable-host-firewall: false`, `enable-policy: default`, `allow-localhost` unset — so
+  upstream cilium/cilium#21965 does not describe our configuration. Prior stale-datapath incidents remain
+  hypothesis, not causal proof. No privileged capture or restart was performed. A port-15021-scoped
+  candidate is preferred; L3/L4 only, no HTTP-path claim.
 
 ### 1.4 Auth Validation + Discovery Tests
 
@@ -165,6 +255,10 @@ per plane; both render fail-closed and both were booted with the pinned binary.
   near-miss scope; 200 for a scoped caller; unmapped path 404; RFC 9728 metadata returns the exact
   issuer at the URL the gateway advertises; the backend always sees the pinned Host; and the admin
   delegation route forwards the caller's own credential.
+  **Caveat (2026-11-09): that file is not in the committed tree** - it came with `9049af3bf` and the
+  revert removed it, so this line is historical local evidence only. The tree carries
+  `foundation-checks.py` (51/51) and `grafana-backend-checks.py` (18/18); re-run any authz case from a
+  landed file before citing it.
 - [x] **Header/credential boundary** (`session-isolation-probe.py`): the caller's backend-URL and
   credential-override headers never reach a backend, while an unnamed header does - so the deny
   list, not the gateway default, is the protection.

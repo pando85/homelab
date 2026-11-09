@@ -3,11 +3,15 @@
 **Status:** rolled back, baseline healthy. The exact packet-level cause of the 2026-11-08 18:53
 regression is still **not captured** (no Hubble/packet evidence) and this doc does **not** claim it
 was solved. Later the same day the MCP gateway foundation hit the same *symptom* - kubelet probe
-timeouts against a healthy process - and there the proximate cause is measurable and policy-shaped
-(its NetworkPolicies attach **Ingress** rules that cannot name the node), so the node-to-pod denial
-itself is now demonstrated by an A/B measurement instead of being inferred. See "Second occurrence"
-below; the Firecrawl cause stays unknown. The MCP `firecrawl` backend route remains disabled and no
-further canary, re-land or live egress test is authorised.
+timeouts against a healthy process - and on 2026-11-09 a Grafana MCP backend reproduced it again with a
+*different* policy shape, which invalidated the explanation this doc previously gave for it. The
+mechanism is now treated as a **probable hypothesis, not a demonstrated cause**: the missing node/host
+allowance was on the **egress** side, so the probe reply pod→node is the candidate drop point. An
+empirical matrix (disposable probe pods plus per-policy-mode CNPs) is running as this is written; until
+it reports, nothing here is settled and the rollback/recovery chronology stays **inconclusive**. See
+"Second occurrence" and "Third occurrence" below; the Firecrawl cause stays unknown. The MCP
+`firecrawl` backend route remains disabled and no further canary, re-land or live egress test is
+authorised beyond the probe matrix already in flight.
 
 ## Timeline (read-only investigation, 2026-11-08)
 
@@ -72,8 +76,10 @@ is covered by the api-only `search` policy.
 2. **Model the probe path** in tests, not only selector matching, and make any egress test fail loudly
    when the workload is unhealthy for the wrong reason — a dead app otherwise reads as "SSRF blocked".
 3. **Canary one workload**, applied out-of-band and watched, rather than selecting every fetcher pod at
-   once. Do not "fix" a probe path by adding a blanket host / remote-node allow, and do not trust a
-   look-alike cluster that does not match the real routing, kernel and datapath behaviour.
+   once. Express the node path in **both** directions (probe ingress *and* pod→node egress) and measure
+   it, rather than guessing at one leg; keep any such allowance scoped to the probe port instead of
+   adding a blanket host / remote-node allow, and do not trust a look-alike cluster that does not match
+   the real routing, kernel and datapath behaviour.
 4. **One concern per commit** — egress isolation shipped together with a public-exposure rework, so a
    regression has more than one candidate.
 
@@ -91,7 +97,7 @@ fetcher reaches, so it cannot substitute for this egress gate. See
 tooling is in the tree today. The commits hold the code if it is needed again — reworked against the
 gates above, not restored wholesale.
 
-## Second occurrence (same day, MCP gateway foundation): node -> pod denial measured
+## Second occurrence (same day, MCP gateway foundation): node-sourced dials unanswered
 
 The disabled-only MCP gateway foundation (`9049af3bf`, `apps/mcp-gateway` and
 `apps/mcp-gateway-admin`, **every route disabled**) was deployed by ArgoCD at 20:31 and both planes
@@ -102,8 +108,11 @@ reached `Degraded` with the identical signature:
 * kubelet reported `Startup probe failed: Get "http://<podIP>:15021/healthz/ready": context deadline
   exceeded` on **both** planes, and killed each container at the startup threshold (30 x 10 s =
   ~297 s), so the pods restarted in a loop while never being Ready;
-* the probe port is **not** in the chart's ingress allow list at all (ingress permits only 3000 from
-  the ingress controller and 15020 from Prometheus), yet the failures were not limited to it.
+* the probe port was **not** in the chart's ingress allow list at all (ingress permitted only 3000 from
+  the ingress controller and 15020 from Prometheus), yet the failures were not limited to it. **The
+  rationale written into that chart comment - the port stays unlisted because a policy "cannot name the
+  node" - is the claim this doc now retracts**, see below. The chart source itself is owned by the
+  gateway owner and its comment still has to be corrected in a future source change.
 
 Measured read-only, same moment, same node, via the API server pod proxy (a host-sourced dial, like
 kubelet's):
@@ -113,32 +122,65 @@ kubelet's):
 | listening port | 502 after **6.14 s** (SYN unanswered) | real response in **0.07 s** |
 | closed port (`15999` / `19999`) | 502 after **6.14 s** | 502 in **0.07 s** (`connection refused`) |
 
-So for the policy-covered pod **every** port behaves like a silent drop, including a port with no
-listener at all, and including ports that the policy does allow for specific pod peers. The control
-pod is on the **same node and the same pod CIDR** (`10.0.4.222` vs `10.0.4.127`), so the only
-difference is that these two endpoints carry NetworkPolicies. That is a node-to-pod data-path denial,
-not an application problem, and it is a clean A/B measurement rather than an inference.
+The numbers stand: for the policy-covered pod **every** port behaved like a silent drop, including a
+port with no listener at all, and including ports the policy allowed for specific pod peers; the control
+pod was on the **same node and the same pod CIDR** (`10.0.4.222` vs `10.0.4.127`). What the numbers
+support is only "**node-sourced traffic was not delivered while this policy set was attached**". The
+reading this doc previously published - a "clean A/B" that **demonstrated** a node→pod ingress denial -
+is **audit-corrected to inconclusive**: Ingress and Egress policies were attached together, so the pair
+cannot separate the two directions; the dial went through the apiserver pod-proxy, so the source
+identity through the K3s proxy is unproven; and a timeout is not by itself a dropped request.
 
-**This does not explain the 18:53 Firecrawl event.** The Firecrawl policies were `policyTypes:
-[Egress]` only, while these charts also attach **Ingress** policies whose allow list contains only
-port 3000 from the ingress controller and 15020 from Prometheus - a native NetworkPolicy cannot name
-the node, so the probe path had no permitted source at all. That is the proximate cause here. For the
-original event the browser (playwright) pod also stayed Ready, and its egress rules are the same
-anchors with the node subnet excluded, so a generic "egress policy drops the probe reply" story does
-not fit it either. The 18:53 root cause stays unknown; only the symptom class is shared - kubelet
-probe timeouts against a healthy process, recovered by deleting the policies without a restart.
+## Third occurrence (2026-11-09, Grafana MCP backend): the ingress explanation fails
 
-**What this does not prove**: whether Cilium drops the probe SYN on ingress or the reply on egress
-(both present in this pod), and it does not prove anything about the `enable-host-firewall=false`
-contract in general. Separating those needs `cilium-dbg`/Hubble verdicts or a capture, and neither is
-authorised. What is established: with these policies attached, node-sourced traffic to the selected
-endpoints is not delivered on any port.
+`838031375` (`grafana-mcp: Add scoped CiliumNetworkPolicy (post-health)`) attached a **Cilium**-native
+policy to a backend that had already been proven healthy without isolation (180 s Ready window
+07:04:35Z-07:07:35Z, `restarts=0`). Its ingress rules allowed the node explicitly -
+`fromEntities: [host, remote-node]` on the `:8081` healthz listener - and on `:8000` only the gateway
+plane pods. Liveness still failed with `context deadline exceeded` (13 times over ~6 min) and the
+container restarted 6 times before `1c28157e2` (`grafana-mcp: Roll back backend CNP (kubelet probes
+blocked)`) rendered no CNP at all (`networkIsolation: false`); the backend returned to `restarts=0`.
 
-**Consequence for any re-land**: a pod that runs kubelet `httpGet`/`tcpSocket` probes must have the
-node path proven open **before** the policy set is attached, and the proof must be measured - the
-bounded host-sourced dial above takes seconds to run and is read-only. Expressing it needs a
-Cilium-native peer (a CiliumNetworkPolicy with `fromEntities: [host]` / `toEntities: [remote-node]`,
-or an explicit node-subnet `ipBlock` if the owner accepts that), because native NetworkPolicy has no
-way to name the node. The gateway charts were reverted for exactly this reason and are back to
-local/uncommitted work. A pod whose only probes are `exec` (like the Firecrawl redis) is unaffected
-by construction, which is worth checking before assuming a policy set is "safe for probes".
+That is the evidence that breaks the earlier story, and it points the other way:
+
+* the **ingress** side of the node path was explicitly allowed, in the exact form the previous text
+  said was "impossible to express", and the probes still timed out;
+* its **egress** rules listed only the Grafana pods on 3000 and the DNS backends on 53 - **no node or
+  host allowance at all**;
+* per Cilium docs, local host→pod traffic is allowed **implicitly** unless the agent runs
+  `--allow-localhost=policy`. Measured live in `cilium-config`: `allow-localhost` unset,
+  `enable-host-firewall: false`, `enable-policy: default`. So an ingress omission on the node path is a
+  weak explanation here, and upstream cilium/cilium#21965 (host egress policy denying kubelet probes)
+  needs `enable-host-firewall: true`, which is **not** this cluster's configuration.
+* the long-running, working reference in this cluster is
+  `calypso-runners/calypso-control-plane-runner-policy` (live, `VALID=True`): its ingress allows
+  `fromEntities: [host, remote-node, cluster, world]` on the served ports **and** its egress allows
+  `toEntities: [cluster]` (port-scoped), where `cluster` is documented to include `host` and
+  `remote-node`. The two failing policies each lacked one of those legs.
+
+**Probable mechanism (hypothesis, not proven)**: with an enforced egress policy that never names the
+node/host, the **pod→node response** of a kubelet probe is dropped, so the probe times out even though
+the request reached the pod. The durable rule this implies is recorded in
+`docs/conventions/cilium.md` ("Kubelet probes under enforced policies").
+
+**Still open**: which leg actually drops the packet, and whether a port-scoped egress allowance to the
+node is sufficient. An empirical matrix of disposable probe pods with per-policy-mode CNPs is running;
+until it reports, the wording above stays probable rather than proven, and the rollback/recovery
+chronology of the earlier events stays inconclusive.
+
+**What the second and third occurrences do not prove**: nothing about the 18:53 Firecrawl event. The
+Firecrawl policies were `policyTypes: [Egress]` only - consistent with the egress/return hypothesis, but
+the browser (playwright) pod stayed Ready with the same egress anchors and the node subnet excluded, so
+a generic "egress policy drops the probe reply" story does not fit that event either. The 18:53 root
+cause stays **unknown**; only the symptom class is shared - kubelet probe timeouts against a healthy
+process, recovered by deleting the policies without a restart.
+
+**Consequence for any re-land**: a pod that runs kubelet `httpGet`/`tcpSocket` probes must have the node
+path proven open in **both directions** - probe ingress *and* pod→node egress - **before** the policy set
+is attached, and the proof must be measured, not inferred from a render. A native NetworkPolicy cannot
+name a node peer, but that is an API limitation only: Cilium expresses it (`fromEntities` /
+`toEntities` with `host`, `remote-node`, or a scoped `cluster`), so the node path is never a valid
+excuse for omitting one direction. Keep such allowances scoped to the probe port, and prefer a validated
+shape copied from a workload that demonstrably runs policy-ed in this cluster. A pod whose only probes
+are `exec` (like the Firecrawl redis) is unaffected by construction, which is worth checking before
+assuming a policy set is "safe for probes".

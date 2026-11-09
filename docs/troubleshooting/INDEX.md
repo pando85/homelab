@@ -472,12 +472,15 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   policy shares the **byte-identical** DNS/internet anchors (all 14 `except` CIDRs) and SearXNG is
   covered by an api-only `search` policy, so browser-vs-fetcher rule shape is not a discriminator —
   only extra peers/rule count on the selected side; note also that the Firecrawl policies were
-  **Egress-only**, and the browser's only network probe is a liveness `httpGet`. The node↔pod denial
-  itself is since **demonstrated** by a same-node A/B dial: an endpoint carrying an **Ingress** policy
-  that cannot name the node answers no port to the node (SYN unanswered for 6.1 s, even on a closed
-  port) while a policy-free neighbour on the same node answers in 0.07 s — see the gateway occurrence
-  in the same doc, which is a different proximate trigger and does not explain this one. The live SSRF
-  check never ran. Re-land only with
-  deny/CT/capture evidence, a single-workload canary, and the node probe path proven open before the
-  policy attaches (bounded host-sourced dial, or a Cilium-native `fromEntities: host` peer).
-  See `docs/troubleshooting/mcp-firecrawl-egress-regression.md`
+  **Egress-only**, and the browser's only network probe is a liveness `httpGet`. The same-node A/B dial
+  (host-sourced port proxy: SYN unanswered for 6.1 s on every port, even a closed one, vs 0.07 s for a
+  policy-free neighbour) is **audit-corrected to inconclusive** — Ingress and Egress were co-attached and
+  the proxy's source identity is unproven — and the "Ingress policy cannot name the node" explanation it
+  was taken to support was **retracted** by a third occurrence: the grafana-mcp CNP (`838031375`) allowed
+  `fromEntities: host, remote-node` on its probe port and still timed out liveness, while its egress
+  named no node/host, so the candidate mechanism is the pod→node **response** under enforced egress
+  policy. Probable, not proven: the probe matrix is still running. See
+  `docs/troubleshooting/mcp-firecrawl-egress-regression.md` and the durable rule in
+  `docs/conventions/cilium.md`. The live SSRF check never ran. Re-land only with
+  deny/CT/capture evidence, a single-workload canary, and the node probe path proven open **in both
+  directions** before the policy attaches.

@@ -111,6 +111,15 @@ Rollback changed both policyMode (ingress→none) AND rolloutNonce (0→1), caus
 ### Source Conclusion
 Ingress-associated kubelet probe failure reproduced on prusik. Missing explicit node allow is CANDIDATE mechanism, not proven root cause. No BPF verdict captured, no source host identity captured. Chronology, stability windows, and recovery mechanism INCONCLUSIVE. No egress phase executed; cannot clear egress/Firecrawl.
 
+**Update 2026-11-09 (supersedes the ingress framing above):** the "missing explicit node allow" candidate
+was an **ingress-side** allow, and it was granted explicitly on `838031375`
+(`fromEntities: host, remote-node` on the probe port) — the probes failed anyway, so that candidate no
+longer explains the failure on its own. The leading candidate is now the **pod→node response under an
+enforced egress policy** that never names the node/host. The egress phase this summary lists as "not yet
+executed" is exactly the measurement needed. Rule to design against:
+`docs/conventions/cilium.md` ("Kubelet probes under enforced policies"); full evidence trail:
+"Second"/"Third occurrence" in `docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
+
 ## Fixed File List
 
 ### Chart Files

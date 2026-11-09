@@ -1,17 +1,23 @@
 # MCP Gateway Architecture
 
-**Status:** Agreed baseline (implementation validation pending). First live attempt of the
-disabled-only foundation was deployed and reverted on 2026-11-08: the NetworkPolicy set denies the
-node path, so kubelet probes never passed - see
-`docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Second occurrence"). **Both planes never
+**Status:** Agreed baseline (implementation validation pending). The first live attempt of the
+disabled-only foundation (`9049af3bf`, deployed and reverted on 2026-11-08) failed kubelet startup probes
+on `:15021` while the process was healthy. This doc previously stated that the attached NetworkPolicy set
+denies the node path; that explanation is **audit-corrected** — a second, Cilium-native policy that
+explicitly allowed the node on its probe port (`838031375`) failed the same way on 2026-11-09, and its
+egress named no node/host. The candidate mechanism is now the **pod→node response under an enforced
+egress policy**, probable and still under measurement, not proven. See
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Second"/"Third occurrence") and the durable
+rule in `docs/conventions/cilium.md`. **Both planes never
 reached Ready at `9049af3bf`, so session-key stability across reconciles, RFC 9728 discovery, and
 disabled-backend 404 were NEVER observed live; they are local render/boot evidence only. No live
-gateway or parity claim exists.** The next gate before re-land is an approved GitOps canary isolating
-ingress-only vs egress-only probe failure.
+gateway or parity claim exists.** The next gate before policy re-land is the in-flight probe-policy
+matrix; the policy-free foundation itself is live again and is tracked in
+`planning/mcp-gateway-implementation.md`.
 **Provisional placement:** both planes and the diagnostic canary are pinned to node `prusik` via
 `nodeSelector: kubernetes.io/hostname=prusik` for diagnosis and initial rollout, accepting a
 single-node failure domain. Placement will be revisited after the node→pod probe/datapath gate.
-**Date:** 2026-11-08
+**Date:** 2026-11-08 (corrected 2026-11-09)
 **Implementation plan:** [`planning/mcp-gateway-implementation.md`](https://github.com/pando85/homelab/blob/master/planning/mcp-gateway-implementation.md)
 
 ## Overview
@@ -222,6 +228,16 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 - **Ops exceptions on a separate PORT**: Metrics/probe on a different port, NOT a `/metrics` path
   distinction (L3/4 enforcement). Narrow probe/node limitations via labels/RBAC. Additive
   policies; verify denied for ordinary pods
+- **Probe path needs both directions**: any enforced policy set on a gateway or backend pod must allow
+  ingress to the probe port from the node (`fromEntities: [host, remote-node]`) **and** egress back to
+  the node (`toEntities: [host, remote-node]`, or port-scoped `toEntities: [cluster]` like the working
+  Calypso runner policy). Omitting one leg is what killed the probes at `9049af3bf` and again at
+  `838031375`. Full rule and the measured caveats: `docs/conventions/cilium.md`
+- **Pending source fix (not a doc change)**: the reverted foundation chart carried a comment justifying
+  leaving 15021 off the ingress list because a policy "cannot name the node". That reasoning is wrong
+  (Cilium names the node with entities; only the native NetworkPolicy API cannot) and the comment must be
+  corrected or removed before any policy set is re-landed by the gateway owner. The current tree renders
+  no policy (`networkIsolation: false`), so nothing live depends on it today
 - **ClusterIP is not isolation**: NetworkPolicy is the isolation mechanism
 
 ### SSRF
