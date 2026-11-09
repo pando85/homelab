@@ -94,6 +94,41 @@ app-template:
             - *host
           secretName: prowlarr-external-tls-certificate
 
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # The internal route has no external-dns annotation until the internal switch. The external
+  # route is behind the OIDC SecurityPolicy (templates/security-policy.yaml).
+  route:
+    internal:
+      kind: HTTPRoute
+      forceRename: prowlarr-internal
+      hostnames:
+        - prowlarr.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: prowlarr
+              port: 9696
+    external:
+      kind: HTTPRoute
+      # stable name: the SecurityPolicy targets it
+      forceRename: prowlarr-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - prowlarr.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: prowlarr
+              port: 9696
+
   defaultPodOptions:
     securityContext:
       runAsUser: 568
