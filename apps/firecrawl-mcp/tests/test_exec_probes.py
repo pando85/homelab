@@ -139,7 +139,7 @@ def test_environment_variables_preserved():
 
 
 def test_probe_timeouts_aligned():
-    """Verify Kubernetes timeoutSeconds aligns with Node.js timeout."""
+    """Verify Kubernetes timeoutSeconds provides buffer for Node.js startup + request."""
     result = subprocess.run(
         ["helm", "template", "--namespace", "firecrawl-mcp", "firecrawl-mcp", "../"],
         capture_output=True,
@@ -164,11 +164,15 @@ def test_probe_timeouts_aligned():
         script = probe["exec"]["command"][2]
         assert "timeout:3000" in script, f"{probe_name} Node.js timeout not 3000ms"
 
-        # Verify alignment (Kubernetes timeout should be >= Node.js timeout)
-        # Kubernetes timeout is in seconds, Node.js timeout is in milliseconds
-        assert k8s_timeout >= 3, f"{probe_name} timeoutSeconds {k8s_timeout} < 3s"
+        # Verify Kubernetes timeout provides buffer for Node startup
+        # K8s timeout must be >= 5s to allow for Node.js startup (~500ms) + request (3s)
+        assert k8s_timeout >= 5, f"{probe_name} timeoutSeconds {k8s_timeout} < 5s (needs buffer for Node startup)"
 
-        print(f"✓ {probe_name} timeouts aligned (K8s: {k8s_timeout}s, Node: 3000ms)")
+        # Verify K8s timeout > Node timeout (prevents race condition)
+        k8s_timeout_ms = k8s_timeout * 1000
+        assert k8s_timeout_ms > 3000, f"{probe_name} K8s timeout {k8s_timeout}s <= Node timeout 3s (race condition)"
+
+        print(f"✓ {probe_name} timeouts aligned (K8s: {k8s_timeout}s, Node: 3000ms, buffer: {k8s_timeout_ms - 3000}ms)")
 
 
 def test_negative_cases():
