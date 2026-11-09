@@ -1,0 +1,254 @@
+{{- if eq (include "hermes.mcpGateway.enabled" .) "true" }}
+{{- $gw := dig "mcpGateway" dict .Values.global }}
+{{- $h := $gw.helper }}
+{{- /* Single source of truth for the Hermes build: the helpers must run the
+       same image as the agent whose config and token store they write, so they
+       can never drift to a different Hermes version than the config they
+       produce. Read from the agent container spec instead of duplicated here
+       (a second pin would be a second Renovate target that can lag). */}}
+{{- $img := (index .Values "app-template").controllers.hermes.containers.hermes.image }}
+{{- /* Placement follows the same rule: pin the helpers where the agent itself is pinned, read from
+       the agent's pod spec instead of repeating a hostname here. A second literal would be a second
+       thing to keep in sync, and drift would schedule this pod onto a node that cannot attach the
+       volume at all. */}}
+{{- $at := index .Values "app-template" }}
+{{- /* Placement follows the same rule: the helpers must sit exactly where the agent sits, so the
+       selector and the runtime class are read from the agent's own pod configuration instead of
+       being repeated here. ``hermes-data`` is ReadWriteOnce with a hard PV node affinity, so a
+       drifted literal would schedule this pod onto a node that cannot attach the volume at all. */}}
+{{- $sel := dig "defaultPodOptions" "nodeSelector" dict $at }}
+{{- if not $sel }}
+{{-   fail "global.mcpGateway: app-template.defaultPodOptions.nodeSelector is empty; the helper pod must be pinned to the node holding hermes-data" }}
+{{- end }}
+{{- $rtc := dig "controllers" "hermes" "pod" "runtimeClassName" "" $at }}
+{{- if not $rtc }}
+{{-   fail "global.mcpGateway: app-template.controllers.hermes.pod.runtimeClassName is empty; the helper pod must share the agent's runtime class" }}
+{{- end }}
+---
+# Opt-in homelab MCP gateway client (``global.mcpGateway.enabled``).
+#
+# What this pod does: it owns exactly two writes into the Hermes agent's own
+# home on ``hermes-data`` -
+#
+#   * ``config.yaml``      <- ``mcp_gateway_merge.py`` adds one ``mcp_servers``
+#                             entry per gateway route, through Hermes' own
+#                             ``atomic_config_write`` chokepoint;
+#   * ``mcp-tokens/*.json`` <- ``mcp_gateway_token.py`` exchanges the workload
+#                             credential for a per-route gateway access token,
+#                             in process memory, and re-exchanges before expiry.
+#
+# Why a separate pod instead of init/sidecar containers in the Hermes pod:
+# app-template's ``enabled`` fields are schema-locked booleans, so a container
+# cannot be switched on by a templated value, and any always-present helper
+# container would leave a mount in the pod even with the feature off. See the
+# comment block in ``values.yaml``.
+#
+# Concurrency: ``Recreate`` and a single replica, because two writers racing on
+# ``config.yaml`` would be a last-writer-wins on a file that holds the agent's
+# whole configuration.
+#
+# Co-location: ``hermes-data`` is a ``ReadWriteOnce`` OpenEBS-ZFS volume and its PV carries a hard
+# node affinity to prusik (``openebs.io/nodeid In [prusik]``, read from the cluster), so the kubelet
+# physically cannot attach this pod anywhere else - the ``nodeSelector`` below records that
+# constraint rather than inventing it. No podAffinity is set: the volume already pins the node, and
+# cross-namespace affinity would add a failure mode (an unschedulable pod) instead of a guarantee.
+# If the PVC ever moves pool or node, this selector and the PV affinity move together.
+#
+# Why the merge is re-applied every cycle instead of once: Hermes serialises its own config writes
+# with an in-process ``threading.RLock`` (``_CONFIG_MUTATION_LOCK`` in hermes_cli/web_server.py)
+# that a second pod cannot take part in. A dashboard "Save" that read ``config.yaml`` before our
+# merge can therefore still write its older copy afterwards and drop the route (a lost update).
+# Re-merging on each refresh converges that within one cycle: the fix is periodic, not atomic, and
+# that is exactly why ``--once`` appears only on the init container.
+#
+# Credential handling: no secret material reaches any ``exec``'d process here. The bearer token goes
+# into the request body in memory, and the exchange token is piped through stdin rather than passed
+# as an argv value, because argv is readable through ``/proc/<pid>/cmdline`` by anything in the pod.
+# The baseline legacy script does expose its subject token that way; the gateway path does not
+# (measured, ``tests/test_cutover_sidecar_probe.py``).
+#
+# Root-owned writes: the helpers run as uid 0 with all capabilities dropped and a read-only rootfs,
+# which matches the ownership of everything already in ``hermes-data`` - the agent container is
+# ``runAsUser: 10000`` (Hermes' own default) and its home is root-owned in the image. No
+# ``fsGroup``: adding one would rewrite permissions across a 100 GiB volume and change existing
+# files for no benefit. Hermes' own init container already does the same root-owned chown.
+#
+# Reload contract, stated honestly (read from /opt/hermes in the pinned image):
+#   * a brand-new ``mcp_servers`` entry is read at startup. Neither writing this file nor a
+#     GitOps-triggered pod restart is performed by this Deployment on its own.
+#   * token files *are* live-reloaded: ``mcp_oauth_manager.is_token_file_stale`` re-reads the on-disk
+#     ``expires_at`` on every request, so rotation needs no restart.
+#   * there is no non-interactive reload. ``/api/mcp/*`` requires the dashboard session token and
+#     does not accept bearer auth (only the ``drain`` plugin registers token routes, and no reload
+#     route exists in the web layer). The only user-facing reloads are the chat ``/reload-mcp``
+#     command (Telegram/WebUI, gated on a confirmation prompt) and the TUI's consent-gated watcher.
+#   * so the intended activation is: ArgoCD applies this pod, the entry is merged and the token
+#     staged, then the route goes live at the next pod restart (a later commit, or any config change)
+#     or when a person runs ``/reload-mcp``.
+#
+# CAVEAT - CANDIDATE, NOT APPROVED ARCHITECTURE. The switch, the two legacy scripts it replaces, the
+# credential path and the co-location constraint are measured (apps/hermes/tests/). Everything below
+# this comment - the Deployment as the right shape, the root/no-fsGroup choice, the nodeSelector -
+# is a proposal for the main review, not a decision.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hermes-mcp-gateway
+  labels:
+    app.kubernetes.io/component: mcp-gateway-client
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: mcp-gateway-client
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: mcp-gateway-client
+      annotations:
+        # The scripts and the route config are mounted, but a mounted file
+        # changing in place does NOT re-run the Python that is already up, and
+        # the merge only happens at startup. Rolling the helper when its own
+        # ConfigMap changes is what makes a new route (or a fixed script)
+        # actually land in ``config.yaml``; no Reloader annotation is needed on
+        # this pod, which is why nothing has to be added to the Hermes pod.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-mcp-gateway.yaml") . | sha256sum }}
+    spec:
+      nodeSelector:
+{{ toYaml $sel | indent 8 }}
+      runtimeClassName: {{ $rtc }}
+      automountServiceAccountToken: {{ $h.automountServiceAccountToken }}
+      enableServiceLinks: {{ $h.enableServiceLinks }}
+      initContainers:
+        # Exchange first: a session that starts right after a restart must find
+        # a valid credential, not a config entry pointing at a route with no
+        # token file yet.
+        - name: mcp-gateway-token
+          image: {{ printf "%s:%s" $img.repository $img.tag | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/hermes/.venv/bin/python"]
+          args: ["/mcp-gateway/mcp_gateway_token.py"]
+          env:
+            - name: PYTHONPATH
+              value: /opt/hermes
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: MCP_GATEWAY_TOKEN_MODE
+              value: once
+            - name: MCP_GATEWAY_CONFIG
+              value: /mcp-gateway/config.json
+            # Workload credential from a Secret reference: it reaches the
+            # process through the environment only, never through argv, where
+            # any process in the container could read it from
+            # /proc/<pid>/cmdline. The request body is built in memory by
+            # urllib inside the helper.
+            - name: MCP_GATEWAY_SUBJECT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $gw.identity.subjectTokenSecret }}
+                  key: {{ $gw.identity.subjectTokenKey }}
+          {{- include "hermes.mcpGateway.containerSecurityContext" . | nindent 10 }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /mcp-gateway
+              readOnly: true
+            - name: data
+              mountPath: /opt/data
+            - name: tmp
+              mountPath: /tmp
+        # Merge second, so the config that appears references a route that
+        # already has a credential on disk.
+        - name: mcp-gateway-config
+          image: {{ printf "%s:%s" $img.repository $img.tag | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/hermes/.venv/bin/python"]
+          args: ["/mcp-gateway/mcp_gateway_merge.py"]
+          env:
+            - name: PYTHONPATH
+              value: /opt/hermes
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: MCP_GATEWAY_CONFIG
+              value: /mcp-gateway/config.json
+          {{- include "hermes.mcpGateway.containerSecurityContext" . | nindent 10 }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /mcp-gateway
+              readOnly: true
+            - name: data
+              mountPath: /opt/data
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        # Re-exchanges every route's token before it expires and rewrites
+        # ``$HERMES_HOME/mcp-tokens/<server>.json``. Hermes' OAuth provider
+        # reloads those files by mtime per request, so rotation needs no
+        # restart and no interactive OAuth flow. Exits after
+        # ``exchange.maxFailures`` consecutive failures rather than keep serving
+        # a stale credential, so the pod restarts and re-reads the Secret.
+        - name: mcp-gateway-token-refresher
+          image: {{ printf "%s:%s" $img.repository $img.tag | quote }}
+          imagePullPolicy: IfNotPresent
+          command: ["/opt/hermes/.venv/bin/python"]
+          args: ["/mcp-gateway/mcp_gateway_token.py"]
+          env:
+            - name: PYTHONPATH
+              value: /opt/hermes
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: MCP_GATEWAY_TOKEN_MODE
+              value: loop
+            - name: MCP_GATEWAY_CONFIG
+              value: /mcp-gateway/config.json
+            - name: MCP_GATEWAY_SUBJECT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $gw.identity.subjectTokenSecret }}
+                  key: {{ $gw.identity.subjectTokenKey }}
+          {{- include "hermes.mcpGateway.containerSecurityContext" . | nindent 10 }}
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: scripts
+              mountPath: /mcp-gateway
+              readOnly: true
+            - name: data
+              mountPath: /opt/data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: scripts
+          configMap:
+            name: hermes-mcp-gateway
+            defaultMode: 0444
+        - name: data
+          persistentVolumeClaim:
+            claimName: hermes-data
+        # The agent container is read-only-rootfs too and Hermes writes only
+        # under $HERMES_HOME; /tmp is here for Python's own temp files, so the
+        # root filesystem can stay read-only.
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+{{- end }}

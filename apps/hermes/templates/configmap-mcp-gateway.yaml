@@ -1,0 +1,62 @@
+{{- if eq (include "hermes.mcpGateway.enabled" .) "true" }}
+{{- $gw := dig "mcpGateway" dict .Values.global }}
+---
+# Opt-in homelab MCP gateway client (``global.mcpGateway.enabled``).
+#
+# Carries the two helper scripts plus the JSON they read, so every endpoint and
+# identity knob lives once in ``values.yaml`` instead of being duplicated in
+# container env blocks. Rendered only when the switch is on; when it is off this
+# template contributes nothing at all.
+#
+# Multi-target: ``servers`` is a map of server name -> route config. Each entry
+# becomes one Hermes ``mcp_servers`` key and one ``mcp-tokens/<name>.json``
+# credential, because the gateway routes per target (``/<target>/mcp``) and has
+# no aggregate endpoint.
+#
+# No credential is ever stored here: ``identity.subjectTokenSecret`` is
+# referenced from the helper pod as a Secret key, and the exchanged access
+# tokens land in ``$HERMES_HOME/mcp-tokens/`` on the PVC, not in a ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hermes-mcp-gateway
+  labels:
+    app.kubernetes.io/component: mcp-gateway-client
+data:
+  config.json: |
+    {{- $servers := dict }}
+    {{- range $name, $srv := $gw.servers }}
+    {{- /* Written in Hermes' own entry shape: ``auth: oauth`` selects the OAuth
+           provider (``tools/mcp_tool.py:3694``) and the provider reads its
+           settings from the ``oauth`` sub-dict, where ``scope`` lives
+           (``tools/mcp_tool.py:3395`` passes ``config.get("oauth")`` and
+           ``tools/mcp_oauth.py:1315`` documents ``oauth.scope``). A top-level
+           ``scope`` would be silently ignored. */}}
+    {{- $_ := set $servers $name (dict
+      "url" $srv.url
+      "auth" "oauth"
+      "oauth" (dict "scope" $srv.scope)
+      "timeout" (int $srv.timeout)
+      "connect_timeout" (int $srv.connectTimeout)
+      "enabled" true
+    ) }}
+    {{- end }}
+    {{- dict
+      "servers" $servers
+      "exchange" (dict
+        "url" $gw.exchange.url
+        "clientId" $gw.exchange.clientId
+        "audience" $gw.exchange.audience
+        "marginSeconds" (int $gw.exchange.marginSeconds)
+        "minIntervalSeconds" (int $gw.exchange.minIntervalSeconds)
+        "maxIntervalSeconds" (int $gw.exchange.maxIntervalSeconds)
+        "httpTimeoutSeconds" (int $gw.exchange.httpTimeoutSeconds)
+        "maxFailures" (int $gw.exchange.maxFailures)
+        "oauthClientId" $gw.oauthClientId
+      )
+      | toJson | nindent 4 }}
+  mcp_gateway_merge.py: |
+{{ .Files.Get "files/mcp_gateway_merge.py" | indent 4 }}
+  mcp_gateway_token.py: |
+{{ .Files.Get "files/mcp_gateway_token.py" | indent 4 }}
+{{- end }}

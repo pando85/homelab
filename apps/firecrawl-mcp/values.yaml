@@ -1,0 +1,118 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/library/common/values.schema.json
+
+# --------------------------------------------------------------------------
+# Firecrawl MCP backend for the public MCP gateway plane.
+#
+# Deliberately its own namespace/pod (not a sidecar, not loopback): the gateway
+# reaches it only over the cluster network, so NetworkPolicy can enforce
+# "gateway -> this backend" and "this backend -> only the Firecrawl API".
+#
+# Facts verified against this exact image (see test/mcp-gateway/README.md):
+#   * image is linux/amd64 only, USER node = uid 1000, WORKDIR /app not writable
+#   * entrypoint `node dist/index.js`; HTTP_STREAMABLE_SERVER=true serves
+#     Streamable HTTP at /mcp (GET /mcp -> 405, POST -> 200) and /health -> 200
+#   * it answers only localhost/127.0.0.1/[::1] unless FIRECRAWL_MCP_ALLOWED_HOSTS
+#     lists the name in the Host header: a foreign Host is rejected with
+#     403 "Forbidden: Host ... is not allowed" (verified)
+#   * it derives the upstream credential from the caller's x-firecrawl-api-key /
+#     x-api-key / Authorization: Bearer headers, so the gateway MUST strip those
+#     before proxying (apps/mcp-gateway route template)
+# --------------------------------------------------------------------------
+app-template:
+  controllers:
+    firecrawl-mcp:
+      type: deployment
+      strategy: RollingUpdate
+      replicas: 1
+      pod:
+        enableServiceLinks: false
+        automountServiceAccountToken: false
+        # The upstream image is amd64-only (verified: single-arch manifest,
+        # linux/amd64). The cluster has ARM64 nodes, so pin the architecture or
+        # the scheduler can place this pod where it can never start.
+        nodeSelector:
+          kubernetes.io/arch: amd64
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+      containers:
+        main:
+          image:
+            # renovate: datasource=docker depName=ghcr.io/firecrawl/firecrawl-mcp-server
+            repository: ghcr.io/firecrawl/firecrawl-mcp-server
+            # v3.38.0 is an amd64-only single-arch manifest (verified via the
+            # registry API), so the digest is pinned alongside the tag.
+            tag: v3.38.0
+            digest: sha256:370c0f8e034b6f1cf27aec8a7d1c8e46d9ce602a1d444fc5cecceaa2ba98636d
+          env:
+            # Streamable HTTP transport instead of the default stdio.
+            HTTP_STREAMABLE_SERVER: "true"
+            HOST: "0.0.0.0"
+            PORT: "3000"
+            # The node image's HOME is /home/node and /app is read-only, so any
+            # temp write has to land in the emptyDir below.
+            HOME: /tmp
+            # Self-hosted Firecrawl API. Fixed value: the crawler target comes
+            # from this setting, never from a caller-controlled URL override.
+            FIRECRAWL_API_URL: &apiUrl http://firecrawl-api.firecrawl.svc.cluster.local:3002
+            # The gateway calls this service by cluster DNS name, so that name
+            # must be on the Host allowlist or every request is a 403.
+            FIRECRAWL_MCP_ALLOWED_HOSTS: &allowedHosts firecrawl-mcp.firecrawl-mcp.svc.cluster.local
+            # No FIRECRAWL_API_KEY on purpose. The in-cluster Firecrawl API is
+            # unauthenticated and the gateway never forwards a caller bearer
+            # (see the route template), so no credential exists to steal here.
+          resources:
+            requests:
+              cpu: 10m
+              memory: 96Mi
+            limits:
+              memory: 384Mi
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet: &httpGet
+                  path: /health
+                  port: &httpPort 3000
+                initialDelaySeconds: 5
+                periodSeconds: 10
+                timeoutSeconds: 3
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet: *httpGet
+                failureThreshold: 30
+                periodSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+  service:
+    firecrawl-mcp:
+      controller: firecrawl-mcp
+      ports:
+        http:
+          port: *httpPort
+          protocol: TCP
+
+  persistence:
+    tmp:
+      type: emptyDir
+      globalMounts:
+        - path: /tmp
+
+  configMap: {}
+
+  # No ingress: reachable only in-cluster, and only from the gateway pod.
+  ingress: {}
+  serviceMonitor: {}

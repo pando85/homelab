@@ -1,0 +1,88 @@
+---
+# Backend isolation. Verified live:
+#   gateway pods  -> mcp-gateway   / app.kubernetes.io/name=mcp-gateway
+#   Firecrawl API -> firecrawl     / service firecrawl-api:3002
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firecrawl-mcp-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: firecrawl-mcp
+      app.kubernetes.io/name: firecrawl-mcp
+  policyTypes:
+    - Ingress
+  ingress:
+    # Only the MCP gateway may talk to this server. No ingress controller path,
+    # no other workload, no sidecar shortcut: the gateway is the single caller.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: mcp-gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mcp-gateway
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: firecrawl-mcp-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: firecrawl-mcp
+      app.kubernetes.io/name: firecrawl-mcp
+  policyTypes:
+    - Egress
+  egress:
+    # DNS. nodelocaldns answers at 169.254.25.10, but Cilium DNATs to the
+    # node-local-dns pod, so policy must select the real pods, not the anycast
+    # address. Scoped to the two DNS workloads instead of all of kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: node-local-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Cluster DNS fallback (CoreDNS) for lookups that reach the Service instead.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The crawler API only. The MCP server's target is fixed by
+    # FIRECRAWL_API_URL, and this rule is what makes that binding real: the
+    # pod cannot be talked into fetching anything else in the cluster.
+    # URL fetching itself happens inside apps/firecrawl, whose own egress rules
+    # are what contain caller-chosen crawl targets.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: firecrawl
+          # Live selector of the firecrawl-api Service: controller=api narrows
+          # this to the API pods instead of every firecrawl workload.
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: firecrawl
+              app.kubernetes.io/instance: firecrawl
+              app.kubernetes.io/controller: api
+      ports:
+        - protocol: TCP
+          port: 3002

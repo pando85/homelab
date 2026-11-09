@@ -1,0 +1,236 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/library/common/values.schema.json
+
+# --------------------------------------------------------------------------
+# MCP Gateway (admin plane, private). Mirror of apps/mcp-gateway with:
+#   * nginx-internal ingress (mcp.internal.grigri.cloud), LAN+VPN reach
+#   * Separate Kanidm OAuth2 client (mcp-gateway-admin) so tokens issued to
+#     the admin client cannot be replayed on the public plane and vice versa
+#   * No backend routes enabled: Vault MCP v0.2.0 has a VAULT_ADDR query
+#     SSRF and no native OIDC login -> see configmap.yaml for details.
+#   * Hermes has NO automatic admin access; only callers presenting an
+#     admin-plane-issued token whose group is in scopeMap can reach tools.
+# --------------------------------------------------------------------------
+# agentgateway log verbosity: trace | debug | info | warn | error. `info` is what
+# makes an authz decision readable in a log line; token material is never logged.
+logLevel: info
+
+# MCP session-protection key (agentgateway AES-256-GCM session IDs). Produced by the
+# External Secrets Operator's own Password generator and pulled into a Secret exactly
+# once; the chart renders NO key material, so renders are deterministic. Full source
+# evidence: templates/session-key-generator.yaml.
+session:
+  length: 32
+  encoding: hex
+  refreshPolicy: CreatedOnce
+
+app-template:
+  controllers:
+    agentgateway:
+      type: deployment
+      strategy: RollingUpdate
+      replicas: 1
+      pod:
+        enableServiceLinks: false
+        automountServiceAccountToken: false
+        nodeSelector:
+          kubernetes.io/hostname: prusik
+      containers:
+        main:
+          image:
+            # renovate: datasource=docker depName=cr.agentgateway.dev/agentgateway
+            repository: cr.agentgateway.dev/agentgateway
+            tag: v1.7.0
+          args:
+            - -f
+            - /config/config.yaml
+          env:
+            TZ: Europe/Madrid
+            # MCP session protection key, exactly as on the public plane. Required,
+            # not optional: with no key (or `session.key: disabled`) agentgateway
+            # falls back to base64 session IDs, and the "resume only at the issuing
+            # backend" guard in MCPSessionState is then not populated at all
+            # (crates/agentgateway/src/config.rs + http/sessionpersistence.rs,
+            # v1.7.0). templates/secret.yaml creates it once and reuses it.
+            SESSION_KEY:
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-gateway-admin-session-key
+                  key: SESSION_KEY
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          probes:
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                httpGet: &httpGet
+                  path: /healthz/ready
+                  port: &healthzPort 15021
+                initialDelaySeconds: 0
+                periodSeconds: 10
+                timeoutSeconds: 2
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                httpGet: *httpGet
+                failureThreshold: 30
+                periodSeconds: 10
+
+  service:
+    agentgateway:
+      controller: agentgateway
+      ports:
+        http:
+          port: 3000
+          protocol: TCP
+        metrics:
+          port: 15020
+          protocol: TCP
+        healthz:
+          port: *healthzPort
+          protocol: TCP
+
+  ingress:
+    mcp:
+      enabled: true
+      className: nginx-internal
+      annotations:
+        external-dns.kubernetes.io/enabled: "true"
+        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+      hosts:
+        - host: &host mcp.internal.grigri.cloud
+          paths:
+            - path: /
+              pathType: Prefix
+              service:
+                identifier: agentgateway
+                port: http
+      tls:
+        - hosts:
+            - *host
+          secretName: mcp-gateway-admin-tls-certificate
+
+  persistence:
+    config:
+      type: configMap
+      name: mcp-gateway-admin-config
+      globalMounts:
+        - path: /config
+          readOnly: true
+    tmp:
+      type: emptyDir
+      globalMounts:
+        - path: /tmp
+
+  serviceMonitor:
+    agentgateway:
+      enabled: true
+      serviceName: mcp-gateway-admin
+      labels:
+        release: monitoring
+      endpoints:
+        - port: metrics
+          scheme: http
+          path: /metrics
+          interval: 1m
+          scrapeTimeout: 10s
+
+gateway:
+  # agentgateway binds the MCP listener on this port. It must match
+  # app-template.service.agentgateway.ports.http.port above, which is the port the
+  # Service and the NetworkPolicy expose.
+  port: 3000
+
+auth:
+  # Issuer is Kanidm's per-client OIDC issuer; `aud` in a Kanidm access token is
+  # the OAuth2 CLIENT NAME, so the admin plane validates against its own client and
+  # public-plane tokens (aud: mcp-gateway) cannot authenticate here, and vice versa.
+  # The client itself has to exist in Kanidm before a route is enabled: fetching JWKS
+  # for an unknown client returns nomatchingentries (verified live).
+  issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway-admin
+  audience: mcp-gateway-admin
+  jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway-admin/public_key.jwk
+
+# --------------------------------------------------------------------------
+# MCP backends behind this gateway. One entry per dedicated backend pod; routes
+# are rendered from this map, so what `helm template` prints is what runs.
+#
+# `credential` decides what reaches the backend, measured against agentgateway
+# v1.7.0 (test/mcp-gateway/backend-auth-probe.py):
+#   none        the caller's bearer stops at the gateway (removed upstream), and the
+#               backend uses its own fixed server-side configuration
+#   accessToken `backendAuth.passthrough` forwards the caller's validated Kanidm
+#               ACCESS token - the only edge bearer shape this project accepts
+#   idToken     forwards an ID-token-shaped bearer instead. KEPT IN THE TEMPLATE ONLY
+#               as the measured record of that option. It is NOT approved: an MCP
+#               bearer is an access token, and Grafana attribution must not be
+#               "fixed" by asking clients to put an ID token at the edge. No shipped
+#               backend uses it (asserted by test/mcp-gateway/chart-checks.py).
+# --------------------------------------------------------------------------
+backends:
+  # grafana is NOT an admin-plane backend: the approved architecture puts Grafana MCP on
+  # the public plane (`mcp.grigri.cloud`), so the disabled delegation candidate lives in
+  # apps/mcp-gateway/values.yaml. The admin plane serves Vault only, and only Vault.
+  # (grafana removed here as an unapproved deviation; see planning doc Task 2 / Task 3.)
+
+  vault:
+    # Blocked upstream, deliberately not enabled: vault-mcp 0.2.0 takes the Vault
+    # address from a query parameter (unpatched SSRF) and caches the Vault client per
+    # session, so one session can serve another caller's Vault identity. Re-check on a
+    # newer tag. There is no route, scope or group for it until then.
+    enabled: false
+    path: /vault/mcp
+    url: http://vault-mcp.mcp-gateway-admin.svc.cluster.local:8080/mcp
+    resource: https://mcp.internal.grigri.cloud/vault/mcp
+    hostHeader: vault-mcp.mcp-gateway-admin.svc.cluster.local
+    namespace: mcp-gateway-admin
+    workloadName: vault-mcp
+    port: 8080
+    scope: mcp_vault
+    credential: none
+    stripRequestHeaders: []
+
+kanidm:
+  # Admin-plane workload group is intentionally NOT created yet: the admin
+  # scopeMap is empty, so a group would be identity surface with no capability
+  # behind it. Enable it together with the first real admin scope.
+  workloadGroup:
+    name: mcp-gateway-admin-agents
+    enabled: false
+    # Authoritative, service-accounts-only member list (see the warning in
+    # apps/mcp-gateway/values.yaml — Kanidm removes anything not listed).
+    serviceMembers: []
+
+  # Dedicated Kanidm OAuth2 client for the admin plane. Independent client
+  # name -> independent issuer/audience. Prevents public-plane bearer tokens
+  # from authenticating against admin routes (and vice versa).
+  oauth2Client:
+    name: mcp-gateway-admin
+    displayname: MCP Gateway (admin)
+    origin: https://mcp.internal.grigri.cloud/
+    # Admin-plane humans use their own browser flow; loopback redirects are
+    # reserved for native clients and are not required here.
+    redirectUrls:
+      - https://mcp.internal.grigri.cloud/callback
+    # Empty scopeMap + empty humanScopeMap = nobody has admin scope.
+    # Owner populates once the Vault MCP blocker is resolved. Person
+    # memberships remain manual (never CRD); service-account-only groups
+    # may add members here.
+    scopeMap: []
+    humanScopeMap: []

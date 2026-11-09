@@ -145,38 +145,27 @@ grafana:
     auth.jwt:
       enabled: true
       header_name: Authorization
+      # Kept as the documented default, stated explicitly. Measured on 13.3.0:
+      # email_claim=sub puts the UUID subject into the user's email column, and
+      # email_claim="" makes the owner's own subject stop resolving (401) while a foreign
+      # subject still attaches by email. Neither is safer than "email".
+      email_claim: email
       # Identity is the JWT subject; the alias row is keyed (auth_module=jwt, auth_id=sub),
       # so it is global to the subject and survives changing the trusted client.
-      # Kanidm enforces uniqueness on `mail` (409 on collision, no admin bypass), so sub
-      # is a stable, unique identifier. email_claim="" prevents email-based attaching:
-      # measured H2a — a foreign subject presenting another's email would attach to the
-      # victim account even with auto_sign_up=false. With email_claim="" and username_claim=sub,
-      # identity is derived from the subject only.
-      email_claim: ""
       username_claim: sub
       cache_ttl: 60m
-      # With inMemory.enabled=true, the DB is wiped on every restart. auto_sign_up=true
-      # means a missing user is re-minted per request from the Kanidm-subject token, so
-      # the MCP path survives restarts without a PVC. The only subjects that can ever
-      # appear are people Kanidm itself minted a mcp-gateway token for (pinned iss/aud
-      # below), so auto_sign_up mints accounts for real Kanidm identities, not attackers.
-      auto_sign_up: true
-      # Roles are governed by Kanidm on every request. The mcp-gateway client's scopeMap
-      # issues role scopes (editor, admin) to the appropriate groups, and skip_org_role_sync=false
-      # means Grafana updates the user's role from the token's scopes on every request.
-      skip_org_role_sync: false
+      # Never true on this path: with sub identities it would mint a user per unknown subject.
+      auto_sign_up: false
+      # Roles stay native to Grafana. Combined with auto_sign_up=false this makes
+      # role_attribute_path inert for already-bootstrapped users; kept for clarity only.
+      skip_org_role_sync: true
       # `audience` is dropped, not repurposed. Measured on 13.3.0 a wrong aud is accepted
       # (HTTP 200) both without GF_AUTH_JWT_AUDIENCE and with it set to the expected value,
       # so the key does nothing for auth.jwt. expect_claims is the only audience control and
       # must pin issuer AND audience. It is an ini string, so one JSON scalar, not a mapping.
       expect_claims: '{"iss":"https://idm.grigri.cloud/oauth2/openid/mcp-gateway","aud":"mcp-gateway"}'
       jwk_set_url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
-      # The access token's `scope` is a space-separated string (e.g., "mcp_grafana editor"),
-      # not an array. JMESPath doesn't have a standard split function, so we use contains
-      # to check for the word 'editor'. The scope names are controlled by us, so the risk
-      # of false positives (e.g., 'editorial') is minimal. If it causes issues, we can
-      # refine this to check for word boundaries.
-      role_attribute_path: "contains(scope, 'editor') && 'Editor' || 'Viewer'"
+      role_attribute_path: "contains(scopes[*], 'editor') && 'Editor' || 'Viewer'"
 
   revisionHistoryLimit: 2
 

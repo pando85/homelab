@@ -52,7 +52,7 @@
 # refresher only has to keep those files fresher than their expiry.
 global:
   mcpGateway:
-    enabled: false
+    enabled: true
 
     # One entry per gateway route (``/<target>/mcp``). The gateway has no
     # aggregate endpoint, so each route gets its own token file, its own scope

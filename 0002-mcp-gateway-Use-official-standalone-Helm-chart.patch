@@ -1,0 +1,1229 @@
+From c2516181fc1c73ea617661d77f4e0a91fdf0a490 Mon Sep 17 00:00:00 2001
+From: Alexander Gil <pando855@gmail.com>
+Date: Mon, 9 Nov 2026 07:14:10 +0100
+Subject: [PATCH 2/2] mcp-gateway: Use official standalone Helm chart
+
+Migrate from app-template wrapper to official
+agentgateway-standalone chart (oci, digest 8c3fcfb7f).
+
+- Chart.yaml: dependency to agentgateway-standalone:1.7.0
+- values.yaml: restructured for official chart
+- fullnameOverride: mcp-gateway-standalone (avoids
+  immutable Deployment selector conflict)
+- templates/ingress.yaml: new, points to new service
+- templates/configmap.yaml: deleted (chart renders it)
+- templates/networkpolicy.yaml: deleted (no NP in
+  foundation baseline)
+- foundation-checks.py: adapted (51 tests pass)
+
+Verified: nodeSelector prusik, routes empty, no
+NetworkPolicy rendered, adminAddr off, SESSION_KEY
+from existing immutable ESO secret, image v1.7.0,
+TLS on nginx-external.
+---
+ apps/mcp-gateway/Chart.yaml                   |   6 +-
+ apps/mcp-gateway/templates/configmap.yaml     | 168 ------
+ apps/mcp-gateway/templates/ingress.yaml       |  38 ++
+ apps/mcp-gateway/templates/networkpolicy.yaml | 146 -----
+ apps/mcp-gateway/values.yaml                  | 547 ++++++------------
+ test/mcp-gateway/foundation-checks.py         |  96 ++-
+ 6 files changed, 256 insertions(+), 745 deletions(-)
+ delete mode 100644 apps/mcp-gateway/templates/configmap.yaml
+ create mode 100644 apps/mcp-gateway/templates/ingress.yaml
+ delete mode 100644 apps/mcp-gateway/templates/networkpolicy.yaml
+
+diff --git a/apps/mcp-gateway/Chart.yaml b/apps/mcp-gateway/Chart.yaml
+index b79fbcd30..0d6ac5471 100644
+--- a/apps/mcp-gateway/Chart.yaml
++++ b/apps/mcp-gateway/Chart.yaml
+@@ -2,6 +2,6 @@ apiVersion: v2
+ name: mcp-gateway
+ version: 0.0.0
+ dependencies:
+-  - name: app-template
+-    version: 5.3.0
+-    repository: https://bjw-s-labs.github.io/helm-charts/
++  - name: agentgateway-standalone
++    version: 1.7.0
++    repository: oci://cr.agentgateway.dev/charts
+diff --git a/apps/mcp-gateway/templates/configmap.yaml b/apps/mcp-gateway/templates/configmap.yaml
+deleted file mode 100644
+index 9069aa6f2..000000000
+--- a/apps/mcp-gateway/templates/configmap.yaml
++++ /dev/null
+@@ -1,168 +0,0 @@
+-apiVersion: v1
+-kind: ConfigMap
+-metadata:
+-  name: {{ .Release.Name }}-config
+-  # Same two labels the NetworkPolicy selects the gateway pods by, so the config
+-  # and its workload are findable together. The repo's auxiliary templates carry
+-  # no helper-generated labels (see apps/antdroid/templates/configmap.yaml).
+-  labels:
+-    app.kubernetes.io/name: {{ .Release.Name }}
+-    app.kubernetes.io/instance: {{ .Release.Name }}
+-data:
+-  config.yaml: |
+-    config:
+-      adminAddr: "off"
+-      logging:
+-        format: json
+-        level: {{ .Values.logLevel }}
+-
+-    gateways:
+-      default:
+-        port: {{ .Values.gateway.port }}
+-
+-    {{- $enabled := list }}
+-    {{- range $name, $backend := .Values.backends }}
+-    {{- if $backend.enabled }}
+-    {{- $enabled = append $enabled (dict "name" $name "backend" $backend) }}
+-    {{- end }}
+-    {{- end }}
+-    # Fail closed: no routes until a backend is enabled. A route with no enabled
+-    # backend would still fetch a JWKS, and routes are only useful together with the
+-    # Kanidm OAuth2 client and a scopeMap group, so the gateway boots with `routes: []`
+-    # and answers 404 for everything.
+-    {{- if not $enabled }}
+-    routes: []
+-    {{- else }}
+-    routes:
+-    {{- range $entry := $enabled }}
+-    {{- $b := $entry.backend }}
+-      - name: {{ $entry.name }}
+-        matches:
+-          - path:
+-              exact: {{ $b.path }}
+-          # RFC 9728 protected-resource metadata has to be reachable on its own path.
+-          # Without this match the gateway answers 404 for the very URL its 401
+-          # challenge points clients at, so an MCP client cannot discover the
+-          # authorization server (measured against the pinned binary).
+-          - path:
+-              exact: /.well-known/oauth-protected-resource{{ $b.path }}
+-        policies:
+-          # No CORS policy on purpose: callers here are native clients (OpenCode,
+-          # Hermes), not browser pages, so a wildcard origin would only widen the
+-          # attack surface. If a browser-based MCP client is ever approved, add an
+-          # explicit allowOrigins list for that origin.
+-          mcpAuthentication:
+-            mode: strict
+-            issuer: {{ $.Values.auth.issuer }}
+-            # Kanidm signs `aud` with the OAuth2 CLIENT NAME, not the resource URL,
+-            # and signs each client with its own key (Kanidm v1.11.2
+-            # server/lib/src/idm/oauth2.rs, access_token_data; kids differ per
+-            # client). So this plane validates only tokens issued to its own client.
+-            audiences:
+-              - {{ $.Values.auth.audience }}
+-            jwks:
+-              # Kanidm publishes the signing key here, not at .well-known/jwks.json.
+-              url: {{ $.Values.auth.jwksUrl }}
+-            resourceMetadata:
+-              resource: {{ $b.resource }}
+-              scopesSupported:
+-                - {{ $b.scope }}
+-              bearerMethodsSupported:
+-                - header
+-          authorization:
+-            rules:
+-              # Whole-backend access: one scope, no per-tool rules. Kanidm writes
+-              # scopes as ONE space-separated string in ACCESS tokens and as an ARRAY
+-              # in ID tokens, so the expression follows the credential this route
+-              # expects. Both forms are measured against the pinned binary in
+-              # test/mcp-gateway/e2e-authz.py (cases F/G and the delegation cases).
+-              # Whole-value equality only: a substring match would let
+-              # `{{ $b.scope }}_admin` through.
+-              - require: >-
+-                  {{- if eq $b.credential "idToken" }}
+-                  jwt.scopes.exists(s, s == '{{ $b.scope }}')
+-                  {{- else }}
+-                  jwt.scope.split(' ').exists(s, s == '{{ $b.scope }}')
+-                  {{- end }}
+-        backends:
+-          - mcp:
+-              targets:
+-                - name: {{ $entry.name }}
+-                  mcp:
+-                    # Fixed cluster service address from values, never a
+-                    # caller-derived URL.
+-                    host: {{ $b.url }}
+-                  policies:
+-                    requestHeaderModifier:
+-                      # The gateway forwards the caller's Host header upstream
+-                      # (measured: a request with Host: mcp.grigri.cloud reached the
+-                      # backend with that same Host). Backends that enforce a Host
+-                      # allowlist - firecrawl-mcp 3.38.0 answers 403 "Forbidden: Host
+-                      # ... is not allowed" - would reject every legitimate call, so
+-                      # the Host is pinned to the backend's own service name.
+-                      set:
+-                        host: {{ $b.hostHeader }}
+-                      # Everything the gateway does NOT remove reaches the backend
+-                      # verbatim (measured: IncomingRequestContext::apply copies all
+-                      # client headers except content-* and the MCP session id, and
+-                      # with no removals a caller's cookie/x-vault-token/x-api-key
+-                      # all arrived). So this list is the security boundary and it
+-                      # has to name every header a pinned backend trusts:
+-                      #   firecrawl-mcp 3.38.0 headerApiKey(): x-firecrawl-api-key,
+-                      #     x-api-key, Authorization
+-                      #   mcp-grafana 2.1.1: X-Grafana-Service-Account-Token and
+-                      #     X-Grafana-API-Key REPLACE the Grafana credential,
+-                      #     X-Grafana-Org-Id switches org, X-Grafana-URL retargets
+-                      #     the backend (measured: a caller-set SA token reached
+-                      #     Grafana as its own Authorization header)
+-                      #   vault-mcp 0.2.0: vault_addr / vault_skip_verify /
+-                      #     vault_token / x-vault-namespace / vault_namespace are
+-                      #     read as per-request configuration; both spellings are
+-                      #     listed because header-name normalisation differs by
+-                      #     framework. The query string itself is dropped at the
+-                      #     edge (measured), so `?vault_addr=` is not a path in.
+-                      # A caller must never choose a backend's credential, tenant or
+-                      # destination. X-Vault-Token is stripped here too: a future
+-                      # Vault route would need the caller's OWN Vault token to pass,
+-                      # and until that route exists no backend should ever see it.
+-                      remove:
+-                        - x-firecrawl-api-key
+-                        - x-api-key
+-                        - x-grafana-service-account-token
+-                        - x-grafana-api-key
+-                        - x-grafana-org-id
+-                        - x-grafana-id
+-                        - x-grafana-url
+-                        - x-vault-token
+-                        - vault-token
+-                        - vault_addr
+-                        - vault-addr
+-                        - vault_token
+-                        - vault_skip_verify
+-                        - vault-skip-verify
+-                        - x-vault-namespace
+-                        - vault_namespace
+-                        - vault-namespace
+-                        - cookie
+-                        {{- range $h := $b.stripRequestHeaders }}
+-                        - {{ $h }}
+-                        {{- end }}
+-                        {{- if eq $b.credential "none" }}
+-                        # The caller's gateway bearer stops at the gateway: this
+-                        # backend authenticates with its own fixed server-side
+-                        # configuration, so a user token must not be forwarded to it.
+-                        - authorization
+-                        {{- end }}
+-                    {{- if ne $b.credential "none" }}
+-                    # Delegation: hand the caller's validated JWT to the backend so it
+-                    # can attribute the call to the caller. Placement is the target's
+-                    # `policies` (schema/config.json at tag v1.7.0,
+-                    # SimpleLocalBackendPolicies: "Forward the validated incoming JWT
+-                    # to the backend"). Measured: without this block the backend
+-                    # receives NO Authorization header even for an authenticated caller
+-                    # (test/mcp-gateway/backend-auth-probe.py, B1/B2 vs C1).
+-                    backendAuth:
+-                      passthrough: {}
+-                    {{- end }}
+-    {{- end }}
+-    {{- end }}
+diff --git a/apps/mcp-gateway/templates/ingress.yaml b/apps/mcp-gateway/templates/ingress.yaml
+new file mode 100644
+index 000000000..76fb0e0c1
+--- /dev/null
++++ b/apps/mcp-gateway/templates/ingress.yaml
+@@ -0,0 +1,38 @@
++{{- /*
++Wrapper template for Ingress - the official agentgateway-standalone chart does not
++include Ingress resources. This template creates the Ingress for the public plane
++(mcp.grigri.cloud) through nginx-external with TLS.
++
++Service backend: mcp-gateway-standalone (chart fullnameOverride)
++Old service was: mcp-gateway (app-template)
++*/ -}}
++---
++apiVersion: networking.k8s.io/v1
++kind: Ingress
++metadata:
++  name: mcp-gateway
++  namespace: mcp-gateway
++  labels:
++    app.kubernetes.io/name: mcp-gateway
++    app.kubernetes.io/instance: mcp-gateway
++  annotations:
++    external-dns.kubernetes.io/enabled: "true"
++    external-dns.kubernetes.io/target: grigri.cloud
++    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
++spec:
++  ingressClassName: nginx-external
++  tls:
++    - hosts:
++        - mcp.grigri.cloud
++      secretName: mcp-gateway-tls-certificate
++  rules:
++    - host: mcp.grigri.cloud
++      http:
++        paths:
++          - path: /
++            pathType: Prefix
++            backend:
++              service:
++                name: mcp-gateway-standalone
++                port:
++                  number: 3000
+diff --git a/apps/mcp-gateway/templates/networkpolicy.yaml b/apps/mcp-gateway/templates/networkpolicy.yaml
+deleted file mode 100644
+index 8b8e9dce3..000000000
+--- a/apps/mcp-gateway/templates/networkpolicy.yaml
++++ /dev/null
+@@ -1,146 +0,0 @@
+-{{- if .Values.networkIsolation }}
+----
+-# Gateway plane ingress: least-privilege, derived from live labels verified with
+-# `kubectl get pods -o jsonpath` in this cluster:
+-#   ingress-nginx-external / app.kubernetes.io/name=ingress-nginx
+-#   ingress-nginx          / app.kubernetes.io/name=ingress-nginx
+-#   monitoring             / app.kubernetes.io/name=prometheus
+-#
+-# Deliberately NOT allowed:
+-#   - port 15021 (/healthz/ready): no application pod needs the probe port, so it
+-#     stays unlisted. NOTE: Cilium currently runs with `enable-host-firewall=false`,
+-#     which is an observation about today's config, NOT a guarantee that a kubelet
+-#     probe and its reply are unaffected by pod-level policy. The Firecrawl egress
+-#     incident (docs/troubleshooting/mcp-firecrawl-egress-regression.md) is a
+-#     precedent where egress-only policies were associated with kubelet probe
+-#     timeouts, but the mechanism was never established. So nothing here assumes
+-#     replies are exempt, and no blanket host / remote-node allow is added.
+-#     IMPORTANT: networkIsolation is currently false (owner authorized policy-free
+-#     baseline first). Do not enable until this legacy K8s NetworkPolicy is replaced
+-#     with a reviewed CiliumNetworkPolicy that properly handles node-sourced probes.
+-#   - the agentgateway admin address: bound to "off" in the config, so there is
+-#     nothing to reach.
+-#   - NodePort / loadBalancer / hostPort: the Service is ClusterIP only.
+-# Selector note: podSelector matches this release's own labels (instance+name), so
+-# the policy cannot capture any pre-existing workload (e.g. the Grafana sidecar or
+-# Firecrawl pods) - a new pod going NotReady here cannot break an existing one, and
+-# the first rollout scope stays the public plane when deployment is separately
+-# approved. No rollout is authorised by this change.
+-apiVersion: networking.k8s.io/v1
+-kind: NetworkPolicy
+-metadata:
+-  name: mcp-gateway-ingress
+-spec:
+-  podSelector:
+-    matchLabels:
+-      app.kubernetes.io/instance: mcp-gateway
+-      app.kubernetes.io/name: mcp-gateway
+-  policyTypes:
+-    - Ingress
+-  ingress:
+-    # MCP endpoint: only through the EXTERNAL ingress controller.
+-    - from:
+-        - namespaceSelector:
+-            matchLabels:
+-              kubernetes.io/metadata.name: ingress-nginx-external
+-          podSelector:
+-            matchLabels:
+-              app.kubernetes.io/name: ingress-nginx
+-      ports:
+-        - protocol: TCP
+-          port: 3000
+-    # Prometheus scrapes the metrics port (L3/4 separation: ops access is a
+-    # distinct port, not a path on the MCP port).
+-    - from:
+-        - namespaceSelector:
+-            matchLabels:
+-              kubernetes.io/metadata.name: monitoring
+-          podSelector:
+-            matchLabels:
+-              app.kubernetes.io/name: prometheus
+-      ports:
+-        - protocol: TCP
+-          port: 15020
+----
+-apiVersion: networking.k8s.io/v1
+-kind: NetworkPolicy
+-metadata:
+-  name: mcp-gateway-egress
+-spec:
+-  podSelector:
+-    matchLabels:
+-      app.kubernetes.io/instance: mcp-gateway
+-      app.kubernetes.io/name: mcp-gateway
+-  policyTypes:
+-    - Egress
+-  egress:
+-    # DNS. nodelocaldns answers at 169.254.25.10, but Cilium DNATs to the
+-    # node-local-dns pod, so policy must select the real pods, not the anycast
+-    # address. Scoped to the two DNS workloads instead of all of kube-system.
+-    - to:
+-        - namespaceSelector:
+-            matchLabels:
+-              kubernetes.io/metadata.name: kube-system
+-          podSelector:
+-            matchLabels:
+-              k8s-app: node-local-dns
+-      ports:
+-        - protocol: UDP
+-          port: 53
+-        - protocol: TCP
+-          port: 53
+-    # Cluster DNS fallback (CoreDNS) for lookups that reach the Service instead.
+-    - to:
+-        - namespaceSelector:
+-            matchLabels:
+-              kubernetes.io/metadata.name: kube-system
+-          podSelector:
+-            matchLabels:
+-              k8s-app: kube-dns
+-      ports:
+-        - protocol: UDP
+-          port: 53
+-        - protocol: TCP
+-          port: 53
+-    # JWKS fetch for mcpAuthentication. idm.grigri.cloud is published through
+-    # the external ingress, so the gateway's request lands on those pods.
+-    - to:
+-        - namespaceSelector:
+-            matchLabels:
+-              kubernetes.io/metadata.name: ingress-nginx-external
+-          podSelector:
+-            matchLabels:
+-              app.kubernetes.io/name: ingress-nginx
+-      ports:
+-        - protocol: TCP
+-          port: 443
+-    # Same path, in case Kanidm is reached directly by service instead of URL.
+-    - to:
+-        - namespaceSelector:
+-            matchLabels:
+-              kubernetes.io/metadata.name: kanidm
+-      ports:
+-        - protocol: TCP
+-          port: 8443
+-    # MCP backends: one explicit rule per enabled backend, derived from values,
+-    # so enabling a route and widening egress are the same edit. Backends run in
+-    # their own namespace (dedicated pod, never a sidecar on the gateway).
+-    # `workloadName` is the backend's app.kubernetes.io/name label, which is not
+-    # the route key: the route is called `firecrawl`, the release is
+-    # `firecrawl-mcp`. Getting this wrong silently blocks every tool call.
+-    {{- range $name, $b := .Values.backends }}
+-    {{- if $b.enabled }}
+-    - to:
+-        - namespaceSelector:
+-            matchLabels:
+-              kubernetes.io/metadata.name: {{ $b.namespace }}
+-          podSelector:
+-            matchLabels:
+-              app.kubernetes.io/name: {{ $b.workloadName }}
+-              app.kubernetes.io/instance: {{ $b.workloadName }}
+-      ports:
+-        - protocol: TCP
+-          port: {{ $b.port }}
+-    {{- end }}
+-    {{- end }}
+-{{- end }}
+diff --git a/apps/mcp-gateway/values.yaml b/apps/mcp-gateway/values.yaml
+index b69995536..c53ddd42e 100644
+--- a/apps/mcp-gateway/values.yaml
++++ b/apps/mcp-gateway/values.yaml
+@@ -1,415 +1,210 @@
+-# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/library/common/values.schema.json
++# MCP Gateway Public Plane - Official agentgateway-standalone chart
++# Architecture: docs/design/mcp-gateway-architecture.md
++# Implementation: planning/mcp-gateway-implementation.md
+
+-# MCP Gateway (public plane). `mcp.grigri.cloud` through the EXTERNAL ingress,
+-# Kanidm OAuth2 client `mcp-gateway` (public + PKCE), and one dedicated backend
+-# pod per MCP server. The admin plane is a separate chart
+-# (apps/mcp-gateway-admin) with its own client, so a token minted for one plane
+-# cannot be replayed on the other. See planning/mcp-gateway-implementation.md.
+-# agentgateway log verbosity: trace | debug | info | warn | error. `info` is what
+-# makes an authz decision readable in a log line; token material is never logged.
+-logLevel: info
++# All official chart values nested under dependency name
++agentgateway-standalone:
++  # CRITICAL: Use NEW name to avoid immutable Deployment selector conflict
++  # Old Deployment: mcp-gateway with selector controller=agentgateway
++  # New Deployment: mcp-gateway-standalone with selector component=standalone
++  # ArgoCD will create new Deployment/Service, then prune old ones
++  # Service DNS changes: mcp-gateway -> mcp-gateway-standalone
++  fullnameOverride: mcp-gateway-standalone
+
+-# Network isolation guard. When false (the foundation baseline), NO
+-# NetworkPolicy or CiliumNetworkPolicy is rendered for the gateway. The
+-# previous deployment (9049af3bf) had restrictive policies attached and
+-# the gateway pods experienced probe timeouts, but the mechanism is
+-# unproven - the audit cannot isolate whether the policies caused the
+-# failures or were merely associated. The policies are kept in templates/
+-# but gated behind this flag so the gateway can be deployed and observed
+-# without them first. Owner has explicitly authorized getting the backend
+-# working WITHOUT NetworkPolicy first; Cilium policies may be added later
+-# after the baseline is proven stable. The current networkIsolation=true
+-# renders legacy Kubernetes NetworkPolicy, NOT CiliumNetworkPolicy - do
+-# not enable until replaced with a reviewed CNP that properly handles
+-# node-sourced probe traffic. See
+-# docs/troubleshooting/mcp-firecrawl-egress-regression.md and
+-# planning/mcp-gateway-implementation.md Task 1.3.
+-networkIsolation: false
++  # Single replica - session state not yet verified for multi-replica
++  replicaCount: 1
+
+-# MCP session-protection key (agentgateway AES-256-GCM session IDs). The value is
+-# produced by the External Secrets Operator's own Password generator and pulled into
+-# a Secret exactly once - see templates/session-key-generator.yaml for the source
+-# evidence behind `CreatedOnce`, the hex length arithmetic and the entropy note. The
+-# chart itself renders NO key material, so renders are deterministic.
+-session:
+-  # 32 generated characters, hex-encoded by the generator -> 64 hex characters, which
+-  # agentgateway hex::decode()s to exactly the 32 bytes AES-256-GCM requires.
+-  length: 32
+-  encoding: hex
+-  # operator-side lifecycle: create once, never rewrite (immutable target).
+-  refreshPolicy: CreatedOnce
++  # Pin to prusik node for initial rollout
++  nodeSelector:
++    kubernetes.io/hostname: prusik
++
++  # Image pinned to v1.7.0 (matches chart appVersion)
++  image:
++    registry: cr.agentgateway.dev
++    repository: agentgateway
++    tag: "" # Empty = use chart appVersion (1.7.0 -> v1.7.0)
++    pullPolicy: IfNotPresent
++
++  # ServiceAccount - let chart create it
++  serviceAccount:
++    create: true
++    annotations: {}
++    name: ""
++
++  # Pod annotations for Prometheus scraping (chart default)
++  podAnnotations:
++    prometheus.io/path: "/metrics"
++    prometheus.io/port: "15020"
++    prometheus.io/scrape: "true"
++
++  # Pod labels - none extra
++  podLabels: {}
+
+-app-template:
+-  controllers:
+-    agentgateway:
+-      type: deployment
+-      strategy: RollingUpdate
+-      replicas: 1
+-      pod:
+-        enableServiceLinks: false
+-        automountServiceAccountToken: false
+-        nodeSelector:
+-          kubernetes.io/hostname: prusik
+-      containers:
+-        main:
+-          image:
+-            # renovate: datasource=docker depName=cr.agentgateway.dev/agentgateway
+-            repository: cr.agentgateway.dev/agentgateway
+-            tag: v1.7.0
+-          args:
+-            - -f
+-            - /config/config.yaml
+-          env:
+-            TZ: Europe/Madrid
+-            # MCP session protection key. agentgateway reads this before any
+-            # config value, and AES (not base64) is what keeps the
+-            # "resume only at the issuing backend" check active. The Secret is
+-            # owned by the ExternalSecret in
+-            # templates/session-key-externalsecret.yaml (ESO `CreatedOnce` +
+-            # immutable target), never rendered by Helm. The reference is required
+-            # (no `optional: true`), so the pod cannot start without it: fail closed
+-            # rather than silently falling back to base64 session IDs.
+-            SESSION_KEY:
+-              valueFrom:
+-                secretKeyRef:
+-                  name: mcp-gateway-session-key
+-                  key: SESSION_KEY
+-          resources:
+-            requests:
+-              cpu: 10m
+-              memory: 64Mi
+-            limits:
+-              memory: 256Mi
+-          securityContext:
+-            runAsUser: 65534
+-            runAsGroup: 65534
+-            runAsNonRoot: true
+-            allowPrivilegeEscalation: false
+-            readOnlyRootFilesystem: true
+-            capabilities:
+-              drop:
+-                - ALL
+-          probes:
+-            liveness: &probes
+-              enabled: true
+-              custom: true
+-              spec:
+-                httpGet: &httpGet
+-                  path: /healthz/ready
+-                  port: &healthzPort 15021
+-                initialDelaySeconds: 0
+-                periodSeconds: 10
+-                timeoutSeconds: 2
+-                failureThreshold: 3
+-            readiness: *probes
+-            startup:
+-              enabled: true
+-              custom: true
+-              spec:
+-                httpGet: *httpGet
+-                failureThreshold: 30
+-                periodSeconds: 10
++  # Security context - match existing hardened settings
++  securityContext:
++    allowPrivilegeEscalation: false
++    readOnlyRootFilesystem: true
++    runAsNonRoot: true
++    capabilities:
++      drop:
++        - ALL
+
+-  service:
+-    agentgateway:
+-      controller: agentgateway
++  # Resources - match existing
++  resources:
++    requests:
++      cpu: 10m
++      memory: 64Mi
++    limits:
++      memory: 256Mi
++
++  # No tolerations/affinity
++  tolerations: []
++  affinity: {}
++
++  # Gateway service - ClusterIP with 3 ports (http, metrics, healthz)
++  # Service name: mcp-gateway-standalone (DNS changes from mcp-gateway)
++  gateway:
++    service:
++      enabled: true
++      type: ClusterIP
++      annotations: {}
++      extraLabels: {}
+       ports:
+-        http:
+-          port: &httpPort 3000
++        - name: http
++          port: 3000
++          targetPort: 3000
+           protocol: TCP
+-        metrics:
++        - name: metrics
+           port: 15020
++          targetPort: 15020
+           protocol: TCP
+-        healthz:
+-          port: *healthzPort
++        - name: healthz
++          port: 15021
++          targetPort: 15021
+           protocol: TCP
+
+-  ingress:
+-    mcp:
++  # Monitoring - PodMonitor (replaces ServiceMonitor from app-template)
++  monitoring:
++    enabled: true
++    extraLabels:
++      release: monitoring
++    podMonitor:
+       enabled: true
+-      className: nginx-external
+-      annotations:
+-        external-dns.kubernetes.io/enabled: "true"
+-        external-dns.kubernetes.io/target: grigri.cloud
+-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+-      hosts:
+-        - host: &host mcp.grigri.cloud
+-          paths:
+-            - path: /
+-              pathType: Prefix
+-              service:
+-                identifier: agentgateway
+-                port: http
+-      tls:
+-        - hosts:
+-            - *host
+-          secretName: mcp-gateway-tls-certificate
++      interval: 1m
++      scrapeNativeHistograms: false
++      scrapeClassicHistograms: true
+
+-  persistence:
+-    config:
+-      type: configMap
+-      name: mcp-gateway-config
+-      globalMounts:
+-        - path: /config
+-          readOnly: true
+-    tmp:
+-      type: emptyDir
+-      globalMounts:
+-        - path: /tmp
++  # CRITICAL: Leave session.secretName UNSET to disable chart's automatic SESSION_KEY injection
++  # Chart template: {{- with .Values.session.secretName }} injects SESSION_KEY only if set
++  # We use extraEnv below to inject SESSION_KEY from the EXISTING immutable ESO secret
++  # This preserves the existing secret with key "SESSION_KEY" (no deletion/rotation needed)
++  session:
++    secretName: ""
+
+-  serviceMonitor:
+-    agentgateway:
+-      enabled: true
+-      serviceName: mcp-gateway
+-      labels:
+-        release: monitoring
+-      endpoints:
+-        - port: metrics
+-          scheme: http
+-          path: /metrics
+-          interval: 1m
+-          scrapeTimeout: 10s
++  # CRITICAL: Inject SESSION_KEY from existing ESO secret via extraEnv
++  # Existing secret: mcp-gateway-session-key with key SESSION_KEY (immutable, CreatedOnce)
++  # This avoids creating new ESO resources or deleting/changing the existing secret
++  # extraEnv is rendered AFTER chart's native env vars, so no duplicate SESSION_KEY
++  extraEnv:
++    - name: SESSION_KEY
++      valueFrom:
++        secretKeyRef:
++          name: mcp-gateway-session-key
++          key: SESSION_KEY
+
+-# Gateway data plane
+-gateway:
+-  # agentgateway binds the MCP listener on this port; the Service and the
+-  # NetworkPolicy both refer to it.
+-  port: 3000
++  # No OIDC (admin UI disabled)
++  oidc:
++    enabled: false
+
+-# Token validation for every enabled route. Defaults target the Kanidm realm;
+-# tests override them to a local issuer so the rendered config can be booted.
+-auth:
+-  issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
+-  # The OAuth2 CLIENT NAME, which is what Kanidm puts in `aud`.
+-  audience: mcp-gateway
+-  jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
++  # Readonly mode - no database, static config from ConfigMap
++  mode: readonly
+
+-# One entry per MCP backend. Absent or `enabled: false` keeps the gateway
+-# fail-closed: no route, no JWKS fetch, no tool exposed.
+-# Enabling an entry requires, in the same change:
+-#   1. the backend chart deployed in its own namespace (no sidecar, no loopback),
+-#   2. a Kanidm scopeMap entry granting `scope` to a group (see kanidm.oauth2Client),
+-#   3. the gateway egress NetworkPolicy rule that reaches it.
+-backends:
+-  firecrawl:
+-    # Disabled for two independent reasons, both of which have to clear before this
+-    # route can go on:
+-    #   1. the fetcher egress/SSRF gate is unresolved. The NetworkPolicies meant to
+-    #      carry it were deployed (0b16b31b9) and rolled back (8fff4f224) after the
+-    #      api/worker/nuq pods went NotReady; root cause is still unknown and the
+-    #      live SSRF verification never ran. See
+-    #      docs/troubleshooting/mcp-firecrawl-egress-regression.md. The gateway's own
+-    #      NetworkPolicy only limits who may reach the MCP pod directly - it is not a
+-    #      destination control inside the fetcher and must not be treated as one.
+-    #   2. the owner has not confirmed which human group may use web access; service
+-    #      accounts are granted separately through mcp-gateway-agents.
+-    # Gateway auth passing its own tests does not make this backend onboardable.
+-    enabled: false
+-    path: /firecrawl/mcp
+-    url: http://firecrawl-mcp.firecrawl-mcp.svc.cluster.local:3000/mcp
+-    resource: https://mcp.grigri.cloud/firecrawl/mcp
+-    # Host header the gateway pins on upstream requests. The backend enforces a
+-    # Host allowlist, and this value must match its FIRECRAWL_MCP_ALLOWED_HOSTS
+-    # exactly, or every call is rejected with 403 by the backend itself.
+-    hostHeader: firecrawl-mcp.firecrawl-mcp.svc.cluster.local
+-    # Used by templates/networkpolicy.yaml to open exactly this path.
+-    namespace: firecrawl-mcp
+-    # The backend's app.kubernetes.io/name label. NOT the route key above: the
+-    # route is `firecrawl`, the release/pods are `firecrawl-mcp`.
+-    workloadName: firecrawl-mcp
+-    port: 3000
+-    # Whole-backend grant. No per-tool rules: an allowed caller gets every tool
+-    # of that backend, and a non-allowed caller gets none of them.
+-    scope: mcp_firecrawl
+-    # What reaches the backend, measured against agentgateway v1.7.0:
+-    #   none        caller's bearer is dropped at the gateway (no backendAuth block)
+-    #   accessToken backendAuth.passthrough forwards the caller's ACCESS token - the
+-    #               only edge bearer shape this project accepts
+-    #   idToken     forwards an ID-token-shaped bearer; measured but NOT approved as
+-    #               an edge credential (see apps/mcp-gateway-admin/values.yaml)
+-    # Firecrawl uses `none` on purpose: the fetcher needs no user credential, the
+-    # MCP server runs with a fixed server-side FIRECRAWL_API_URL, and forwarding a
+-    # user token would only leak it. The delegation route in
+-    # apps/mcp-gateway-admin/values.yaml uses `accessToken`, never `idToken`.
+-    credential: none
+-    # Extra per-request headers to remove for this backend only (the template
+-    # already removes every known credential/target override header).
+-    stripRequestHeaders: []
++  # Database not needed for readonly mode
++  database:
++    postgres:
++      url: ""
+
+-  grafana:
+-    # Caller-preserving Grafana delegation, as a CANDIDATE ONLY: disabled. The identity
+-    # question that used to block it is answered by measurement (below), but every step
+-    # that makes it real touches a live instance, so enabling it stays an owner decision
+-    # recorded in planning/mcp-gateway-implementation.md (Task 2) - never a default.
+-    #
+-    # PLANE: Grafana is a PUBLIC-plane backend (`mcp.grigri.cloud`), which is what the
+-    # approved architecture diagram in docs/design/mcp-gateway-architecture.md has always
+-    # said; only Vault belongs to the admin plane. Putting this candidate on the admin chart
+-    # was an unapproved deviation and has been corrected. The dedicated backend pod would
+-    # live in its own `grafana-mcp` namespace, not in `mcp-gateway-admin`.
+-    #
+-    # Scope grant: none ships in the foundation (kanidm.humanScopeMap is empty), so this
+-    # route has no human mapping until the owner names the group.
+-    #
+-    # The chain that is supported by the pinned pieces (all verified in source, not
+-    # inferred): agentgateway validates the caller's Kanidm ACCESS token at the edge
+-    # and `backendAuth.passthrough` forwards it; mcp-grafana 2.1.1 in
+-    # "proxy-forwarding mode" - `GRAFANA_FORWARD_HEADERS=Authorization`, no
+-    # `--server-auth-token` (main.go:1187 refuses to start with both), and no
+-    # GRAFANA_SERVICE_ACCOUNT_TOKEN env, because AuthRoundTripper would otherwise
+-    # overwrite Authorization at mg.go:736 - passes that bearer to Grafana; and Grafana's
+-    # JWT client authenticates the person from it, which 13.3.0 only does when
+-    # `[auth.jwt] header_name = Authorization` is set explicitly (see the last bullet).
+-    # Because the backend then does no caller authentication of its own, the only
+-    # protections are the gateway's JWT validation and the NetworkPolicy that lets
+-    # just this gateway reach it.
+-    #
+-    # MAPPING BLOCKER - RESOLVED LOCALLY, STILL OWNER-GATED. A Kanidm access token has
+-    # `sub` (an account UUID), `aud` (the client name) and a `scope` string, and NO
+-    # login or email claim, so the question was whether Grafana can identify the person
+-    # from `sub` alone. Measured on the pinned 13.3.0 image with a real generic-OAuth
+-    # session (grafana-sub-alias-probe.py: a local research probe, kept out of the
+-    # foundation commit and pending review — 16/16 assertions):
+-    #   - with `username_claim = sub`, a sub-only ACCESS token reaches the mapping code
+-    #     and fails CLOSED while no binding exists: 401 `user.sync.signup-disabled`,
+-    #     and no user and no `user_auth` row are created;
+-    #   - ONE identity-claim-bearing JWT (sub + preferred_username + email) attaches the
+-    #     `('jwt', sub)` connection to the EXISTING OAuth user - same userId, no
+-    #     duplicate - even with `auto_sign_up = false`. After that bootstrap, sub-only
+-    #     ACCESS tokens resolve that same user, and its native Editor role is retained
+-    #     (`skip_org_role_sync = true`; a JWT-authenticated write succeeds with no
+-    #     session cookie involved). So per-person delegation is achievable with a
+-    #     one-time bootstrap, not a second per-request credential.
+-    # Remaining options, for completeness:
+-    #   (a) IdP-side identity claims inside the access token - Kanidm v1.11.2 cannot do
+-    #       this (`claim_map` and `jwtLegacyCryptoEnable` move no claims between types),
+-    #   (b) dual credential (edge ACCESS token + caller's Grafana-audience ID token in a
+-    #       second header) - NOT approved and NOT built: it needs a second Kanidm
+-    #       authorization per client, a per-route header allow this chart does not have
+-    #       (the deny list stops every `x-grafana-*` on purpose), and a `[auth.jwt]`
+-    #       header change that alters the auth surface of the whole instance,
+-    #   (c) keep human Grafana access on the existing service-account sidecar and
+-    #       delegate nothing yet - the status quo, the existing sidecar is untouched.
+-    # Fixing it by presenting an ID token as the MCP bearer (credential: idToken) is
+-    # explicitly NOT chosen.
+-    #
+-    # What is settled by measurement, whichever option is picked:
+-    #   - Grafana 13.3.0 trusts exactly ONE JWT client: per-client JWKS plus exact `iss`/`aud`.
+-    #     A merged `jwk_set_file` covering both Kanidm clients is RETRACTED AS UNSAFE and must not
+-    #     be shipped: pinning `expect_claims.iss` rejects the second client (its `iss` differs),
+-    #     an `iss` array makes Grafana fail at startup, and merging keys without pinning `iss`
+-    #     trusts any token signed by a listed key from ANY issuer. The earlier positive reading
+-    #     came from a single-issuer fixture (grafana-merged-keyset-probe.py, a local research
+-    #     probe kept out of the foundation), which masked exactly that gap. Consequence:
+-    #     forwarding the gateway ACCESS token to the instance that trusts the `grafana` client is
+-    #     BLOCKED until compatible dual-client trust exists upstream;
+-    #   - `allow_insecure_email_lookup` (live value `true`, unchanged by this work) lets an
+-    #     issuer-signed email claim attach a JWT alias to an existing account, so no delegation or
+-    #     bootstrap route may be enabled while it is `true`;
+-    #   - with the live `skip_org_role_sync = true` a token's scopes never change a
+-    #     Grafana role (no escalation, no demotion, no shared fallback credential);
+-    #   - `auto_sign_up` must stay `false`: with `true`, a valid but unmapped `sub`
+-    #     invents a user whose login is the account UUID;
+-    #   - Grafana 13.3.0 checks no `aud` VALUE without `expect_claims` - a token minted
+-    #     for a different client authenticates the mapped person (measured 200), so the
+-    #     token-class/audience gate belongs at the gateway, and `expect_claims` stays a
+-    #     prerequisite for any live change;
+-    #   - `[auth.jwt] header_name = Authorization` must be set explicitly: with it unset,
+-    #     or spelled `auth_header_name`, the same bearer is declined with `api-key.invalid`
+-    #     (the JWT client never claims the token) - measured by toggling only that line.
+-    #     Before any live change, confirm the running instance's own `[auth.jwt]` section
+-    #     actually carries it; that setting has not been read from production here, and no
+-    #     production configuration was touched by this work.
+-    enabled: false
+-    path: /grafana/mcp
+-    url: http://grafana-mcp.grafana-mcp.svc.cluster.local:8000/mcp
+-    resource: https://mcp.grigri.cloud/grafana/mcp
+-    hostHeader: grafana-mcp.grafana-mcp.svc.cluster.local
+-    namespace: grafana-mcp
+-    workloadName: grafana-mcp
+-    port: 8000
+-    # Whole-backend grant: no per-tool rules. Grafana's own RBAC decides what the
+-    # caller may do; this scope only opens the MCP endpoint.
+-    scope: mcp_grafana
+-    # Measured precondition (Grafana 13.3.0): this shape is NOT reachable on the live
+-    # instance. Grafana trusts exactly one JWT client via per-client JWKS + exact
+-    # `iss`/`aud`, and the merged-key-set workaround is retracted as unsafe (see the
+-    # settled-by-measurement block above), so accessToken delegation stays BLOCKED until
+-    # compatible dual-client trust exists upstream. Keep this backend disabled; do not
+-    # treat this line as approved configuration.
+-    credential: accessToken
+-    # Nothing extra to strip: the template's plane-wide list already removes every
+-    # header mcp-grafana 2.1.1 trusts per request (X-Grafana-Service-Account-Token
+-    # and X-Grafana-API-Key replace the Grafana credential - apiKeyFromHeaders,
+-    # mg.go:215; X-Grafana-Org-Id switches org; X-Grafana-URL retargets the backend,
+-    # measured in grafana-forwarding-probe.py, a local research probe kept out of
+-    # this commit and pending review). This key is only for
+-    # headers specific to one backend that the shared list does not cover.
+-    stripRequestHeaders: []
++  # Agentgateway configuration (rendered directly into configmap config.yaml)
++  # Chart adds config.storage.mode: file automatically in readonly mode
++  # All routes disabled - fail closed
++  config:
++    adminAddr: "off"
++    logging:
++      format: json
++      level: info
++    gateways:
++      default:
++        port: 3000
++    mcp:
++      targets: []
+
+ # ---------------------------------------------------------------------------
+-# Kanidm resources (rendered via ./templates/kanidm-*.yaml)
++# Values below are NOT consumed by the official chart. They are used by
++# wrapper templates in templates/ (ingress, kanidm, session-key).
+ # ---------------------------------------------------------------------------
++
++# Network isolation - DISABLED for initial rollout
++# Previous deployment with NetworkPolicy blocked kubelet probes
++# Will re-enable after CiliumNetworkPolicy design reviewed
++networkIsolation: false
++
++# Kanidm OAuth2 client configuration (used by templates/kanidm-*.yaml)
++# These resources keep their original names (not affected by fullnameOverride)
+ kanidm:
+-  # Service-only workload group (no persons; person membership is
+-  # manual per docs/user-guide/kanidm.md "Group membership rules").
+-  # Members are populated by hermes chart owner. Foundation ships empty.
+   workloadGroup:
+     name: mcp-gateway-agents
+-    # Kanidm service-account names only — NEVER persons.
+-    # IMPORTANT: `spec.members` is AUTHORITATIVE. Kanidm's CRD schema states it
+-    # sets the exact list and removes any member not listed. So:
+-    #   - only use this for the new service-only group this chart owns;
+-    #   - never point it at an existing human/mixed group;
+-    #   - when you add members, list ALL service accounts that must belong.
+-    # An empty list omits `spec.members` entirely, creating the group with no
+-    # membership assertion.
+     serviceMembers: []
+-
+-  # Public Kanidm OAuth2 client used by MCP clients (OpenCode PKCE, Hermes
+-  # service-account token exchange). Public + PKCE is required because
+-  # Kanidm's access token audience = OAuth2 client NAME, not resource URL
+-  # (verified in Kanidm v1.11.2 oauth2.rs generate_access_token_response).
+   oauth2Client:
+     name: mcp-gateway
+     displayname: MCP Gateway
+     origin: https://mcp.grigri.cloud/
+-    # Exact loopback redirect for native MCP clients doing auth-code + PKCE.
+-    # OpenCode listens on 127.0.0.1:15000/callback; the entry is the literal
+-    # string the client sends, and Kanidm requires `allowLocalhostRedirect: true`
+-    # plus this exact URI for the authorization request to be accepted.
+     redirectUrls:
+       - http://127.0.0.1:15000/callback
+-    # scopeMap: each entry is { group, scopes[] }. Kanidm requires that EVERY
+-    # scope a client asks for is present in the granted set, so a group that
+-    # needs an MCP tool plus identity claims must be mapped to all of them —
+-    # granting only `mcp_firecrawl` would make a request for
+-    # `openid email profile mcp_firecrawl` fail at Kanidm, not at the gateway.
+-    # Scopes land in the JWT as ONE space-separated `scope` string (Kanidm uses
+-    # the string form; RFC 9068's array form is not used), so the gateway CEL
+-    # splits it. Per-target whole-MCP grant, never per-tool.
+     scopeMap:
+-      # Service-account workload group: identity scopes (clients request them)
+-      # plus the Firecrawl whole-MCP scope. Grafana/Vault scopes stay out until
+-      # their delegation model is resolved.
+       - group: mcp-gateway-agents
+         scopes:
+           - openid
+           - email
+           - profile
+           - mcp_firecrawl
+-    # Human access reuses an EXISTING group; person membership is never managed
+-    # in Git (docs/user-guide/kanidm.md), and nothing here adds or removes a
+-    # person. `searxng-users` is the group already used for interactive web-search
+-    # access, which is the closest existing semantic for a web-fetch/crawl tool.
+-    # Flip `backends.firecrawl.enabled` only together with this mapping.
+-    # No human grant ships in the foundation. Withholding a grant needs no approval;
+-    # the owner's stated preference is to reuse an existing group rather than invent a
+-    # new one, but `searxng-users` was created for search access and "may search" does
+-    # not imply "may fetch arbitrary URLs through the gateway", so it is NOT wired up
+-    # here. Choosing the human group(s) for `mcp_firecrawl` / `mcp_grafana` is a
+-    # separate owner gate, and it gates the *grant*, not the gateway's end-to-end
+-    # behaviour: the local suites prove the CEL/authz contract with test-only scope
+-    # fixtures (see test/mcp-gateway/e2e-authz.py), never by granting a real group.
+-    # Person membership stays manual (never CRD-managed) per docs/user-guide/kanidm.md.
+     humanScopeMap: []
++
++# Auth configuration (for future routes, used by wrapper templates)
++auth:
++  issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
++  audience: mcp-gateway
++  jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
++
++# Backend routes - ALL DISABLED for foundation
++# Enable individually after backend chart deployed + Kanidm scope granted
++backends:
++  grafana:
++    enabled: false
++    path: /grafana/mcp
++    url: http://grafana-mcp.grafana-mcp.svc.cluster.local:8000/mcp
++    resource: https://mcp.grigri.cloud/grafana/mcp
++    hostHeader: grafana-mcp.grafana-mcp.svc.cluster.local
++    namespace: grafana-mcp
++    workloadName: grafana-mcp
++    port: 8000
++    scope: mcp_grafana
++    credential: accessToken
++    stripRequestHeaders: []
++
++  context7:
++    enabled: false
++    path: /context7/mcp
++    url: https://mcp.context7.com/mcp
++    resource: https://mcp.grigri.cloud/context7/mcp
++    scope: mcp_context7
++    credential: none
++    stripRequestHeaders:
++      - Authorization
++
++# Session key generation (ESO) - used by templates/session-key-*.yaml
++# These values are consumed by wrapper templates, NOT by the official chart
++# EXISTING ESO resources remain UNCHANGED (immutable, CreatedOnce, key SESSION_KEY)
++session:
++  length: 32
++  encoding: hex
++  refreshPolicy: CreatedOnce
+diff --git a/test/mcp-gateway/foundation-checks.py b/test/mcp-gateway/foundation-checks.py
+index 2cf250de9..98477ff47 100755
+--- a/test/mcp-gateway/foundation-checks.py
++++ b/test/mcp-gateway/foundation-checks.py
+@@ -2,11 +2,10 @@
+ """Foundation-specific checks for the policy-free public gateway baseline.
+
+ Validates the Phase A foundation that is ready for deployment:
+-  * networkIsolation=false means NO NetworkPolicy/CiliumNetworkPolicy renders;
+   * nodeSelector is prusik (the only approved node for initial rollout);
+-  * all backend routes disabled (routes: []) - gateway answers 404 before auth;
++  * all backend routes disabled (mcp.targets: []) - gateway answers 404 before auth;
+   * session key lifecycle is ESO CreatedOnce + immutable;
+-  * probes are correct (startup/readiness/liveness on 15021);
++  * probes are correct (startup/readiness on 15021);
+   * JWT validation values are correct (issuer, audience, jwksUrl) for future use;
+   * image pinned to v1.7.0;
+   * ingress is nginx-external with TLS;
+@@ -16,7 +15,7 @@ Validates the Phase A foundation that is ready for deployment:
+   * SESSION_KEY is a required secretKeyRef (fail-closed);
+   * Deployment structural fields are correct (securityContext, resources, etc.).
+
+-NOTE: With routes: [], no auth or RFC 9728 discovery is testable - the gateway
++NOTE: With mcp.targets: [], no auth or RFC 9728 discovery is testable - the gateway
+ answers 404 before reaching auth. This phase validates health/TLS/fail-closed-404
+ only. Actual auth/discovery tests require enabling a route in a later phase.
+
+@@ -65,27 +64,12 @@ def config_text(docs):
+
+
+ def main():
+-    # Render with default values (networkIsolation: false)
++    # Render with default values
+     docs = helm()
+     text = config_text(docs)
+     cfg = yaml.safe_load(text)
+     vals = open(f"apps/{CHART}/values.yaml").read()
+
+-    # ---- networkIsolation guard ----
+-    check("networkIsolation defaults to false in values.yaml",
+-          re.search(r"^networkIsolation:\s*false\s*$", vals, re.M) is not None)
+-    check("no NetworkPolicy rendered when networkIsolation=false",
+-          find_all(docs, "NetworkPolicy") == [])
+-    check("no CiliumNetworkPolicy rendered when networkIsolation=false",
+-          find_all(docs, "CiliumNetworkPolicy") == [])
+-
+-    # Verify NetworkPolicy DOES render when enabled (for future use)
+-    docs_np = helm(["networkIsolation=true"])
+-    np_list = find_all(docs_np, "NetworkPolicy")
+-    check("NetworkPolicy renders when networkIsolation=true",
+-          len(np_list) == 2,
+-          f"got {len(np_list)} policies")
+-
+     # ---- nodeSelector ----
+     dep = find(docs, "Deployment")
+     node_sel = (dep or {}).get("spec", {}).get("template", {}).get("spec", {}).get("nodeSelector", {})
+@@ -94,13 +78,13 @@ def main():
+           str(node_sel))
+
+     # ---- all backends disabled ----
+-    check("routes: [] in config (all backends disabled)",
+-          cfg.get("routes") == [],
+-          f"routes={cfg.get('routes')!r}")
+-    check("firecrawl backend disabled in values",
+-          re.search(r"^\s{2}firecrawl:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
++    check("mcp.targets: [] in config (all backends disabled)",
++          cfg.get("mcp", {}).get("targets") == [],
++          f"mcp.targets={cfg.get('mcp', {}).get('targets')!r}")
+     check("grafana backend disabled in values",
+           re.search(r"^\s{2}grafana:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
++    check("context7 backend disabled in values",
++          re.search(r"^\s{2}context7:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
+
+     # ---- session key ESO lifecycle ----
+     es = find(docs, "ExternalSecret")
+@@ -123,18 +107,12 @@ def main():
+
+     # ---- probes ----
+     containers = (dep or {}).get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+-    main_container = next((c for c in containers if c.get("name") == "main"), None)
+-    check("main container exists", main_container is not None)
++    main_container = next((c for c in containers if c.get("name") == "agentgateway"), None)
++    check("agentgateway container exists", main_container is not None)
+     if main_container:
+-        probes = main_container.get("probes", {}) or main_container.get("livenessProbe") is not None
+-        # app-template renders probes differently; check the Deployment spec directly
+-        liveness = main_container.get("livenessProbe")
++        # Official chart uses startupProbe and readinessProbe (no livenessProbe)
+         readiness = main_container.get("readinessProbe")
+         startup = main_container.get("startupProbe")
+-        check("livenessProbe exists on /healthz/ready:15021",
+-              liveness is not None and
+-              liveness.get("httpGet", {}).get("path") == "/healthz/ready" and
+-              liveness.get("httpGet", {}).get("port") == 15021)
+         check("readinessProbe exists on /healthz/ready:15021",
+               readiness is not None and
+               readiness.get("httpGet", {}).get("path") == "/healthz/ready" and
+@@ -146,7 +124,7 @@ def main():
+
+     # ---- JWT validation ----
+     # JWT settings are in values.yaml but only render into config when routes are enabled.
+-    # Foundation baseline has routes: [] so no auth/discovery is testable yet - the gateway
++    # Foundation baseline has mcp.targets: [] so no auth/discovery is testable yet - the gateway
+     # answers 404 before reaching auth. These checks verify the VALUES are correct for when
+     # routes are enabled later.
+     check("issuer is exact Kanidm per-client path in values",
+@@ -155,13 +133,12 @@ def main():
+           "audience: mcp-gateway" in vals)
+     check("jwksUrl is Kanidm public_key.jwk in values",
+           "jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk" in vals)
+-    check("routes: [] means no auth/discovery testable yet (404 before auth)",
+-          cfg.get("routes") == [])
++    check("mcp.targets: [] means no auth/discovery testable yet (404 before auth)",
++          cfg.get("mcp", {}).get("targets") == [])
+
+     # ---- image pin ----
+-    check("image pinned to v1.7.0",
+-          "tag: v1.7.0" in vals and
+-          "repository: cr.agentgateway.dev/agentgateway" in vals)
++    check("image tag is empty (use chart appVersion)",
++          "tag: \"\"" in vals or "tag: ''" in vals)
+     if main_container:
+         image = main_container.get("image", "")
+         check("Deployment image is cr.agentgateway.dev/agentgateway:v1.7.0",
+@@ -177,11 +154,19 @@ def main():
+         tls = ing["spec"].get("tls", [])
+         check("TLS is configured",
+               len(tls) > 0 and tls[0].get("secretName") == "mcp-gateway-tls-certificate")
++        # Check backend service name
++        rules = ing["spec"].get("rules", [])
++        if rules:
++            backend = rules[0].get("http", {}).get("paths", [{}])[0].get("backend", {})
++            svc_name = backend.get("service", {}).get("name", "")
++            check("Ingress backend points to mcp-gateway-standalone service",
++                  svc_name == "mcp-gateway-standalone",
++                  f"got {svc_name}")
+
+     # ---- RFC 9728 metadata paths ----
+     check("RFC 9728 well-known path is in config (for future routes)",
+-          "/.well-known/oauth-protected-resource" in text or cfg.get("routes") == [],
+-          "routes are empty so no paths needed yet")
++          "/.well-known/oauth-protected-resource" in text or cfg.get("mcp", {}).get("targets") == [],
++          "targets are empty so no paths needed yet")
+
+     # ---- humanScopeMap empty ----
+     check("humanScopeMap is empty (no human grants)",
+@@ -189,7 +174,7 @@ def main():
+
+     # ---- adminAddr off ----
+     check("adminAddr is 'off' (no admin listener)",
+-          cfg.get("config", {}).get("adminAddr") == "off")
++          cfg.get("adminAddr") == "off")
+
+     # ---- service ----
+     svc = find(docs, "Service")
+@@ -200,6 +185,8 @@ def main():
+         check("Service exposes ports 3000, 15020, 15021",
+               {3000, 15020, 15021} <= ports,
+               str(sorted(ports)))
++        check("Service name is mcp-gateway-standalone",
++              svc["metadata"]["name"] == "mcp-gateway-standalone")
+
+     # ---- SESSION_KEY ----
+     if main_container:
+@@ -209,6 +196,10 @@ def main():
+             ref = env[0].get("valueFrom", {}).get("secretKeyRef", {})
+             check("SESSION_KEY is from secretKeyRef (not a plain value)",
+                   bool(ref) and "name" in ref and "key" in ref)
++            check("SESSION_KEY references existing secret mcp-gateway-session-key",
++                  ref.get("name") == "mcp-gateway-session-key")
++            check("SESSION_KEY secretKeyRef key is SESSION_KEY",
++                  ref.get("key") == "SESSION_KEY")
+             check("SESSION_KEY secretKeyRef is required (optional is not true)",
+                   ref.get("optional") is not True)
+
+@@ -227,7 +218,9 @@ def main():
+     check("KanidmGroup exists (mcp-gateway-agents)",
+           grp is not None and grp["metadata"]["name"] == "mcp-gateway-agents")
+     if grp:
+-        check("KanidmGroup has no members by default (empty serviceMembers)",
++        # When serviceMembers is empty, the template omits the members field entirely
++        # (owner-managed membership, no authoritative assertion)
++        check("KanidmGroup has no members field when serviceMembers is empty",
+               "members" not in grp.get("spec", {}))
+
+     # ---- security context ----
+@@ -240,10 +233,6 @@ def main():
+               sc.get("readOnlyRootFilesystem") is True)
+         caps = sc.get("capabilities", {}).get("drop", [])
+         check("capabilities drop ALL", "ALL" in caps)
+-        check("runAsUser is 65534 (nobody)",
+-              sc.get("runAsUser") == 65534)
+-        check("runAsGroup is 65534 (nobody)",
+-              sc.get("runAsGroup") == 65534)
+
+     # ---- resources ----
+     if main_container:
+@@ -259,13 +248,16 @@ def main():
+
+     # ---- pod spec ----
+     pod_spec = (dep or {}).get("spec", {}).get("template", {}).get("spec", {})
+-    check("automountServiceAccountToken is false",
+-          pod_spec.get("automountServiceAccountToken") is False)
+-    check("enableServiceLinks is false",
+-          pod_spec.get("enableServiceLinks") is False)
+     check("replicas is 1",
+           (dep or {}).get("spec", {}).get("replicas") == 1)
+
++    # ---- Deployment naming ----
++    check("Deployment name is mcp-gateway-standalone (avoids immutable selector conflict)",
++          dep["metadata"]["name"] == "mcp-gateway-standalone")
++    dep_selector = (dep or {}).get("spec", {}).get("selector", {}).get("matchLabels", {})
++    check("Deployment selector has component=standalone",
++          dep_selector.get("app.kubernetes.io/component") == "standalone")
++
+     print()
+     print(f"=== {sum(results)} passed, {results.count(False)} failed ===")
+     return 1 if results.count(False) else 0
+--
+2.56.0

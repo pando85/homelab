@@ -1,0 +1,70 @@
+From dee221aeef44bd3840b701c9a98ec230c9a0c85d Mon Sep 17 00:00:00 2001
+From: Alexander Gil <pando855@gmail.com>
+Date: Mon, 9 Nov 2026 07:10:19 +0100
+Subject: [PATCH 1/2] docs: add official chart preference rule and migration
+ follow-up
+
+- AGENTS.md: CodeStyle Helm line prefers official/first-party charts
+- docs/conventions/helm.md: add Chart Selection section, update values guidance
+- planning/mcp-gateway-implementation.md: add follow-up tasks checkbox for official chart migration
+
+Task-owned hunks only; unrelated Applications pitfall count change left unstaged.
+---
+ AGENTS.md                              | 2 +-
+ docs/conventions/helm.md               | 6 +++++-
+ planning/mcp-gateway-implementation.md | 4 ++++
+ 3 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/AGENTS.md b/AGENTS.md
+index bfbb37fd8..1af9c47e7 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -44,7 +44,7 @@ helm lint apps/<name>/
+ ## Code Style
+
+ - **YAML:** 2-space indent, `---` for multi-doc, yamllint via pre-commit (ignores `templates/`)
+-- **Helm:** `app-template` from bjw-s. See `docs/conventions/helm.md`
++- **Helm:** Prefer maintained official/first-party charts; use `app-template` only when none exists. See `docs/conventions/helm.md`
+ - **Ansible:** `safety` profile. See `docs/conventions/ansible.md`
+ - **Renovate:** Add hints above image refs — `docs/conventions/helm.md#renovate-integration`
+ - **Docs:** Troubleshooting in `docs/troubleshooting/`; `AGENTS.md` for links/reminders. See `docs/conventions/documenting-learnings.md`
+diff --git a/docs/conventions/helm.md b/docs/conventions/helm.md
+index f95c3a307..cc5dbd48c 100644
+--- a/docs/conventions/helm.md
++++ b/docs/conventions/helm.md
+@@ -1,5 +1,9 @@
+ # Helm Chart Conventions
+
++## Chart Selection
++
++Prefer maintained official/first-party Helm charts when available. Use `app-template` from bjw-s only when no maintained official chart exists for the application. If an official chart cannot support the needed deployment mode, document the limitation and obtain owner approval rather than silently falling back to a generic wrapper. Always pin chart versions and use wrapper charts for homelab-specific additions (Ingress, ESO, Kanidm, etc.).
++
+ ## Chart.yaml Pattern
+
+ ```yaml
+@@ -14,7 +18,7 @@ dependencies:
+
+ ## values.yaml Patterns
+
+-- Use `app-template` from bjw-s as the standard wrapper
++- Use `app-template` from bjw-s only when no maintained official chart exists
+ - Always define `resources.requests` and `resources.limits`
+ - Use YAML anchors for repeated probe definitions (`&probes`, `*probes`)
+ - Set `enableServiceLinks: false` in `defaultPodOptions`
+diff --git a/planning/mcp-gateway-implementation.md b/planning/mcp-gateway-implementation.md
+index 9a533a65e..ec1b947e7 100644
+--- a/planning/mcp-gateway-implementation.md
++++ b/planning/mcp-gateway-implementation.md
+@@ -56,6 +56,10 @@ Every "measured" statement below comes from the local suites in `test/mcp-gatewa
+ pinned v1.7.0 binary (and pinned Grafana/mcp-grafana/firecrawl images) against chart-rendered
+ configs - not from assumptions or from the live cluster.
+
++## MCP Gateway Follow-up Tasks
++
++- [ ] **Migrate to official agentgateway-standalone chart**: Currently using `app-template` wrapper; migrate to official `oci://cr.agentgateway.dev/charts/agentgateway-standalone`. Verify and pin exact artifact version from official source before migration.
++
+ ## Task 0: Architecture & Inventory
+
+ **Architecture:** done | **agentgateway pin:** done | **Kanidm inventory:** pending (identity agent)
+--
+2.56.0

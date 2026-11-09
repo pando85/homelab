@@ -1,0 +1,93 @@
+# Committed GitOps verification job for the MCP gateway foundation.
+# NOT synced by ArgoCD (test/ is not under apps/ or system/).
+# Owner applies explicitly once the foundation is deployed, then deletes:
+#   kubectl --context=grigri apply -f test/mcp-gateway/jobs/verify-foundation-incluster.yaml
+#   kubectl --context=grigri -n monitoring logs job/mcp-gateway-foundation-verify
+#   kubectl --context=grigri -n monitoring delete job mcp-gateway-foundation-verify
+#
+# This job runs in the `monitoring` namespace because that is the only namespace
+# the gateway's NetworkPolicy allows to reach anything besides the external
+# ingress controller. Verified live labels used by the policy:
+#   - ingress-nginx-external / app.kubernetes.io/name=ingress-nginx
+#   - monitoring             / app.kubernetes.io/name=prometheus
+#
+# What it proves while routes are intentionally disabled (fail-closed posture):
+#   1. metrics :15020 is reachable from monitoring and returns 200
+#      => the gateway is healthy and Prometheus/ServiceMonitor can scrape it
+#   2. MCP :3000 is NOT reachable from monitoring
+#      => ingress is least-privilege, not "cluster-internal is fine"
+#   3. healthz :15021 is NOT reachable from monitoring
+#      => the probe port stays private to the kubelet (Cilium has
+#         enable-host-firewall=false, so kubelet probes are host traffic and
+#         still work without a policy rule; app pods must not get in)
+#
+# The positive MCP data-plane check (expect 404 today, 401 once a route with
+# mcpAuthentication is enabled) must be done through the real public entry
+# point, not from inside the cluster:
+#   curl -sS -o /dev/null -w '%{http_code}\n' https://mcp.grigri.cloud/mcp
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mcp-gateway-foundation-verify
+  namespace: monitoring
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 900
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mcp-gateway-foundation-verify
+    spec:
+      restartPolicy: Never
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      containers:
+        - name: curl
+          image: curlimages/curl:8.10.1@sha256:2201f0e4fdc9320f468d42f8a6d5cfd219f5d9d4f6a6fa3e67a4dcf2fe7cae8c
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              fail() { echo "FAIL: $*" >&2; exit 1; }
+              ok() { echo "  ok ($*)"; }
+              GW=mcp-gateway.mcp-gateway.svc.cluster.local
+
+              probe() { curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$1" 2>/dev/null || echo 000; }
+
+              echo "[1] metrics :15020 must be scrapeable from monitoring"
+              code=$(probe "http://${GW}:15020/metrics")
+              [ "$code" = "200" ] || fail "expected 200, got $code"
+              ok "metrics reachable"
+
+              echo "[2] gateway body must expose gateway_* metrics"
+              body=$(curl -s --max-time 5 "http://${GW}:15020/metrics" | grep -c '^gateway_' || true)
+              [ "${body:-0}" -gt 0 ] || fail "no gateway_* metrics found"
+              ok "$body gateway_* series"
+
+              echo "[3] MCP :3000 must NOT be reachable from monitoring"
+              code=$(probe "http://${GW}:3000/mcp")
+              case "$code" in
+                000) ok "blocked as expected" ;;
+                *)   fail "monitoring reached the MCP port (HTTP $code)" ;;
+              esac
+
+              echo "[4] healthz :15021 must NOT be reachable from monitoring"
+              code=$(probe "http://${GW}:15021/healthz/ready")
+              case "$code" in
+                000) ok "blocked as expected" ;;
+                *)   fail "probe port exposed to app pods (HTTP $code)" ;;
+              esac
+
+              echo "ALL PASS"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
