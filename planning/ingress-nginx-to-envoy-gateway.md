@@ -49,7 +49,8 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | ----- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | done        | All steps done except step 7 (post the listener contract on multivara#199): owner action, does not block Phase 1. Findings below. |
 | 1     | done        | All steps done except step 6 (ZeroSSL, waits for the owner's EAB credentials) and P1.1 (optional pfSense). Gate 1 satisfied.     |
-| 2-6   | not started |                                                                                                                                   |
+| 2     | in progress | Pilots without auth done (below); auth pilots (esphome, http-echo, navidrome, kanidm route) tracked by the auth work. Procedure: `docs/conventions/gateway-api-routes.md`. |
+| 3-6   | not started |                                                                                                                                   |
 
 ### Phase 1 progress (2026-11-09)
 
@@ -161,6 +162,42 @@ Step 4 notes (monitoring, tracing, roll test; all verified 2026-11-09):
   new pod follows. `terminationGracePeriodSeconds` 360, `--drain-time-s 60`. No tuning needed.
   Not covered: long-lived connections (websockets, big transfers) across a roll, which drain up to
   60 s and are then cut.
+
+### Phase 2 progress: pilots without auth (2026-11-09)
+
+All routes are internal (`internal` / `https-internal-grigri-cloud`, no external-dns annotation),
+every Ingress is untouched, every Argo app Synced Healthy, every route and policy Accepted and
+ResolvedRefs, no `response_flags` other than `-` in the Envoy access log, client IP preserved
+(`client_address` is the LAN address), external-dns planned no record change for these hosts. No
+NetworkPolicy or CiliumNetworkPolicy exists in any of the six namespaces, so none was needed.
+
+| App (style)                          | Commit      | Result                                                                                                                                                                                                                                                             |
+| ------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| firecrawl (A, app-template `route:`) | `3ff1f435c` | `firecrawl.internal` 200 h2 on `.13`, same JSON body as `.1`; cert `*.internal.grigri.cloud` verifies, ALPN h2, HSTS and security headers, no `Server`.                                                                                                            |
+| rsshub (kustomize, raw)              | `1b918d1d6` | Raw `HTTPRoute` in `resources/` (kustomize has no cluster capabilities, so no chart `route:`). `/`, `/healthz`, `/test/1` (1911 B XML) identical on `.13` and `.1`.                                                                                                |
+| hubble (cilium, raw)                 | `671ec0200` | Raw `HTTPRoute` in `system/kube-system/resources/cilium/`, `hubble.ui.ingress` untouched. UI HTML (642 B) identical on `.13` and `.1`. gRPC-web streaming not exercised (see below).                                                                              |
+| vault (operator CR, standalone)      | `83f440b77` | `HTTPRoute` + `BackendTLSPolicy` (`Secret vault-tls` `ca.crt`, hostname `vault.vault.svc.cluster.local`, port `api-port`); `spec.ingress` kept. `/v1/sys/health` 200 h2 through `.13` with the same body as `.1`, also without `-k`; `/v1/pki/iot/ca/pem` returns the `iot.grigri` CA on both; `/ui/` 200. Proxy config dump shows SNI, SAN match and the SDS CA `vault/vault-ca`. |
+| unifi (self-signed backend)          | `1fe3f7726` | EG `Backend` (FQDN `unifi.unifi.svc.cluster.local:8443`, `insecureSkipVerify`) as backendRef. `/` 302 `/manage`, `/status` JSON `rc: ok` on `.13` and `.1`. Same trust as nginx.                                                                                  |
+| radarr (Lua request case)            | `8de64d1dc` | Second `HTTPRoute` `radarr-movie-list` (path `RegularExpression (?i)/api/v3/movie`, wins over the catch-all `/`) + `EnvoyExtensionPolicy` with the Lua. Proof with the API key (header, never printed): no param 8129801 B / 0 local images = explicit `excludeLocalCovers=true`; explicit `false` 8367716 B / 4034 local images; identical on `.1`. `/API/V3/Movie` (case) filtered too, `/api/v3/movie/1` and `/api/v3/movies` 404 as on nginx, `?tmdbId=` passes through. |
+
+Skipped on purpose: **`radarr.grigri.cloud` external route** (oauth2-proxy `auth-url`, `auth-snippet`
+apiKey bypass, buffer 16k): not created, left to the auth pattern (needs the `SecurityPolicy`, the
+bypass route with `queryParams` regex, which is still unproven, and the Lua on both copies).
+
+Findings:
+
+- Lua works (`enableLua`), a second same-host HTTPRoute with a regex path overrides the catch-all
+  `/`, and `(?i)` regexes work in route paths.
+- `BackendTLSPolicy` accepts `kind: Secret` CA references (key `ca.crt`, same namespace); `sectionName`
+  is the Service port name.
+- Routes get `timeout: 60s` plus `idle_timeout: 3600s` and `upgrade_configs: websocket`. Whether an
+  upgraded websocket survives the 60 s timeout is **not yet verified** (no websocket test target:
+  `http-echo` has no websocket endpoint). Needs a held-connection test on the first websocket app
+  (Home Assistant, UniFi events, jellyfin) in Phase 3.
+- Hubble UI uses gRPC-web streaming on `/api`; the probe path 404s on nginx and Envoy alike, so the
+  stream itself still needs a browser check before the switch.
+- Procedure written: `docs/conventions/gateway-api-routes.md`; `helm.md` and
+  `deploying-new-apps.md` now point to it instead of the nginx snippet guidance.
 
 ### Phase 0 findings (2026-11-09)
 
