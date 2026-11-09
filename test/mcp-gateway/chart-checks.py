@@ -354,27 +354,45 @@ def main():
           "- mcp-gateway\n" not in adm_text)
 
     # ---- egress follows the same values entry as the route
-    def egress_json(docs):
+    # Public gateway: CiliumNetworkPolicy with bare toEntities: [cluster] (allows all cluster traffic).
+    # No per-backend egress rules - the architecture uses cluster-wide allowance.
+    # Admin gateway: also CiliumNetworkPolicy with bare toEntities: [cluster].
+    # Both charts use the same proven egress shape: bare cluster + DNS pod rules.
+    def cnp_egress_json(docs):
+        cnp = [d for d in docs if d.get("kind") == "CiliumNetworkPolicy"]
+        if not cnp:
+            return ""
+        return json.dumps(cnp[0].get("spec", {}).get("egress", []))
+
+    def np_egress_json(docs):
         np = [d for d in docs if d.get("kind") == "NetworkPolicy"
               and d["metadata"]["name"].endswith("-egress")]
         return json.dumps(np[0]["spec"]["egress"]) if np else ""
 
-    pub_eg_off, adm_eg_off = egress_json(helm("mcp-gateway")), egress_json(helm("mcp-gateway-admin"))
-    check("no backend egress path while every route is disabled",
-          "firecrawl-mcp" not in pub_eg_off and "grafana-mcp" not in adm_eg_off and
-          "vault-mcp" not in adm_eg_off)
-    # Public gateway uses CiliumNetworkPolicy with toEntities: cluster (allows all cluster traffic)
-    # No per-backend egress rules - the architecture is different from admin gateway
-    # Admin gateway uses NetworkPolicy with templated per-backend egress rules
-    adm_eg_on = egress_json(adm_on)
-    # after B3, Grafana is a public-plane backend: enabling Vault must not create any
-    # admin egress path to Grafana, and the public chart must be the one that can.
-    check("admin egress adds Vault only when Vault is enabled, and never Grafana",
-          "vault-mcp" in adm_eg_on and "grafana-mcp" not in adm_eg_on,
-          f"admin egress {adm_eg_on.count('kubernetes.io/metadata.name')} selectors")
-    pub_eg_default = egress_json(helm("mcp-gateway"))
+    # With networkIsolation=false (default), no policy is rendered
+    pub_eg_off = cnp_egress_json(helm("mcp-gateway"))
+    adm_eg_off = cnp_egress_json(helm("mcp-gateway-admin"))
+    check("no egress policy while networkIsolation is false (default)",
+          pub_eg_off == "" and adm_eg_off == "",
+          f"public={pub_eg_off[:50] if pub_eg_off else 'none'}, admin={adm_eg_off[:50] if adm_eg_off else 'none'}")
+
+    # With networkIsolation=true, both charts render CNP with bare cluster egress
+    adm_eg_on = cnp_egress_json(adm_on)
+    pub_eg_on = cnp_egress_json(pub_on)
+    check("admin CNP egress has bare toEntities: [cluster]",
+          '"toEntities": ["cluster"]' in adm_eg_on or "'toEntities': ['cluster']" in adm_eg_on,
+          f"admin egress {adm_eg_on[:100]}")
+    check("public CNP egress has bare toEntities: [cluster]",
+          '"toEntities": ["cluster"]' in pub_eg_on or "'toEntities': ['cluster']" in pub_eg_on,
+          f"public egress {pub_eg_on[:100]}")
+    # Admin CNP has no per-backend egress rules (bare cluster allows all)
+    # The architecture is: routes: [] (fail-closed) + bare cluster egress
+    # Enabling a backend doesn't change the network policy - it changes the config
+    check("admin CNP egress is bare cluster (no per-backend rules)",
+          "vault-mcp" not in adm_eg_on and "grafana-mcp" not in adm_eg_on,
+          f"admin egress should be bare cluster, not per-backend")
     check("public plane has no Vault path at all (admin-only backend)",
-          "vault-mcp" not in pub_eg_default and
+          "vault-mcp" not in pub_eg_on and
           "mcp_vault" not in config_text(helm("mcp-gateway",
                                               ["backends.grafana.enabled=true"])))
 
@@ -401,36 +419,196 @@ def main():
           len(adm_cnp_false) == 0,
           f"found {len(adm_cnp_false)} CiliumNetworkPolicy resources")
 
-    # Explicit true: existing native NetworkPolicies rendered unchanged
+    # Explicit true: CiliumNetworkPolicy rendered (native NPs replaced)
     adm_true_docs = helm("mcp-gateway-admin", ["networkIsolation=true"])
     adm_np_true = [d for d in adm_true_docs if d.get("kind") == "NetworkPolicy"]
-    check("mcp-gateway-admin: networkIsolation=true renders both legacy NetworkPolicies",
-          len(adm_np_true) == 2,
-          f"expected 2, found {len(adm_np_true)}")
-    adm_np_names = {d["metadata"]["name"] for d in adm_np_true}
-    check("mcp-gateway-admin: networkIsolation=true renders ingress and egress policies",
-          adm_np_names == {"mcp-gateway-admin-ingress", "mcp-gateway-admin-egress"},
-          f"names: {adm_np_names}")
-    # Verify the ingress policy still allows only 3000 and 15020 (not 15021)
-    adm_np_ingress = next((d for d in adm_np_true if d["metadata"]["name"] == "mcp-gateway-admin-ingress"), None)
-    if adm_np_ingress:
-      ingress_ports = set()
-      for rule in adm_np_ingress.get("spec", {}).get("ingress", []):
-          for port in rule.get("ports", []):
-              ingress_ports.add(port.get("port"))
-      check("mcp-gateway-admin: legacy ingress policy allows only 3000 and 15020 (not 15021)",
-            ingress_ports == {3000, 15020},
-            f"ports: {ingress_ports}")
-    # Verify values.yaml documents the gating and the legacy status
+    adm_cnp_true = [d for d in adm_true_docs if d.get("kind") == "CiliumNetworkPolicy"]
+    check("mcp-gateway-admin: networkIsolation=true renders no native NetworkPolicy",
+          len(adm_np_true) == 0,
+          f"found {len(adm_np_true)} native NetworkPolicy resources (should be 0)")
+    check("mcp-gateway-admin: networkIsolation=true renders CiliumNetworkPolicy",
+          len(adm_cnp_true) == 1,
+          f"expected 1, found {len(adm_cnp_true)}")
+    # Verify values.yaml documents the gating
     adm_vals_text = open("apps/mcp-gateway-admin/values.yaml").read()
     check("mcp-gateway-admin: values.yaml documents networkIsolation gating",
           "networkIsolation: false" in adm_vals_text and
           "policy-free" in adm_vals_text,
           "missing documentation")
-    check("mcp-gateway-admin: values.yaml warns that true is NOT production-ready",
-          "NOT production-ready" in adm_vals_text or
-          "not production-ready" in adm_vals_text,
-          "missing warning")
+
+    # ---- CNP shape verification for all three charts
+    # Helper to verify the proven CNP shape: world on health port only, app port from
+    # specific endpoints, egress bare cluster + DNS, no native NP.
+    def verify_cnp_shape(chart_name, docs_with_isolation, pod_labels, health_port, app_port, metrics_port=None):
+        """Verify CiliumNetworkPolicy matches the proven shape."""
+        cnps = [d for d in docs_with_isolation if d.get("kind") == "CiliumNetworkPolicy"]
+        nps = [d for d in docs_with_isolation if d.get("kind") == "NetworkPolicy"]
+
+        check(f"{chart_name}: no native NetworkPolicy rendered with networkIsolation=true",
+              len(nps) == 0,
+              f"found {len(nps)} native NetworkPolicy resources")
+
+        if not cnps:
+            check(f"{chart_name}: CiliumNetworkPolicy exists", False, "no CNP found")
+            return
+
+        cnp = cnps[0]
+        spec = cnp.get("spec", {})
+
+        # endpointSelector must match the real pod labels
+        selector = spec.get("endpointSelector", {}).get("matchLabels", {})
+        for label_key, label_val in pod_labels.items():
+            check(f"{chart_name}: CNP endpointSelector has {label_key}={label_val}",
+                  selector.get(label_key) == label_val,
+                  f"selector={selector}")
+
+        ingress_rules = spec.get("ingress", [])
+        egress_rules = spec.get("egress", [])
+
+        # Find the world rule (health port)
+        world_rules = [r for r in ingress_rules if "fromEntities" in r and "world" in r.get("fromEntities", [])]
+        check(f"{chart_name}: exactly one ingress rule with fromEntities: [world]",
+              len(world_rules) == 1,
+              f"found {len(world_rules)} world rules")
+
+        if world_rules:
+            world_rule = world_rules[0]
+            # world rule must have toPorts with ONLY the health port
+            world_ports = set()
+            for tp in world_rule.get("toPorts", []):
+                for p in tp.get("ports", []):
+                    world_ports.add((str(p.get("port")), p.get("protocol", "TCP")))
+            check(f"{chart_name}: world rule toPorts contains ONLY health port {health_port}",
+                  world_ports == {(str(health_port), "TCP")},
+                  f"ports={world_ports}")
+            # world rule must not have fromEndpoints (it's fromEntities only)
+            check(f"{chart_name}: world rule has no fromEndpoints (pure entity rule)",
+                  "fromEndpoints" not in world_rule,
+                  "world rule should not mix entities and endpoints")
+
+        # No rule should list both world and cluster
+        for i, rule in enumerate(ingress_rules + egress_rules):
+            entities = rule.get("fromEntities", []) + rule.get("toEntities", [])
+            has_world = "world" in entities
+            has_cluster = "cluster" in entities
+            check(f"{chart_name}: rule {i} does not list both world and cluster",
+                  not (has_world and has_cluster),
+                  f"entities={entities}")
+
+        # App port must be restricted to fromEndpoints (not fromEntities)
+        app_port_rules = []
+        for rule in ingress_rules:
+            for tp in rule.get("toPorts", []):
+                for p in tp.get("ports", []):
+                    if str(p.get("port")) == str(app_port):
+                        app_port_rules.append(rule)
+        check(f"{chart_name}: app port {app_port} has fromEndpoints rules",
+              all("fromEndpoints" in r for r in app_port_rules),
+              f"app port rules should use fromEndpoints, not fromEntities")
+        check(f"{chart_name}: app port {app_port} is NOT in world rules",
+              not any(str(app_port) in str(r.get("toPorts", [])) for r in world_rules),
+              "app port must not be exposed via world entity")
+
+        # Metrics port (if present) must be from Prometheus endpoints only
+        if metrics_port:
+            metrics_rules = []
+            for rule in ingress_rules:
+                for tp in rule.get("toPorts", []):
+                    for p in tp.get("ports", []):
+                        if str(p.get("port")) == str(metrics_port):
+                            metrics_rules.append(rule)
+            if metrics_rules:
+                check(f"{chart_name}: metrics port {metrics_port} from Prometheus endpoints",
+                      all("fromEndpoints" in r for r in metrics_rules),
+                      "metrics should use fromEndpoints")
+                for rule in metrics_rules:
+                    eps = rule.get("fromEndpoints", [])
+                    has_prometheus = any(
+                        ep.get("matchLabels", {}).get("app.kubernetes.io/name") == "prometheus"
+                        for ep in eps
+                    )
+                    check(f"{chart_name}: metrics rule selects prometheus pods",
+                          has_prometheus,
+                          f"endpoints={eps}")
+
+        # Egress: bare toEntities: [cluster] with no toPorts
+        cluster_egress = [r for r in egress_rules if "toEntities" in r and "cluster" in r.get("toEntities", [])]
+        check(f"{chart_name}: egress has toEntities: [cluster] rule",
+              len(cluster_egress) >= 1,
+              "missing bare cluster egress")
+        if cluster_egress:
+            # At least one cluster rule must have NO toPorts (bare cluster)
+            bare_cluster = [r for r in cluster_egress if "toPorts" not in r or not r.get("toPorts")]
+            check(f"{chart_name}: bare cluster egress rule has no toPorts",
+                  len(bare_cluster) >= 1,
+                  "cluster egress must be bare (no toPorts) to allow all cluster traffic")
+
+        # DNS rules must name the real pods
+        dns_rules = [r for r in egress_rules if "toEndpoints" in r]
+        if dns_rules:
+            dns_ports = set()
+            for rule in dns_rules:
+                for tp in rule.get("toPorts", []):
+                    for p in tp.get("ports", []):
+                        dns_ports.add((str(p.get("port")), p.get("protocol")))
+            check(f"{chart_name}: DNS rules cover port 53 UDP and TCP",
+                  ("53", "UDP") in dns_ports and ("53", "TCP") in dns_ports,
+                  f"dns_ports={dns_ports}")
+
+    # Test mcp-gateway-admin CNP
+    verify_cnp_shape(
+        "mcp-gateway-admin",
+        adm_true_docs,
+        pod_labels={
+            "app.kubernetes.io/name": "mcp-gateway-admin",
+            "app.kubernetes.io/instance": "mcp-gateway-admin",
+            "app.kubernetes.io/controller": "agentgateway",
+        },
+        health_port=15021,
+        app_port=3000,
+        metrics_port=15020,
+    )
+
+    # Test mcp-gateway (public) CNP
+    pub_true_docs = helm("mcp-gateway", ["networkIsolation=true"])
+    verify_cnp_shape(
+        "mcp-gateway",
+        pub_true_docs,
+        pod_labels={
+            "app.kubernetes.io/name": "agentgateway-standalone",
+            "app.kubernetes.io/instance": "mcp-gateway",
+            "app.kubernetes.io/component": "standalone",
+        },
+        health_port=15021,
+        app_port=3000,
+        metrics_port=15020,
+    )
+
+    # Test grafana-mcp CNP
+    graf_true_docs = helm("grafana-mcp", ["networkIsolation=true"])
+    verify_cnp_shape(
+        "grafana-mcp",
+        graf_true_docs,
+        pod_labels={
+            "app.kubernetes.io/name": "grafana-mcp",
+            "app.kubernetes.io/instance": "grafana-mcp",
+            "app.kubernetes.io/component": "mcp-server",
+        },
+        health_port=8081,
+        app_port=8000,
+        metrics_port=None,  # grafana-mcp has no metrics port
+    )
+
+    # grafana-mcp default-false checks
+    graf_default_docs = helm("grafana-mcp")
+    graf_cnp_default = [d for d in graf_default_docs if d.get("kind") == "CiliumNetworkPolicy"]
+    graf_np_default = [d for d in graf_default_docs if d.get("kind") == "NetworkPolicy"]
+    check("grafana-mcp: default render has no CiliumNetworkPolicy (networkIsolation defaults false)",
+          len(graf_cnp_default) == 0,
+          f"found {len(graf_cnp_default)} CNP resources")
+    check("grafana-mcp: default render has no NetworkPolicy",
+          len(graf_np_default) == 0,
+          f"found {len(graf_np_default)} NetworkPolicy resources")
 
     # ---- services: ClusterIP only, ops port separate from the MCP port
     svc = find(pub_on, "Service")
