@@ -2,12 +2,12 @@
 """Regression test for mcp.grigri.cloud DNS override via hostAliases.
 
 The MCP gateway (mcp.grigri.cloud) resolves to the public IP 79.117.1.43 via
-external DNS, but the ingress-nginx-external LoadBalancer listens on the
-internal Cilium BGP IP 192.168.193.4. Without a DNS override, hermes pods
+external DNS, but the external Envoy Gateway LoadBalancer listens on the
+internal Cilium BGP IP 192.168.193.14. Without a DNS override, hermes pods
 cannot reach the gateway (HTTPS connection times out).
 
 This test verifies that hostAliases is correctly configured in defaultPodOptions
-to override mcp.grigri.cloud -> 192.168.193.4 for both the hermes StatefulSet
+to override mcp.grigri.cloud -> 192.168.193.14 for both the hermes StatefulSet
 and the hermes-mcp-gateway Deployment.
 
 Run: ``python3 apps/hermes/tests/test_hostaliases_mcp_dns.py`` from anywhere.
@@ -23,7 +23,7 @@ REPO = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=Tr
                       text=True, check=True).stdout.strip()
 CHART = os.path.join(REPO, "apps", "hermes")
 
-EXPECTED_IP = "192.168.193.4"
+EXPECTED_IP = "192.168.193.14"
 EXPECTED_HOSTNAME = "mcp.grigri.cloud"
 
 
@@ -88,22 +88,24 @@ def test_hostaliases_present_in_main_pod():
 
 
 def test_hostaliases_ip_matches_external_ingress_lb():
-    """The hostAliases IP must match the ingress-nginx-external LoadBalancer IP."""
+    """The hostAliases IP must match the external Envoy Gateway LoadBalancer IP."""
     import yaml
 
-    # Read the external ingress values to verify the IP matches
-    external_ingress_values = os.path.join(REPO, "system", "ingress-nginx-external", "values.yaml")
-    with open(external_ingress_values) as f:
-        ingress_config = yaml.safe_load(f)
+    # The external Gateway's data plane Service IP is set on its EnvoyProxy resource
+    envoyproxy = os.path.join(REPO, "system", "envoy-gateway", "resources", "envoyproxy-external.yaml")
+    with open(envoyproxy) as f:
+        docs = [d for d in yaml.safe_load_all(f) if d]
+    proxy = next(d for d in docs if d.get("kind") == "EnvoyProxy" and d["metadata"]["name"] == "external")
 
-    lb_ip = (ingress_config.get("ingress-nginx", {})
-             .get("controller", {})
-             .get("service", {})
+    lb_ip = (proxy.get("spec", {})
+             .get("provider", {})
+             .get("kubernetes", {})
+             .get("envoyService", {})
              .get("annotations", {})
              .get("lbipam.cilium.io/ips"))
 
     assert lb_ip == EXPECTED_IP, (
-        f"ingress-nginx-external LB IP changed: expected {EXPECTED_IP}, got {lb_ip}. "
+        f"external Envoy Gateway LB IP changed: expected {EXPECTED_IP}, got {lb_ip}. "
         f"Update hostAliases in apps/hermes/values.yaml to match."
     )
 

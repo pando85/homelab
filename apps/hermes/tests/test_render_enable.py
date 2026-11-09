@@ -101,7 +101,7 @@ def test_disabled_render_is_head_baseline():
                 # Check it's the expected mcp.grigri.cloud override
                 host_aliases = pod_spec["hostAliases"]
                 assert len(host_aliases) == 1
-                assert host_aliases[0]["ip"] == "192.168.193.4"
+                assert host_aliases[0]["ip"] == "192.168.193.14"
                 assert host_aliases[0]["hostnames"] == ["mcp.grigri.cloud"]
                 # Remove it for comparison
                 del pod_spec["hostAliases"]
@@ -155,7 +155,7 @@ def test_enabled_changes_only_the_two_cutover_scripts():
         # Verify it's the expected mcp.grigri.cloud override
         host_aliases = pod_o_filtered["hostAliases"]
         assert len(host_aliases) == 1
-        assert host_aliases[0]["ip"] == "192.168.193.4"
+        assert host_aliases[0]["ip"] == "192.168.193.14"
         assert host_aliases[0]["hostnames"] == ["mcp.grigri.cloud"]
         del pod_o_filtered["hostAliases"]
 

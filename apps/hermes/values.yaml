@@ -145,8 +145,8 @@ app-template:
         runtimeClassName: kata
         automountServiceAccountToken: false
         # DNS override for mcp.grigri.cloud: the public DNS resolves to 79.117.1.43
-        # (external IP), but the ingress-nginx-external LoadBalancer listens on
-        # 192.168.193.4 (internal Cilium BGP IP). Without this override, the hermes
+        # (external IP), but the external Envoy Gateway LoadBalancer listens on
+        # 192.168.193.14 (internal Cilium BGP IP). Without this override, the hermes
         # pod cannot reach the MCP gateway via HTTPS (connection times out).
         # idm.grigri.cloud and grafana.grigri.cloud already resolve correctly via
         # the upstream DNS (split-horizon at the network level), but mcp.grigri.cloud
@@ -155,7 +155,7 @@ app-template:
         # because app-template doesn't support conditional pod options. The entry
         # is harmless when unused (just an /etc/hosts entry).
         hostAliases:
-          - ip: "192.168.193.4"
+          - ip: "192.168.193.14"
             hostnames:
               - mcp.grigri.cloud
       serviceAccount:
