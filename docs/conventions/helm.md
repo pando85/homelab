@@ -2,7 +2,7 @@
 
 ## Chart Selection
 
-Prefer maintained official/first-party Helm charts when available. Use `app-template` from bjw-s only when no maintained official chart exists for the application. If an official chart cannot support the needed deployment mode, document the limitation and obtain owner approval rather than silently falling back to a generic wrapper. Always pin chart versions and use wrapper charts for homelab-specific additions (Ingress, ESO, Kanidm, etc.).
+Prefer maintained official/first-party Helm charts when available. Use `app-template` from bjw-s only when no maintained official chart exists for the application. If an official chart cannot support the needed deployment mode, document the limitation and obtain owner approval rather than silently falling back to a generic wrapper. Always pin chart versions and use wrapper charts for homelab-specific additions (routes, ESO, Kanidm, etc.).
 
 ## Chart.yaml Pattern
 
@@ -41,7 +41,24 @@ annotations:
   argocd.argoproj.io/sync-options: Prune=false
 ```
 
-## Ingress Annotations
+## Routes (Gateway API) and DNS Annotations
+
+Apps are exposed with Gateway API `HTTPRoute`s on the Envoy Gateways, not with nginx Ingress
+annotations or snippets. Full procedure, nginx-to-Gateway-API table, backend TLS, Lua, NetworkPolicy
+and verification: [`gateway-api-routes.md`](gateway-api-routes.md). During the migration an app
+keeps its Ingress (below) next to the route until ingress-nginx is removed.
+
+External route (the target comes from the external Gateway, never from the route):
+
+```yaml
+annotations:
+  external-dns.kubernetes.io/enabled: "true"
+```
+
+Internal route: **no** external-dns annotation until the internal switch. Routes carry no
+`cert-manager.io/*` annotation (certificates live on the Gateways).
+
+Legacy Ingress annotations, kept only while the Ingress exists:
 
 Internal:
 
@@ -104,7 +121,7 @@ dockerImage: postgres:16
 2. For upstream charts: add dependency block, run `helm dependency build`, commit `Chart.lock`
 3. Namespace equals folder name (auto-created by deploy script)
 4. Pin all images with Renovate hints
-5. Add Ingress with cert-manager + external-dns annotations
+5. Add an HTTPRoute on the right Envoy Gateway ([`gateway-api-routes.md`](gateway-api-routes.md)); until ingress-nginx is removed also add the Ingress with cert-manager + external-dns annotations
 6. Define resource requests and limits
 7. Create ExternalSecret objects for secrets (source: Vault path)
 8. Create PVC with `Prune=false` annotation for persistent data

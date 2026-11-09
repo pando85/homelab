@@ -28,7 +28,7 @@ Create a table:
 - **Database**: Does it need PostgreSQL, MySQL, Redis, etc.?
 - **Object Storage**: Does it need S3/MinIO?
 - **Auth**: Does it support OIDC/OAuth? What provider?
-- **API Gateway**: Does it need Kong, Traefik, or can nginx handle it?
+- **API Gateway**: Does it need Kong, Traefik, or can a Gateway API `HTTPRoute` (Envoy Gateway) handle it?
 - **Secrets**: What credentials does it need? (API keys, JWT secrets, etc.)
 
 ### 1.3 Check for Existing Infrastructure
@@ -152,30 +152,34 @@ Then add `<app>Password` to Vault `/s3-public/users` and to
 `apps/s3-public/templates/external-secrets-users.yaml`. The same pattern applies to
 `platform/minio/` (secret `minio-users`, Vault `/minio/users`) for internal buckets.
 
-### 2.3 API Gateway: Kong vs nginx Ingress
+### 2.3 API Gateway: Kong vs Gateway API routes
 
-**Use nginx ingress when:**
+Routing is done with Gateway API `HTTPRoute`s on the Envoy Gateways; see
+[`gateway-api-routes.md`](gateway-api-routes.md) for the how-to (listeners, annotations, nginx
+behaviour equivalents, backend TLS, Lua, NetworkPolicies, verification).
+
+**Use an HTTPRoute when:**
 - The app just needs path-based routing (`/api/*` → backend)
-- You don't need API-specific features (rate limiting, JWT validation, etc.)
+- You don't need API-specific features (JWT validation of arbitrary issuers, request transformation chains)
 - The app's backend services can be reached directly via Kubernetes services
 
 **Use Kong when:**
-- The app requires API gateway features (rate limiting, JWT validation, request transformation)
+- The app requires API gateway features (rate limiting per consumer, JWT validation, request transformation)
 - The app's Docker Compose already includes Kong with custom plugins
 - You need to expose multiple APIs with different auth mechanisms
 
 **Decision tree:**
 ```
 Does the app's compose.yaml include Kong/Traefik?
-├── YES → Can nginx replace it with path-based routing?
-│   ├── YES → Use nginx ingress (simpler, no extra controller)
+├── YES → Can HTTPRoute rules replace it with path-based routing?
+│   ├── YES → Use an HTTPRoute (simpler, no extra controller)
 │   └── NO → Use Kong (app requires API gateway features)
-└── NO → Use nginx ingress
+└── NO → Use an HTTPRoute
 ```
 
 **Example: Readest**
 - Compose includes Kong for routing `/auth/v1/*` and `/rest/v1/*`
-- nginx can handle this with path-based routing → no Kong needed
+- HTTPRoute path rules can handle this → no Kong needed
 
 ### 2.4 OIDC Integration: kaniop Pattern
 
@@ -400,6 +404,24 @@ app-template:
         http:
           port: <port>
 
+  # Gateway API route (internal shown; external: parentRefs `external` / `https-grigri-cloud`,
+  # host <app>.grigri.cloud, annotation external-dns.kubernetes.io/enabled: "true" only).
+  # No external-dns annotation on internal routes until the internal switch. See gateway-api-routes.md
+  route:
+    <app-name>:
+      kind: HTTPRoute
+      hostnames:
+        - <app>.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: <app-name>
+              port: <port>
+
+  # Legacy Ingress, kept until ingress-nginx is removed (the route above is the target state)
   ingress:
     <app-name>:
       enabled: true
@@ -484,7 +506,7 @@ spec:
 - [ ] Renovate hints added above image repositories
 - [ ] PVCs have `Prune=false` annotation
 - [ ] PVCs have `backup:` and `backup/retain:` labels
-- [ ] Ingress annotations include `cert-manager.io/cluster-issuer`
+- [ ] HTTPRoute on the right Gateway/listener, external-dns annotation per `gateway-api-routes.md` (and, while it exists, Ingress annotations include `cert-manager.io/cluster-issuer`)
 - [ ] ExternalSecrets reference correct Vault paths
 - [ ] OIDC redirect URLs match the app's callback path
 - [ ] Resource requests and limits are defined
@@ -577,16 +599,20 @@ helm lint apps/<app>/
 - kaniop creates `<app>-kanidm-oauth2-credentials` secret automatically
 - Wait for the secret to appear: `kubectl get secret -n <app> <app>-kanidm-oauth2-credentials`
 
-### 5.3 Ingress Issues
+### 5.3 Ingress and Route Issues
 
 **Path-based routing conflicts**
-- nginx ingress evaluates paths in order (longest match wins)
-- Put more specific paths first (`/auth/v1` before `/`)
-- See: `docs/deployment/readest.md` for multi-path example
+- HTTPRoute matching is segment-based and case-sensitive: `Exact` beats the longest `PathPrefix`
+  (`/api` matches `/api/x`, not `/apix`); rule order does not matter
+- See: `docs/deployment/readest.md` for the nginx multi-path example, `gateway-api-routes.md` for routes
 
-**Large file uploads fail**
-- Add `nginx.ingress.kubernetes.io/proxy-body-size: "0"` annotation
-- Default is 1MB
+**Large file uploads fail / long requests cut at 60 s**
+- Envoy has no body limit (legacy nginx: `nginx.ingress.kubernetes.io/proxy-body-size: "0"`, default 1MB)
+- The gateway-wide request timeout is 60 s: set `timeouts.request: 0s` on that route
+
+**503 from the Envoy VIP only**
+- Backend expects TLS (add a `BackendTLSPolicy` or `Backend`), or a NetworkPolicy admits only the
+  nginx namespaces. Look at `response_flags` (`UF`) in the Envoy proxy access log
 
 ### 5.4 MinIO Issues
 
