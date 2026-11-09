@@ -77,6 +77,40 @@ app-template:
         - hosts:
             - *host
           secretName: lidarr-external-tls-certificate
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # The internal route has no external-dns annotation until the internal switch. The external
+  # route is behind the OIDC SecurityPolicy (templates/security-policy.yaml).
+  route:
+    internal:
+      kind: HTTPRoute
+      forceRename: lidarr-internal
+      hostnames:
+        - lidarr.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: lidarr
+              port: 8686
+    external:
+      kind: HTTPRoute
+      # stable name: the SecurityPolicy targets it
+      forceRename: lidarr-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - lidarr.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: lidarr
+              port: 8686
   defaultPodOptions:
     securityContext:
       runAsUser: 995
