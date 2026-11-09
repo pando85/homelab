@@ -165,8 +165,11 @@ grafana-mcp:
 # ---------------------------------------------------------------------------
 # Wrapper-chart own resources (templates/ciliumnetworkpolicy.yaml)
 # ---------------------------------------------------------------------------
-# Health-first sequence: baseline deployed and proven Ready 180s WITHOUT any
-# network policy (2026-11-09 07:04:35Z..07:07:35Z, zero restarts, Normal events
-# only). This flag now enables the scoped CNP. Rollback = set false (template
-# only; no Deployment nonce, no pod churn).
-networkIsolation: true
+# ROLLED BACK after a real incident: enabling this CNP (838031375) broke the
+# kubelet liveness path — probes to the :8081 healthz listener timed out
+# ("context deadline exceeded") and the container restart loop started within
+# ~4 minutes of the policy landing (2026-11-09, 6 restarts by 07:16Z). The
+# fromEntities host/remote-node allowance for :8081 is therefore NOT proven on
+# this cluster's datapath; health-first ordering means the flag stays OFF until
+# a corrected policy is validated. Template-only rollback, no pod churn.
+networkIsolation: false
