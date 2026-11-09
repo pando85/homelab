@@ -1,0 +1,35 @@
+# Envoy Gateway route (ingress-nginx migration), alongside the app-template Ingress, which stays
+# until the switch. Internal route: no external-dns annotation until the internal switch.
+#
+# The controller serves HTTPS on 8443 with a self-signed certificate. nginx
+# (`backend-protocol: HTTPS`) does not verify it, so an Envoy Gateway `Backend` with
+# `insecureSkipVerify` keeps the same trust (no CA to reference for a BackendTLSPolicy). Needs
+# `extensionApis.enableBackend` on the controller.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: unifi
+spec:
+  endpoints:
+    - fqdn:
+        hostname: unifi.{{ .Release.Namespace }}.svc.cluster.local
+        port: 8443
+  tls:
+    insecureSkipVerify: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: unifi
+spec:
+  hostnames:
+    - unifi.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - backendRefs:
+        - group: gateway.envoyproxy.io
+          kind: Backend
+          name: unifi
