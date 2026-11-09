@@ -198,7 +198,14 @@ spec:
               value: "1"
             - name: MCP_GATEWAY_CONFIG
               value: /mcp-gateway/config.json
-          {{- include "hermes.mcpGateway.containerSecurityContext" . | nindent 10 }}
+          securityContext:
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
           resources:
             requests:
               cpu: 10m
@@ -240,14 +247,21 @@ spec:
                 secretKeyRef:
                   name: {{ $gw.identity.subjectTokenSecret }}
                   key: {{ $gw.identity.subjectTokenKey }}
-          {{- include "hermes.mcpGateway.containerSecurityContext" . | nindent 10 }}
+          securityContext:
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
           resources:
             requests:
               cpu: 10m
-              memory: 64Mi
+              memory: 128Mi
             limits:
               cpu: 100m
-              memory: 128Mi
+              memory: 256Mi
           volumeMounts:
             - name: scripts
               mountPath: /mcp-gateway
