@@ -1,0 +1,82 @@
+# Envoy Gateway routes (ingress-nginx migration). The Ingresses (ingress.yaml, stream-ingress.yaml)
+# stay until the switch. The backend is the ExternalName Service `tanque` (tanque.iot.grigri).
+# tanque-external and tanque-stream-external are behind the OIDC SecurityPolicies
+# (security-policy.yaml). Same-host routes merge: `tanque-stream-root` (Exact `/`) wins over the
+# protected catch-all and has no policy, because nginx answered `/` with its snippet redirect
+# before the auth check.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tanque-external
+  annotations:
+    # the target (grigri.cloud) comes from the external Gateway
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - tanque.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: tanque
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tanque-stream-external
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - tanque-stream.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: tanque
+          port: 1984
+---
+# nginx configuration-snippet: `if ($request_uri = "/") { return 302 /stream.html?src=tcp_magic; }`
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tanque-stream-root
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - tanque-stream.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /
+      filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: gateway.envoyproxy.io
+            kind: HTTPRouteFilter
+            name: tanque-stream-root-redirect
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: tanque-stream-root-redirect
+spec:
+  directResponse:
+    statusCode: 302
+    header:
+      set:
+        # absolute, as nginx sends it
+        - name: Location
+          value: https://tanque-stream.grigri.cloud/stream.html?src=tcp_magic
