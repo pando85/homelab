@@ -75,9 +75,18 @@ app-template:
               enabled: true
               custom: true
               spec:
-                httpGet: &httpGet
-                  path: /health
-                  port: &httpPort 3000
+                exec: &execProbe
+                  command:
+                    - node
+                    - -e
+                    - |
+                      const http=require('http');
+                      const req=http.request({hostname:'127.0.0.1',port:3000,path:'/health',method:'GET',timeout:3000},(res)=>{
+                        process.exit(res.statusCode>=200&&res.statusCode<300?0:1);
+                      });
+                      req.on('error',()=>process.exit(1));
+                      req.on('timeout',()=>{req.destroy();process.exit(1)});
+                      req.end();
                 initialDelaySeconds: 5
                 periodSeconds: 10
                 timeoutSeconds: 3
@@ -87,9 +96,10 @@ app-template:
               enabled: true
               custom: true
               spec:
-                httpGet: *httpGet
+                exec: *execProbe
                 failureThreshold: 30
                 periodSeconds: 5
+                timeoutSeconds: 3
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -102,7 +112,7 @@ app-template:
       controller: firecrawl-mcp
       ports:
         http:
-          port: *httpPort
+          port: 3000
           protocol: TCP
 
   persistence:
