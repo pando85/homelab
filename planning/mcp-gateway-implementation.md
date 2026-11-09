@@ -99,75 +99,164 @@ evidence until the files land and are re-run.
   all deleted afterwards, baseline verified intact. Verdict and tables:
   "Measured answer" in `docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
 
-## 2026-11-09 Resumption State
+## E2E Acceptance — Measured 2026-11-09
 
-Read this first in a fresh session. Re-verified read-only against `origin/master` and the live cluster on
-2026-11-09; nothing below authorises a deployment.
+Repository clean at pushed `dba5343a3`. No new push; changes local only.
 
-**What is live (still policy-free):**
+### OpenCode client + IdP
 
-- ArgoCD app `mcp-gateway`: **Synced / Healthy at `3a1e2d19e`** (`mcp-gateway: Check the routes as
-  rendered and as booted`), the current `origin/master` tip. Chart history: `5d314c648` official
-  `agentgateway-standalone:1.7.0` migration → `0b63d06ab` config nesting fix → `de20f415e` **context7
-  route plus both RFC 9728 discovery routes** served on the public plane → `3a1e2d19e` route checks.
-- Pod `mcp-gateway-standalone-…` on `prusik`, `Ready`, `restarts=0`, unchanged since 06:43:44Z: routes
-  reload **in place**, no restart. `networkIsolation: false`.
-- Public evidence (verified with plain HTTP): `/context7/mcp` → **401** (live route, caller auth on),
-  `/grafana/mcp` → **404** (specified but disabled), `/.well-known/oauth-protected-resource/context7/mcp`
-  → **200**. The grafana route stays commented out until Grafana's `auth.jwt` trusts the `mcp-gateway`
-  client, otherwise the caller authenticates at the edge and fails at the backend.
-- Grafana MCP backend: healthy at tip `1c28157e2` (CNP rolled back, template renders none), `Ready`,
-  `restarts=0`, observed on `grigri`; its baseline 180 s window 07:04:35Z–07:07:35Z is in the commit
-  messages.
-- **No NetworkPolicy or CiliumNetworkPolicy exists in `mcp-gateway` or `grafana-mcp`** (verified). Admin
-  plane / Vault MCP / Firecrawl route: not deployed. Nothing else was disturbed.
+- OpenCode v2.2.6 effective `mcp.servers`: `homelab-context7` and `grafana`, both with
+  `oauth.client_id=mcp-gateway`, scopes `mcp_context7` / `mcp_grafana`, `callback_port=15000`,
+  `redirect_uri=http://127.0.0.1:15000/callback`, no client secret. A location reload corrected a stale
+  effective config during the session.
+- Existing public client + PKCE works end to end. The earlier DCR incompatibility conclusion was
+  **wrong**; no IdP changes or fork are needed.
 
-**Repo-verified local proofs — re-run 2026-11-09 at `3a1e2d19e`, real numbers:**
-`foundation-checks.py` **54 passed / 0 failed**, `route-checks.py` **72 / 0**,
-`local-boot-checks.py` **41 / 0**, `grafana-backend-checks.py` **18 / 18**. Figures attributed to suites
-that are not in the tree (`e2e-authz.py` cases A-N, the 39 access-gate, 21 discovery, 11/13
-stateless-backend counts) are agent reports of untracked work and are **not** evidence — do not restate
-them as verified.
+### Real `tools/call` — both clients, both MCPs
 
-**Gate CLOSED — probe/policy matrix.** Verdict: **EXACT_PRODUCTION_SHAPE_SAFE**. The split-port CNP
-(dedicated health port from `world`, app/metrics from `fromEndpoints`, egress `toEntities: [cluster]`)
-served a probed pod with **zero probe failures** while denying a non-permitted pod on 3000/15020/8000;
-applying it 6 m 32 s before the endpoint existed was also clean; removing only the `world` rule broke it
-within 6 s. The previously prescribed cure — allow the node with `host`/`remote-node` on either leg — is
-**falsified**, as is the "egress drops the probe reply" follow-up. Tables and reasoning: "Measured
-answer" in `docs/troubleshooting/mcp-firecrawl-egress-regression.md`; rule in
-`docs/conventions/cilium.md`. All matrix objects were deleted and the baseline verified intact.
+- **Context7**: `resolve-library-id` and `query-docs` (Next.js `source` + `Response.json`) — success.
+- **Grafana**: `user_info` and `list_datasources` — success.
+- Distinct caller subjects: each caller `sub` mapped to its own Grafana login; roles restored by exact
+  scope tokens; neither caller is server admin. `/api/admin/stats` returns nested 403
+  (`server.stats:read`). No account-to-privilege mapping recorded (public repo hygiene).
+- Routes: unauthenticated → 401 each; cross-scope → 403 each.
+- Gateway logs: `method=tools/call`, `route=default/context7/grafana`, `status=200`, distinct hashed
+  subjects corroborate timed client calls. Logs do not record tool names or run header — do **not**
+  claim request-id / tool-name direct correlation.
+- OpenCode latest timestamps: Context7 docs `14:23:13.749348Z`; Grafana 3 calls
+  `14:23:22.582393Z` / `.740913Z` / `23.047972Z`.
+- HTTP 200 at the gateway does not imply backend success; assertions verify result JSON.
+- **Verified**: route-level authorization (401/403 boundaries), caller subject isolation, scope enforcement,
+  Grafana native permissions (admin→Admin, editor→Editor, else Viewer). **Not deployed**: network isolation
+  (`networkIsolation: false` on both public and admin planes). No network-level isolation claims.
 
-**Remaining gates, in order:**
+### Hermes live acceptance
 
-1. **Isolate both planes** with the measured split-port CNP (`apps/mcp-gateway`, `apps/grafana-mcp`),
-   keeping `cluster` off the health port, and drop the stale "15021 deliberately not allowed" rationale
-   from any re-landed chart copy (see Follow-up Tasks). Positive *and* negative assertions must be
-   re-checked after the rollout.
-2. **Verify/bootstrap the Grafana JWT `('jwt', sub)` aliases BEFORE any cutover** — against the real
-   two-issuer setup, not the single-issuer fixture. The alias lifecycle (create / re-point / revoke) has
-   never been exercised.
-3. **Coordinated `system/monitoring` Grafana `auth.jwt` + Hermes `global.mcpGateway.enabled`** in
-   **TWO staged commits**: the helper/config merge lands first, then the StatefulSet restart annotation.
-   Never both in one commit. Only after that may the grafana route be uncommented.
-4. **OpenCode client config**: fixed public `client_id` `mcp-gateway`, callback
-   `http://127.0.0.1:15000/callback`, `/mcps` behind user auth, owner performs the browser sign-in; no
-   shared broker token store. Scope grants ride the existing `grafana-mcp` service account and the
-   existing `grafana-users` human group; person membership stays manual, never set by CRD.
-5. **Real `tools/call` from both clients (OpenCode, Hermes) to both MCPs** (context7 and grafana),
-   end to end, then record parity.
+- `test/mcp-gateway/hermes-live-acceptance.py` (normal, no overrides) passed two runs:
+  - `acceptance-162ee02e4d3b` at 14:20:39–42 UTC
+  - `acceptance-a7f188dfb972` at 14:23:39–43 UTC
+- Repeat measurements: Context7 resolve 2091 bytes, docs 3375 bytes; Grafana identity 191 bytes,
+  datasources 287 bytes, admin 403, writes absent, GET only.
+- Literal deployed `hermes mcp test`: homelab-context7 passed 1842 ms / 2 tools; grafana 1026 ms /
+  63 tools.
 
-**Deferred / out of scope:** Vault MCP (Task 4, blocked), SearxNG (not counted toward parity), browser
-OAuth flows (unaffected by the gateway), and any public Firecrawl exposure (two independent gates: the
-SSRF gate above and the group-membership decision).
+### Backend configuration (chosen model)
 
-**Chart policy note:** the official-chart preference rule is committed (`b5c84c8c4`:
-`docs/conventions/helm.md` plus `AGENTS.md`) — `AGENTS.md` is owned by the main session, not edited here.
+- **Grafana MCP**: in-memory DB, `username_claim=sub`, `email_claim` empty, `auto_sign_up=true`,
+  `skip_org_role_sync=false`. No alias bootstrap, no PVC change. No ambient/shared credentials, no
+  passthrough bearer, `disableWrite=true`.
+- **Context7**: Vault ExternalSecret unchanged.
+- Backend 403 root cause: `Host` header rewritten by DNS auto-port stripping. Exact route
+  `urlRewrite.authority.full=grafana-mcp.grafana-mcp.svc.cluster.local:8000` (final `414240d83`);
+  tests target localhost DNS to ensure regression coverage. Identity fix `585c564dc`.
 
-**Untracked work in the shared tree:** the root-level reports and probe scripts from this incident are
-unauthorised, untracked, build-scope incident-containment evidence. They are **not** a claim of a
-credential leak (none was verified). Cluster-side probe objects were cleaned up; the loose files in the
-working tree were not, and that is the owner's call.
+### Hermes hairpin fix
+
+- Public DNS timeout fixed: main-pod-only `hostAliases` `mcp.grigri.cloud→192.168.193.4`
+  (declarative external ingress LB). Public URL / TLS / resource / issuer / aud unchanged. Final
+  `dba5343a3`.
+
+### ArgoCD state at `dba5343a3`
+
+All four apps — `hermes`, `mcp-gateway`, `grafana-mcp`, `monitoring` — **Synced / Healthy**.
+
+### Test counts (local suites re-run)
+
+| suite | result |
+|---|---|
+| `route-checks.py` | 77 pass |
+| `local-boot-checks.py` | 79 pass |
+| `foundation-checks.py` | 54 pass |
+| `grafana-backend-checks.py` (role parity) | 28 pass |
+| `hermes-live-acceptance.py` | 25 pass |
+| existing `PytestReturnNotNoneWarning` | 1 (pre-existing, not a failure) |
+
+### Network isolation audit (reconfirmed read-only, ~15:05Z 2026-11-09)
+
+**Individual namespace queries** (not comma-separated):
+
+| Namespace | Native NetworkPolicy | CiliumNetworkPolicy | CiliumClusterwideNetworkPolicy |
+|-----------|---------------------|---------------------|-------------------------------|
+| `mcp-gateway` | 0 | 0 | 0 |
+| `mcp-gateway-admin` | 0 | 0 | 0 |
+| `grafana-mcp` | 0 | 0 | 0 |
+| `firecrawl-mcp` | **2 preserved** | 0 | 0 |
+| `firecrawl` (backend) | 0 | 0 | 0 |
+
+**Global:** 0 CiliumClusterwideNetworkPolicies.
+
+**Isolation status:**
+- `mcp-gateway`: **unisolated** (no policy selects workload)
+- `mcp-gateway-admin`: **unisolated** (native NPs removed at `c75fae8f0`, owner-approved, due to health probe blocking on port 15021; no replacement CNP deployed)
+- `grafana-mcp`: **unisolated** (no policy selects workload)
+- `firecrawl-mcp`: **configured and verified** (2 native NPs preserved by exec probe fix; durable test 10/10 passed; see selector mismatch below)
+- `firecrawl` backend: **unisolated** (no policy selects workload)
+
+**Configured vs. measured:** firecrawl-mcp NPs verified by durable test (exec probes work, NPs
+preserved). No positive or negative cross-pod connectivity test has been performed for any namespace.
+
+**Firecrawl ingress selector mismatch (CONFIRMED):**
+- Policy `firecrawl-mcp-ingress` expects: `app.kubernetes.io/name: mcp-gateway`
+- Actual `mcp-gateway` pod labels: `app.kubernetes.io/name: agentgateway-standalone`, `app.kubernetes.io/instance: mcp-gateway`, `app.kubernetes.io/component: standalone`
+- **Labels do not match.** If the firecrawl route were enabled, the ingress policy would not select the gateway pod and would fail closed (deny traffic) rather than permit it.
+- **Runtime impact:** Firecrawl route is currently disabled (`backends.firecrawl.enabled: false`), so this is not an active runtime blocker. No fix approved.
+
+### Admin plane — recovered and stable
+
+Admin plane baseline restoration **pushed** at signed `c75fae8f0` (`mcp-gateway-admin: Restore
+policy-free probe baseline`). Native NetworkPolicies removed (2→0). ArgoCD **Synced / Healthy**. Pod
+`Ready` since 14:39:59Z, restarts=17 (last at 14:38:08Z), stable 208s through 14:43:27Z with no new
+probe failures. Public plane unchanged (Healthy, 0 restarts).
+
+**Clarification on legacy NP assertion:** The `chart-checks.py` test asserting the admin ingress NP
+"allows only 3000 and 15020 (not 15021)" is **correct and should NOT change**. The approved fix gates
+native NPs behind `networkIsolation: false` (default); it does not add port 15021 to the legacy
+policy shape. The legacy assertion documents the known-broken shape that is now disabled by default.
+
+### Firecrawl MCP — exec probes verified, route disabled
+
+Firecrawl MCP crashloop **resolved** at pushed `914c18689` (`firecrawl-mcp: Increase probe
+timeoutSeconds to 5 for Node startup buffer`). Two commits: `132eb5504` (exec probes to avoid
+NetworkPolicy blocking kubelet probes) and `914c18689` (timeout increase for Node startup buffer).
+Argo revision `914c1868969f30ac815978ba7bc8a927bfef0a1d` **Synced / Healthy**. Pod
+`firecrawl-mcp-8885f568b-72j8v` **Running Ready** (0 restarts, 8m18s on prusik, ~15:05Z
+2026-11-09). No OOM, no previous termination.
+
+**Durable test verified:** `apps/firecrawl-mcp/tests/test_exec_probes.py` **10/10 passed**. Three
+exec probes, 2 NPs/env preserved, timeouts aligned (K8s 5s, Node 3s buffer 2s). Real read-only
+health check inside pod: `127.0.0.1:3000 /health` response ok.
+
+**Existing NPs unchanged** (2 ingress + egress preserved by exec probe fix). **Gateway route remains
+disabled** (`backends.firecrawl.enabled: false`), public not exposed. **Selector mismatch latent**
+(see network isolation audit above).
+
+**Diagnosis:** Native ingress NP allows gateway-only on port 3000, but HTTP probes also target port
+3000. Exit code 137 observed during CrashLoopBackOff; inconclusive (could be OOM or probe-kill, no
+definitive proof). Exec probes bypass NetworkPolicy (local pod communication).
+
+Not a four-path blocker for the public routes. Broader "all healthy" claim now valid for Firecrawl
+MCP pod health.
+
+### Network isolation — outstanding, separate approval required
+
+Network isolation remains **outstanding**, requires separate owner approval. The designed split-port
+CNP shape (dedicated health port from `world`, app/metrics from `fromEndpoints`, egress
+`toEntities: [cluster]`) is **not yet deployed** for any namespace.
+
+**Current state:**
+- `mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`, `firecrawl` backend: **no policies** (unisolated)
+- `firecrawl-mcp`: **2 native NPs configured** (preserved by exec probe fix), but selector mismatch with gateway pod labels (see audit above); untested
+- Admin native NPs removed at `c75fae8f0` (owner-approved) due to health probe blocking; no replacement CNP deployed
+
+**Rollout plan:** After baseline stabilization (including Firecrawl final verification), deploy CNPs
+in the measured split-port shape. Rollback via git (breaking policies committed and reverted), never
+`kubectl`.
+
+### Deferred / out of scope (unchanged)
+
+Vault MCP (Task 4, blocked), SearxNG (not counted toward parity), browser OAuth flows (unaffected by
+the gateway), and any public Firecrawl exposure (two independent gates: the SSRF gate and the
+group-membership decision).
 
 ## Task 0: Architecture & Inventory
 
@@ -605,6 +694,13 @@ Simulated or single-identity runs do not satisfy this gate.
 
 ### Gates before this goes live
 
+**SUPERSEDED (2026-11-09 E2E acceptance):** The chosen model uses `username_claim=sub` with
+`email_claim` empty, so `allow_insecure_email_lookup` is inert (no email-based lookup occurs). The
+earlier concern that `auto_sign_up=true` would invent users with UUID logins does not apply: with
+`sub`-based mapping and an in-memory DB (no PVC change), no alias bootstrap is needed or performed.
+The alias-bootstrap prerequisite and the `auto_sign_up=false` gate are superseded by the deployed
+configuration.
+
 - Test prerequisite: **two distinct human Grafana identities with different native rights** (none
   supplied; results must not be simulated).
 - Kanidm `mcp-gateway` (public-plane) client registered and `mcp_grafana` granted via a scopeMap group.
@@ -781,6 +877,12 @@ proven live, no direct ingress to the backend. **Owner approval gate** before de
 ## Task 5: Migration (OpenCode / Hermes)
 
 NOT STARTED
+
+**SUPERSEDED (2026-11-09 E2E acceptance):** The Hermes migration path does not trigger PVC-based
+config-overwrite recovery. The gateway route is declarative (main-pod-only `hostAliases` for DNS
+resolution of `mcp.grigri.cloud→192.168.193.4`); it does not modify Hermes config storage or require
+PVC restoration. The `hermes-config-overwrite-recovery.md` reference remains valid for other failure
+modes but is not applicable to this migration path.
 
 - [ ] **OpenCode migration**: one instance at a time. Update user config MCP URLs to point to gateway. Test OAuth discovery → PKCE → access token → gateway → backend
 - [ ] **Hermes migration**: one instance at a time, start with first (has sidecar). Update config: MCP URLs → gateway. PVC persistence (`docs/troubleshooting/hermes-config-overwrite-recovery.md`), rollback: switch to previous gateway or pause before exclusivity cutover
