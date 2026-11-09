@@ -126,10 +126,22 @@ agentgateway-standalone:
 
   # Agentgateway configuration (rendered directly into configmap config.yaml)
   # Chart adds config.storage.mode: file automatically in readonly mode
-  # All routes disabled - fail closed
+  #
   # NOTE: adminAddr/logging are startup RawConfig settings and MUST be nested
   # under `config:` (LocalConfig root has no adminAddr field - proven by live
   # crash: "unknown field `adminAddr`" against the working a146c5ee9 baseline).
+  #
+  # NOTE ON ENABLEMENT: the official chart passes this block through verbatim
+  # (`toYaml .Values.config`), so nothing here can be templated: a route is
+  # enabled by being PRESENT in this list and disabled by being absent. That is
+  # deliberate - the exact YAML that serves traffic is the YAML a reviewer reads
+  # in the diff, and `test/mcp-gateway/route-checks.py` fails if the
+  # `backends.<name>.enabled` flags below and the rendered routes ever disagree.
+  # Startup-only settings live under `config.config` (the chart hashes that
+  # section into the pod template); `routes` are reloaded in place, so enabling
+  # or disabling a route does NOT restart the gateway (measured locally against
+  # the pinned v1.7.0 binary: "Watching config file", and a rewrite is applied
+  # without a restart).
   config:
     config:
       adminAddr: "off"
@@ -139,8 +151,217 @@ agentgateway-standalone:
     gateways:
       default:
         port: 3000
-    mcp:
-      targets: []
+    routes:
+      # ---------------------------------------------------------------------
+      # RFC 9728 protected-resource discovery, served BY THE GATEWAY.
+      #
+      # The `mcpAuthentication` policy below already advertises these exact URLs
+      # in its 401 challenge (`WWW-Authenticate: Bearer resource_metadata="..."`),
+      # but it does not serve them: measured on v1.7.0, the advertised path is
+      # forwarded to the MCP backend instead of answered by the gateway, which
+      # breaks every spec-compliant MCP client's first step. `directResponse`
+      # closes that gap - validated 21/21 by the local proof
+      # (access-gate-proof/discovery_proof.py, reproduced twice).
+      #
+      # Schema facts measured against the pinned binary, not guessed:
+      #   * `body` is the LITERAL payload (the base64 seen in exported config is
+      #     serialization-only; feeding base64 in serves base64 back).
+      #   * `body` and `bodyExpression` are mutually exclusive.
+      #   * `headers` values are CEL expressions, so a literal needs inner quotes.
+      #   * `path` variants are exact | pathPrefix | regex; `exact` here is
+      #     disjoint from the MCP `pathPrefix` routes, so ordering is irrelevant.
+      #   * `hostnames` pins these to the public vhost: any other Host gets
+      #     404 "route not found" (measured).
+      # Both metadata routes are public and unauthenticated by design (RFC 9728
+      # is an advertisement, not a grant) and they are independent of whether the
+      # matching MCP route is enabled - enabling the grafana MCP route later is a
+      # one-block change, discovery is already in place.
+      # ---------------------------------------------------------------------
+      - name: context7-metadata
+        gateways:
+          - default
+        hostnames:
+          - mcp.grigri.cloud
+        matches:
+          - path:
+              exact: /.well-known/oauth-protected-resource/context7/mcp
+        policies:
+          directResponse:
+            status: 200
+            body: |-
+              {
+                "resource": "https://mcp.grigri.cloud/context7/mcp",
+                "authorization_servers": [
+                  "https://idm.grigri.cloud/oauth2/openid/mcp-gateway"
+                ],
+                "scopes_supported": [
+                  "mcp_context7"
+                ],
+                "bearer_methods_supported": [
+                  "header"
+                ],
+                "resource_name": "homelab context7 MCP"
+              }
+            headers:
+              content-type: "'application/json'"
+              cache-control: "'public, max-age=300'"
+      - name: grafana-metadata
+        gateways:
+          - default
+        hostnames:
+          - mcp.grigri.cloud
+        matches:
+          - path:
+              exact: /.well-known/oauth-protected-resource/grafana/mcp
+        policies:
+          directResponse:
+            status: 200
+            body: |-
+              {
+                "resource": "https://mcp.grigri.cloud/grafana/mcp",
+                "authorization_servers": [
+                  "https://idm.grigri.cloud/oauth2/openid/mcp-gateway"
+                ],
+                "scopes_supported": [
+                  "mcp_grafana"
+                ],
+                "bearer_methods_supported": [
+                  "header"
+                ],
+                "resource_name": "homelab grafana MCP"
+              }
+            headers:
+              content-type: "'application/json'"
+              cache-control: "'public, max-age=300'"
+
+      # ---------------------------------------------------------------------
+      # context7: LIVE. No upstream credential exists, so the caller's bearer is
+      # STRIPPED (no backendAuth) - the backend provably sees no Authorization.
+      # ---------------------------------------------------------------------
+      - name: context7
+        gateways:
+          - default
+        matches:
+          - path:
+              pathPrefix: /context7/mcp
+        policies:
+          mcpAuthentication:
+            mode: strict
+            issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
+            audiences:
+              - mcp-gateway
+            jwks:
+              url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
+            resourceMetadata:
+              resource: https://mcp.grigri.cloud/context7/mcp
+              scopesSupported:
+                - mcp_context7
+          # Fail closed on identity AND on scope. Kanidm v1.11.2 puts no identity
+          # claim in an ACCESS token (claim_map and jwtLegacyCryptoEnable cannot
+          # move claims between token types), so a bearer carrying `email` or
+          # `preferred_username` is an ID token - the wrong token at the wrong
+          # place - and is refused regardless of the scopes it carries.
+          # `scope` is a single space-separated STRING (RFC 9068 array form is not
+          # used), hence split() and not `in`.
+          authorization:
+            rules:
+              - require: "!has(jwt.email)"
+              - require: "!has(jwt.preferred_username)"
+              - require: "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_context7')"
+          # Every inbound credential and every caller-controlled URL override is
+          # removed: without `remove`, a Cookie traverses the edge (measured), and
+          # with no backendAuth the caller's bearer must not reach the upstream.
+          requestHeaderModifier:
+            remove:
+              - Authorization
+              - Cookie
+              - X-Grafana-URL
+              - X-Grafana-Service-Account-Token
+              - X-Session-Id
+        backends:
+          - mcp:
+              targets:
+                - name: context7
+                  mcp:
+                    host: mcp.context7.com
+                    port: 443
+                    path: /mcp
+                  # `host` + `port` + `path` never infers TLS (v1.7.0:
+                  # config/local.rs McpBackendHost::process sets tls=false in
+                  # that branch), so HTTPS to the upstream is stated explicitly
+                  # here rather than left to a scheme guess.
+                  policies:
+                    backendTLS: {}
+              # Stateless: the gateway issues no Mcp-Session-Id (measured), which
+              # keeps a session id from becoming a second, unauthenticated way to
+              # address a backend session.
+              statefulMode: stateless
+
+      # ---------------------------------------------------------------------
+      # grafana: DISABLED. The route is fully specified below and stays
+      # commented out until Grafana's `auth.jwt` trusts the `mcp-gateway` client
+      # (today it trusts `grafana`; enabling this route now would authenticate the
+      # caller at the edge and then fail at the backend).
+      #
+      # Difference from context7, both required and both measured:
+      #   * `backendAuth.passthrough` forwards the CALLER'S OWN validated bearer,
+      #     so one shared mcp-grafana process keeps per-caller authorization
+      #     (measured: Editor succeeds, Viewer 403 on the identical tool call).
+      #   * `Authorization` IS still listed in `remove`: header modification runs
+      #     before backend auth, so the inbound (possibly duplicated or spoofed)
+      #     credential is deleted first and only then replaced by the validated
+      #     value - measured in local-boot-checks.py run D, where the backend
+      #     receives exactly the validated bearer with Authorization stripped.
+      #     Stripping it makes "the bearer the backend sees" a property of the
+      #     gateway rather than of whatever the client sent.
+      #   * The Grafana URL and service-account headers are caller-controllable
+      #     overrides in mcp-grafana; they are stripped unconditionally.
+      #
+      # This block is not decorative: route-checks.py un-comments it, parses it,
+      # and boots it against the pinned binary, so the day the cutover lands it is
+      # a move-the-`#` change with nothing left to discover.
+      #
+      # - name: grafana
+      #   gateways:
+      #     - default
+      #   matches:
+      #     - path:
+      #         pathPrefix: /grafana/mcp
+      #   policies:
+      #     mcpAuthentication:
+      #       mode: strict
+      #       issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
+      #       audiences:
+      #         - mcp-gateway
+      #       jwks:
+      #         url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
+      #       resourceMetadata:
+      #         resource: https://mcp.grigri.cloud/grafana/mcp
+      #         scopesSupported:
+      #           - mcp_grafana
+      #     authorization:
+      #       rules:
+      #         - require: "!has(jwt.email)"
+      #         - require: "!has(jwt.preferred_username)"
+      #         - require: "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_grafana')"
+      #     requestHeaderModifier:
+      #       remove:
+      #         - Authorization
+      #         - Cookie
+      #         - X-Grafana-URL
+      #         - X-Grafana-Service-Account-Token
+      #     backendAuth:
+      #       passthrough: {}
+      #   backends:
+      #     - mcp:
+      #         targets:
+      #           - name: grafana
+      #             mcp:
+      #               host: grafana-mcp.grafana-mcp.svc.cluster.local
+      #               port: 8000
+      #               path: /mcp
+      #         statefulMode: stateless
+      # ---------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # Values below are NOT consumed by the official chart. They are used by
@@ -157,11 +378,26 @@ networkIsolation: false
 kanidm:
   workloadGroup:
     name: mcp-gateway-agents
-    serviceMembers: []
+    # Kanidm CRD `members` is AUTHORITATIVE (see templates/kanidm-group.yaml):
+    # this must be the COMPLETE service-account list for the group.
+    # Service accounts only - never a person.
+    # `grafana-mcp` is the EXISTING KanidmServiceAccount owned by
+    # apps/hermes/templates/kanidm-service-account.yaml; it is the workload that
+    # exchanges its API token (secret `grafana-mcp-token`) for an MCP bearer.
+    # Deliberately NOT added here: this release creates no new service account,
+    # so nothing else is a member.
+    serviceMembers:
+      - grafana-mcp
   oauth2Client:
     name: mcp-gateway
     displayname: MCP Gateway
     origin: https://mcp.grigri.cloud/
+    # Public client + PKCE S256, and it stays that way: Kanidm v1.11.2 advertises
+    # no `registration_endpoint` in either its RFC 8414 or its OIDC document, so
+    # there is no dynamic registration - the client id is fixed (`mcp-gateway`)
+    # and the redirect below is matched EXACTLY (`strictRedirectUrl: true`).
+    # Not widened in this release: no extra redirect, no second port, no
+    # device-code or client-credentials grant.
     redirectUrls:
       - http://127.0.0.1:15000/callback
     scopeMap:
@@ -171,39 +407,53 @@ kanidm:
           - email
           - profile
           - mcp_firecrawl
-    humanScopeMap: []
+          # Per-route scopes. A scope is only a permission to ASK for a bearer; the
+          # gateway's own route policy decides. `mcp_grafana` is granted now and is
+          # inert now: the grafana MCP route is not rendered, so a bearer carrying it
+          # gets 404 "route not found" (measured) - and it must already be reconciled
+          # in Kanidm when the Grafana JWT cutover flips that route on.
+          - mcp_grafana
+          - mcp_context7
+    # Human grants for the public plane. Group MEMBERSHIP is managed by the owner in
+    # Kanidm and is never declared in this chart (docs/user-guide/kanidm.md).
+    # `grafana-users` is the existing group from
+    # system/monitoring/resources/kanidm-groups-grafana.yaml; no membership change.
+    # Only the MCP scopes are mapped. `openid`/`email`/`profile` are deliberately
+    # absent: a native MCP client asks for exactly the `scopes_supported` values this
+    # chart's RFC 9728 document advertises, and a bearer carrying identity claims is
+    # refused by the route policy anyway.
+    # GATE, stated rather than assumed: Kanidm refuses the WHOLE authorization when any
+    # requested scope is not in the granted set, so a client that also asks for
+    # `offline_access` (refresh tokens) has to be settled as its own deliberate change.
+    humanScopeMap:
+      - group: grafana-users
+        scopes:
+          - mcp_grafana
+          - mcp_context7
 
-# Auth configuration (for future routes, used by wrapper templates)
-auth:
-  issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
-  audience: mcp-gateway
-  jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
-
-# Backend routes - ALL DISABLED for foundation
-# Enable individually after backend chart deployed + Kanidm scope granted
+# Backend routes - the contract that test/mcp-gateway/route-checks.py enforces
+# against the rendered gateway config. `enabled: true` must appear as EXACTLY ONE
+# MCP route in agentgateway-standalone.config.routes (and vice versa); the route
+# YAML above is what actually serves, these flags are what this chart's own
+# resources and checks are written against. Each flag is independent, so one
+# backend can go live without touching the other.
 backends:
   grafana:
     enabled: false
     path: /grafana/mcp
-    url: http://grafana-mcp.grafana-mcp.svc.cluster.local:8000/mcp
-    resource: https://mcp.grigri.cloud/grafana/mcp
-    hostHeader: grafana-mcp.grafana-mcp.svc.cluster.local
-    namespace: grafana-mcp
-    workloadName: grafana-mcp
-    port: 8000
     scope: mcp_grafana
-    credential: accessToken
-    stripRequestHeaders: []
+    resource: https://mcp.grigri.cloud/grafana/mcp
+    # Upstream credential: the caller's own validated bearer (passthrough), written
+    # AFTER the inbound Authorization is stripped (measured, local-boot-checks.py D).
+    credential: passthrough
 
   context7:
-    enabled: false
+    enabled: true
     path: /context7/mcp
-    url: https://mcp.context7.com/mcp
-    resource: https://mcp.grigri.cloud/context7/mcp
     scope: mcp_context7
+    resource: https://mcp.grigri.cloud/context7/mcp
+    # No upstream credential: the bearer is stripped at the edge.
     credential: none
-    stripRequestHeaders:
-      - Authorization
 
 # Session key generation (ESO) - used by templates/session-key-*.yaml
 # These values are consumed by wrapper templates, NOT by the official chart
