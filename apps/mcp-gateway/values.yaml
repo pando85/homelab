@@ -127,11 +127,15 @@ agentgateway-standalone:
   # Agentgateway configuration (rendered directly into configmap config.yaml)
   # Chart adds config.storage.mode: file automatically in readonly mode
   # All routes disabled - fail closed
+  # NOTE: adminAddr/logging are startup RawConfig settings and MUST be nested
+  # under `config:` (LocalConfig root has no adminAddr field - proven by live
+  # crash: "unknown field `adminAddr`" against the working a146c5ee9 baseline).
   config:
-    adminAddr: "off"
-    logging:
-      format: json
-      level: info
+    config:
+      adminAddr: "off"
+      logging:
+        format: json
+        level: info
     gateways:
       default:
         port: 3000

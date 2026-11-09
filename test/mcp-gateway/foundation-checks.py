@@ -174,7 +174,7 @@ def main():
 
     # ---- adminAddr off ----
     check("adminAddr is 'off' (no admin listener)",
-          cfg.get("adminAddr") == "off")
+          cfg.get("config", {}).get("adminAddr") == "off")
 
     # ---- service ----
     svc = find(docs, "Service")
