@@ -1,0 +1,836 @@
+# ingress-nginx to Envoy Gateway Migration
+
+## Overview
+
+Replace both ingress-nginx controllers (`nginx-internal`, `nginx-external`) with Envoy Gateway
+(Gateway API: `GatewayClass`, `Gateway`, `HTTPRoute`/`TLSRoute`/`TCPRoute` and Envoy Gateway
+policies), then decommission ingress-nginx and oauth2-proxy.
+
+This also delivers the grigri (staging) platform part of
+[multivara/gitops#199](https://git.grigri.cloud/multivara/gitops/issues/199) (Envoy Gateway for
+Forkline Remote): experimental-channel Gateway API CRDs, a shared external Gateway with HTTPS
+listeners plus a TLS passthrough listener, and the router 443 switch away from `192.168.193.4`.
+
+**Status: planning. Decisions taken 2026-11-09 (see Decisions). Nothing implemented.**
+
+Strategy in one paragraph: run Envoy Gateway **side by side** on two new Cilium LB VIPs
+(`.13` internal, `.14` external). Every app gets its internal and external routes and is verified
+against the new VIPs **app by app**, while nginx keeps serving all real traffic. When every app is
+done, traffic moves in **two single switches**, each verified and reversible in seconds:
+
+1. **internal switch**: all internal names move to `.13` in one move (same DNS mechanism as
+   today, see Phase 4);
+2. **external switch**: one pfSense alias edit (`k8s_external_ingress`, `.4 -> .14`) plus the
+   three DNS Resolver host overrides.
+   nginx stays idle as the rollback path until both switches have soaked, then both controllers are
+   removed together.
+
+## Decisions
+
+| #   | Topic                       | Decision                                                                                                                                                           |
+| --- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| D1  | Strategy                    | Side by side. App by app: internal route, verify, external route, verify. After all apps: one internal switch, verify; then one external switch at pfSense, verify |
+| D2  | VIPs and Forgejo SSH        | `.13` internal, `.14` external. Forgejo SSH (29518) as a `TCPRoute` on the external gateway, moving with the same pfSense alias                                    |
+| D3  | Auth                        | Native Envoy Gateway OIDC against Kanidm + JWT authorization on `groups`; oauth2-proxy removed in Phase 6                                                          |
+| D4  | Calypso runners             | TLS passthrough bridge of `*.app.staging.forkline.dev` to ingress-nginx-external until calypso emits HTTPRoutes                                                    |
+| D5  | nginx-only behaviours       | Port and verify **all** of them (none dropped)                                                                                                                     |
+| D6  | Internal DNS                | Same mechanism as today: external-dns publishes internal names to Cloudflare; the switch is one change that moves all records to `.13`                             |
+| D7  | Cloudflare internal records | Keep them, pointing to `.13` (routes carry the external-dns annotation after the switch)                                                                           |
+| D8  | Decommission timing         | Both controllers together at the end, after the external switch soaks                                                                                              |
+| D9  | BGP ECMP                    | Not now: placement keeps proxies on `prusik`, one path per VIP as today                                                                                            |
+
+## Context & Current State
+
+Facts gathered 2026-11-09 from this repo, a read-only look at the live cluster, a read-only look
+at pfSense (`pfsense.grigri`, 2.8.1) and multivara/gitops.
+
+### Controllers
+
+|                      | internal                                                                     | external                                                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Argo app / namespace | `system/ingress-nginx` / `ingress-nginx`                                     | `system/ingress-nginx-external` / `ingress-nginx-external`                                                                                                             |
+| Chart                | forkline `ingress-nginx` 2026.11.6 (OCI)                                     | same                                                                                                                                                                   |
+| IngressClass         | `nginx-internal` (default)                                                   | `nginx-external`                                                                                                                                                       |
+| LB VIP               | `192.168.193.1`, `externalTrafficPolicy: Local`                              | `192.168.193.4`, `Local`                                                                                                                                               |
+| Replicas             | HPA 2-11                                                                     | 2                                                                                                                                                                      |
+| Placement            | preferred `prusik` (100) and amd64 (50), spread `maxSkew: 4`, no tolerations | same                                                                                                                                                                   |
+| Forwarded headers    | `use-forwarded-headers: true`                                                | `false` (real client IP via `Local`)                                                                                                                                   |
+| Extras               |                                                                              | OTel tracing (`service.name=nginx-external`), `limit-req-status-code: 429`, trace ids in access log, external-dns wildcard `*.app.staging.forkline.dev` on its Service |
+
+Shared controller config: snippets allowed (`annotations-risk-level: Critical`), brotli, HSTS,
+global security headers (Referrer-Policy, `X-Frame-Options: DENY`, nosniff, Permissions-Policy),
+`proxy_cache_path` zone `static-cache` (kroki), TCP map `29518 -> git/git-forgejo-ssh:22` on both.
+
+### Cluster network
+
+- 3 nodes: `prusik` (control plane), `grigri`, `k8s-amd64-1` (tainted `dedicated=ci:NoSchedule`,
+  CI only).
+- Cilium 1.20.4, kube-proxy replacement, BGP v2 (cluster ASN 64513, pfSense `192.168.192.1` ASN
+  64512), pool `default` = `192.168.193.0/24`, every LB Service advertised unless labelled
+  `cilium.io/bgp-skip`. Cilium's own Gateway API and ingress controller are **off** (no conflict).
+- VIPs in use: .1 nginx-int, .2 unifi, .3 transcoder-rabbit, .4 nginx-ext, .5 coturn,
+  .7 qbittorrent, .8 kanidm-ldaps, .9 mosquitto, .10 mosquitto-tls. pfSense aliases also name
+  .6 (`k8s_deluge`) and .11 (`k8s_pt`), both unadvertised. **.12-.15 appear nowhere** in pfSense
+  config or BGP.
+
+### DNS: how names resolve today
+
+| Names                                                                                                             | Resolved by                                                                                                                       | Answer            | Moved by                      |
+| ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ----------------- | ----------------------------- |
+| `*.internal.grigri.cloud`, `*.staging.internal.forkline.dev`                                                      | Cloudflare (public A records written by external-dns from the Ingress status); pfSense unbound just recurses, no rebind filtering | `192.168.193.1`   | the internal switch (Phase 4) |
+| external names on the override list (idm, git, argocd, grafana, auth, ... 28 + forkline staging + mintpsicologia) | pfSense unbound host overrides (LAN and cluster pods)                                                                             | `192.168.193.4`   | pfSense P5.2                  |
+| external names, from the internet                                                                                 | Cloudflare CNAME to `grigri.cloud` / `ddns.staging.forkline.dev` -> public IP -> pfSense NAT                                      | public IP -> `.4` | pfSense P5.1                  |
+| external names not on the override list (mcp, photos, requests, ...) from LAN                                     | Cloudflare -> public IP -> NAT reflection                                                                                         | `.4`              | pfSense P5.1                  |
+| `k8s.grigri` (`*.k8s.grigri`)                                                                                     | unbound custom option (redirect zone)                                                                                             | `.1`              | pfSense P4.1                  |
+
+external-dns: Cloudflare, `sources: [service, ingress]`, `policy: upsert-only`, annotation filter
+`external-dns.kubernetes.io/enabled=true`. Internal Ingresses carry no `target`, so the record is
+the Ingress status address, which ingress-nginx sets from its LB Service (`.1`). The `DNSEndpoint`
+CRD is already installed.
+
+### pfSense (read-only inventory, 2026-11-09)
+
+Not in git today; Phase 0 writes it to `docs/network/pfsense.md`.
+
+- **WAN** `pppoe0`, single public IPv4, no WAN VIPs. No HAProxy or other proxy package: public
+  ports are plain pf port forwards. NAT reflection on globally (pure NAT + NAT proxy helper).
+- **Port forwards touching the cluster:**
+
+| NAT rule                 | Ports (alias)                               | Target (alias)                           | Notes                                                                                                   |
+| ------------------------ | ------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| grigri port redirect tcp | `external_ingress_tcp` = 80, 443, **29518** | `k8s_external_ingress` = `192.168.193.4` | the only ingress rule; WAN pass rule auto-associated; rdr also on every LAN-side interface (reflection) |
+| TURN tcp/udp             | `turn_tcp`/`turn_udp`                       | `k8s_turn` = .5                          | coturn, untouched                                                                                       |
+| qbittorrent              | `qbittorrent_tcp` = 50413                   | `k8s_qbittorrent` = .7                   | untouched                                                                                               |
+
+- **Mosquitto (.9/.10) is not public.** No WAN NAT or pass rule; only reachable from LAN-side
+  interfaces. It has its own VIPs and is not on the ingress path: this migration does not touch
+  it.
+- **No bandwidth limiter on `.4`.** `docs/conventions/bandwidth-protection.md` describes one as a
+  recommendation; the only limiters configured are the guest Wi-Fi ones.
+- **DNS Resolver (unbound) overrides:**
+
+| Override                   | IP  | Aliases                                                                                                                                                                                                                                                              |
+| -------------------------- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `freshrss.grigri.cloud`    | .4  | 28 names: api.m.rajoy, m.rajoy, gitea, navidrome, wallabag, argocd, bazarr, jackett, sonarr, radarr, accounts, nextcloud, qbittorrent, jellyfin, idm, auth-kanidm, grafana, antdroid, auth, appdaemon, dawarich, atuin, git, gitlab, hass, isidoro, searxng, readest |
+| `app.staging.forkline.dev` | .4  | auth, idm, api `.staging.forkline.dev`                                                                                                                                                                                                                               |
+| `mintpsicologia.es`        | .4  | www                                                                                                                                                                                                                                                                  |
+| `turn.grigri.cloud`        | .5  |                                                                                                                                                                                                                                                                      |
+| `unifi-controller.grigri`  | .2  | unifi.grigri                                                                                                                                                                                                                                                         |
+| custom options             | .1  | `local-zone: "k8s.grigri" redirect` + `local-data: "k8s.grigri A 192.168.193.1"`                                                                                                                                                                                     |
+
+- **FRR/BGP:** route-map `allow-all` in/out, `next-hop-self`, `allowas-in` on neighbors
+  `grigri` (.2) and `prusik` (.3). Neighbor `k8s-amd64-1` (.11) is Established without a
+  route-map, so it exchanges no prefixes; harmless here because that node never runs a proxy. No
+  `maximum-paths`. Every ingress VIP is learned from `prusik` today.
+- Live states: 48 to `.4:443`, 0 to `.4:29518`, 0 to `.1`, 6 to `.9:1883`.
+
+### Gateway API state
+
+No Gateway API CRDs, no Envoy Gateway. cert-manager 1.21.3 without Gateway API support.
+
+### Ingress inventory
+
+98-99 Ingresses live (53-54 external, 45 internal; runner Ingresses come and go).
+
+- **This repo:** 85 (43 ext, 42 int).
+- **multivara/gitops** (`grigri.cloud/apps/`), 11 incl. one runtime runner:
+
+| Ingress                                     | Class | Host                                                      | Notable                                                                                                                                                                                                       |
+| ------------------------------------------- | ----- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| calypso                                     | ext   | `app.staging.forkline.dev` `/`                            | oauth2-proxy auth (in-cluster), CSP snippet                                                                                                                                                                   |
+| calypso-api                                 | ext   | `app.staging.forkline.dev` `/api`, `/webhooks`, `/public` | auth with `auth-snippet` skips, body 6m                                                                                                                                                                       |
+| calypso-external-api                        | ext   | `api.staging.forkline.dev` `/v1(/\|$)(.*)`                | regex rewrite to `/public-api/v1/$2`, `limit-rps 20` x5 burst                                                                                                                                                 |
+| calypso-landing-page                        | ext   | `staging.forkline.dev`                                    | auth, CSP snippet                                                                                                                                                                                             |
+| oauth2-proxy                                | ext   | `app.staging.forkline.dev/oauth2`                         |                                                                                                                                                                                                               |
+| keycloak-ingress                            | ext   | `idm.staging.forkline.dev`                                | backend HTTPS                                                                                                                                                                                                 |
+| gitlab-webservice-default                   | ext   | `gitlab.grigri.cloud`                                     | 35G, 3600s, buffering off                                                                                                                                                                                     |
+| vault                                       | int   | `vault.staging.internal.forkline.dev`                     | backend HTTPS                                                                                                                                                                                                 |
+| keycloak-admin-ingress                      | int   | `idm.staging.internal.forkline.dev`                       | backend HTTPS                                                                                                                                                                                                 |
+| **runners** (created by calypso at runtime) | ext   | `<runner>.app.staging.forkline.dev`                       | nginx `auth-url` to calypso-auth-proxy `?runner_id=`, Authorization passthrough, 3600s, buffering off; wildcard cert `calypso-runners/runners-subdomain`; DNS from the wildcard on the nginx-external Service |
+
+- **Unknown owner:** `isidoro`, `isidoro-keycloak`, `mcp-gateway` namespaces (probably this repo
+  or `kiais/gitops`; Phase 0).
+
+Calypso builds runner Ingresses in
+`crates/calypso-control-plane/src/runner_controller/k8s/runner/ingress.rs` with nginx-only auth
+annotations (`runner_controller/service.rs:1164-1181`); its RBAC only grants `ingresses`. No
+HTTPRoute support exists, and #199 does not cover it (hence the D4 bridge).
+
+Annotation load (live, all repos):
+
+| Feature                                                                           | Count | Envoy Gateway equivalent                       | Difficulty |
+| --------------------------------------------------------------------------------- | ----- | ---------------------------------------------- | ---------- |
+| `auth-url` / `auth-signin` (oauth2-proxy, per-app `allowed_groups`)               | 24    | `SecurityPolicy` OIDC + JWT authorization      | high       |
+| `auth-snippet` bypasses (navidrome `/rest\|/share`, radarr `apiKey`, calypso-api) | 4     | extra route rule without the policy            | medium     |
+| `auth-response-headers`                                                           | 9     | `SecurityPolicy` `claimToHeaders`              | medium     |
+| `proxy-buffer-size`                                                               | 28    | none needed (Envoy header limits are larger)   | none       |
+| `proxy-body-size`                                                                 | 20    | none needed (Envoy has no default body limit)  | none       |
+| proxy timeouts                                                                    | 14    | `BackendTrafficPolicy` / route `timeouts`      | low        |
+| `proxy-buffering off`                                                             | 14    | none needed (Envoy streams)                    | none       |
+| `backend-protocol: HTTPS`                                                         | 8     | `BackendTLSPolicy` or EG `Backend` with TLS    | medium     |
+| `rewrite-target` (regex)                                                          | 3     | `URLRewrite` / `HTTPRouteFilter` regex         | medium     |
+| `configuration-snippet`                                                           | 16    | case by case (snippet table)                   | high       |
+| `server-snippet`                                                                  | 9     | case by case (snippet table)                   | high       |
+| `upstream-hash-by $remote_addr` (kanidm)                                          | 1     | `BackendTrafficPolicy` ConsistentHash SourceIP | low        |
+| `permanent-redirect` (www.mintpsicologia.es)                                      | 1     | `RequestRedirect` 301                          | low        |
+| `limit-rps` (calypso-external-api)                                                | 1     | `BackendTrafficPolicy` local rate limit        | low        |
+| `whitelist-source-range`, GRPC, websocket annotations                             | 0     |                                                |            |
+
+How Ingresses are defined in this repo (decides how routes get written):
+
+- **A. app-template 5.3.0 `ingress:` block** (~40 apps): app-template already supports `route:`
+  (HTTPRoute). Mechanical switch per app.
+- **B. upstream chart values**: argocd, forgejo, minio, s3-public, cross-backups, monitoring
+  (prometheus, alertmanager, grafana), oauth2-proxy, ollama, open-webui, mintpsicologia
+  (wordpress), hubble UI, kanidm (Kaniop CR), vault (operator CR). Use the chart's own route
+  support where it exists, else disable its ingress and add a raw `HTTPRoute` template.
+- **C. raw `Ingress` manifests**: mcp-gateway, mintpsicologia external, tanque (2), nextcloud,
+  rsshub, searxng, argocd webhook, loki, prometheus-long-term. Rewrite as raw `HTTPRoute`.
+
+### Things that pin nginx today (break silently if missed)
+
+- `apps/hermes/values.yaml:146-158` hostAliases `mcp.grigri.cloud -> 192.168.193.4`, plus tests
+  `apps/hermes/tests/test_hostaliases_mcp_dns.py`, `test_render_enable.py`.
+- NetworkPolicies admitting the nginx namespaces: `apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml:65-72`,
+  `apps/mcp-gateway-admin/templates/ciliumnetworkpolicy.yaml` (moved from `networkpolicy.yaml` by work in progress on 2026-11-09), `test/mcp-gateway/jobs/*.yaml`.
+- Monitoring: dashboards in `system/ingress-nginx/dashboards/`, alerts in
+  `system/ingress-nginx-external/rules/alerts.yaml`, OTel tail sampling keyed on
+  `service.name == "nginx-external"` (`system/otel-collector/values.yaml:58-111`), Loki trace id
+  regex (`system/loki/resources/configmap-grafana-datasource-loki.yaml:23`), Tempo alert
+  (`system/tempo/resources/prometheus-rules-telemetry-alerts.yaml:25`).
+- In-cluster clients of ingress hostnames: many apps use `https://idm.grigri.cloud` as OIDC
+  issuer, plus vault, git, s3 URLs. Pods resolve through pfSense, so `idm`, `git`, `argocd`,
+  `grafana`, `auth` reach `.4` via the override and move at P5.2; `*.internal` names move at the
+  internal switch.
+- Ingress-owned certificates: cert-manager runs with `--enable-certificate-owner-ref=true`, so
+  deleting an Ingress deletes its `Certificate` **and the TLS Secret**. Any workload mounting an
+  ingress TLS secret breaks (suspect: kanidm `ldaps.idm.internal...` SAN on the ingress cert).
+- The external-dns wildcard `*.app.staging.forkline.dev` lives as annotations on the
+  nginx-external **Service**; runner hosts depend on it.
+- Docs that still teach nginx: `AGENTS.md` tech stack, `docs/conventions/helm.md:48-66`,
+  `docs/conventions/deploying-new-apps.md:155-173`, README network section,
+  `docs/conventions/bandwidth-protection.md` (names `.4`).
+
+## Target Design
+
+```
+                 pfSense (BGP peer, NAT, unbound)
+       LAN clients |                      | public 80/443/29518 -> NAT alias k8s_external_ingress
+                   v                      v
+     VIP .13 Gateway "internal"     VIP .14 Gateway "external"
+                   |   EnvoyProxy "internal"   |   EnvoyProxy "external"
+                   +----------+   +------------+
+                              v   v
+       HTTPRoutes / TLSRoutes / TCPRoute in app namespaces (parentRef picks gateway + listener)
+```
+
+- **One app** `system/envoy-gateway` (namespace `envoy-gateway`): official OCI chart
+  `oci://docker.io/envoyproxy/gateway-helm` via kustomize `helmCharts`, version pinned with a
+  Renovate hint, CRDs patched like the repo already does for big CRDs (`Replace=true` or
+  `ServerSideApply=true`). **Gateway API experimental channel** (#199 needs `TLSRoute`; it also
+  gives `TCPRoute`). If the chart's bundled CRDs are not the experimental channel, install CRDs
+  from `gateway-crds-helm` or the upstream release manifest instead and skip the chart's.
+  Controller config: `extensionApis.enableBackend: true` (unifi), Lua enabled for
+  `EnvoyExtensionPolicy` (readest, radarr, navidrome, tanque). Sync waves: CRDs/controller, then
+  GatewayClass, EnvoyProxy, Certificates, Gateways, global policies.
+- **One `GatewayClass` (`envoy`), two `Gateway`s** (`internal`, `external`) in `envoy-gateway`,
+  each with its own `EnvoyProxy` (via `spec.infrastructure.parametersRef`), so each gets its own
+  Deployment and LB Service:
+  - Service: `loadBalancerClass: io.cilium/bgp-control-plane`, `lbipam.cilium.io/ips: <VIP>`,
+    `externalTrafficPolicy: Local` (real client IP through pfSense DNAT; staging matches the
+    #199 requirement).
+  - Deployment, PDB `minAvailable: 1`, `rollingUpdate: {maxSurge: 1, maxUnavailable: 0}` (avoid
+    a roll gap with `Local`).
+  - **Placement copied from ingress-nginx** (`system/ingress-nginx/values.yaml:56-90`), set in
+    `EnvoyProxy.spec.provider.kubernetes.envoyDeployment.pod` / `.envoyHpa`: preferred node
+    affinity `kubernetes.io/hostname In [prusik]` (weight 100) and `kubernetes.io/arch In
+[amd64]` (weight 50); topology spread `maxSkew: 4` on `kubernetes.io/hostname`,
+    `DoNotSchedule`, `matchLabelKeys: [pod-template-hash]`, selector on the gateway's own proxy
+    labels; no tolerations (never on the CI node); internal HPA 2-11, external 2 replicas.
+- **Listeners (this is the contract other repos reference with `parentRefs.sectionName`):**
+
+| Gateway  | Listener                              | Port / protocol     | Hostname                                     | Cert / backend                                                                                                              |
+| -------- | ------------------------------------- | ------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| internal | `http`                                | 80 HTTP             |                                              | redirect route                                                                                                              |
+| internal | `https-internal-grigri-cloud`         | 443 HTTPS           | `*.internal.grigri.cloud`                    | wildcard                                                                                                                    |
+| internal | `https-staging-internal-forkline-dev` | 443 HTTPS           | `*.staging.internal.forkline.dev`            | wildcard (multivara vault, keycloak admin)                                                                                  |
+| external | `http`                                | 80 HTTP             |                                              | redirect route                                                                                                              |
+| external | `https-grigri-cloud`                  | 443 HTTPS           | `*.grigri.cloud`                             | wildcards `*.grigri.cloud`, `*.rajoy.grigri.cloud`, `*.m.rajoy.grigri.cloud`, `*.isidoro.grigri.cloud` (Envoy picks by SNI) |
+| external | `https-staging-forkline-dev`          | 443 HTTPS           | `staging.forkline.dev`                       | apex cert                                                                                                                   |
+| external | `https-wildcard-staging-forkline-dev` | 443 HTTPS           | `*.staging.forkline.dev`                     | wildcard (app, api, idm)                                                                                                    |
+| external | `tls-bridge-runners`                  | 443 TLS Passthrough | `*.app.staging.forkline.dev`                 | `TLSRoute` to `ingress-nginx-external:443` (D4, temporary)                                                                  |
+| external | `https-runners-staging-forkline-dev`  | 443 HTTPS           | `*.app.staging.forkline.dev`                 | replaces the bridge once calypso emits HTTPRoutes                                                                           |
+| external | `tls-remote-staging-forkline-io`      | 443 TLS Passthrough | `*.remote.staging.forkline.io`               | `TLSRoute` from the `calypso-remote` relay (#199)                                                                           |
+| external | `https-mintpsicologia-es` / `-www`    | 443 HTTPS           | `mintpsicologia.es`, `www.mintpsicologia.es` | per-host certs                                                                                                              |
+| external | `tcp-forgejo-ssh`                     | 29518 TCP           |                                              | `TCPRoute` to `git/git-forgejo-ssh:22`                                                                                      |
+
+`allowedRoutes.namespaces.from: All` (single-owner cluster). All certs live in
+`envoy-gateway`, issued by `letsencrypt-prod-dns` (DNS-01, Cloudflare), so no `ReferenceGrant`
+and no cert-manager Gateway API support are needed; ~100 per-host certs go away. A Gateway API
+wildcard matches several labels, so `*.grigri.cloud` would also accept an
+`x.internal.grigri.cloud` route, but the external gateway holds no cert for it and the TLS
+handshake fails: keep it that way and add a lint (route with `.internal.` host must not
+reference `external`).
+
+- **Gateway-wide defaults** (one `ClientTrafficPolicy` + one `BackendTrafficPolicy` per gateway),
+  matching nginx so apps don't notice:
+  - request timeout 60s (Envoy Gateway default is 15s), route-level overrides for long-running
+    apps (immich, forgejo, nextcloud, transcoder, gitlab, minio/s3, runners: 3600s or `0s`);
+  - HSTS identical to nginx (`max-age=31536000; includeSubDomains`), remove `Server`, the four
+    global security headers;
+  - `tls.alpnProtocols: [h2, http/1.1]` pinned (**mandatory here**: hostname-scoped TLS
+    listeners silently drop h2 gateway-wide otherwise), `http1.http10` enabled, path
+    `escapedSlashesAction: KeepUnchanged`, idle timeouts and TCP keepalive set explicitly;
+  - compression (Brotli + Gzip) **only per route, never on MinIO/S3 hosts** (compression rewrites
+    `Accept-Encoding`, which breaks SigV4-signed requests);
+  - every route-level `BackendTrafficPolicy` uses `mergeType: StrategicMerge`, otherwise it
+    replaces the gateway one instead of extending it.
+- **Auth (D3)**: `SecurityPolicy` OIDC against Kanidm + JWT `authorization` on the `groups`
+  claim, one policy per app; recipe 1 below.
+- **Telemetry**: Prometheus scraping of controller and proxies (ServiceMonitor/PodMonitor with
+  `release: monitoring`), Envoy Gateway's Grafana dashboards, external proxy tracing via
+  `EnvoyProxy.telemetry.tracing` to `otel-collector...:4317`, JSON access logs with trace id.
+- **DNS**: external-dns gains sources `gateway-httproute` and `crd`, and `forkline.io` in
+  `domainFilters` (#199). The runner wildcard moves from the nginx Service annotations to a
+  `DNSEndpoint` owned by multivara.
+- **Forgejo SSH (D2)**: `TCPRoute` on the external gateway, sharing `git.grigri.cloud`, the
+  pfSense port alias and the unbound override with HTTPS; no pfSense rule of its own.
+
+### Special case recipes (D5: all ported and verified)
+
+Recipes below are the ones proven in a previous production migration of the same kind, adapted
+to this repo. "Unproven" marks a mechanism with no prior use: spike it in Phase 2. Lua runs in an
+`EnvoyExtensionPolicy` (EEP) targeting the route; attach it only to the narrowest route that
+needs it.
+
+**Rules that apply to every case**
+
+- nginx snippets are never converted by tools (`ingress2gateway` and friends silently drop auth,
+  backend protocol and snippets, and mistranslate sizes): translate each one by what it does,
+  after capturing its live behaviour with `curl`.
+- Gateway API path matching is case-sensitive and segment-based (`PathPrefix /api` matches
+  `/api` and `/api/x`, not `/apix`); `Exact` beats the longest prefix; a regex path match is a
+  full match (append `.*`).
+- A route-level `BackendTrafficPolicy` replaces the gateway one unless it sets
+  `mergeType: StrategicMerge`.
+- A `requestBuffer` anywhere in scope breaks websockets, WebDAV and large uploads: never set one.
+- A route that bypasses auth must not carry `claimToHeaders`, and must strip any incoming
+  `X-Auth-Request-*` headers (otherwise a client can spoof identity).
+
+**1. Auth (24 Ingresses, D3)**
+
+```yaml
+kind: SecurityPolicy # one per protected route (or per app group)
+spec:
+  targetRefs:
+    [{ group: gateway.networking.k8s.io, kind: HTTPRoute, name: <app> }]
+  oidc:
+    provider: { issuer: https://idm.grigri.cloud/oauth2/openid/<client> }
+    clientID: <client>
+    clientSecret: { name: oidc-client, namespace: envoy-gateway } # + ReferenceGrant per app ns
+    redirectURL: https://<app-host>/oauth2/callback
+    scopes: [openid, email, profile, groups]
+  jwt:
+    providers:
+      - name: kanidm
+        issuer: https://idm.grigri.cloud/oauth2/openid/<client>
+        remoteJWKS:
+          {
+            uri: https://idm.grigri.cloud/oauth2/openid/<client>/public_key.jwk,
+          }
+        claimToHeaders:
+          [
+            {
+              header: X-Auth-Request-Preferred-Username,
+              claim: preferred_username,
+            },
+          ]
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: group
+        action: Allow
+        principal:
+          jwt:
+            provider: kanidm
+            claims:
+              [
+                {
+                  name: groups,
+                  valueType: StringArray,
+                  values: ["<app>-users@idm.grigri.cloud"],
+                },
+              ]
+```
+
+- One Kanidm OAuth2 client for all apps (secret stored once in `envoy-gateway`, a
+  `ReferenceGrant` per app namespace); every app's `/oauth2/callback` is added to the client's
+  redirect URLs in git (`system/kanidm`).
+- The OIDC cookie is **per host**: there is no cross-app cookie. Single sign-on still works
+  because Kanidm keeps its own session, so each new app is a silent redirect. Don't rely on
+  `cookieDomain`.
+- Replicate exactly which claim oauth2-proxy put in which header for http-echo, navidrome and
+  searxng (`X-Auth-Request-User`, `-Email`, `-Groups`, `Authorization`). Array claims arrive
+  base64(JSON); flatten with Lua only if an app needs CSV.
+- **OIDC discovery is fetched once and not retried.** The controller reaches
+  `idm.grigri.cloud` through the pfSense override (`.4` until the external switch): after
+  P5.1/P5.2, restart the Envoy Gateway controller or touch one SecurityPolicy. Migrate and verify
+  the kanidm route itself before applying any OIDC policy.
+- Unproven for Kanidm: per-client issuer and JWKS URLs, PKCE requirements (Kanidm enforces PKCE
+  by default; if Envoy Gateway does not send it, the client needs Kanidm's PKCE opt-out),
+  `logoutPath`. Check with `kubectl explain securitypolicy.spec.oidc` during the pilot.
+- Verify: `curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://<app>/` is a 302 to
+  Kanidm; after login a user outside the group gets 403; `-H 'X-Auth-Request-User: spoofed'`
+  is not echoed by http-echo.
+
+**2. Global controller behaviour** (per gateway)
+
+| nginx                                                                                              | Envoy Gateway                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `more_set_headers` security headers, HSTS (`max-age=31536000; includeSubDomains`), `server_tokens` | `ClientTrafficPolicy.headers.lateResponseHeaders.set` (Referrer-Policy, X-Frame-Options, X-Content-Type-Options, Permissions-Policy, Strict-Transport-Security) and `remove: [Server]`                                                                                      |
+| brotli                                                                                             | `BackendTrafficPolicy.compression: [{type: Brotli}, {type: Gzip}]` on routes only, never on S3 or navidrome routes                                                                                                                                                          |
+| `use-forwarded-headers: true` (internal)                                                           | internal `ClientTrafficPolicy.clientIPDetection.xForwardedFor.numTrustedHops: 1` (or `trustedCIDRs`); external: none                                                                                                                                                        |
+| OTel tracing, trace_id in access log                                                               | `EnvoyProxy.telemetry.tracing` (`provider.type: OpenTelemetry`, backendRef to the otel-collector Service :4317, `samplingRate: 100`) + `ReferenceGrant`; JSON access log with `"traceID": "%TRACE_ID%"`; service name via `customTags` or check what the collector receives |
+| `limit-req-status-code: 429`                                                                       | default for Envoy local rate limits                                                                                                                                                                                                                                         |
+| implicit nginx defaults                                                                            | `tls.alpnProtocols: [h2, http/1.1]`, `path.escapedSlashesAction: KeepUnchanged`, `http1.http10: {}`, `timeout.http.idleTimeout: 600s`, `tcpKeepalive`, request timeout 60s                                                                                                  |
+
+Verify: `curl -skI https://<host>/ | grep -i 'strict-transport\|x-frame\|referrer\|permissions\|server'`,
+`curl -sk --http2 -o /dev/null -w '%{http_version}'` = 2.
+
+**3. readest** (`apps/readest/values.yaml` ~L340-385, ~L411-460)
+
+- nginx: on `/auth/v1/authorize`, when the query is empty or names `provider=google|apple|github|discord`,
+  302 to the same path with `?provider=custom:kanidm&redirect_to=<redirect_to arg, else
+https://readest.grigri.cloud/auth/callback>`; `/callback` 301 to `/auth/v1/callback` keeping
+  the query; `/auth/v1(/|$)(.*)` rewritten to `/$2`.
+- Envoy: Lua on the authorize rule (no Gateway API filter can compute a query):
+
+```lua
+function envoy_on_request(h)
+  local path, q = h:headers():get(":path"):match("^([^?]*)%??(.*)$")
+  if path ~= "/auth/v1/authorize" then return end
+  local ql, hit = q:lower(), (q == "")
+  for _, v in ipairs({"google", "apple", "github", "discord"}) do
+    if ql:find("provider=" .. v, 1, true) then hit = true end
+  end
+  if not hit then return end
+  local rt = q:match("redirect_to=([^&]*)") or "https://readest.grigri.cloud/auth/callback"
+  h:respond({[":status"] = "302", ["location"] = path .. "?provider=custom:kanidm&redirect_to=" .. rt}, "")
+end
+```
+
+`/callback`: rule `Exact /callback` + `RequestRedirect {path: {type: ReplaceFullPath,
+  replaceFullPath: /auth/v1/callback}, statusCode: 301}` (query preserved). Rewrite: rule
+`PathPrefix /auth/v1` + `URLRewrite ReplacePrefixMatch: /`.
+
+- Gotcha: check whether nginx evaluated `$uri` before or after the rewrite (curl the live host
+  first); the internal host's default `redirect_to` may differ, read both snippets.
+- Verify: `curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' 'https://<host>/auth/v1/authorize?provider=google&redirect_to=X'`, then a full login on web and app.
+
+**4. radarr** (`apps/radarr/values.yaml` ~L62-69, ~L94-106)
+
+- nginx: append `excludeLocalCovers=true` to `/api/v3/movie` when absent; external skips auth when
+  `^/api/v3/...[?&]apiKey=` is present.
+- Envoy: a dedicated `Exact /api/v3/movie` rule with Lua
+  (`if not q:find("excludeLocalCovers=", 1, true) then h:headers():replace(":path", <path with
+the param appended, "?" or "&">) end`), attached to both the protected and the bypass copy.
+  Bypass: a second HTTPRoute, `PathPrefix /api/v3` + `queryParams: [{type: RegularExpression,
+name: apiKey, value: ".+"}]`, no SecurityPolicy (radarr validates the key, as today).
+  `queryParams` regex match is unproven: spike.
+- Verify: with `apiKey` 200 without login, without it 302 to Kanidm; radarr log shows
+  `excludeLocalCovers=true` on a request that did not send it.
+
+**5. navidrome** (`apps/navidrome/values.yaml` ~L65-106)
+
+- nginx: auth skip `^/(rest|share)`; external also disables compression, clears
+  `Accept-Encoding` and injects a `#/login -> /` script before `</html>`.
+- Envoy: bypass = second HTTPRoute with `PathPrefix /rest` and `PathPrefix /share`, no policy,
+  `RequestHeaderModifier remove: [X-Auth-Request-User, X-Auth-Request-Email, ...]`. UI route:
+  `RequestHeaderModifier remove: [Accept-Encoding]`, no compression, Lua response body rewrite
+  (unproven, no prior use):
+
+```lua
+function envoy_on_response(h)
+  local ct = h:headers():get("content-type") or ""
+  if not ct:find("text/html", 1, true) then return end   -- never buffer audio
+  local body = h:body()
+  local s = body:getBytes(0, body:length())
+  local out = s:gsub("</html>", '<script>if(location.hash==="#/login"){location.replace("/")}</script></html>')
+  body:setBytes(out)
+end
+```
+
+- Gotcha: `body()` buffers the whole response, hence the content-type guard; check
+  `content-length` is fixed up. With native OIDC the `#/login` landing may no longer happen:
+  verify before and after, keep the Lua only if still needed.
+- Verify: `curl -sk https://navidrome.grigri.cloud/app/ | grep -c location.replace` = 1; a
+  Subsonic client works without login.
+
+**6. kroki** (`apps/kroki/values.yaml` ~L77-81, cache zone in the nginx `http-snippet`)
+
+- nginx: `proxy_cache` 7d on a 300 MB `/dev/shm` zone, `expires 7d`, `X-Cache-Status`.
+- Envoy has no production-grade response cache (the HTTP cache filter is experimental, in-memory
+  per pod, and needs `EnvoyPatchPolicy`). Exact parity: a small caching sidecar (nginx or
+  Varnish) in the kroki pod with the same zone, 7d validity and `X-Cache-Status`; the route
+  points at the sidecar port. Plus `ResponseHeaderModifier` `Cache-Control: public,
+max-age=604800` if the sidecar does not set it.
+- Verify: two identical GETs, the second shows `X-Cache-Status: HIT` and is faster.
+
+**7. tanque-stream** (`apps/tanque/templates/stream-ingress.yaml`)
+
+- nginx: `/` 302 to `/stream.html?src=tcp_magic`, before auth.
+- Envoy: `directResponse` cannot carry a `Location` header, and `RequestRedirect` cannot set a
+  query reliably. Rule `Exact /` on a route **without** the SecurityPolicy (keeps "redirect before
+  login") with Lua `if h:headers():get(":path") == "/" then h:respond({[":status"] = "302",
+["location"] = "/stream.html?src=tcp_magic"}, "") end`.
+- Verify: `curl -sk -o /dev/null -w '%{http_code} %{redirect_url}\n' https://tanque-stream.grigri.cloud/`.
+
+**8. nextcloud** (`apps/nextcloud/nextcloud.yaml` server-snippet)
+
+| nginx                                                                   | Envoy Gateway                                                                                                                          |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `server_tokens off`                                                     | gateway-wide `remove: [Server]`                                                                                                        |
+| `proxy_hide_header X-Powered-By`                                        | `ResponseHeaderModifier remove: [X-Powered-By]`                                                                                        |
+| `= /` with UA `^DavClnt` -> 302 `/remote.php/webdav/`                   | rule `Exact /` + `headers: [{type: RegularExpression, name: User-Agent, value: "^DavClnt.*"}]` + `RequestRedirect ReplaceFullPath` 302 |
+| `/.well-known/carddav`, `/.well-known/caldav` -> 301 `/remote.php/dav/` | two `Exact` rules + `RequestRedirect ReplaceFullPath` 301                                                                              |
+| `^~ /.well-known` -> 301 `/index.php$uri`                               | `PathPrefix /.well-known` + `RequestRedirect path ReplacePrefixMatch /index.php/.well-known` 301                                       |
+| `^/(build\|tests\|config\|lib\|3rdparty\|templates\|data)(/\|$)` -> 404 | one rule with 7 `PathPrefix` matches + `HTTPRouteFilter.directResponse` 404                                                            |
+| `^/(\.\|autotest\|occ\|issue\|indie\|db_\|console)` -> 404              | `RegularExpression` `^/(\.\|autotest\|occ\|issue\|indie\|db_\|console).*` + `directResponse` 404                                       |
+| `robots.txt` logging off                                                | nothing                                                                                                                                |
+| 3600s, buffering off, 35G                                               | `timeouts.request: 0s`; no buffer, no body limit                                                                                       |
+
+Verify: `curl -A DavClnt` on `/`, `/.well-known/caldav`, `/config/x` (404), desktop and mobile
+sync, a multi-GB upload over a slow link (stream idle timeout).
+
+**9. wallabag**: rule with `queryParams: [{type: RegularExpression, name:
+PHP_SESSION_UPLOAD_PROGRESS, value: ".*"}]` + `directResponse` 403 ahead of the catch-all
+(unproven; for nginx's case-insensitive substring parity use Lua on `:path` + `respond` 403).
+Verify `?PHP_SESSION_UPLOAD_PROGRESS=x` = 403, normal URL = 200.
+
+**10. home-assistant**: rule `Exact /api/prometheus` + `directResponse` 403 ahead of `/`
+(Prometheus scrapes the Service directly). Verify 403 from outside.
+
+**11. MinIO** (`platform/minio`, `apps/s3-public`, `apps/cross-backups`): `timeouts.request: 0s`;
+nothing for body, buffering or chunked; `ClientTrafficPolicy.headers.withUnderscoresAction:
+Allow` if clients send underscore headers (`ignore_invalid_headers off`); **no compression**
+(it strips the signed `Accept-Encoding`, SigV4 fails with 400/403). Verify with a real SDK
+(`aws s3 ls --debug`, `mc`) and an upload longer than 60s.
+
+**12. Backend TLS**
+
+- kanidm: `BackendTLSPolicy` (CA from the kanidm cert, `hostname` = a SAN of it, same namespace
+  as the Service) + `BackendTrafficPolicy.loadBalancer: {type: ConsistentHash, consistentHash:
+{type: SourceIP}}` (needs `Local`, kept).
+- vault: operator CR `ingress` off, standalone HTTPRoute, `BackendTLSPolicy` with the
+  operator's TLS secret CA and the in-cluster Service FQDN as `hostname`.
+- unifi (self-signed): EG `Backend` (`enableBackend: true`) with `tls.insecureSkipVerify: true`,
+  same trust as nginx today (don't tighten unasked).
+- Verify: policies `Accepted=True`, 200 not 503 with response flag `UF`.
+
+**13. Small ones**
+
+- forgejo SSH: listener `tcp-forgejo-ssh` (TCP 29518) + `TCPRoute` to `git-forgejo-ssh:22`;
+  `kubectl get crd tcproutes.gateway.networking.k8s.io`; `ssh -p 29518 git@...`.
+- `www.mintpsicologia.es`: HTTPRoute with no backend, `RequestRedirect {scheme: https,
+hostname: mintpsicologia.es, statusCode: 301}`.
+- calypso-external-api (multivara): `HTTPRouteFilter.urlRewrite.path.replaceRegexMatch` with the
+  nginx regex; `BackendTrafficPolicy.rateLimit` `type: Local`, `mergeType: StrategicMerge`. A
+  local limit is per route per proxy pod, not per client IP like nginx: size it
+  (20 rps x 5 burst x proxy pods) and add a `clientSelectors` source-IP rule if per-IP limiting
+  matters.
+
+## Strategy: why side by side
+
+|                                     | Side by side (chosen)                                                                 | Big bang, Envoy takes `.1`/`.4`                                         |
+| ----------------------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Per-app testing before real traffic | full: `curl --resolve`, `ssh -p 29518`, browser with `/etc/hosts` against `.13`/`.14` | none in place                                                           |
+| Switch                              | two single moves (internal, external), each with a seconds-long rollback              | everything at once                                                      |
+| Rollback                            | revert one change; nginx is still running                                             | revert git and wait for Argo, while ArgoCD/Vault/idm may be unreachable |
+
+### Expected unavailability
+
+| Service                                        | When                                 | How long                                                                                                  | Why                                                   |
+| ---------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| internal names                                 | internal switch (Phase 4)            | none in practice: clients that cached `.1` (Cloudflare TTL, 300s auto) keep reaching nginx, still running |                                                       |
+| all external hosts                             | pfSense P5.1 apply                   | seconds (filter reload); open connections keep their pf state to `.4` and nginx until they close          |                                                       |
+| LAN clients on overridden names                | pfSense P5.2 (unbound restart)       | ~1-2 s DNS blip; cached answers keep hitting `.4` (still served)                                          |                                                       |
+| forgejo SSH (29518)                            | pfSense P5.1                         | same seconds; open SSH sessions continue on `.4`                                                          | moves with 80/443                                     |
+| everyone using auth                            | first visit after their app's switch | one re-login                                                                                              | oauth2-proxy cookie replaced by the Envoy OIDC cookie |
+| mosquitto (.9/.10), coturn, qbittorrent, unifi | never                                | 0                                                                                                         | own VIPs and NAT rules, not on the ingress path       |
+
+## pfSense change plan
+
+Manual in the pfSense UI by the owner; each change has its verify and rollback. Read-only checks
+can be run by an agent (`ssh pfsense.grigri`, show-only commands).
+
+| #        | When                 | Change                                                                                                                                                                                                                         | Verify                                                                                                                         | Rollback              |
+| -------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| P0.1     | Phase 0              | Export the cluster-relevant config (tables above) into `docs/network/pfsense.md`                                                                                                                                               | committed                                                                                                                      |                       |
+| P0.2     | optional, any time   | FRR neighbor `192.168.192.11` (k8s-amd64-1): route-map `allow-all` in/out, `next-hop-self`, `allowas-in` like grigri/prusik; update `docs/deployment/cilium-bgp-control-plane.md`. Hygiene only, not needed for this migration | `vtysh -c 'show ip bgp summary'` shows prefixes, not `(Policy)`                                                                | remove the route-maps |
+| P1.1     | Phase 1, optional    | Aliases `k8s_internal_gateway` = .13, `k8s_external_gateway` = .14 (documentation)                                                                                                                                             | `pfctl -t <alias> -T show`                                                                                                     | delete                |
+| P1.2     | Phase 1              | nothing else: BGP `allow-all` accepts the new /32s, LAN-side interfaces already pass to the VIP range                                                                                                                          | `vtysh -c 'show ip bgp 192.168.193.0/24 longer-prefixes'` has .13 and .14                                                      |                       |
+| P4.1     | **internal switch**  | Unbound custom options: `local-data: "k8s.grigri A 192.168.193.13"` (or delete both lines if nothing uses `k8s.grigri`; only a doc mention found)                                                                              | `drill k8s.grigri @192.168.192.1`                                                                                              | restore `.1`          |
+| **P5.1** | **external switch**  | Firewall > Aliases > `k8s_external_ingress`: `192.168.193.4` -> `192.168.193.14`. Retargets the WAN port forward (80, 443, 29518), its WAN pass rule and reflection on every interface                                         | from mobile data: `curl -I https://git.grigri.cloud`, `ssh -p 29518 git@git.grigri.cloud`; `pfctl -sn \| grep 29518` shows .14 | alias back to .4      |
+| **P5.2** | **external switch**  | DNS Resolver host overrides `freshrss.grigri.cloud` (28 aliases), `app.staging.forkline.dev` (3), `mintpsicologia.es` (www): `.4` -> `.14`. IP only, no list cleanup in this window                                            | `drill idm.grigri.cloud @192.168.192.1` = .14, also from a pod                                                                 | IPs back to .4        |
+| P5.3     | end of external soak | Diagnostics > States: kill remaining states to `192.168.193.4`                                                                                                                                                                 | `pfctl -ss \| grep -c 192.168.193.4` = 0                                                                                       | n/a                   |
+| P6.1     | Phase 6              | Rename `k8s_external_ingress` to `k8s_external_gateway` (or point the rule at the P1.1 alias)                                                                                                                                  | rule shows the new alias                                                                                                       |                       |
+| P6.2     | Phase 6              | Override list cleanup: drop dead names (gitea, jackett, accounts, auth-kanidm, and gitlab/isidoro if gone), add missing external names (mcp, photos, requests, ...); then remove the hermes hostAliases                        | `drill mcp.grigri.cloud` = .14 from a pod                                                                                      |                       |
+| P6.3     | Phase 6              | Update `docs/network/pfsense.md` and `docs/conventions/bandwidth-protection.md`                                                                                                                                                |                                                                                                                                |                       |
+
+## Implementation Plan
+
+Each phase ends at a gate. Do not start the next phase until the gate passes.
+
+### Phase 0 - Pre-flight (no cluster changes)
+
+1. pfSense P0.1 export.
+2. Confirm `.13`/`.14` free on the cluster side (`kubectl get svc -A` LB IPs) and record them.
+3. DNS map: `dig` every internal ingress host against `1.1.1.1` (expect Cloudflare `.1`), list
+   every Cloudflare record under `internal.grigri.cloud` and `staging.internal.forkline.dev`
+   that does **not** point at `.1` (LB services such as `ldaps.idm.internal` = .8; they must not
+   move), and resolve from a pod `idm`, `git`, `vault.internal`, `s3.internal`, `auth`, `mcp`.
+4. Confirm the internal switch mechanism works on the forkline ingress-nginx chart: the
+   controller flag `--publish-status-address` (chart `controller.publishService.enabled: false`
+   - `extraArgs`) makes every `nginx-internal` Ingress report that address in its status, which
+     is what external-dns publishes. Check with `helm template` and the chart source.
+5. Inventory ingress TLS secret consumers: for every ingress `tls.secretName`, check nothing
+   else mounts or references it (kanidm LDAPS first). Any hit gets an explicit `Certificate`
+   before Phase 6 removes its Ingress.
+6. Find the owner repo of the `isidoro`, `isidoro-keycloak`, `mcp-gateway` Ingresses.
+7. Post the listener contract on #199 (owner action) so multivara writes routes against it.
+8. Verify the remaining assumptions (doc read or Phase 1 spike):
+   - Cilium BGP advertises a `Local` VIP only from nodes with a ready local endpoint;
+   - external-dns `gateway-httproute` honours the annotation filter and `target` on routes;
+   - which Gateway API channel the pinned `gateway-helm` bundles;
+   - Argo CD 3.6 health checks for Gateway API kinds;
+   - which upstream charts in group B support `HTTPRoute` natively;
+   - Kanidm with Envoy Gateway OIDC: per-client issuer/JWKS URLs, PKCE (recipe 1);
+   - `queryParams` regex matching (radarr, wallabag).
+
+**Gate 0:** pfSense export committed, DNS map recorded here, publish-status-address confirmed,
+contract posted.
+
+### Phase 1 - Platform (both gateways live, no app traffic)
+
+Commits, in order, each synced and checked before the next:
+
+1. `envoy-gateway: Add Envoy Gateway controller and Gateway API CRDs` (experimental channel,
+   CRD patch, Renovate hint, Backend and Lua enabled). Restart the Argo CD
+   application controller if it keeps reporting unknown kinds after the CRDs land.
+2. `envoy-gateway: Add internal and external gateways` (GatewayClass, 2 EnvoyProxy with the
+   nginx placement, 2 Gateways on `.13`/`.14` with the listener table, Certificates, HTTP->HTTPS
+   redirect route, gateway-wide ClientTrafficPolicy and BackendTrafficPolicy).
+3. `git: Add forgejo SSH TCPRoute on the external gateway`.
+4. `envoy-gateway: Add monitoring` (ServiceMonitor/PodMonitor, dashboards, alerts mirroring the
+   three nginx-external ones on Envoy metrics for both gateways; external tracing to the
+   otel-collector, new service name added next to `nginx-external` in otel-collector, Loki and
+   Tempo configs).
+5. `external-dns: Add gateway-httproute and crd sources and forkline.io`.
+6. `cert-manager: Add ZeroSSL ClusterIssuer for forkline.io` (#199; needs the owner's EAB
+   credentials in Vault, can trail).
+7. `http-echo: Add HTTPRoutes on both gateways` (smoke test target).
+
+pfSense: P1.1 (optional).
+
+**Gate 1:**
+
+- both Gateways `Programmed=True` with the right address; pfSense learns .13 and .14 via BGP;
+- `curl --resolve http-echo.internal.grigri.cloud:443:192.168.193.13 ...` and the external
+  equivalent: 200, valid wildcard cert, h2, HSTS and security headers, no `Server`; `http://`
+  redirects;
+- `ssh -p 29518 -o HostKeyAlias=git.grigri.cloud git@192.168.193.14` authenticates with the same
+  host key as through nginx;
+- http-echo sees the real LAN client IP;
+- roll test: continuous `curl` against both VIPs during `kubectl rollout restart` of each Envoy
+  deployment, zero failures (or a measured gap, tuned before going further);
+- metrics in Grafana, a test trace in Tempo;
+- #199 gate G11 on this deployment (wildcard `TLSRoute` matches two labels, passthrough coexists
+  with the HTTPS listeners, h2 still negotiated on `https-grigri-cloud`).
+
+Rollback: delete the app dir; nothing depends on it.
+
+### Phase 2 - Pilot and patterns
+
+Goal: settle the route pattern per definition style (A, B, C) and the auth pattern before
+scaling. Same per-app procedure as Phase 3.
+
+- A, no annotations: `firecrawl`; C raw: `rsshub`;
+- A, auth with group check and identity headers: `esphome` and `http-echo` (Kanidm client,
+  `groups` authorization, `claimToHeaders`, spoof test);
+- auth skip: `navidrome` (`/rest`, `/share`);
+- B chart values / CR: `hubble` (cilium values), `vault` (operator CR, `BackendTLSPolicy`);
+- self-signed backend: `unifi` (EG `Backend` with TLS skip-verify);
+- the kanidm route itself first (before any OIDC policy), then one Lua request case (`radarr`)
+  and the Lua body rewrite (`navidrome`), to prove `EnvoyExtensionPolicy` early.
+
+Write the per-app procedure into `docs/conventions/` (replaces the nginx snippet in `helm.md` /
+`deploying-new-apps.md`).
+
+**Gate 2:** every pilot passes the per-route checklist on both VIPs; auth: login, 403 for a user
+outside the group, logout, skip paths open.
+
+### Phase 3 - App by app (no traffic moves)
+
+Per app, in one PR (or one per gateway if it is easier to review):
+
+1. internal route (`parentRefs: internal`, `sectionName` from the contract) with the app's
+   policies. **No external-dns annotation yet** (internal records must not flip app by app).
+2. verify against `.13`: `curl --resolve <host>:443:192.168.193.13`, browser with an
+   `/etc/hosts` entry, the per-route checklist, the app's special case recipe.
+3. external route (`parentRefs: external`) with the definitive external-dns annotations
+   (`enabled`, `target: grigri.cloud`): safe now, because external records are CNAMEs to the
+   apex and do not change.
+4. verify against `.14` the same way, from the LAN.
+5. tick the app in the tracking list below. The Ingresses stay untouched.
+
+Order: plain apps, then timeouts/body, then auth, then snippets, then the control-plane names
+(argocd, vault, s3/minio, kanidm, oauth2-proxy-dependent apps last).
+
+multivara (their repo, in parallel, against the contract): calypso web/api/landing,
+calypso-external-api, oauth2-proxy, keycloak (+ admin), vault, gitlab; the `DNSEndpoint` for
+`*.app.staging.forkline.dev`; the bridge `TLSRoute` for runners.
+
+Tracking list (fill during Phase 3): one row per app, columns `internal route` / `verified .13` /
+`external route` / `verified .14`.
+
+**Gate 3 (before any switch):**
+
+- every Ingress in the cluster has a route on the matching gateway, verified (compare
+  `kubectl get ingress -A` hosts against `kubectl get httproute -A` hosts with a script; the
+  runner hosts are covered by the bridge);
+- scripted diff of every host: `curl -sk -o /dev/null -w '%{http_code} %{redirect_url}'` with
+  `--resolve` to the nginx IP vs the Envoy IP, identical;
+- functional list from the LAN against the Envoy IPs: nextcloud sync (WebDAV), immich mobile
+  upload of a large video, `git push` over HTTPS and SSH, `mc ls` against s3-public, Home
+  Assistant app (websocket), jellyfin playback, navidrome Subsonic client, calypso login and SSE
+  stream, one runner host through the bridge, calypso-external-api returns 429 over 20 rps;
+- no `UF`/`URX` response flags in Envoy access logs;
+- prepared, unmerged: the internal switch commit, the hermes hostAliases/tests commit
+  (`.4 -> .14`), and the commit removing the external-dns annotations from the nginx-external
+  Service.
+
+### Phase 4 - Internal switch (one move)
+
+Same DNS mechanism as today: external-dns publishes internal names to Cloudflare from the
+Ingress status. The switch makes the internal controller **report `.13`** instead of its own LB
+IP, so external-dns rewrites every internal record in one sync. nginx-internal keeps running on
+`.1` and serving clients with cached answers.
+
+1. Pre-checks: break-glass ready (`kubectl port-forward` to argocd-server and vault), Envoy
+   internal pods ready.
+2. Merge `ingress-nginx: Publish the internal Envoy gateway address` (`publishService.enabled:
+false`, `--publish-status-address=192.168.193.13`). This includes multivara's
+   `*.staging.internal.forkline.dev` Ingresses, which use the same controller.
+3. pfSense P4.1 (`k8s.grigri`).
+4. Verify: `kubectl get ingress -A` internal ones show `.13`; external-dns log shows the
+   updates; `dig @1.1.1.1 argocd.internal.grigri.cloud` = .13; the records from the Phase 0
+   exception list are unchanged; from a pod, `vault.internal`/`s3.internal` resolve to .13;
+   External Secrets syncs (force one refresh), one backup job writes to minio, argocd and vault
+   UIs, Grafana datasources (loki, prometheus-long-term) healthy.
+5. Right after: `*: Publish internal routes in DNS` (external-dns annotation on all internal
+   routes; same target `.13`, so no record changes; D7).
+6. Watch 3-7 days: nginx-internal request rate goes to ~0 (residual = a client pinned to `.1`
+   or a cached answer, find it).
+
+Rollback: revert step 2 (records go back to `.1` within one external-dns interval + TTL) and
+P4.1.
+
+**Gate 4:** nginx-internal near zero requests for 3+ days, no regressions.
+
+### Phase 5 - External switch (one window, at pfSense)
+
+Low-traffic time. The owner does the pfSense steps; an agent watches and verifies.
+
+1. Pre-checks: Gate 3 diff script re-run against `.14`, external Envoy pods ready, nginx
+   healthy (rollback target), multivara routes and the bridge `Accepted`.
+2. pfSense **P5.1** (alias `k8s_external_ingress` -> .14), apply.
+3. pfSense **P5.2** (3 host overrides -> .14), apply.
+4. Merge the prepared commits (hermes hostAliases/tests, nginx-external Service annotations
+   removed).
+5. Restart the Envoy Gateway controller (or touch the OIDC SecurityPolicies): it fetches OIDC
+   discovery from `idm.grigri.cloud`, which just moved, and may not retry a failure.
+6. Verify from outside (phone on mobile data) and from the LAN: the Gate 3 functional list,
+   OIDC login on argocd/grafana/forgejo/freshrss/dawarich (in-cluster OIDC clients reach idm
+   through the override, now `.14`), argocd webhook delivery from GitHub, Argo still syncing
+   `multivara/gitops` from `git.grigri.cloud`, external-dns healthy, the Forkline Remote
+   passthrough listener reachable on public 443 (#199).
+7. Watch one week: Envoy 5xx/latency alerts; nginx-external request rate drops to bridge
+   traffic only. Then P5.3.
+
+Rollback: P5.1 and P5.2 back to `.4` (seconds), revert the hermes commit. Routes stay in place.
+
+**Gate 5:** one week without regressions.
+
+### Phase 6 - Decommission (both controllers together, D8)
+
+Separate commits, in order:
+
+1. Explicit `Certificate`s for any TLS secret found in Phase 0.5, then delete every `ingress:`
+   block, raw Ingress template and chart `ingress.enabled` (grep templates for each removed
+   values key so nothing falls back to a chart default). multivara does the same in its repo.
+2. Remove `system/oauth2-proxy`, its Kanidm client and Vault paths (D3).
+3. Remove `system/ingress-nginx`. Remove `system/ingress-nginx-external` **only after** calypso
+   runners use HTTPRoutes and the bridge listener is replaced; until then it serves runners
+   only. Then clean what Argo does not prune: IngressClasses, admission webhook configs,
+   leader-election Leases, ClusterRoles, leftover Secrets.
+4. Drop nginx references from NetworkPolicies, otel-collector rules, Loki/Tempo configs,
+   dashboards and alerts.
+5. Docs: `AGENTS.md` tech stack, `docs/conventions/helm.md`, `deploying-new-apps.md` decision
+   tree, README network section, `docs/network/pfsense.md`; an ADR for the Gateway API choice.
+6. pfSense P6.1-P6.3.
+
+**Gate 6:** zero Ingress objects (or only runner ones while the bridge exists), no
+`nginx_ingress_controller_*` series once both are gone, no `.1`/`.4` in Cilium LB IPAM, all Argo
+apps Synced/Healthy.
+
+## Verification Checklist (per route)
+
+- [ ] status and redirects match nginx; `http://` redirects to `https://`
+- [ ] valid cert for the host, h2 negotiated (also on a second host after any listener change)
+- [ ] HSTS, security headers present; `Server` absent
+- [ ] auth: 302 to login unauthenticated, 403 wrong group, 200 right group, skip paths open
+- [ ] the app's special case recipe, if any
+- [ ] large upload, long request (timeouts), websocket/SSE where the app uses them
+- [ ] paths with `%2F`, trailing slashes, prefix boundaries (`/api` vs `/apifoo`)
+- [ ] real client IP in the app log
+- [ ] Envoy access log `response_flags` empty
+
+## Troubleshooting (expected failure modes)
+
+| Symptom                                 | Likely cause                                                                                             |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| new VIP unreachable from LAN            | not advertised: `Local` with no ready endpoint (proxies Pending, e.g. placement too strict)              |
+| 504 after 15s                           | gateway-wide request timeout missing or overridden by a route policy without `StrategicMerge`            |
+| S3/MinIO 403 `SignatureDoesNotMatch`    | compression enabled on an S3 host                                                                        |
+| `%2F` paths return 3xx/404              | `escapedSlashesAction` not `KeepUnchanged`                                                               |
+| 426 for old clients                     | `http1.http10` not enabled                                                                               |
+| h2 lost on all hosts                    | hostname-scoped TLS listener without pinned ALPN                                                         |
+| intermittent 503 `UF`                   | backend expects TLS (missing `BackendTLSPolicy`) or a NetworkPolicy still admits only nginx              |
+| VIP unreachable during roll             | `maxSurge 0` with `Local`; BGP withdraws before the new pod is ready                                     |
+| OIDC 500 after the external switch      | controller cached a failed OIDC discovery; restart controller                                            |
+| internal record not moved after Phase 4 | Ingress has a `target` annotation or is not `nginx-internal`; or the name is a Service record (expected) |
+| app lost TLS secret                     | Ingress deleted with owner-ref'd Certificate still mounted elsewhere                                     |
+| LAN works, outside fails (or reverse)   | P5.1 and P5.2 out of step: LAN uses the override, outside uses the alias                                 |
+
+## Files to Modify
+
+New: `system/envoy-gateway/**`, `docs/conventions/` gateway procedure, `docs/network/pfsense.md`,
+ADR. Changed: `system/external-dns/values.yaml`, `system/cert-manager` (ZeroSSL issuer),
+`system/ingress-nginx/values.yaml` (Phase 4 publish address), `platform/git` (TCPRoute), every
+app in the inventory, `apps/hermes/values.yaml` + tests, mcp-gateway(-admin) network policies,
+`system/otel-collector/values.yaml`, `system/loki/...`, `system/tempo/...`, monitoring alerts,
+docs. Removed (Phase 6): `system/ingress-nginx/`, `system/oauth2-proxy/`, later
+`system/ingress-nginx-external/`. Other repos: multivara/gitops routes, `DNSEndpoint`, bridge
+`TLSRoute`; calypso runner HTTPRoute support. Manual: pfSense table above.
+
+## Execution Order
+
+Phase 0 -> 1 -> 2 -> 3 (all apps, both gateways, no traffic) -> 4 (internal switch) -> 5
+(external switch at pfSense) -> 6 (decommission both). #199's DNS/ZeroSSL/Keycloak items run in
+parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
+
+## Open Items
+
+- Calypso HTTPRoute support for runners (multivara/calypso work, not covered by #199); gates
+  the removal of ingress-nginx-external and of the bridge listener.
+- kroki: caching sidecar image and config (recipe 6).
