@@ -1,0 +1,59 @@
+# Envoy Gateway routes (ingress-nginx migration), alongside the chart Ingresses, which stay until
+# the switch (the chart has no route support). S3 API and console, same Services and ports.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cross-backups
+  annotations:
+    # the target (grigri.cloud) comes from the external Gateway
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - cross-backups.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: cross-backups-minio
+          port: 9000
+---
+# nginx `proxy-read-timeout` / `proxy-send-timeout` 3601 are idle timeouts: the Envoy equivalent is
+# `streamIdleTimeout` (never `timeouts.request`, a total limit, so uploads and downloads of any
+# size keep working while data moves). `mergeType: StrategicMerge` keeps the gateway defaults.
+# No compression on S3 hosts (it rewrites the signed Accept-Encoding and breaks SigV4); no body
+# limit and no request buffering are the Envoy defaults (nginx `proxy-body-size: 0`, buffering off).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: cross-backups-timeouts
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: cross-backups
+  mergeType: StrategicMerge
+  timeout:
+    http:
+      streamIdleTimeout: 3601s
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: cross-backups-console
+  annotations:
+    # the target (grigri.cloud) comes from the external Gateway
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - mc-cross-backups.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: cross-backups-minio-console
+          port: 9001
