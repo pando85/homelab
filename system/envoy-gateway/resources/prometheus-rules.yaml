@@ -1,0 +1,65 @@
+---
+# Mirrors the three ingress-nginx-external alerts (system/ingress-nginx-external/rules/alerts.yaml)
+# on Envoy metrics, for both Gateways. Same thresholds, `for` and `severity` labels, so they route
+# like the nginx ones.
+#
+# Envoy has no per-host request metric, so the nginx "by host" grouping becomes "by route rule":
+# `envoy_cluster_name` is `httproute/<namespace>/<route>/rule/<n>` for every HTTPRoute backend.
+# `gateway` (internal | external) is added by the PodMonitor (resources/monitoring.yaml).
+# Envoy counts 5xx from upstreams and its own 503s (no healthy upstream, connection failure) in
+# envoy_cluster_upstream_rq_xx; unmatched requests (404, no route) are not in these series.
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: envoy-gateway
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: envoy-gateway.routes
+      rules:
+        - alert: EnvoyGatewayHighErrorRate
+          expr: |
+            (
+              sum by (gateway, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name=~"httproute/.*",envoy_response_code_class="5"}[5m]))
+              /
+              sum by (gateway, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name=~"httproute/.*"}[5m]))
+            ) > 0.05
+            and
+            sum by (gateway, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name=~"httproute/.*"}[5m])) > 1
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High 5xx error rate on {{ $labels.envoy_cluster_name }} ({{ $labels.gateway }} gateway)"
+            description: "More than 5% of requests to {{ $labels.envoy_cluster_name }} through the {{ $labels.gateway }} gateway are returning 5xx errors."
+
+        - alert: EnvoyGatewayCriticalErrorRate
+          expr: |
+            (
+              sum by (gateway, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name=~"httproute/.*",envoy_response_code_class="5"}[5m]))
+              /
+              sum by (gateway, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name=~"httproute/.*"}[5m]))
+            ) > 0.25
+            and
+            sum by (gateway, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{envoy_cluster_name=~"httproute/.*"}[5m])) > 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Critical 5xx error rate on {{ $labels.envoy_cluster_name }} ({{ $labels.gateway }} gateway)"
+            description: "More than 25% of requests to {{ $labels.envoy_cluster_name }} through the {{ $labels.gateway }} gateway are returning 5xx errors."
+
+        # envoy_cluster_upstream_rq_time is in milliseconds. The cross-backups MinIO (long uploads)
+        # is excluded, as it is in the nginx rule (host cross-backups.grigri.cloud).
+        - alert: EnvoyGatewayHighLatency
+          expr: |
+            histogram_quantile(0.95, sum by (gateway, envoy_cluster_name, le) (rate(envoy_cluster_upstream_rq_time_bucket{envoy_cluster_name=~"httproute/.*",envoy_cluster_name!~"httproute/cross-backups/.*"}[5m]))) > 5000
+            and
+            sum by (gateway, envoy_cluster_name) (rate(envoy_cluster_upstream_rq_time_count{envoy_cluster_name=~"httproute/.*",envoy_cluster_name!~"httproute/cross-backups/.*"}[5m])) > 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High latency on {{ $labels.envoy_cluster_name }} ({{ $labels.gateway }} gateway)"
+            description: "p95 request latency for {{ $labels.envoy_cluster_name }} through the {{ $labels.gateway }} gateway is above 5 seconds."

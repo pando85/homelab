@@ -1,0 +1,46 @@
+---
+# Control plane metrics: Service envoy-gateway, port "metrics" (19001), path /metrics.
+# `release: monitoring` is what the kube-prometheus-stack Prometheus selects on.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: envoy-gateway
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: envoy-gateway
+      app.kubernetes.io/name: gateway-helm
+      control-plane: envoy-gateway
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+---
+# Data plane metrics: the managed proxies (both Gateways) expose Envoy stats on the container
+# port "metrics" (19001) at /stats/prometheus. The proxies have no Service for it, so scrape the
+# pods. The `gateway` label (internal / external) comes from the owning-gateway pod label.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: envoy-proxy
+  labels:
+    release: monitoring
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: envoy
+      app.kubernetes.io/component: proxy
+      app.kubernetes.io/managed-by: envoy-gateway
+  podMetricsEndpoints:
+    - port: metrics
+      path: /stats/prometheus
+      interval: 30s
+      scrapeTimeout: 10s
+      relabelings:
+        - action: replace
+          sourceLabels:
+            - __meta_kubernetes_pod_label_gateway_envoyproxy_io_owning_gateway_name
+          targetLabel: gateway

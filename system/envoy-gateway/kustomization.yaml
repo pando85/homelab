@@ -11,6 +11,8 @@ resources:
   - resources/gateway-external.yaml
   - resources/http-redirect-routes.yaml
   - resources/policies.yaml
+  - resources/monitoring.yaml
+  - resources/prometheus-rules.yaml
 
 helmCharts:
   # CRDs (Gateway API experimental channel + Envoy Gateway). Keep the version
@@ -28,6 +30,23 @@ helmCharts:
     namespace: envoy-gateway
     includeCRDs: false
     valuesFile: values.yaml
+
+configMapGenerator:
+  # Upstream Envoy Gateway dashboards (charts/gateway-addons-helm/dashboards at v1.9.3). Local
+  # edits: hardcoded datasource uid replaced by the $datasource variable, controller namespace
+  # default envoy-gateway. Picked up by the Grafana sidecar (label grafana_dashboard).
+  - name: envoy-gateway-dashboards
+    files:
+      - dashboards/envoy-clusters.json
+      - dashboards/envoy-gateway-global.json
+      - dashboards/envoy-proxy-global.json
+    options:
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana.grafana.com/dashboards.target-directory: /tmp/dashboards/envoy-gateway
+        # ~210 KiB of JSON: too big for the client-side last-applied annotation
+        argocd.argoproj.io/sync-options: ServerSideApply=true
 
 patches:
   # CRDs are larger than the 262144 byte client-side last-applied annotation limit
