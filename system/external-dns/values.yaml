@@ -17,9 +17,14 @@ external-dns:
   sources:
     - service
     - ingress
+    # gateway-httproute reads Gateway API HTTPRoutes (target from the Gateway, annotation filter
+    # applies to the route); crd reads DNSEndpoint objects. Not gateway-tcproute: v1alpha2 only.
+    - gateway-httproute
+    - crd
   domainFilters:
     - grigri.cloud
     - forkline.dev
+    - forkline.io
     - mintpsicologia.es
   serviceMonitor:
     enabled: true
