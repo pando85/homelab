@@ -97,21 +97,27 @@ grigri.cloud` and the internal Gateway has none (its records default to `.13`).
 
 ## nginx annotation to Gateway API
 
-The gateway-wide defaults match nginx (60 s request timeout, HSTS and security headers, `Server`
-removed, h2 and HTTP/1.0, no body limit, no response buffering, websocket upgrade enabled on
+The gateway-wide defaults match nginx (60 s idle timeouts and no total request limit, HSTS only,
+`Server` removed, h2 and HTTP/1.0, no body limit, no response buffering, websocket upgrade enabled on
 every route). An app only needs something extra when it relied on a non-default behaviour.
 
 | nginx                                                              | Gateway API / Envoy Gateway                                                                                                         |
 | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `proxy-body-size`, `proxy-buffer-size`, `proxy-buffering off`       | nothing (no body limit, streaming, larger header limits)                                                                             |
-| `proxy-read/send-timeout`, long uploads and streams                 | route `timeouts.request: 0s`, or a route `BackendTrafficPolicy` with `mergeType: StrategicMerge` (never one without it)              |
-| websockets                                                          | nothing to configure; **verify an idle connection older than 60 s** (see "Known unknowns")                                          |
+| `proxy-read/send-timeout` (idle between reads or writes)            | only when longer than 60 s: route `BackendTrafficPolicy` `timeout.http.streamIdleTimeout` with `mergeType: StrategicMerge`; see "Timeouts" |
+| `proxy-connect-timeout`                                             | route `BackendTrafficPolicy` `timeout.tcp.connectTimeout`, only when it is not the 5 s default; see "Timeouts"                       |
+| long uploads, downloads, streams, SSE, websockets                   | nothing while data keeps flowing (no total limit); **never** `timeouts.request` / `requestTimeout` (a total limit)                   |
 | `backend-protocol: HTTPS`, backend CA available                     | `BackendTLSPolicy` (below)                                                                                                           |
 | `backend-protocol: HTTPS`, self-signed backend, nginx never verified | Envoy Gateway `Backend` with `tls.insecureSkipVerify: true` (below)                                                                  |
 | `rewrite-target`, redirects                                         | `URLRewrite` / `RequestRedirect` filters (a redirect rule cannot have `backendRefs`)                                                 |
 | `configuration-snippet` / `server-snippet`                          | translate by behaviour (recipes in the plan); request-side query or header logic is an `EnvoyExtensionPolicy` with Lua (below)       |
 | compression                                                         | `BackendTrafficPolicy` `compressor` per route, never on S3/MinIO hosts                                                               |
 | `auth-url` / `auth-signin` / `auth-snippet` skips                   | see "Authentication"                                                                                                                 |
+
+Response headers: nginx sends only `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+(https only, replacing an app's own value) and removes `Server`; the gateways do exactly that and
+nothing else, so an app's own `Referrer-Policy`, `Permissions-Policy` etc. pass through. Per-app
+hardening headers are added later on that app's route (filter), never gateway-wide.
 
 Never convert nginx snippets with a tool, and never guess: capture the live behaviour with `curl`
 on the nginx VIP (`.1` internal, `.4` external) first, then reproduce it on `.13` / `.14`.
@@ -174,6 +180,93 @@ Reproduce the nginx regex semantics exactly (case-insensitive, query handling) a
 with `lua5.4` offline against the edge cases before pushing. nginx path matches are
 case-insensitive when the regex says `~*`; Gateway API paths are case-sensitive unless a regex
 with `(?i)` is used. A regex path is a **full** match.
+
+## Timeouts
+
+**nginx timeouts are idle timeouts, Envoy's route timeout is a total limit.** nginx
+`proxy-read-timeout` / `proxy-send-timeout` (default 60 s) only fire when nothing is read or
+written for that long. Envoy's `requestTimeout` (what `BackendTrafficPolicy.timeout.http.requestTimeout`
+and HTTPRoute `timeouts.request` / `backendRequest` set) runs from the end of the request until the
+response is complete, so 60 s total cut a 50 KB/s download of the Radarr movie list at 60.3 s where
+nginx delivered all of it in 158 s. Gateway-wide defaults (`system/envoy-gateway/resources/policies.yaml`):
+
+| Envoy setting                                              | Value | nginx equivalent                                       |
+| ---------------------------------------------------------- | ----- | ------------------------------------------------------ |
+| BTP `timeout.http.requestTimeout`                          | `0s`  | none (nginx has no total limit)                        |
+| BTP `timeout.http.streamIdleTimeout` (route idle timeout)  | `60s` | `proxy_read_timeout` / `proxy_send_timeout` 60 s       |
+| CTP `timeout.http.streamIdleTimeout` (listener)            | `60s` | same, for requests no route matched                    |
+| BTP `timeout.tcp.connectTimeout`                           | `5s`  | `proxy_connect_timeout` 5 s (Envoy default is 10 s)    |
+| BTP `timeout.http.connectionIdleTimeout` (upstream)        | `60s` | upstream `keepalive_timeout` 60 s                      |
+| CTP `timeout.http.idleTimeout` (client connection)         | `75s` | `keepalive_timeout` 75 s                               |
+| CTP `timeout.http.requestHeadersReceivedTimeout`           | `60s` | `client_header_timeout` 60 s                           |
+
+`streamIdleTimeout` counts a stream as idle only when no bytes move in **either direction**, and it
+also bounds upgraded streams: a websocket or SSE stream with traffic (pings, events) is never cut
+by it, a silent one is cut after 60 s, exactly like nginx. A websocket is **not** subject to the
+route request timeout. Do not set `requestReceivedTimeout`: it is a total upload limit
+(nginx `client_body_timeout` is idle).
+
+### Translating a nginx timeout annotation
+
+| Annotation                                    | Gateway API                                                                                                                       |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `proxy-read-timeout`, `proxy-send-timeout` <= 60 | nothing (gateway default)                                                                                                       |
+| `proxy-read-timeout`, `proxy-send-timeout` > 60  | `streamIdleTimeout` = the larger of the two (Envoy has one idle timeout), on the route BTP below                                |
+| `proxy-connect-timeout` <= 60 and != 5        | `tcp.connectTimeout` = the value                                                                                                  |
+| `proxy-connect-timeout` > 60                  | `tcp.connectTimeout: 60s`: 300/600/3600 are copy-paste values (a cluster Service connects in milliseconds or fails), say so in the PR |
+| `proxy-body-size`, `proxy-buffer-size`, `proxy-buffering`, `proxy-request-buffering` | nothing (see above)                                                          |
+
+Route override (mergeType is mandatory: without it this policy REPLACES the gateway one and
+`requestTimeout` goes back to Envoy's 15 s). Proven live on the rsshub pilot: the route kept
+`timeout: 0s`, got `idle_timeout: 3600s` and the cluster `connect_timeout: 60s`, the rest was inherited.
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: <app>-timeouts
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: HTTPRoute, name: <route>}
+  mergeType: StrategicMerge
+  timeout:
+    tcp:
+      connectTimeout: 60s
+    http:
+      streamIdleTimeout: 3600s
+```
+
+Never use `timeouts.request` on the
+route to emulate a long nginx timeout, it would reintroduce the total limit.
+
+Per-route values the Ingresses need today (all other hosts keep the defaults):
+
+| App (Ingress host)                                          | `streamIdleTimeout` | `connectTimeout` |
+| ----------------------------------------------------------- | ------------------- | ---------------- |
+| forgejo (`git.grigri.cloud`)                                | 3600s               | 60s              |
+| gitlab (`gitlab.grigri.cloud`)                   | 3600s               | 60s              |
+| immich (`photos.internal`, `photos`)                        | 3600s               | 60s              |
+| nextcloud (`nextcloud.grigri.cloud`)                        | 3600s               | 60s              |
+| transcoder (`transcoder.internal`)                          | 3600s               | 60s              |
+| calypso runner Ingress (`*.app.staging.forkline.dev`)       | 3600s               | 60s              |
+| minio (`s3.internal`), s3-public (`s3`), cross-backups      | 3601s               | default          |
+| isidoro (`isidoro.grigri.cloud`, tenant)                    | 1800s               | 10s              |
+| jellyseerr (`requests.grigri.cloud`)                        | 1800s (send was 600) | 60s             |
+| prowlarr (`prowlarr.grigri.cloud`)                          | 300s                | 60s (was 300)    |
+
+Re-read the live annotations before each app (`kubectl get ingress -n <ns> <name> -o yaml`); the
+table is the 2026-11-09 inventory.
+
+**Config changes that modify a listener drain connections.** Adding or changing an HCM filter
+(OIDC, JWT, Lua, a new TLS hostname) modifies the listener and Envoy closes the old listener's
+connections after the drain time (60 s). A websocket or download open during such a sync is cut
+(seen once, a 121 s websocket on the pilots), nginx keeps old workers until their connections finish.
+Do not sync listener-affecting changes during a long transfer; the client reconnects.
+
+Test a route like this (the Phase 2 reproduction): a rate-limited response longer than 60 s
+(`curl --limit-rate 50k ... -w '%{size_download} %{time_total}'` of a few MB), a websocket held
+more than 60 s with traffic, and a client that stops reading for 100 s (cut at about 60 s on both
+nginx and Envoy, resumed after 40 s on both).
 
 ## NetworkPolicies
 
@@ -382,8 +475,8 @@ cookies; a person outside the scope map group is refused by Kanidm at `/ui/oauth
    done
    ```
 
-   Expect the same status and body size; on the Envoy side also h2, HSTS, `x-frame-options`,
-   `referrer-policy`, `permissions-policy`, no `Server`.
+   Expect the same status and body size and the same response headers: on the Envoy side h2, HSTS
+   (once) and no `Server`, nothing else beyond what the app itself sends.
 3. Certificate: `openssl s_client -connect 192.168.193.13:443 -servername $H -alpn h2` shows the
    wildcard certificate (`Verification: OK`, `ALPN protocol: h2`). A request without `-k` must verify.
 4. A functional request per app (an API call, a real page, for a body-size or long request the
@@ -409,10 +502,15 @@ MB works through Envoy unchanged (Radarr movie list, 8 MB, identical size on bot
 
 ## Known unknowns
 
-- Websocket connections older than the gateway-wide 60 s request timeout are not verified through
-  the Envoy path yet. The route has `upgrade_configs: websocket` and a 3600 s `idle_timeout`, but
-  the 60 s `timeout` is also on the route. Apps with long websockets (Home Assistant, UniFi events,
-  jellyfin, Radarr SignalR) need a held-connection test before their route is considered done; the
-  fix, if needed, is `timeouts.request: 0s` on that app's route.
-- Hubble UI streams over gRPC-web (`/api`); a streaming call was not exercised (the probe path
-  answered 404 on both nginx and Envoy). Open the UI in a browser against `.13` before the switch.
+- Websockets: verified over 60 s with traffic on the Radarr SignalR endpoint (160 s and 200 s held,
+  also under the old 60 s total limit). A websocket silent for more than 60 s is expected to be cut
+  (`streamIdleTimeout`, like nginx's `proxy_read_timeout`) but no pilot has a silent websocket to
+  prove it; check it on the first app that has one (Home Assistant, esphome logs, jellyfin).
+- Hubble UI streams over gRPC-web (`/api`); the stream was not exercised (the probe paths answer 404
+  on both nginx and Envoy). Open the UI in a browser against `.13` before the switch.
+- A backend that accepts a request and never answers is bounded by `streamIdleTimeout` (60 s), not
+  proven end to end: no pilot backend can be made silent without a mutation.
+- Envoy streams request bodies to the backend (no request buffering, nginx buffers by default): a
+  client that uploads slowly reaches the app as a slow upload (Radarr's Kestrel aborts a stalled body
+  after 5 s). Apps that cannot take that need `proxy-request-buffering`-like behaviour, which Envoy
+  Gateway does not offer; test large slow uploads on immich/nextcloud/forgejo.

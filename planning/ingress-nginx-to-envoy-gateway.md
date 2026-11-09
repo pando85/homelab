@@ -111,10 +111,11 @@ Step 2 notes:
   listeners (apex plus wildcard, `mintpsicologia.es` plus `www`): Envoy Gateway then sets
   `OverlappingTLSConfig` (HTTP/2 coalescing risk), so they were split. `https-grigri-cloud`
   keeps one Certificate with the four wildcard SANs.
-- Gateway-wide `BackendTrafficPolicy` carries only the 60s request timeout: no `compressor`
+- Gateway-wide `BackendTrafficPolicy` carries the timeouts (first a 60s request timeout, replaced
+  on 2026-11-09 by idle timeouts, see "Phase 2 progress: timeouts and headers"): no `compressor`
   gateway-wide on purpose (per route, never on S3 hosts). `ClientTrafficPolicy`: ALPN, `http10`,
-  `KeepUnchanged`, idle timeout 600s, TCP keepalive, HSTS and security headers, `Server` removed;
-  internal adds `xForwardedFor.numTrustedHops: 1`.
+  `KeepUnchanged`, idle timeouts, TCP keepalive, HSTS, `Server` removed (the four extra security
+  headers were removed again 2026-11-09); internal adds `xForwardedFor.numTrustedHops: 1`.
 - JSON access log to stdout is on; `traceID` is filled since step 4 (external gateway only).
 - Internal HPA uses `ContainerResource` metrics on the `envoy` container (the pod also runs the
   shutdown-manager sidecar, which has no requests).
@@ -202,7 +203,8 @@ Findings:
   nginx never sent them (`.4` sends only HSTS). Envoy's `lateResponseHeaders.set` now adds them on
   every app and **overrides the app's own values** (Kanidm `Referrer-Policy: origin` and
   `Permissions-Policy` replaced, `X-Frame-Options: DENY` added everywhere, which can break apps
-  embedded in iframes). Decide: keep (new hardening, check iframe users), or `addIfAbsent`, or drop.
+  embedded in iframes). **Decided (D5, parity with nginx): dropped**, see "Phase 2 progress:
+  timeouts and headers".
 - **Kanidm replica restarts during a reindex** (pre-existing, not caused by the route):
   `kanidm-default-1` started a replication-triggered `System reindex` at 21:16:29, failed probes and
   was liveness-killed 6 times between 21:17 and 21:24:18 (Ready at 21:21:04, again killed at
@@ -240,14 +242,58 @@ Findings:
   `/`, and `(?i)` regexes work in route paths.
 - `BackendTLSPolicy` accepts `kind: Secret` CA references (key `ca.crt`, same namespace); `sectionName`
   is the Service port name.
-- Routes get `timeout: 60s` plus `idle_timeout: 3600s` and `upgrade_configs: websocket`. Whether an
-  upgraded websocket survives the 60 s timeout is **not yet verified** (no websocket test target:
-  `http-echo` has no websocket endpoint). Needs a held-connection test on the first websocket app
-  (Home Assistant, UniFi events, jellyfin) in Phase 3.
+- Routes got `timeout: 60s` plus `idle_timeout: 3600s` and `upgrade_configs: websocket`. The 60 s
+  **total** timeout cut a never-idle 50 KB/s download; the websocket question is settled in "Phase 2
+  progress: timeouts and headers" (Radarr SignalR as test target).
 - Hubble UI uses gRPC-web streaming on `/api`; the probe path 404s on nginx and Envoy alike, so the
   stream itself still needs a browser check before the switch.
 - Procedure written: `docs/conventions/gateway-api-routes.md`; `helm.md` and
   `deploying-new-apps.md` now point to it instead of the nginx snippet guidance.
+
+### Phase 2 progress: timeouts and headers (2026-11-09)
+
+Settled before Phase 3 scales to ~90 routes. Commits `fe6fe1792` (timeouts), `79749296a` (headers).
+
+**nginx inventory** (live `nginx.conf` of both controllers; the ConfigMaps set none of these):
+`proxy_connect_timeout 5s`, `proxy_read_timeout` / `proxy_send_timeout 60s`, `client_header_timeout`
+and `client_body_timeout 60s`, client `keepalive_timeout 75s` (`keepalive_requests 1000`,
+`keepalive_time 1h`), upstream `keepalive 320`, `keepalive_timeout 60s`, `keepalive_requests 10000`,
+`proxy_buffering off`, `proxy_request_buffering on`, `proxy_next_upstream error timeout` (3 tries),
+websocket upgrade through `$connection_upgrade` on every location. Per-Ingress annotations (99
+Ingresses): `proxy-read-timeout` 13 (300, 1800, 3600, 3601), `proxy-send-timeout` 13 (same set plus
+600), `proxy-connect-timeout` 10 (10, 60, 300, 600, 3600), `proxy-buffering` 13, `proxy-request-buffering`
+10 (all `off`), `proxy-body-size` 20; table of apps and the Envoy values in
+`docs/conventions/gateway-api-routes.md` (Timeouts).
+
+**Reproduction before the fix** (Radarr movie list 8129801 B, `curl --limit-rate 50k`, header API
+key): nginx `.1` complete in 158.3 s; Envoy `.13` cut at 60.27 s with 3072000 B (h2 `INTERNAL_ERROR`),
+caused by the route `timeout: 60s` (a total limit). A websocket (Radarr SignalR, 15 s pings) was **not**
+cut by the route timeout: held 200.7 s and 200.7 s on `.13`, 150.9 s on `.1`; Envoy does not apply
+the route timeout to upgraded streams. One earlier `.13` websocket closed at 121.6 s: a listener
+modification by a parallel auth change (`listener_modified`, OIDC/JWT filters at 21:26:35) drained it
+after the 60 s drain time; any listener-modifying sync cuts long connections (nginx keeps old workers).
+A client that stops reading for 100 s: cut on both (nginx reset, Envoy EOF at about 2 MB).
+
+**Fix** (policies in `system/envoy-gateway/resources/policies.yaml`, values in "Target Design"):
+total limit off (`requestTimeout: 0s`), idle limits instead. Config dump confirms on both proxies:
+route `timeout: 0s`, `idle_timeout: 60s`, HCM `stream_idle_timeout: 60s`, client idle 75 s,
+cluster `connect_timeout: 5s`, upstream idle 60 s. Before this, EG set a route `idle_timeout` of
+3600 s that overrode the listener value.
+
+**After the fix:** the 8129801 B download completed in 158.5 s on `.13` (nginx 158.3 s); a websocket
+held 160.5 s; a 40 s read stall resumed and completed on both `.13` and `.1`; a 100 s stall is cut
+on both. Short requests unchanged (all seven pilots answer as before, unifi 302). Route override pattern proven on the
+rsshub pilot with a temporary `StrategicMerge` BTP (`45b2fd050`, removed in `cf60dc878`): route kept
+`timeout: 0s`, got `idle_timeout: 3600s` and `connect_timeout: 60s`, upstream idle stayed 60 s.
+Not proven: a silent websocket or silent backend (no pilot can be made silent without a mutation),
+slow-upload behaviour (Envoy streams request bodies, nginx buffers them).
+
+**Headers (D5, parity):** nginx sends only `Strict-Transport-Security: max-age=31536000;
+includeSubDomains`, set in its Lua header filter (replaces an app's value, https only, and only
+when a certificate is configured for the host) and no `Server`. The four extra headers were removed
+from the gateway policies; the `http` listener of each gateway has its own CTP so the redirect
+carries no HSTS. Verified `.13`/`.14` vs `.1`/`.4` on http-echo, rsshub, vault (one HSTS line) and
+Kanidm (its own `Referrer-Policy: origin` and `Permissions-Policy` pass through).
 
 ### Phase 0 findings (2026-11-09)
 
@@ -397,8 +443,8 @@ at pfSense (`pfsense.grigri`, 2.8.1) and multivara/gitops.
 | Forwarded headers    | `use-forwarded-headers: true`                                                | `false` (real client IP via `Local`)                                                                                                                                   |
 | Extras               |                                                                              | OTel tracing (`service.name=nginx-external`), `limit-req-status-code: 429`, trace ids in access log, external-dns wildcard `*.app.staging.forkline.dev` on its Service |
 
-Shared controller config: snippets allowed (`annotations-risk-level: Critical`), brotli, HSTS,
-global security headers (Referrer-Policy, `X-Frame-Options: DENY`, nosniff, Permissions-Policy),
+Shared controller config: snippets allowed (`annotations-risk-level: Critical`), brotli, HSTS
+(the `configuration-snippet` security headers are an invalid ConfigMap key and never took effect),
 `proxy_cache_path` zone `static-cache` (kroki), TCP map `29518 -> git/git-forgejo-ssh:22` on both.
 
 ### Cluster network
@@ -535,9 +581,18 @@ How Ingresses are defined in this repo (decides how routes get written):
   `apps/hermes/tests/test_hostaliases_mcp_dns.py`, `test_render_enable.py`.
 - NetworkPolicies admitting the nginx namespaces: `apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml:65-72`,
   `apps/mcp-gateway-admin/templates/ciliumnetworkpolicy.yaml` (moved from `networkpolicy.yaml` by work in progress on 2026-11-09), `test/mcp-gateway/jobs/*.yaml`.
-  **Live check 2026-11-09:** both render only with `networkIsolation: true` (off), so no active
-  homelab policy admits only nginx today; they must gain the Envoy proxy selector before that
-  flag is ever enabled. Cluster-wide, the only live policies naming the nginx namespaces are
+  **Update 2026-11-09 (later):** `networkIsolation: true` is now committed in both apps, so these
+  CNPs are live or about to be: `mcp-gateway` admits port 3000 only from the `ingress-nginx-external`
+  controller pods (`apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml:65-75`) and `mcp-gateway-admin`
+  only from the `ingress-nginx` controller pods (`apps/mcp-gateway-admin/templates/ciliumnetworkpolicy.yaml:66-77`).
+  **Their Phase 3 step must add the Envoy proxy pods before their routes can work** (503 `UF`
+  otherwise): `io.kubernetes.pod.namespace: envoy-gateway`, `app.kubernetes.io/name: envoy`,
+  `gateway.envoyproxy.io/owning-gateway-name: <gw>` (`external` for mcp-gateway, `internal` for
+  the admin). `apps/grafana-mcp/templates/ciliumnetworkpolicy.yaml` (also `networkIsolation: true`)
+  does not pin nginx: it admits port 8000 only from the `agentgateway-standalone` pod of
+  `mcp-gateway`, so it needs no change. (Not edited here: another session owns these CNPs.)
+  **Earlier live check 2026-11-09 (before the flag was enabled):** both rendered only with
+  `networkIsolation: true` (off), so no active homelab policy admitted only nginx then. Cluster-wide, the only live policies naming the nginx namespaces are
   tenant ones: the operator-generated Keycloak NetworkPolicies in `keycloak` and
   `isidoro-keycloak` (8443 only from `ingress-nginx*`: Envoy gets 503 `UF`) and
   `calypso-runners/calypso-control-plane-runner-policy` (egress hairpin to
@@ -798,13 +853,25 @@ reference `external`).
 
 - **Gateway-wide defaults** (one `ClientTrafficPolicy` + one `BackendTrafficPolicy` per gateway),
   matching nginx so apps don't notice:
-  - request timeout 60s (Envoy Gateway default is 15s), route-level overrides for long-running
-    apps (immich, forgejo, nextcloud, transcoder, gitlab, minio/s3, runners: 3600s or `0s`);
-  - HSTS identical to nginx (`max-age=31536000; includeSubDomains`), remove `Server`, the four
-    global security headers;
+  - **timeouts: idle, not total.** nginx `proxy-read/send-timeout` (60s) are idle timeouts, Envoy's
+    route `requestTimeout` is a TOTAL limit (a 60s one cut a 50 KB/s, never-idle 8 MB download at
+    60.3s; nginx delivered it in 158s). Gateway-wide: BTP `requestTimeout: 0s`, `streamIdleTimeout:
+    60s` (no bytes in either direction, also bounds websockets and SSE), `connectionIdleTimeout:
+    60s` (nginx upstream keepalive), `tcp.connectTimeout: 5s`; CTP `streamIdleTimeout: 60s`,
+    `idleTimeout: 75s` (nginx `keepalive_timeout`), `requestHeadersReceivedTimeout: 60s`;
+    `requestReceivedTimeout` stays unset (it is a total upload limit). Route-level overrides only
+    where an annotation sets a longer idle value (forgejo, gitlab, immich, nextcloud, transcoder,
+    runners 3600s; minio/s3 3601s; isidoro, jellyseerr 1800s; prowlarr 300s): a route BTP with
+    `mergeType: StrategicMerge` setting `streamIdleTimeout`, never `timeouts.request`. Rule and
+    table: `docs/conventions/gateway-api-routes.md` (Timeouts);
+  - HSTS identical to nginx (`max-age=31536000; includeSubDomains`, https only, replaces an app's
+    own value), remove `Server`, **no other security headers** (nginx sends none; gateway-wide
+    values would override apps such as Kanidm; per-app hardening is a later per-route addition). The
+    port 80 listener has its own CTP without headers because a listener policy replaces the gateway
+    one;
   - `tls.alpnProtocols: [h2, http/1.1]` pinned (**mandatory here**: hostname-scoped TLS
     listeners silently drop h2 gateway-wide otherwise), `http1.http10` enabled, path
-    `escapedSlashesAction: KeepUnchanged`, idle timeouts and TCP keepalive set explicitly;
+    `escapedSlashesAction: KeepUnchanged`, TCP keepalive set explicitly;
   - compression (`compressor: [{type: Brotli}, {type: Gzip}]`; the older `compression` field is deprecated) **only per route, never on MinIO/S3 hosts** (compression rewrites
     `Accept-Encoding`, which breaks SigV4-signed requests);
   - every route-level `BackendTrafficPolicy` uses `mergeType: StrategicMerge`, otherwise it
@@ -922,12 +989,12 @@ spec:
 
 | nginx                                                                                              | Envoy Gateway                                                                                                                                                                                                                                                               |
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `more_set_headers` security headers, HSTS (`max-age=31536000; includeSubDomains`), `server_tokens` | `ClientTrafficPolicy.headers.lateResponseHeaders.set` (Referrer-Policy, X-Frame-Options, X-Content-Type-Options, Permissions-Policy, Strict-Transport-Security) and `remove: [Server]`                                                                                      |
+| HSTS (`max-age=31536000; includeSubDomains`, https only), `server_tokens`                          | `ClientTrafficPolicy.headers.lateResponseHeaders.set` Strict-Transport-Security and `remove: [Server]` (no other security headers: nginx never sent them)                                                                                      |
 | brotli                                                                                             | `BackendTrafficPolicy.compressor: [{type: Brotli}, {type: Gzip}]` on routes only, never on S3 or navidrome routes                                                                                                                                                           |
 | `use-forwarded-headers: true` (internal)                                                           | internal `ClientTrafficPolicy.clientIPDetection.xForwardedFor.numTrustedHops: 1` (or `trustedCIDRs`); external: none                                                                                                                                                        |
 | OTel tracing, trace_id in access log                                                               | `EnvoyProxy.telemetry.tracing` (`provider.type: OpenTelemetry`, backendRef to the otel-collector Service :4317, `samplingRate: 100`) + `ReferenceGrant`; JSON access log with `"traceID": "%TRACE_ID%"`; service name via `customTags` or check what the collector receives |
 | `limit-req-status-code: 429`                                                                       | default for Envoy local rate limits                                                                                                                                                                                                                                         |
-| implicit nginx defaults                                                                            | `tls.alpnProtocols: [h2, http/1.1]`, `path.escapedSlashesAction: KeepUnchanged`, `http1.http10: {}`, `timeout.http.idleTimeout: 600s`, `tcpKeepalive`, request timeout 60s                                                                                                  |
+| implicit nginx defaults                                                                            | `tls.alpnProtocols: [h2, http/1.1]`, `path.escapedSlashesAction: KeepUnchanged`, `http1.http10: {}`, `timeout.http.idleTimeout: 75s`, `streamIdleTimeout: 60s`, `tcpKeepalive`, BTP `requestTimeout: 0s` plus `streamIdleTimeout: 60s`                                                                                                  |
 
 Verify: `curl -skI https://<host>/ | grep -i 'strict-transport\|x-frame\|referrer\|permissions\|server'`,
 `curl -sk --http2 -o /dev/null -w '%{http_version}'` = 2.
@@ -1031,7 +1098,7 @@ Location, value: /stream.html?src=tcp_magic}]` (`set` works, `remove` is ignored
 | `^/(build\|tests\|config\|lib\|3rdparty\|templates\|data)(/\|$)` -> 404 | one rule with 7 `PathPrefix` matches + `HTTPRouteFilter.directResponse` 404                                                            |
 | `^/(\.\|autotest\|occ\|issue\|indie\|db_\|console)` -> 404              | `RegularExpression` `^/(\.\|autotest\|occ\|issue\|indie\|db_\|console).*` + `directResponse` 404                                       |
 | `robots.txt` logging off                                                | nothing                                                                                                                                |
-| 3600s, buffering off, 35G                                               | `timeouts.request: 0s`; no buffer, no body limit                                                                                       |
+| 3600s, buffering off, 35G                                               | route BTP `streamIdleTimeout: 3600s` (`StrategicMerge`); no buffer, no body limit                                                                                       |
 
 Verify: `curl -A DavClnt` on `/`, `/.well-known/caldav`, `/config/x` (404), desktop and mobile
 sync, a multi-GB upload over a slow link (stream idle timeout).
@@ -1044,7 +1111,7 @@ Verify `?PHP_SESSION_UPLOAD_PROGRESS=x` = 403, normal URL = 200.
 **10. home-assistant**: rule `Exact /api/prometheus` + `directResponse` 403 ahead of `/`
 (Prometheus scrapes the Service directly). Verify 403 from outside.
 
-**11. MinIO** (`platform/minio`, `apps/s3-public`, `apps/cross-backups`): `timeouts.request: 0s`;
+**11. MinIO** (`platform/minio`, `apps/s3-public`, `apps/cross-backups`): route BTP `streamIdleTimeout: 3601s` (`StrategicMerge`; no total limit anywhere);
 nothing for body, buffering or chunked; `ClientTrafficPolicy.headers.withUnderscoresAction:
 Allow` if clients send underscore headers (`ignore_invalid_headers off`); **no compression**
 (it strips the signed `Accept-Encoding`, SigV4 fails with 400/403). Verify with a real SDK
@@ -1423,7 +1490,7 @@ apps Synced/Healthy.
 | Symptom                                 | Likely cause                                                                                             |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | new VIP unreachable from LAN            | not advertised: `Local` with no ready endpoint (proxies Pending, e.g. placement too strict)              |
-| 504 after 15s                           | gateway-wide request timeout missing or overridden by a route policy without `StrategicMerge`            |
+| 504 after 15s, or a stream cut at 60s   | gateway-wide BTP missing, or a route BTP without `StrategicMerge` (reverts `requestTimeout` to 15s and the idle timeout to the default) |
 | S3/MinIO 403 `SignatureDoesNotMatch`    | compression enabled on an S3 host                                                                        |
 | `%2F` paths return 3xx/404              | `escapedSlashesAction` not `KeepUnchanged`                                                               |
 | 426 for old clients                     | `http1.http10` not enabled                                                                               |
@@ -1474,8 +1541,11 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
   out` for two SDS secrets when a policy became valid together with its Secret; it recovered.
   Not exercised: deliberate delete/recreate churn (needs `kubectl delete`).
 - Interactive OIDC login, Envoy 403 and the Lua `#/login` rewrite: owner test (Gate 2).
-- Websockets through a route with the 60 s request timeout (esphome logs) unverified.
-- Gateway-wide security headers override app headers (Phase 2 auth findings): decide.
+- Websockets silent for more than 60 s (esphome logs, Home Assistant) are expected to be cut by
+  `streamIdleTimeout` like nginx; unproven on a silent websocket (the pilots only have SignalR,
+  which pings every 15 s).
+- Envoy streams request bodies (nginx buffers): slow uploads reach the app as slow uploads; test
+  immich, nextcloud, forgejo with a throttled large upload.
 - Kanidm: startupProbe or longer probe timeouts against reindex restarts (Phase 2 auth findings).
 - Helm hooks (the `gateway-helm` certgen Job, RBAC) under kustomize `helmCharts` become Argo
   hooks; they need the namespace first. Verify in the Phase 1 step 1 sync.
