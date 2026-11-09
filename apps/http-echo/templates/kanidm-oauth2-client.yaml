@@ -1,0 +1,29 @@
+---
+# OIDC client for the Envoy Gateway SecurityPolicy on the external route (replaces the shared
+# oauth2-proxy client for this app). Kanidm only issues tokens to the scope map groups below.
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmOAuth2Client
+metadata:
+  name: http-echo
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+  displayname: http-echo
+  origin: https://http-echo.grigri.cloud/
+  redirectUrl:
+    - https://http-echo.grigri.cloud/oauth2/callback
+  # same users as nginx today: no allowed_groups, so anyone the oauth2-proxy client accepts
+  scopeMap:
+    - group: k8s-oauth2-proxy-users
+      scopes: [openid, profile, email, groups]
+    - group: navidrome-users
+      scopes: [openid, profile, email, groups]
+    - group: hermes-users
+      scopes: [openid, profile, email, groups]
+  preferShortUsername: true
+  strictRedirectUrl: true
+  # Envoy Gateway reads the client secret from the `client-secret` key
+  secretKeyAliases:
+    clientSecret:
+      - client-secret
