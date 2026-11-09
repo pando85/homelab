@@ -1,5 +1,12 @@
 oauth2-proxy:
   replicaCount: 2
+  # Scale down an old pod before creating the surge one. With hard required
+  # anti-affinity and only 2 schedulable nodes, a pure-maxSurge rollout
+  # deadlocks (no free node for the new pod while both old pods are Running).
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
   ingress:
     enabled: true
     className: nginx-external
