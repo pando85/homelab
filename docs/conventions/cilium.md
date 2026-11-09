@@ -19,29 +19,37 @@
 
 ## Kubelet probes under enforced policies
 
-- **Any enforced Cilium policy set on a workload must permit BOTH legs of the kubelet probe path**:
-  ingress to the probe port from the node (`fromEntities: [host, remote-node]`) **and** egress back to
-  the node (`toEntities: [host, remote-node]`, or a port-scoped `toEntities: [cluster]` as
-  `calypso-runners/calypso-control-plane-runner-policy` does). `cluster` is documented to include the
-  `host` and `remote-node` entities, so a `cluster` egress rule covers the node.
-- **A probe `context deadline exceeded` does not mean the request was never delivered.** The request can
-  have reached the pod and its reply been dropped by the egress side. Attach the symptom to a direction
-  only from a per-policy/per-port verdict, never from the timeout alone.
-- **Aggregate Hubble/deny counters prove nothing** — they are cumulative and unattributable to a
-  namespace, policy or port. Capture `cilium-dbg monitor -t deny`, the CT entry and a targeted dial.
-- Measured on this cluster (`cilium-config`, 2026-11-09): `enable-host-firewall: false`,
-  `enable-policy: default`, `allow-localhost` unset — so upstream cilium/cilium#21965 (host-egress
-  policy denying kubelet, needs `enable-host-firewall: true`) is **not** our configuration, and per
-  Cilium docs local host→pod ingress is allowed implicitly unless `--allow-localhost=policy`. Both
-  facts mean an *ingress* omission on the node path is a weak explanation; the egress/return leg is the
-  live candidate and is being measured, not assumed (see
-  `docs/troubleshooting/mcp-firecrawl-egress-regression.md`).
-- **Native Kubernetes NetworkPolicy cannot name a node peer** — that is an API limitation only, not a
-  Cilium one (Cilium has the entities above). It must never be used as an explanation for a failure that
-  happened with a Cilium-native policy attached, and it is not a reason to skip the egress allowance.
-- **Never document a datapath behaviour as "proven" without a disposable in-cluster test on this
-  cluster** (real routing, kernel, datapath). A look-alike cluster or a `helm template` render is not
-  evidence.
-- Chart/source hygiene: comments in charts that justify *omitting* the probe port from a policy by
-  "the node cannot be named anyway" are misleading for the reason above and must be corrected before any
-  re-land.
+Measured 2026-11-09 on `grigri` (Cilium `v1.20.4`, `enable-policy: default`,
+`enable-host-firewall: false`, `allow-localhost` unset) with disposable probe pods and CNPs in
+`default`, all deleted afterwards. Matrix numbers:
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
+
+- **An INGRESS section is what breaks kubelet `httpGet`/`tcpSocket` probes.** Any policy set that puts an
+  ingress rule on a probed pod makes probes time out with `context deadline exceeded` — native
+  NetworkPolicy and CiliumNetworkPolicy alike. Egress-only policy sets did not break a single probe in
+  any run. A `context deadline exceeded` therefore means the **request was denied on ingress**, not that
+  a reply was lost on egress; ingress is stateful and probe replies traverse it unharmed.
+- **The kubelet probe source cannot be matched by `host`, `remote-node`, `cluster` or a node-subnet
+  `fromCIDR`** while `enable-host-firewall: false`. Only `world` matched. Any advice of the form "allow
+  the node with `fromEntities`/`toEntities: [host, remote-node]`" is **falsified** — that cure does not
+  work here, and it is not what the one long-lived policy-covered workload relies on:
+  `calypso-runners/calypso-control-plane-runner-policy` (273 d, `VALID=True`) survives because its
+  ingress `fromEntities` also lists `world` (verified live, not inferred).
+- **Production-safe shape (proven):** keep the probe on a **dedicated health port**; allow that port from
+  `fromEntities: [world]` and *nothing else* in that rule; serve the real app port and the metrics port
+  from `fromEndpoints`; egress `toEntities: [cluster]`. Do **not** put `cluster` on the health port — in
+  one run it shared the rule list and leaked the app port.
+- **Native Kubernetes NetworkPolicy cannot express this at all** — no entities, and a node `ipBlock`
+  does not match the probe source. Any native NP with `policyTypes: [Ingress]` on a probed pod breaks it.
+  Use a CiliumNetworkPolicy in the shape above, or make the probes `exec`, which is immune by
+  construction.
+- **Accepted residual exposure:** `world` opens only that dedicated health port to anything routable to
+  the pod IP, and only the health body. If the owner rejects that, the alternatives are `exec` probes or
+  `enable-host-firewall=true` — cluster-wide and **untested here**, and the only thing that would make
+  `host`/`remote-node` matching meaningful.
+- **Timing is safe:** applying the CNP *before* the endpoint exists works (attached 6 m 32 s earlier →
+  Ready in 6 s, zero probe failures). Apply at or before the workload and keep
+  `failureThreshold >= 6` anyway.
+- Aggregate Hubble/deny counters still prove nothing — cumulative and unattributable. Never document a
+  datapath behaviour as "proven" without a disposable in-cluster test on this cluster; a
+  `helm template` render or a look-alike cluster is not evidence.

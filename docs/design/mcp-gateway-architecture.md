@@ -2,22 +2,27 @@
 
 **Status:** Agreed baseline (implementation validation pending). The first live attempt of the
 disabled-only foundation (`9049af3bf`, deployed and reverted on 2026-11-08) failed kubelet startup probes
-on `:15021` while the process was healthy. This doc previously stated that the attached NetworkPolicy set
-denies the node path; that explanation is **audit-corrected** — a second, Cilium-native policy that
-explicitly allowed the node on its probe port (`838031375`) failed the same way on 2026-11-09, and its
-egress named no node/host. The candidate mechanism is now the **pod→node response under an enforced
-egress policy**, probable and still under measurement, not proven. See
-`docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Second"/"Third occurrence") and the durable
-rule in `docs/conventions/cilium.md`. **Both planes never
-reached Ready at `9049af3bf`, so session-key stability across reconciles, RFC 9728 discovery, and
-disabled-backend 404 were NEVER observed live; they are local render/boot evidence only. No live
-gateway or parity claim exists.** The next gate before policy re-land is the in-flight probe-policy
-matrix; the policy-free foundation itself is live again and is tracked in
-`planning/mcp-gateway-implementation.md`.
+on `:15021` while the process was healthy, and the grafana-mcp CNP (`838031375`) reproduced it on
+2026-11-09. Both are now **explained by measurement**, not by argument: any policy set carrying an
+**ingress** rule on an `httpGet`/`tcpSocket`-probed pod denies the kubelet probe, and on this cluster
+(`enable-host-firewall: false`) the probe source is matchable **only** as `world` - `host`,
+`remote-node`, `cluster` and a node-subnet `fromCIDR` all fail. The two explanations this doc gave
+earlier ("a NetworkPolicy cannot name the node, so ingress had no permitted source", then the follow-up
+"the pod→node response is dropped by an enforced egress policy") are both **falsified** - the second one
+was measured out on 2026-11-09 (egress-only policy sets kept pods Ready with zero probe failures).
+Matrix numbers and the reasoning trail:
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Measured answer"); durable rule and the
+proven split-port shape: `docs/conventions/cilium.md`.
+**Neither `9049af3bf` plane ever reached Ready**, so session-key stability across reconciles was never
+observed *at that revision*. The policy-free foundation that replaced it is live: at `3a1e2d19e` the
+public plane answers `/context7/mcp` → 401, `/grafana/mcp` → 404 (route present, disabled) and the
+RFC 9728 protected-resource metadata for `/context7/mcp` → 200 (re-verified 2026-11-09). Backend
+*parity* through the gateway is still not demonstrated. Policy re-land is unblocked in principle - the
+shape is known and measured - and is tracked in `planning/mcp-gateway-implementation.md`.
 **Provisional placement:** both planes and the diagnostic canary are pinned to node `prusik` via
 `nodeSelector: kubernetes.io/hostname=prusik` for diagnosis and initial rollout, accepting a
-single-node failure domain. Placement will be revisited after the node→pod probe/datapath gate.
-**Date:** 2026-11-08 (corrected 2026-11-09)
+single-node failure domain. Placement will be revisited after the isolated planes run stably.
+**Date:** 2026-11-08 (corrected 2026-11-09 after the probe matrix)
 **Implementation plan:** [`planning/mcp-gateway-implementation.md`](https://github.com/pando85/homelab/blob/master/planning/mcp-gateway-implementation.md)
 
 ## Overview
@@ -223,22 +228,32 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 
 ### NetworkPolicy
 
+- **Isolation must be a CiliumNetworkPolicy, not a NetworkPolicy**: measured on 2026-11-09, *any* policy
+  set with an ingress section on an `httpGet`/`tcpSocket`-probed pod breaks kubelet probes, and native
+  NetworkPolicy has no way to express the one allowance that works. Native
+  `policyTypes: [Ingress]` on these pods is therefore out.
+- **Proven split-port shape** (matrix cases S2/S3/S5, `docs/conventions/cilium.md`):
+  ingress `fromEntities: [world]` with `toPorts` limited to a **dedicated health/probe port** (15021, and
+  8081 where a second health listener exists); `fromEndpoints` for the app port (3000 / backend 8000) and
+  the metrics port (15020); egress `toEntities: [cluster]`. Keep `cluster` **off** the health port - when
+  it shared the rule list it leaked the app port (case E5).
 - **All MCP listener ingress**: Allowed only from gateway namespace AND gateway pods (label-based)
 - **No direct backend exposure**: No NodePort, LoadBalancer, or hostPort for MCP backends
 - **Ops exceptions on a separate PORT**: Metrics/probe on a different port, NOT a `/metrics` path
-  distinction (L3/4 enforcement). Narrow probe/node limitations via labels/RBAC. Additive
-  policies; verify denied for ordinary pods
-- **Probe path needs both directions**: any enforced policy set on a gateway or backend pod must allow
-  ingress to the probe port from the node (`fromEntities: [host, remote-node]`) **and** egress back to
-  the node (`toEntities: [host, remote-node]`, or port-scoped `toEntities: [cluster]` like the working
-  Calypso runner policy). Omitting one leg is what killed the probes at `9049af3bf` and again at
-  `838031375`. Full rule and the measured caveats: `docs/conventions/cilium.md`
+  distinction (L3/4 enforcement). Additive policies; verify denied for ordinary pods (S2 did exactly
+  that: a non-permitted pod was DENIED on 3000/15020/8000 while permitted ones were allowed)
+- **Accepted trade-off**: the `world` rule exposes only that dedicated health port to whatever can route
+  to the pod IP (health body). If the owner rejects it, the alternatives are `exec` probes or
+  `enable-host-firewall=true` (cluster-wide, untested here). Non-negotiable either way: an ingress rule
+  that does not include `world` on the probe port is a pod-kill switch, not a hardening measure.
+- **Timing**: attach the CNP at or before the workload - measured safe (policy present 6 m 32 s before
+  the endpoint was recreated → Ready in 6 s, 0 probe failures). Keep `failureThreshold >= 6`.
 - **Pending source fix (not a doc change)**: the reverted foundation chart carried a comment justifying
-  leaving 15021 off the ingress list because a policy "cannot name the node". That reasoning is wrong
-  (Cilium names the node with entities; only the native NetworkPolicy API cannot) and the comment must be
-  corrected or removed before any policy set is re-landed by the gateway owner. The current tree renders
-  no policy (`networkIsolation: false`), so nothing live depends on it today
-- **ClusterIP is not isolation**: NetworkPolicy is the isolation mechanism
+  leaving 15021 off the ingress list because a policy "cannot name the node". That reasoning is wrong and
+  the cure it implies is measured useless; the comment must be removed when the CNPs are written by the
+  source owner. The current tree renders no policy (`networkIsolation: false`), so nothing live depends
+  on it today
+- **ClusterIP is not isolation**: the CNP above is the isolation mechanism
 
 ### SSRF
 

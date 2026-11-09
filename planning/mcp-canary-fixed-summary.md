@@ -111,14 +111,19 @@ Rollback changed both policyMode (ingress→none) AND rolloutNonce (0→1), caus
 ### Source Conclusion
 Ingress-associated kubelet probe failure reproduced on prusik. Missing explicit node allow is CANDIDATE mechanism, not proven root cause. No BPF verdict captured, no source host identity captured. Chronology, stability windows, and recovery mechanism INCONCLUSIVE. No egress phase executed; cannot clear egress/Firecrawl.
 
-**Update 2026-11-09 (supersedes the ingress framing above):** the "missing explicit node allow" candidate
-was an **ingress-side** allow, and it was granted explicitly on `838031375`
-(`fromEntities: host, remote-node` on the probe port) — the probes failed anyway, so that candidate no
-longer explains the failure on its own. The leading candidate is now the **pod→node response under an
-enforced egress policy** that never names the node/host. The egress phase this summary lists as "not yet
-executed" is exactly the measurement needed. Rule to design against:
-`docs/conventions/cilium.md` ("Kubelet probes under enforced policies"); full evidence trail:
-"Second"/"Third occurrence" in `docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
+**Update 2026-11-09 (both readings below this line are now resolved by measurement):** the "missing
+explicit node allow" candidate was an **ingress-side** allow, and it was granted explicitly on
+`838031375` (`fromEntities: host, remote-node` on the probe port) — the probes failed anyway. The
+follow-up candidate recorded here, "**pod→node response under an enforced egress policy**", was then
+**falsified** by the two matrices run on `grigri`: egress-only policy sets kept probe pods Ready with
+zero probe failures, while *any* policy carrying an ingress rule broke them (native NetworkPolicy and
+CNP alike), and with `enable-host-firewall: false` the kubelet probe source matches **only** `world` —
+`host`, `remote-node`, `cluster` and a node-subnet `fromCIDR` all fail. So this canary's own conclusion
+("ingress-associated failure, missing node allow as candidate") was right about the direction and wrong
+about the cure. The egress phase listed as "not yet executed" was executed separately and measured clean.
+Durable rule and the proven split-port shape: `docs/conventions/cilium.md`; matrix tables and the full
+trail, including this file's superseded readings: "Measured answer" in
+`docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
 
 ## Fixed File List
 

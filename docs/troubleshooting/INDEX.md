@@ -466,21 +466,21 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - Firecrawl egress NetworkPolicies (`0b16b31b9`) produced kubelet **probe timeouts** on
   `api`/`worker`/`nuq` across two nodes within ~12 s of attach (selected endpoints' BPF reloaded 1 s
   after the apply), while `browser` stayed `Ready`; reverted (`8fff4f224`) and the **same** `api`
-  process recovered readiness **without a restart**. Root cause unknown. Denied counters read `0` but
-  are cumulative and unattributable, so they prove nothing either way, and app logs showing the process
-  alive with background DB work prove neither handler responsiveness nor packet location. The browser
-  policy shares the **byte-identical** DNS/internet anchors (all 14 `except` CIDRs) and SearXNG is
-  covered by an api-only `search` policy, so browser-vs-fetcher rule shape is not a discriminator —
-  only extra peers/rule count on the selected side; note also that the Firecrawl policies were
-  **Egress-only**, and the browser's only network probe is a liveness `httpGet`. The same-node A/B dial
-  (host-sourced port proxy: SYN unanswered for 6.1 s on every port, even a closed one, vs 0.07 s for a
-  policy-free neighbour) is **audit-corrected to inconclusive** — Ingress and Egress were co-attached and
-  the proxy's source identity is unproven — and the "Ingress policy cannot name the node" explanation it
-  was taken to support was **retracted** by a third occurrence: the grafana-mcp CNP (`838031375`) allowed
-  `fromEntities: host, remote-node` on its probe port and still timed out liveness, while its egress
-  named no node/host, so the candidate mechanism is the pod→node **response** under enforced egress
-  policy. Probable, not proven: the probe matrix is still running. See
-  `docs/troubleshooting/mcp-firecrawl-egress-regression.md` and the durable rule in
-  `docs/conventions/cilium.md`. The live SSRF check never ran. Re-land only with
-  deny/CT/capture evidence, a single-workload canary, and the node probe path proven open **in both
-  directions** before the policy attaches.
+  process recovered readiness **without a restart**. **Root cause UNKNOWN and it stays unknown**: the
+  2026-11-09 probe matrix measured **egress-only policy sets as clean** (cases C, D — Ready, 0 restarts),
+  so nothing reproduced explains an egress-only failure, and `browser` staying Ready with the same anchors
+  is still unexplained. Denied counters read `0` but are cumulative and unattributable, so they prove
+  nothing either way; app logs prove neither handler responsiveness nor packet location. What the same
+  matrices **did** settle is the kubelet-probe mechanism for the two later incidents (gateway
+  `9049af3bf`, grafana-mcp `838031375`): any policy set carrying an **ingress** rule on an
+  `httpGet`/`tcpSocket`-probed pod denies the probe (native NetworkPolicy and CNP alike), and while
+  `enable-host-firewall: false` the probe source matches **only** `world` — `host`, `remote-node`,
+  `cluster` and a node-subnet `fromCIDR` all fail. Both explanations published earlier here ("cannot name
+  the node on ingress", then "pod→node response dropped by enforced egress") are **falsified**; the
+  same-node A/B dial's direction was right, its reasoning was not. Safe shape: dedicated health port from
+  `fromEntities: [world]`, app/metrics ports from `fromEndpoints`, egress `toEntities: [cluster]`
+  (keep `cluster` off the health port). Rule: `docs/conventions/cilium.md`; full record with the matrix
+  tables and the retracted hypotheses:
+  `docs/troubleshooting/mcp-firecrawl-egress-regression.md`. The live SSRF check never ran. Re-land only
+  with deny/CT/capture evidence, a single-workload canary, and the probe shape proven on this cluster
+  before the policy attaches.
