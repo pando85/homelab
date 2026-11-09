@@ -12,6 +12,23 @@ metadata:
     argocd.argoproj.io/sync-wave: "1"
 spec:
   telemetry:
+    # Same as nginx-external: every request traced (nginx otel-sampler AlwaysOn), incoming
+    # traceparent trusted. Spans go to the otel-collector (cross-namespace backendRef, allowed by
+    # the ReferenceGrant in system/otel-collector). The collector special-cases the service name
+    # (full tail sampling, SERVER to CLIENT span kind), see system/otel-collector/values.yaml.
+    # The internal gateway is not traced, like nginx-internal.
+    tracing:
+      samplingRate: 100
+      provider:
+        type: OpenTelemetry
+        serviceName: envoy-external
+        backendRefs:
+          - name: otel-collector-opentelemetry-collector
+            namespace: otel-collector
+            port: 4317
+      tags:
+        http.host: "%REQ(:AUTHORITY)%"
+        upstream.cluster: "%UPSTREAM_CLUSTER%"
     accessLog:
       settings:
         - format:

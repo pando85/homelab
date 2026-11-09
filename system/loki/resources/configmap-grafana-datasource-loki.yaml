@@ -21,6 +21,8 @@ data:
             # Field names verified against REAL Loki log lines (2026-10-10):
             #   calypso-control-plane JSON: "trace_id":"3f08...95cf6","span_id":"668756d87cf308ce" (snake_case)
             #   nginx-external plain text:  trace_id=2581af41cbf9f7fddff2c2e12b1f414d span_id=9dff7f2e76e4af75
+            #   envoy-external JSON access log: "traceID":"2581af41cbf9f7fddff2c2e12b1f414d" (capital ID, example id above is the nginx one;
+            #     EnvoyProxy accessLog json key; %TRACE_ID% is the 32 hex W3C trace id)
             #   keycloak: no trace_id/traceId observed in 24h of logs — camelCase kept defensively for
             #     other OTel/Java instrumentation that may emit it in future.
             # Each regex is anchored to exactly 32 hex chars (W3C/OTel trace id) with ONE capture group.
@@ -38,6 +40,10 @@ data:
               name: traceId
               urlDisplayLabel: 'View Trace'
             - datasourceUid: tempo
+              matcherRegex: '"traceID":"([a-f0-9]{32})"'
+              name: traceID
+              urlDisplayLabel: 'View Trace'
+            - datasourceUid: tempo
               matcherRegex: 'trace_id=([a-f0-9]{32})'
               name: trace_id_plain
               urlDisplayLabel: 'View Trace'
@@ -51,4 +57,4 @@ data:
         #   Check the live DB version with:
         #     curl -u <admin>:<pw> https://grafana.grigri.cloud/api/datasources/uid/loki | jq .version
         #   Observed live DB version at time of edit: 11. Bumped file version to 15 to leave room.
-        version: 15
+        version: 16

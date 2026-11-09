@@ -4,6 +4,7 @@ namespace: otel-collector
 
 resources:
   - servicemonitor.yaml
+  - referencegrant-envoy-gateway.yaml
 
 helmCharts:
   - name: opentelemetry-collector

@@ -1,0 +1,15 @@
+# Lets the EnvoyProxy "external" in envoy-gateway send traces to the collector Service
+# (EnvoyProxy.spec.telemetry.tracing.provider.backendRefs points into this namespace).
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: envoy-gateway-tracing
+spec:
+  from:
+    - group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      namespace: envoy-gateway
+  to:
+    - group: ""
+      kind: Service
+      name: otel-collector-opentelemetry-collector
