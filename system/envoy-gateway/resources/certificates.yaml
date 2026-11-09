@@ -49,6 +49,23 @@ spec:
   dnsNames:
     - "*.isidoro.grigri.cloud"
 ---
+# internal Gateway, listener https-rajoy-internal-grigri-cloud (m.rajoy and api.m.rajoy are two
+# labels below internal.grigri.cloud, which the *.internal.grigri.cloud wildcard does not cover)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: rajoy-internal-grigri-cloud
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  secretName: rajoy-internal-grigri-cloud-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+  dnsNames:
+    - "m.rajoy.internal.grigri.cloud"
+    - "*.m.rajoy.internal.grigri.cloud"
+---
 # external Gateway, listener https-grigri-cloud (Envoy picks the cert by SNI)
 apiVersion: cert-manager.io/v1
 kind: Certificate

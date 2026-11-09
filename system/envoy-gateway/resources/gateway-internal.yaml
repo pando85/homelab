@@ -57,3 +57,15 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
+    - name: https-rajoy-internal-grigri-cloud
+      port: 443
+      protocol: HTTPS
+      hostname: "*.rajoy.internal.grigri.cloud"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: rajoy-internal-grigri-cloud-tls
+      allowedRoutes:
+        namespaces:
+          from: All
