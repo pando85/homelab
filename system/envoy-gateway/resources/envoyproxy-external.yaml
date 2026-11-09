@@ -77,6 +77,12 @@ spec:
             maxSurge: 1
             maxUnavailable: 0
         pod:
+          annotations:
+            # Pod template marker with no runtime effect. Changing it rolls the external proxies
+            # (planning/ingress-nginx-to-envoy-gateway.md, Gate 1 roll test): the tracing block
+            # is dynamic xDS config and does not roll pods. Safe to remove with the next real
+            # change to this pod template.
+            homelab.grigri.cloud/roll-test: gate1-2026-11-09
           affinity:
             nodeAffinity:
               preferredDuringSchedulingIgnoredDuringExecution:
