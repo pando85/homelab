@@ -92,6 +92,40 @@ app-template:
         - hosts:
             - *host
           secretName: bazarr-external-tls-certificate
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # The internal route has no external-dns annotation until the internal switch. The external
+  # route is behind the OIDC SecurityPolicy (templates/security-policy.yaml).
+  route:
+    internal:
+      kind: HTTPRoute
+      forceRename: bazarr-internal
+      hostnames:
+        - bazarr.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: bazarr
+              port: 6767
+    external:
+      kind: HTTPRoute
+      # stable name: the SecurityPolicy targets it
+      forceRename: bazarr-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - bazarr.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: bazarr
+              port: 6767
   defaultPodOptions:
     securityContext:
       runAsUser: 995
