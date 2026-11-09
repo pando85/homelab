@@ -25,6 +25,11 @@
 # listener it has no Host/Origin validation to trip over (`--healthz-address` is exempt
 # - measured). It also survives rescheduling: this pod has no nodeSelector, and `world`
 # matches whichever node ends up probing it, which `host`/`remote-node` did not.
+#
+# NEW MEASURED FACT: with `world` on the health port, an in-cluster pod that is NOT
+# named in `fromEndpoints` is DENIED on the health port as well. So `world` does not
+# admit cluster-identity pods; the residual exposure is only world-identity traffic
+# reaching a readiness body on a non-routable pod IP.
 apiVersion: cilium.io/v2
 kind: CiliumNetworkPolicy
 metadata:
