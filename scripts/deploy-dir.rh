@@ -28,6 +28,7 @@
       --include-crds \
       --kube-version v1.25.12 \
       --api-versions networking.k8s.io/v1/Ingress \
+      --api-versions gateway.networking.k8s.io/v1/HTTPRoute \
       --namespace {{ app_name }} \
       {{ app_name }} . \
       | kubectl apply \
