@@ -467,6 +467,69 @@ app-template:
             - *host
           secretName: hass-valetudopng-tls-certificate
 
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # Internal routes carry no external-dns annotation until the internal switch.
+  route:
+    # hass.grigri.cloud: no auth. Prometheus scrapes the Service directly, so the nginx
+    # server-snippet `location = /api/prometheus { deny all; }` becomes a 403 direct response
+    # (templates/httproutefilter-prometheus-deny.yaml) ahead of the catch-all rule.
+    hass:
+      kind: HTTPRoute
+      forceRename: home-assistant-hass
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - hass.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - matches:
+            - path:
+                type: Exact
+                value: /api/prometheus
+          filters:
+            - type: ExtensionRef
+              extensionRef:
+                group: gateway.envoyproxy.io
+                kind: HTTPRouteFilter
+                name: home-assistant-prometheus-deny
+        - backendRefs:
+            - identifier: hass
+              port: 8123
+    # appdaemon.grigri.cloud: behind the OIDC SecurityPolicy (templates/security-policy.yaml)
+    appdaemon:
+      kind: HTTPRoute
+      # stable name: the SecurityPolicy targets it
+      forceRename: home-assistant-appdaemon
+      annotations:
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - appdaemon.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: appdaemon
+              port: 5050
+    valetudopng:
+      kind: HTTPRoute
+      forceRename: home-assistant-valetudopng
+      hostnames:
+        - valetudopng.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: valetudopng
+              port: 3000
+
   persistence:
     config:
       enabled: true

@@ -1,0 +1,15 @@
+---
+# nginx server-snippet of hass.grigri.cloud: `location = /api/prometheus { deny all; }`. The route
+# `home-assistant-hass` matches the Exact path (query ignored, like nginx `=`) ahead of its
+# catch-all rule. Prometheus scrapes the Service directly, never through the gateway.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: home-assistant-prometheus-deny
+spec:
+  directResponse:
+    statusCode: 403
+    contentType: text/plain
+    body:
+      type: Inline
+      inline: 403 Forbidden
