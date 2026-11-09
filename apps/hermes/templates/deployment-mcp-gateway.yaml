@@ -122,6 +122,18 @@ spec:
       automountServiceAccountToken: {{ $h.automountServiceAccountToken }}
       enableServiceLinks: {{ $h.enableServiceLinks }}
       initContainers:
+        # Create the mcp-tokens directory with correct ownership before the token exchange runs.
+        # The hermes-data PVC is owned by uid 10000 (the Hermes user), so we need to create
+        # the directory as that user to avoid permission denied errors.
+        - name: create-mcp-tokens-dir
+          image: busybox:1.36
+          command: ["sh", "-c", "mkdir -p /opt/data/mcp-tokens && chown 10000:10000 /opt/data/mcp-tokens && chmod 700 /opt/data/mcp-tokens"]
+          volumeMounts:
+            - name: data
+              mountPath: /opt/data
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
         # Exchange first: a session that starts right after a restart must find
         # a valid credential, not a config entry pointing at a route with no
         # token file yet.
