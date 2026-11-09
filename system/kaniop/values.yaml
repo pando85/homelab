@@ -17,6 +17,12 @@ resources:
     cpu: 2
     memory: 256Mi
 
+# The operator detects the optional Gateway API kinds (HTTPRoute, BackendTLSPolicy) only at
+# startup: bump this marker to restart it after installing or upgrading those CRDs, otherwise
+# Kanidm `spec.gateway` is silently ignored.
+podAnnotations:
+  homelab.grigri.cloud/gateway-api-crds: "v1.6.1"
+
 metrics:
   enabled: true
   serviceMonitor:
