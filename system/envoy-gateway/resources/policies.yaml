@@ -36,19 +36,15 @@ spec:
     idleTime: 300s
     interval: 60s
     probes: 3
+  # Exactly what nginx sends: HSTS (replaces an app's own value, like nginx) and no Server header.
+  # nginx sends no Referrer-Policy, X-Frame-Options, X-Content-Type-Options or Permissions-Policy
+  # (its configuration-snippet key is invalid), so none is set here: gateway-wide values would
+  # override the apps' own (Kanidm). Per-app hardening goes on the route, never gateway-wide.
   headers:
     lateResponseHeaders:
       set:
         - name: Strict-Transport-Security
           value: max-age=31536000; includeSubDomains
-        - name: Referrer-Policy
-          value: strict-origin-when-cross-origin
-        - name: X-Frame-Options
-          value: DENY
-        - name: X-Content-Type-Options
-          value: nosniff
-        - name: Permissions-Policy
-          value: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
       remove:
         - Server
 ---
@@ -114,19 +110,15 @@ spec:
     idleTime: 300s
     interval: 60s
     probes: 3
+  # Exactly what nginx sends: HSTS (replaces an app's own value, like nginx) and no Server header.
+  # nginx sends no Referrer-Policy, X-Frame-Options, X-Content-Type-Options or Permissions-Policy
+  # (its configuration-snippet key is invalid), so none is set here: gateway-wide values would
+  # override the apps' own (Kanidm). Per-app hardening goes on the route, never gateway-wide.
   headers:
     lateResponseHeaders:
       set:
         - name: Strict-Transport-Security
           value: max-age=31536000; includeSubDomains
-        - name: Referrer-Policy
-          value: strict-origin-when-cross-origin
-        - name: X-Frame-Options
-          value: DENY
-        - name: X-Content-Type-Options
-          value: nosniff
-        - name: Permissions-Policy
-          value: accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()
       remove:
         - Server
 ---
@@ -156,3 +148,62 @@ spec:
       requestTimeout: 0s
       streamIdleTimeout: 60s
       connectionIdleTimeout: 60s
+---
+# Port 80 only redirects to https. nginx sends HSTS only over https, so this listener gets its own
+# policy WITHOUT the response headers (a listener policy replaces the gateway one for that
+# listener, it does not merge): keep the settings below in step with internal-defaults.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: internal-http-redirect
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: internal
+      sectionName: http
+  http1:
+    http10: {}
+  path:
+    escapedSlashesAction: KeepUnchanged
+  clientIPDetection:
+    xForwardedFor:
+      numTrustedHops: 1
+  timeout:
+    http:
+      idleTimeout: 75s
+      requestHeadersReceivedTimeout: 60s
+      streamIdleTimeout: 60s
+  tcpKeepalive:
+    idleTime: 300s
+    interval: 60s
+    probes: 3
+---
+# Same as internal-http-redirect, without clientIPDetection (like the external gateway policy).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+metadata:
+  name: external-http-redirect
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: external
+      sectionName: http
+  http1:
+    http10: {}
+  path:
+    escapedSlashesAction: KeepUnchanged
+  timeout:
+    http:
+      idleTimeout: 75s
+      requestHeadersReceivedTimeout: 60s
+      streamIdleTimeout: 60s
+  tcpKeepalive:
+    idleTime: 300s
+    interval: 60s
+    probes: 3
