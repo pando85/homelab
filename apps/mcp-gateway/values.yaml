@@ -432,6 +432,10 @@ agentgateway-standalone:
               - Cookie
               - X-Grafana-URL
               - X-Grafana-Service-Account-Token
+            # MCP snapshots the inbound authority before creating its transport.
+            # Pin it at the route as well as the target; never trust caller Host.
+            set:
+              Host: grafana-mcp.grafana-mcp.svc.cluster.local:8000
           backendAuth:
             passthrough: {}
         backends:
