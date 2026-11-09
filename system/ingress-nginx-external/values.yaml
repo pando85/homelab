@@ -103,9 +103,9 @@ ingress-nginx:
       enabled: true
       annotations:
         lbipam.cilium.io/ips: "192.168.193.4"
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: app.staging.forkline.dev
-        external-dns.kubernetes.io/hostname: "*.app.staging.forkline.dev"
+        # The Service no longer publishes DNS (external switch, Phase 5 step 4). The CNAME
+        # `*.app.staging.forkline.dev` -> `app.staging.forkline.dev` it created stays in Cloudflare:
+        # external-dns runs upsert-only, so removing the source deletes nothing.
       loadBalancerClass: "io.cilium/bgp-control-plane"
       externalTrafficPolicy: Local
       enableHttp: true
