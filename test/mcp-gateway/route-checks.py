@@ -224,6 +224,9 @@ def main():
                               "port": 8000, "path": "/mcp"}, str(gtgt["mcp"]))
         check("grafana target has no backendTLS (plain HTTP inside the cluster)",
               "backendTLS" not in (gtgt.get("policies") or {}))
+        check("grafana target pins Host without broadening the backend allowlist",
+              (gtgt.get("policies") or {}).get("requestHeaderModifier")
+              == {"set": {"Host": "grafana-mcp.grafana-mcp.svc.cluster.local:8000"}})
 
     # ---------------- 4. RFC 9728 discovery ----------------
     meta = [r for r in routes if "metadata" in r["name"]]

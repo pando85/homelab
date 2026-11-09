@@ -160,7 +160,8 @@ class Capture(BaseHTTPRequestHandler):
         # EVERY occurrence, in wire order: a dict keeps only one value per name, so the
         # duplicated credential line run E sends would be invisible if it arrived.
         auth_lines = hdr_lines(self.headers, "Authorization")
-        rec = {"path": self.path, "auth": auth, "bearer": fp(auth.split(" ", 1)[1])
+        rec = {"path": self.path, "host": self.headers.get("Host"),
+               "auth": auth, "bearer": fp(auth.split(" ", 1)[1])
                if auth and auth.lower().startswith("bearer ") else None,
                "auth_raw": fp(auth) if auth else None,
                "auth_n": len(auth_lines),
@@ -218,6 +219,16 @@ class Capture(BaseHTTPRequestHandler):
 
 class GrafanaCapture(Capture):
     name = "grafana"
+
+    def do_POST(self):
+        # Match the real backend's exact allowlist. Public/client authority
+        # must not leak through the gateway's MCP target transport.
+        if self.headers.get("Host") != "grafana-mcp.grafana-mcp.svc.cluster.local:8000":
+            self.send_response(403)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        super().do_POST()
 
 
 class CtxCapture(Capture):
@@ -565,6 +576,9 @@ def run_b(text, grafana_route):
         check("B grafana route (from the comment block) serves mcp_grafana bearers",
               code == 200, str(code))
         rec = cap_g[-1] if cap_g else {}
+        check("B grafana target rewrites public authority to the exact backend Host",
+              rec.get("host") == "grafana-mcp.grafana-mcp.svc.cluster.local:8000",
+              str(rec.get("host")))
         check("B grafana backend sees a bearer at all (passthrough, not a stripped edge)",
               rec.get("bearer") is not None, f"backend bearer={rec.get('bearer')}")
         tk_graf = token(KEY, KID, scope="mcp_grafana")

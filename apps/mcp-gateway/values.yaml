@@ -442,6 +442,12 @@ agentgateway-standalone:
                     host: grafana-mcp.grafana-mcp.svc.cluster.local
                     port: 8000
                     path: /mcp
+                  # MCP carries the original authority by default. Rewrite it only
+                  # at this target, matching the backend's exact Host allowlist.
+                  policies:
+                    requestHeaderModifier:
+                      set:
+                        Host: grafana-mcp.grafana-mcp.svc.cluster.local:8000
               statefulMode: stateless
       # ---------------------------------------------------------------------
 
@@ -533,10 +539,11 @@ kanidm:
           - mcp_context7
     # supScopeMap: additional scopes granted to specific groups. These are used
     # for Grafana role scopes (editor, admin) that the role_attribute_path checks.
-    # The grafana-users group gets 'editor' (measured: contains(scope, 'editor') matches),
-    # and grafana-admins gets 'admin'. Group membership is managed in Kanidm.
+    # Must match the grafana OAuth2 client's supScopeMap (kanidm-oauth2-client-grafana.yaml):
+    # grafana-mcp-users gets 'editor', grafana-admins gets 'admin'.
+    # Group membership is managed in Kanidm.
     supScopeMap:
-      - group: grafana-users
+      - group: grafana-mcp-users
         scopes:
           - editor
       - group: grafana-admins
