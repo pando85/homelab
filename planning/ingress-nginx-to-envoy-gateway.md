@@ -11,7 +11,7 @@ This also delivers the grigri (staging) platform part of
 Forkline Remote): experimental-channel Gateway API CRDs, a shared external Gateway with HTTPS
 listeners plus a TLS passthrough listener, and the router 443 switch away from `192.168.193.4`.
 
-**Status: planning. Decisions taken 2026-11-09 (see Decisions). Nothing implemented.**
+**Status: Phase 0 in progress (2026-11-09). See Execution Status and Autonomy Scope.**
 
 Strategy in one paragraph: run Envoy Gateway **side by side** on two new Cilium LB VIPs
 (`.13` internal, `.14` external). Every app gets its internal and external routes and is verified
@@ -38,6 +38,70 @@ done, traffic moves in **two single switches**, each verified and reversible in 
 | D7  | Cloudflare internal records | Keep them, pointing to `.13` (routes carry the external-dns annotation after the switch)                                                                           |
 | D8  | Decommission timing         | Both controllers together at the end, after the external switch soaks                                                                                              |
 | D9  | BGP ECMP                    | Not now: placement keeps proxies on `prusik`, one path per VIP as today                                                                                            |
+
+## Execution Status
+
+Work happens in a dedicated worktree (`git worktree add -b envoy-gateway <dir> origin/master`),
+committed and pushed **directly to master** (`git push origin envoy-gateway:master`, after
+`git pull --rebase origin master`). No PRs in this repo.
+
+| Phase | State       | Notes                                                                                                                                                                                                                                                                                                                   |
+| ----- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | in progress | P0.1 done (`docs/network/pfsense.md`). DNS map, TLS secret consumers, ownership: done (findings below). Pending: Envoy Gateway chart/API research (versions, CRD channel, EnvoyProxy/policy field paths, Kanidm PKCE, external-dns gateway source, Argo health), chart route support + `--publish-status-address` check |
+| 1-6   | not started |                                                                                                                                                                                                                                                                                                                         |
+
+### Phase 0 findings (2026-11-09)
+
+- `.13` and `.14` are free on the cluster side too.
+- Internal switch coverage: 42 of 45 internal hosts move (annotation `external-dns.kubernetes.io/enabled=true`).
+  Three use the `external-dns.alpha.kubernetes.io/enabled` key, which the external-dns filter
+  ignores, so their Cloudflare records (`.1`) are never updated and will not move:
+  `idm.staging.internal.forkline.dev` (multivara `keycloak`), `vault.staging.internal.forkline.dev`
+  (multivara `calypso`), `idm-internal.isidoro.grigri.cloud` (kiais `isidoro-keycloak`). Owners
+  must switch to the non-alpha key (or the records are edited by hand) before Phase 4.
+- Records that must not move (Service-sourced): `ldaps.idm.internal` (.8), `mosquitto.internal`
+  (.9), `mosquitto-tls.internal` (.10), `transcoder-rabbit.internal` (.3), `turn` (.5, CNAME),
+  `*.app.staging.forkline.dev` (CNAME, from the nginx-external Service). No `DNSEndpoint` exists yet.
+- Pods resolve via nodelocaldns/CoreDNS -> node resolv.conf -> pfSense: `idm`, `git`, `auth`,
+  `grafana` = `.4` (override); `mcp` = public IP (NAT reflection); `*.internal` = `.1` (Cloudflare).
+- External Secrets uses `https://vault.vault:8200` (unaffected). **cert-manager `iot` ClusterIssuer
+  uses `https://vault.internal.grigri.cloud` on purpose** (Vault custom CA): the vault route must
+  be verified before Phase 4. Other ingress-path consumers: kanidm backups and velero cross-backup
+  rclone (`s3.internal`), velero `publicUrl`, unpackerr (`sonarr/radarr.internal`), self URLs and
+  OAuth redirect origins.
+- TLS secret consumers: only `kanidm/idm-external-tls-certificate` (SANs `idm.grigri.cloud`,
+  `ldaps.idm.internal.grigri.cloud`), mounted by the kanidm pods, owned by the kaniop-generated
+  Ingress: needs an explicit `Certificate` before Phase 6.
+- Fourth Ingress source: **kiais/gitops** (`tea.millaguie.net`, third-party owner) owns `isidoro`
+  (external) and `isidoro-keycloak` (internal + external, operator-generated). multivara/gitops owns
+  calypso (5 + vault), keycloak (2), gitlab. These need routes in their repos (or stay on
+  nginx-external) before the corresponding switch.
+
+## Autonomy Scope (agreed with the owner 2026-11-09)
+
+**Autonomous, no check-backs** (no real traffic moves; nginx keeps serving `.1`/`.4`):
+
+- Phase 0 read-only work; docs and plan updates committed and pushed.
+- Phase 1 additive platform commits, one at a time, each followed by Argo `Synced Healthy` and the
+  step's checks before the next.
+- Phases 2-3: internal routes (no DNS annotation) and external routes (same CNAME annotations as
+  today) app by app, with policies, Lua, Kaniop OAuth2 client changes in git; verify against
+  `.13`/`.14`.
+- Rollback of my own push: revert commit and push immediately, then report.
+- Stop and alert the owner when: Argo stays Degraded after a revert, an existing app's error rate
+  moves on nginx, an alert fires that could be ours, or a CRD conflicts.
+
+**Needs the owner's explicit yes, each time:** disabling PKCE on a Kanidm client; comments on
+multivara#199 or any change in multivara/kiais repos or calypso; the Phase 4 internal switch
+commit (then executed, verified and rolled back autonomously); Phase 6 decommission; anything
+outside this plan.
+
+**Owner only:** pfSense edits (P4.1, P5.x, P6.x). The agent prepares exact steps and verifies
+read-only before and after.
+
+**Rules from `AGENTS.md`:** commit first, then push; never `kubectl apply/patch/delete/edit`,
+never `helm install/upgrade`; read-only `kubectl --context=grigri`; no attribution lines in
+commits; public repo hygiene. Reports: one hand-back per phase, or when stopped.
 
 ## Context & Current State
 
