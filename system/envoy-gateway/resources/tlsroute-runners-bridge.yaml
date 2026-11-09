@@ -1,0 +1,23 @@
+# D4: temporary TLS passthrough bridge. Everything under *.app.staging.forkline.dev (calypso
+# runner hosts) is forwarded untouched to ingress-nginx-external, which keeps terminating TLS
+# with the per-runner certificates until calypso emits HTTPRoutes. No external-dns annotation:
+# the runner wildcard record is owned elsewhere. The cross-namespace backendRef is allowed by
+# the ReferenceGrant in system/ingress-nginx-external/templates.
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: TLSRoute
+metadata:
+  name: runners-bridge
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+spec:
+  parentRefs:
+    - name: external
+      sectionName: tls-bridge-runners
+  hostnames:
+    - "*.app.staging.forkline.dev"
+  rules:
+    - backendRefs:
+        - name: ingress-nginx-external-controller
+          namespace: ingress-nginx-external
+          port: 443
