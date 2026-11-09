@@ -161,7 +161,14 @@ spec:
                 secretKeyRef:
                   name: {{ $gw.identity.subjectTokenSecret }}
                   key: {{ $gw.identity.subjectTokenKey }}
-          {{- include "hermes.mcpGateway.containerSecurityContext" . | nindent 10 }}
+          securityContext:
+            runAsUser: 10000
+            runAsGroup: 10000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
           resources:
             requests:
               cpu: 10m
