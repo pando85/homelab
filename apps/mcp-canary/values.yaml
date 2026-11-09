@@ -84,7 +84,6 @@ app-template:
                 httpGet: *httpGet
                 failureThreshold: 30
                 periodSeconds: 10
-      nodeSelector: "{{ .Values.nodeSelector }}"
 
   persistence:
     config:
