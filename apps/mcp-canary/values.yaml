@@ -18,11 +18,6 @@
 policyMode: none
 rolloutNonce: "0"
 
-# nodeSelector pins the canary to prusik, where the foundation timeouts occurred.
-# The ApplicationSet will create namespace `mcp-canary`; the pod lands on prusik.
-nodeSelector:
-  kubernetes.io/hostname: prusik
-
 app-template:
   controllers:
     agentgateway:
