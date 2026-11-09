@@ -1353,6 +1353,14 @@ and the internal `*.isidoro.grigri.cloud` listener.
 Tracking list (fill during Phase 3): one row per app, columns `internal route` / `verified .13` /
 `external route` / `verified .14`.
 
+| App | Internal route | Verified .13 | External route | Verified .14 | SHA | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| mintpsicologia | yes (chart-native `wordpress.httpRoute`) | yes | yes (`mintpsicologia.es`, `www` 301) | yes | `668fcd9b4` | No dependency switch needed: `helm dependency build` resolves `wordpress 34.2.6` from `charts.bitnami.com` today (slow, about 2 min, pulls the OCI artifact). Rendered manifests unchanged apart from the three routes. No external-dns annotation. `www` 301 keeps path and query. 12 MB POST identical. |
+| argocd | yes (chart-native `server.httproute`) | yes | yes (`/api/webhook` only) | yes | `7d15505c7` | No `grpcroute`: the Service port has no h2c appProtocol, native gRPC answers 404 on nginx and Envoy alike, grpc-web identical (CLI needs `--grpc-web` as today). Authenticated UI, SSE and websocket paths not exercised (the CLI token in the agent environment was expired). Webhook: same status on `.14` and `.4`, prefix boundary `/api/webhookx` 404 on both. |
+| oauth2-proxy | no (n/a) | n/a | yes (chart-native `gatewayApi`, `PathPrefix /oauth2`) | yes | `153a0be5b` | `/oauth2/start`, `/sign_in`, `/auth`, `/userinfo`, `/ping` identical on `.14` and `.4` (302 to Kanidm with the same query, 401, 404 outside `/oauth2`). |
+| mcp-gateway | n/a | n/a | yes (raw `HTTPRoute`, `mcp.grigri.cloud`) | yes, unauthenticated only | `d9be46f5e` | CNP admits the `external` proxies on 3000 next to the nginx rule. `/grafana/mcp`, `/context7/mcp` 401 with the same body, RFC 9728 metadata 200 identical on `.14` and `.4`. An authenticated MCP initialize and a stream longer than 60 s were not run (no token). `apps/hermes` hostAliases pin `.4` and move with the P5.2 commit. |
+| mcp-gateway-admin | yes (app-template `route:`) | yes, unauthenticated only | n/a | n/a | `16c9e24d8` | CNP admits the `internal` proxies on 3000 next to the nginx rule. No backend route is enabled on the admin plane, so every path is the app's 404 on both VIPs. |
+
 **Gate 3 (before any switch):**
 
 - every Ingress in the cluster, **tenant ones included** (10 multivara, 3 kiais, plus the WIP
