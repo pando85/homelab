@@ -111,7 +111,7 @@ every route). An app only needs something extra when it relied on a non-default 
 | `rewrite-target`, redirects                                         | `URLRewrite` / `RequestRedirect` filters (a redirect rule cannot have `backendRefs`)                                                 |
 | `configuration-snippet` / `server-snippet`                          | translate by behaviour (recipes in the plan); request-side query or header logic is an `EnvoyExtensionPolicy` with Lua (below)       |
 | compression                                                         | `BackendTrafficPolicy` `compressor` per route, never on S3/MinIO hosts                                                               |
-| `auth-url` / `auth-signin` / `auth-snippet` skips                   | see "Authentication" (stub)                                                                                                          |
+| `auth-url` / `auth-signin` / `auth-snippet` skips                   | see "Authentication"                                                                                                                 |
 
 Never convert nginx snippets with a tool, and never guess: capture the live behaviour with `curl`
 on the nginx VIP (`.1` internal, `.4` external) first, then reproduce it on `.13` / `.14`.
@@ -197,11 +197,175 @@ rule. None of the first pilots had a policy in its namespace.
 
 ## Authentication
 
-> **Stub: owned by the auth pilot.** Native OIDC against Kanidm with a JWT group check, the
-> `claimToHeaders` mapping, auth-skip routes and the spoof test are documented here once the auth
-> pattern is proven. Until then an external route whose Ingress has oauth2-proxy annotations is
-> **not created** (an Envoy route without a `SecurityPolicy` would expose the app unauthenticated,
-> even LAN-only). Design: recipe 1 of the plan.
+Native Envoy Gateway OIDC against Kanidm plus a JWT group check (plan decision D3). It replaces
+the nginx `auth-url` / `auth-signin` annotations (oauth2-proxy at `auth.grigri.cloud`) per app.
+Worked examples: `apps/http-echo` (identity headers), `apps/esphome` (internal only),
+`apps/navidrome` (skip paths, Lua body rewrite, 401 without redirect), `apps/radarr` (apiKey skip,
+raw routes).
+
+### Per app: three objects
+
+1. **`KanidmOAuth2Client`** in the app namespace (`templates/kanidm-oauth2-client.yaml`), one per
+   app, never the shared `k8s-oauth2-proxy` client:
+
+   ```yaml
+   apiVersion: kaniop.rs/v1beta1
+   kind: KanidmOAuth2Client
+   metadata:
+     name: <app>
+   spec:
+     kanidmRef: { name: kanidm, namespace: kanidm }
+     displayname: <app>
+     origin: https://<host>/
+     redirectUrl:
+       - https://<host>/oauth2/callback # one per host (internal and external)
+     # the group(s) of the nginx `allowed_groups=`; Kanidm issues no token to anyone else
+     scopeMap:
+       - group: <app>-users
+         scopes: [openid, profile, email, groups]
+     preferShortUsername: true # short `preferred_username`, as oauth2-proxy sent it
+     strictRedirectUrl: true
+     secretKeyAliases:
+       clientSecret: [client-secret] # Envoy Gateway reads this key
+   ```
+
+   The operator writes `<app>-kanidm-oauth2-credentials` (`CLIENT_ID`, `CLIENT_SECRET`,
+   `client-secret`) next to the policy: no `ReferenceGrant`. PKCE stays on (Envoy always sends
+   S256). The scope map group must exist in Kanidm (Kaniop reports `ScopeMapUpdated=False`
+   otherwise); groups created by hand are fine.
+
+2. **`SecurityPolicy`** per protected route (`templates/security-policy.yaml`); one policy may
+   target several routes of the same host (they then share the cookies):
+
+   ```yaml
+   apiVersion: gateway.envoyproxy.io/v1alpha1
+   kind: SecurityPolicy
+   metadata:
+     name: <app>-<gateway>
+   spec:
+     targetRefs:
+       - { group: gateway.networking.k8s.io, kind: HTTPRoute, name: <route> }
+     oidc:
+       provider:
+         issuer: https://idm.grigri.cloud/oauth2/openid/<app>
+         # explicit endpoints: no OIDC discovery at translation time
+         authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
+         tokenEndpoint: https://idm.grigri.cloud/oauth2/token
+       clientID: <app>
+       clientSecret: { name: <app>-kanidm-oauth2-credentials }
+       redirectURL: https://<host>/oauth2/callback
+       logoutPath: /oauth2/logout # the default `/logout` shadows the app's own path
+       scopes: [openid, profile, email, groups]
+       cookieNames: { accessToken: oidc-access-token, idToken: oidc-id-token }
+     jwt:
+       providers:
+         - name: kanidm
+           issuer: https://idm.grigri.cloud/oauth2/openid/<app>
+           audiences: [<app>]
+           extractFrom: { cookies: [oidc-id-token] }
+           remoteJWKS: { uri: https://idm.grigri.cloud/oauth2/openid/<app>/public_key.jwk }
+           claimToHeaders: # only the headers nginx `auth-response-headers` passed
+             - { header: X-Auth-Request-Preferred-Username, claim: preferred_username }
+     authorization:
+       defaultAction: Deny
+       rules:
+         - name: allowed-groups
+           action: Allow
+           principal:
+             jwt:
+               provider: kanidm
+               claims:
+                 - name: groups
+                   valueType: StringArray
+                   values: [<app>-users@idm.grigri.cloud] # SPN form, same as `allowed_groups=`
+   ```
+
+3. **The route** with a stable name (`forceRename` in app-template when the release has a single
+   route: its default name changes when a second route is added, and the policy would then
+   target nothing).
+
+### Mapping from nginx
+
+| nginx / oauth2-proxy                                        | Envoy Gateway                                                                                                                                       |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth-url ...?allowed_groups=<g>@idm.grigri.cloud`          | client `scopeMap` group `<g>` + `authorization` allow on `groups` = `<g>@idm.grigri.cloud`                                                         |
+| `auth-url` without `allowed_groups`                         | every group of the `k8s-oauth2-proxy` client scope map (`k8s-oauth2-proxy-users`, `navidrome-users`, `hermes-users`), as http-echo                  |
+| `auth-response-headers: X-Auth-Request-Preferred-Username`  | `claimToHeaders` `preferred_username` (`X-Auth-Request-User` / `-Email`: `email`, oauth2-proxy's default user claim)                                |
+| `X-Auth-Request-Groups`                                     | `claimToHeaders` cannot copy arrays: add a `claimMap` with `joinStrategy: csv` on the client and map that string claim                             |
+| `auth-url` without `auth-signin` (401, no redirect)         | `oidc.denyRedirect.headers: [{name: ":path", type: RegularExpression, value: "/api([/?].*)?"}]` (navidrome external `/api`)                        |
+| `auth-snippet` `return 200` skips                           | a second same-host route with the skip matches and **no** policy, plus a `RequestHeaderModifier` that removes `X-Auth-Request-*` (below)             |
+| `auth.grigri.cloud` cookie on `.grigri.cloud`, shared       | cookies per host (`oidc-id-token`, `oidc-access-token`, `OauthHMAC-*`, `OauthExpires-*`, `RefreshToken-*`); a new app is a silent Kanidm redirect |
+| `/oauth2/sign_out`                                          | `/oauth2/logout` clears the Envoy cookies only (Kanidm has no end-session endpoint): the next request logs in again silently while Kanidm's session lives |
+
+### Skip paths (no auth)
+
+Same-host routes merge; give the skip its own route without a `SecurityPolicy`:
+
+```yaml
+- matches:
+    - path: { type: PathPrefix, value: /rest }
+    - path: { type: PathPrefix, value: /share }
+  filters:
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        remove: [X-Auth-Request-User, X-Auth-Request-Email, X-Auth-Request-Preferred-Username,
+                 X-Auth-Request-Groups, X-Auth-Request-Access-Token]
+```
+
+- Gateway API prefixes are segment-based: `^/(rest|share)` in nginx also skipped `/restx`; Envoy
+  does not (stricter, accepted).
+- A query-based skip (radarr `apiKey`) is `path: RegularExpression` + `queryParams:
+  [{type: RegularExpression, name: apiKey, value: ".+"}]`. Envoy Gateway orders regex routes by
+  **regex length, then query match count**: a skip must not lose to a longer protected regex on
+  the same host (radarr uses `(?-i)/api/v3/movie` against the protected `(?i)/api/v3/movie`).
+  Compare every case (case, empty value, sub-paths) with nginx.
+- Header removal on the **protected** route is not possible with a route filter: route header
+  changes run in the router, after `jwt_authn`, and would also remove the claim headers. There
+  `jwt_authn` itself removes every `claimToHeaders` header before it adds the claim (Envoy
+  `sanitizeHeaders`), so a client-sent copy never reaches the app.
+
+### Verification (no browser needed)
+
+```bash
+H=<host>; VIP=192.168.193.14   # .13 for internal hosts
+# 1. unauthenticated: 302 to /ui/oauth2 with client_id, redirect_uri, scope, S256 challenge, state
+curl -sk --resolve $H:443:$VIP -o /dev/null -w '%{http_code} %{redirect_url}\n' https://$H/
+# 2. forged cookies or bearer: still 302 (the OAuth2 filter checks its HMAC before jwt_authn)
+curl -sk --resolve $H:443:$VIP -b 'oidc-id-token=x.y.z; OauthHMAC=x' -o /dev/null -w '%{http_code}\n' https://$H/
+# 3. logout clears the five cookies and redirects to /
+curl -sk --resolve $H:443:$VIP -D- -o /dev/null https://$H/oauth2/logout | grep -i set-cookie
+# 4. skip paths answer like nginx, also with a spoofed X-Auth-Request-Preferred-Username
+```
+
+Prove the client secret and HMAC reached the proxy (SDS) without a login: start a flow (keep the
+cookies), call `/oauth2/callback?code=bogus&state=<state from step 1>`: Envoy answers 401 and the
+Kanidm log shows `POST /oauth2/token` with `handle_oauth2_token_exchange` failing on `Failed to
+deserialise a valid JWE` (the code), which Kanidm only reaches after the client authenticated.
+
+Interactive check (owner, once per pattern change), with a throwaway browser profile that maps the
+hosts to the gateway VIPs (Kanidm itself resolves normally):
+
+```bash
+chromium --user-data-dir="$(mktemp -d)" \
+  --host-resolver-rules="MAP http-echo.grigri.cloud 192.168.193.14, MAP esphome.internal.grigri.cloud 192.168.193.13" \
+  https://http-echo.grigri.cloud/
+```
+
+Expect: Kanidm login and consent, then the http-echo JSON with `x-auth-request-preferred-username`
+(short name) and `x-auth-request-email`; `https://http-echo.grigri.cloud/oauth2/logout` clears the
+cookies; a person outside the scope map group is refused by Kanidm at `/ui/oauth2`; an Envoy 403
+(`RBAC: access denied`) needs a token whose `groups` lack the allowed SPN (see the plan, Gate 2).
+
+### Gotchas
+
+- Policy `Accepted=False` (`secret ... does not exist`) for a few seconds after the first sync: the
+  operator creates the Secret after the policy. Envoy Gateway answers 500 on the route meanwhile
+  (fail closed) and recovers by itself; the proxies may log `initial fetch timed out for
+  ...tls.v3.Secret` once, harmless when the bogus-code check above passes afterwards.
+- The proxies reach `idm.grigri.cloud` through cluster DNS (today the pfSense override to nginx
+  `.4`, after Phase 5 `.14`): token exchange and JWKS depend on that name resolving in pods.
+- Envoy logs the raw cookie value when it cannot decrypt a token cookie (`failed to decrypt token:`
+  in the proxy log): only forged or stale cookies hit it, but treat the proxy log as sensitive.
 
 ## Verification (per route, before the next commit)
 
