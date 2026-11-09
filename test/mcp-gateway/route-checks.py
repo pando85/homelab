@@ -176,8 +176,15 @@ def main():
     removed = pol["requestHeaderModifier"]["remove"]
     for h in ("Authorization", "Cookie", "X-Grafana-URL", "X-Grafana-Service-Account-Token"):
         check(f"context7 strips {h} at the edge", h in removed, str(removed))
-    check("context7 has NO backendAuth (no upstream credential exists, so none may be sent)",
-          "backendAuth" not in pol)
+    want_ba = {"key": {"value": {"file": "/etc/agentgateway/secrets/context7/api-key"},
+                       "location": {"header": {"name": "Authorization", "prefix": "Bearer "}}}}
+    check("context7 sends the upstream API key read from the mounted Secret file (never inline)",
+          pol.get("backendAuth") == want_ba, json.dumps(pol.get("backendAuth")))
+    check("context7 has NO passthrough: the caller's bearer can never reach the upstream",
+          "passthrough" not in (pol.get("backendAuth") or {}),
+          json.dumps(sorted((pol.get("backendAuth") or {}).keys())))
+    check("the key is injected into a header the edge already strips, so exactly one reaches it",
+          want_ba["key"]["location"]["header"]["name"] in removed, str(removed))
     be = ctx["backends"][0]["mcp"]
     check("context7 backend is stateless (gateway issues no Mcp-Session-Id)",
           be["statefulMode"] == "stateless")
@@ -190,24 +197,18 @@ def main():
           "hostnames" not in ctx)
 
     # ---------------- 3. grafana (PRESENT, DISABLED) ----------------
-    block = commented_block(values_text, "- name: grafana")
-    graf = None
-    try:
-        parsed = yaml.safe_load(block) if block else None
-        graf = parsed[0] if isinstance(parsed, list) else parsed
-    except yaml.YAMLError as exc:
-        graf = None
-        print(f"      un-commented grafana block did not parse: {exc}")
-    check("disabled grafana route exists in values.yaml and PARSES as YAML",
-          graf is not None, "the commented block must stay real config, not prose")
+    # The grafana route is now live (enabled=true), so we check it directly from the rendered config
+    graf = by_name(routes, "grafana")
+    check("grafana route is live (enabled=true)",
+          graf is not None, "grafana route should be rendered when backend is enabled")
     if graf:
         gpol = graf["policies"]
-        check("grafana block matches its flag values (path, scope, resource)",
+        check("grafana route matches its flag values (path, scope, resource)",
               path_of(graf) == (("pathPrefix", backends["grafana"]["path"]),)
               and graf["policies"]["mcpAuthentication"]["resourceMetadata"]["resource"]
               == backends["grafana"]["resource"],
               str(path_of(graf)))
-        check("grafana block validates its own scope, not context7's",
+        check("grafana route validates its own scope, not context7's",
               "mcp_grafana" in json.dumps(gpol["authorization"]))
         check("grafana forwards the caller's validated bearer (per-caller backend auth)",
               gpol.get("backendAuth") == {"passthrough": {}})

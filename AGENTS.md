@@ -149,7 +149,8 @@ Full pitfall index (75 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
 - **Desktop & Home** (12): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote), Omnibattery `backup_mode` latch (backup threshold 500 W workaround)
-- **Applications** (10): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema
+- **Applications** (11): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema, Firecrawl
+  egress NP probe-timeout rollback (root cause unknown, aggregate denied counters prove nothing)
 
 ## Subsystem Docs
 

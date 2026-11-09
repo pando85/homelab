@@ -28,5 +28,12 @@ spec:
     # No groups mapped yet -> no scope is ever granted; fail closed.
     []
     {{- end }}
+  # supScopeMap: group -> additional scopes. These are granted on top of the
+  # scopeMap scopes. Used for role scopes (editor, admin) that Grafana's
+  # role_attribute_path checks.
+  {{- if .Values.kanidm.oauth2Client.supScopeMap }}
+  supScopeMap:
+    {{- toYaml .Values.kanidm.oauth2Client.supScopeMap | nindent 4 }}
+  {{- end }}
   preferShortUsername: true
   strictRedirectUrl: true

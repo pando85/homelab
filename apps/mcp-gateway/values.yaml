@@ -403,46 +403,46 @@ agentgateway-standalone:
       # and boots it against the pinned binary, so the day the cutover lands it is
       # a move-the-`#` change with nothing left to discover.
       #
-      # - name: grafana
-      #   gateways:
-      #     - default
-      #   matches:
-      #     - path:
-      #         pathPrefix: /grafana/mcp
-      #   policies:
-      #     mcpAuthentication:
-      #       mode: strict
-      #       issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
-      #       audiences:
-      #         - mcp-gateway
-      #       jwks:
-      #         url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
-      #       resourceMetadata:
-      #         resource: https://mcp.grigri.cloud/grafana/mcp
-      #         scopesSupported:
-      #           - mcp_grafana
-      #     authorization:
-      #       rules:
-      #         - require: "!has(jwt.email)"
-      #         - require: "!has(jwt.preferred_username)"
-      #         - require: "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_grafana')"
-      #     requestHeaderModifier:
-      #       remove:
-      #         - Authorization
-      #         - Cookie
-      #         - X-Grafana-URL
-      #         - X-Grafana-Service-Account-Token
-      #     backendAuth:
-      #       passthrough: {}
-      #   backends:
-      #     - mcp:
-      #         targets:
-      #           - name: grafana
-      #             mcp:
-      #               host: grafana-mcp.grafana-mcp.svc.cluster.local
-      #               port: 8000
-      #               path: /mcp
-      #         statefulMode: stateless
+      - name: grafana
+        gateways:
+          - default
+        matches:
+          - path:
+              pathPrefix: /grafana/mcp
+        policies:
+          mcpAuthentication:
+            mode: strict
+            issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
+            audiences:
+              - mcp-gateway
+            jwks:
+              url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
+            resourceMetadata:
+              resource: https://mcp.grigri.cloud/grafana/mcp
+              scopesSupported:
+                - mcp_grafana
+          authorization:
+            rules:
+              - require: "!has(jwt.email)"
+              - require: "!has(jwt.preferred_username)"
+              - require: "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_grafana')"
+          requestHeaderModifier:
+            remove:
+              - Authorization
+              - Cookie
+              - X-Grafana-URL
+              - X-Grafana-Service-Account-Token
+          backendAuth:
+            passthrough: {}
+        backends:
+          - mcp:
+              targets:
+                - name: grafana
+                  mcp:
+                    host: grafana-mcp.grafana-mcp.svc.cluster.local
+                    port: 8000
+                    path: /mcp
+              statefulMode: stateless
       # ---------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -531,6 +531,17 @@ kanidm:
         scopes:
           - mcp_grafana
           - mcp_context7
+    # supScopeMap: additional scopes granted to specific groups. These are used
+    # for Grafana role scopes (editor, admin) that the role_attribute_path checks.
+    # The grafana-users group gets 'editor' (measured: contains(scope, 'editor') matches),
+    # and grafana-admins gets 'admin'. Group membership is managed in Kanidm.
+    supScopeMap:
+      - group: grafana-users
+        scopes:
+          - editor
+      - group: grafana-admins
+        scopes:
+          - admin
 
 # Backend routes - the contract that test/mcp-gateway/route-checks.py enforces
 # against the rendered gateway config. `enabled: true` must appear as EXACTLY ONE
@@ -540,7 +551,7 @@ kanidm:
 # backend can go live without touching the other.
 backends:
   grafana:
-    enabled: false
+    enabled: true
     path: /grafana/mcp
     scope: mcp_grafana
     resource: https://mcp.grigri.cloud/grafana/mcp

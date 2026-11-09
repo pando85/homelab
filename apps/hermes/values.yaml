@@ -1,3 +1,139 @@
+# ---------------------------------------------------------------------------
+# Opt-in homelab MCP gateway client integration (Hermes -> apps/mcp-gateway).
+#
+# OFF BY DEFAULT AND INERT WHILE OFF: with ``enabled: false`` no resource of
+# this feature is rendered at all and the Hermes pod is byte-for-byte the
+# baseline (verified by apps/hermes/tests/test_render_enable.py, which diffs
+# the rendered manifests against ``git show HEAD:apps/hermes/values.yaml``).
+#
+# WHY THE SWITCH IS ``global.mcpGateway.enabled`` AND NOT A PLAIN KEY
+# Every ``enabled`` field of the app-template subchart is locked to a real
+# boolean by its ``values.schema.json`` (verified in
+# ``charts/app-template-5.3.0.tgz``: ``.controllers.[]initContainers[].enabled``,
+# ``.persistence.[]`` and 14 more are ``type: boolean``), so a helper container
+# can never be switched on by a templated string. Templating the values tree
+# itself is not possible either: a parent template's writes to ``.Values`` do
+# not reach a subchart (subchart values are split before rendering), and YAML
+# anchors resolve at parse time, so ``--set`` would flip the ConfigMap but not
+# the anchored containers. ``global`` is the one path Helm shares with
+# subcharts, and it is a plain bool, so a git edit and
+# ``--set global.mcpGateway.enabled=true`` take exactly the same path.
+#
+# WHY NOTHING IS ADDED TO THE HERMES POD
+# The helpers need to write Hermes' own config and OAuth token store
+# (``$HERMES_HOME/config.yaml``, ``$HERMES_HOME/mcp-tokens/`` on the
+# ``hermes-data`` PVC), so they run as a second pod mounting that same claim.
+# Conditional pod contents are not expressible in app-template without leaving
+# a trace in the disabled render (empty-valued annotations render as
+# ``key: ""``, templated-empty keys as ``"": "true"`` - both verified), and an
+# always-present helper container would mean an always-present
+# ``hermes-data`` mount. The legacy ``grafana-mcp`` sidecar and its refresher
+# are therefore left exactly as they are: this feature ADDS gateway routes to
+# Hermes, it does not cut anything over.
+#
+# FLIP IT ONCE apps/mcp-gateway HAS:
+#   1. the Kanidm OAuth client ``mcp-gateway`` (``audience: mcp-gateway``) with
+#      the custom scopes ``mcp_grafana`` / ``mcp_context7`` mapped from a
+#      service-account-only group, and
+#   2. that group's ``spec.members`` containing the service account whose API
+#      token is in ``identity.subjectTokenSecret`` (``grafana-mcp`` reuses the
+#      identity the working sidecar already has: no new privileged identity).
+#
+# WHAT STILL NEEDS A HUMAN AFTER THE FIRST MERGE
+# Hermes re-reads ``mcp_servers`` at gateway startup, from the interactive CLI
+# file watcher, or from the ``/reload-mcp`` chat command
+# (``cli.py:13113``/``19038`` are the watcher and its only call site, both in
+# the CLI loop; ``gateway/run.py:17123`` is the chat command;
+# ``tools/mcp_tool.py:7385`` re-reads config inside ``discover_mcp_tools()``).
+# ``gateway run`` has no config watcher, so a newly merged server appears at
+# the next pod restart or after ``/reload-mcp``. Tokens, in contrast, are
+# picked up live: ``tools/mcp_oauth_manager.py`` reloads
+# ``mcp-tokens/<server>.json`` by ``st_mtime_ns`` per request, which is why the
+# refresher only has to keep those files fresher than their expiry.
+global:
+  mcpGateway:
+    enabled: false
+
+    # One entry per gateway route (``/<target>/mcp``). The gateway has no
+    # aggregate endpoint, so each route gets its own token file, its own scope
+    # and its own Hermes ``mcp_servers`` entry. MVP: Grafana (per-user JWT
+    # propagation) and Context7 (library docs) - two distinct servers, not two
+    # tools of one server.
+    servers:
+      homelab-grafana:
+        url: https://mcp.grigri.cloud/grafana/mcp
+        scope: mcp_grafana
+        timeout: 120
+        connectTimeout: 60
+      homelab-context7:
+        url: https://mcp.grigri.cloud/context7/mcp
+        scope: mcp_context7
+        timeout: 120
+        connectTimeout: 60
+
+    exchange:
+      url: https://idm.grigri.cloud/oauth2/token
+      clientId: mcp-gateway
+      audience: mcp-gateway
+      # Refresh this many seconds before expiry, and never write a token that
+      # is already past it: the file's mtime is what makes the running gateway
+      # pick the credential up, so it must never be seen expired.
+      marginSeconds: 300
+      minIntervalSeconds: 60
+      maxIntervalSeconds: 900
+      httpTimeoutSeconds: 15
+      # Consecutive failures after which the refresher exits instead of serving
+      # a stale credential, so the pod restarts and re-reads the Secret.
+      maxFailures: 3
+
+    # Written as ``<server>.client.json`` in the RFC 7591 shape Hermes itself
+    # would have stored after dynamic registration. Optional; no refresh token
+    # is ever written, so Hermes cannot start an unauthorized refresh.
+    oauthClientId: mcp-gateway
+
+    identity:
+      # Workload identity, never a person's session: the Kanidm service-account
+      # API token is read from this Secret and passed to the exchange request
+      # in process memory only (no curl, no argv - argv is readable by any
+      # process in the container via /proc/<pid>/cmdline).
+      subjectTokenSecret: grafana-mcp-token
+      subjectTokenKey: token
+
+    serviceAccount:
+      # Disabled: ``grafana-mcp`` already has the Grafana native RBAC and the
+      # JWT alias, so the routes reuse it. Kept for the day a separate
+      # per-instance identity is actually wanted.
+      enabled: false
+      name: hermes-mcp
+      displayname: Hermes homelab MCP gateway
+      tokenSecretName: hermes-mcp-token
+      tokenRotationDays: 90
+
+    helper:
+      # No ``nodeSelector`` or ``runtimeClassName`` is pinned here: the Deployment
+      # reads both from the agent's own configuration
+      # (``app-template.defaultPodOptions.nodeSelector`` and
+      # ``app-template.controllers.hermes.pod.runtimeClassName``), because
+      # ``hermes-data`` is ReadWriteOnce and the two pods must stay on the same
+      # node/runtime. A duplicated literal here would be a second thing to move
+      # when the node moves, and drift means a pod that cannot attach its volume.
+      # No command-line secrets, no interactive shell, no service-account token
+      # mount: the pod only needs the PVC, the scripts and its own Secret.
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      # Hermes itself runs as uid 0 in this namespace (``runAsUser: 0`` on the
+      # agent container) and ``$HERMES_HOME`` on the PVC is root-owned, so the
+      # helper writes with the SAME uid the agent already uses. Alternatives
+      # were rejected deliberately: ``fsGroup: 10000`` would recursively chown
+      # the agent's user data, and a uid-10000 helper cannot write a
+      # root-owned 0755 directory (reproduced offline in
+      # tests/test_helper_container_runtime.py). The trade-off is explicit:
+      # this pod runs as root, so it is capped with a read-only root
+      # filesystem, all capabilities dropped, no privilege escalation and no
+      # Kubernetes API access at all.
+      runAsUser: 0
+      runAsGroup: 0
+
 app-template:
   controllers:
     hermes:
@@ -31,8 +167,37 @@ app-template:
                   name: grafana-mcp-token
                   key: token
           command: ["/bin/sh", "-c"]
+          # Paired cutover, driven by the same ``global.mcpGateway.enabled`` bool
+          # the helper pod uses. app-template's ``enabled`` fields are
+          # boolean-locked, but ``command``/``args`` strings are templated
+          # (``charts/common/templates/loader/_generate.tpl`` evaluates every
+          # string unless ``global.templateEvaluation.excludePaths`` opts out, and
+          # ``global`` is visible in the subchart context). With the switch off
+          # this renders the original script byte-for-byte; with it on it writes
+          # the gateway-issued access token instead of the ``audience=grafana``
+          # id_token, which is what breaks the moment Grafana stops trusting the
+          # old introspection client - the container and its ``/shared`` mount
+          # stay, only the client and token shape change.
+          #
+          # The credential is piped through stdin to ``curl --data-binary @-``:
+          # ``-d "subject_token=$T"`` puts it in curl's argv, readable by any
+          # process through ``/proc/<pid>/cmdline``. ``printf`` is a shell
+          # builtin, so nothing is exec'd with it.
+          #
+          # COUPLING (do not flip one without the other): this branch assumes the
+          # Grafana MCP route at ``apps/mcp-gateway`` forwards the route token and
+          # that Grafana's OAuth client trusts ``audience=mcp-gateway`` +
+          # ``scope=mcp_grafana`` for the ``grafana-mcp`` service account. Until
+          # both are true, keep the switch off: the legacy path is what works.
           args:
             - |
+              {{- if .Values.global.mcpGateway.enabled -}}
+              RESPONSE=$(printf '%s' "grant_type=urn:ietf:params:oauth:grant-type:token-exchange&client_id={{ .Values.global.mcpGateway.exchange.clientId }}&audience={{ .Values.global.mcpGateway.exchange.audience }}&scope={{ index .Values.global.mcpGateway.servers "homelab-grafana" "scope" }}&subject_token=${KANIDM_TOKEN}&subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
+                | curl -sf -X POST "{{ .Values.global.mcpGateway.exchange.url }}" --data-binary @-)
+              TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+              echo -n "$TOKEN" > /shared/grafana-jwt
+              chmod 666 /shared/grafana-jwt
+              {{- else -}}
               RESPONSE=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
                 -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
                 -d "client_id=grafana" \
@@ -43,6 +208,7 @@ app-template:
               JWT=$(echo "$RESPONSE" | grep -o '"id_token":"[^"]*"' | cut -d'"' -f4)
               echo -n "$JWT" > /shared/grafana-jwt
               chmod 666 /shared/grafana-jwt
+              {{- end }}
       containers:
         hermes:
           image:
@@ -112,8 +278,19 @@ app-template:
                   name: grafana-mcp-token
                   key: token
           command: ["/bin/sh", "-c"]
+          # Same paired cutover as ``grafana-mcp-token-init``: byte-identical
+          # legacy script while the switch is off, gateway access token while on.
           args:
             - |
+              {{- if .Values.global.mcpGateway.enabled -}}
+              while true; do
+                sleep 600
+                RESPONSE=$(printf '%s' "grant_type=urn:ietf:params:oauth:grant-type:token-exchange&client_id={{ .Values.global.mcpGateway.exchange.clientId }}&audience={{ .Values.global.mcpGateway.exchange.audience }}&scope={{ index .Values.global.mcpGateway.servers "homelab-grafana" "scope" }}&subject_token=${KANIDM_TOKEN}&subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
+                  | curl -sf -X POST "{{ .Values.global.mcpGateway.exchange.url }}" --data-binary @-)
+                TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+                echo -n "$TOKEN" > /shared/grafana-jwt
+              done
+              {{- else -}}
               while true; do
                 sleep 600
                 RESPONSE=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
@@ -126,6 +303,7 @@ app-template:
                 JWT=$(echo "$RESPONSE" | grep -o '"id_token":"[^"]*"' | cut -d'"' -f4)
                 echo -n "$JWT" > /shared/grafana-jwt
               done
+              {{- end }}
           resources:
             requests:
               cpu: 5m

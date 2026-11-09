@@ -84,8 +84,8 @@ def main():
     check("enabled backends in values match the MCP routes that exist",
           set(prefixes) == {values["backends"][n]["path"] for n in enabled},
           f"routes={prefixes} enabled={enabled}")
-    check("grafana backend stays disabled until the Grafana JWT cutover",
-          values["backends"]["grafana"]["enabled"] is False)
+    check("grafana backend is enabled after the Grafana JWT cutover",
+          values["backends"]["grafana"]["enabled"] is True)
 
     # ---- session key ESO lifecycle ----
     es = find(docs, "ExternalSecret")

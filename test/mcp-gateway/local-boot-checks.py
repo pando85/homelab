@@ -386,11 +386,29 @@ def commented_route(values_text, header):
     return yaml.safe_load(textwrap.dedent("\n".join(out)))[0]
 
 
+SYNTH_KEY = "ctx7sk-LOCAL-SYNTHETIC-NOT-A-REAL-KEY"
+
+
+def synth_key_file():
+    """A backendAuth key file is a pod volume mount: it cannot exist on a loopback run, and a
+    missing file aborts startup on this binary (measured). Supply a synthetic one instead, so
+    every run still boots the same route shape production has."""
+    path = f"{WORK}/context7-api-key"
+    with open(path, "w") as fh:
+        fh.write(SYNTH_KEY + "\n")   # the trailing newline a Kubernetes Secret file carries
+    return path
+
+
 def base_cfg(text, port):
     cfg = yaml.safe_load(text)
-    # local-only deviations, the only two that a loopback run can make:
+    # local-only deviations, the only three that a loopback run can make:
     cfg["gateways"]["default"] = {"port": port, "bindAddress": "127.0.0.1"}
     cfg["config"]["backend"] = {"allowDynamicLoopback": True}
+    keyfile = synth_key_file()
+    for route in cfg["routes"]:
+        value = ((route.get("policies") or {}).get("backendAuth") or {}).get("key", {}).get("value")
+        if isinstance(value, dict) and "file" in value:
+            value["file"] = keyfile
     return cfg
 
 
@@ -500,8 +518,8 @@ def run_a(text):
         check("A token signed by an unknown key is 401 against the REAL Kanidm JWKS",
               code == 401, str(code))
         code, _, body = rpc("/grafana/mcp")
-        check("A disabled grafana route is 404 (no auth, no backend, nothing to reach)",
-              code == 404, f"{code} {body[:60]!r}")
+        check("An enabled grafana route without auth is 401 (requires authentication)",
+              code == 401, f"{code} {body[:60]!r}")
     finally:
         stop(proc, fh)
 
@@ -531,8 +549,15 @@ def run_b(text, grafana_route):
         check("B valid mcp_context7 bearer reaches the backend (200 + JSON-RPC envelope)",
               code == 200 and b"jsonrpc" in body, f"{code} {body[:70]!r}")
         rec = cap_c[-1] if cap_c else {}
-        check("B context7 backend sees NO Authorization (no backendAuth, bearer stripped)",
-              rec.get("auth") is None, str(rec.get("hdrs")))
+        check("B context7 backend sees the API key as its only bearer (backendAuth key, "
+              "never the caller's)",
+              rec.get("bearer") == fp(SYNTH_KEY),
+              f"backend={rec.get('bearer')} want={fp(SYNTH_KEY)} caller={fp(tk_ctx)}")
+        check("B context7 backend sees exactly one Authorization line (the strip ran first)",
+              rec.get("auth_n") == 1, f"auth_n={rec.get('auth_n')} hdrs={rec.get('hdrs')}")
+        check("B the caller's bearer never reaches the context7 backend (no passthrough)",
+              rec.get("bearer") != fp(tk_ctx) and fp(tk_ctx) not in (rec.get("bearer_fps") or []),
+              "caller bearer would be a passthrough")
         code, _, _ = rpc("/context7/mcp", tk_ctx, method="tools/list")
         code, _, _ = rpc("/context7/mcp", tk_ctx, method="tools/call")
         check("B tools/call through the stateless route succeeds", code == 200, str(code))
@@ -665,8 +690,10 @@ def run_e(text, grafana_route):
     here is asserted on what the loopback backend captured plus the gateway's own status code -
     never on the config text. Measured, pinned to this binary version:
 
-      * context7: no Authorization line and no Cookie line ever arrives, in any duplicate
-        shape (same-case, mixed-case, empty second value, comma-joined in one line);
+      * context7: the caller's credential never arrives — the ONLY Authorization line the
+        backend sees is the injected backendAuth API key, in every duplicate shape (same-case,
+        mixed-case, empty second value, comma-joined in one line), and no Cookie line ever
+        arrives;
       * grafana: exactly ONE Authorization line arrives, holding the validated (gateway-set)
         credential - a client-supplied duplicate never reaches it;
       * a spoofed FIRST line is what decides the outcome: the edge authenticates the first
@@ -712,24 +739,33 @@ def run_e(text, grafana_route):
         check("E context7: spoofed-first + legit-second is 401 and never reaches the backend",
               code == 401 and not hits, f"code={code} backend_hits={len(hits)}")
         code, hits, _ = send("/context7/mcp", [("Authorization", A), ("Authorization", S)], cap_c)
-        check("E context7: legit-first + spoofed-second is served with NO Authorization line",
-              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
-              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+        check("E context7: legit-first + spoofed-second is served, and the only Authorization "
+              "line is the injected key (neither caller line survives the strip)",
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 1
+              and hits[0]["bearer_fps"] == [fp(SYNTH_KEY)],
+              f"code={code} auth_n={[r['auth_n'] for r in hits]} "
+              f"bearers={[r['bearer_fps'] for r in hits]} key={fp(SYNTH_KEY)}")
         check("E context7: the spoofed duplicate did not smuggle through (fingerprint absent)",
               all(fp(spoof) not in r["bearer_fps"] for r in hits),
               f"backend bearers={[r['bearer_fps'] for r in hits]} spoof={fp(spoof)}")
         code, hits, _ = send("/context7/mcp", [("Authorization", A), ("Authorization", A)], cap_c)
         check("E context7: two identical legit lines do not survive either",
-              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
-              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 1
+              and hits[0]["bearer_fps"] == [fp(SYNTH_KEY)],
+              f"code={code} auth_n={[r['auth_n'] for r in hits]} "
+              f"bearers={[r['bearer_fps'] for r in hits]} key={fp(SYNTH_KEY)}")
         code, hits, _ = send("/context7/mcp", [("authorization", A), ("AUTHORIZATION", S)], cap_c)
         check("E context7: the strip is case-insensitive across EVERY duplicate",
-              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
-              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 1
+              and hits[0]["bearer_fps"] == [fp(SYNTH_KEY)],
+              f"code={code} auth_n={[r['auth_n'] for r in hits]} "
+              f"bearers={[r['bearer_fps'] for r in hits]} key={fp(SYNTH_KEY)}")
         code, hits, _ = send("/context7/mcp", [("Authorization", A), ("Authorization", "")], cap_c)
         check("E context7: an empty second Authorization line is removed too",
-              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 0,
-              f"code={code} auth_n={[r['auth_n'] for r in hits]}")
+              code == 200 and len(hits) == 1 and hits[0]["auth_n"] == 1
+              and hits[0]["bearer_fps"] == [fp(SYNTH_KEY)],
+              f"code={code} auth_n={[r['auth_n'] for r in hits]} "
+              f"bearers={[r['bearer_fps'] for r in hits]} key={fp(SYNTH_KEY)}")
         code, hits, _ = send("/context7/mcp", [("Authorization", f"{S}, {A}")], cap_c)
         check("E context7: two bearers comma-joined in ONE line is 401, not split-and-accept",
               code == 401 and not hits, f"code={code} backend_hits={len(hits)}")
@@ -810,11 +846,13 @@ def run_e(text, grafana_route):
         check("E a weird scope shape (array/null/number/object/empty) fails CLOSED: 403, no hit, "
               "never a 5xx", all(c == 403 and h == 0 for _, c, h in seen), str(seen))
 
-        check("E context7 captured ZERO Authorization, Cookie or session-id lines across every "
-              "case in this run",
-              all(r["auth_n"] == 0 and r["cookie_n"] == 0 and r["sid_n"] == 0
+        check("E context7: across every case the backend sees ONE Authorization line, always the "
+              "injected key, and ZERO Cookie or session-id lines",
+              all(r["auth_n"] == 1 and r["bearer_fps"] == [fp(SYNTH_KEY)]
+                  and r["cookie_n"] == 0 and r["sid_n"] == 0
                   for r in cap_c[c0:]),
-              f"per hit={[(r['auth_n'], r['cookie_n'], r['sid_n']) for r in cap_c[c0:]]}")
+              f"per hit={[(r['auth_n'], r['bearer_fps'], r['cookie_n'], r['sid_n'])
+                          for r in cap_c[c0:]]}")
         check("E grafana captured exactly one Authorization line per served request, always "
               "the validated credential",
               all(r["auth_n"] == 1 and r["bearer_fps"] == [fp(tkg)] for r in cap_g[g0:]),
@@ -847,10 +885,14 @@ def main():
         return 1
     text = rendered_config()
     values_text = open(f"apps/{CHART}/values.yaml").read()
-    grafana_route = commented_route(values_text, "- name: grafana")
     cfg = yaml.safe_load(text)
-    check("rendered config has NO grafana MCP route (run A and B depend on that)",
-          all(r["name"] != "grafana" for r in cfg["routes"]))
+    # The grafana route is now live (enabled=true), so extract it from the rendered config
+    grafana_route = next((r for r in cfg["routes"] if r["name"] == "grafana"), None)
+    check("grafana route is live in rendered config (enabled=true)",
+          grafana_route is not None, "grafana route should be rendered when backend is enabled")
+    if not grafana_route:
+        print("ERROR: grafana route not found in rendered config")
+        return 1
     run_a(text)
     got = run_b(text, grafana_route)
     run_c(*got, grafana_route)
@@ -860,6 +902,7 @@ def main():
     if not os.environ.get("KEEP"):
         shutil.rmtree(WORK, ignore_errors=True)
     print(f"\n=== {sum(RESULTS)} passed, {RESULTS.count(False)} failed ===")
+    return 0 if all(RESULTS) else 1
     return 1 if RESULTS.count(False) else 0
 
 
