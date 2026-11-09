@@ -78,6 +78,23 @@ spec:
     extraTlsHosts:
       - ldaps.idm.internal.grigri.cloud
 
+  # Envoy Gateway route (ingress-nginx migration). `spec.ingress` above stays: it owns the
+  # `idm-external-tls-certificate` the pods mount (also the ldaps SAN). Before removing it, set
+  # `spec.tlsSecretName: idm-external-tls-certificate` and add an explicit Certificate.
+  gateway:
+    annotations:
+      # the target (grigri.cloud) comes from the external Gateway
+      external-dns.kubernetes.io/enabled: "true"
+    parentRefs:
+      - name: external
+        namespace: envoy-gateway
+        sectionName: https-grigri-cloud
+    # Kanidm serves the Let's Encrypt certificate for idm.grigri.cloud on 8443
+    backendTlsPolicy:
+      validation:
+        hostname: idm.grigri.cloud
+        wellKnownCaCertificates: System
+
   securityContext:
     runAsUser: 389
     runAsGroup: 389

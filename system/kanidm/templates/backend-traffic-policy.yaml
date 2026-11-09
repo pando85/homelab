@@ -1,0 +1,18 @@
+---
+# Same affinity as the nginx Ingress (`upstream-hash-by: $remote_addr`): one client sticks to one
+# Kanidm replica. The external Gateway keeps the client IP (`externalTrafficPolicy: Local`).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: BackendTrafficPolicy
+metadata:
+  name: kanidm
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: kanidm
+  # extend the gateway-wide defaults (60s request timeout) instead of replacing them
+  mergeType: StrategicMerge
+  loadBalancer:
+    type: ConsistentHash
+    consistentHash:
+      type: SourceIP
