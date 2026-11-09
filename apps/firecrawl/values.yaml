@@ -453,6 +453,22 @@ app-template:
             - *host
           secretName: firecrawl-tls-certificate
 
+  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # Internal route: no external-dns annotation until the internal switch.
+  route:
+    api:
+      kind: HTTPRoute
+      hostnames:
+        - firecrawl.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: api
+              port: 3002
+
   # Pod options
   defaultPodOptions:
     enableServiceLinks: false
