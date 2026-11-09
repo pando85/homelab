@@ -1,0 +1,25 @@
+---
+# Port of the nginx-external `sub_filter`: send `#/login` landings to `/`. Only plain
+# (uncompressed) HTML is buffered and rewritten, never audio or API responses.
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: navidrome-external
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: navidrome-external
+  lua:
+    - type: Inline
+      inline: |
+        function envoy_on_response(handle)
+          local ct = handle:headers():get("content-type") or ""
+          if not ct:find("text/html", 1, true) then return end
+          if handle:headers():get("content-encoding") ~= nil then return end
+          local body = handle:body()
+          if body == nil then return end
+          local out, n = body:getBytes(0, body:length()):gsub("</html>",
+            '<script>if(location.hash==="#/login"){location.replace("/")}</script></html>')
+          if n > 0 then body:setBytes(out) end
+        end

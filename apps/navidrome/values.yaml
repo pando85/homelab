@@ -137,6 +137,106 @@ app-template:
             - *host
           secretName: navidrome-external-tls-certificate
 
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # `*` routes carry the OIDC SecurityPolicy (templates/security-policy.yaml); `*-subsonic`
+  # routes are the auth skip (`/rest` Subsonic API, `/share` public shares), no policy.
+  route:
+    internal:
+      kind: HTTPRoute
+      forceRename: navidrome-internal
+      hostnames:
+        - navidrome.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - backendRefs:
+            - identifier: navidrome
+              port: 4533
+    internal-subsonic:
+      kind: HTTPRoute
+      forceRename: navidrome-internal-subsonic
+      hostnames:
+        - navidrome.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /rest
+            - path:
+                type: PathPrefix
+                value: /share
+          filters:
+            - type: RequestHeaderModifier
+              requestHeaderModifier:
+                remove:
+                  # bypass routes carry no SecurityPolicy: never let a client choose the user
+                  - X-Auth-Request-User
+                  - X-Auth-Request-Email
+                  - X-Auth-Request-Preferred-Username
+                  - X-Auth-Request-Groups
+                  - X-Auth-Request-Access-Token
+          backendRefs:
+            - identifier: navidrome
+              port: 4533
+    external:
+      kind: HTTPRoute
+      forceRename: navidrome-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - navidrome.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - filters:
+            # plain HTML for the Lua `#/login` rewrite (templates/envoy-extension-policy.yaml)
+            - type: RequestHeaderModifier
+              requestHeaderModifier:
+                remove:
+                  - Accept-Encoding
+          backendRefs:
+            - identifier: navidrome
+              port: 4533
+    external-subsonic:
+      kind: HTTPRoute
+      forceRename: navidrome-external-subsonic
+      hostnames:
+        - navidrome.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /rest
+            - path:
+                type: PathPrefix
+                value: /share
+          filters:
+            - type: RequestHeaderModifier
+              requestHeaderModifier:
+                remove:
+                  # bypass routes carry no SecurityPolicy: never let a client choose the user
+                  - X-Auth-Request-User
+                  - X-Auth-Request-Email
+                  - X-Auth-Request-Preferred-Username
+                  - X-Auth-Request-Groups
+                  - X-Auth-Request-Access-Token
+          backendRefs:
+            - identifier: navidrome
+              port: 4533
+
   defaultPodOptions:
     securityContext:
       runAsUser: 995

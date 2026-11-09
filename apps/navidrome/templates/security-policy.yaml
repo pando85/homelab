@@ -1,0 +1,108 @@
+# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim, one policy
+# per UI route (the `*-subsonic` routes have none). Pattern: docs/conventions/envoy-gateway-auth.md
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: navidrome-internal
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: navidrome-internal
+  oidc:
+    provider:
+      issuer: https://idm.grigri.cloud/oauth2/openid/navidrome
+      # explicit endpoints: no OIDC discovery at translation time
+      authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
+      tokenEndpoint: https://idm.grigri.cloud/oauth2/token
+    clientID: navidrome
+    clientSecret:
+      name: navidrome-kanidm-oauth2-credentials
+    redirectURL: https://navidrome.internal.grigri.cloud/oauth2/callback
+    # the default `/logout` would shadow the app's own path
+    logoutPath: /oauth2/logout
+    scopes: [openid, profile, email, groups]
+    cookieNames:
+      accessToken: oidc-access-token
+      idToken: oidc-id-token
+  jwt:
+    providers:
+      - name: kanidm
+        issuer: https://idm.grigri.cloud/oauth2/openid/navidrome
+        audiences: [navidrome]
+        extractFrom:
+          cookies: [oidc-id-token]
+        remoteJWKS:
+          uri: https://idm.grigri.cloud/oauth2/openid/navidrome/public_key.jwk
+        # the user navidrome logs in (ND_REVERSEPROXYUSERHEADER); jwt_authn removes any
+        # client-sent copy before adding it
+        claimToHeaders:
+          - header: X-Auth-Request-Preferred-Username
+            claim: preferred_username
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: allowed-groups
+        action: Allow
+        principal:
+          jwt:
+            provider: kanidm
+            claims:
+              - name: groups
+                valueType: StringArray
+                values:
+                  - navidrome-users@idm.grigri.cloud
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: SecurityPolicy
+metadata:
+  name: navidrome-external
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: navidrome-external
+  oidc:
+    provider:
+      issuer: https://idm.grigri.cloud/oauth2/openid/navidrome
+      # explicit endpoints: no OIDC discovery at translation time
+      authorizationEndpoint: https://idm.grigri.cloud/ui/oauth2
+      tokenEndpoint: https://idm.grigri.cloud/oauth2/token
+    clientID: navidrome
+    clientSecret:
+      name: navidrome-kanidm-oauth2-credentials
+    redirectURL: https://navidrome.grigri.cloud/oauth2/callback
+    # the default `/logout` would shadow the app's own path
+    logoutPath: /oauth2/logout
+    scopes: [openid, profile, email, groups]
+    cookieNames:
+      accessToken: oidc-access-token
+      idToken: oidc-id-token
+  jwt:
+    providers:
+      - name: kanidm
+        issuer: https://idm.grigri.cloud/oauth2/openid/navidrome
+        audiences: [navidrome]
+        extractFrom:
+          cookies: [oidc-id-token]
+        remoteJWKS:
+          uri: https://idm.grigri.cloud/oauth2/openid/navidrome/public_key.jwk
+        # the user navidrome logs in (ND_REVERSEPROXYUSERHEADER); jwt_authn removes any
+        # client-sent copy before adding it
+        claimToHeaders:
+          - header: X-Auth-Request-Preferred-Username
+            claim: preferred_username
+  authorization:
+    defaultAction: Deny
+    rules:
+      - name: allowed-groups
+        action: Allow
+        principal:
+          jwt:
+            provider: kanidm
+            claims:
+              - name: groups
+                valueType: StringArray
+                values:
+                  - navidrome-users@idm.grigri.cloud
