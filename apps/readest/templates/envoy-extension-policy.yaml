@@ -1,0 +1,41 @@
+# Port of the nginx configuration-snippet on `/auth/v1/authorize`: when the query is empty or names
+# `provider=google|apple|github|discord` (case-insensitive substring of the raw query, like
+# `$args ~*`), answer 302 to the same path with `provider=custom:kanidm` and the first
+# `redirect_to` argument (raw, as `$arg_redirect_to`; default the public callback, also on the
+# internal host). The Location is absolute like nginx's. Any other query reaches GoTrue untouched.
+{{- range $route := list "readest-internal-authorize" "readest-external-authorize" }}
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: {{ $route }}
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: {{ $route }}
+  lua:
+    - type: Inline
+      inline: |
+        function envoy_on_request(handle)
+          local path = handle:headers():get(":path") or ""
+          local q = path:match("^[^?]*%?(.*)$") or ""
+          local ql = q:lower()
+          local hit = (q == "")
+          for _, p in ipairs({"google", "apple", "github", "discord"}) do
+            if ql:find("provider=" .. p, 1, true) then hit = true end
+          end
+          if not hit then return end
+          local rt = ""
+          for kv in q:gmatch("[^&]+") do
+            local v = kv:match("^redirect_to=(.*)$")
+            if v ~= nil then rt = v break end
+          end
+          if rt == "" then rt = "https://readest.grigri.cloud/auth/callback" end
+          local host = handle:headers():get(":authority") or "readest.grigri.cloud"
+          handle:respond({
+            [":status"] = "302",
+            ["location"] = "https://" .. host .. "/auth/v1/authorize?provider=custom:kanidm&redirect_to=" .. rt,
+          }, "")
+        end
+{{- end }}

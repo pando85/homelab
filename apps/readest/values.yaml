@@ -471,6 +471,169 @@ app-template:
             - *externalHost
           secretName: readest-external-tls-certificate
 
+  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # `*-authorize` is the nginx configuration-snippet redirect to the Kanidm provider, a Lua
+  # EnvoyExtensionPolicy (templates/envoy-extension-policy.yaml).
+  route:
+    internal:
+      kind: HTTPRoute
+      forceRename: readest-internal
+      hostnames:
+        - readest.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        # nginx `rewrite-target: /$2` on `/auth/v1(/|$)(.*)` and `/rest/v1(/|$)(.*)`
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /auth/v1
+          filters:
+            - type: URLRewrite
+              urlRewrite:
+                path:
+                  type: ReplacePrefixMatch
+                  replacePrefixMatch: /
+          backendRefs:
+            - identifier: auth
+              port: 9999
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /rest/v1
+          filters:
+            - type: URLRewrite
+              urlRewrite:
+                path:
+                  type: ReplacePrefixMatch
+                  replacePrefixMatch: /
+          backendRefs:
+            - identifier: rest
+              port: 3000
+        # nginx server-snippet `location = /callback`: 301, query kept
+        - matches:
+            - path:
+                type: Exact
+                value: /callback
+          filters:
+            - type: RequestRedirect
+              requestRedirect:
+                statusCode: 301
+                path:
+                  type: ReplaceFullPath
+                  replaceFullPath: /auth/v1/callback
+        - backendRefs:
+            - identifier: client
+              port: 3000
+    internal-authorize:
+      kind: HTTPRoute
+      forceRename: readest-internal-authorize
+      hostnames:
+        - readest.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        # carries the Lua redirect (templates/envoy-extension-policy.yaml); same rewrite as above
+        - matches:
+            - path:
+                type: Exact
+                value: /auth/v1/authorize
+          filters:
+            - type: URLRewrite
+              urlRewrite:
+                path:
+                  type: ReplaceFullPath
+                  replaceFullPath: /authorize
+          backendRefs:
+            - identifier: auth
+              port: 9999
+    external:
+      kind: HTTPRoute
+      forceRename: readest-external
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - readest.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        # nginx `rewrite-target: /$2` on `/auth/v1(/|$)(.*)` and `/rest/v1(/|$)(.*)`
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /auth/v1
+          filters:
+            - type: URLRewrite
+              urlRewrite:
+                path:
+                  type: ReplacePrefixMatch
+                  replacePrefixMatch: /
+          backendRefs:
+            - identifier: auth
+              port: 9999
+        - matches:
+            - path:
+                type: PathPrefix
+                value: /rest/v1
+          filters:
+            - type: URLRewrite
+              urlRewrite:
+                path:
+                  type: ReplacePrefixMatch
+                  replacePrefixMatch: /
+          backendRefs:
+            - identifier: rest
+              port: 3000
+        # nginx server-snippet `location = /callback`: 301, query kept
+        - matches:
+            - path:
+                type: Exact
+                value: /callback
+          filters:
+            - type: RequestRedirect
+              requestRedirect:
+                statusCode: 301
+                path:
+                  type: ReplaceFullPath
+                  replaceFullPath: /auth/v1/callback
+        - backendRefs:
+            - identifier: client
+              port: 3000
+    external-authorize:
+      kind: HTTPRoute
+      forceRename: readest-external-authorize
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - readest.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        # carries the Lua redirect (templates/envoy-extension-policy.yaml); same rewrite as above
+        - matches:
+            - path:
+                type: Exact
+                value: /auth/v1/authorize
+          filters:
+            - type: URLRewrite
+              urlRewrite:
+                path:
+                  type: ReplaceFullPath
+                  replaceFullPath: /authorize
+          backendRefs:
+            - identifier: auth
+              port: 9999
+
   defaultPodOptions:
     enableServiceLinks: false
     # Pin all controllers (client, auth, rest) to prusik, like immich/nextcloud.
