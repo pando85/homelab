@@ -48,7 +48,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | Phase | State       | Notes                                                                                                                             |
 | ----- | ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | done        | All steps done except step 7 (post the listener contract on multivara#199): owner action, does not block Phase 1. Findings below. |
-| 1     | in progress | Steps 1-3 done (below); step 4 (monitoring) next.                                                                                 |
+| 1     | in progress | Steps 1-5 and 7 done, step 6 pending (below); roll test and metrics/trace items of Gate 1 satisfied.                            |
 | 2-6   | not started |                                                                                                                                   |
 
 ### Phase 1 progress (2026-11-09)
@@ -58,6 +58,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 1    | `68de320f4` `envoy-gateway: Add Envoy Gateway controller and Gateway API CRDs`                                     | Controller and experimental CRDs live, Synced Healthy.                                                                                                                                                           |
 | 2    | `205cb6710` + `94f45bd35` `envoy-gateway: Add internal and external gateways` / `Use one certificate per listener` | Both Gateways Accepted and Programmed on `.13` / `.14`, 7 Certificates Ready (all `letsencrypt-prod-dns`), 2 proxies per Gateway on `prusik`, `.13/32` and `.14/32` learned by pfSense.                          |
 | 3    | `eef9c8613` `git: Add forgejo SSH TCPRoute on the external gateway`                                                | TCPRoute `git-forgejo-ssh` Accepted and ResolvedRefs; SSH through `.14` shows the same host keys as through nginx.                                                                                               |
+| 4    | `2c0498a11` `envoy-gateway: Add monitoring`; `71d00f34e` `envoy-gateway: Add external tracing to the otel-collector`; `1ba494e72` `envoy-gateway: Add roll-test marker to the external proxy pod template` | ServiceMonitor `envoy-gateway` and PodMonitor `envoy-proxy` (5 targets up, `gateway` label), 3 upstream dashboards (v1.9.3) in folder `envoy-gateway`, PrometheusRule `envoy-gateway` (3 alerts, loaded, not firing), external tracing to Tempo (service `envoy-external`), Loki `traceID` derived field. Roll test: 0 failures (below). |
 | 5    | `9bfc7a781` `external-dns: Add gateway-httproute and crd sources and forkline.io`                                  | Sources `service ingress gateway-httproute crd`, domain filters plus `forkline.io`. Pod 0 restarts, no RBAC or watch errors, every cycle "All records are already up to date"; `dig` before and after identical. |
 | 6    | pending                                                                                                            | `cert-manager: Add ZeroSSL ClusterIssuer for forkline.io` waits for the owner's EAB credentials in Vault (can trail).                                                                                            |
 | 7    | `874727b4a` `scripts: ...` + `9ad8e1404` `http-echo: Add HTTPRoutes on both gateways`                              | Both routes Accepted and ResolvedRefs, 200 over h2 on `.13` and `.14`, real client IP preserved; no DNS record moved. Gate 1 evidence below.                                                                     |
@@ -90,9 +91,53 @@ Step 2 notes:
   gateway-wide on purpose (per route, never on S3 hosts). `ClientTrafficPolicy`: ALPN, `http10`,
   `KeepUnchanged`, idle timeout 600s, TCP keepalive, HSTS and security headers, `Server` removed;
   internal adds `xForwardedFor.numTrustedHops: 1`.
-- JSON access log to stdout is already on (with `traceID`, empty until step 4 adds tracing).
+- JSON access log to stdout is on; `traceID` is filled since step 4 (external gateway only).
 - Internal HPA uses `ContainerResource` metrics on the `envoy` container (the pod also runs the
   shutdown-manager sidecar, which has no requests).
+
+Step 4 notes (monitoring, tracing, roll test; all verified 2026-11-09):
+
+- **Scraping**: controller `Service envoy-gateway` port `metrics` (19001, `/metrics`) via
+  ServiceMonitor; proxies have no Service for stats, so a PodMonitor scrapes container port
+  `metrics` (19001, `/stats/prometheus`) and copies the owning-gateway pod label to a `gateway`
+  label (`internal` / `external`). Both carry `release: monitoring`. 5 targets up.
+- **Dashboards**: `envoy-proxy-global`, `envoy-clusters`, `envoy-gateway-global` from
+  `charts/gateway-addons-helm/dashboards` at v1.9.3, as a `configMapGenerator` (sidecar label,
+  folder `envoy-gateway`, ServerSideApply for size). Local edits: hardcoded datasource uid
+  replaced by the `$datasource` variable, controller namespace default `envoy-gateway`. Bump them
+  with the chart version.
+- **Alerts** (`resources/prometheus-rules.yaml`, same thresholds, `for` and `severity` labels as
+  `system/ingress-nginx-external/rules/alerts.yaml`): `IngressNginxExternalHighErrorRate` ->
+  `EnvoyGatewayHighErrorRate`, `...CriticalErrorRate` -> `EnvoyGatewayCriticalErrorRate`,
+  `...HighLatency` -> `EnvoyGatewayHighLatency` (p95 > 5000 ms, `cross-backups` excluded by
+  cluster name `httproute/cross-backups/.*`). Envoy has no per-host metric: grouping is by
+  `gateway` and `envoy_cluster_name` (`httproute/<ns>/<route>/rule/<n>`), from
+  `envoy_cluster_upstream_rq_xx` and `envoy_cluster_upstream_rq_time_bucket`. Unmatched requests
+  (404 no route) are not in these series. Covers both gateways (nginx-internal had no alerts).
+- **Tracing**: external gateway only, like nginx (`nginx-internal` does not trace).
+  `EnvoyProxy.spec.telemetry.tracing`: OpenTelemetry to
+  `otel-collector-opentelemetry-collector.otel-collector:4317`, `serviceName: envoy-external`,
+  `samplingRate: 100` (nginx `AlwaysOn`), tags `http.host` and `upstream.cluster`; a
+  `ReferenceGrant` in `otel-collector` allows the cross-namespace backendRef. The collector
+  treats `envoy-external` like `nginx-external` (tail sampling 100%, SERVER to CLIENT span kind).
+  Loki gets a `traceID` derived field (the Envoy JSON key has a capital `ID`). Tempo needed no
+  change. Evidence: a request with a `traceparent` through `.14` appears in Tempo as service
+  `envoy-external`, root span `ingress`, parented to the incoming span id, with the same trace id
+  in the access log line. Envoy exports spans for every request, including 404s.
+- **Tracing does not roll pods** (dynamic xDS config). The roll test therefore rides on a no-op
+  pod annotation `homelab.grigri.cloud/roll-test` on both EnvoyProxies (internal in `71d00f34e`,
+  external in `1ba494e72`). It can go with the next real pod template change.
+- **Roll test (Gate 1)**: ~10 req/s per VIP (3 parallel `curl` loops, 404 from Envoy, 2 s connect
+  and 5 s total timeout) from the workstation, logged from before the first roll until 2 minutes
+  after the last pod was replaced: **3241 requests to `.14`, 3236 to `.13`, 0 failures** (no code
+  000, no timeouts, none during either roll). 4 probes took about 1 s (SYN retransmit) at two
+  instants outside the roll windows, hitting both VIPs at the same time (client side). Timeline
+  (UTC): internal 20:50:04-20:50:38, external 20:51:54-20:52:27; each roll: new pod created, Ready
+  about 11 s later (`maxSurge: 1`, `maxUnavailable: 0`), old pod gets SIGTERM only then and exits
+  about 11 s later (shutdown-manager `minDrainDuration` 10 s; no open connections to drain), next
+  new pod follows. `terminationGracePeriodSeconds` 360, `--drain-time-s 60`. No tuning needed.
+  Not covered: long-lived connections (websockets, big transfers) across a roll, which drain up to
+  60 s and are then cut.
 
 ### Phase 0 findings (2026-11-09)
 
@@ -1042,8 +1087,9 @@ pfSense: P1.1 (optional).
   self-signed "Kubernetes Ingress Controller Fake Certificate" and a 404. Nothing in the
   migration depends on the nginx behaviour; revisit only if a health check or client connects by IP;
 - roll test: continuous `curl` against both VIPs during `kubectl rollout restart` of each Envoy
-  deployment, zero failures (or a measured gap, tuned before going further);
-- metrics in Grafana, a test trace in Tempo;
+  deployment, zero failures (or a measured gap, tuned before going further); **done 2026-11-09**
+  (pod-template roll through git instead of `rollout restart`, 0 failures, see step 4 notes);
+- metrics in Grafana, a test trace in Tempo; **done 2026-11-09** (step 4 notes);
 - #199 gate G11 on this deployment (wildcard `TLSRoute` matches two labels, passthrough coexists
   with the HTTPS listeners, h2 still negotiated on `https-grigri-cloud`).
 
