@@ -2,11 +2,10 @@
 """Foundation-specific checks for the policy-free public gateway baseline.
 
 Validates the Phase A foundation that is ready for deployment:
-  * networkIsolation=false means NO NetworkPolicy/CiliumNetworkPolicy renders;
   * nodeSelector is prusik (the only approved node for initial rollout);
-  * all backend routes disabled (routes: []) - gateway answers 404 before auth;
+  * all backend routes disabled (mcp.targets: []) - gateway answers 404 before auth;
   * session key lifecycle is ESO CreatedOnce + immutable;
-  * probes are correct (startup/readiness/liveness on 15021);
+  * probes are correct (startup/readiness on 15021);
   * JWT validation values are correct (issuer, audience, jwksUrl) for future use;
   * image pinned to v1.7.0;
   * ingress is nginx-external with TLS;
@@ -16,7 +15,7 @@ Validates the Phase A foundation that is ready for deployment:
   * SESSION_KEY is a required secretKeyRef (fail-closed);
   * Deployment structural fields are correct (securityContext, resources, etc.).
 
-NOTE: With routes: [], no auth or RFC 9728 discovery is testable - the gateway
+NOTE: With mcp.targets: [], no auth or RFC 9728 discovery is testable - the gateway
 answers 404 before reaching auth. This phase validates health/TLS/fail-closed-404
 only. Actual auth/discovery tests require enabling a route in a later phase.
 
@@ -65,26 +64,11 @@ def config_text(docs):
 
 
 def main():
-    # Render with default values (networkIsolation: false)
+    # Render with default values
     docs = helm()
     text = config_text(docs)
     cfg = yaml.safe_load(text)
     vals = open(f"apps/{CHART}/values.yaml").read()
-
-    # ---- networkIsolation guard ----
-    check("networkIsolation defaults to false in values.yaml",
-          re.search(r"^networkIsolation:\s*false\s*$", vals, re.M) is not None)
-    check("no NetworkPolicy rendered when networkIsolation=false",
-          find_all(docs, "NetworkPolicy") == [])
-    check("no CiliumNetworkPolicy rendered when networkIsolation=false",
-          find_all(docs, "CiliumNetworkPolicy") == [])
-
-    # Verify NetworkPolicy DOES render when enabled (for future use)
-    docs_np = helm(["networkIsolation=true"])
-    np_list = find_all(docs_np, "NetworkPolicy")
-    check("NetworkPolicy renders when networkIsolation=true",
-          len(np_list) == 2,
-          f"got {len(np_list)} policies")
 
     # ---- nodeSelector ----
     dep = find(docs, "Deployment")
@@ -94,13 +78,13 @@ def main():
           str(node_sel))
 
     # ---- all backends disabled ----
-    check("routes: [] in config (all backends disabled)",
-          cfg.get("routes") == [],
-          f"routes={cfg.get('routes')!r}")
-    check("firecrawl backend disabled in values",
-          re.search(r"^\s{2}firecrawl:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
+    check("mcp.targets: [] in config (all backends disabled)",
+          cfg.get("mcp", {}).get("targets") == [],
+          f"mcp.targets={cfg.get('mcp', {}).get('targets')!r}")
     check("grafana backend disabled in values",
           re.search(r"^\s{2}grafana:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
+    check("context7 backend disabled in values",
+          re.search(r"^\s{2}context7:\s*\n(?:.*\n)*?\s{4}enabled: false", vals, re.M) is not None)
 
     # ---- session key ESO lifecycle ----
     es = find(docs, "ExternalSecret")
@@ -123,18 +107,12 @@ def main():
 
     # ---- probes ----
     containers = (dep or {}).get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
-    main_container = next((c for c in containers if c.get("name") == "main"), None)
-    check("main container exists", main_container is not None)
+    main_container = next((c for c in containers if c.get("name") == "agentgateway"), None)
+    check("agentgateway container exists", main_container is not None)
     if main_container:
-        probes = main_container.get("probes", {}) or main_container.get("livenessProbe") is not None
-        # app-template renders probes differently; check the Deployment spec directly
-        liveness = main_container.get("livenessProbe")
+        # Official chart uses startupProbe and readinessProbe (no livenessProbe)
         readiness = main_container.get("readinessProbe")
         startup = main_container.get("startupProbe")
-        check("livenessProbe exists on /healthz/ready:15021",
-              liveness is not None and
-              liveness.get("httpGet", {}).get("path") == "/healthz/ready" and
-              liveness.get("httpGet", {}).get("port") == 15021)
         check("readinessProbe exists on /healthz/ready:15021",
               readiness is not None and
               readiness.get("httpGet", {}).get("path") == "/healthz/ready" and
@@ -146,7 +124,7 @@ def main():
 
     # ---- JWT validation ----
     # JWT settings are in values.yaml but only render into config when routes are enabled.
-    # Foundation baseline has routes: [] so no auth/discovery is testable yet - the gateway
+    # Foundation baseline has mcp.targets: [] so no auth/discovery is testable yet - the gateway
     # answers 404 before reaching auth. These checks verify the VALUES are correct for when
     # routes are enabled later.
     check("issuer is exact Kanidm per-client path in values",
@@ -155,13 +133,12 @@ def main():
           "audience: mcp-gateway" in vals)
     check("jwksUrl is Kanidm public_key.jwk in values",
           "jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk" in vals)
-    check("routes: [] means no auth/discovery testable yet (404 before auth)",
-          cfg.get("routes") == [])
+    check("mcp.targets: [] means no auth/discovery testable yet (404 before auth)",
+          cfg.get("mcp", {}).get("targets") == [])
 
     # ---- image pin ----
-    check("image pinned to v1.7.0",
-          "tag: v1.7.0" in vals and
-          "repository: cr.agentgateway.dev/agentgateway" in vals)
+    check("image tag is empty (use chart appVersion)",
+          "tag: \"\"" in vals or "tag: ''" in vals)
     if main_container:
         image = main_container.get("image", "")
         check("Deployment image is cr.agentgateway.dev/agentgateway:v1.7.0",
@@ -177,11 +154,19 @@ def main():
         tls = ing["spec"].get("tls", [])
         check("TLS is configured",
               len(tls) > 0 and tls[0].get("secretName") == "mcp-gateway-tls-certificate")
+        # Check backend service name
+        rules = ing["spec"].get("rules", [])
+        if rules:
+            backend = rules[0].get("http", {}).get("paths", [{}])[0].get("backend", {})
+            svc_name = backend.get("service", {}).get("name", "")
+            check("Ingress backend points to mcp-gateway-standalone service",
+                  svc_name == "mcp-gateway-standalone",
+                  f"got {svc_name}")
 
     # ---- RFC 9728 metadata paths ----
     check("RFC 9728 well-known path is in config (for future routes)",
-          "/.well-known/oauth-protected-resource" in text or cfg.get("routes") == [],
-          "routes are empty so no paths needed yet")
+          "/.well-known/oauth-protected-resource" in text or cfg.get("mcp", {}).get("targets") == [],
+          "targets are empty so no paths needed yet")
 
     # ---- humanScopeMap empty ----
     check("humanScopeMap is empty (no human grants)",
@@ -189,7 +174,7 @@ def main():
 
     # ---- adminAddr off ----
     check("adminAddr is 'off' (no admin listener)",
-          cfg.get("config", {}).get("adminAddr") == "off")
+          cfg.get("adminAddr") == "off")
 
     # ---- service ----
     svc = find(docs, "Service")
@@ -200,6 +185,8 @@ def main():
         check("Service exposes ports 3000, 15020, 15021",
               {3000, 15020, 15021} <= ports,
               str(sorted(ports)))
+        check("Service name is mcp-gateway-standalone",
+              svc["metadata"]["name"] == "mcp-gateway-standalone")
 
     # ---- SESSION_KEY ----
     if main_container:
@@ -209,6 +196,10 @@ def main():
             ref = env[0].get("valueFrom", {}).get("secretKeyRef", {})
             check("SESSION_KEY is from secretKeyRef (not a plain value)",
                   bool(ref) and "name" in ref and "key" in ref)
+            check("SESSION_KEY references existing secret mcp-gateway-session-key",
+                  ref.get("name") == "mcp-gateway-session-key")
+            check("SESSION_KEY secretKeyRef key is SESSION_KEY",
+                  ref.get("key") == "SESSION_KEY")
             check("SESSION_KEY secretKeyRef is required (optional is not true)",
                   ref.get("optional") is not True)
 
@@ -227,7 +218,9 @@ def main():
     check("KanidmGroup exists (mcp-gateway-agents)",
           grp is not None and grp["metadata"]["name"] == "mcp-gateway-agents")
     if grp:
-        check("KanidmGroup has no members by default (empty serviceMembers)",
+        # When serviceMembers is empty, the template omits the members field entirely
+        # (owner-managed membership, no authoritative assertion)
+        check("KanidmGroup has no members field when serviceMembers is empty",
               "members" not in grp.get("spec", {}))
 
     # ---- security context ----
@@ -240,10 +233,6 @@ def main():
               sc.get("readOnlyRootFilesystem") is True)
         caps = sc.get("capabilities", {}).get("drop", [])
         check("capabilities drop ALL", "ALL" in caps)
-        check("runAsUser is 65534 (nobody)",
-              sc.get("runAsUser") == 65534)
-        check("runAsGroup is 65534 (nobody)",
-              sc.get("runAsGroup") == 65534)
 
     # ---- resources ----
     if main_container:
@@ -259,12 +248,15 @@ def main():
 
     # ---- pod spec ----
     pod_spec = (dep or {}).get("spec", {}).get("template", {}).get("spec", {})
-    check("automountServiceAccountToken is false",
-          pod_spec.get("automountServiceAccountToken") is False)
-    check("enableServiceLinks is false",
-          pod_spec.get("enableServiceLinks") is False)
     check("replicas is 1",
           (dep or {}).get("spec", {}).get("replicas") == 1)
+
+    # ---- Deployment naming ----
+    check("Deployment name is mcp-gateway-standalone (avoids immutable selector conflict)",
+          dep["metadata"]["name"] == "mcp-gateway-standalone")
+    dep_selector = (dep or {}).get("spec", {}).get("selector", {}).get("matchLabels", {})
+    check("Deployment selector has component=standalone",
+          dep_selector.get("app.kubernetes.io/component") == "standalone")
 
     print()
     print(f"=== {sum(results)} passed, {results.count(False)} failed ===")

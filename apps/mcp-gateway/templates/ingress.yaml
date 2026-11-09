@@ -1,0 +1,38 @@
+{{- /*
+Wrapper template for Ingress - the official agentgateway-standalone chart does not
+include Ingress resources. This template creates the Ingress for the public plane
+(mcp.grigri.cloud) through nginx-external with TLS.
+
+Service backend: mcp-gateway-standalone (chart fullnameOverride)
+Old service was: mcp-gateway (app-template)
+*/ -}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mcp-gateway
+  namespace: mcp-gateway
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/instance: mcp-gateway
+  annotations:
+    external-dns.kubernetes.io/enabled: "true"
+    external-dns.kubernetes.io/target: grigri.cloud
+    cert-manager.io/cluster-issuer: letsencrypt-prod-dns
+spec:
+  ingressClassName: nginx-external
+  tls:
+    - hosts:
+        - mcp.grigri.cloud
+      secretName: mcp-gateway-tls-certificate
+  rules:
+    - host: mcp.grigri.cloud
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mcp-gateway-standalone
+                port:
+                  number: 3000
