@@ -11,9 +11,9 @@ spec:
   resources:
     requests:
       cpu: 10m
-      memory: 256Mi
-    limits:
       memory: 512Mi
+    limits:
+      memory: 1Gi
 
   nodeAffinity:
     requiredDuringSchedulingIgnoredDuringExecution:
@@ -40,7 +40,7 @@ spec:
       # RAILS_MAX_THREADS: 5
       # minimal value. If not default to 100
       max_connections: "40"
-      shared_buffers: 32MB
+      shared_buffers: 256MB
       log_checkpoints: "off"
       log_connections: "off"
       log_disconnections: "off"
