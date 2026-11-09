@@ -1,0 +1,18 @@
+# Envoy Gateway route (ingress-nginx migration). The Ingress in ingress.yaml stays until the switch.
+# Internal route: no external-dns annotation until the internal switch.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: prometheus-long-term
+  namespace: monitoring
+spec:
+  hostnames:
+    - prometheus-long-term.internal.grigri.cloud
+  parentRefs:
+    - name: internal
+      namespace: envoy-gateway
+      sectionName: https-internal-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: prometheus-long-term
+          port: 9090

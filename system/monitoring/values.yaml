@@ -54,6 +54,18 @@ alertmanager:
         hosts:
           - alertmanager.internal.grigri.cloud
 
+  # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
+  # Internal route: no external-dns annotation until the internal switch.
+  route:
+    main:
+      enabled: true
+      hostnames:
+        - alertmanager.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+
 grafana:
   enabled: true
 
@@ -78,6 +90,21 @@ grafana:
       - secretName: grafana-general-tls
         hosts:
           - *host
+
+  # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
+  route:
+    main:
+      enabled: true
+      annotations:
+        # the target (grigri.cloud) comes from the external Gateway
+        external-dns.kubernetes.io/enabled: "true"
+      hostnames:
+        - grafana.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+
   plugins:
     - grafana-piechart-panel
   persistence:
@@ -301,3 +328,15 @@ prometheus:
       - secretName: prometheus-general-tls
         hosts:
           - prometheus.internal.grigri.cloud
+
+  # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
+  # Internal route: no external-dns annotation until the internal switch.
+  route:
+    main:
+      enabled: true
+      hostnames:
+        - prometheus.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
