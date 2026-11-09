@@ -1,0 +1,41 @@
+# External Envoy Gateway routes (ingress-nginx migration); external-ingress.yaml stays until the
+# switch. The internal route is the chart-native `wordpress.httpRoute` (values.yaml).
+# No external-dns annotation on purpose: the records for mintpsicologia.es and www already exist
+# (external-dns runs upsert-only), the routes must not change them.
+# nginx `proxy-body-size 100m` and `proxy-buffer-size 16k`: nothing to port (no body limit,
+# larger header limits on the Gateway).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mintpsicologia-external
+spec:
+  hostnames:
+    - mintpsicologia.es
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-mintpsicologia-es
+  rules:
+    - backendRefs:
+        - name: mintpsicologia-wordpress
+          port: 80
+---
+# nginx `permanent-redirect: https://mintpsicologia.es$request_uri` (301): path and query kept.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mintpsicologia-www-redirect
+spec:
+  hostnames:
+    - www.mintpsicologia.es
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-mintpsicologia-es-www
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            hostname: mintpsicologia.es
+            statusCode: 301
