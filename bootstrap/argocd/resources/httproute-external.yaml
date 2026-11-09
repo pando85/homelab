@@ -1,0 +1,25 @@
+# External Envoy Gateway route (ingress-nginx migration); ingress-external.yaml stays until the
+# switch. Same restriction as the Ingress: only the webhook path is public (`/api/webhook`,
+# Prefix, so `/api/webhook` and `/api/webhook/x` but not `/api/webhookx`).
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: argocd-external
+  annotations:
+    # the target (grigri.cloud) comes from the external Gateway
+    external-dns.kubernetes.io/enabled: "true"
+spec:
+  hostnames:
+    - argocd.grigri.cloud
+  parentRefs:
+    - name: external
+      namespace: envoy-gateway
+      sectionName: https-grigri-cloud
+  rules:
+    - backendRefs:
+        - name: argocd-server
+          port: 80
+      matches:
+        - path:
+            type: PathPrefix
+            value: /api/webhook

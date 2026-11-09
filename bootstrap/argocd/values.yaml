@@ -112,6 +112,18 @@ server:
       external-dns.kubernetes.io/enabled: "true"
     hostname: argocd.internal.grigri.cloud
     tls: true
+  # Envoy Gateway route (ingress-nginx migration); the Ingress above stays until the switch.
+  # No external-dns annotation before the internal switch. The external /api/webhook route is
+  # resources/httproute-external.yaml. No grpcroute: the Service port has no h2c appProtocol, so the
+  # backend speaks HTTP/1.1 like behind nginx today (CLI needs `--grpc-web`, as with nginx).
+  httproute:
+    enabled: true
+    parentRefs:
+      - name: internal
+        namespace: envoy-gateway
+        sectionName: https-internal-grigri-cloud
+    hostnames:
+      - argocd.internal.grigri.cloud
   metrics: &metrics
     enabled: true
     serviceMonitor:
