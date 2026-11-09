@@ -1,0 +1,129 @@
+{{- if .Values.networkIsolation }}
+---
+# CiliumNetworkPolicy for the public MCP gateway plane (release `mcp-gateway`).
+#
+# WHY CILIUM AND NOT A NATIVE NetworkPolicy
+# -----------------------------------------
+# Native Kubernetes NetworkPolicy cannot express what this cluster needs: it has no
+# entities, and a node `ipBlock` does not match the kubelet probe source. Measured on
+# `grigri` (Cilium v1.20.4, `enable-policy: default`, `enable-host-firewall: false`,
+# `allow-localhost` unset): ANY policy set carrying an INGRESS section on a pod probed
+# with `httpGet` denies the kubelet probe unless the probe source is matched, and the
+# only entity that matches it here is `world` - `host`, `remote-node`, `cluster` and a
+# node-subnet `fromCIDR` each measured `context deadline exceeded` plus restarts.
+# Egress-only sets never broke a probe. Full matrix and caveats:
+# `docs/conventions/cilium.md`, section "Kubelet probes under enforced policies".
+# Do not "improve" this shape from general Cilium advice; it is the one that measured
+# safe here (rows S2/S3, and S5 reproduces the outage in 6 s when the `world` rule is
+# removed from an otherwise identical policy).
+#
+# PORTS - read off the rendered manifests, not assumed
+# ---------------------------------------------------
+#   3000   MCP app listener (`config.gateways.default.port`, Service `http`)
+#   15020  metrics (the only declared containerPort; PodMonitor `port: metrics`,
+#          `prometheus.io/port: "15020"`)
+#   15021  health (`/healthz/ready`) - startupProbe + readinessProbe, hardcoded in the
+#          official chart, on a listener that serves NOTHING else
+#   admin  `config.config.adminAddr: "off"` -> there is no admin port to reach
+#
+# The probe port is therefore DEDICATED: allowing it does not expose the app or the
+# metrics port. This is what makes the `world` allowance below usable. The earlier note
+# in this chart saying the probe port was "deliberately not allowed" is FALSIFIED - not
+# allowing it is exactly what killed the pod.
+#
+# ACCEPTED RESIDUAL EXPOSURE (owner-approved): `world` may reach 15021 only. That
+# listener serves the readiness body and no secrets, and pod IPs (10.0.0.0/16) are not
+# routable from outside the cluster, so in practice `world` here means "identities the
+# endpoint-scoped rules below do not name", not "the internet".
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: mcp-gateway
+  labels:
+    app.kubernetes.io/name: mcp-gateway
+    app.kubernetes.io/instance: mcp-gateway
+spec:
+  # Pod labels verified against the rendered Deployment AND the live pod:
+  # kubectl -n mcp-gateway get pod -l app.kubernetes.io/instance=mcp-gateway -o jsonpath
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-standalone
+      app.kubernetes.io/instance: mcp-gateway
+      app.kubernetes.io/component: standalone
+  ingress:
+    # (1) Kubelet startup/readiness probes on the dedicated health listener. `world`
+    # ONLY - and `cluster` stays OFF this port: in one measured run a rule list that
+    # also contained `cluster` leaked the app port.
+    - fromEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "15021"
+              protocol: TCP
+    # (2) MCP traffic arrives only through the external edge. Live proof of the source
+    # identity: every gateway request log carries src.addr 10.0.4.148 / 10.0.4.234, the
+    # two `ingress-nginx-external` controller pods (not hostNetwork), and the Ingress
+    # for mcp.grigri.cloud uses class nginx-external -> Service mcp-gateway-standalone
+    # port 3000. Nothing else is allowed to call the gateway.
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: ingress-nginx
+            app.kubernetes.io/component: controller
+            io.kubernetes.pod.namespace: ingress-nginx-external
+      toPorts:
+        - ports:
+            - port: "3000"
+              protocol: TCP
+    # (3) Metrics are an ops-only port, separated at L3/L4 rather than by path. Covers
+    # both prometheus servers in `monitoring` (prometheus-monitoring-kube-prometheus-…
+    # and prometheus-long-term-…); they share app.kubernetes.io/name=prometheus.
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            io.kubernetes.pod.namespace: monitoring
+      toPorts:
+        - ports:
+            - port: "15020"
+              protocol: TCP
+  egress:
+    # Proven baseline: everything inside the cluster (DNS, the API, in-cluster MCP
+    # backends such as grafana-mcp:8000, and Kanidm reached through the internal
+    # ingress VIP). Bare `cluster` with NO toPorts - attaching ports to this rule would
+    # restrict all cluster traffic to them (the pattern in the calypso runner policy is
+    # DNS-only-by-ports and must not be copied here).
+    - toEntities:
+        - cluster
+    # Kept explicit as a guard for the DNS anycast path: nodelocaldns answers at
+    # 169.254.25.10 and Cilium DNATs that to the node-local-dns POD, so a cidr rule
+    # would be wrong and a pod rule names the real endpoints. Redundant with `cluster`,
+    # which already covers both DNS workloads; harmless because egress rules are unioned.
+    - toEndpoints:
+        - matchLabels:
+            k8s-app: kube-dns
+            io.kubernetes.pod.namespace: kube-system
+        - matchLabels:
+            k8s-app: node-local-dns
+            io.kubernetes.pod.namespace: kube-system
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # OUTBOUND 443 TO THE INTERNET - required by a LIVE route, not by a plan. The
+    # context7 backend terminates at mcp.context7.com, which resolves to a public AWS
+    # NLB address (measured), so `cluster` alone would break the route the day this
+    # flag is flipped. It also keeps the Kanidm JWKS fetch working if idm.grigri.cloud
+    # answers with its public address instead of the internal VIP.
+    # Not narrowed with toFQDNs: FQDN pinning depends on the DNS proxy path, and the
+    # node-local-dns interaction is untested on this cluster - an unverified rule is
+    # worse than an honest one. The scope is bounded by the gateway itself: readonly
+    # mode, upstream targets fixed in the rendered config, outbound-only on 443. The
+    # long-lived calypso runner CNP uses the same `world`/443 allowance.
+    - toEntities:
+        - world
+      toPorts:
+        - ports:
+            - port: "443"
+              protocol: TCP
+{{- end }}

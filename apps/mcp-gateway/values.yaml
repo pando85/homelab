@@ -368,9 +368,28 @@ agentgateway-standalone:
 # wrapper templates in templates/ (ingress, kanidm, session-key).
 # ---------------------------------------------------------------------------
 
-# Network isolation - DISABLED for initial rollout
-# Previous deployment with NetworkPolicy blocked kubelet probes
-# Will re-enable after CiliumNetworkPolicy design reviewed
+# ---------------------------------------------------------------------------
+# Network isolation - OFF in this release on purpose: the running baseline stays
+# policy-free until the CNP is enabled as its own reviewed change.
+# apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml now carries the shape MEASURED
+# safe on this cluster: kubelet probes hit the DEDICATED health port 15021, and with
+# `enable-host-firewall: false` the only entity that matches the probe source there is
+# `world`; `host`, `remote-node`, `cluster` and a node-subnet ipBlock all measured
+# `context deadline exceeded` + restarts. See docs/conventions/cilium.md, "Kubelet
+# probes under enforced policies".
+# The earlier rationale in this chart - probe port 15021 "deliberately not allowed" -
+# is FALSIFIED and has been removed: withholding the health port is precisely what
+# killed the pod, not what protected it.
+#
+# TO ENABLE (one line, `true`): this plane's official chart hardcodes the probes and
+# defines NO livenessProbe, so a denied probe can only flap the endpoint, never restart
+# the container - startupProbe already carries failureThreshold 60. The sibling
+# apps/grafana-mcp has a livenessProbe at failureThreshold 3, and that must be raised to
+# >= 6 in ITS values as part of the same enable step: a CNP-only ArgoCD sync attaches
+# these ingress rules to the RUNNING pod, and the threshold is what rides out the
+# transient. Applying the CNP before the endpoint exists is also safe (measured:
+# attached 6 m 32 s earlier, Ready in 6 s, zero probe failures). Rollback is
+# template-only: set the flag back to false, no pod churn, no Deployment nonce.
 networkIsolation: false
 
 # Kanidm OAuth2 client configuration (used by templates/kanidm-*.yaml)
