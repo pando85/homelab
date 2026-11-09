@@ -25,9 +25,13 @@ spec:
   clientIPDetection:
     xForwardedFor:
       numTrustedHops: 1
+  # Idle-based, like nginx (client keepalive_timeout 75s, client_header_timeout 60s). Never set
+  # requestReceivedTimeout here: it is a TOTAL upload limit, nginx's client_body_timeout is idle.
   timeout:
     http:
-      idleTimeout: 600s
+      idleTimeout: 75s
+      requestHeadersReceivedTimeout: 60s
+      streamIdleTimeout: 60s
   tcpKeepalive:
     idleTime: 300s
     interval: 60s
@@ -48,10 +52,14 @@ spec:
       remove:
         - Server
 ---
-# Envoy Gateway defaults to 15s; nginx proxy timeouts are 60s. Long-running apps (immich,
-# forgejo, nextcloud, transcoder, gitlab, minio/s3, runners) override per route with
-# mergeType: StrategicMerge. No compressor here on purpose: compression is per route only and
-# never on MinIO/S3 hosts (it rewrites the signed Accept-Encoding).
+# nginx proxy-read/send-timeout (60s) are IDLE timeouts between reads and writes, while Envoy's
+# route timeout (requestTimeout, default 15s) is a TOTAL limit from request end to the complete
+# response: 60s total cuts every download or stream longer than a minute. So the total limit is
+# disabled and idleness is bounded by streamIdleTimeout (no bytes in either direction, also for
+# websockets and SSE), connect timeout and upstream keepalive match nginx (5s, 60s). Apps whose
+# Ingress sets proxy-read/send-timeout override streamIdleTimeout per route with a BackendTrafficPolicy
+# mergeType: StrategicMerge (docs/conventions/gateway-api-routes.md). No compressor here on purpose:
+# compression is per route only and never on MinIO/S3 hosts (it rewrites the signed Accept-Encoding).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
 metadata:
@@ -64,8 +72,12 @@ spec:
       kind: Gateway
       name: internal
   timeout:
+    tcp:
+      connectTimeout: 5s
     http:
-      requestTimeout: 60s
+      requestTimeout: 0s
+      streamIdleTimeout: 60s
+      connectionIdleTimeout: 60s
 ---
 # Gateway-wide defaults of the external Gateway, matching ingress-nginx so apps do not notice.
 apiVersion: gateway.envoyproxy.io/v1alpha1
@@ -91,9 +103,13 @@ spec:
     escapedSlashesAction: KeepUnchanged
   # No clientIPDetection: like nginx-external, trust no X-Forwarded-For. externalTrafficPolicy
   # Local keeps the real client IP on the TCP connection.
+  # Idle-based, like nginx (client keepalive_timeout 75s, client_header_timeout 60s). Never set
+  # requestReceivedTimeout here: it is a TOTAL upload limit, nginx's client_body_timeout is idle.
   timeout:
     http:
-      idleTimeout: 600s
+      idleTimeout: 75s
+      requestHeadersReceivedTimeout: 60s
+      streamIdleTimeout: 60s
   tcpKeepalive:
     idleTime: 300s
     interval: 60s
@@ -114,10 +130,14 @@ spec:
       remove:
         - Server
 ---
-# Envoy Gateway defaults to 15s; nginx proxy timeouts are 60s. Long-running apps (immich,
-# forgejo, nextcloud, transcoder, gitlab, minio/s3, runners) override per route with
-# mergeType: StrategicMerge. No compressor here on purpose: compression is per route only and
-# never on MinIO/S3 hosts (it rewrites the signed Accept-Encoding).
+# nginx proxy-read/send-timeout (60s) are IDLE timeouts between reads and writes, while Envoy's
+# route timeout (requestTimeout, default 15s) is a TOTAL limit from request end to the complete
+# response: 60s total cuts every download or stream longer than a minute. So the total limit is
+# disabled and idleness is bounded by streamIdleTimeout (no bytes in either direction, also for
+# websockets and SSE), connect timeout and upstream keepalive match nginx (5s, 60s). Apps whose
+# Ingress sets proxy-read/send-timeout override streamIdleTimeout per route with a BackendTrafficPolicy
+# mergeType: StrategicMerge (docs/conventions/gateway-api-routes.md). No compressor here on purpose:
+# compression is per route only and never on MinIO/S3 hosts (it rewrites the signed Accept-Encoding).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
 metadata:
@@ -130,5 +150,9 @@ spec:
       kind: Gateway
       name: external
   timeout:
+    tcp:
+      connectTimeout: 5s
     http:
-      requestTimeout: 60s
+      requestTimeout: 0s
+      streamIdleTimeout: 60s
+      connectionIdleTimeout: 60s
