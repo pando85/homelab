@@ -54,6 +54,20 @@ open-webui:
     host: open-webui.grigri.cloud
     tls: true
 
+  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # No httpsRedirect: the Gateways have their own http redirect routes.
+  route:
+    enabled: true
+    annotations:
+      # the target (grigri.cloud) comes from the external Gateway
+      external-dns.kubernetes.io/enabled: "true"
+    hostnames:
+      - open-webui.grigri.cloud
+    parentRefs:
+      - name: external
+        namespace: envoy-gateway
+        sectionName: https-grigri-cloud
+
   nodeSelector:
     kubernetes.io/hostname: prusik
   persistence:
