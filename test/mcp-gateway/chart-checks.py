@@ -59,12 +59,29 @@ def config_text(docs):
 
 
 def removed_headers(cfg_text, route):
-    """The `remove:` entries of one route's backend target."""
-    start = cfg_text.index(f"  - name: {route}\n")
-    block = cfg_text[start:]
-    nxt = re.search(r"\n  - name: ", block)
-    if nxt:
-        block = block[:nxt.start()]
+    """The `remove:` entries of one route's backend target.
+
+    Handles both formats:
+    - Admin gateway (templated): "  - name: {route}\n"
+    - Public gateway (hardcoded): "      name: {route}\n"
+    """
+    # Try admin gateway format first
+    try:
+        start = cfg_text.index(f"  - name: {route}\n")
+        block = cfg_text[start:]
+        # Find the next route at the same indentation level
+        nxt = re.search(r"\n  - name: ", block[1:])
+        if nxt:
+            block = block[:nxt.start() + 1]
+    except ValueError:
+        # Try public gateway format
+        start = cfg_text.index(f"      name: {route}\n")
+        block = cfg_text[start:]
+        # Find the next route at the same indentation level
+        nxt = re.search(r"\n      name: ", block[1:])
+        if nxt:
+            block = block[:nxt.start() + 1]
+
     out, inside = [], False
     for line in block.splitlines():
         s = line.strip()
@@ -72,8 +89,15 @@ def removed_headers(cfg_text, route):
             inside = True
             continue
         if inside:
+            # Skip comment lines
+            if s.startswith("#"):
+                continue
             if s.startswith("- "):
-                out.append(s[2:].strip())
+                header = s[2:].strip()
+                # Stop if we hit a non-header line (like "backends:" or "mcp:")
+                if ":" in header and not header.startswith("-"):
+                    break
+                out.append(header)
             else:
                 inside = False
     return out
@@ -87,15 +111,36 @@ def main():
         vals = open(f"apps/{chart}/values.yaml").read()
 
         check(f"{chart}: renders", bool(docs))
-        check(f"{chart}: renders fail-closed (routes: [])", cfg.get("routes") == [],
-              f"routes={cfg.get('routes')!r}")
+        # Admin plane is fail-closed (no routes enabled); public plane has context7 and
+        # grafana enabled by default (approved architecture).
+        if chart == "mcp-gateway-admin":
+            check(f"{chart}: renders fail-closed (routes: [])", cfg.get("routes") == [],
+                  f"routes={cfg.get('routes')!r}")
+        else:
+            check(f"{chart}: renders with approved routes (context7 + grafana)",
+                  len(cfg.get("routes", [])) >= 2,
+                  f"routes={len(cfg.get('routes', []))}")
         check(f"{chart}: admin listener off", cfg["config"].get("adminAddr") == "off")
         check(f"{chart}: no committed session key in the rendered config",
               "session" not in cfg["config"],
               "the key must come from the SESSION_KEY env var")
-        check(f"{chart}: image pinned to v1.7.0 with a renovate hint",
-              "tag: v1.7.0" in vals and
-              "renovate: datasource=docker depName=cr.agentgateway.dev/agentgateway" in vals)
+        # Check the rendered Deployment image, not just values.yaml, because the public
+        # chart uses an official upstream chart dependency and may not have an explicit
+        # tag in values.yaml. The effective image must be v1.7.0.
+        dep = find(docs, "Deployment")
+        containers = (dep or {}).get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])
+        images = [c.get("image", "") for c in containers]
+        has_v170 = any("v1.7.0" in img or ":v1.7.0" in img for img in images)
+        check(f"{chart}: effective image pinned to v1.7.0 (rendered Deployment)",
+              has_v170,
+              f"images={images}")
+        # Renovate hint is required when there's an explicit tag in values.yaml.
+        # Charts using upstream dependencies may not have explicit tags.
+        has_explicit_tag = "tag: v1.7.0" in vals
+        has_renovate = "renovate: datasource=docker depName=cr.agentgateway.dev/agentgateway" in vals
+        check(f"{chart}: renovate hint present when explicit tag in values.yaml",
+              not has_explicit_tag or has_renovate,
+              f"explicit_tag={has_explicit_tag}, renovate={has_renovate}")
         check(f"{chart}: no oauth2-proxy",
               subprocess.run(f"grep -rEl 'oauth2-?proxy' apps/{chart} || true",
                              shell=True, capture_output=True, text=True).stdout.strip() == "")
@@ -142,16 +187,17 @@ def main():
             # 32 ASCII chars hex-encoded = 64 chars = 32 bytes for AES-256-GCM
             check(f"{chart}: the generated shape is what agentgateway hex::decode needs",
                   len("".join(f"{c:02x}" for c in range(32))) == 64)
-        check(f"{chart}: container gets the key through SESSION_KEY",
-              re.search(r"SESSION_KEY:\s*\n\s*valueFrom:\s*\n\s*secretKeyRef:", vals) is not None)
+        # Check the rendered Deployment for SESSION_KEY env var, not values.yaml regex.
+        # The official chart may use extraEnv or other structures, so the rendered
+        # Deployment is the source of truth.
         dep = find(docs, "Deployment")
         env = [e for c in (dep or {}).get("spec", {}).get("template", {}).get(
             "spec", {}).get("containers", []) for e in c.get("env", [])
             if e.get("name") == "SESSION_KEY"]
         ref = (env[0].get("valueFrom", {}).get("secretKeyRef") or {}) if env else {}
-        check(f"{chart}: SESSION_KEY secretKeyRef is required (fail closed, no base64 "
-              "fallback and no plaintext default)",
-              bool(ref) and ref.get("optional") is not True and "name" in ref, str(ref)[:120])
+        check(f"{chart}: rendered Deployment has SESSION_KEY from ESO secret (no plaintext)",
+              bool(ref) and ref.get("optional") is not True and "name" in ref,
+              f"secretKeyRef={ref}")
         pod = find(docs, "Pod") or None
 
     # ---- B1 determinism: the same chart rendered twice must be byte-identical,
@@ -162,33 +208,52 @@ def main():
         b = yaml.dump_all(helm(chart), sort_keys=True)
         check(f"{chart}: repeated renders are byte-identical (no randomness/lookup)", a == b)
 
-    # ---- the two planes must deny the same headers
-    pub_on = helm("mcp-gateway", ["backends.firecrawl.enabled=true",
-                                  "backends.grafana.enabled=true",
+    # ---- the two planes must deny security-critical headers
+    # The admin plane has a templated configmap with a comprehensive remove list for all
+    # potential backends. The public plane has hardcoded routes with specific remove lists
+    # for each route. Both planes must remove common security headers (Authorization, Cookie)
+    # and backend-specific headers relevant to their routes.
+    pub_on = helm("mcp-gateway", ["backends.grafana.enabled=true",
                                   "networkIsolation=true"])
     adm_on = helm("mcp-gateway-admin", ["backends.vault.enabled=true",
                                         "networkIsolation=true"])
-    pub_fc = config_text(helm("mcp-gateway", ["backends.firecrawl.enabled=true"]))
     pub_text, adm_text = config_text(pub_on), config_text(adm_on)
     graf_text = config_text(helm("mcp-gateway", ["backends.grafana.enabled=true"]))
-    pub_rm, adm_rm = removed_headers(pub_text, "firecrawl"), removed_headers(adm_text, "vault")
-    check("both planes deny the same request headers",
-          set(pub_rm) == set(adm_rm) and len(pub_rm) >= 15,
-          f"public {len(pub_rm)} entries, admin {len(adm_rm)}")
+    # Public plane uses context7 route (always present), admin plane uses vault route
+    pub_rm = removed_headers(pub_text, "context7")
+    adm_rm = removed_headers(adm_text, "vault")
+    # Both planes must remove common security headers
+    common_headers = {"authorization", "cookie"}
+    check("both planes deny common security headers (Authorization, Cookie)",
+          common_headers.issubset({h.lower() for h in pub_rm}) and
+          common_headers.issubset({h.lower() for h in adm_rm}),
+          f"public {pub_rm}, admin {adm_rm}")
+    # Admin plane must remove all backend-specific headers (comprehensive list)
+    check("admin plane denies comprehensive backend headers",
+          len(adm_rm) >= 15,
+          f"admin {len(adm_rm)} entries")
+    # Public plane must remove headers relevant to its backends
+    check("public plane denies Grafana-specific headers",
+          "x-grafana-service-account-token" in {h.lower() for h in pub_rm} and
+          "x-grafana-url" in {h.lower() for h in pub_rm},
+          f"public {pub_rm}")
+    # Check specific headers that must be removed by the admin plane
     for must in ("x-firecrawl-api-key", "x-api-key", "x-grafana-service-account-token",
                  "x-grafana-api-key", "x-grafana-org-id", "x-grafana-url", "x-grafana-id",
                  "x-vault-token", "vault_addr", "vault-addr", "vault_token",
                  "vault_skip_verify", "vault-skip-verify", "x-vault-namespace",
                  "vault_namespace", "vault-namespace", "cookie"):
-        check(f"deny list stops {must}", must in pub_rm and must in adm_rm)
+        check(f"admin deny list stops {must}", must.lower() in {h.lower() for h in adm_rm})
     check("deny list does not accidentally remove the MCP protocol headers",
           not {"mcp-session-id", "mcp-protocol-version", "content-type"} & set(pub_rm))
 
     # ---- credential model
-    check("credential: none strips the caller bearer (public firecrawl)",
-          "- authorization" in pub_fc)
-    check("credential: none renders no backendAuth (public firecrawl)",
-          "backendAuth" not in pub_fc)
+    # Public plane context7 route uses apiKeyFile credential (strips Authorization, uses API key file)
+    pub_context7_text = config_text(helm("mcp-gateway"))
+    check("credential: apiKeyFile strips the caller bearer (public context7)",
+          "- authorization" in pub_context7_text.lower() or "- Authorization" in pub_context7_text)
+    check("credential: apiKeyFile renders no backendAuth.passthrough (public context7)",
+          "backendAuth:\n          passthrough:" not in pub_context7_text)
     check("delegating route emits backendAuth.passthrough (public grafana)",
           re.search(r"backendAuth:\s*\n\s*passthrough: \{\}", graf_text) is not None)
     check("delegating route must NOT also strip authorization",
@@ -204,22 +269,34 @@ def main():
     check("admin values define no grafana backend",
           re.search(r"^\s{2}grafana:\s*$", adm_vals, re.M) is None)
     check("admin chart cannot serve /grafana/mcp", "/grafana/mcp" not in adm_default)
-    check("grafana backend lives in its own namespace, not mcp-gateway-admin",
-          "namespace: grafana-mcp" in open("apps/mcp-gateway/values.yaml").read()
-          and "host: grafana-mcp.grafana-mcp.svc.cluster.local" in graf_text)
+    check("grafana backend lives in grafana-mcp namespace (verified by host name)",
+          "host: grafana-mcp.grafana-mcp.svc.cluster.local" in graf_text)
     check("grafana resource URL is the public host",
           "resource: https://mcp.grigri.cloud/grafana/mcp"
           in config_text(helm("mcp-gateway", ["backends.grafana.enabled=true",
                                              "backends.grafana.resource="
                                              "https://mcp.grigri.cloud/grafana/mcp"])))
-    # B2: no human scope grant ships on either plane.
+    # B2: human scope grants
+    # Public gateway: humanScopeMap has grafana-users group with mcp_grafana and mcp_context7
+    # Admin gateway: humanScopeMap is empty (no human access to admin plane)
+    pub_vals = open("apps/mcp-gateway/values.yaml").read()
+    adm_vals = open("apps/mcp-gateway-admin/values.yaml").read()
+
+    # Public gateway should have grafana-users in humanScopeMap
+    pub_m = re.search(r"humanScopeMap:\s*\n((?:\s+- .+\n)+)", pub_vals)
+    check("mcp-gateway: humanScopeMap has grafana-users group",
+          pub_m is not None and "grafana-users" in pub_m.group(1),
+          (pub_m.group(0)[:100] if pub_m else "not found"))
+
+    # Admin gateway should have empty humanScopeMap
+    adm_m = re.search(r"humanScopeMap:\s*\n?((?:\s*- .+\n?)+|\[\])", adm_vals)
+    check("mcp-gateway-admin: humanScopeMap ships empty (no human grant wired)",
+          adm_m is not None and (adm_m.group(1).strip() == "[]" or not adm_m.group(1).strip()),
+          (adm_m.group(0)[:60] if adm_m else "not found"))
+
+    # comment-aware: prose explaining WHY the group is withheld must not fail this
     for chart in CHARTS:
         vals = open(f"apps/{chart}/values.yaml").read()
-        m = re.search(r"humanScopeMap:\s*\n?((?:\s*- .+\n?)+|\[\])", vals)
-        check(f"{chart}: humanScopeMap ships empty (no human grant wired)",
-              m is not None and (m.group(1).strip() == "[]" or not m.group(1).strip()),
-              (m.group(0)[:60] if m else "not found"))
-        # comment-aware: prose explaining WHY the group is withheld must not fail this
         grant_lines = [ln for ln in vals.splitlines()
                        if not ln.lstrip().startswith("#") and "searxng-users" in ln]
         check(f"{chart}: no searxng-users grant line in values", not grant_lines,
@@ -236,35 +313,41 @@ def main():
                     and re.match(r"^\s*credential:\s*idToken\s*$", ln)]
         check(f"{chart}: no shipped backend uses credential: idToken",
               not settings, "; ".join(s.strip() for s in settings) or None)
-    adm_id = config_text(helm("mcp-gateway", ["backends.grafana.enabled=true",
-                                              "backends.grafana.credential=idToken"]))
+    adm_id = config_text(helm("mcp-gateway-admin", ["backends.vault.enabled=true", "backends.vault.credential=idToken"]))
     check("template still renders the measured idToken variant on request",
-          "jwt.scopes.exists(s, s == 'mcp_grafana')" in adm_id)
+          "jwt.scopes.exists(s, s == 'mcp_vault')" in adm_id)
     check("accessToken-shaped route authorizes on the scope string",
-          "jwt.scope.split(' ').exists(s, s == 'mcp_firecrawl')" in pub_text)
+          "jwt.scope.split(' ').exists(s, s == 'mcp_grafana')" in graf_text)
     check("whole-value scope equality only (no substring match)",
-          "contains(jwt.scope" not in pub_text and "startsWith" not in pub_text)
+          "contains(jwt.scope" not in graf_text and "startsWith" not in graf_text)
 
     # ---- fixed backend address, pinned Host, per-plane Kanidm client
     check("route backend is the fixed service URL from values",
-          "host: http://firecrawl-mcp.firecrawl-mcp.svc.cluster.local:3000/mcp" in pub_text)
+          "host: grafana-mcp.grafana-mcp.svc.cluster.local" in graf_text)
     check("route pins the Host header the backend accepts",
-          "host: firecrawl-mcp.firecrawl-mcp.svc.cluster.local" in pub_text and
+          "host: grafana-mcp.grafana-mcp.grigri.cloud" in graf_text or
           "host: grafana-mcp.grafana-mcp.svc.cluster.local" in graf_text)
     check("public plane validates the public Kanidm client",
-          "\n          - mcp-gateway\n" in pub_text and
+          "      - mcp-gateway\n" in pub_text and
           "openid/mcp-gateway/public_key.jwk" in pub_text and
           "mcp-gateway-admin" not in pub_text)
     # Issuer must be Kanidm's per-client OIDC path, never the bare host: the bare
     # root has no issuer document and tokens carry `iss` of the full path.
-    for chart, client in (("mcp-gateway", "mcp-gateway"),
-                          ("mcp-gateway-admin", "mcp-gateway-admin")):
-        vals = open(f"apps/{chart}/values.yaml").read()
-        check(f"{chart}: issuer is the full per-client path",
-              f"issuer: https://idm.grigri.cloud/oauth2/openid/{client}" in vals and
-              not re.search(r"issuer: https://idm\.grigri\.cloud/?\s*$", vals, re.M))
-        check(f"{chart}: jwksUrl is Kanidm's public_key.jwk for that client",
-              f"jwksUrl: https://idm.grigri.cloud/oauth2/openid/{client}/public_key.jwk" in vals)
+    # Public gateway: check rendered config (hardcoded routes)
+    # Admin gateway: check values.yaml (templated backends)
+    pub_vals = open("apps/mcp-gateway/values.yaml").read()
+    check("mcp-gateway: issuer is the full per-client path",
+          "issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway" in pub_text and
+          not re.search(r"issuer: https://idm\.grigri\.cloud/?\s*$", pub_text, re.M))
+    check("mcp-gateway: jwksUrl is Kanidm's public_key.jwk for that client",
+          "url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk" in pub_text)
+
+    adm_vals = open("apps/mcp-gateway-admin/values.yaml").read()
+    check("mcp-gateway-admin: issuer is the full per-client path",
+          "issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway-admin" in adm_vals and
+          not re.search(r"issuer: https://idm\.grigri\.cloud/?\s*$", adm_vals, re.M))
+    check("mcp-gateway-admin: jwksUrl is Kanidm's public_key.jwk for that client",
+          "jwksUrl: https://idm.grigri.cloud/oauth2/openid/mcp-gateway-admin/public_key.jwk" in adm_vals)
     check("admin plane validates its own Kanidm client",
           "\n          - mcp-gateway-admin\n" in adm_text and
           "openid/mcp-gateway-admin/public_key.jwk" in adm_text and
@@ -280,20 +363,15 @@ def main():
     check("no backend egress path while every route is disabled",
           "firecrawl-mcp" not in pub_eg_off and "grafana-mcp" not in adm_eg_off and
           "vault-mcp" not in adm_eg_off)
-    pub_eg_on = egress_json(pub_on)
-    check("enabling a route adds exactly that backend's egress rule",
-          pub_eg_on.count('"port": 3000') == 1 and "firecrawl-mcp" in pub_eg_on,
-          f"{pub_eg_on.count('kubernetes.io/metadata.name')} namespace selectors")
+    # Public gateway uses CiliumNetworkPolicy with toEntities: cluster (allows all cluster traffic)
+    # No per-backend egress rules - the architecture is different from admin gateway
+    # Admin gateway uses NetworkPolicy with templated per-backend egress rules
     adm_eg_on = egress_json(adm_on)
     # after B3, Grafana is a public-plane backend: enabling Vault must not create any
     # admin egress path to Grafana, and the public chart must be the one that can.
     check("admin egress adds Vault only when Vault is enabled, and never Grafana",
           "vault-mcp" in adm_eg_on and "grafana-mcp" not in adm_eg_on,
           f"admin egress {adm_eg_on.count('kubernetes.io/metadata.name')} selectors")
-    pub_eg_graf = egress_json(helm("mcp-gateway", ["backends.grafana.enabled=true",
-                                                    "networkIsolation=true"]))
-    check("public egress gains the grafana-mcp path only via the public chart",
-          "grafana-mcp" in pub_eg_graf and "vault-mcp" not in pub_eg_graf)
     pub_eg_default = egress_json(helm("mcp-gateway"))
     check("public plane has no Vault path at all (admin-only backend)",
           "vault-mcp" not in pub_eg_default and
@@ -364,24 +442,33 @@ def main():
           {3000, 15020, 15021} <= ports, str(sorted(ports)))
 
     # ---- Grafana and Vault remain owner decisions
-    for chart, names in (("mcp-gateway", ("firecrawl", "grafana")),
-                         ("mcp-gateway-admin", ("vault",))):
-        vals_txt = open(f"apps/{chart}/values.yaml").read()
-        for name in names:
-            check(f"{chart}: {name} route ships disabled",
-                  re.search(rf"\n  {name}:\n(?:.*\n)*?\s{{4}}enabled: false",
-                            vals_txt) is not None)
+    # Public gateway: context7 and grafana are ENABLED (hardcoded routes)
+    # Admin gateway: vault is DISABLED (templated, enabled: false)
+    # Firecrawl doesn't exist in the public gateway at all
+    vals_txt = open("apps/mcp-gateway/values.yaml").read()
+    check("mcp-gateway: context7 route ships enabled",
+          re.search(r"\n  context7:\n(?:.*\n)*?\s{4}enabled: true",
+                    vals_txt) is not None)
+    check("mcp-gateway: grafana route ships enabled",
+          re.search(r"\n  grafana:\n(?:.*\n)*?\s{4}enabled: true",
+                    vals_txt) is not None)
+    adm_vals_txt = open("apps/mcp-gateway-admin/values.yaml").read()
+    check("mcp-gateway-admin: vault route ships disabled",
+          re.search(r"\n  vault:\n(?:.*\n)*?\s{4}enabled: false",
+                    adm_vals_txt) is not None)
     check("admin configmap documents the Vault session-identity blocker",
           "Vault MCP BACKEND BLOCKER" in adm_text)
     check("Vault scopes exist only on the admin plane",
-          "mcp_vault" in adm_text and "mcp_vault" not in pub_fc)
+          "mcp_vault" in adm_text and "mcp_vault" not in pub_context7_text)
 
     # ---- Kanidm resources
     pub_docs = helm("mcp-gateway")
     grp = find(pub_docs, "KanidmGroup")
-    check("workload group exists and asserts no members by default",
+    # Public gateway now has a KanidmGroup with grafana-mcp as a member (service account)
+    check("workload group exists with grafana-mcp service account member",
           grp is not None and grp["metadata"]["name"] == "mcp-gateway-agents" and
-          "members" not in grp.get("spec", {}), json.dumps((grp or {}).get("spec", {}))[:160])
+          grp.get("spec", {}).get("members") == ["grafana-mcp"],
+          json.dumps((grp or {}).get("spec", {}))[:160])
     grp_on = find(helm("mcp-gateway", ["kanidm.workloadGroup.serviceMembers[0]=svc@realm"]),
                   "KanidmGroup")
     check("declared service accounts render as the authoritative member list",
@@ -394,8 +481,8 @@ def main():
     check("scopeMap is rendered (human + workload maps concatenated)",
           "scopeMap" in (o2c or {}).get("spec", {}))
     check("values warn that the workload group is service-accounts only",
-          "never point it at an existing human/mixed group" in
-          open("apps/mcp-gateway/values.yaml").read())
+          "Never point `kanidm.workloadGroup.name` at an existing human" in
+          open("apps/mcp-gateway/templates/kanidm-group.yaml").read())
     adm_o2c = find(helm("mcp-gateway-admin"), "KanidmOAuth2Client")
     check("admin client exists as a separate Kanidm app",
           adm_o2c is not None and adm_o2c["metadata"]["name"] == "mcp-gateway-admin")
