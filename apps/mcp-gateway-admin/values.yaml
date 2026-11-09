@@ -15,7 +15,7 @@
 logLevel: info
 
 # --------------------------------------------------------------------------
-# Network isolation - OFF by default. When enabled, renders a CiliumNetworkPolicy
+# Network isolation - ON (`networkIsolation: true`). Renders a CiliumNetworkPolicy
 # (templates/ciliumnetworkpolicy.yaml) in the proven split-port shape:
 #   - `world` on the dedicated health port 15021 only (kubelet probes; the only
 #     entity matching the probe source on this cluster, measured)
@@ -25,11 +25,11 @@ logLevel: info
 #   - egress: bare `toEntities: [cluster]` (no toPorts) plus explicit DNS pod rules
 #   - no `world` egress (no live admin route requires internet; JWKS is in-cluster)
 # See docs/conventions/cilium.md, section "Kubelet probes under enforced policies".
-# The baseline stays policy-free; enabling is a separate reviewed change.
-# TO ENABLE: set `networkIsolation: true`. The CNP attaches to the running pod;
-# failureThreshold on probes is >= 6 (startup 30) so the transient attach window
-# is safe (measured: policy attached 6m32s before endpoint => Ready in 6s).
-# Rollback: set false again, no pod churn.
+# The policy is live (this CNP is the only policy in the namespace; no Envoy Gateway policy
+# targets the route): a new caller or route needs its own ingress rule in the template.
+# The CNP attaches to the running pod; failureThreshold on probes is >= 6 (startup 30) so the
+# transient attach window is safe (measured: policy attached 6m32s before endpoint => Ready in 6s).
+# Rollback: set `networkIsolation: false`, no pod churn.
 networkIsolation: true
 
 # MCP session-protection key (agentgateway AES-256-GCM session IDs). Produced by the
