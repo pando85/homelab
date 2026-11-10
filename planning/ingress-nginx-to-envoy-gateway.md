@@ -53,7 +53,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 3     | done        | Every homelab Ingress host has an Envoy route on the matching gateway, tenant hosts included (calypso, isidoro). Tracking list and Gate 3 results in Phase 3. |
 | 4     | done, Gate 4 running | Executed 2026-11-09 (Phase 4, Executed). Watch 3-7 days. P4.1 (pfSense) done, owner. |
 | 5     | done, Gate 5 running | Executed 2026-11-10 (Phase 5, Executed). P5.1, P5.2 and P5.3 (pfSense) done, owner. Runner bridge swap done. Gate 5 watch running. |
-| 6     | not started (needs the owner's yes) | Preconditions checked 2026-11-10 (Phase 6, Precondition check). Owner decision 2026-11-10: the Gate 5 soak length no longer gates Phase 6; start on the owner's go once the gap-closure blockers below are closed. Gap closure 2026-11-10: G1 step b, G2, G3 and G5 P6.1 done; open: G1 step c (Phase 6 step 1), G4 (owner), G5 P6.2 `auth.staging` alias and the hermes `hostAliases`. |
+| 6     | not started (needs the owner's yes) | Preconditions checked 2026-11-10 (Phase 6, Precondition check). Owner decision 2026-11-10: the Gate 5 soak length no longer gates Phase 6; start on the owner's go once the gap-closure blockers below are closed. Gap closure 2026-11-10: G1 step b, G2, G3, G4 and G5 P6.1 done; open: G1 step c (Phase 6 step 1), G5 P6.2 `auth.staging` alias and the hermes `hostAliases`. |
 
 ### Phase 1 progress (2026-11-09)
 
@@ -1706,7 +1706,8 @@ Separate commits, in order:
    listener is kept during the migration but must be gone when ingress-nginx is removed. Then
    clean what Argo does not prune: IngressClasses, admission webhook configs,
    leader-election Leases, ClusterRoles, leftover Secrets.
-   **3a. Stale DNS records (do before the removal in step 3).** external-dns runs `upsert-only`, so
+   **3a. Stale DNS records (do before the removal in step 3). Done 2026-11-10: 12 A + 26 TXT deleted
+   via the API with external-dns's token; zone backup taken; no A record at `.1`/`.4` left (see G4).** external-dns runs `upsert-only`, so
    a record whose Ingress was removed or renamed stays in Cloudflare forever (example:
    `grafana.internal.grigri.cloud`, Grafana's name until a 2023 rename, whose TXT owner record still
    names `ingress/monitoring/monitoring-grafana`). List every Cloudflare A record pointing at `.1` or
@@ -1733,7 +1734,7 @@ Separate commits, in order:
 **Gate 6:** zero Ingress objects (or only runner ones while calypso is on `exposure: both`), no
 `nginx_ingress_controller_*` series once both are gone, no `.1`/`.4` in Cilium LB IPAM, all Argo
 apps Synced/Healthy, no listener `https-runners-staging-forkline-dev` remains on the internal
-Gateway, no Cloudflare A record points at `192.168.193.1` or `.4` (step 3a).
+Gateway, no Cloudflare A record points at `192.168.193.1` or `.4` (step 3a; met 2026-11-10).
 
 **Precondition check 2026-11-10** (read-only, before the owner's yes):
 
@@ -1974,8 +1975,9 @@ step 2. Untested: interactive login, 403 for a logged-in non-member.
   account); session length now follows Kanidm, not oauth2-proxy's 168h; logout clears only the
   Envoy cookies.
 
-**G4. Stale Cloudflare records (step 3a; owner, before step 3).** Status 2026-11-10: pending (the
-owner chooses how the 38 records are deleted).
+**G4. Stale Cloudflare records (step 3a; owner, before step 3).** Status 2026-11-10: done (12 A + 26 TXT
+deleted via the API with external-dns's token; zone backup taken; no A record at `.1`/`.4` left;
+`dig` for all 13 names empty for A and both TXT; `grafana.grigri.cloud` and `s3.internal` still resolve).
 
 - external-dns has no `txtPrefix`/`txtOwnerId` (`system/external-dns/values.yaml`), so each name has
   two TXT records: `<fqdn>` and `a-<fqdn>` (content

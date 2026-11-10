@@ -131,7 +131,7 @@ from the resolver's host override list if needed.
 Custom options:
 
 - `local-zone: "k8s.grigri" redirect`
-- `local-data: "k8s.grigri A 192.168.193.1"`
+- `local-data: "k8s.grigri A 192.168.193.13"`
 
 These are stored base64-encoded in `config.xml`, so a plain `grep` of the config does not find
 them.
