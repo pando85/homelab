@@ -158,7 +158,7 @@ Full pitfall index (78 entries grouped by subsystem): `docs/troubleshooting/INDE
 ## Subsystem Docs
 
 - **Cilium:** `docs/conventions/cilium.md` — BGP, TCX, bandwidth limiting
-- **Ingress:** `docs/network/ingress.md` — Envoy Gateways, pfSense alias/overrides, DNS, rollback; routes: `docs/conventions/gateway-api-routes.md`
+- **Ingress:** `docs/network/ingress.md`: Envoy Gateways, pfSense alias/overrides, DNS, rollback; routes: `docs/conventions/gateway-api-routes.md`
 - **Deploying new apps:** `docs/conventions/deploying-new-apps.md` — decision-making, patterns, checklist
 - **Kanidm:** `docs/user-guide/kanidm.md` — Kaniop CRDs, OAuth2 clients, group membership rules (person membership manual, never via CRD)
 - **Documenting learnings:** `docs/conventions/documenting-learnings.md` — when/how to write troubleshooting docs
