@@ -1,6 +1,7 @@
 # Vault MCP Backend Implementation Plan
 
-**Status:** PROPOSAL. Nothing here is applied, committed or enabled. Drafted 2026-11-10 against
+**Status:** DEFERRED by owner decision 2026-11-10, after the OIDC-passthrough directive was
+researched (§13). Nothing here is applied, committed or enabled. Drafted 2026-11-10 against
 `master` at `fa96d899a` (per-route Kanidm human groups). All cluster statements below are read-only
 measurements or file citations; all upstream statements are cited to a fetched URL or marked
 UNVERIFIED.
@@ -23,6 +24,7 @@ matrix in `docs/conventions/cilium.md`. This plan assumes both and cites them by
 | Where it runs | Admin plane `mcp-gateway-admin`, internal hostname only | The design puts Vault on the admin plane and the public plane must stay Vault-free (`grep -c vault apps/mcp-gateway/values.yaml` must stay `0`) |
 | Do agents get `mcp_vault`? | **No**, not in phase 1 | Hermes service accounts have no Vault login path today (§4.2) and a service-account Vault token is model (b) by another name |
 | Admin plane | **Keep it dormant (option i)** and schedule, do not start, §11 phase 3 | Phase 0 has 8 open unknowns, 3 of which are outside this repo's control (§10) |
+| OIDC passthrough (owner directive 2026-11-10) | **Not achievable with any released image.** §13 records the research, the three options and the deferral | Upstream implements it only in unmerged PR #129, and the newest published image predates an SSRF fix (§13.5) |
 
 Two deviations must be accepted before any of this is shippable, both already recorded in the design
 doc: the per-route `x-vault-token` allow and `statefulMode: stateless`. §8 restates them with the
@@ -35,7 +37,7 @@ No chart file should be authored until each line below has a measured answer rec
 | ID | Unknown | How to answer it | Why it gates everything |
 |---|---|---|---|
 | U1 | Contents of the published image: entrypoint, binary path, `Config.User`, whether any shell or HTTP client exists | `docker manifest inspect` plus `docker inspect` on the pinned amd64 digest | Decides whether `exec` probes are possible at all (§7) and whether `runAsNonRoot` works |
-| U2 | Whether the security fixes on `main` will be released as a container | Watch `hashicorp/vault-mcp-server` releases and the Docker Hub tags page | §3.6: the published image is 18 months older than the fixed source; a self-built image changes the supply-chain story and the pinning convention |
+| U2 | Whether the security fixes on `main` will be released as a container | **RESOLVED 2026-11-10, in the negative** (§13.5): no release in 13 months, `0.2.1` still unreleased on `main`, no GHCR image. There is no official artefact to upgrade to | §3.6: the published image is 13 months older than the fixed source and predates an SSRF fix; a self-built image changes the supply-chain story and the pinning convention |
 | U3 | Per-request header semantics on **this** image: is `X-Vault-Token` honoured per request with no ambient `VAULT_TOKEN`, and is the env fallback used when the header is absent | Re-run `test/mcp-gateway/vault-official-stateless-probe.py` against the pinned digest, plus a real `hashicorp/vault:2.1.2` (the earlier run used a 1.15 dev fixture) | The prior run proves the semantics on a Vault **1.15 local fixture**, explicitly "not version parity with the production Vault" (`planning/mcp-gateway-implementation.md:905-908`) |
 | U4 | Whether the MCP clients here (OpenCode, Hermes) can attach a custom `X-Vault-Token` header to every request, and tolerate a server that issues no `Mcp-Session-Id` on the admin plane | Local client config trial against the disabled-then-enabled route | If the client cannot send a second credential, model (a) has no caller and the whole feature is unusable |
 | U5 | Does Vault have an audit device? | Measured today: **no**. `platform/vault/templates/vault.yaml` `externalConfig` declares only `auth`, `secrets`, `policies` (lines 199-409); repo-wide grep for `audit_devices` / `sys/audit` returns zero | Model (a)'s headline benefit ("Vault's audit log names the real caller") is **not available until an audit device is enabled**. §4 must not oversell it |
@@ -166,7 +168,10 @@ Meanwhile the repo's recent history includes `test: add test case for VAULT_ADDR
 rejection` (11 Aug 2026) and a merge of `VAULT-51441-sec-vuln-fixes` (PR #135, 15 Oct 2026).
 
 Therefore: the only publishable image (`0.2.0`) predates the `VAULT_ADDR` query rejection and the
-October security fixes. Pinning it means shipping code with known SSRF-shaped behaviour and relying on
+October security fixes. Of the two, only the SSRF fix is application logic: PR #135 was measured to be
+a toolchain bump alone (4 files, +15/-15: `.go-version` 1.25.5 to 1.27.2, the `Dockerfile` golang base
+digest, `go.mod`, `go.sum`), so the material exposure in pinning `0.2.0` is the `VAULT_ADDR` vector,
+not the October batch. Pinning it means shipping code with known SSRF-shaped behaviour and relying on
 the gateway's strip list and query-string drop as the mitigation, exactly as recorded at
 `planning/mcp-gateway-implementation.md:860-866`. Options, in order of preference:
 
@@ -659,3 +664,148 @@ an auth problem.
    by nothing (for example `secret/mcp-smoke/*`), then add real prefixes one reviewed commit at a time.
    §5.3: naming a prefix in the policy is the same act as publishing that app's secrets to every holder
    of `mcp_vault`.
+
+## 13. OIDC passthrough (owner directive 2026-11-10): findings, options, deferral
+
+**Directive:** "I want to use OIDC to connect to Vault MCP, similar to grafana, passing the auth to
+the MCP and validating it there. Also, we need a Vault container image updated."
+**Owner decision 2026-11-10:** document and defer. Nothing in this section is implemented.
+
+This section supersedes the §3.3/§4.4 recommendation of a caller-supplied `X-Vault-Token`. That model
+works, but it requires every caller to run `vault login` themselves and manage a token. The directive
+asks for the Grafana shape instead: the gateway forwards the caller's own validated bearer, and the
+backend validates it. Research below establishes that this is achievable in design, is not achievable
+with any published artefact, and therefore waits.
+
+### 13.1 The gateway half already exists and is measured
+
+`backendAuth.passthrough: {}` forwards the caller's own validated bearer to the backend. The live
+grafana route uses it, and the rendered gateway config confirms it (search `passthrough` in
+`helm template --include-crds --namespace mcp-gateway mcp-gateway apps/mcp-gateway/`).
+
+`apps/mcp-gateway/values.yaml:417-426` records the ordering that makes this safe, already measured in
+`local-boot-checks.py` run D: `Authorization` is listed in `remove` *and* passthrough is set, because
+header modification runs **before** backend auth. The inbound, possibly duplicated or spoofed
+credential is deleted first, then replaced by the validated value. So "the bearer the backend sees" is
+a property of the gateway, not of whatever the client sent.
+
+**Side finding (stale comment):** `apps/mcp-gateway/values.yaml:411-414` states the grafana route is
+"DISABLED" and "stays commented out". It is not: `- name: grafana` at `values.yaml:434` is live,
+uncommented, and renders. The comment predates the route being enabled and should be corrected.
+
+### 13.2 The MCP half does not exist in any released server
+
+Fetched `https://raw.githubusercontent.com/hashicorp/vault-mcp-server/main/README.md` (14448 chars)
+and counted occurrences: `oidc` 0, `OIDC` 0, `jwt` 0, `JWT` 0, `Authorization` 0, `bearer` 0,
+`Bearer` 0, `token-exchange` 0, `X-Vault-Token` 2, `VAULT_TOKEN` 6. There is no OIDC or bearer path
+in the upstream server, on `main`, today.
+
+The design the directive describes exists as **unmerged upstream PR #129**, "Support Vault JWT auth
+method for gateway deployments" (closes issue #107, open since 2026-05-10). Quoting its description:
+it adds `VAULT_AUTH_METHOD=jwt`; when set, "VaultContextMiddleware reads the JWT from the configured
+header (`Authorization: Bearer <jwt>` by default)", "exchanges that JWT with Vault via
+`POST /v1/auth/<mount>/login`, using the configured role", and "Vault does its own JWT verification
+(signature, issuer, audience, whatever the auth method is configured to ch[eck])".
+
+PR #129 state, from the GitHub API: `state: open`, `merged: false`, `draft: false`, author `yatuk`,
+`author_association: NONE` (an external contributor, not HashiCorp staff), `head: yatuk:jwt-auth-support`,
+`sha: 3c33198a1d`, `mergeable: true`, `mergeable_state: clean`, 1 commit, 6 files, +711/-6, last
+updated 2026-08-07. So it is complete and cleanly mergeable, and has sat unmerged for three months.
+
+Issue #107's own framing matches this repo's reasoning exactly: behind a gateway that terminates user
+OIDC, a static token means "every user reaches Vault as the same service-account identity", audit logs
+cannot attribute requests, the token must carry "the union of all users' privileges", and per-user RBAC
+at the Vault layer is impossible. That is §4.3's model (b) argument, independently arrived at.
+
+### 13.3 Vault can be the validator (proven read-only)
+
+The attractive property of PR #129's design is that no component of ours handles signing keys: Vault
+performs the verification. Kanidm publishes **per-client** discovery, so a Vault JWT role can be
+pointed at the gateway's own client. Measured 2026-11-10:
+
+| Request | Result |
+|---|---|
+| `/oauth2/openid/mcp-gateway/.well-known/openid-configuration` | 200, `issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway`, `jwks_uri: .../mcp-gateway/public_key.jwk`, `id_token_signing_alg_values_supported: [ES256]` |
+| `/oauth2/openid/vault/.well-known/openid-configuration` | 200, same shape, per-client issuer and JWKS |
+| `/oauth2/openid/definitely-not-a-client/.well-known/openid-configuration` | 404 |
+
+The 404 for a bogus name proves discovery is genuinely per-client rather than a global document, so a
+Vault role scoped to `oidc_discovery_url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway` would
+fetch the right key. `ES256` matches the existing OIDC mount's `jwt_supported_algs`
+(`platform/vault/templates/vault.yaml:200-220`).
+
+**UNVERIFIED (the phase-0 gate for this model):** whether a Kanidm **access** token issued to client
+`mcp-gateway` carries `iss` equal to that issuer and `aud: mcp-gateway`, and whether Vault's JWT auth
+method accepts an access token as readily as an ID token. Both are checkable with one real login and
+one `vault write auth/<mount>/login role=<role> jwt=<token>`; neither can be settled from metadata
+alone. Note the existing routes deliberately reject ID tokens (`!has(jwt.email)`,
+`!has(jwt.preferred_username)`), so the token arriving at the backend is an access token, which is why
+this must be proven rather than assumed.
+
+### 13.4 Two traps specific to this cluster
+
+1. **`user_claim`.** The existing OIDC role uses `user_claim: email` and maps `policies: admin`
+   (`platform/vault/templates/vault.yaml:208-220`, `groups_claim` commented out at 218). MCP-route
+   tokens carry **no** `email` claim, because the CEL gates reject `has(jwt.email)`. A role copied from
+   the existing one would fail closed for every MCP caller. The new role must use `user_claim: sub`,
+   `bound_audiences: [mcp-gateway]`, narrow `token_policies`, a short `token_ttl`, and must leave
+   `default_role: default` untouched (§12 item 4).
+2. **`VAULT_ADDR` is caller-influenceable.** It was an SSRF vector, fixed by blocking it as a URL query
+   parameter (commits 2026-08-11 "fix: block VAULT_ADDR from URL query parameters to prevent SSRF" and
+   "test: add test case for VAULT_ADDR query parameter rejection", merged as PR #130/#131 on
+   2026-08-17/20). The accompanying doc change relocated it to a **header** ("docs: update HTTP mode
+   config to use VAULT_ADDR header instead of query param"), and a header is exactly what a reverse
+   proxy forwards. So the Vault route must strip `VAULT_ADDR` and `X-Vault-Namespace` on the way in,
+   precisely as the grafana route strips the caller-controllable `X-Grafana-URL`,
+   `X-Grafana-Service-Account-Token` and `X-Session-Id` (`apps/mcp-gateway/values.yaml:342-344`).
+   Without that strip, a caller can redirect the backend's Vault traffic, and with it their own bearer.
+
+### 13.5 The image cannot be "updated"; it can only be built
+
+| Fact | Evidence |
+|---|---|
+| Newest published tag is `0.2.0`, pushed 2025-09-24 | Docker Hub tags API; the full tag set is `0.1.0`, `0.2.0`, `0.2`, `latest`, all pushed 2025-09-24 |
+| No newer GitHub release | Releases API returns only `v0.2.0` and `v0.1.0`, both 2025-09-24; `tags` returns the same two |
+| `main` is ahead but unreleased | `CHANGELOG.md` on `main` shows `0.2.1` with no release date, containing only "Adding Gemini extension" (PR #56) |
+| No alternative registry | `ghcr.io/v2/hashicorp/vault-mcp-server/tags/list` returns nothing |
+| `main` carries an application-logic SSRF fix | Commits 2026-08-11 to 2026-08-20, PR #130/#131 (§13.4 item 2) |
+| The October "security" batch is only a toolchain bump | PR #135 (`VAULT-51441-sec-vuln-fixes`), merged 2026-10-15, 4 files +15/-15: `.go-version` 1.25.5 to 1.27.2, the `Dockerfile` golang base digest, `go.mod`, `go.sum` |
+
+Consequences. The only published image is thirteen months behind `main` and **predates the SSRF fix**.
+HashiCorp has merged security work onto `main` without cutting a release, so there is no official
+artefact to upgrade to. This resolves plan unknown U2 in the negative: waiting for a released container
+is not a strategy with a date on it. It also means §12 item 7 (self-built image) stops being a
+fallback and becomes the only route to current code.
+
+### 13.6 Options
+
+| Option | Shape | Cost |
+|---|---|---|
+| **A. Shim in front of the official image** | Keep `hashicorp/vault-mcp-server:0.2.0` untouched. A small sidecar of ours takes the forwarded bearer, calls `POST /v1/auth/<mount>/login`, and injects `X-Vault-Token` | Runs a known-stale image with an unfixed SSRF vector. Mitigable (strip `VAULT_ADDR`, refuse any query string) but the mitigation is ours to keep correct. The shim must also proxy MCP streamable HTTP faithfully: `Mcp-Session-Id`, SSE framing, `Accept` negotiation |
+| **B. Build from `main` plus PR #129** (recommended) | Vendor upstream `main` at a pinned commit, apply PR #129, build in our CI, pin the digest | Runs an unmerged external contributor's PR as the component that handles Vault tokens, and owns a build pipeline plus its provenance. But it is the only option that is simultaneously current, patched against the SSRF, and natively OIDC |
+| **C. Defer** | Stay with §4.4: caller supplies `X-Vault-Token` from their own `vault login` | No new code and no fork, but it is not the directive, and it still runs the stale image |
+
+**Recommendation: B**, gated on reading the 711-line diff before building anything. "It is
+upstream-shaped" is not sufficient for a component that converts an identity assertion into a Vault
+token. B also subsumes the image ask, since building is the only way to obtain current code.
+A is the fallback if unmerged third-party code in that position is unacceptable; C is what the
+committed plan already describes.
+
+### 13.7 Deferral and re-open triggers
+
+Deferred by owner decision 2026-11-10. Re-open when **either**:
+
+- upstream merges PR #129 and cuts a release containing it, which removes the fork and the build
+  pipeline in one step and makes option B a plain image pin; or
+- the owner wants Vault MCP enough to accept option B's supply-chain cost now.
+
+Whichever trigger fires, the phase-0 gate is unchanged and cheap: prove §13.3's UNVERIFIED item, that
+a Kanidm access token for client `mcp-gateway` is accepted by a Vault JWT role configured with
+`user_claim: sub` and `bound_audiences: [mcp-gateway]`. Everything else in this section is design that
+can be written down but not validated until that holds.
+
+Note for whoever re-opens this: the Vault **server** image is a separate and unrelated question. The
+repo runs `hashicorp/vault:2.1.2` (`platform/vault/templates/vault.yaml:10`) via the bank-vaults
+operator (`apiVersion: vault.banzaicloud.com/v1alpha1`, `kind: Vault`); `hashicorp/vault:2.2.1` was
+published 2026-10-22. That bump needs its own operator-compatibility and Raft-upgrade review, and must
+not be bundled with MCP work: Vault is the secrets root for the whole cluster.

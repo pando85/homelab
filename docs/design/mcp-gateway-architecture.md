@@ -260,7 +260,7 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 | Grafana MCP | MVP | Live route, caller-preserving delegation | Standalone pod; Hermes sidecar removed |
 | Context7 | MVP | Deployed route with Vault-delivered upstream key | Live |
 | Firecrawl | MVP | Live route; backend pod deployed and isolated | Active `firecrawl-mcp` service |
-| Vault MCP | Deferred | Admin gateway has `routes: []`; Vault MCP not deployed | Owner decision 2026-11-10: deferred |
+| Vault MCP | Deferred | Admin gateway has `routes: []`; Vault MCP not deployed | Owner decision 2026-11-10: deferred. OIDC-passthrough research (upstream PR #129, stale image) in `planning/vault-mcp-implementation.md` §13 |
 | SearXNG | Next | REST API, internal | Deploy MCP package |
 | Playwright | Stage 1 live | Cluster browser, port-forward only, no ingress | Stage 2: authenticated exposure pending two unknowns |
 | HA, Postgres | Future | N/A | Separate phases |
