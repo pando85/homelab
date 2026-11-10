@@ -22,6 +22,10 @@ topologyInjector:
   enabled: false
 
 deployment:
+  annotations:
+    # The controller reads its config (envoy-gateway-config) only at start: restart it when the
+    # ConfigMap changes. Scoped to that ConfigMap so certgen secret churn does not restart it.
+    configmap.reloader.stakater.com/reload: envoy-gateway-config
   replicas: 1
   pod:
     # Same placement as ingress-nginx: prefer prusik, then amd64.
