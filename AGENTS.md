@@ -122,7 +122,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (75 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (78 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -137,6 +137,9 @@ Full pitfall index (75 entries grouped by subsystem): `docs/troubleshooting/INDE
   Renovate bumps surface breakage. Check init container logs after version bumps
 - ArgoCD `selfHeal: true` reverts `kubectl apply` almost instantly — commit/push first, let ArgoCD
   sync. See `docs/troubleshooting/argocd-gitops-workflow.md`
+- Never `kubectl config use-context`/`set-context` (rewrites the owner's kubeconfig default): always
+  pass `--context`. The shell is zsh: unquoted variables do not word-split, put multi-step kubectl
+  helpers in a bash script
 
 **Subsystem index** (top pitfalls per group — see `docs/troubleshooting/INDEX.md` for full entries):
 
@@ -144,7 +147,7 @@ Full pitfall index (75 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **ArgoCD** (6): repo-server probe death-spiral, kustomize OCI auth override, Helm-hook mixing and
   hook-only edits that never converge (`docs/troubleshooting/argocd-helm-hook-provisioning.md`)
 - **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps
-- **Networking** (6): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP
+- **Networking** (9): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP, pfSense alias change keeps old states (`pfsense-alias-change-keeps-old-states.md`), Envoy listener drain (`envoy-gateway-listener-drain.md`), Envoy debugging (`envoy-gateway-debugging.md`)
 - **Storage & Backup** (12): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
@@ -155,6 +158,7 @@ Full pitfall index (75 entries grouped by subsystem): `docs/troubleshooting/INDE
 ## Subsystem Docs
 
 - **Cilium:** `docs/conventions/cilium.md` — BGP, TCX, bandwidth limiting
+- **Ingress:** `docs/network/ingress.md` — Envoy Gateways, pfSense alias/overrides, DNS, rollback; routes: `docs/conventions/gateway-api-routes.md`
 - **Deploying new apps:** `docs/conventions/deploying-new-apps.md` — decision-making, patterns, checklist
 - **Kanidm:** `docs/user-guide/kanidm.md` — Kaniop CRDs, OAuth2 clients, group membership rules (person membership manual, never via CRD)
 - **Documenting learnings:** `docs/conventions/documenting-learnings.md` — when/how to write troubleshooting docs

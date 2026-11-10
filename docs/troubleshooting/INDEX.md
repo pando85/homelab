@@ -11,7 +11,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
 - [ArgoCD](#argocd) (6 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
-- [Networking](#networking) (6 entries)
+- [Networking](#networking) (9 entries)
 - [Storage & Backup](#storage--backup) (12 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
@@ -177,6 +177,22 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `docs/troubleshooting/ci-runner-amd64-disk-full.md`
 
 ## Networking
+
+- Repointing the pfSense alias `k8s_external_ingress` does not move open connections: pf keeps the
+  redirect target of existing states (h2, SSH, webhooks stay on the old VIP), and a missed unbound
+  host override stays on the old IP. Kill the states, count overrides per IP.
+  See `docs/troubleshooting/pfsense-alias-change-keeps-old-states.md`
+
+- Envoy Gateway: any listener, certificate or Security/ExtensionPolicy change replaces that
+  listener's filter chain and closes its websockets, SSE and long downloads after the 60 s drain;
+  HTTPRoute-only changes drain nothing. Batch such changes, avoid them during long transfers.
+  See `docs/troubleshooting/envoy-gateway-listener-drain.md`
+
+- Envoy Gateway debugging: the proxy image is distroless, use `port-forward` to the admin port
+  (`config_dump`, `/stats`, `/clusters`); `NR`/`UAEX`/`DC` response flags; OIDC cookie values and
+  query-string API keys leak into proxy logs; Argo shows `Progressing` for a label-selected
+  `BackendTrafficPolicy` and only refreshes on webhooks.
+  See `docs/troubleshooting/envoy-gateway-debugging.md`
 
 - Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
   (`24.11.1`). See `docs/troubleshooting/armbian-kernel-bpf-masquerade.md`
