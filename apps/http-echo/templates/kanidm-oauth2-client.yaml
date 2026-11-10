@@ -16,7 +16,15 @@ spec:
   # per-app group: Kanidm only issues tokens to its members (members are added by hand)
   scopeMap:
     - group: http-echo-users
-      scopes: [openid, profile, email, groups]
+      scopes: [openid, profile, email]
+  # per-app claim for the SecurityPolicy authorization: small, unlike the `groups` scope, which
+  # lists every group of the person and overflowed the 4096 B `oidc-id-token` cookie
+  claimMap:
+    - name: access
+      joinStrategy: array
+      valuesMap:
+        - group: http-echo-users
+          values: [http-echo]
   preferShortUsername: true
   strictRedirectUrl: true
   # Envoy Gateway reads the client secret from the `client-secret` key

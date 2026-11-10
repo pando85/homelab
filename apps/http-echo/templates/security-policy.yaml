@@ -1,5 +1,6 @@
 ---
-# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim.
+# Envoy Gateway native OIDC against Kanidm + JWT authorization on the per-app `access` claim.
+# No `groups` scope: every group in the ID token pushed the `oidc-id-token` cookie over 4096 B.
 # Pattern: docs/conventions/envoy-gateway-auth.md
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
@@ -22,7 +23,7 @@ spec:
     redirectURL: https://http-echo.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
-    scopes: [openid, profile, email, groups]
+    scopes: [openid, profile, email]
     cookieNames:
       accessToken: oidc-access-token
       idToken: oidc-id-token
@@ -46,13 +47,14 @@ spec:
   authorization:
     defaultAction: Deny
     rules:
-      - name: allowed-groups
+      - name: allowed-access
         action: Allow
         principal:
           jwt:
             provider: kanidm
             claims:
-              - name: groups
+              # claim map of the http-echo client (members of http-echo-users)
+              - name: access
                 valueType: StringArray
                 values:
-                  - http-echo-users@idm.grigri.cloud
+                  - http-echo
