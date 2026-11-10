@@ -47,6 +47,12 @@ repos:
         language: script
         files: apps/readest/(values\.yaml|files/sql/)
         pass_filenames: false
+      - id: validate-battery-optimizer-config
+        name: Validate battery-optimizer production overrides
+        entry: scripts/validate-battery-optimizer-config.sh
+        language: script
+        files: apps/battery-optimizer/files/service\.yaml
+        pass_filenames: false
       - id: no-session-links
         name: Refuse AI session links and trailers in commit messages
         language: pygrep

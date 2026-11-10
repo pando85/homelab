@@ -916,6 +916,67 @@ code version changes every dataset id, so expect one extra dataset on the next b
 Growing the volume: raise `spec.resources.requests.storage` in `templates/pvc.yaml`
 (`allowVolumeExpansion` is on). Never delete the PVC; `Prune=false` and `Retain` protect it.
 
+## Re-vendoring Config Files
+
+When deploying a new version that includes changes to `config/service.yaml` in the app repository
+(`~/home-energy-optimizer`), the config must be re-vendored into `apps/battery-optimizer/files/service.yaml`.
+
+**⚠️ Critical: Preserve site-specific overrides**
+
+The app repository's `config/service.yaml` is a **development template** with safe defaults. The
+homelab deployment has **production overrides** that must be preserved:
+
+| Setting | Template default | Production value | Notes |
+|---------|------------------|------------------|-------|
+| `mode` | `shadow` | `live` | Battery control mode |
+| `climate_shadow.enabled` | `false` | `true` | Climate tracking |
+| `climate_shadow.prior` | `null` | `"2311c010392f"` | Site-specific prior ID |
+| `climate_shadow.optimizer_mode` | `"off"` | `"shadow"` | Advisory climate plan |
+
+**Re-vendoring checklist:**
+
+1. **Diff the template**: Compare `~/home-energy-optimizer/config/service.yaml` with the current
+   `apps/battery-optimizer/files/service.yaml` to identify new features or sections.
+
+2. **Merge, don't overwrite**: Copy only new features, comments, and structural changes. **Never
+   copy the entire file** — this overwrites production overrides.
+
+3. **Verify critical values**: After merging, confirm the production overrides above are intact:
+   ```bash
+   grep -A 5 "^climate_shadow:" apps/battery-optimizer/files/service.yaml
+   ```
+
+4. **Test locally**: Render the Helm chart and verify the ConfigMap:
+   ```bash
+   helm dependency build apps/battery-optimizer/
+   helm template --include-crds --namespace battery-optimizer battery-optimizer apps/battery-optimizer/ | \
+     grep -A 10 "climate_shadow:"
+   ```
+
+5. **Commit with explicit message**: Document which values were preserved vs. copied from the template.
+
+**Example of a correct re-vendor commit:**
+
+```
+feat(battery-optimizer): Deploy v0.17.0 with new feature
+
+- Update image to 0.17.0@sha256:...
+- Re-vendor config: add new_feature section from template
+- Preserve production overrides: mode=live, climate_shadow enabled with prior 2311c010392f
+- New feature configuration: ...
+```
+
+**Example of an incorrect re-vendor commit (what NOT to do):**
+
+```
+feat(battery-optimizer): Deploy v0.16.0 with reserve protection
+
+- Re-vendor config files from app repo (preserve mode: live)
+```
+
+This commit message says "preserve mode: live" but does not mention climate_shadow, which was
+accidentally reverted to template defaults, disabling climate tracking for 2 days.
+
 ## App Repository Notes
 
 - Code lives in `pando85/home-energy-optimizer` (moved history-preserving from `scripts/energy-baseline`
