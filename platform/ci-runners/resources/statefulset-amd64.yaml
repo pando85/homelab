@@ -67,17 +67,18 @@ spec:
               # capacity 2 the aggregate peak is bounded by concurrency as well as
               # by this limit, but jobs can still demand ~17.4GiB individually
               # (measured on prusik), so OOM kills remain possible. The pod's total
-              # limits (12Gi + 2Gi + 128Mi = 14.1Gi) still exceed the node's
+              # limits (12Gi + 4Gi + 128Mi = 16.1Gi) still exceed the node's
               # 12.53Gi allocatable, so the "pod dies before node" property is
               # gone - if every container peaks simultaneously, the node itself
               # will pressure. Accepted trade-off: more runner headroom at the
               # cost of losing the strict OOM boundary.
               #
-              # Memory stays at 12Gi (not raised into the room freed from the
-              # daemon): memory is the binding constraint on this node (MemAvailable
-              # minimum 1.0-2.6 GB, MemoryPressure ~30 min in 14d), the runner's
-              # 7d working-set peak is ~11.2-12.0Gi, and a node-level OOM evicts
-              # unrelated pods. The freed daemon memory only shrinks the overcommit.
+              # Memory stays at 12Gi: memory is the binding constraint on this node
+              # (MemAvailable minimum 1.0-2.6 GB, MemoryPressure ~30 min in 14d),
+              # the runner's 7d working-set peak is ~11.2-12.0Gi, and a node-level
+              # OOM evicts unrelated pods. The daemon's share went back up to 4Gi
+              # (see the `daemon` container), so the overcommit grows there, not
+              # here; the runner is not the side that can absorb more.
               memory: "12Gi"
               # 8 cores = 2 concurrent jobs x CARGO_BUILD_JOBS/-j4. Was 5: over
               # 2026-11-03..10 the runner sat on that limit (peak 5.0 cores, mean
@@ -187,15 +188,31 @@ spec:
             limits:
               # `docker`-label jobs are sibling containers created by dockerd, so
               # they land in THIS container's cgroup - this limit bounds them, not
-              # the runner's. Under-sizing it would silently cap docker jobs below
-              # the runner's own budget.
+              # the runner's. Under-sizing it silently caps docker jobs below the
+              # runner's own budget and OOM-kills them inside DinD.
               #
-              # Cut from 4608Mi / 3 cores after measuring 2026-11-03..10: the
-              # container's working-set peak was 0.78Gi and its CPU peak 0.45 cores
-              # (the window includes `docker`-label jobs, so the peak already covers
-              # them). 2Gi is ~2.5x that peak and 2 cores ~4x; the freed 2.5Gi of
-              # memory limit and 1 core go to the runner side of the node budget.
-              memory: "2Gi"
+              # Raised back from the 2Gi set on 2026-11-10 (`a4806f45a`), which
+              # OOM-killed a `docker`-label job. That cut was justified by a 0.78Gi
+              # working-set peak, but that series is the *parent's* own usage: the
+              # job containers dockerd spawns are only visible in this cgroup's
+              # hierarchical high-water mark, and the parent's
+              # `container_oom_events_total` stayed 0 over the same window. Measured
+              # `container_memory_max_usage_bytes` (memory.peak, children included)
+              # never read below whatever ceiling was configured - 2.01-2.02GiB under
+              # 2Gi (from ~13:50Z) and 4.50-4.54GiB under 4608Mi before it.
+              #
+              # Caveat for the next person resizing this: that peak includes
+              # reclaimable page cache from image pulls and build layers, so it is an
+              # upper bound on pressure, not an RSS demand figure. What it does prove
+              # is that the ceiling, not the workload, is the binding number here.
+              #
+              # 4Gi is what is left of the node budget next to the runner's 12Gi:
+              # pod limits sum to 16.1Gi against 12.53Gi allocatable, while the
+              # observed concurrent working set stays near 11Gi (runner 7d peak
+              # ~10Gi, daemon 0.1-0.85Gi). If docker jobs need more than this, the
+              # fix is moving them off DinD or rebalancing against the runner, not
+              # raising this ceiling further. CPU stays at 2 cores.
+              memory: "4Gi"
               cpu: "2"
           startupProbe:
             exec:
@@ -615,7 +632,7 @@ spec:
             path: /srv/ci-runner/docker
             type: Directory
       # No pod-level `resources` block. Limits are per-container and sum to
-      # ~14.1Gi, which exceeds this node's 12.53Gi allocatable. The runner's
+      # ~16.1Gi, which exceeds this node's 12.53Gi allocatable. The runner's
       # 12Gi limit prioritizes headroom for concurrent jobs over the strict
       # "pod dies before node" property. The legacy StatefulSet notes
       # pod-level resources do not work under kata.
