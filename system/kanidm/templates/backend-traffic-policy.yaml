@@ -1,6 +1,6 @@
 ---
-# Same affinity as the nginx Ingress (`upstream-hash-by: $remote_addr`): one client sticks to one
-# Kanidm replica. The external Gateway keeps the client IP (`externalTrafficPolicy: Local`).
+# One client sticks to one Kanidm replica (hash on the client IP). The external Gateway keeps the
+# client IP (`externalTrafficPolicy: Local`).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: BackendTrafficPolicy
 metadata:

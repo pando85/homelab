@@ -1,5 +1,5 @@
-# Standalone certificate for the pods' HTTPS (8443) and LDAPS (3636) listeners. Not owned by an
-# Ingress, so it survives removing `spec.ingress` from the Kanidm CR.
+# Standalone certificate for the pods' HTTPS (8443) and LDAPS (3636) listeners (Kanidm serves it
+# through `spec.tlsSecretName`).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

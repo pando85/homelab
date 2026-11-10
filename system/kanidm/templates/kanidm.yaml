@@ -63,26 +63,10 @@ spec:
 
   ldapPortName: ldaps
 
-  ingress:
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      external-dns.kubernetes.io/hostname: idm.grigri.cloud
-      external-dns.kubernetes.io/ingress-hostname-source: annotation-only
-      external-dns.kubernetes.io/target: grigri.cloud
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-      # Enable source IP-based load balancing for consistent routing
-      nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
-    ingressClassName: nginx-external
-    tlsSecretName: idm-external-tls-certificate
-    extraTlsHosts:
-      - ldaps.idm.internal.grigri.cloud
-
-  # The pods serve HTTPS and LDAPS from `kanidm-tls` (see certificate-tls.yaml), so `spec.ingress`
-  # above can be removed in Phase 6 of the Envoy migration without losing the certificate.
+  # The pods serve HTTPS and LDAPS from `kanidm-tls` (see certificate-tls.yaml).
   tlsSecretName: kanidm-tls
 
-  # Envoy Gateway route (ingress-nginx migration).
+  # Envoy Gateway route.
   gateway:
     annotations:
       # the target (grigri.cloud) comes from the external Gateway
