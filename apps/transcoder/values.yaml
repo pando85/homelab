@@ -108,33 +108,7 @@ app-template:
           port: *port_rabbit
           targetPort: *port_rabbit
 
-  ingress:
-    transcoder:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-        nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
-        nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-        nginx.ingress.kubernetes.io/proxy-body-size: 20G
-        nginx.ingress.kubernetes.io/proxy-buffering: "off"
-        nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-      hosts:
-        - host: &host transcoder.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: transcoder
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: transcoder-tls-certificate
-
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # Envoy Gateway route.
   # Internal route: the external-dns annotation publishes its name (the Gateway address). Stable name: the
   # BackendTrafficPolicy (templates/backend-traffic-policy.yaml) targets it.
   route:

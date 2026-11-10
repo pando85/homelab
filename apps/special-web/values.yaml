@@ -41,28 +41,7 @@ app-template:
         http:
           port: 80
 
-  ingress:
-    external:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      hosts:
-        - host: &host regalo.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: special-web
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: special-web-external-tls-certificate
-
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # Envoy Gateway route.
   route:
     external:
       kind: HTTPRoute
