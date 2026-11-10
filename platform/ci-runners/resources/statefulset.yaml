@@ -258,6 +258,12 @@ spec:
               value: /tmp
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
+            #
+            # Low/medium tiers run only while the runner is idle (see runner_busy
+            # in the script). A prune racing an image pull made jobs fail with
+            # `No such image` right after `docker pull` (2026-11-10, dockerd:
+            # `lease does not exist`). A busy runner skips them with one log line
+            # per interval. The emergency tier (THRESHOLD_HIGH) runs regardless.
           command:
             - sh
             - -c
@@ -267,7 +273,10 @@ spec:
               THRESHOLD_MED="${THRESHOLD_MED:-85}"
               THRESHOLD_HIGH="${THRESHOLD_HIGH:-90}"
               THRESHOLD_CRITICAL="${THRESHOLD_CRITICAL:-95}"
+              DOCKER_QUIET_SECONDS="${DOCKER_QUIET_SECONDS:-180}"
+              DOCKER_STATE_DIR="${DOCKER_STATE_DIR:-/var/lib/docker/containerd/daemon}"
               runner_started=false
+              gc_meta_mtime=0
 
               cleanup() {
                 exit 0
@@ -277,6 +286,64 @@ spec:
 
               get_disk_usage() {
                 df -P /var/lib/docker 2>/dev/null | awk 'NR==2 {print $5}' | tr -d '%' || echo 0
+              }
+
+              # Prints why the runner is busy and returns 0, or returns 1 when it is idle.
+              # Idle means none of these hold:
+              #  - forgejo-runner has a child process (a host-mode job step is running);
+              #  - a task container exists (docker-mode job, after the pull);
+              #  - an image pull is in flight: a blob is downloading (containerd content
+              #    ingest dir not empty) or dockerd's metadata db (leases, images, snapshots,
+              #    containers) was written within DOCKER_QUIET_SECONDS. That is the only signal
+              #    for the pull and unpack phase of a container job: no container exists yet
+              #    and the runner has no child process. A write by our own previous prune does
+              #    not count (gc_meta_mtime).
+              # Anything that cannot be read counts as busy: pruning during a pull is the
+              # failure this guards against.
+              runner_busy() {
+                rpid=$(pgrep -o forgejo-runner 2>/dev/null)
+                if [ -n "$rpid" ] && pgrep -P "$rpid" >/dev/null 2>&1; then
+                  echo "job step running"
+                  return 0
+                fi
+
+                if ! tasks=$(docker ps -q --filter name=FORGEJO-ACTIONS-TASK- 2>/dev/null); then
+                  echo "cannot list containers"
+                  return 0
+                fi
+                if [ -n "$tasks" ]; then
+                  echo "task container running"
+                  return 0
+                fi
+
+                if [ ! -d "$DOCKER_STATE_DIR/io.containerd.content.v1.content/ingest" ]; then
+                  echo "cannot read containerd ingest dir"
+                  return 0
+                fi
+                if [ -n "$(ls -A "$DOCKER_STATE_DIR/io.containerd.content.v1.content/ingest" 2>/dev/null)" ]; then
+                  echo "image pull in progress"
+                  return 0
+                fi
+
+                if ! meta_mtime=$(stat -c %Y "$DOCKER_STATE_DIR/io.containerd.metadata.v1.bolt/meta.db" 2>/dev/null); then
+                  echo "cannot read containerd metadata db"
+                  return 0
+                fi
+                if [ "$meta_mtime" != "$gc_meta_mtime" ]; then
+                  meta_age=$(($(date +%s) - meta_mtime))
+                  if [ "$meta_age" -lt "$DOCKER_QUIET_SECONDS" ]; then
+                    echo "docker active ${meta_age}s ago"
+                    return 0
+                  fi
+                fi
+
+                return 1
+              }
+
+              # Remember the metadata db mtime after our own prune so that it is not
+              # mistaken for job activity by the next check.
+              note_gc_mtime() {
+                gc_meta_mtime=$(stat -c %Y "$DOCKER_STATE_DIR/io.containerd.metadata.v1.bolt/meta.db" 2>/dev/null || echo 0)
               }
 
               while true; do
@@ -299,30 +366,41 @@ spec:
 
                 usage=$(get_disk_usage)
                 echo "docker disk usage: ${usage}%"
+                ran=false
 
                 if [ "$usage" -ge "$THRESHOLD_LOW" ]; then
                   if [ "$usage" -ge "$THRESHOLD_CRITICAL" ]; then
+                    # Emergency tiers (critical, high) run even while a job is active.
                     echo "critical disk usage (${usage}%), aggressive cleanup (6h retention)"
                     docker image prune -af --filter "until=6h" || true
                     docker builder prune -af --filter "until=6h" || true
                     docker container prune -f || true
+                    ran=true
                   elif [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
                     echo "high disk usage (${usage}%), pruning unused images (24h retention)"
                     docker image prune -af --filter "until=24h" || true
                     docker builder prune -af --filter "until=24h" || true
+                    ran=true
+                  elif busy_reason=$(runner_busy); then
+                    echo "busy, skipping non-emergency cleanup (${busy_reason})"
                   elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
                     echo "medium disk usage (${usage}%), pruning build cache (24h retention)"
                     docker builder prune -af --filter "until=24h" || true
+                    ran=true
                   else
                     echo "low disk usage (${usage}%), pruning dangling images and containers"
                     docker image prune -f || true
                     docker container prune -f || true
+                    ran=true
                   fi
-
-                  new_usage=$(get_disk_usage)
-                  echo "cleanup complete, new usage: ${new_usage}%"
                 else
                   echo "disk usage below threshold (${usage}%), skipping cleanup"
+                fi
+
+                if [ "$ran" = true ]; then
+                  new_usage=$(get_disk_usage)
+                  note_gc_mtime
+                  echo "cleanup complete, new usage: ${new_usage}%"
                 fi
 
                 echo "sleeping for ${CHECK_INTERVAL}s"
@@ -337,6 +415,12 @@ spec:
                   slept_seconds=$((slept_seconds + 10))
                 done
               done
+          # Root, read-only mount: the idle check reads dockerd's containerd state
+          # (content ingest dir, metadata db), which is root-only 0700. The volume
+          # stays mounted readOnly and the container is not privileged.
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
           volumeMounts:
             - name: docker-run
               mountPath: /sock
