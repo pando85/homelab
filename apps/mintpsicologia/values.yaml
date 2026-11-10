@@ -57,10 +57,9 @@ wordpress:
       argocd.argoproj.io/sync-options: Prune=false
   volumePermissions:
     enabled: false
-  # Envoy Gateway route (ingress-nginx migration); the Ingress below stays until the switch.
-  # The external-dns annotation publishes the name (the Gateway address). Parent refs are mandatory:
-  # the chart default is a Gateway named `gateway`. The external routes are in
-  # templates/httproute-external.yaml.
+  # Envoy Gateway route. The external-dns annotation publishes the name (the Gateway address).
+  # Parent refs are mandatory: the chart default is a Gateway named `gateway`. The external routes
+  # are in templates/httproute-external.yaml.
   httpRoute:
     enabled: true
     annotations:
@@ -71,17 +70,6 @@ wordpress:
         sectionName: https-internal-grigri-cloud
     hostnames:
       - mintpsicologia.internal.grigri.cloud
-  ingress:
-    enabled: true
-    ingressClassName: nginx-internal
-    hostname: mintpsicologia.internal.grigri.cloud
-    path: /
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      nginx.ingress.kubernetes.io/proxy-body-size: "100m"
-    tls: true
-    extraHosts:
   mariadb:
     enabled: true
     architecture: standalone
