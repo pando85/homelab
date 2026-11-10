@@ -1,21 +1,16 @@
 # Playwright MCP
 
-Playwright MCP server with a co-located headless Chromium, reachable only via
-`kubectl port-forward` (Stage 1).
+Playwright MCP server with a co-located headless Chromium, exposed through
+the MCP gateway with Kanidm OIDC (Stage 2).
 
-## Stage 1 (this chart)
+## Stage 2 (current)
 
-One pod, MCP server + browser together. No HTTPRoute, no Ingress, no Envoy
-SecurityPolicy, no Kanidm OAuth client or group. The upstream image states
-plainly: **"Playwright MCP is not a security boundary."** Exposing an
-unauthenticated browser driver to the LAN is not acceptable, so it stays
-unexposed until the auth question is settled.
+Authenticated exposure via the MCP gateway at
+`https://mcp.grigri.cloud/playwright/mcp`. The gateway validates Kanidm
+OIDC tokens with the `mcp_playwright` scope and forwards to the in-cluster
+pod. No tunnel needed.
 
 ### Access
-
-```bash
-kubectl --context=grigri -n playwright-mcp port-forward svc/playwright-mcp 8931:8931
-```
 
 OpenCode config (`~/.config/opencode/opencode.json`):
 
@@ -24,44 +19,70 @@ OpenCode config (`~/.config/opencode/opencode.json`):
   "mcp": {
     "playwright": {
       "type": "remote",
-      "url": "http://127.0.0.1:8931/mcp"
+      "url": "https://mcp.grigri.cloud/playwright/mcp",
+      "client_id": "mcp-gateway",
+      "scope": "mcp_playwright",
+      "callback_port": 15000,
+      "redirect_uri": "http://127.0.0.1:15000/callback"
     }
   }
 }
 ```
 
-No OAuth: the path is loopback-only.
+Kanidm has no dynamic client registration and no client_id metadata
+documents, so the pre-registered `client_id: mcp-gateway` must be given
+explicitly. See `docs/troubleshooting/kanidm-no-dcr-mcp-client-id.md`.
+
+Membership in the `mcp-playwright-users` Kanidm group is required. The
+owner adds members manually:
+
+```bash
+kanidm group add-members mcp-playwright-users <account> \
+  -D idm_admin -H https://idm.grigri.cloud
+```
+
+### Session continuity
+
+The route uses `statefulMode: stateful` because Playwright MCP is stateful
+(browser context lives in an `Mcp-Session-Id`). The Phase A probe
+(`test/playwright-mcp/session-propagation-probe.py`) measured that
+`stateless` mode drops the backend-issued session id, so
+`browser_navigate` followed by `browser_snapshot` would hit a fresh
+browser. Stateful mode has the gateway issue its own session id and
+translate it back to the backend's on each request, preserving continuity.
+
+This is the only stateful route in the gateway, so it was verified rather
+than assumed safe. The other routes chose `stateless` to stop a session id
+becoming "a second, unauthenticated way to address a backend session"
+(`apps/mcp-gateway/values.yaml:405-407`). The probe's negative tests confirm
+that does not happen here: a valid session id presented with no
+`Authorization`, with a garbage token, or with a well-formed token carrying
+another route's scope is refused in all three cases, a forged session id is
+not accepted, and none of the refused requests reach the backend.
+Authentication and the CEL scope gate re-apply on every request, not just
+`initialize`. Translation also means the client never learns the backend's
+real session id. Stateful mode is safe on this route specifically because it
+has no `backendAuth`, so there is no backend credential to cache per session.
 
 ### Threat model
 
-The browser is driven by an agent and visits arbitrary URLs, so it is treated
-as untrusted. The CiliumNetworkPolicy denies cluster and LAN destinations to
-prevent it becoming a pivot (SSRF into the cluster, the LAN, or pfSense). The
-pod holds no cluster identity (`automountServiceAccountToken: false`).
+The upstream image states plainly: **"Playwright MCP is not a security boundary."** The CiliumNetworkPolicy admits only the gateway pods on port
+8931 (no `world`, no `cluster`, no `host`). The browser is driven by an
+agent and visits arbitrary URLs, so it is treated as untrusted. The CNP
+denies cluster and LAN destinations to prevent it becoming a pivot (SSRF
+into the cluster, the LAN, or pfSense). The pod holds no cluster identity
+(`automountServiceAccountToken: false`).
 
-Egress is internet-only via `toCIDRSet` with `cidr: 0.0.0.0/0` and an `except`
-list covering the cluster's pod CIDR (`10.0.0.0/8`), service CIDR
-(`10.43.0.0/16`), RFC1918 (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`),
-link-local (`169.254.0.0/16`), and CGNAT (`100.64.0.0/10`). DNS to the
-`node-local-dns` and `kube-dns` pods in `kube-system` is allowed separately.
-
-### Stage 2 (pending)
-
-Authenticated exposure via the Envoy Gateway requires resolving two unknowns:
-
-1. Does a Kanidm `claimMap` value land in the ACCESS token or only the ID
-   token?
-2. Can an Envoy Gateway SecurityPolicy jwt provider extract from the
-   `Authorization` header and authorize on that claim?
-
-Neither is implemented here. The repo's Envoy OIDC pattern (apps/http-echo
-precedent: `apps/http-echo/templates/security-policy.yaml`) validates an ID
-token extracted from the `oidc-id-token` COOKIE, which is browser-shaped;
-bearer-mode auth for an MCP client is unverified.
+Egress is internet-only via `toCIDRSet` with `cidr: 0.0.0.0/0` and an
+`except` list covering the cluster's pod CIDR (`10.0.0.0/8`), service CIDR
+(`10.43.0.0/16`), RFC1918 (`10.0.0.0/8`, `172.16.0.0/12`,
+`192.168.0.0/16`), link-local (`169.254.0.0/16`), and CGNAT
+(`100.64.0.0/10`). DNS to the `node-local-dns` and `kube-dns` pods in
+`kube-system` is allowed separately.
 
 ### Ephemeral browser profile
 
-Stage 1 uses an ephemeral browser profile (no PVC), set by
+Stage 2 uses an ephemeral browser profile (no PVC), set by
 `PLAYWRIGHT_MCP_ISOLATED=true`. Upstream defines `--isolated` as "keep the
 browser profile in memory, do not save it to disk", so no cookie store ever
 lands on a volume. A persisted profile would be a cookie store that Velero
@@ -98,6 +119,9 @@ helm lint apps/playwright-mcp/
 
 # Run the chart tests
 python3 test/playwright-mcp/chart-checks.py
+
+# Run the session propagation probe (Phase A)
+python3 test/playwright-mcp/session-propagation-probe.py
 
 # After ArgoCD syncs, run the live acceptance
 bash test/playwright-mcp/live-acceptance.sh

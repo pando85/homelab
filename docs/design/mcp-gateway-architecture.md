@@ -78,7 +78,7 @@ future work.
 - **Platform hardening**: Privileged node/RBAC limitation brief only, not a comprehensive project
 - **Session engineering**: Single replica allowed initially; session behaviour tested during spike.
   No "stateless / no initialize / pooling" claims without verification
-- **Playwright remote browser**: Stage 1 landed (cluster browser, no ingress, port-forward access). Stage 2 (authenticated exposure) pending the two unknowns in `apps/playwright-mcp/README.md`
+- **Playwright remote browser**: Stage 2 landed. The cluster browser is exposed through the gateway at `/playwright/mcp` with Kanidm OIDC and `statefulMode: stateful`; the Phase A probe (`test/playwright-mcp/session-propagation-probe.py`) proved stateless mode drops the backend-issued session id, which would break browser continuity. The Stage 1 port-forward path was removed with it
 
 ## Architecture Topology
 
@@ -89,10 +89,12 @@ future work.
 </div>
 
 **Public plane (live):** Envoy `external` routes `mcp.grigri.cloud` to
-`apps/mcp-gateway` (namespace `mcp-gateway`). Its three active MCP routes are
+`apps/mcp-gateway` (namespace `mcp-gateway`). Its four active MCP routes are
 `/grafana/mcp` (standalone in-cluster pod, caller token passthrough),
-`/context7/mcp` (external HTTPS service, gateway-managed API key), and
-`/firecrawl/mcp` (isolated in-cluster pod). Each has its own Kanidm OAuth2 scope.
+`/context7/mcp` (external HTTPS service, gateway-managed API key),
+`/firecrawl/mcp` (isolated in-cluster pod), and
+`/playwright/mcp` (cluster browser with stateful session continuity).
+Each has its own Kanidm OAuth2 scope.
 Additional MCPs appear as an unconnected placeholder, not as deployed integrations.
 
 **Identity:** OpenCode uses OAuth2 authorization code + PKCE; Hermes uses Kanidm-issued tokens.
@@ -166,6 +168,7 @@ one entry per route:
 |---|---|---|
 | `mcp-context7-users` | `mcp_context7` | `/context7/mcp` |
 | `mcp-firecrawl-users` | `mcp_firecrawl` | `/firecrawl/mcp` |
+| `mcp-playwright-users` | `mcp_playwright` | `/playwright/mcp` |
 | `grafana-users` | `mcp_grafana` | `/grafana/mcp` |
 
 Workloads use a single group (`mcp-gateway-agents`) that keeps **all three** MCP scopes plus
@@ -262,7 +265,7 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 | Firecrawl | MVP | Live route; backend pod deployed and isolated | Active `firecrawl-mcp` service |
 | Vault MCP | Deferred | Admin gateway has `routes: []`; Vault MCP not deployed | Owner decision 2026-11-10: deferred. OIDC-passthrough research (upstream PR #129, stale image) in `planning/vault-mcp-implementation.md` §13 |
 | SearXNG | Next | REST API, internal | Deploy MCP package |
-| Playwright | Stage 1 live | Cluster browser, port-forward only, no ingress | Stage 2: authenticated exposure pending two unknowns |
+| Playwright | Stage 2 live | Cluster browser, gateway-exposed with Kanidm OIDC | Active via `/playwright/mcp` with `statefulMode: stateful` |
 | HA, Postgres | Future | N/A | Separate phases |
 
 ## Network & Trust Boundaries
@@ -369,7 +372,7 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 - Approval workflows for sensitive write operations
 - Caller-bound dynamic credentials for backends that support it
 - PostgreSQL MCP (see below)
-- Playwright remote browser: Stage 1 landed (cluster browser, port-forward only). Stage 2 (authenticated exposure) pending the two unknowns in `apps/playwright-mcp/README.md`
+- Playwright remote browser: Stage 2 landed (authenticated exposure via the MCP gateway at `/playwright/mcp` with Kanidm OIDC and `statefulMode: stateful`)
 
 ## PostgreSQL MCP (Future)
 

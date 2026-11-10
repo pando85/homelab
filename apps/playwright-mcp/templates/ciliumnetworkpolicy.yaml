@@ -11,13 +11,13 @@
 # plainly: "Playwright MCP is **not** a security boundary" - the CNP is what
 # makes the isolation real.
 #
-# INGRESS: `kubectl port-forward` only. The kubelet's streaming server enters
-# the pod's network namespace and connects to 127.0.0.1:8931 from within the
-# netns, which Cilium classifies as the endpoint's own localhost traffic and
-# allows regardless of the ingress rule. The `fromEntities: [host]` rule is
-# belt-and-braces for the host-side path. Nothing else may reach the pod: no
-# `world` (that would expose the browser driver to the LAN), no `cluster`, no
-# `fromEndpoints`. Exec probes are immune to ingress policy by construction
+# INGRESS: Stage 2 exposes the server through the MCP gateway. The gateway
+# pods in the mcp-gateway namespace are the only permitted callers on port
+# 8931. Labels are the gateway's rendered + live pod labels (verified with
+# `kubectl --context=grigri -n mcp-gateway get pods --show-labels`).
+# No `world` (that would expose the browser driver to the LAN), no `cluster`,
+# no `fromEntities: [host]` (Stage 2 replaces the port-forward tunnel).
+# Exec probes are immune to ingress policy by construction
 # (docs/conventions/cilium.md).
 #
 # EGRESS: DNS to the real node-local-dns and kube-dns pods in kube-system
@@ -49,14 +49,18 @@ spec:
       app.kubernetes.io/instance: playwright-mcp
       app.kubernetes.io/controller: playwright-mcp
   ingress:
-    # `kubectl port-forward` path. The kubelet's streaming server enters the
-    # pod's netns and connects to 127.0.0.1:8931, which is the endpoint's own
-    # localhost traffic. Cilium allows same-endpoint loopback regardless of
-    # the ingress rule; this rule is belt-and-braces for the host-side path.
-    # No `world` (that would expose the browser driver to the LAN), no
-    # `cluster`, no `fromEndpoints`. Exec probes are immune by construction.
-    - fromEntities:
-        - host
+    # Stage 2: only the MCP gateway may reach the browser. Labels are the
+    # gateway's rendered + live pod labels, verified read-only:
+    #   kubectl --context=grigri -n mcp-gateway get pods --show-labels
+    # No `fromEntities: [host]` - Stage 2 replaces the port-forward tunnel.
+    # No `world` (that would expose the browser driver to the LAN).
+    # Exec probes are immune by construction (docs/conventions/cilium.md).
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/name: agentgateway-standalone
+            app.kubernetes.io/instance: mcp-gateway
+            app.kubernetes.io/component: standalone
+            io.kubernetes.pod.namespace: mcp-gateway
       toPorts:
         - ports:
             - port: "8931"

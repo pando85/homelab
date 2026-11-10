@@ -340,9 +340,9 @@ def main():
     check("mcp-gateway: rendered OAuth2Client exists", o2c is not None)
     if o2c:
         smap = {e["group"]: e["scopes"] for e in o2c["spec"]["scopeMap"]}
-        check("mcp-gateway: rendered scopeMap has exactly 4 group entries",
+        check("mcp-gateway: rendered scopeMap has exactly 5 group entries",
               set(smap) == {"mcp-gateway-agents", "mcp-context7-users",
-                            "mcp-firecrawl-users", "grafana-users"},
+                            "mcp-firecrawl-users", "mcp-playwright-users", "grafana-users"},
               str(sorted(smap)))
         check("mcp-gateway: mcp-gateway-agents still grants all 3 mcp scopes (agent path)",
               {"mcp_firecrawl", "mcp_grafana", "mcp_context7"} <= set(smap.get("mcp-gateway-agents", [])),
@@ -356,6 +356,9 @@ def main():
         check("mcp-gateway: grafana-users grants only mcp_grafana",
               smap.get("grafana-users") == ["mcp_grafana"],
               str(smap.get("grafana-users")))
+        check("mcp-gateway: mcp-playwright-users grants mcp_playwright",
+              smap.get("mcp-playwright-users") == ["mcp_playwright"],
+              str(smap.get("mcp-playwright-users")))
 
     # comment-aware: prose explaining WHY the group is withheld must not fail this
     for chart in CHARTS:

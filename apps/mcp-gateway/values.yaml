@@ -290,6 +290,34 @@ agentgateway-standalone:
             headers:
               content-type: "'application/json'"
               cache-control: "'public, max-age=300'"
+      - name: playwright-metadata
+        gateways:
+          - default
+        hostnames:
+          - mcp.grigri.cloud
+        matches:
+          - path:
+              exact: /.well-known/oauth-protected-resource/playwright/mcp
+        policies:
+          directResponse:
+            status: 200
+            body: |-
+              {
+                "resource": "https://mcp.grigri.cloud/playwright/mcp",
+                "authorization_servers": [
+                  "https://idm.grigri.cloud/oauth2/openid/mcp-gateway"
+                ],
+                "scopes_supported": [
+                  "mcp_playwright"
+                ],
+                "bearer_methods_supported": [
+                  "header"
+                ],
+                "resource_name": "homelab playwright MCP"
+              }
+            headers:
+              content-type: "'application/json'"
+              cache-control: "'public, max-age=300'"
 
       # ---------------------------------------------------------------------
       # context7: LIVE. The upstream is authenticated with OUR Context7 API key,
@@ -525,6 +553,75 @@ agentgateway-standalone:
                     port: 3000
                     path: /mcp
               statefulMode: stateless
+
+      # ---------------------------------------------------------------------
+      # playwright: Stage 2. Cluster browser exposed through the gateway with
+      # Kanidm OIDC. No backendAuth: Playwright needs no credential, so there
+      # is nothing to inject and nothing to cache. This is why the usual
+      # objection to stateful mode (caching a backend credential per session)
+      # does not apply here.
+      #
+      # statefulMode: stateful - required. Phase A probe
+      # (test/playwright-mcp/session-propagation-probe.py) measured that
+      # stateless mode drops the backend-issued Mcp-Session-Id entirely, so
+      # browser_navigate followed by browser_snapshot would hit a fresh
+      # browser. Stateful mode has the gateway issue its own session id and
+      # translate it back to the backend's on each request, preserving
+      # browser continuity across HTTP requests.
+      #
+      # Mcp-Session-Id is NOT stripped. Stripping it would break browser
+      # continuity, since the gateway needs it to map a client session to a
+      # backend session. Keeping it means a client can present an arbitrary
+      # session id, so the real question is whether that id becomes a second,
+      # unauthenticated way to address a backend session - the concern that made
+      # every other route stateless. MEASURED, not assumed, by the negative tests
+      # in test/playwright-mcp/session-propagation-probe.py against the pinned
+      # v1.7.0 binary: a valid session id presented with no Authorization, with a
+      # garbage token, and with a well-formed token carrying another route's scope
+      # is refused in all three cases; a forged session id is not accepted; and
+      # none of the refused requests reach the backend. Authentication and the CEL
+      # scope gate therefore re-apply on EVERY request, not just `initialize`.
+      #
+      # Stateful mode also TRANSLATES the id: the client receives an opaque
+      # gateway-issued value and the backend only ever sees its own original id,
+      # so the backend's session space is not directly addressable by a caller.
+      # ---------------------------------------------------------------------
+      - name: playwright
+        gateways:
+          - default
+        matches:
+          - path:
+              pathPrefix: /playwright/mcp
+        policies:
+          mcpAuthentication:
+            mode: strict
+            issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
+            audiences:
+              - mcp-gateway
+            jwks:
+              url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
+            resourceMetadata:
+              resource: https://mcp.grigri.cloud/playwright/mcp
+              scopesSupported:
+                - mcp_playwright
+          authorization:
+            rules:
+              - require: "!has(jwt.email)"
+              - require: "!has(jwt.preferred_username)"
+              - require: "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_playwright')"
+          requestHeaderModifier:
+            remove:
+              - Authorization
+              - Cookie
+        backends:
+          - mcp:
+              targets:
+                - name: playwright
+                  mcp:
+                    host: playwright-mcp.playwright-mcp.svc.cluster.local
+                    port: 8931
+                    path: /mcp
+              statefulMode: stateful
       # ---------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -585,6 +682,7 @@ kanidm:
   humanGroups:
     - mcp-context7-users
     - mcp-firecrawl-users
+    - mcp-playwright-users
   oauth2Client:
     name: mcp-gateway
     displayname: MCP Gateway
@@ -638,6 +736,9 @@ kanidm:
       - group: mcp-firecrawl-users
         scopes:
           - mcp_firecrawl
+      - group: mcp-playwright-users
+        scopes:
+          - mcp_playwright
       - group: grafana-users
         scopes:
           - mcp_grafana
@@ -691,6 +792,16 @@ backends:
     # and no API key the gateway injects. Every caller's fetches run under one
     # shared upstream identity; the gateway audit still names the caller
     # (jwt.sub), but destination control is per-group, not per-person.
+    credential: none
+
+  playwright:
+    enabled: true
+    path: /playwright/mcp
+    scope: mcp_playwright
+    resource: https://mcp.grigri.cloud/playwright/mcp
+    # Upstream credential: none. Playwright needs no credential. No backendAuth
+    # means no per-session credential caching, which is the usual objection to
+    # stateful mode - but with nothing to cache, that objection does not apply.
     credential: none
 
 # Session key generation (ESO) - used by templates/session-key-*.yaml

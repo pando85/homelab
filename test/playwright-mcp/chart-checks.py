@@ -228,8 +228,27 @@ def main():
               f"found {len(ingress)}")
         if ingress:
             rule = ingress[0]
-            check("CNP ingress fromEntities is [host]",
-                  rule.get("fromEntities") == ["host"],
+            # Stage 2: ingress from gateway pods, not fromEntities: [host]
+            from_endpoints = rule.get("fromEndpoints", [])
+            check("CNP ingress uses fromEndpoints (gateway pods, Stage 2)",
+                  len(from_endpoints) == 1,
+                  f"fromEndpoints={from_endpoints}")
+            if from_endpoints:
+                ep_labels = from_endpoints[0].get("matchLabels", {})
+                check("CNP ingress selects gateway pods by name",
+                      ep_labels.get("app.kubernetes.io/name") == "agentgateway-standalone",
+                      f"labels={ep_labels}")
+                check("CNP ingress selects gateway pods by instance",
+                      ep_labels.get("app.kubernetes.io/instance") == "mcp-gateway",
+                      f"labels={ep_labels}")
+                check("CNP ingress selects gateway pods by component",
+                      ep_labels.get("app.kubernetes.io/component") == "standalone",
+                      f"labels={ep_labels}")
+                check("CNP ingress selects gateway pods in mcp-gateway namespace",
+                      ep_labels.get("io.kubernetes.pod.namespace") == "mcp-gateway",
+                      f"labels={ep_labels}")
+            check("CNP ingress has no fromEntities: [host] (Stage 2 replaces port-forward)",
+                  "fromEntities" not in rule,
                   f"fromEntities={rule.get('fromEntities')}")
             check("CNP ingress has no world",
                   "world" not in rule.get("fromEntities", []),
@@ -318,12 +337,14 @@ def main():
     readme = open("apps/playwright-mcp/README.md").read()
     check("README quotes 'not a security boundary'",
           "not a security boundary" in readme.lower())
-    check("README documents port-forward command",
-          "kubectl" in readme and "port-forward" in readme)
-    check("README documents Stage 2 unknowns",
-          "Stage 2" in readme and "claimMap" in readme)
+    check("README documents gateway route (Stage 2 access path)",
+          "mcp.grigri.cloud/playwright/mcp" in readme)
+    check("README documents opencode.json with client_id and scope",
+          "client_id" in readme and "mcp_playwright" in readme)
     check("README documents ephemeral profile decision",
           "ephemeral" in readme.lower() and "PVC" in readme)
+    check("README documents statefulMode decision",
+          "statefulMode: stateful" in readme)
 
     # ---- determinism
     a = yaml.dump_all(helm(), sort_keys=True)

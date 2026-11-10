@@ -217,6 +217,52 @@ def main():
         check("firecrawl target has no backendTLS (plain HTTP inside the cluster)",
               "backendTLS" not in (ftgt.get("policies") or {}))
 
+    # ---------------- 2c. playwright (Stage 2) ----------------
+    pw = by_name(routes, "playwright")
+    check("playwright route exists (enabled=true)",
+          pw is not None, "playwright route should be rendered when backend is enabled")
+    if pw:
+        ppol = pw["policies"]
+        pauthn = ppol["mcpAuthentication"]
+        check("playwright route matches its flag values (path, scope, resource)",
+              path_of(pw) == (("pathPrefix", backends["playwright"]["path"]),)
+              and pauthn["resourceMetadata"]["resource"] == backends["playwright"]["resource"],
+              str(path_of(pw)))
+        check("playwright issuer is the exact Kanidm per-client path",
+              pauthn["issuer"] == ISSUER)
+        check("playwright audience is pinned to the OAuth2 client name",
+              pauthn["audiences"] == ["mcp-gateway"])
+        check("playwright JWKS URL is Kanidm's public_key.jwk",
+              pauthn["jwks"] == {"url": JWKS})
+        check("playwright mode is strict",
+              pauthn.get("mode") == "strict")
+        check("playwright resourceMetadata holds the absolute route URL and its scope",
+              pauthn["resourceMetadata"] == {"resource": f"{PUBLIC}/playwright/mcp",
+                                             "scopesSupported": ["mcp_playwright"]},
+              str(pauthn["resourceMetadata"]))
+        prules = [r["require"] for r in ppol["authorization"]["rules"]]
+        check("playwright authorization is fail-closed: no identity claims, then mcp_playwright",
+              prules == [
+                  "!has(jwt.email)",
+                  "!has(jwt.preferred_username)",
+                  "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_playwright')",
+              ], json.dumps(prules))
+        premoved = ppol["requestHeaderModifier"]["remove"]
+        for h in ("Authorization", "Cookie"):
+            check(f"playwright strips {h} at the edge", h in premoved, str(premoved))
+        check("playwright has NO backendAuth (no upstream credential injected)",
+              ppol.get("backendAuth") is None,
+              json.dumps(ppol.get("backendAuth")))
+        pbe = pw["backends"][0]["mcp"]
+        check("playwright backend is stateful (Phase A: stateless drops session id)",
+              pbe["statefulMode"] == "stateful")
+        ptgt = pbe["targets"][0]
+        check("playwright target is the in-cluster service, split host/port/path",
+              ptgt["mcp"] == {"host": "playwright-mcp.playwright-mcp.svc.cluster.local",
+                              "port": 8931, "path": "/mcp"}, str(ptgt["mcp"]))
+        check("playwright target has no backendTLS (plain HTTP inside the cluster)",
+              "backendTLS" not in (ptgt.get("policies") or {}))
+
     # ---------------- 3. grafana (PRESENT, LIVE) ----------------
     # The grafana route is live (enabled=true), so we check it directly from the rendered config
     graf = by_name(routes, "grafana")
@@ -254,8 +300,9 @@ def main():
 
     # ---------------- 4. RFC 9728 discovery ----------------
     meta = [r for r in routes if "metadata" in r["name"]]
-    check("all three discovery routes are rendered (context7, grafana, firecrawl)",
-          {r["name"] for r in meta} == {"context7-metadata", "grafana-metadata", "firecrawl-metadata"})
+    check("all four discovery routes are rendered (context7, grafana, firecrawl, playwright)",
+          {r["name"] for r in meta} == {"context7-metadata", "grafana-metadata",
+                                         "firecrawl-metadata", "playwright-metadata"})
     for r in meta:
         name = r["name"].replace("-metadata", "")
         spec = backends[name]
@@ -367,9 +414,10 @@ def main():
           str(smap.get("mcp-gateway-agents")))
     check("human scopes come from per-route groups plus grafana-users",
           set(smap) == {"mcp-gateway-agents", "mcp-context7-users",
-                        "mcp-firecrawl-users", "grafana-users"}
+                        "mcp-firecrawl-users", "mcp-playwright-users", "grafana-users"}
           and smap["mcp-context7-users"] == ["mcp_context7"]
           and smap["mcp-firecrawl-users"] == ["mcp_firecrawl"]
+          and smap["mcp-playwright-users"] == ["mcp_playwright"]
           and smap["grafana-users"] == ["mcp_grafana"], str(smap))
     groups = [d for d in docs if d.get("kind") == "KanidmGroup"]
     workload_grp = next((g for g in groups if g["metadata"]["name"] == "mcp-gateway-agents"), None)
@@ -378,7 +426,8 @@ def main():
           and workload_grp["spec"]["members"] == ["grafana-mcp"],
           str(workload_grp["spec"]["members"] if workload_grp else None))
     for g in groups:
-        if g["metadata"]["name"] in ("mcp-context7-users", "mcp-firecrawl-users"):
+        if g["metadata"]["name"] in ("mcp-context7-users", "mcp-firecrawl-users",
+                                      "mcp-playwright-users"):
             check(f"group {g['metadata']['name']} has no members field (person membership is manual)",
                   "members" not in g.get("spec", {}),
                   str(list(g.get("spec", {}).keys())))
