@@ -408,10 +408,10 @@ agentgateway-standalone:
               statefulMode: stateless
 
       # ---------------------------------------------------------------------
-      # grafana: DISABLED. The route is fully specified below and stays
-      # commented out until Grafana's `auth.jwt` trusts the `mcp-gateway` client
-      # (today it trusts `grafana`; enabling this route now would authenticate the
-      # caller at the edge and then fail at the backend).
+      # grafana: LIVE. The cutover landed, so Grafana's `auth.jwt` trusts the
+      # `mcp-gateway` client and this route renders into the gateway config
+      # (verified: `passthrough: {}` is present in the `helm template` output, and
+      # route-checks.py asserts the route is live from the rendered config).
       #
       # Difference from context7, both required and both measured:
       #   * `backendAuth.passthrough` forwards the CALLER'S OWN validated bearer,
@@ -427,9 +427,9 @@ agentgateway-standalone:
       #   * The Grafana URL and service-account headers are caller-controllable
       #     overrides in mcp-grafana; they are stripped unconditionally.
       #
-      # This block is not decorative: route-checks.py un-comments it, parses it,
-      # and boots it against the pinned binary, so the day the cutover lands it is
-      # a move-the-`#` change with nothing left to discover.
+      # This block is not decorative: route-checks.py parses the rendered route and
+      # boots it against the pinned binary, so a change here is validated before it
+      # reaches the cluster.
       #
       - name: grafana
         gateways:

@@ -15,9 +15,9 @@ Covers:
   2. context7 route: strict Kanidm issuer/audience/JWKS, per-route resource URL and scope,
      fail-closed authorization rules, the full credential/URL-override strip list, no
      backendAuth, stateless;
-  3. the disabled grafana route: it exists in values.yaml as a real, parseable YAML block
-     (un-commented here and compared), with backendAuth passthrough, its own per-route scope,
-     and pointing at the canonical in-cluster host;
+  3. the grafana route (live since the cutover): read from the rendered config, with
+     backendAuth passthrough, its own per-route scope, and pointing at the canonical
+     in-cluster host;
   4. RFC 9728 discovery: both exact paths, gateway-served, literal JSON body (NOT base64),
      CEL-quoted headers, resource = the absolute route URL, authorization_servers = the
      Kanidm per-client issuer, per-route scopes_supported, and paths disjoint from the MCP
@@ -29,10 +29,8 @@ Covers:
      no admin listener.
 """
 import json
-import re
 import subprocess
 import sys
-import textwrap
 
 import yaml
 
@@ -80,30 +78,6 @@ def authn_resource(route):
 def path_of(route):
     """The single match's path condition as ('exact'|'pathPrefix'|..., value)."""
     return tuple(next(iter(m["path"].items())) for m in route["matches"])
-
-
-def commented_block(values_text, header):
-    """Recover a commented-out YAML block from values.yaml.
-
-    The disabled grafana route is kept in values.yaml as commented YAML so that the exact
-    config that would go live is reviewable. Reading it back here (and parsing it) is what
-    stops that comment from rotting into fiction.
-    """
-    lines = values_text.splitlines()
-    try:
-        start = next(i for i, l in enumerate(lines) if l.strip() == f"# {header}")
-    except StopIteration:
-        return None
-    out = []
-    for line in lines[start:]:
-        stripped = line.lstrip(" ")
-        indent = len(line) - len(stripped)
-        if not stripped.startswith("#"):
-            break
-        if re.fullmatch(r"#\s*-{3,}", stripped):  # closing rule ends the block
-            break
-        out.append(" " * indent + stripped[2:])
-    return textwrap.dedent("\n".join(out))
 
 
 def main():
@@ -243,8 +217,8 @@ def main():
         check("firecrawl target has no backendTLS (plain HTTP inside the cluster)",
               "backendTLS" not in (ftgt.get("policies") or {}))
 
-    # ---------------- 3. grafana (PRESENT, DISABLED) ----------------
-    # The grafana route is now live (enabled=true), so we check it directly from the rendered config
+    # ---------------- 3. grafana (PRESENT, LIVE) ----------------
+    # The grafana route is live (enabled=true), so we check it directly from the rendered config
     graf = by_name(routes, "grafana")
     check("grafana route is live (enabled=true)",
           graf is not None, "grafana route should be rendered when backend is enabled")
