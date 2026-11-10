@@ -79,6 +79,7 @@ forgejo:
         OPENID_CONNECT_SCOPES: email
       server:
         LANDING_PAGE: explore
+        DOMAIN: git.grigri.cloud
         ROOT_URL: https://git.grigri.cloud
         SSH_DOMAIN: git.grigri.cloud
         SSH_PORT: 29518
