@@ -4,12 +4,15 @@
 # NOT synced by ArgoCD (test/ is outside apps/ and system/).
 # Owner applies explicitly after the foundation is deployed, then deletes.
 #
-# NOTE: This Job has NOT been applied since the CNP replaced the native NetworkPolicy.
-# This run is its first re-verification against the current CNP shape.
+# RE-RUN 2026-11-10: Previous run failed because the blocked-detection parsing was wrong.
+# The probe() function did `curl ... || echo 000`, which concatenated curl's http_code `000`
+# (emitted on connection failure) with the fallback `echo 000`, producing `000000`. The case
+# statement expected `000` and classified `000000` as "NOT blocked". Fixed: capture curl's
+# exit code separately; non-zero exit OR http_code 000 means blocked.
 #
 # Why a separate namespace: a 404 from the gateway would prove nothing about the
 # policy (empty routes already 404 on the admin plane). A blocked TCP connect proves
-# the policy is enforcing, so this Job must observe a TIMEOUT, not an HTTP status.
+# the policy is enforcing, so this Job must observe a TIMEOUT or REFUSED, not an HTTP status.
 #
 # Scope of the policy under test (apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml):
 #   ingress 15021 <- fromEntities: [world] (kubelet probes; `world` does NOT admit
@@ -26,6 +29,7 @@ metadata:
   namespace: default
 spec:
   backoffLimit: 0
+  activeDeadlineSeconds: 180
   ttlSecondsAfterFinished: 900
   template:
     metadata:
@@ -45,37 +49,39 @@ spec:
               set -eu
               fail() { echo "FAIL: $*" >&2; exit 1; }
               ok() { echo "  ok ($*)"; }
-              GW=mcp-gateway.mcp-gateway.svc.cluster.local
+              GW=mcp-gateway-standalone.mcp-gateway.svc.cluster.local
+              pass=0
 
-              probe() { # url -> prints http_code, or 000 on connect timeout/refusal
-                curl -s -o /dev/null -w '%{http_code}' --max-time 4 "$1" 2>/dev/null || echo 000
+              # probe URL -> sets _code (http_code) and _rc (curl exit code).
+              # curl always emits a 3-digit http_code (000 on connect failure);
+              # the exit code is non-zero when curl could not complete the request.
+              probe() {
+                _rc=0
+                _code=$(curl -s -o /dev/null -w '%{http_code}' \
+                  --connect-timeout 3 --max-time 5 "$1" 2>/dev/null) || _rc=$?
+                : "${_code:=000}"
+              }
+
+              assert_blocked() { # label url
+                probe "$2"
+                if [ "$_rc" -ne 0 ] || [ "$_code" = "000" ]; then
+                  ok "$1 blocked (exit=$_rc code=$_code)"
+                  pass=$((pass + 1))
+                else
+                  fail "$1 NOT blocked: exit=$_rc code=$_code"
+                fi
               }
 
               echo "[1] cross-namespace -> gateway:3000 must be DENIED"
-              code=$(probe "http://${GW}:3000/mcp")
-              case "$code" in
-                000) ok "blocked as expected" ;;
-                404) fail "NOT blocked: reached the gateway (policy gap)" ;;
-                *)   fail "NOT blocked: got HTTP $code" ;;
-              esac
+              assert_blocked "MCP port" "http://${GW}:3000/mcp"
 
               echo "[2] cross-namespace -> gateway:15020 metrics must be DENIED"
-              code=$(probe "http://${GW}:15020/metrics")
-              case "$code" in
-                000) ok "blocked as expected" ;;
-                200) fail "metrics reachable from another namespace" ;;
-                *)   fail "unexpected HTTP $code" ;;
-              esac
+              assert_blocked "metrics port" "http://${GW}:15020/metrics"
 
               echo "[3] cross-namespace -> gateway:15021 healthz must be DENIED"
-              code=$(probe "http://${GW}:15021/healthz/ready")
-              case "$code" in
-                000) ok "blocked as expected" ;;
-                200) fail "healthz reachable from another namespace" ;;
-                *)   fail "unexpected HTTP $code" ;;
-              esac
+              assert_blocked "healthz port" "http://${GW}:15021/healthz/ready"
 
-              echo "ALL PASS: default-deny for the gateway plane holds"
+              echo "NETPOL_VERIFY_PASS ($pass/3 assertions passed)"
           resources:
             requests:
               cpu: 10m

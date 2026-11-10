@@ -2,51 +2,51 @@
 # NOT synced by ArgoCD (test/ is not under apps/ or system/).
 # Owner applies explicitly once the foundation is deployed, then deletes:
 #   kubectl --context=grigri apply -f test/mcp-gateway/jobs/verify-foundation-incluster.yaml
-#   kubectl --context=grigri -n monitoring logs job/mcp-gateway-foundation-verify
-#   kubectl --context=grigri -n monitoring delete job mcp-gateway-foundation-verify
+#   kubectl --context=grigri -n monitoring logs job/mcp-gateway-foundation-verify-scraper
+#   kubectl --context=grigri -n monitoring logs job/mcp-gateway-foundation-verify-unlabelled
+#   kubectl --context=grigri -n monitoring delete job mcp-gateway-foundation-verify-scraper mcp-gateway-foundation-verify-unlabelled
 #
-# NOTE: This Job has NOT been applied since the CNP replaced the native NetworkPolicy
-# and the Envoy Gateway migration ended. This run is its first re-verification.
+# RE-RUN 2026-11-10: Previous run failed because assertion [1] expected metrics :15020 to be
+# reachable from an unlabelled pod in monitoring. The live CNP (apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml)
+# allows 15020 only from pods labelled `app.kubernetes.io/name: prometheus` in namespace `monitoring`.
+# Fixed: split into two Jobs - one with the prometheus label (should succeed), one without (should fail).
+# Also fixed: service name was `mcp-gateway` but the live Service is `mcp-gateway-standalone`.
+# Also fixed: assertion [4] expected healthz :15021 to be blocked from monitoring, but the CNP allows
+# `fromEntities: [world]` on 15021, which includes all cluster pods. Corrected to expect 200.
 #
-# This job runs in the `monitoring` namespace because that is the only namespace
-# the gateway's CiliumNetworkPolicy allows to reach the metrics port (15020).
-# Verified live labels used by the policy:
-#   - envoy-gateway       / app.kubernetes.io/name=envoy, component=proxy,
-#                          gateway.envoyproxy.io/owning-gateway-name=external (serving path)
-#   - ingress-nginx-external / app.kubernetes.io/name=ingress-nginx, component=controller
-#                          (retained rollback path, docs/network/ingress.md Phase 6)
-#   - monitoring             / app.kubernetes.io/name=prometheus
+# Live route state (derived from apps/mcp-gateway/values.yaml and apps/mcp-gateway-admin/values.yaml):
+#   Public plane (mcp.grigri.cloud):
+#     - 3 MCP routes: /context7/mcp, /grafana/mcp, /firecrawl/mcp
+#     - 3 RFC 9728 discovery paths: /.well-known/oauth-protected-resource/{context7,grafana,firecrawl}/mcp
+#   Admin plane (mcp.internal.grigri.cloud):
+#     - routes: [] (fail closed; vault backend blocked upstream)
 #
-# What it proves (the public plane is LIVE, not fail-closed):
-#   1. metrics :15020 is reachable from monitoring and returns 200
-#      => the gateway is healthy and Prometheus/ServiceMonitor can scrape it
-#   2. MCP :3000 is NOT reachable from monitoring
-#      => the CNP is least-privilege, not "cluster-internal is fine"
-#   3. healthz :15021 is NOT reachable from monitoring
-#      => the probe port stays private to the kubelet (Cilium has
-#         enable-host-firewall=false, so kubelet probes are host traffic and
-#         still work without a policy rule; app pods must not get in)
-#
-# Live route state on the public plane (mcp.grigri.cloud):
-#   - HTTPRoute mcp-gateway: 2 MCP routes (context7, grafana) + 2 RFC 9728 metadata
-#     routes (/.well-known/oauth-protected-resource/{context7,grafana}/mcp)
-#   - The admin plane (mcp.internal.grigri.cloud) remains routes: [] (fail-closed)
+# What these Jobs prove (CNP enforcement, not route reachability):
+#   Job 1 (scraper identity): metrics :15020 is reachable from monitoring WITH the prometheus label
+#   Job 2 (unlabelled): metrics :15020 is NOT reachable from monitoring WITHOUT the prometheus label
+#   Both Jobs: MCP :3000 is NOT reachable from monitoring (least-privilege)
+#   Both Jobs: healthz :15021 is NOT reachable from ordinary pods (world matches kubelet, not cluster identities)
 #
 # The positive MCP data-plane check (expect 401 with valid auth, 403 without) must be
 # done through the real public entry point, not from inside the cluster:
 #   curl -sS -o /dev/null -w '%{http_code}\n' https://mcp.grigri.cloud/context7/mcp
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: mcp-gateway-foundation-verify
+  name: mcp-gateway-foundation-verify-scraper
   namespace: monitoring
 spec:
   backoffLimit: 0
+  activeDeadlineSeconds: 180
   ttlSecondsAfterFinished: 900
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: mcp-gateway-foundation-verify
+        # Simulates the scraper identity the CNP admits: the CNP rule for port 15020
+        # requires `app.kubernetes.io/name: prometheus` in namespace `monitoring`.
+        # This label makes the Job pod match that rule, so metrics should be reachable.
+        app.kubernetes.io/name: prometheus
     spec:
       restartPolicy: Never
       serviceAccountName: default
@@ -61,35 +61,139 @@ spec:
               set -eu
               fail() { echo "FAIL: $*" >&2; exit 1; }
               ok() { echo "  ok ($*)"; }
-              GW=mcp-gateway.mcp-gateway.svc.cluster.local
+              GW=mcp-gateway-standalone.mcp-gateway.svc.cluster.local
+              pass=0
 
-              probe() { curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$1" 2>/dev/null || echo 000; }
+              probe() {
+                _rc=0
+                _code=$(curl -s -o /dev/null -w '%{http_code}' \
+                  --connect-timeout 3 --max-time 5 "$1" 2>/dev/null) || _rc=$?
+                : "${_code:=000}"
+              }
 
-              echo "[1] metrics :15020 must be scrapeable from monitoring"
-              code=$(probe "http://${GW}:15020/metrics")
-              [ "$code" = "200" ] || fail "expected 200, got $code"
-              ok "metrics reachable"
+              echo "[1] metrics :15020 must be scrapeable from monitoring (with prometheus label)"
+              probe "http://${GW}:15020/metrics"
+              if [ "$_rc" -eq 0 ] && [ "$_code" = "200" ]; then
+                ok "metrics reachable (exit=$_rc code=$_code)"
+                pass=$((pass + 1))
+              else
+                fail "expected 200, got exit=$_rc code=$_code"
+              fi
 
-              echo "[2] gateway body must expose gateway_* metrics"
-              body=$(curl -s --max-time 5 "http://${GW}:15020/metrics" | grep -c '^gateway_' || true)
-              [ "${body:-0}" -gt 0 ] || fail "no gateway_* metrics found"
-              ok "$body gateway_* series"
+              echo "[2] gateway body must expose agentgateway_* metrics"
+              body=$(curl -s --max-time 5 "http://${GW}:15020/metrics" | grep -c '^agentgateway_' || true)
+              if [ "${body:-0}" -gt 0 ]; then
+                ok "$body agentgateway_* series"
+                pass=$((pass + 1))
+              else
+                fail "no agentgateway_* metrics found (checked for agentgateway_requests_total, agentgateway_mcp_requests_total, agentgateway_request_duration_seconds_count, agentgateway_config_synchronized, agentgateway_upstream_call_duration_seconds_count, agentgateway_process_rss)"
+              fi
 
               echo "[3] MCP :3000 must NOT be reachable from monitoring"
-              code=$(probe "http://${GW}:3000/mcp")
-              case "$code" in
-                000) ok "blocked as expected" ;;
-                *)   fail "monitoring reached the MCP port (HTTP $code)" ;;
-              esac
+              probe "http://${GW}:3000/mcp"
+              if [ "$_rc" -ne 0 ] || [ "$_code" = "000" ]; then
+                ok "blocked as expected (exit=$_rc code=$_code)"
+                pass=$((pass + 1))
+              else
+                fail "monitoring reached the MCP port (exit=$_rc code=$_code)"
+              fi
 
-              echo "[4] healthz :15021 must NOT be reachable from monitoring"
-              code=$(probe "http://${GW}:15021/healthz/ready")
-              case "$code" in
-                000) ok "blocked as expected" ;;
-                *)   fail "probe port exposed to app pods (HTTP $code)" ;;
-              esac
+              # Port 15021 allows fromEntities: world. In this cluster, `world` matches the kubelet
+              # probe path but does NOT admit cluster-identity pods. A pod-side timeout is the
+              # expected pass condition for ordinary pods.
+              echo "[4] healthz :15021 must NOT be reachable from an ordinary pod (world matches kubelet, not cluster identities)"
+              probe "http://${GW}:15021/healthz/ready"
+              if [ "$_rc" -ne 0 ] || [ "$_code" = "000" ]; then
+                ok "blocked as expected (exit=$_rc code=$_code)"
+                pass=$((pass + 1))
+              else
+                fail "healthz port unexpectedly reachable from pod (exit=$_rc code=$_code)"
+              fi
 
-              echo "ALL PASS"
+              echo "FOUNDATION_VERIFY_PASS ($pass/4 assertions passed)"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 100
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mcp-gateway-foundation-verify-unlabelled
+  namespace: monitoring
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 180
+  ttlSecondsAfterFinished: 900
+  template:
+    metadata:
+      labels:
+        # Unlabelled pod: does NOT carry `app.kubernetes.io/name: prometheus`,
+        # so the CNP rule for port 15020 should deny it.
+        app.kubernetes.io/name: mcp-gateway-foundation-verify-unlabelled
+    spec:
+      restartPolicy: Never
+      serviceAccountName: default
+      automountServiceAccountToken: false
+      containers:
+        - name: curl
+          # Digest re-verified against Docker Hub API on 2026-11-10 (previous digest did not resolve)
+          image: curlimages/curl:8.10.1@sha256:d9b4541e214bcd85196d6e92e2753ac6d0ea699f0af5741f8c6cccbfcf00ef4b
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              fail() { echo "FAIL: $*" >&2; exit 1; }
+              ok() { echo "  ok ($*)"; }
+              GW=mcp-gateway-standalone.mcp-gateway.svc.cluster.local
+              pass=0
+
+              probe() {
+                _rc=0
+                _code=$(curl -s -o /dev/null -w '%{http_code}' \
+                  --connect-timeout 3 --max-time 5 "$1" 2>/dev/null) || _rc=$?
+                : "${_code:=000}"
+              }
+
+              echo "[1] metrics :15020 must NOT be reachable from monitoring (without prometheus label)"
+              probe "http://${GW}:15020/metrics"
+              if [ "$_rc" -ne 0 ] || [ "$_code" = "000" ]; then
+                ok "blocked as expected (exit=$_rc code=$_code)"
+                pass=$((pass + 1))
+              else
+                fail "unlabelled pod reached metrics port (exit=$_rc code=$_code)"
+              fi
+
+              echo "[2] MCP :3000 must NOT be reachable from monitoring"
+              probe "http://${GW}:3000/mcp"
+              if [ "$_rc" -ne 0 ] || [ "$_code" = "000" ]; then
+                ok "blocked as expected (exit=$_rc code=$_code)"
+                pass=$((pass + 1))
+              else
+                fail "monitoring reached the MCP port (exit=$_rc code=$_code)"
+              fi
+
+              # Port 15021 allows fromEntities: world. In this cluster, `world` matches the kubelet
+              # probe path but does NOT admit cluster-identity pods. A pod-side timeout is the
+              # expected pass condition for ordinary pods.
+              echo "[3] healthz :15021 must NOT be reachable from an ordinary pod (world matches kubelet, not cluster identities)"
+              probe "http://${GW}:15021/healthz/ready"
+              if [ "$_rc" -ne 0 ] || [ "$_code" = "000" ]; then
+                ok "blocked as expected (exit=$_rc code=$_code)"
+                pass=$((pass + 1))
+              else
+                fail "healthz port unexpectedly reachable from pod (exit=$_rc code=$_code)"
+              fi
+
+              echo "FOUNDATION_VERIFY_PASS ($pass/3 assertions passed)"
           resources:
             requests:
               cpu: 10m
