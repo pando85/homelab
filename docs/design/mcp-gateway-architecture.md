@@ -14,8 +14,8 @@ Matrix numbers and the reasoning trail:
 `docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Measured answer"); durable rule and the
 proven split-port shape: `docs/conventions/cilium.md`.
 **Neither `9049af3bf` plane ever reached Ready**, so session-key stability across reconciles was never
-observed *at that revision*. The MVP is now live and network-isolated on the official
-`agentgateway-standalone` v1.7.0 chart: the public plane serves `/grafana/mcp`, `/context7/mcp`, and `/firecrawl/mcp`
+observed *at that revision*. The MVP is now live and network-isolated: the public gateway uses the official
+`agentgateway-standalone` v1.7.0 chart, while the admin gateway uses `app-template` 5.3.0: the public plane serves `/grafana/mcp`, `/context7/mcp`, and `/firecrawl/mcp`
 plus three RFC 9728 protected-resource metadata routes; the admin plane serves `routes: []` (deliberate fail-closed; the
 Vault backend is deferred by owner decision 2026-11-10). Backend parity through the gateway is
 demonstrated (acceptance record in `planning/mcp-gateway-implementation.md`). Network isolation
@@ -24,7 +24,7 @@ live and `Valid=True` in the measured split-port shape.
 **Provisional placement:** both planes and the diagnostic canary are pinned to node `prusik` via
 `nodeSelector: kubernetes.io/hostname=prusik` for diagnosis and initial rollout, accepting a
 single-node failure domain. Placement will be revisited after the isolated planes run stably.
-**Date:** 2026-11-08 (corrected 2026-11-09 after the probe matrix)
+**Date:** 2026-11-10 (implementation status; probe matrix corrected 2026-11-09)
 **Implementation plan:** [`planning/mcp-gateway-implementation.md`](https://github.com/pando85/homelab/blob/master/planning/mcp-gateway-implementation.md)
 
 ## Overview
@@ -41,7 +41,8 @@ future work.
 
 ### In Scope (MVP)
 
-- **Upstream agentgateway**: Official standalone v1.7.0 chart on both planes
+- **Upstream agentgateway**: Official `agentgateway-standalone` v1.7.0 chart on the public plane;
+  `app-template` 5.3.0 deploying the same agentgateway binary on the admin plane
 - **Two deployments**: Public `apps/mcp-gateway` and private `apps/mcp-gateway-admin` in separate namespaces.
   Admin does NOT expose Vault admin backend to public plane
 - **Native MCP OAuth**: OpenCode → MCP OAuth discovery → Kanidm auth-code + PKCE → access token.
@@ -95,7 +96,7 @@ future work.
 Additional MCPs appear as an unconnected placeholder, not as deployed integrations.
 
 **Identity:** OpenCode uses OAuth2 authorization code + PKCE; Hermes uses Kanidm-issued tokens.
-The gateway validates issuer, audience, and per-route scope. MCP backend services have no
+The gateway validates issuer, audience, and per-route scope. In-cluster MCP backend services have no
 independent public ingress; gateway audit events are sent to Loki.
 
 **Admin plane (deployed, inactive):** Envoy `internal` routes `mcp.internal.grigri.cloud`
