@@ -144,24 +144,7 @@ spec:
   dnsNames:
     - www.mintpsicologia.es
 ---
-# internal Gateway, listener https-runners-staging-forkline-dev (calypso runner verification;
-# *.staging.forkline.dev does not cover two labels)
-apiVersion: cert-manager.io/v1
-kind: Certificate
-metadata:
-  name: internal-app-staging-forkline-dev
-  annotations:
-    argocd.argoproj.io/sync-wave: "2"
-spec:
-  secretName: internal-app-staging-forkline-dev-tls
-  issuerRef:
-    name: letsencrypt-prod-dns
-    kind: ClusterIssuer
-  dnsNames:
-    - "*.app.staging.forkline.dev"
----
-# external Gateway, listener https-runners-staging-forkline-dev (calypso runners). Issued ahead of
-# the listener so the swap from tls-bridge-runners never waits for DNS-01.
+# external Gateway, listener https-runners-staging-forkline-dev (calypso runners).
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
