@@ -203,7 +203,9 @@ auth:
 backends:
   # grafana is NOT an admin-plane backend: the approved architecture puts Grafana MCP on
   # the public plane (`mcp.grigri.cloud`), so the disabled delegation candidate lives in
-  # apps/mcp-gateway/values.yaml. The admin plane serves Vault only, and only Vault.
+  # apps/mcp-gateway/values.yaml. This plane carries privileged backends only: Vault MCP
+  # is deferred (planning/vault-mcp-implementation.md) and the read-only pfSense MCP is the
+  # first planned route, blocked at phase 0 (planning/pfsense-mcp-implementation.md).
   # (grafana removed here as an unapproved deviation; see planning doc Task 2 / Task 3.)
 
   vault:
