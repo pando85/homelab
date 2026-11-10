@@ -87,6 +87,34 @@ app-template:
         - backendRefs:
             - identifier: bazarr
               port: 6767
+    # PWA manifest: browsers fetch it without credentials (no login redirect)
+    external-manifest:
+      kind: HTTPRoute
+      forceRename: bazarr-external-manifest
+      hostnames:
+        - bazarr.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - matches:
+            - path:
+                type: Exact
+                value: /manifest.webmanifest
+          filters:
+            - type: RequestHeaderModifier
+              requestHeaderModifier:
+                remove:
+                  # bypass routes carry no SecurityPolicy: never let a client choose the user
+                  - X-Auth-Request-User
+                  - X-Auth-Request-Email
+                  - X-Auth-Request-Preferred-Username
+                  - X-Auth-Request-Groups
+                  - X-Auth-Request-Access-Token
+          backendRefs:
+            - identifier: bazarr
+              port: 6767
   defaultPodOptions:
     securityContext:
       runAsUser: 995
