@@ -22,7 +22,8 @@
 # METRIC NAMES — VERIFIED against live Prometheus (2026-10-10, 20:20Z window):
 #   - traces_spanmetrics_calls_total{service="calypso-control-plane"}: 12 series present.
 #     - Label is `service`, NOT `service_name` (verified via `count by (service)` returning
-#       calypso-control-plane, calypso-auth-proxy, keycloak, kiais-gateway, nginx-external).
+#       calypso-control-plane, calypso-auth-proxy, keycloak, kiais-gateway and the edge proxy, now
+#       `envoy-external`).
 #   - tempo_metrics_generator_spans_discarded_total{reason=...} present with reasons
 #     invalid_utf8, outside_metrics_ingestion_slack (56 cumulative, structural — long-lived
 #     k8s watch spans exceed the 60s slack), span_metrics_filtered, trace_too_large.
