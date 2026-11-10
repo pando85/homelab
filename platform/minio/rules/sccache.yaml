@@ -1,0 +1,80 @@
+# Alerts for the sccache S3 bucket (see docs/troubleshooting/sccache-s3-bucket-full-silent.md).
+# Series come from the `minio-bucket` Probe (templates/probe-bucket.yaml). The quota is read from
+# minio_bucket_quota_total_bytes, which the provisioning hook sets from
+# templates/sccache-config.yaml (SCCACHE_QUOTA_BYTES), so no byte value is repeated here.
+- alert: SccacheBucketUsageHigh
+  annotations:
+    summary: sccache bucket is above 70% of its quota
+    description: |
+      The sccache bucket uses {{ $value | humanizePercentage }} of its quota. Expiry normally keeps it
+      below about 70%; check ingest and the lifecycle rule before it reaches the quota and CI stops
+      writing to the S3 cache tier.
+    runbook_url: https://github.com/pando85/homelab/blob/master/docs/troubleshooting/sccache-s3-bucket-full-silent.md
+  expr: |
+    minio_bucket_usage_total_bytes{job="minio-bucket",bucket="sccache"}
+      / on (bucket) minio_bucket_quota_total_bytes{job="minio-bucket",bucket="sccache"} > 0.70
+  for: 30m
+  labels:
+    severity: warning
+- alert: SccacheBucketUsageCritical
+  annotations:
+    summary: sccache bucket is above 90% of its quota
+    description: |
+      The sccache bucket uses {{ $value | humanizePercentage }} of its quota. Past 100% MinIO rejects
+      PUTs and sccache (write error policy l0) hides it from jobs.
+    runbook_url: https://github.com/pando85/homelab/blob/master/docs/troubleshooting/sccache-s3-bucket-full-silent.md
+  expr: |
+    minio_bucket_usage_total_bytes{job="minio-bucket",bucket="sccache"}
+      / on (bucket) minio_bucket_quota_total_bytes{job="minio-bucket",bucket="sccache"} > 0.90
+  for: 15m
+  labels:
+    severity: critical
+- alert: SccacheBucketFullIn24h
+  annotations:
+    summary: sccache bucket is predicted to reach its quota within 24h
+    description: |
+      A linear fit over the last 6h puts the sccache bucket at {{ $value | humanize1024 }}B in 24h,
+      above its quota.
+    runbook_url: https://github.com/pando85/homelab/blob/master/docs/troubleshooting/sccache-s3-bucket-full-silent.md
+  # Skip a bucket that is already over the quota; SccacheBucketUsageCritical covers it.
+  expr: |
+    (
+      predict_linear(minio_bucket_usage_total_bytes{job="minio-bucket",bucket="sccache"}[6h], 24 * 3600)
+        > on (bucket) minio_bucket_quota_total_bytes{job="minio-bucket",bucket="sccache"}
+    )
+    and on (bucket)
+    (
+      minio_bucket_usage_total_bytes{job="minio-bucket",bucket="sccache"}
+        < on (bucket) minio_bucket_quota_total_bytes{job="minio-bucket",bucket="sccache"}
+    )
+  for: 1h
+  labels:
+    severity: warning
+- alert: SccachePutRejections
+  annotations:
+    summary: MinIO is rejecting PUTs on the sccache bucket
+    description: |
+      PUT requests to the sccache bucket have returned 4xx for 30m ({{ $value | humanize }}/s). The
+      usual cause is "Bucket quota exceeded"; CI keeps building from the local cache but the S3 tier
+      stops filling. GET 4xx are normal cache misses and are not counted.
+    runbook_url: https://github.com/pando85/homelab/blob/master/docs/troubleshooting/sccache-s3-bucket-full-silent.md
+  expr: |
+    sum by (bucket) (rate(minio_bucket_requests_4xx_errors_total{job="minio-bucket",bucket="sccache",api="putobject"}[10m])) > 0
+  for: 30m
+  labels:
+    severity: warning
+- alert: SccacheLifecycleNotExpiring
+  annotations:
+    summary: sccache bucket usage keeps growing past the expiry window
+    description: |
+      The lowest sccache usage of the last 7 days is above the highest usage of the day 8 days ago, so
+      nothing is expiring (expiry is 7 days, see SCCACHE_EXPIRY_DAYS). Check the lifecycle rule
+      (`mc ilm rule ls`) and the provisioning hook. Only meaningful once 9 days of
+      history exist for the series.
+    runbook_url: https://github.com/pando85/homelab/blob/master/docs/troubleshooting/sccache-s3-bucket-full-silent.md
+  expr: |
+    min_over_time(minio_bucket_usage_total_bytes{job="minio-bucket",bucket="sccache"}[7d])
+      > max_over_time(minio_bucket_usage_total_bytes{job="minio-bucket",bucket="sccache"}[1d] offset 8d)
+  for: 6h
+  labels:
+    severity: info

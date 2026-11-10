@@ -1,0 +1,45 @@
+{{- /*
+Per-bucket MinIO metrics (usage, quota, object count, per-bucket requests and traffic).
+
+The chart-rendered Probe `minio-cluster` (job `minio`) only scrapes /minio/v2/metrics/cluster.
+Per-bucket series exist only on /minio/v2/metrics/bucket, so this second Probe scrapes it with the
+same pattern (MINIO_PROMETHEUS_AUTH_TYPE=public, so no bearer token). Job `minio-bucket`.
+
+The raw endpoint exposes ~690 series for 4 buckets (396 are TTFB histograms, 44+44 requests and
+inflight per api, size/version distributions). The relabelling keeps only what dashboards and
+alerts use, about 36 series (4 buckets):
+  - usage bytes / object count / traffic received+sent: all buckets
+  - quota: only buckets that have one (sccache)
+  - requests_total and requests_4xx_errors_total: only the object data-path apis
+Cluster-wide TTFB comes from the `minio` job (minio_s3_requests_ttfb_seconds_distribution).
+
+Usage is computed by the MinIO scanner, so scraping faster than 60s adds nothing.
+*/ -}}
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: minio-bucket
+  labels:
+    app: minio
+    release: monitoring
+spec:
+  jobName: minio-bucket
+  interval: 60s
+  scrapeTimeout: 30s
+  prober:
+    url: minio.minio:9000
+    path: /minio/v2/metrics/bucket
+    scheme: http
+  targets:
+    staticConfig:
+      static:
+        - minio.minio
+  metricRelabelings:
+    # __name__;api is joined with ";" (api is empty for series without it); the regex is anchored.
+    - action: keep
+      sourceLabels: [__name__, api]
+      regex: >-
+        minio_bucket_(usage_total_bytes|usage_object_total|quota_total_bytes|traffic_(received|sent)_bytes);.*|minio_bucket_requests(_4xx_errors)?_total;(getobject|putobject|headobject|listobjectsv[12]|putobjectpart|completemultipartupload)
+    # Constant "127.0.0.1:9000", carries no information.
+    - action: labeldrop
+      regex: server

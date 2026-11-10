@@ -1,0 +1,14 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: minio
+  labels:
+    # The main Prometheus selects rules by release=monitoring.
+    release: monitoring
+spec:
+  groups:
+    - name: minio-sccache.rules
+      rules:
+{{- range $path, $_ := .Files.Glob "rules/*.yaml" }}
+{{ $.Files.Get $path | indent 8 }}
+{{- end }}
