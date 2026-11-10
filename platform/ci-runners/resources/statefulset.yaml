@@ -61,6 +61,20 @@ spec:
             - sh
             - -c
             - |
+              # One-shot removal of the legacy single-daemon sccache directory. Unused
+              # since 2026-11-06, when the Calypso sccache action moved to leased slots
+              # under /cache/sccache-slots (nothing in it was modified after that date on
+              # either runner; the owner approved deleting it). Idempotent: a no-op once
+              # the directory is gone. The exact path is used on purpose, no globs:
+              # /cache/sccache-slots, /cache/sccache-daemon and /cache/cargo* must stay.
+              # REMOVE THIS BLOCK once both runners have rolled past 2026-11-10.
+              if [ -d /cache/sccache ]; then
+                legacy_kib=$(du -sk /cache/sccache 2>/dev/null | cut -f1)
+                echo "removing legacy /cache/sccache (${legacy_kib:-unknown} KiB)"
+                rm -rf /cache/sccache
+                echo "legacy /cache/sccache removed"
+              fi
+
               retries=0
               max_retries=10
               while [ ! -S /sock/docker.sock ]; do
