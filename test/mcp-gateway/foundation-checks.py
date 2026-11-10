@@ -11,7 +11,8 @@ enabled - the pod, the probes, the session key, the ingress, the identity client
   * probes are correct (startup/readiness on 15021 /healthz/ready);
   * JWT validation values in the RENDERED config are the exact Kanidm per-client
     issuer/audience/JWKS (the config is the only source - there is no second copy);
-  * image pinned to v1.7.0, ingress nginx-external with TLS, service ClusterIP only,
+  * image pinned to v1.7.0, HTTPRoute (serving path via Envoy Gateway external) +
+    Ingress nginx-external with TLS (retained rollback path), service ClusterIP only,
     adminAddr "off" (no admin listener), hardened container;
   * human scope grants carry no identity scopes and no person membership is declared;
   * SESSION_KEY is a required secretKeyRef (fail-closed).
@@ -149,11 +150,36 @@ def main():
               "cr.agentgateway.dev/agentgateway:v1.7.0" in image,
               image)
 
-    # ---- ingress ----
+    # ---- serving path (HTTPRoute) and rollback path (Ingress) ----
+    # The Envoy Gateway migration has ended. The HTTPRoute is the SERVING path for
+    # mcp.grigri.cloud; the Ingress is retained as the documented rollback path
+    # (docs/network/ingress.md, ingress-migration Phase 6). Both must exist and agree
+    # on host and backend so a rollback is a DNS/annotation flip, not a chart change.
+    hr = find(docs, "HTTPRoute")
+    check("HTTPRoute exists (serving path via Envoy Gateway)", hr is not None)
+    if hr:
+        prefs = hr["spec"].get("parentRefs", [])
+        check("HTTPRoute parentRef gateway is 'external' in namespace envoy-gateway",
+              len(prefs) == 1 and prefs[0].get("name") == "external"
+              and prefs[0].get("namespace") == "envoy-gateway",
+              str(prefs))
+        check("HTTPRoute sectionName is https-grigri-cloud",
+              prefs[0].get("sectionName") == "https-grigri-cloud" if prefs else False)
+        check("HTTPRoute hostname is mcp.grigri.cloud",
+              hr["spec"].get("hostnames") == ["mcp.grigri.cloud"])
+        rules = hr["spec"].get("rules", [])
+        if rules:
+            bref = rules[0].get("backendRefs", [{}])[0]
+            check("HTTPRoute backend is Service mcp-gateway-standalone port 3000",
+                  bref.get("name") == "mcp-gateway-standalone" and bref.get("port") == 3000,
+                  f"name={bref.get('name')} port={bref.get('port')}")
+
+    # The Ingress is the ROLLBACK path. It carries no traffic while the HTTPRoute is
+    # attached to the Envoy Gateway, but must stay deployable so a rollback is instant.
     ing = find(docs, "Ingress")
-    check("Ingress exists", ing is not None)
+    check("Ingress exists (retained rollback path, docs/network/ingress.md)", ing is not None)
     if ing:
-        check("ingress className is nginx-external",
+        check("ingress className is nginx-external (rollback, not serving)",
               ing["spec"].get("ingressClassName") == "nginx-external")
         tls = ing["spec"].get("tls", [])
         check("TLS is configured",

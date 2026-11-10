@@ -5,26 +5,36 @@
 #   kubectl --context=grigri -n monitoring logs job/mcp-gateway-foundation-verify
 #   kubectl --context=grigri -n monitoring delete job mcp-gateway-foundation-verify
 #
+# NOTE: This Job has NOT been applied since the CNP replaced the native NetworkPolicy
+# and the Envoy Gateway migration ended. This run is its first re-verification.
+#
 # This job runs in the `monitoring` namespace because that is the only namespace
-# the gateway's NetworkPolicy allows to reach anything besides the external
-# ingress controller. Verified live labels used by the policy:
-#   - ingress-nginx-external / app.kubernetes.io/name=ingress-nginx
+# the gateway's CiliumNetworkPolicy allows to reach the metrics port (15020).
+# Verified live labels used by the policy:
+#   - envoy-gateway       / app.kubernetes.io/name=envoy, component=proxy,
+#                          gateway.envoyproxy.io/owning-gateway-name=external (serving path)
+#   - ingress-nginx-external / app.kubernetes.io/name=ingress-nginx, component=controller
+#                          (retained rollback path, docs/network/ingress.md Phase 6)
 #   - monitoring             / app.kubernetes.io/name=prometheus
 #
-# What it proves while routes are intentionally disabled (fail-closed posture):
+# What it proves (the public plane is LIVE, not fail-closed):
 #   1. metrics :15020 is reachable from monitoring and returns 200
 #      => the gateway is healthy and Prometheus/ServiceMonitor can scrape it
 #   2. MCP :3000 is NOT reachable from monitoring
-#      => ingress is least-privilege, not "cluster-internal is fine"
+#      => the CNP is least-privilege, not "cluster-internal is fine"
 #   3. healthz :15021 is NOT reachable from monitoring
 #      => the probe port stays private to the kubelet (Cilium has
 #         enable-host-firewall=false, so kubelet probes are host traffic and
 #         still work without a policy rule; app pods must not get in)
 #
-# The positive MCP data-plane check (expect 404 today, 401 once a route with
-# mcpAuthentication is enabled) must be done through the real public entry
-# point, not from inside the cluster:
-#   curl -sS -o /dev/null -w '%{http_code}\n' https://mcp.grigri.cloud/mcp
+# Live route state on the public plane (mcp.grigri.cloud):
+#   - HTTPRoute mcp-gateway: 2 MCP routes (context7, grafana) + 2 RFC 9728 metadata
+#     routes (/.well-known/oauth-protected-resource/{context7,grafana}/mcp)
+#   - The admin plane (mcp.internal.grigri.cloud) remains routes: [] (fail-closed)
+#
+# The positive MCP data-plane check (expect 401 with valid auth, 403 without) must be
+# done through the real public entry point, not from inside the cluster:
+#   curl -sS -o /dev/null -w '%{http_code}\n' https://mcp.grigri.cloud/context7/mcp
 apiVersion: batch/v1
 kind: Job
 metadata:

@@ -25,7 +25,8 @@ Covers:
   5. isolation: networkIsolation is true and exactly one CiliumNetworkPolicy (no native
      NetworkPolicy) is rendered, admitting ingress-nginx and the external Envoy proxies;
   6. what must NOT have moved: prusik pin, session-key Secret/ExternalSecret/Password,
-     probes, ingress, ClusterIP-only service, no admin listener.
+     probes, HTTPRoute serving path + Ingress rollback path, ClusterIP-only service,
+     no admin listener.
 """
 import json
 import re
@@ -312,8 +313,23 @@ def main():
     check("service stays ClusterIP with 3000/15020/15021",
           svc["spec"]["type"] == "ClusterIP"
           and {p["port"] for p in svc["spec"]["ports"]} == {3000, 15020, 15021})
+    # Serving path: HTTPRoute via Envoy Gateway (external). The Ingress is retained as
+    # the rollback path (docs/network/ingress.md, ingress-migration Phase 6).
+    hr = find(docs, "HTTPRoute")
+    check("HTTPRoute serving path: parentRef external/envoy-gateway, sectionName https-grigri-cloud",
+          hr is not None
+          and hr["spec"]["parentRefs"][0]["name"] == "external"
+          and hr["spec"]["parentRefs"][0].get("namespace") == "envoy-gateway"
+          and hr["spec"]["parentRefs"][0].get("sectionName") == "https-grigri-cloud",
+          str(hr["spec"].get("parentRefs")) if hr else "no HTTPRoute")
+    check("HTTPRoute serving path: hostname mcp.grigri.cloud, backend mcp-gateway-standalone:3000",
+          hr is not None
+          and hr["spec"]["hostnames"] == ["mcp.grigri.cloud"]
+          and hr["spec"]["rules"][0]["backendRefs"][0]["name"] == "mcp-gateway-standalone"
+          and hr["spec"]["rules"][0]["backendRefs"][0]["port"] == 3000,
+          str(hr["spec"]) if hr else "no HTTPRoute")
     ing = find(docs, "Ingress")
-    check("ingress unchanged: nginx-external + TLS for mcp.grigri.cloud -> the gateway service",
+    check("ingress retained as rollback path: nginx-external + TLS for mcp.grigri.cloud -> the gateway service",
           ing["spec"]["ingressClassName"] == "nginx-external"
           and ing["spec"]["tls"][0]["secretName"] == "mcp-gateway-tls-certificate"
           and ing["spec"]["rules"][0]["http"]["paths"][0]["backend"]["service"]["name"]

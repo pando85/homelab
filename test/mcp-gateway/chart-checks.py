@@ -439,8 +439,8 @@ def main():
     adm_vals_text = open("apps/mcp-gateway-admin/values.yaml").read()
     check("mcp-gateway-admin: values.yaml enables networkIsolation and documents the false rollback",
           re.search(r"^networkIsolation: true$", adm_vals_text, re.M) is not None and
-          "Rollback: set false again" in adm_vals_text,
-          "missing networkIsolation: true or rollback documentation")
+          re.search(r"Rollback.*networkIsolation:\s*false", adm_vals_text, re.M) is not None,
+          "missing networkIsolation: true or rollback documentation (expected comment like '# Rollback: set `networkIsolation: false`...')")
 
     # ---- CNP shape verification for all three charts
     # Helper to verify the proven CNP shape: world on health port only, app port from
@@ -627,6 +627,48 @@ def main():
         app_port=8000,
         metrics_port=None,  # grafana-mcp has no metrics port
     )
+
+    # ---- CNP fromEndpoints drift guard ----
+    # If Envoy's proxy pod labels ever change, the CNP stops matching and the routes
+    # fail closed with no error anywhere (Cilium silently drops, Envoy logs 503 UF).
+    # If someone deletes the nginx rules early, the documented ingress rollback
+    # (docs/network/ingress.md, Phase 6) fails closed at the network layer. Both
+    # conditions must fail LOUDLY here, not silently in production.
+    for chart, envoy_gw, nginx_ns in [
+        ("mcp-gateway", "external", "ingress-nginx-external"),
+        ("mcp-gateway-admin", "internal", "ingress-nginx"),
+    ]:
+        cnp_docs = helm(chart, ["networkIsolation=true"])
+        cnps = [d for d in cnp_docs if d.get("kind") == "CiliumNetworkPolicy"]
+        if not cnps:
+            check(f"{chart}: CNP drift guard SKIPPED (no CNP rendered)", False,
+                  "networkIsolation=true must render a CiliumNetworkPolicy")
+            continue
+        cnp = cnps[0]
+        app_rules = [r for r in cnp["spec"].get("ingress", [])
+                     if any(str(p.get("port")) == "3000"
+                            for tp in r.get("toPorts", [])
+                            for p in tp.get("ports", []))]
+        all_eps = [ep for r in app_rules for ep in r.get("fromEndpoints", [])]
+        envoy_eps = [ep.get("matchLabels", {}) for ep in all_eps
+                     if ep.get("matchLabels", {}).get("app.kubernetes.io/name") == "envoy"]
+        nginx_eps = [ep.get("matchLabels", {}) for ep in all_eps
+                     if ep.get("matchLabels", {}).get("app.kubernetes.io/name") == "ingress-nginx"]
+        # Envoy proxy drift guard: exact label set from the live proxy pods
+        check(f"{chart}: CNP admits the {envoy_gw} Envoy proxy with exact live labels "
+              "(drift guard: if Envoy relabels, routes fail closed with no error)",
+              any(e.get("app.kubernetes.io/component") == "proxy"
+                  and e.get("gateway.envoyproxy.io/owning-gateway-name") == envoy_gw
+                  and e.get("io.kubernetes.pod.namespace") == "envoy-gateway"
+                  for e in envoy_eps),
+              f"envoy selectors={envoy_eps}")
+        # nginx rollback drift guard: the rule must stay until Phase 6
+        check(f"{chart}: CNP retains ingress-nginx rule in {nginx_ns} "
+              "(drift guard: deleting early breaks the documented rollback path)",
+              any(e.get("app.kubernetes.io/component") == "controller"
+                  and e.get("io.kubernetes.pod.namespace") == nginx_ns
+                  for e in nginx_eps),
+              f"nginx selectors={nginx_eps}")
 
     # grafana-mcp default-false checks
     graf_default_docs = helm("grafana-mcp")

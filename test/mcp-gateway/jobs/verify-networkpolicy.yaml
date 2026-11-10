@@ -1,16 +1,23 @@
-# Committed GitOps verification job: proves the gateway's NetworkPolicy actually
-# denies reachability from an unrelated namespace while routes are disabled.
+# Committed GitOps verification job: proves the gateway's CiliumNetworkPolicy actually
+# denies reachability from an unrelated namespace.
 #
 # NOT synced by ArgoCD (test/ is outside apps/ and system/).
 # Owner applies explicitly after the foundation is deployed, then deletes.
 #
-# Why a separate namespace: a 404 from the gateway would prove nothing about the
-# policy (empty routes already 404). A blocked TCP connect proves the policy is
-# enforcing, so this Job must observe a TIMEOUT, not an HTTP status.
+# NOTE: This Job has NOT been applied since the CNP replaced the native NetworkPolicy.
+# This run is its first re-verification against the current CNP shape.
 #
-# Scope of the policy under test (apps/mcp-gateway/templates/networkpolicy.yaml):
-#   ingress 3000  <- ingress-nginx-external only
-#   ingress 15020 <- monitoring only
+# Why a separate namespace: a 404 from the gateway would prove nothing about the
+# policy (empty routes already 404 on the admin plane). A blocked TCP connect proves
+# the policy is enforcing, so this Job must observe a TIMEOUT, not an HTTP status.
+#
+# Scope of the policy under test (apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml):
+#   ingress 15021 <- fromEntities: [world] (kubelet probes; `world` does NOT admit
+#                     cluster-identity pods, so cross-namespace pods are still denied)
+#   ingress 3000  <- fromEndpoints: ingress-nginx-external controller pods OR
+#                    Envoy Gateway `external` proxy pods (serving path)
+#   ingress 15020 <- fromEndpoints: prometheus pods in monitoring namespace
+#   egress: toEntities: [cluster] + DNS pod rules + world:443 (context7 backend)
 #   everything else denied
 apiVersion: batch/v1
 kind: Job
