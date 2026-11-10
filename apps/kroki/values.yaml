@@ -37,9 +37,8 @@ app-template:
               cpu: 2
               memory: 1Gi
         # Response cache for the Envoy Gateway routes (Envoy has no production response cache).
-        # Same settings as the ingress-nginx `static-cache` zone (300m, 7d inactive, `expires 7d`,
-        # `X-Cache-Status`); the routes point at the `cache` Service, the Ingresses keep using
-        # `kroki` and nginx's own cache.
+        # Settings of the former ingress-nginx `static-cache` zone (300m, 7d inactive, `expires 7d`,
+        # `X-Cache-Status`); the routes point at the `cache` Service.
         cache:
           image:
             repository: nginxinc/nginx-unprivileged
@@ -100,57 +99,6 @@ app-template:
         http:
           port: 8080
 
-  ingress:
-    kroki:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        external-dns.kubernetes.io/enabled: "true"
-        nginx.ingress.kubernetes.io/proxy-buffering: "on"
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          proxy_cache static-cache;
-          expires 7d;
-          proxy_cache_valid 200 7d;
-          add_header X-Cache-Status $upstream_cache_status;
-      hosts:
-        - host: &host kroki.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: kroki
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: kroki-tls-certificate
-    external:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/proxy-buffering: "on"
-        nginx.ingress.kubernetes.io/configuration-snippet: |
-          proxy_cache static-cache;
-          expires 7d;
-          proxy_cache_valid 200 7d;
-          add_header X-Cache-Status $upstream_cache_status;
-      hosts:
-        - host: &host kroki.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: kroki
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: kroki-external-tls-certificate
-
   persistence:
     tmp:
       type: emptyDir
@@ -198,8 +146,7 @@ app-template:
             }
           }
 
-  # Envoy Gateway routes (ingress-nginx migration), pointing at the caching sidecar. The
-  # Ingresses above stay until the switch.
+  # Envoy Gateway routes, pointing at the caching sidecar.
   route:
     internal:
       kind: HTTPRoute

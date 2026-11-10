@@ -36,31 +36,7 @@ app-template:
       ports:
         http:
           port: 5055
-  ingress:
-    jellyseerr:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-        nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
-        nginx.ingress.kubernetes.io/proxy-read-timeout: "1800"
-      hosts:
-        - host: &host requests.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: jellyseerr
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: jellyseerr-external-tls-certificate
-
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # Envoy Gateway route.
   # The route has a stable name: the BackendTrafficPolicy (templates/backend-traffic-policy.yaml) targets it.
   route:
     external:

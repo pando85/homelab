@@ -209,29 +209,7 @@ app-template:
       ports:
         http:
           port: 9119
-  ingress:
-    dashboard:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth?allowed_groups=hermes-users@idm.grigri.cloud
-        nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
-        nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
-      hosts:
-        - host: hermes.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: dashboard
-                port: http
-      tls:
-        - hosts:
-            - hermes.internal.grigri.cloud
-          secretName: hermes-dashboard-tls-certificate
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # Envoy Gateway route.
   # The external-dns annotation publishes the name (the Gateway address). Behind the OIDC SecurityPolicy
   # (templates/security-policy.yaml); the dashboard keeps its own OIDC login on top, as with nginx.
   route:

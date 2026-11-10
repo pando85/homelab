@@ -402,72 +402,7 @@ app-template:
         http:
           port: 3000
 
-  ingress:
-    hass:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/server-snippet: |
-          location = /api/prometheus {
-            deny all;
-          }
-      hosts:
-        - host: &host hass.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: hass
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: home-assistant-external-tls-certificate
-    appdaemon:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/auth-url: https://auth.grigri.cloud/oauth2/auth?allowed_groups=appdaemon-users@idm.grigri.cloud
-        nginx.ingress.kubernetes.io/auth-signin: https://auth.grigri.cloud/oauth2/start
-        nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
-      hosts:
-        - host: &host appdaemon.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: appdaemon
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: hass-appdaemon-tls-certificate
-    valetudopng:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        external-dns.kubernetes.io/enabled: "true"
-      hosts:
-        - host: &host valetudopng.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: valetudopng
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: hass-valetudopng-tls-certificate
-
-  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # Envoy Gateway routes.
   # Internal routes carry the external-dns annotation (the Gateway address is published in DNS).
   route:
     # hass.grigri.cloud: no auth. Prometheus scrapes the Service directly, so the nginx

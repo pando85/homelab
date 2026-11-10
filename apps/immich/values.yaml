@@ -158,60 +158,7 @@ app-template:
     nodeSelector:
       kubernetes.io/hostname: prusik
 
-  ingress:
-    immich:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        external-dns.kubernetes.io/enabled: "true"
-        nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-        nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
-        nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-        # fix timeouts uploading big files disabling proxy buffering
-        nginx.ingress.kubernetes.io/proxy-buffering: "off"
-        nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-        nginx.ingress.kubernetes.io/proxy-body-size: 35G
-      hosts:
-        - host: &host photos.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: server
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: immich-tls-certificate
-    external:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-        nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
-        nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-        # fix timeouts uploading big files disabling proxy buffering
-        nginx.ingress.kubernetes.io/proxy-buffering: "off"
-        nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-        nginx.ingress.kubernetes.io/proxy-body-size: 35G
-      hosts:
-        - host: &host photos.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: server
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: immich-external-tls-certificate
-
-  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # Envoy Gateway routes.
   # Internal routes carry the external-dns annotation (the Gateway address is published in DNS). Stable names: the
   # BackendTrafficPolicy (templates/backend-traffic-policy.yaml) targets both routes.
   route:
