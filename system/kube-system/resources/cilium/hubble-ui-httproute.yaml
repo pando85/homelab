@@ -1,6 +1,5 @@
-# Envoy Gateway route (ingress-nginx migration). The chart Ingress (hubble.ui.ingress in
-# cilium-values.yaml) stays until the switch. Internal route: the external-dns annotation publishes
-# its name (the Gateway address).
+# Envoy Gateway route. Internal route: the external-dns annotation publishes its name (the Gateway
+# address).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

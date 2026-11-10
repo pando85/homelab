@@ -1,6 +1,6 @@
 ---
 # Data plane of the "external" Gateway: own Deployment, PDB, LB Service (192.168.193.14), 2 replicas.
-# Placement mirrors system/ingress-nginx (prefer prusik, then amd64). No tolerations on
+# Placement: prefer prusik, then amd64 (as the former ingress-nginx). No tolerations on
 # purpose: the CI node k8s-amd64-1 (dedicated=ci:NoSchedule) must never run these pods.
 # Cilium BGP advertises every LoadBalancer Service without the cilium.io/bgp-skip label
 # (system/kube-system/resources/cilium/bgp-advertisement.yaml), so no extra label is needed.

@@ -1,5 +1,5 @@
 ---
-# Mirrors the three ingress-nginx-external alerts (system/ingress-nginx-external/rules/alerts.yaml)
+# Mirrors the three alerts of the former ingress-nginx-external controller
 # on Envoy metrics, for both Gateways. Same thresholds, `for` and `severity` labels, so they route
 # like the nginx ones.
 #
