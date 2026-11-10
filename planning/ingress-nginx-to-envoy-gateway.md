@@ -11,8 +11,8 @@ This also delivers the grigri (staging) platform part of
 Forkline Remote): experimental-channel Gateway API CRDs, a shared external Gateway with HTTPS
 listeners plus a TLS passthrough listener, and the router 443 switch away from `192.168.193.4`.
 
-**Status: Phases 0-5 executed (Phase 5 on 2026-11-10 07:04 UTC), Gate 5 running; P5.3 and the runner
-bridge swap still open. See Execution Status and Autonomy Scope.**
+**Status: Phases 0-5 executed (Phase 5 on 2026-11-10 07:04 UTC), Gate 5 running; P5.3 still open, the
+runner bridge swap done (2026-11-10 07:25 UTC). See Execution Status and Autonomy Scope.**
 
 Strategy in one paragraph: run Envoy Gateway **side by side** on two new Cilium LB VIPs
 (`.13` internal, `.14` external). Every app gets its internal and external routes and is verified
@@ -53,7 +53,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 2     | done        | Pilots without auth and auth pilots (kanidm route, http-echo, esphome, navidrome, radarr external) live and verified without a browser; the Gate 2 owner items (interactive login, refusal for a person outside the group) stay open. Procedure: `docs/conventions/gateway-api-routes.md`. |
 | 3     | done        | Every homelab Ingress host has an Envoy route on the matching gateway, tenant hosts included (multivara, kiais). Tracking list and Gate 3 results in Phase 3. |
 | 4     | done, Gate 4 running | Executed 2026-11-09 (Phase 4, Executed). Watch 3-7 days. P4.1 (pfSense) done, owner. |
-| 5     | done, Gate 5 running | Executed 2026-11-10 (Phase 5, Executed). P5.1 and P5.2 (pfSense) done, owner. Open: P5.3, runner bridge swap. |
+| 5     | done, Gate 5 running | Executed 2026-11-10 (Phase 5, Executed). P5.1 and P5.2 (pfSense) done, owner. Runner bridge swap done. Open: P5.3. |
 | 6     | not started |                                                                                                                                   |
 
 ### Phase 1 progress (2026-11-09)
@@ -1630,10 +1630,27 @@ stay in place.
 - Post-window commits (07:20 UTC): homelab `b81237b22` nginx-external Service no longer publishes
   DNS; kiais gitops `89f47a9` DNSEndpoint `isidoro-keycloak/idm-isidoro`, A
   `idm.isidoro.grigri.cloud` to `192.168.193.14` (external-dns changed it at 07:21:53).
-- Not done in the window, still open: calypso runners stay on the TLS passthrough bridge (it lives on
-  the `.14` gateway, so runners keep working); the bridge swap commit waits for a runner verified
-  through the internal listener (V1-V5). P5.3 (kill leftover pf states to `.4`) after traffic on
-  nginx-external decays. Gate 5 watch.
+- Not done in the window: P5.3 (kill leftover pf states to `.4`) after traffic on nginx-external
+  decays. Gate 5 watch.
+- Runner bridge swap, done (07:25 UTC): a test runner `eg-runner-test` (repository test-forgejo, size
+  basic) started with the forkline CLI got Ingress + HTTPRoute + SecurityPolicy (`pathOverride
+  /auth/runner/<uuid>`, `failOpen: false`). Verified first through the internal verification
+  listener (`.13`), then, after homelab `4b39c7d42` (external listener `tls-bridge-runners` replaced
+  by HTTPS listener `https-runners-staging-forkline-dev`, TLSRoute `runners-bridge` removed,
+  ReferenceGrant kept until Phase 6), on `.14` and from an outside host: Let's Encrypt
+  `*.app.staging.forkline.dev` served by Envoy (no longer nginx's `runners-subdomain`); no
+  credentials 302 to `app.staging.forkline.dev/oauth2/start?rd=...`; bad Basic credentials on
+  `/api/info` 401; spoofed `X-Auth-Request-*` headers plus `?runner_id=` 401; a valid attach grant
+  (from `forkline runner attach`) 200 JSON on `/api/info` and `/api/session`; SSE `/api/event` idle
+  for 75 s not cut. Stopping the runner removed Deployment, Service, Ingress, HTTPRoute and
+  SecurityPolicy. Post-check after the listener change: 49 external hosts still TLS-verified and h2.
+  Note for test writers: the runner's OpenCode server serves its web app shell (`/`, any non-`/api/`
+  path) with 200 to any request that passes the gateway, wrong Basic credentials included,
+  identically on nginx and Envoy; the API is under `/api/` and is what must be checked for 401.
+  Remaining runner items for Phase 6: switch calypso to `exposure: gateway-api` after the soak, then
+  remove the ReferenceGrant in `ingress-nginx-external`, the `runners-subdomain` Certificate, the
+  runner CNP nginx rules, the internal runner listener and its Certificate, and the `internal`
+  parentRef (all in Phase 6 step 3).
 - Known non-regressions seen in tests: `argocd.grigri.cloud/` is 404 on both (only `/api/webhook`
   is public; the UI is on `argocd.internal`); the Navidrome PWA manifest request is redirected to idm
   and blocked by CORS (cosmetic).

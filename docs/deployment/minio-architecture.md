@@ -190,7 +190,7 @@ Internet
   │   ├── mc-s3.grigri.cloud → s3-public MinIO (console)
   │   └── cross-backups.grigri.cloud → cross-backups MinIO (backup ingestion)
   │
-  └── nginx-internal (192.168.193.1)
+  └── internal Envoy Gateway (192.168.193.13)
       ├── s3.internal.grigri.cloud → internal MinIO (cluster-only)
       └── <app>.internal.grigri.cloud → <app> (cluster-only)
 
