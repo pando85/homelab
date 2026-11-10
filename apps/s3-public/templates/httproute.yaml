@@ -1,5 +1,4 @@
-# Envoy Gateway routes (ingress-nginx migration), alongside the chart Ingresses, which stay until
-# the switch (the chart has no route support). S3 API and console, same Services and ports.
+# Envoy Gateway routes (the chart has no route support). S3 API and console.
 ---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute

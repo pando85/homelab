@@ -1,5 +1,4 @@
-# Envoy Gateway route (ingress-nginx migration), alongside the chart Ingress, which stays until the
-# switch. Port of the nginx annotations of `nextcloud.grigri.cloud`:
+# Envoy Gateway route. Port of the former nginx annotations of `nextcloud.grigri.cloud`:
 #   - server-snippet `location` blocks: the redirects and the two 404 groups below (nginx matches
 #     the regex blocks case-sensitively, like Gateway API paths);
 #   - `proxy_hide_header X-Powered-By`: the response header modifier on the catch-all rule;

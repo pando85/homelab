@@ -1,7 +1,6 @@
-# Envoy Gateway route (ingress-nginx migration), replacing the chart's `httpRoute` (disabled in
-# values.yaml: it has no annotations key). Same name and spec as the chart rendered, plus the
-# external-dns annotation that publishes the name (the Gateway address). The Ingress stays until the
-# switch.
+# Envoy Gateway route, replacing the chart's `httpRoute` (disabled in values.yaml: it has no
+# annotations key). Same name and spec as the chart rendered, plus the external-dns annotation
+# that publishes the name (the Gateway address).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

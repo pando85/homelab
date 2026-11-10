@@ -1,5 +1,5 @@
-# Envoy Gateway route (ingress-nginx migration), alongside the app-template Ingress, which stays
-# until the switch. Internal route: the external-dns annotation publishes its name (the Gateway address).
+# Envoy Gateway route. Internal route: the external-dns annotation publishes its name (the Gateway
+# address).
 #
 # The controller serves HTTPS on 8443 with a self-signed certificate. nginx
 # (`backend-protocol: HTTPS`) does not verify it, so an Envoy Gateway `Backend` with

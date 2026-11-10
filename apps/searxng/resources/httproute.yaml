@@ -1,5 +1,5 @@
-# Envoy Gateway routes (ingress-nginx migration). The Ingresses in searxng.yaml stay until the
-# switch. Rendered by kustomize `helmCharts` (no cluster capabilities), so they are raw files.
+# Envoy Gateway routes. Rendered by kustomize `helmCharts` (no cluster capabilities), so they are
+# raw files.
 # The internal route carries the external-dns annotation (the Gateway address is published in DNS); the external route
 # is behind the OIDC SecurityPolicy (security-policy.yaml).
 apiVersion: gateway.networking.k8s.io/v1

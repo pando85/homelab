@@ -1,4 +1,4 @@
-# External Envoy Gateway routes (ingress-nginx migration); the Ingresses stay until the switch.
+# External Envoy Gateway routes.
 # The internal routes and the movie list Lua live in httproute.yaml. Same-host routes merge:
 # - radarr-external, radarr-external-movie-list: behind the OIDC SecurityPolicy
 #   (security-policy.yaml);

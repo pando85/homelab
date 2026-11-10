@@ -1,5 +1,4 @@
-# Envoy Gateway routes (ingress-nginx migration), alongside the app-template Ingresses, which stay
-# until the switch. Internal routes carry the external-dns annotation (the Gateway address is
+# Envoy Gateway routes. Internal routes carry the external-dns annotation (the Gateway address is
 # published in DNS).
 # The external route (oauth2 auth, apiKey bypass) is added with the auth pattern.
 apiVersion: gateway.networking.k8s.io/v1
