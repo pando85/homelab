@@ -53,7 +53,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 3     | done        | Every homelab Ingress host has an Envoy route on the matching gateway, tenant hosts included (calypso, isidoro). Tracking list and Gate 3 results in Phase 3. |
 | 4     | done, Gate 4 running | Executed 2026-11-09 (Phase 4, Executed). Watch 3-7 days. P4.1 (pfSense) done, owner. |
 | 5     | done, Gate 5 running | Executed 2026-11-10 (Phase 5, Executed). P5.1, P5.2 and P5.3 (pfSense) done, owner. Runner bridge swap done. Gate 5 watch running. |
-| 6     | not started (needs the owner's yes) |                                                                                                                                   |
+| 6     | not started (needs the owner's yes) | Preconditions checked 2026-11-10 (Phase 6, Precondition check). Owner decision 2026-11-10: the Gate 5 soak length no longer gates Phase 6; start on the owner's go once the gap-closure blockers below are closed. Gap closure 2026-11-10: G1 step b, G2, G3 and G5 P6.1 done; open: G1 step c (Phase 6 step 1), G4 (owner), G5 P6.2 `auth.staging` alias and the hermes `hostAliases`. |
 
 ### Phase 1 progress (2026-11-09)
 
@@ -584,8 +584,10 @@ How Ingresses are defined in this repo (decides how routes get written):
 
 ### Things that pin nginx today (break silently if missed)
 
-- `apps/hermes/values.yaml:146-158` hostAliases `mcp.grigri.cloud -> 192.168.193.4`, plus tests
-  `apps/hermes/tests/test_hostaliases_mcp_dns.py`, `test_render_enable.py`.
+- `apps/hermes/values.yaml:158` hostAliases `mcp.grigri.cloud -> 192.168.193.14` (moved from `.4`
+  at P5.2), plus tests asserting `.14`: `apps/hermes/tests/test_hostaliases_mcp_dns.py`,
+  `test_render_enable.py`. P6.2 still removes them (delete or update the first test and the `.14`
+  asserts in the second).
 - NetworkPolicies admitting the nginx namespaces: `apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml:65-72`,
   `apps/mcp-gateway-admin/templates/ciliumnetworkpolicy.yaml` (moved from `networkpolicy.yaml` by work in progress on 2026-11-09), `test/mcp-gateway/jobs/*.yaml`.
   **Update 2026-11-09 (later):** `networkIsolation: true` is now committed in both apps, so these
@@ -1262,8 +1264,8 @@ can be run by an agent (`ssh pfsense.grigri`, show-only commands).
 | **P5.1** | **external switch**  | Firewall > Aliases > `k8s_external_ingress`: `192.168.193.4` -> `192.168.193.14`. Retargets the WAN port forward (80, 443, 29518), its WAN pass rule and reflection on every interface                                         | from mobile data: `curl -I https://git.grigri.cloud`, `ssh -p 29518 git@git.grigri.cloud`; `pfctl -sn \| grep 29518` shows .14 | alias back to .4      |
 | **P5.2** | **external switch**  | DNS Resolver host overrides `freshrss.grigri.cloud` (28 aliases), `app.staging.forkline.dev` (4), `mintpsicologia.es` (www): `.4` -> `.14`. IP only, no list cleanup in this window                                            | `drill idm.grigri.cloud @192.168.192.1` = .14, also from a pod                                                                 | IPs back to .4        |
 | P5.3     | end of external soak | Diagnostics > States: kill remaining states to `192.168.193.4`                                                                                                                                                                 | `pfctl -ss \| grep -c 192.168.193.4` = 0 (**done 2026-11-10 ~08:20 UTC, owner**)                                               | n/a                   |
-| P6.1     | Phase 6              | Rename `k8s_external_ingress` to `k8s_external_gateway` (or point the rule at the P1.1 alias)                                                                                                                                  | rule shows the new alias                                                                                                       |                       |
-| P6.2     | Phase 6              | Override list cleanup: drop dead names (gitea, jackett, accounts, auth-kanidm, and gitlab/isidoro if gone), add missing external names (mcp, photos, requests, ...); then remove the hermes hostAliases                        | `drill mcp.grigri.cloud` = .14 from a pod                                                                                      |                       |
+| P6.1     | Phase 6              | Point the port forward at a new `k8s_external_gateway` alias, then delete `k8s_external_ingress` (procedure: G5). **Done 2026-11-10 (owner)**                                                                                | rule shows the new alias                                                                                                       |                       |
+| P6.2     | Phase 6              | Override list cleanup: drop dead names (gitea, jackett, accounts, auth-kanidm, auth.staging.forkline.dev; gitlab and isidoro still have routes), add missing external names (mcp, photos, ...); then remove the hermes hostAliases (procedure: G5). **Done 2026-11-10 except `auth.staging`; hostAliases pending** | `drill mcp.grigri.cloud` = .14 from a pod                                                                                      |                       |
 | P6.3     | Phase 6              | Update `docs/network/pfsense.md` and `docs/conventions/bandwidth-protection.md`                                                                                                                                                |                                                                                                                                |                       |
 
 ## Implementation Plan
@@ -1675,7 +1677,7 @@ stay in place.
   is public; the UI is on `argocd.internal`); the Navidrome PWA manifest request is redirected to idm
   and blocked by CORS (cosmetic).
 
-**Gate 5:** one week without regressions.
+**Gate 5:** one week without regressions (waived 2026-11-10 by the owner: Phase 6 starts on the owner's go).
 
 ### Phase 6 - Decommission (both controllers together, D8)
 
@@ -1698,7 +1700,7 @@ Separate commits, in order:
    The same change also removes the calypso runner verification listener on the internal
    Gateway (`https-runners-staging-forkline-dev` on gateway `internal`) and its Certificate
    `internal-app-staging-forkline-dev` (both added by the homelab commit "envoy-gateway: Add
-   runner certificates and internal runner listener", not yet on master). Before that, the
+   runner certificates and internal runner listener", `67badb6dc`, on master). Before that, the
    calypso tenant drops the `internal` parentRef from its runner values and sets
    `exposure: gateway-api`. Owner decision 2026-11-10: the internal runner
    listener is kept during the migration but must be gone when ingress-nginx is removed. Then
@@ -1717,6 +1719,10 @@ Separate commits, in order:
    `grafana`, `home`, `jackett`, `plex`, `rook-ceph`, `stump`, `sunshine`, `tdarr`, `tdarr-ui`,
    `transcorder`, `unpackerr`. The `grafana` record was being deleted the same day; re-run the check
    instead of trusting this list.
+   Re-checked 2026-11-10 (later): 12 names (the 13 minus `grafana`, already deleted) still at `.1`,
+   none at `.4`, none with a route or Ingress. When counting pf states to these VIPs anchor the
+   match (`grep -E '192\.168\.193\.1[: ]'`): a substring grep for `192.168.193.1` also counts
+   `.13`/`.14`.
 4. Drop nginx references from NetworkPolicies (ours and the tenants': Keycloak
    NetworkPolicies, runner policy), otel-collector rules, Loki/Tempo configs, dashboards and
    alerts (including the isidoro edge alerts and the calypso landing analytics queries).
@@ -1728,6 +1734,300 @@ Separate commits, in order:
 `nginx_ingress_controller_*` series once both are gone, no `.1`/`.4` in Cilium LB IPAM, all Argo
 apps Synced/Healthy, no listener `https-runners-staging-forkline-dev` remains on the internal
 Gateway, no Cloudflare A record points at `192.168.193.1` or `.4` (step 3a).
+
+**Precondition check 2026-11-10** (read-only, before the owner's yes):
+
+- Soak: Gate 4 ~1 day, Gate 5 ~3.5 h of 7 days. Envoy 5xx 24h: external 11/75.9k, internal 6/132k;
+  no switch-attributable alerts; 0 certs not Ready, min expiry 30 days; probes clean except an IoT
+  device. nginx: 0 requests in the last hour on both controllers (a burst of 3 requests on 36 hosts
+  around 09:30 UTC, attributed to a `gateway-check.sh` run, not confirmed). Proxy restart on
+  2026-11-09 ~20:50 UTC: no clean Envoy history before it.
+- Cluster: Gateways Programmed (6 listeners internal, 8 external); all 108 route parent statuses
+  Accepted/ResolvedRefs; all SecurityPolicy/BTP/CTP/BackendTLSPolicy Accepted; 92/92 Argo apps
+  Synced/Healthy. Still present (Phase 6 removes them): 91 Ingresses (56 nginx-external, 35
+  nginx-internal), `.1`/`.4` LB Services, internal listener `https-runners-staging-forkline-dev` and
+  Certificate `internal-app-staging-forkline-dev`, ReferenceGrant `envoy-gateway-runners-bridge` in
+  `ingress-nginx-external`.
+- Step 1 blocker (plan: G1): of 94 Ingress-owned Certificates only `kanidm/idm-external-tls-certificate` is
+  mounted by a pod (kanidm, also the LDAPS SAN; see `system/kanidm/templates/kanidm.yaml:77-83`):
+  explicit `Certificate` first. Scan covered pod volumes/env and Gateway certificateRefs only (no
+  Gateway certificateRef points at an Ingress-owned secret).
+- Step 1 inputs (plan: G2): 7 raw Ingress templates (`apps/mcp-gateway/templates/ingress.yaml`,
+  `apps/mintpsicologia/templates/external-ingress.yaml` (2), `apps/tanque/templates/ingress.yaml`,
+  `apps/tanque/templates/stream-ingress.yaml`, `bootstrap/argocd/resources/ingress-external.yaml`,
+  `system/loki/resources/ingress.yaml`,
+  `system/monitoring/resources/long-term-metrics/ingress.yaml`); ~42 app-template `ingress:` blocks
+  (no chart default, safe); upstream/operator blocks that need a `helm template` check for chart
+  defaults: `apps/nextcloud/nextcloud.yaml`, `apps/rsshub/rsshub.yaml`, `apps/searxng/searxng.yaml`,
+  `platform/minio/values.yaml`, `platform/git/values.yaml`, `system/monitoring/values.yaml`
+  (grafana, prometheus, alertmanager), `bootstrap/argocd/values.yaml`,
+  `system/kube-system/cilium-values.yaml` (hubble), `system/kanidm/templates/kanidm.yaml` and
+  `platform/vault/templates/vault.yaml` (operator `spec.ingress`).
+- Step 2 blocker (plan: G3): the Envoy `SecurityPolicy`s (bazarr, esphome, home-assistant, http-echo, lidarr,
+  prowlarr, qbittorrent, ...) still authorize the Kanidm group `k8s-oauth2-proxy-users`, defined in
+  `system/oauth2-proxy/templates/kanidm-groups.yaml`. Keep the group (move it out of
+  `system/oauth2-proxy`, or rename it with the policies) before removing the chart. 17 Ingresses
+  still carry the `auth.grigri.cloud` auth-url; every host has an OIDC SecurityPolicy (host-level
+  check, not per path).
+- Step 3: the only runner Ingress `calypso-runners/autonomous-runner-issue-603-09` predates the
+  exposure switch and has no HTTPRoute: recycle it after `exposure: gateway-api`. Argo-unpruned
+  leftovers found: IngressClasses `nginx-external`/`nginx-internal`; ValidatingWebhookConfigurations
+  `ingress-nginx-admission`, `ingress-nginx-external-admission`; Leases
+  `ingress-nginx-external/ingress-nginx-external-leader`, `ingress-nginx/ingress-controller-leader`,
+  `ingress-nginx/ingress-nginx-leader`; ClusterRoles/Bindings `ingress-nginx`,
+  `ingress-nginx-admission`, `ingress-nginx-external`; 2 Secrets; namespaces `ingress-nginx`,
+  `ingress-nginx-external`, `oauth2-proxy`.
+- Step 4 additions: `test/mcp-gateway/chart-checks.py` drift guards require the nginx CNP rules
+  until Phase 6 (update with the CNPs), plus `test/mcp-gateway/route-checks.py`,
+  `foundation-checks.py`, `jobs/verify-*.yaml`; `scripts/eg-host-diff.sh` and
+  `scripts/gateway-check.sh` (compare against `.1`/`.4`, retire or repoint);
+  `test/step_by_step_tests.sh:35` deploys `system/ingress-nginx`.
+- Step 5 additions: `README.md:46`; `docs/network/ingress.md`; `docs/adr/index.md` has no Gateway
+  API ADR yet.
+- pfSense P6.2 inputs (plan: G5; read-only, 2026-11-10): 36 overrides, none at `.1`/`.4`. Dead (no route):
+  `accounts`, `auth-kanidm`, `gitea`, `jackett` (`.grigri.cloud`) and `auth.staging.forkline.dev`
+  (new). Keep `turn.grigri.cloud` (coturn, own VIP). `gitlab` and `isidoro` still have routes.
+  External route names with no override (LAN clients go through NAT reflection): `cross-backups`,
+  `http-echo`, `idm.isidoro`, `kroki`, `lidarr`, `mc-cross-backups`, `mcp`, `mc-s3`, `open-webui`,
+  `photos`, `prowlarr`, `regalo`, `requests`, `s3`, `tanque`, `tanque-stream`, `telegram`
+  (`.grigri.cloud`) and `staging.forkline.dev`. `mcp.grigri.cloud` resolves to the public address
+  via pfSense today, so the P6.2 verify (`drill mcp.grigri.cloud` = .14) fails until the override is
+  added. P1.1 aliases do not exist (P6.1: rename instead). pf states: 0 to `.1` and 0 to `.4`
+  (exact-match count; a substring grep for `192.168.193.1` also counts `.13`/`.14`, so anchor it,
+  e.g. `grep -E '192\.168\.193\.1[: ]'`). Watch pf for new `.1` states around the removal: clients
+  of the stale `*.internal` records would show there.
+
+**Tenant cleanup (2026-11-10 inventory)** Base files in the calypso environment are promoted to
+production (`*/custom/*` is excluded from promotion), so all disables go in `custom/patches` or
+`custom/resources`. Each item is tagged with its Phase 6 step. The step-1 gate grep (`grep -rn
+'nginx\|192.168.193.[14]'`) is noisy on both environments (vendored charts, comments in the new
+gateway files): review the hits instead of requiring zero.
+
+The calypso tenant's `grigri.cloud` environment (all Ingresses have Accepted routes; 14 live
+Ingresses, 13 HTTPRoutes):
+
+1. [1] `apps/calypso`: disable `ingress` and `ingress.api` (`values.yaml:423`, `:460`) and
+   `landingPage.ingress` (`:546`) in `custom/patches/values.yaml` (~:226-249, also drops the alpha
+   keys and staging nginx annotations).
+2. [1] `mcpFixture.ingress` (`custom/patches/values.yaml` ~:410): the Ingress is what carries
+   `external-dns.kubernetes.io/enabled` for the `mcp-fixture` record (its HTTPRoute has no
+   annotation): add the annotation to `httproute-mcp-fixture.yaml` or a `DNSEndpoint` first, then
+   disable.
+3. [1] `apps/calypso/oauth2-proxy-values.yaml:2-6` ingress: disable in
+   `custom/patches/oauth2-proxy-values.yaml`; route `httproute-oauth2.yaml` is live.
+4. [1] `apps/keycloak`: CR `spec.ingress` off in `custom/patches/keycloak.yaml` (base
+   `resources/keycloak.yaml:48` is shared with prod); delete `custom/resources/admin-ingress.yaml`
+   and its `kustomization.yaml` entry (route `httproute-keycloak-admin.yaml` live). Open: whether
+   the Keycloak operator deletes its Ingress when `spec.ingress` is off.
+5. [1] Vault `apps/calypso/resources/vault/server.yaml:112` `spec.ingress`, patched in
+   `custom/patches/vault-server.yaml`: turn off; the operator does not delete its Ingress, so the
+   live `calypso/vault` Ingress becomes the orphan the owner deletes with a yes.
+6. [1] `apps/gitlab`: `global.ingress` (`values.yaml:18-26`) and webservice nginx annotations
+   (`:152-159`) off in `custom/patches/values.yaml`; route `gitlab-gitlab` live. `nginx-ingress:
+   enabled: false` (`:114`) and the vendored chart are gate-grep false positives.
+7. [3] Runners: `exposure: both` and the `internal` parentRef (`custom/patches/values.yaml` ~:47-66)
+   to `exposure: gateway-api`, no internal parentRef; recycle `autonomous-runner-issue-603-09` and
+   verify HTTPRoute + `calypso-runner-auth` SecurityPolicy; then drop `runner.ingressClass`
+   (`values.yaml:44`), `runner.ingressAnnotations` (`:50-59`, patch ~:31),
+   `custom/resources/certificates-runners-wildcard.yaml` (`runners-subdomain`).
+8. [4] Runner CNP: `networkPolicy.ingressNamespaceSelector: ingress-nginx-external`
+   (`values.yaml:484`) and `allowIngressControllerEgress`;
+   `ciliumnetworkpolicy-runner-egress-envoy.yaml` comments. After item 7.
+9. [4] mcp gateway/broker egress in `custom/patches/values.yaml` ~:337-380: the `.4` toCIDR and
+   nginx toEndpoints, and the nginx-external entry in the fixture `additionalIngress` (`.4` parts
+   wait for item 7).
+10. [4] Keycloak `networkPolicy.https`: drop `ingress-nginx`, `ingress-nginx-external`
+    (`custom/patches/keycloak.yaml:16-28`, base `resources/keycloak.yaml:41-42`), keep the Envoy
+    entry.
+11. [4] `dashboards/landing-analytics.json`: 9 nginx queries without Envoy equivalents; promoted to
+    production, so add Envoy series (`or`) rather than dropping nginx.
+
+The isidoro tenant's `grigri.cloud` environment (3 live Ingresses `isidoro`, `keycloak-ingress`,
+`keycloak-admin-ingress`, all with Accepted routes; local checkouts must be pulled first, the routes
+live only on `origin/main` there at the time of the check):
+
+1. [1] `apps/isidoro/custom/patches/values.yaml:20`: `ingress.enabled: false` (drops ~15 nginx
+   annotations; the `/metrics` deny is already in `custom/resources/httproute.yaml`). Check the
+   vendored chart renders nothing with it off.
+2. [1] `apps/isidoro-keycloak/resources/keycloak.yaml` ~:53 `spec.ingress` off (route and
+   `BackendTLSPolicy` in `custom/resources/httproutes.yaml`; the `DNSEndpoint` for
+   `idm.isidoro.grigri.cloud` stays).
+3. [1] Delete `apps/isidoro-keycloak/custom/resources/admin-ingress.yaml` and its
+   `kustomization.yaml` entry (route annotation already publishes `idm-internal`, at `.13`).
+4. [4] Keycloak NP namespaces: drop `ingress-nginx`, `ingress-nginx-external`
+   (`resources/keycloak.yaml:46-47`, `custom/patches/keycloak.yaml:30-31`); README rewrite.
+5. [4] `apps/isidoro/resources/prometheusrule-ingress-edge.yaml`: drop the nginx terms (already `or` with
+   Envoy series) after Gate 6.
+
+**Gap closure plan (2026-11-10)**
+
+Blockers found by the precondition check, each with its procedure. Close G1-G5 before step 1 of
+Phase 6 (G3 and G5 before the matching step).
+
+**G1. Kanidm TLS secret (blocks step 1).** Status 2026-11-10: step a done (`7fc4ae90d`, Certificate
+`kanidm-tls` Ready, Let's Encrypt, expires 2027-02-08); step b released (`986dbcce1`); step c stays
+for Phase 6 step 1.
+
+- Facts: the kanidm pods mount only `idm-external-tls-certificate` at `/etc/kanidm/tls`, for HTTPS
+  8443 and LDAPS 3636 (LB `.8`). SANs `idm.grigri.cloud`, `ldaps.idm.internal.grigri.cloud`; issuer
+  `letsencrypt-prod-dns`. Ownership chain: Secret -> Certificate -> Ingress `kanidm` -> Kanidm CR,
+  so removing `spec.ingress` (Kaniop 0.21.1 deletes unexpected labelled Ingresses) cascades to the
+  Secret. Kaniop resolves the TLS secret as `spec.tlsSecretName` > `spec.ingress.tlsSecretName` >
+  `<name>-tls`, never creates a Certificate, and hashes the secret into the pod annotation
+  `kanidm.kaniop.rs/tls-secret-hash` (it rolls the StatefulSet on change and keeps the old hash if
+  the secret is missing). Reusing the same secret name is rejected: ingress-shim fights the
+  explicit Certificate and the garbage collection still deletes it.
+- Procedure, one commit each:
+  1. `system/kanidm/templates/certificate-tls.yaml`: Certificate `kanidm-tls`,
+     `secretName: kanidm-tls`, ClusterIssuer `letsencrypt-prod-dns`, dnsNames `idm.grigri.cloud`,
+     `ldaps.idm.internal.grigri.cloud`. Verify Ready and the SANs
+     (`openssl x509 -noout -ext subjectAltName` on the secret's `tls.crt`). Rollback: revert.
+  2. `system/kanidm/templates/kanidm.yaml`: `spec.tlsSecretName: kanidm-tls` (keep
+     `spec.ingress`). Kaniop rolls the pods one by one; wait for 2/2 Ready. Verify
+     `openssl s_client -connect 192.168.193.8:636 -servername ldaps.idm.internal.grigri.cloud`
+     shows the new serial, `idm.grigri.cloud` through Envoy, BackendTLSPolicy `kanidm` (hostname
+     `idm.grigri.cloud`, system CAs) Accepted, one OIDC login. Rollback: revert (the old secret
+     still exists).
+  3. Phase 6 step 1: drop `spec.ingress` (`kanidm.yaml:66-79`) and the comment at `:77-83`. Verify
+     no Ingress is left, `kanidm-tls` is still mounted, and external-dns left `idm.grigri.cloud` on
+     the Envoy target.
+- Note: one new Let's Encrypt cert for the same name set (duplicate-cert limit 5/week, fine).
+  Unverified: how Kaniop itself validates kanidm's TLS.
+
+**G2. Chart defaults (step 1 input).** Status 2026-11-10: done. Values `69a38e77f` (git `DOMAIN`) and
+`280bca0c8` (Prometheus `externalUrl`) landed first with zero render diff and no restarts. Removals
+`f1fc3acdd`..`d9f70577f` (nextcloud, rsshub, searxng, minio, git, monitoring, argocd internal, hubble,
+cross-backups): 15 Ingresses gone, every host kept the same status, VIP and DNS. Remaining raw
+Ingresses: `argocd-external` and `prometheus-long-term`, plus the kanidm and vault CRs and the
+app-template apps, all for Phase 6 step 1. Checked 2026-11-10 by rendering before/after
+(`helm template`, `kustomize --enable-helm`). Every upstream chart default is
+`ingress.enabled: false`, so deleting the block is enough; removal drops only Ingress objects,
+except two charts that derive config from the block.
+
+| Target                                                                                   | Change                                                  | Ingress before -> after | Extra                                                                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `apps/nextcloud/nextcloud.yaml:9-65`                                                     | delete                                                  | 1 -> 0                  | -                                                                                                                                                                                                                  |
+| `apps/rsshub/rsshub.yaml:67-85`                                                          | delete                                                  | 1 -> 0                  | -                                                                                                                                                                                                                  |
+| `apps/searxng/searxng.yaml:61-102`                                                       | delete (`searxng`, `searxng-external`)                  | 2 -> 0                  | -                                                                                                                                                                                                                  |
+| `platform/minio/values.yaml:26-48`, `:50-63`                                             | delete `ingress` and `consoleIngress`                   | 2 -> 0                  | -                                                                                                                                                                                                                  |
+| `platform/git/values.yaml:15-37`                                                         | delete                                                  | 1 -> 0                  | add `gitea.config.server.DOMAIN: git.grigri.cloud` (else it falls back to the chart's `git.example.com`; config Secret and pod checksum change)                                                                    |
+| `system/monitoring/values.yaml:42-55` (alertmanager), `:82-94` (grafana), `:319-332` (prometheus) | delete                                         | 4 -> 1                  | add `prometheus.prometheusSpec.externalUrl: https://prometheus.internal.grigri.cloud/` (else `externalUrl` turns `http://`); grafana `root_url` explicit, alertmanager unchanged                                    |
+| `bootstrap/argocd/values.yaml:107-114`                                                   | delete                                                  | 2 -> 1                  | `configs.cm.url` unchanged                                                                                                                                                                                         |
+| `system/kube-system/cilium-values.yaml:136-147`                                          | delete `hubble.ui.ingress`                              | 1 -> 0                  | -                                                                                                                                                                                                                  |
+| `system/kanidm/templates/kanidm.yaml:66-79`                                              | CR `spec.ingress`                                       | -                       | after G1                                                                                                                                                                                                           |
+| `platform/vault/templates/vault.yaml:97-118`                                             | CR `spec.ingress`                                       | -                       | its `vault-tls-certificate` is not referenced elsewhere; check that the operator deletes the Ingress (see the tenant open point)                                                                                   |
+| app-template apps (sampled atuin, immich, kroki)                                         | delete `ingress:`                                       | 2 -> 0 each             | -                                                                                                                                                                                                                  |
+
+- Not yet rendered: `apps/cross-backups/values.yaml` (minio-style `ingress` + `consoleIngress`,
+  ~:15-57).
+- Raw Ingress manifests stay until deleted explicitly:
+  `bootstrap/argocd/resources/ingress-external.yaml` and
+  `system/monitoring/resources/long-term-metrics/ingress.yaml` (they are the remaining 1 in
+  monitoring and argocd), plus the other raw templates listed in the precondition check.
+- Procedure: render the directory before and after, diff by kind/name. Only an Ingress (and its
+  ingress-shim Certificate) may disappear; any other diff needs an explicit value. One commit per
+  app or small batch. Each Ingress deletion also deletes its ingress-shim Certificate and Secret,
+  so check that no Gateway or pod uses it (precondition check: only kanidm).
+
+**G3. oauth2-proxy group (blocks step 2).** Status 2026-11-10: done, decision taken: per-app groups
+only. `8bbf3b3fc` (KanidmGroup `http-echo-users`, owner account added by hand), `d0f770ae0` (http-echo
+scope map and policy), `c856f4cc2` (dropped the second group claim from 11 policies; checked that no
+member gained access), `cbc808b9f` (docs). No SecurityPolicy references `k8s-oauth2-proxy-users`; it
+remains only in the `k8s-oauth2-proxy` client scope map and is deleted with `system/oauth2-proxy` in
+step 2. Untested: interactive login, 403 for a logged-in non-member.
+
+- Facts (live 2026-11-10): 18 OIDC SecurityPolicies (`oidc` + `jwt`, `defaultAction: Deny`,
+  `refreshToken: true`, no `cookieDomain`, no `forwardAccessToken`). Every app has its own Kanidm
+  OAuth2 client whose scope map holds only `<app>-users`, so Kanidm already decides who can log in,
+  and Envoy re-checks `<app>-users`. bazarr, esphome, appdaemon, lidarr, prowlarr, qbittorrent,
+  radarr, searxng, sonarr and tanque (x2) also require one of `k8s-oauth2-proxy-users`,
+  `navidrome-users`, `hermes-users` (claims are ANDed; parity with nginx, where the oauth2-proxy
+  login required one of the three and `allowed_groups` the app group). hermes 1-4 and navidrome
+  check only their own group. http-echo checks only the three groups, and its client scope map is
+  the three groups (`apps/http-echo/templates/kanidm-oauth2-client.yaml:18`). Identity headers are
+  still provided where used (navidrome `X-Auth-Request-Preferred-Username`, searxng user/email).
+- Kaniop 0.21.1: every KanidmGroup carries the finalizer `kanidmgroups.kaniop.rs/finalizer`, and
+  deleting the CR deletes the group in Kanidm with its manual memberships. The webhook rejects a
+  second CR for the same group, so moving the CR is delete-then-create (members lost): do not move
+  it. Deleting `system/oauth2-proxy` (Argo `resources-finalizer`, `prune: true`) deletes the group
+  and the `k8s-oauth2-proxy` client.
+- Recommended (pending the owner's decision): per-app groups only, no global tier. Commits:
+  1. http-echo: KanidmGroup `http-echo-users`; the owner adds members by hand.
+  2. http-echo: scope map and policy to `http-echo-users`. Verify the client
+     `ScopeMapUpdated=True`, policy Accepted, the curl checks from
+     `docs/conventions/gateway-api-routes.md` (302 to `/ui/oauth2`, forged cookie still 302), and
+     an owner login.
+  3. Owner check first: for each of the 10 apps, the `<app>-users` members are all in one of the
+     three groups (otherwise dropping the second claim widens access). Then drop the second claim
+     from those 11 policies in one commit (listener drain, 60 s; not during long transfers). Verify
+     no SecurityPolicy mentions `k8s-oauth2-proxy-users`, all are Accepted, one owner login per
+     app.
+  4. Docs: `docs/conventions/gateway-api-routes.md` (~:433 auth recipe), `docs/user-guide/kanidm.md`
+     (the Kaniop finalizer deletes the group and its members).
+  5. Phase 6 step 2: delete `system/oauth2-proxy`; verify the group and client are gone and no
+     client shows `ScopeMapUpdated=False`.
+- Alternative: keep a global tier as a new `homelab-users` KanidmGroup in `system/kanidm` (the owner
+  adds members), policies require `[homelab-users, navidrome-users, hermes-users]`, then step 2.
+- Rollback: commits 1-4 revert; after 5 a revert recreates an empty group (the owner re-adds
+  members; `kanidm recycle-bin revive` unverified).
+- Unknowns: the 403 for a logged-in non-member is still unproven live (needs a non-member
+  account); session length now follows Kanidm, not oauth2-proxy's 168h; logout clears only the
+  Envoy cookies.
+
+**G4. Stale Cloudflare records (step 3a; owner, before step 3).** Status 2026-11-10: pending (the
+owner chooses how the 38 records are deleted).
+
+- external-dns has no `txtPrefix`/`txtOwnerId` (`system/external-dns/values.yaml`), so each name has
+  two TXT records: `<fqdn>` and `a-<fqdn>` (content
+  `heritage=external-dns,external-dns/owner=default,external-dns/resource=ingress/<ns>/<name>`).
+- Delete, for each of the 12 names (`blackbox-exporter`, `freshrss`, `home`, `jackett`, `plex`,
+  `rook-ceph`, `stump`, `sunshine`, `tdarr`, `tdarr-ui`, `transcorder`, `unpackerr`, all
+  `.internal.grigri.cloud`), the A record and both TXT, plus the orphan TXT pair of
+  `grafana.internal.grigri.cloud` (A already gone): 12 A + 26 TXT. Keep `transcoder-rabbit`,
+  `mosquitto*`, `ldaps.idm`, `turn`. No AAAA/CNAME/wildcard leftovers.
+- Cloudflare UI: export a backup first; search by name (not by content `192.168.193.1`, which also
+  matches `.13`/`.14`); delete the A and both TXT. Verify `dig +short A <name> @1.1.1.1` and
+  `dig +short TXT <name>`, `a-<name>` are empty.
+
+**G5. pfSense P6.1/P6.2 (owner, any time; P6.2 before removing the hermes hostAliases).** Status
+2026-11-10: P6.1 done by the owner (alias `k8s_external_gateway` = `.14`, 21 rdr and 3 pass rules, old
+alias deleted; an orphan kernel table `k8s_external_ingress` remains until a filter reload,
+unreferenced). P6.2 done except the `auth` alias under `app.staging.forkline.dev`, still present.
+Added overrides `mcp`, `photos`, `s3`, `mc-s3`, `cross-backups`, `mc-cross-backups`, `open-webui`
+(resolve to `.14` from LAN and pods); removed `accounts`, `auth-kanidm`, `gitea`, `jackett`; no
+optional names added. Next: remove the hermes `hostAliases` (waits for unrelated in-flight hermes
+work).
+
+- Facts: overrides are a parent host with aliases: `freshrss.grigri.cloud` -> `.14` (28 aliases),
+  `app.staging.forkline.dev` -> `.14` (4), `mintpsicologia.es` -> `.14` (`www`),
+  `turn.grigri.cloud` -> `.5` (keep). NAT reflection is on (pure NAT, 3 rdr rules x 7 interfaces =
+  21) and there is no SNAT on the LAN interfaces, so LAN clients keep their source IP through
+  reflection (this corrects the earlier assumption that the source becomes pfSense); the cost is
+  the extra hop. Reflection does not work for pods (hermes HTTPS timeouts via the public address);
+  CoreDNS and nodelocaldns forward to `/etc/resolv.conf` (pfSense), so an override reaches pods
+  within the cache TTL.
+- P6.2 UI steps (Services > DNS Resolver > Host Overrides):
+  1. Edit `freshrss.grigri.cloud`: delete the aliases `accounts`, `auth-kanidm`, `gitea`,
+     `jackett`; add `mcp` (required: pods use it), `photos`, `s3`, `mc-s3`, `cross-backups`,
+     `mc-cross-backups`, `open-webui` (recommended, bulk or LAN-heavy), domain `grigri.cloud`,
+     description "K8s external gateway". Optional (reflection covers LAN): `kroki`, `lidarr`,
+     `prowlarr`, `requests`, `tanque`, `tanque-stream`, `regalo`, `telegram`, `http-echo`,
+     `staging.forkline.dev`. Not needed: `idm.isidoro.grigri.cloud` (the public record is already
+     `.14`).
+  2. Edit `app.staging.forkline.dev`: delete the alias `auth`.
+  3. Save, Apply. Verify `dig +short mcp.grigri.cloud @192.168.192.1` = `192.168.193.14` for each
+     added name, and from a pod. Rollback: re-add or remove the aliases.
+  4. Then (git) remove the hermes `hostAliases` (`apps/hermes/values.yaml:158`) and update
+     `apps/hermes/tests/test_hostaliases_mcp_dns.py` and the `.14` asserts in
+     `test_render_enable.py`.
+- P6.1 (no traffic impact, IP unchanged): create the alias `k8s_external_gateway` = `.14` (P1.1),
+  edit the port forward to redirect to it (regenerates the linked pass rule), verify
+  `pfctl -sn | grep -c k8s_external_gateway` = 21 and `pfctl -sr | grep -c k8s_external_gateway`
+  = 3, then delete `k8s_external_ingress` (pfSense refuses while it is in use). Rollback:
+  re-select the old alias before deleting it.
+
+**G6. Calypso runners (step 3).** Tenant work in progress (owner, 2026-11-10) to drop the Ingress
+dependency (`exposure: gateway-api`, no `internal` parentRef); see the tenant cleanup list.
 
 ## Verification Checklist (per route)
 
@@ -1782,6 +2082,13 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
   the tenant's chart release and the bridge was replaced on 2026-11-10 (Phase 5 record). Still open: switch
   calypso to `exposure: gateway-api` after the soak, which gates the removal of
   ingress-nginx-external, the runner ReferenceGrant and the internal runner listener (Phase 6 step 3).
+  Also open (2026-11-10 check): the `mcp-fixture` DNS record depends on its Ingress for the
+  `external-dns.kubernetes.io/enabled` annotation (move it to the route or a `DNSEndpoint` before
+  the Ingress is disabled), and the runner Ingress `autonomous-runner-issue-603-09` predates the
+  exposure switch and has no HTTPRoute (recycle it after `exposure: gateway-api`).
+- Kanidm group `k8s-oauth2-proxy-users` (defined in `system/oauth2-proxy`, still authorizes the
+  Envoy `SecurityPolicy`s): plan in G3; decision taken 2026-11-10: per-app groups only (G3
+  done); the group is deleted with `system/oauth2-proxy` in Phase 6 step 2.
 - Phase 1 leftovers: step 6 (ZeroSSL ClusterIssuer, waits for the owner's EAB credentials in
   Vault) and P1.1 (optional pfSense).
 - Tenant open points (details in the tenant section): runner auth and RBAC for HTTPRoutes (design
