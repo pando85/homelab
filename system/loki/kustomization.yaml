@@ -5,7 +5,6 @@ namespace: loki
 resources:
   - resources/configmap-grafana-datasource-loki.yaml
   - resources/httproute.yaml
-  - resources/ingress.yaml
   - resources/prometheus-rules-alerts.yaml
   - resources/prometheus-rules-rules.yaml
   - resources/prometheus-rules-vector-alerts.yaml
