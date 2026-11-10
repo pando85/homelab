@@ -10,8 +10,8 @@ This also delivers the grigri (staging) platform part of the tenant's Envoy Gate
 Forkline Remote: experimental-channel Gateway API CRDs, a shared external Gateway with HTTPS
 listeners plus a TLS passthrough listener, and the router 443 switch away from `192.168.193.4`.
 
-**Status: Phases 0-5 executed (Phase 5 on 2026-11-10 07:04 UTC, P5.3 at ~08:20 UTC), Gate 5 watch
-running (a few days). Next is Phase 6, which needs the owner's yes. See Execution Status and Autonomy Scope.**
+**Status: Phases 0-6 executed (Phase 6 on 2026-11-10). ingress-nginx, ingress-nginx-external and
+oauth2-proxy are gone; the owner leftovers are listed under Phase 6, Executed. See Execution Status.**
 
 Strategy in one paragraph: run Envoy Gateway **side by side** on two new Cilium LB VIPs
 (`.13` internal, `.14` external). Every app gets its internal and external routes and is verified
@@ -53,7 +53,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 3     | done        | Every homelab Ingress host has an Envoy route on the matching gateway, tenant hosts included (calypso, isidoro). Tracking list and Gate 3 results in Phase 3. |
 | 4     | done, Gate 4 running | Executed 2026-11-09 (Phase 4, Executed). Watch 3-7 days. P4.1 (pfSense) done, owner. |
 | 5     | done, Gate 5 running | Executed 2026-11-10 (Phase 5, Executed). P5.1, P5.2 and P5.3 (pfSense) done, owner. Runner bridge swap done. Gate 5 watch running. |
-| 6     | not started (needs the owner's yes) | Preconditions checked 2026-11-10 (Phase 6, Precondition check). Owner decision 2026-11-10: the Gate 5 soak length no longer gates Phase 6; start on the owner's go once the gap-closure blockers below are closed. Gap closure 2026-11-10: G1 step b, G2, G3, G4 and G5 P6.1 done; open: G1 step c (Phase 6 step 1), G5 P6.2 `auth.staging` alias and the hermes `hostAliases`. |
+| 6     | done        | Executed 2026-11-10 (Phase 6, Executed). Owner leftovers listed there (Vault orphan Ingress, Kanidm `spec.ingress`, namespaces, Vault metadata, `auth` DNS record). |
 
 ### Phase 1 progress (2026-11-09)
 
@@ -1737,6 +1737,46 @@ Separate commits, in order:
 apps Synced/Healthy, no listener `https-runners-staging-forkline-dev` remains on the internal
 Gateway, no Cloudflare A record points at `192.168.193.1` or `.4` (step 3a; met 2026-11-10).
 
+**Executed 2026-11-10** (an agent, owner-approved, group by group with a check after each push):
+
+- Baseline before group A: 94 hosts (every HTTPRoute host plus every Ingress host) probed over HTTPS and
+  resolved at the public resolver; Gateways Programmed; no Argo app out of sync; 18 OIDC SecurityPolicies Accepted;
+  LDAPS serial recorded. After every group the probe set was identical (same code and same address per
+  host), Gateways Programmed, external-dns 0 errors, no Argo app out of sync.
+- A (Ingress removal): `58adf599a` (kanidm, vault, mcp-gateway, mintpsicologia, tanque, argocd external,
+  loki, monitoring, 4 `apps:` batches). The 65 ingress-shim Certificates went with their Ingresses, all remaining
+  Certificates Ready; kanidm pods untouched, LDAPS serial unchanged. Lesson: removing `spec.ingress` from the
+  Kanidm CR never reached the cluster (server-side apply keeps no last-applied annotation, so Argo sees no
+  diff for a removed field). `a6f5952bc` (metadata annotation) forced one apply that pruned the fields
+  Argo owned; the rest of `spec.ingress` belongs to older field managers and stays until the owner patches it
+  out, so the operator's `kanidm/kanidm` Ingress is the one leftover. `198106c2b` corrects the comment.
+- B: `84575f110` (oauth2-proxy). Application gone, its KanidmGroup and KanidmOAuth2Client gone, 18/18
+  OIDC SecurityPolicies Accepted, OIDC hosts still 302 to the identity provider.
+- C: `3d9e70f29`. Listener `https-runners-staging-forkline-dev` and Certificate
+  `internal-app-staging-forkline-dev` gone from the internal Gateway (the external listener stays), all
+  listeners Programmed, runner HTTPRoutes Accepted.
+- D: `9a2d92a9a` (internal controller), `c0bb20e09` (external controller). Both Applications, the
+  Services on `.1` and `.4`, IngressClasses, admission webhooks and ClusterRoles pruned; pfSense BGP no longer
+  lists `.1/32` or `.4/32`; no `nginx_ingress_controller_*` series about 5 min after the pods went (they had
+  0 req/s for 15 min before). Namespaces stay until the owner deletes them.
+- E (references): `3569a30e4` through `198106c2b` (otel-collector rules, Loki and Tempo comments, scripts
+  `eg-host-diff` removed and `gateway-check` compare dropped, mcp-gateway NetworkPolicy rules, stale comments).
+  otel-collector rolled with no config errors, Loki answers, mcp-gateway Synced/Healthy with its NetworkPolicies.
+  Envoy 5xx stayed at noise level (the only 5xx source was 30 s Loki query timeouts behind Grafana, which
+  started before the push).
+- Docs: `9f2b19e62` through `11a379314`.
+- No rollback was needed.
+- **Gate 6 result:** met except one Ingress: no `nginx_ingress_controller_*` series; no `.1`/`.4`
+  Service or pfSense route; all Argo apps Synced/Healthy; no internal runner listener; no Cloudflare A record
+  at `.1`/`.4` (public resolver spot checks of `idm`, `bazarr` and `antdroid` answer the public address).
+  Ingresses left: `vault/vault` (orphan) and `kanidm/kanidm` (operator-owned, see A).
+- **Owner leftovers:** `kubectl --context=grigri -n vault delete ingress vault`; remove the rest of
+  `spec.ingress` from the Kanidm CR (`kubectl --context=grigri -n kanidm patch kanidm kanidm --type=json
+  -p '[{"op":"remove","path":"/spec/ingress"}]'`, the operator then deletes its Ingress and the
+  `idm-external-tls-certificate` Certificate follows); `kubectl --context=grigri delete ns ingress-nginx
+  ingress-nginx-external oauth2-proxy`; `vault kv metadata delete secret/oauth2-proxy/cookie`; the public
+  `auth.grigri.cloud` record (external-dns only upserts, it still resolves).
+
 **Precondition check 2026-11-10** (read-only, before the owner's yes):
 
 - Soak: Gate 4 ~1 day, Gate 5 ~3.5 h of 7 days. Envoy 5xx 24h: external 11/75.9k, internal 6/132k;
@@ -2041,8 +2081,9 @@ work).
   = 3, then delete `k8s_external_ingress` (pfSense refuses while it is in use). Rollback:
   re-select the old alias before deleting it.
 
-**G6. Calypso runners (step 3).** Tenant work in progress (owner, 2026-11-10) to drop the Ingress
-dependency (`exposure: gateway-api`, no `internal` parentRef); see the tenant cleanup list.
+**G6. Calypso runners (step 3).** Status 2026-11-10: done. The tenants removed their Ingresses (calypso
+dropped the Ingress dependency, `exposure: gateway-api`, no `internal` parentRef; isidoro removed its own),
+so step 3 and the internal runner listener removal ran.
 
 ## Verification Checklist (per route)
 
