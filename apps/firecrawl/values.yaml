@@ -432,28 +432,7 @@ app-template:
         http:
           port: 6379
 
-  # Ingress
-  ingress:
-    api:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      hosts:
-        - host: &host firecrawl.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: api
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: firecrawl-tls-certificate
-
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # Envoy Gateway route.
   # Internal route: the external-dns annotation publishes its name (the Gateway address).
   route:
     api:

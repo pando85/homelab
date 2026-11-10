@@ -74,48 +74,7 @@ app-template:
         metrics:
           port: *metricsPort
 
-  ingress:
-    atuin:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/proxy-body-size: 1G
-      hosts:
-        - host: &host atuin.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: atuin
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: atuin-tls-certificate
-    external:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        nginx.ingress.kubernetes.io/proxy-body-size: 1G
-      hosts:
-        - host: &host atuin.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: atuin
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: atuin-external-tls-certificate
-
-  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # Envoy Gateway routes.
   # Internal routes carry the external-dns annotation (the Gateway address is published in DNS).
   route:
     internal:
