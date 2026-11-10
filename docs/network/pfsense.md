@@ -6,8 +6,8 @@ depends on, so that changes can be planned against them. Snapshot taken 2026-11-
 before acting on any value here.
 
 For the FRR (BGP) setup on the cluster side, see
-[Cilium BGP control plane](../deployment/cilium-bgp-control-plane.md). For the planned changes,
-see `planning/ingress-nginx-to-envoy-gateway.md` in the repository root.
+[Cilium BGP control plane](../deployment/cilium-bgp-control-plane.md). For how the Gateways are
+used, see [Ingress](ingress.md); migration history is in `planning/ingress-nginx-to-envoy-gateway.md`.
 
 ## 1. Interfaces
 
@@ -33,10 +33,8 @@ The VIPs live in 192.168.193.0/24 and are learned by pfSense over BGP
 
 | Address | Service |
 |---------|---------|
-| 192.168.193.1 | ingress-nginx (internal), idle rollback path |
 | 192.168.193.2 | UniFi |
 | 192.168.193.3 | transcoder-rabbit |
-| 192.168.193.4 | ingress-nginx (external), idle rollback path |
 | 192.168.193.5 | coturn (TURN) |
 | 192.168.193.7 | qBittorrent |
 | 192.168.193.8 | Kanidm LDAPS |
@@ -44,6 +42,8 @@ The VIPs live in 192.168.193.0/24 and are learned by pfSense over BGP
 | 192.168.193.10 | Mosquitto TLS |
 | 192.168.193.13 | Envoy Gateway (internal) |
 | 192.168.193.14 | Envoy Gateway (external) |
+
+`192.168.193.1` and `.4` were the ingress-nginx VIPs and are no longer allocated.
 
 Aliases that reference addresses not advertised over BGP:
 
@@ -77,7 +77,7 @@ Host aliases:
 
 | Alias | Address | Note |
 |-------|---------|------|
-| `k8s_external_gateway` | 192.168.193.14 | External Envoy Gateway VIP. Renamed from `k8s_external_ingress` and moved from `.4` (nginx-external) on 2026-11-10; nginx is no longer the target |
+| `k8s_external_gateway` | 192.168.193.14 | External Envoy Gateway VIP. Renamed from `k8s_external_ingress`; it pointed at the former ingress-nginx external VIP (`.4`) until 2026-11-10 |
 | `k8s_turn` | 192.168.193.5 | |
 | `k8s_plex` | 192.168.193.5 | Stale description: same address as `k8s_turn` |
 | `k8s_qbittorrent` | 192.168.193.7 | |

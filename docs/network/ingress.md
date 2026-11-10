@@ -1,7 +1,8 @@
 # Ingress
 
 How HTTP(S) and TCP traffic reaches the cluster: Envoy Gateway, the pfSense forwards in front of it,
-and the DNS that points clients at it. For writing a route see
+and the DNS that points clients at it. Why Envoy Gateway:
+[ADR-0005](../adr/0005-gateway-api-with-envoy-gateway.md). For writing a route see
 [Exposing an app with Gateway API](../conventions/gateway-api-routes.md). For the pfSense inventory
 (interfaces, BGP, all aliases) see [pfSense](pfsense.md).
 
@@ -24,7 +25,7 @@ Gateway listener (hostname) becomes one filter chain. This matters for
 
 | Listener                                | Port  | Serves                                                                 |
 |-----------------------------------------|-------|------------------------------------------------------------------------|
-| `http`                                  | 80    | Redirect to HTTPS, 301 (nginx used 308)                                |
+| `http`                                  | 80    | Redirect to HTTPS, 301                                                |
 | `https-grigri-cloud`                    | 443   | `*.grigri.cloud` wildcard, the bulk of the routes                      |
 | `https-staging-forkline-dev`            | 443   | `staging.forkline.dev` (tenant)                                        |
 | `https-wildcard-staging-forkline-dev`   | 443   | `*.staging.forkline.dev` (tenant)                                      |
@@ -33,19 +34,23 @@ Gateway listener (hostname) becomes one filter chain. This matters for
 | `https-mintpsicologia-es`, `-www`       | 443   | `mintpsicologia.es` and `www.`                                         |
 | `tcp-forgejo-ssh`                       | 29518 | TCPRoute to Forgejo SSH                                                |
 
-The internal Gateway carries its own listeners (wildcards for `internal.grigri.cloud`, Isidoro, Rajoy,
-the tenant staging domain) plus a **verification listener** `https-runners-staging-forkline-dev`
-(certificate `internal-app-staging-forkline-dev`). It exists so tenant runner routes can be tested
-on `.13` with `curl --resolve` before public exposure. It is temporary: it is removed together with
-ingress-nginx in Phase 6 of `planning/ingress-nginx-to-envoy-gateway.md`, and with it the tenant's
-`internal` parentRef.
+The internal Gateway carries its own listeners: wildcards for `internal.grigri.cloud`, Isidoro,
+Rajoy and the tenant staging domain (see `gateway-internal.yaml`).
 
-### ingress-nginx (idle rollback paths)
+### Authentication
 
-ingress-nginx (`192.168.193.1`, internal) and ingress-nginx-external (`192.168.193.4`) still run, with
-the Ingresses still in git, but carry no traffic. They are rollback paths until Phase 6 removes them.
-Do not remove an Ingress when adding a route before then. The `nginx-external` Service no longer
-publishes DNS.
+Protected apps use an Envoy Gateway `SecurityPolicy` (native OIDC against Kanidm plus a JWT check on
+a per-app claim), with one Kanidm client and one `<app>-users` group per app. There is no
+shared oauth2-proxy and no `auth.grigri.cloud` host (a tenant runs its own for its own apps).
+Recipe and operating details: [Authentication](../conventions/gateway-api-routes.md#authentication) and
+[ID token cookie size](../troubleshooting/envoy-oidc-id-token-cookie-size.md).
+
+### Removed: ingress-nginx
+
+ingress-nginx (`192.168.193.1` internal, `192.168.193.4` external), its Ingresses and oauth2-proxy
+were removed after both switches soaked; the two VIPs are unused. The Gateways are the only
+ingress path, so a route is the only way to expose an app and there is no nginx to roll back to
+(history: `planning/ingress-nginx-to-envoy-gateway.md`).
 
 ## pfSense in front of the external Gateway
 
@@ -72,7 +77,7 @@ pfSense configuration is not in git and **changes are owner-only**; agents inspe
 Read-only checks:
 
 ```sh
-ssh pfsense.grigri 'pfctl -t k8s_external_gateway -T show; pfctl -sn | grep -c "rdr.*k8s_external_gateway"; pfctl -ss | grep -c "192.168.193.4:"'
+ssh pfsense.grigri 'pfctl -t k8s_external_gateway -T show; pfctl -sn | grep -c "rdr.*k8s_external_gateway"; pfctl -ss | grep -cE "192\.168\.193\.[14][: ]"'
 ssh pfsense.grigri 'grep -E "^local-data: \"[^ ]+ A 192.168.193\." /var/unbound/host_entries.conf'
 ```
 
@@ -98,9 +103,8 @@ external-dns publishes to Cloudflare with policy `upsert-only` and sources `serv
   filter written with the legacy key would still select objects while their legacy `target` is
   ignored; an object meant to get a CNAME then gets an A record from its status IP, and where a
   CNAME already exists Cloudflare rejects it with error 81054 and the whole batch fails. The filter
-  here uses the non-alpha `enabled` key, so the 11 tenant Ingresses that still carry
-  `external-dns.alpha.kubernetes.io/enabled` are ignored entirely and their records are frozen
-  until the Ingresses go away in Phase 6.
+  here uses the non-alpha `enabled` key, so an object that only carries
+  `external-dns.alpha.kubernetes.io/enabled` is ignored entirely.
 - **Upsert-only:** external-dns never deletes or reverts a record. Removing an annotation, or rolling
   a route back, leaves the record in Cloudflare. To roll back a moved record, edit it in Cloudflare
   by hand **and** revert the source in git; otherwise external-dns re-asserts the record within its
@@ -121,26 +125,23 @@ external-dns publishes to Cloudflare with policy `upsert-only` and sources `serv
   Cloudflare dashboard or API for names never in git. Point-in-time list and cleanup step:
   `planning/ingress-nginx-to-envoy-gateway.md` (Phase 6).
 
-## Rolling back a Gateway switch
+## Rolling back
 
-Rollback paths exist until Phase 6 (ingress-nginx still serves the Ingresses).
+Change nothing by hand: revert the commit and let Argo CD sync (see
+[ArgoCD GitOps workflow](../troubleshooting/argocd-gitops-workflow.md)). A revert that changes a
+`SecurityPolicy`, `EnvoyExtensionPolicy` or certificate on a listener drains that listener like the
+original change did, so do not revert during a long transfer.
 
-1. Owner sets alias `k8s_external_gateway` back to `192.168.193.4` (one edit; moves 80, 443, 29518
-   and reflection; the alias was named `k8s_external_ingress` until 2026-11-10).
-2. Owner sets the three unbound host override IPs back to the nginx VIP (`.4` for the external
-   names). Count with the override command above, do not eyeball.
-3. Kill the pf states that still point at the new VIP (Diagnostics > States, filter the IP, Kill);
-   see the states doc above.
-4. DNS: edit moved records in Cloudflare by hand, then revert the source in git (see upsert-only).
+The two VIPs are the only targets: alias `k8s_external_gateway` stays at `192.168.193.14` and the
+unbound overrides at `.14`. If the external Gateway itself is down, public traffic has no fallback;
+bringing ingress-nginx back means reverting its removal commits in git (owner decision).
 
 ## Verifying a change
 
 - `scripts/gateway-check.sh`: read-only. Gateway and listener health, route and policy acceptance,
-  pfSense alias and override counts, and host probes.
-- `scripts/eg-host-diff.sh`: read-only diff of every Ingress host and path as served by
-  ingress-nginx against the same request served by Envoy Gateway (`curl --resolve`, no DNS, no
-  credentials). Expected differences: port 80 redirect 301 vs 308, empty bodies on 404/403/redirects,
-  headers containing underscores dropped by Envoy.
+  pfSense alias and override counts, and host probes. Expected differences when reading old
+  captures: port 80 redirect 301 vs 308, empty bodies on 404/403/redirects, headers containing
+  underscores dropped by Envoy.
 - A single-page app that answers 200 to any path proves nothing about auth. Probe a path only the
   protected backend serves (for example an `/api/` path that returns 401 on bad credentials).
 - Debugging Envoy itself: [Envoy Gateway debugging](../troubleshooting/envoy-gateway-debugging.md).

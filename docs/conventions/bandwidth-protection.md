@@ -43,7 +43,7 @@ The only mechanism that can protect pfSense from downloads. One-time pfSense con
 - Traffic Shaper → Limiter `WAN-in-backups`, dummynet pipe, **~250 Mbit** (below the
   ~300 Mbit saturation knee, leaves headroom for other traffic).
 - Firewall rule on WAN-in, dst = `192.168.193.14` (the external Envoy Gateway
-  LoadBalancer IP; `192.168.193.4`, `ingress-nginx-external`, until 2026-11-10), action = pipe to `WAN-in-backups`.
+  LoadBalancer IP), action = pipe to `WAN-in-backups`.
 
 This prevents the reboot scenario regardless of cluster state. It lives outside GitOps
 (pfSense XML); record it here and optionally automate via the pfSense API / Ansible
