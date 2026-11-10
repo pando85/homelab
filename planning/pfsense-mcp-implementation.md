@@ -392,6 +392,31 @@ objection to stateful mode is that it caches a backend credential per session, a
 session id presented without a valid bearer, with a garbage token, and with another route's
 scope is refused, and that refused requests never reach the backend.
 
+**Pre-flight check, resolved 2026-11-10.** The admin gateway pod reported 17 restarts, which
+looked like an unexplained fault on the plane this feature depends on. It is benign and already
+fixed:
+
+| Evidence | Value |
+|---|---|
+| Restart window | pod created `2026-11-09T13:10:59Z`, last termination `2026-11-09T14:38:20Z`: all 17 inside 87 minutes |
+| Stability since | current container started `14:38:20Z`, no further restarts over ~27 h of logs |
+| Last termination | `reason: Completed`, `exitCode: 0`, final log lines `drain started`, `listener drained`, `shutdown complete`, `binds drained` |
+| Not OOM, not a hard kill | memory limit 256Mi; an OOMKill or a container that ignored SIGTERM would report 137 |
+| Fix | commit `c75fae8f0` (`mcp-gateway-admin: Restore policy-free probe baseline`) at `2026-11-09T14:39:34Z`, one minute after the last restart |
+
+Mechanism: agentgateway handles SIGTERM by draining gracefully and exiting 0, so a
+**liveness-probe kill presents as `Completed`, not as a crash**. On this cluster
+(`enable-policy: default`, `enable-host-firewall: false`) any policy carrying an ingress section
+denies kubelet probe traffic unless the health port is exempted, which is exactly what
+`c75fae8f0` restored; the reasoning and the owner-approved residual (`world` may reach 15021
+only) are recorded in `apps/mcp-gateway-admin/templates/networkpolicy.yaml`. Kubernetes events
+for that pod have expired, so the per-restart trigger is inferred from the log shape and the
+commit timing rather than read from the API.
+
+Consequence for this plan: no blocker, but `restartCount` must be re-read immediately before and
+after the phase 2 route lands, so that a genuine config-reload fault is not dismissed as
+leftover churn from 2026-11-09.
+
 ## 7. Network policies
 
 | Direction | Allow | Deny |
@@ -411,13 +436,27 @@ rule (`§3.3`).
 **Phase 0, resolve the blockers (owner-side, no code).**
 
 1. Decide `§3`: Option A scoped to one node, or Option B with its Cilium change first.
-2. Apply the pfSense rule above the `quick` deny, then re-run the connectivity check from that
-   node only, with **one** request and a valid token.
+2. Apply the pfSense rule above the `quick` deny
+   (`block return in log quick on igb1.101 inet proto tcp from <OPT1__NETWORK> to (self)`,
+   labelled `"DMZ to pfsense DENY TCP"`, rule id 1585457855), then Apply Changes.
 3. Issue a read-only API token and place it in Vault.
 
-Acceptance: from the chosen node, `curl -sk -o /dev/null -w '%{http_code}'` against
-`https://pfsense.grigri/api/v2/system/version/` with `X-API-Key` returns 200, and the same
-call from a *different* node still fails (proving the rule is scoped, not DMZ-wide).
+Acceptance: from the chosen node, one request against
+`https://pfsense.grigri/api/v2/system/version/` returns 200, and the same call from a
+*different* node still fails (proving the rule is scoped, not DMZ-wide).
+
+Pass the credential on stdin, never in argv, and **never loop it**: three rejected credentials
+inside five minutes trip the GUI Lockout rule and ban the source address for 120 s (`§2.4`),
+which behind masquerade bans the node for every pod on it.
+
+```bash
+printf 'header = "X-API-Key: %s"\n' "$TOKEN" \
+  | curl -sk -K - -o /dev/null -w '%{http_code}\n' https://pfsense.grigri/api/v2/system/version/
+```
+
+`-k` is used here only because the CA has not been fetched yet; the deployed pod must use
+`VERIFY_SSL=true` with `PFSENSE_CA_FILE` (`§2.2`). The hostname is mandatory in the URL: the
+certificate has no IP SAN (`§2.3`).
 
 **Phase 1, the workload.** Chart, CNP, ExternalSecret, generated `MCP_API_KEY`. No gateway
 route yet, so the MCP is unreachable and inert.
@@ -431,7 +470,8 @@ the loopback redirect, and `statefulMode: stateless`.
 
 Acceptance: discovery URL returns 200 JSON **without** a token; `/pfsense/mcp` without a
 bearer returns 401 (not 404); a token with the wrong scope is refused; `tools/list` returns
-the read-only set; and no write tool is present.
+the read-only set; and no write tool is present. Also re-read the gateway pod's `restartCount`
+before and after the sync: it must not move (`§6` pre-flight check).
 
 **Phase 3, read-only proof.** Enumerate the tool inventory and compare it with the expected
 read-only set. Attempt a write tool by name and confirm it is absent rather than merely
