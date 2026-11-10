@@ -27,7 +27,9 @@
     'custom.regex',
   ],
   kubernetes: {
-    managerFilePatterns: ["/ci-runners/resources/statefulset.yaml$/"]
+    // Both CI runner StatefulSets (prusik and k8s-amd64-1) must be tracked, or the
+    // forgejo-runner-gc digest is bumped in one only and the runners drift apart.
+    managerFilePatterns: ["/ci-runners/resources/statefulset(-amd64)?\\.yaml$/"]
   },
   'pre-commit': {
     enabled: true,
@@ -295,6 +297,26 @@
         '/app-template/',
       ],
       commitMessagePrefix: 'app-template: ',
+    },
+    {
+      description: 'Group the CI runner images of both runner StatefulSets in one PR',
+      matchDatasources: [
+        'docker',
+      ],
+      matchFileNames: [
+        'platform/ci-runners/**',
+      ],
+      matchPackageNames: [
+        'ghcr.io/pando85/forgejo-runner-gc',
+        'docker',
+      ],
+      groupName: 'forgejo-runner',
+      groupSlug: 'forgejo-runner',
+      additionalBranchPrefix: 'forgejo-runner-',
+      addLabels: [
+        'renovate/forgejo-runner',
+      ],
+      commitMessagePrefix: 'ci-runners: ',
     },
     {
       description: 'Group Immich updates in one PR',
