@@ -56,8 +56,9 @@ group `minio-sccache.rules`, `severity: warning|critical` as elsewhere.
 
 Notes: use PUT only (GET 4xx is mostly normal misses: 45% of bucket GETs). Quota is enforced from
 scanner usage, so usage can overshoot it slightly. The first three need a margin: at ~13 GiB/day a
-14-day expiry plateaus near 180 GiB, so the pending lifecycle sizing, not the alerts, must keep the
-plateau under about 70% of quota. Prometheus retention (240d) covers the 15d offset. Add short
+14-day expiry would plateau near 180 GiB; the 7-day expiry with a 200 GiB quota plateaus near
+95-145 GiB (about 48-72% of quota), which is why the expiry and quota, not the alerts, keep the
+plateau under about 70% of quota on average weeks. Prometheus retention (240d) covers the 15d offset. Add short
 runbook text pointing at the troubleshooting doc in `annotations.description`.
 
 ## 3. Client-side stats (per-level hits, misses, L1 writes, errors)
@@ -95,8 +96,8 @@ or use a second ConfigMap). Panels:
 
 ## 5. Rollout, validation, approvals
 
-1. After the 100 GiB quota commit is pushed and synced (owner approval), confirm
-   `minio_bucket_quota_total_bytes{bucket="sccache"}` reads 107,374,182,400.
+1. After the 200 GiB quota commit is pushed and synced (owner approval), confirm
+   `minio_bucket_quota_total_bytes{bucket="sccache"}` reads 214,748,364,800.
 2. Commit the Probe, then the rules and dashboard in `platform/minio/` (one commit each, scope
    `minio`). Push needs owner approval; ArgoCD does the apply. Validate: `helm template
    --include-crds platform/minio`, `pre-commit run`, then target `up{job="minio-bucket"}`, series

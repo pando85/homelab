@@ -121,8 +121,11 @@ plausible for Validation (identical basedir shape on both runners) but not prove
 
 **Incident, 2026-11-10:** the 50 GiB bucket filled in about 3.5 days (~12-14 GiB/day). From
 ~04:20Z MinIO rejected PUTs (14% 4xx) while jobs reported 0 L1 writes and 0 write errors, because
-`l0` silently drops failed secondary writes. The quota was raised to 100 GiB; a shorter lifecycle
-expiry is being sized. See
+`l0` silently drops failed secondary writes. The quota is now 200 GiB with a 7-day lifecycle expiry:
+measured writes (2026-11-06..10) averaged 11.8 GiB/day (22 GiB on the one full weekday, at least
+25.9 GiB in the peak 24h), and a 7-day rule holds up to about 8 days of writes (MinIO expires at the
+UTC midnight after the age is reached), roughly 95 GiB at the average and 145 GiB in a busy week.
+Rule of thumb: quota >= 2 x busy-day GiB x (expiry days + 1). See
 [sccache S3 bucket full](../troubleshooting/sccache-s3-bucket-full-silent.md).
 
 ## What Cargo and sccache reuse

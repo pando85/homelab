@@ -15,11 +15,11 @@ MinIO rejected PUTs with "Bucket quota exceeded".
 ## Root Cause
 
 The bucket has a hard quota (`platform/minio/templates/sccache-config.yaml`, applied by the
-`minio-sccache-provisioning` hook) and a 14-day age-based lifecycle rule. Ingest outpaced expiry, so
-the quota was reached. The action runs `SCCACHE_MULTILEVEL_WRITE_ERROR_POLICY=l0`, which writes the
+`minio-sccache-provisioning` hook) and an age-based lifecycle rule (14 days at the time). Ingest outpaced
+expiry, so the quota was reached. The action runs `SCCACHE_MULTILEVEL_WRITE_ERROR_POLICY=l0`, which writes the
 local level first and silently drops failed secondary writes, so a full bucket is invisible to
 sccache and to the job result. Reads keep working, so hits continue until entries expire. The
-quota was raised to 100 GiB (a shorter lifecycle expiry is being sized); this is the intended
+quota is now 200 GiB with a 7-day expiry (current values: `sccache-config.yaml`); this is the intended
 degradation (jobs fall back to local cache), not a build failure.
 
 ## How to Diagnose

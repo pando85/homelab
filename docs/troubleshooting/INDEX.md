@@ -301,7 +301,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   runner's native `workdir_cleanup_age` GC only covers per-job scratch dirs. See
   `docs/troubleshooting/ci-runner-amd64-disk-full.md`
 
-- The `sccache` MinIO bucket (hard quota, 14-day lifecycle) filled in ~3.5 days at ~12-14 GiB/day;
+- The `sccache` MinIO bucket (hard quota, 14-day lifecycle at the time) filled in ~3.5 days at ~12-14 GiB/day;
   from then MinIO rejected PUTs (14% 4xx) while CI jobs showed 0 `L1 (s3) writes` and 0 errors,
   because write policy `l0` silently drops failed secondary writes. Check `du -sb /export/sccache`
   in the minio pod and the PutObject 4xx rate, not sccache errors. See

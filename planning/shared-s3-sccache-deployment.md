@@ -99,8 +99,8 @@ Proposed initial settings, subject to verified capacity and backend support:
 | Anonymous access | Disabled |
 | Versioning / object locking | Disabled |
 | Purge existing contents during provisioning | Disabled |
-| Storage ceiling | 100 GiB = 107,374,182,400 bytes, hard quota (raised from 50 GiB on 2026-11-10; verified: oversized writes rejected) |
-| Object expiration | 14 days; one lifecycle rule `sccache-expiry`; tune from observed reuse |
+| Storage ceiling | 200 GiB = 214,748,364,800 bytes, hard quota (50 GiB, then 100 GiB, until 2026-11-10; oversized writes verified rejected) |
+| Object expiration | 7 days (was 14); one lifecycle rule `sccache-expiry`; tune from observed reuse |
 | Backups | Do not add cache contents to backup jobs |
 | Authorization | Dedicated bucket-scoped policies; no administrative or backup-bucket access |
 
@@ -270,15 +270,20 @@ capacity decisions. No worktree-target migration is implied by enabling S3.
 
 ### Cross-host hits and path normalization
 
-The storage side is complete and verified: private `sccache` bucket, hard quota 100 GiB
-(107,374,182,400 bytes, writes past the cap rejected), one 14-day lifecycle rule
+The storage side is complete and verified: private `sccache` bucket, hard quota 200 GiB
+(214,748,364,800 bytes, writes past the cap rejected), one 7-day lifecycle rule
 (`sccache-expiry`), separate scoped identities (`sccache-ci` read/write, `sccache-desktop`
 read-only) and a credential file delivered to the runners.
 
 The quota was raised from 50 GiB because the original bucket filled in about 3.5 days (2026-11-06 to
 2026-11-10 ~04:30Z, ~12-14 GiB/day) and S3 writes were silently rejected (write policy `l0`; see
-`docs/troubleshooting/sccache-s3-bucket-full-silent.md`). A shorter lifecycle expiry is being sized
-next; this plan does not fix its value.
+`docs/troubleshooting/sccache-s3-bucket-full-silent.md`). Sizing for the 200 GiB / 7-day setting: measured
+writes 2026-11-06..10 were 11.8 GiB/day on average over full days, 22 GiB on the one full weekday and
+at least 25.9 GiB in the peak 24h. A 7-day expiry holds up to about 8 days of writes (MinIO expires
+at the UTC midnight after the age is reached): about 95 GiB at the average and 145 GiB in a busy
+week, so 200 GiB does not fill at today's rates (about 1.4x headroom on busy weeks, 2.1x on average).
+The target is 2x on busy weeks once write volume drops (path normalization in all Calypso workflows,
+PR jobs read-only; tracked in Calypso). Rule of thumb: quota >= 2 x busy-day GiB x (expiry days + 1).
 
 sccache keys include source file paths, so builds under different workspace prefixes do not collide.
 Path normalization (`normalize-paths: true`, sccache 0.19 `BASEDIRS` = workspace root) **is now

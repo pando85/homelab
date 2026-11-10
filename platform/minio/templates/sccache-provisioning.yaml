@@ -21,7 +21,7 @@ same pinned image, RELEASE.2026-10-26T00-00-00Z):
   3. exactly one lifecycle  mc ilm rule import (replaces the whole config) -> 1 rule, <RULE_ID>, <DAYS>
 
 The quota, expiry, rule ID, endpoint and bucket name are configured in templates/sccache-config.yaml
-(currently 100 GiB = 107,374,182,400 bytes and a 14-day expiry), not in this script.
+(currently 200 GiB = 214,748,364,800 bytes and a 7-day expiry), not in this script.
   4. every step is read back and the Job FAILS if the applied state differs, so a green sync means
      the cap and the rule are actually in place (no `|| true` anywhere in this script).
 
@@ -211,12 +211,12 @@ spec:
               # Hard quota. `mc admin bucket quota` is deprecated and errors in this mc build
               # ("Please use 'mcli quota' instead"); `mc quota set --size` is the supported form.
               # The cap is passed as an explicit byte count with the "b" suffix (mc accepts it), so
-              # no unit parser can turn "100gb" (decimal 100,000,000,000) into a surprise: 100 GiB is
-              # exactly 107,374,182,400 bytes and that is what the assertion below requires.
+              # no unit parser can turn "200gb" (decimal 200,000,000,000) into a surprise: 200 GiB is
+              # exactly 214,748,364,800 bytes and that is what the assertion below requires.
               mc quota set "$TARGET" --size "${QUOTA_BYTES}b" >/dev/null || fail "quota set failed"
               Q="$(normalize "$(mc quota info "$TARGET" --json 2>&1)")"
               # The number is a JSON *number*, so it is followed by , or }. Matching that delimiter
-              # is what stops a prefix (10737418240 vs 107374182400) from passing. Needles are built
+              # is what stops a prefix (21474836480 vs 214748364800) from passing. Needles are built
               # as variables so the patterns stay literal - hand-spliced quotes here are error-prone.
               q_needle='"quota":'"$QUOTA_BYTES"
               q_a="${q_needle},"

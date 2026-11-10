@@ -27,10 +27,13 @@ data:
   SCCACHE_S3_ENDPOINT: minio
   SCCACHE_S3_PORT: "9000"
   SCCACHE_S3_BUCKET: sccache
-  # Hard capacity cap. 100 GiB is 107,374,182,400 bytes (IEC); "100gb" would be 100,000,000,000.
+  # Hard capacity cap. 200 GiB is 214,748,364,800 bytes (IEC); "200gb" would be 200,000,000,000.
   # Enforced by the server: writes past the cap are rejected, not merely reported.
-  SCCACHE_QUOTA_BYTES: "107374182400"
-  # Disposable cache: objects expire after 14 days. Exactly one rule, with this stable ID, so
-  # provisioning converges instead of accumulating rules.
-  SCCACHE_EXPIRY_DAYS: "14"
+  # Sizing rule of thumb: quota >= 2 x busy-day GiB x (expiry days + 1); see
+  # planning/shared-s3-sccache-deployment.md.
+  SCCACHE_QUOTA_BYTES: "214748364800"
+  # Disposable cache: objects expire after 7 days. The provisioning Job imports the whole
+  # lifecycle configuration, so changing this value replaces an existing rule with the same ID
+  # (exactly one rule, stable ID) instead of accumulating rules.
+  SCCACHE_EXPIRY_DAYS: "7"
   SCCACHE_RULE_ID: sccache-expiry
