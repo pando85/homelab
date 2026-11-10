@@ -1,0 +1,15 @@
+# Standalone certificate for the pods' HTTPS (8443) and LDAPS (3636) listeners. Not owned by an
+# Ingress, so it survives removing `spec.ingress` from the Kanidm CR.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: kanidm-tls
+spec:
+  secretName: kanidm-tls
+  issuerRef:
+    name: letsencrypt-prod-dns
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - idm.grigri.cloud
+    - ldaps.idm.internal.grigri.cloud
