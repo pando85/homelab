@@ -16,6 +16,11 @@ data:
   # `defaultKeepStorage` key behaves the same (734MB to 210MB). Unknown keys under `builder.gc`
   # are NOT rejected by `dockerd --validate`, so verify by behaviour.
   # Only cache not referenced by an image or a running build is eligible.
+  # Cache that backs an image (`docker buildx du`: "Shared") is not eligible and is
+  # also counted in the image size, so Build Cache can read above the cap while the
+  # cap holds: 2026-11-10 prusik showed 12.4 GB = 5.8 GB shared with images + 6.6 GB
+  # prunable. `docker builder prune --max-used-space` skips it as well; it is freed
+  # once the image is removed.
   daemon.json: |
     {
       "builder": {
@@ -43,6 +48,11 @@ data:
   # `defaultKeepStorage` key behaves the same (734MB to 210MB). Unknown keys under `builder.gc`
   # are NOT rejected by `dockerd --validate`, so verify by behaviour.
   # Only cache not referenced by an image or a running build is eligible.
+  # Cache that backs an image (`docker buildx du`: "Shared") is not eligible and is
+  # also counted in the image size, so Build Cache can read above the cap while the
+  # cap holds: 2026-11-10 prusik showed 12.4 GB = 5.8 GB shared with images + 6.6 GB
+  # prunable. `docker builder prune --max-used-space` skips it as well; it is freed
+  # once the image is removed.
   daemon.json: |
     {
       "builder": {

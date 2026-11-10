@@ -150,9 +150,13 @@ CI, so splitting the disk is not worth it.
   - 60% / 80% **of Docker's own footprint** (`docker system df`, budget `DOCKER_BUDGET_GB=25`,
     updated 2026-11-10; the node's `df` includes /cache, /workspace and the OS, so it pruned Docker
     for growth Docker had not caused): removes dangling images and stopped containers / unused
-    images and build cache older than 24h plus anonymous volumes. These tiers run only while the
-    runner is idle (no job step, no task container, no image pull in flight; see `runner_busy`),
-    because a prune racing a `docker pull` made jobs fail with `No such image`.
+    images and build cache older than 24h plus anonymous volumes. Image and build cache prunes
+    run only while the runner is idle (no job step, no task container, no image pull in flight;
+    see `runner_busy`), because a prune racing a `docker pull` made jobs fail with
+    `No such image`. Stopped-container and anonymous-volume prunes cannot race a pull and run even
+    while busy (containers only when older than 10m); a runner that is never idle (prusik,
+    2026-11-10) would otherwise never free its anonymous volumes. Each interval logs one
+    `gc summary` line with what ran and what was skipped.
   - **78% of the filesystem: removes every unused image, all build cache and all unused volumes,
     with no age filter, even while a job runs.** Docker itself protects anything in use.
   - Cost: base images get pulled again more often. Rarely, a job may lose an image it just pulled.

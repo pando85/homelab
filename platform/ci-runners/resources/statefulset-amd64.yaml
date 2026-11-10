@@ -251,10 +251,12 @@ spec:
             # k3s/OS the node then peaks near 70%, below the 78% emergency line.
             # LOW/MED are percentages of the budget (15 GB / 20 GB).
             #
-            # Low/medium also run only while the runner is idle (see runner_busy):
-            # a prune racing an image pull made jobs fail with `No such image`
-            # right after `docker pull` (dockerd: `lease does not exist`). A busy
-            # runner skips them with one log line per interval.
+            # Image and build cache prunes in low/medium run only while the runner is
+            # idle (see runner_busy): a prune racing an image pull made jobs fail with
+            # `No such image` right after `docker pull` (dockerd: `lease does not
+            # exist`). Stopped-container and anonymous-volume prunes cannot race a
+            # pull and run even while busy. Each interval logs one `gc summary` line
+            # with what ran and what was skipped.
             #
             # The emergency tier (THRESHOLD_HIGH) still uses the filesystem
             # percentage and runs regardless of activity: this loop is the only
@@ -294,9 +296,14 @@ spec:
               THRESHOLD_MED="${THRESHOLD_MED:-80}"
               THRESHOLD_HIGH="${THRESHOLD_HIGH:-78}"
               DOCKER_QUIET_SECONDS="${DOCKER_QUIET_SECONDS:-180}"
+              DOCKER_BUSY_CONTAINER_AGE="${DOCKER_BUSY_CONTAINER_AGE:-10m}"
               DOCKER_STATE_DIR="${DOCKER_STATE_DIR:-/var/lib/docker/containerd/daemon}"
               runner_started=false
               gc_meta_mtime=0
+              ops_ran=""
+              ops_skipped=""
+              busy=false
+              busy_reason=""
 
               cleanup() {
                 exit 0
@@ -398,6 +405,44 @@ spec:
                 gc_meta_mtime=$(stat -c %Y "$DOCKER_STATE_DIR/io.containerd.metadata.v1.bolt/meta.db" 2>/dev/null || echo 0)
               }
 
+              # Cleanup is split by what it can break while a job runs.
+              #  - Pull-safe: `container prune` (stopped containers) and `volume prune` (anonymous
+              #    volumes no container references; named volumes need -a and are not touched, a
+              #    created or running container's volumes count as in use). Neither touches images,
+              #    layers or leases, so neither can race an image pull. They run whenever a budget
+              #    tier fires, busy or not. While busy, container prune only takes containers older
+              #    than DOCKER_BUSY_CONTAINER_AGE: a job container exists in state `created` for a
+              #    moment before it starts and `container prune` would remove it.
+              #  - Pull-unsafe: `image prune` and `builder prune` delete snapshots and content and
+              #    trigger containerd GC, which can delete the lease of an image that is being
+              #    pulled (`No such image` right after `docker pull`). Idle-gated.
+              # Each interval logs one summary line: what ran and what was skipped because busy.
+              run_op() {
+                op=$1
+                shift
+                echo "running ${op}"
+                "$@" || true
+                ops_ran="${ops_ran} ${op}"
+              }
+
+              run_idle_op() {
+                op=$1
+                shift
+                if [ "$busy" = true ]; then
+                  ops_skipped="${ops_skipped} ${op}"
+                else
+                  run_op "$op" "$@"
+                fi
+              }
+
+              prune_containers() {
+                if [ "$busy" = true ]; then
+                  docker container prune -f --filter "until=${DOCKER_BUSY_CONTAINER_AGE}"
+                else
+                  docker container prune -f
+                fi
+              }
+
               while true; do
                 if pgrep forgejo-runner >/dev/null; then
                   runner_started=true
@@ -418,35 +463,37 @@ spec:
 
                 usage=$(get_disk_usage)
                 echo "docker disk usage: ${usage}%"
-                ran=false
+                ops_ran=""
+                ops_skipped=""
+                if busy_reason=$(runner_busy); then
+                  busy=true
+                else
+                  busy=false
+                  busy_reason=""
+                fi
 
                 if [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
                   # Emergency tier: keyed on the filesystem and run even while a job is
                   # active. In-use images, containers and volumes are protected by dockerd
                   # itself; everything else goes.
                   echo "high disk usage (${usage}%), pruning all unused images, build cache and volumes"
-                  docker container prune -f || true
-                  docker image prune -af || true
-                  docker builder prune -af || true
-                  docker volume prune -af || true
-                  ran=true
-                elif busy_reason=$(runner_busy); then
-                  echo "busy, skipping non-emergency cleanup (${busy_reason})"
+                  run_op container-prune docker container prune -f
+                  run_op image-prune docker image prune -af
+                  run_op builder-prune docker builder prune -af
+                  run_op volume-prune docker volume prune -af
                 elif used_mb=$(get_docker_used_mb); then
                   budget_pct=$((used_mb * 100 / (DOCKER_BUDGET_GB * 1000)))
                   echo "docker footprint: ${used_mb} MB, ${budget_pct}% of the ${DOCKER_BUDGET_GB} GB budget"
                   if [ "$budget_pct" -ge "$THRESHOLD_MED" ]; then
                     echo "medium docker footprint (${budget_pct}% of budget), pruning build cache, unused images (24h retention) and anonymous volumes"
-                    docker container prune -f || true
-                    docker image prune -af --filter "until=24h" || true
-                    docker builder prune -af --filter "until=24h" || true
-                    docker volume prune -f || true
-                    ran=true
+                    run_op container-prune prune_containers
+                    run_op volume-prune docker volume prune -f
+                    run_idle_op image-prune docker image prune -af --filter "until=24h"
+                    run_idle_op builder-prune docker builder prune -af --filter "until=24h"
                   elif [ "$budget_pct" -ge "$THRESHOLD_LOW" ]; then
                     echo "low docker footprint (${budget_pct}% of budget), pruning dangling images and containers"
-                    docker image prune -f || true
-                    docker container prune -f || true
-                    ran=true
+                    run_op container-prune prune_containers
+                    run_idle_op image-prune docker image prune -f
                   else
                     echo "docker footprint below budget threshold (${budget_pct}%), skipping cleanup"
                   fi
@@ -454,7 +501,8 @@ spec:
                   echo "cannot read docker usage, skipping non-emergency cleanup"
                 fi
 
-                if [ "$ran" = true ]; then
+                echo "gc summary: busy=${busy_reason:-no}; ran:${ops_ran:- none}; skipped while busy:${ops_skipped:- none}"
+                if [ -n "$ops_ran" ]; then
                   new_usage=$(get_disk_usage)
                   note_gc_mtime
                   echo "cleanup complete, new usage: ${new_usage}%"
