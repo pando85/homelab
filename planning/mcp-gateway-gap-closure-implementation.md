@@ -1,8 +1,13 @@
 # MCP Gateway Gap Closure Implementation Plan
 
 **Status:** Not started. This is the continuation plan for the MCP gateway work.
-**Anchor revision:** measured against `origin/master` at `2121ca476` (2026-11-10). Findings are
-timestamped; the cluster moves — re-run §5 before trusting any line here.
+**Anchor revision:** revision 2, measured against `origin/master` at `2a3b8dbb0` (2026-11-10).
+Findings are timestamped; the cluster moves — re-run §5 before trusting any line here.
+**What changed in revision 2:** the Envoy Gateway migration **ended**. Envoy is now the sole serving
+data plane for `mcp.grigri.cloud` and `mcp.internal.grigri.cloud`; ingress-nginx still runs but
+carries no MCP traffic and is the documented rollback path until ingress-migration Phase 6. That
+inverts two things revision 1 said: the nginx CNP rules are now **load-bearing for rollback** rather
+than debris (G15), and a set of committed tests and Jobs now assert a **dead** Ingress (G14).
 **Predecessor:** [`mcp-gateway-implementation.md`](mcp-gateway-implementation.md) — build-out history,
 measured probe/policy matrices, and the E2E acceptance record. Do not duplicate that evidence here.
 **Architecture:** [`docs/design/mcp-gateway-architecture.md`](../docs/design/mcp-gateway-architecture.md)
@@ -21,6 +26,11 @@ starts from measurement rather than from this document's claims.
 The dominant theme is **consolidation, not construction**: the gateway currently exists *alongside*
 the legacy paths it was meant to replace. Three Grafana MCP paths and one Firecrawl path still bypass
 it entirely.
+
+A second theme, new in revision 2, is **handoff debt**: the ingress layer under this gateway changed
+underneath it. The gateway itself needed no change — its CNPs already allowed the Envoy proxies — but
+the tests, Jobs and comments that describe "how traffic arrives" were written for nginx and did not
+move with it. That class of debt is silent: nothing fails, the assertions just stop meaning anything.
 
 ### 1.1 Success Criteria scorecard (measured 2026-11-10)
 
@@ -52,10 +62,16 @@ Verified live, not inferred from the charts:
 - No public-plane route to Vault: `grep -c vault apps/mcp-gateway/values.yaml` → `0`.
 - No direct backend exposure: every service in the MCP namespaces is `ClusterIP`; no Ingress or
   HTTPRoute exists for any backend.
+- `firecrawl-mcp` is **already** correctly isolated before any route exists: native NetworkPolicies,
+  `exec` probes (policy-immune), ingress limited to the gateway pods, egress limited to DNS plus
+  `firecrawl-api:3002`, and no API key by design. TODO-4.1 adds a route to it; it must not touch the
+  chart.
 - Network isolation: three CiliumNetworkPolicies (`mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`),
   all `Valid=True`, in the measured split-port shape. Both permitted and denied paths were measured
-  per plane at enablement. The gateway CNPs already allow **both** ingress data planes
-  (ingress-nginx and Envoy proxies), which is why the in-flight Envoy migration did not break them.
+  per plane at enablement. The gateway CNPs allow **both** ingress data planes (ingress-nginx and
+  Envoy proxies), which is why the Envoy migration completed without touching the gateway at all:
+  measured `src.addr` in the gateway access log is `10.0.4.6`/`10.0.4.44` (external Envoy proxies),
+  and no MCP route request arrives from an nginx pod.
 - Audit is **better than the design specified**: live gateway log lines carry `jwt.sub`,
   `mcp.target`, `mcp.method.name`, `gen_ai.tool.name`, `http.status`, `trace.id`/`span.id`, with no
   payload. All four MCP namespaces do reach Loki (see the correction in §6.2).
@@ -69,18 +85,20 @@ residual risk or missing control; **Low** = hygiene/documentation.
 | ID | Gap | Sev | Blocked on | Phase |
 |----|-----|-----|-----------|-------|
 | G1 | Hermes legacy `grafana-mcp` sidecar not removed; two Grafana MCP paths live, legacy one has `auth=None` + shared SA token | High | owner approval (gate 3, now satisfiable) | 3 |
-| G2 | Firecrawl: pod deployed but **no route in the gateway chart** (not even commented), while `mcp_firecrawl` scope is already granted → inert scope, unreachable pod | High | SSRF/egress gate + group decision | 4 |
+| G2 | Firecrawl: pod deployed, chart **already** restricts ingress to gateway pods and egress to `firecrawl-api:3002`, **no API key by design** — yet no route exists in the gateway chart, while `mcp_firecrawl` is already granted → inert scope, unreachable pod | High | group decision (who may fetch arbitrary web pages) only; fetcher-side control is G8 | 4 |
 | G3 | Vault MCP not deployed; admin plane serves nothing (`routes: []`, `scopeMap: []`, group disabled) | High | owner decision: per-route `x-vault-token` allow + stateless | 4 |
 | G4 | Not a single entry point: 6 of 8 OpenCode MCP servers bypass the gateway — a duplicate `context7`, plus `grafana-grigri` hitting the *same* Grafana the gateway fronts with a local credential (`grafana-forkline` is a different, external instance and stays out of scope) | High | per-server owner decision | 3 |
 | G5 | Rollback never tested (no dry run, no tested client switch-back) | Medium | owner approval of method | 5 |
-| G6 | Placement still provisional: every MCP pod pinned to `prusik`, 1 replica each | Medium | owner decision (plan said revisit once stable — stable ~25 h) | 5 |
+| G6 | Placement still provisional: both gateway planes and Hermes are pinned to `prusik`; `grafana-mcp` has no `nodeSelector` (happens to land there), `firecrawl-mcp` is pinned to `amd64` only; 1 replica each | Medium | owner decision (plan said revisit once stable — stable >24 h) | 5 |
 | G7 | No Prometheus target for `grafana-mcp` / `firecrawl-mcp`; backend failure only visible via gateway-side errors | Medium | none | 2 |
 | G8 | `firecrawl` **backend** namespace has no pod-level policy (only `firecrawl-mcp` is isolated) | Medium | needs its own measurement; prior attempt regressed | 4 |
-| G9 | ~~Envoy switchover dependency~~ **CLOSED — verified 2026-11-10.** All three CNPs already carry an `envoy`/`proxy` `fromEndpoints` rule alongside the nginx one, and both data planes are serving live (Hermes via Envoy, OpenCode via nginx) | — | none | — |
+| G9 | ~~Envoy switchover dependency~~ **CLOSED, and now final** — the migration ended. Envoy external (`192.168.193.14`) serves the public plane, Envoy internal (`192.168.193.13`) the admin plane; `src.addr` confirms no MCP route request comes from nginx. Nothing to do | — | none | — |
 | G10 | Documentation drift: design doc + plan + one values comment still describe the pre-isolation, pre-parity state | Low | none | 1 |
 | G11 | Canary leftovers: orphan `mcp-canary` namespace, untracked `apps/mcp-canary/` debris, two superseded canary planning docs | Low | none | 1 |
 | G12 | `jwt.sub` logged in full into Loki (180-day retention) while the design says "redacted"; no dashboards/alerts on the gateway audit stream | Low | owner decision on retention/pseudonymisation | 2 |
 | G13 | Committed verification assets are stale and have not been re-run since isolation landed: `jobs/verify-networkpolicy.yaml` still names the deleted native-NP template, and the predecessor plan calls 13 tracked suites/lines "uncommitted" | Medium | owner approval to apply the Jobs | 1, 2 |
+| G14 | **Ingress-era assertions survive the migration.** `foundation-checks.py:14,156` and `route-checks.py:316` still assert "the Ingress is `nginx-external` with TLS"; both `jobs/*.yaml` headers and three chart comments still describe nginx as the traffic source. They pass (the Ingress objects still exist) while proving nothing about the serving path — worse than failing | Medium | none (text/assertion change) | 1, 2 |
+| G15 | **The rollback path depends on an undocumented invariant.** `docs/network/ingress.md` documents rolling back to nginx by re-pointing pfSense/DNS, but a network rollback only works while the gateway CNPs still list the nginx controllers. Nothing states that coupling, and revision 1 of this plan told a future reader to delete those rules as "dead weight" | Medium | none (doc + comment) | 2 |
 
 ## 3. Context & Current State (measured)
 
@@ -89,17 +107,24 @@ residual risk or missing control; **Low** = hygiene/documentation.
 ```
 ns mcp-gateway         mcp-gateway-standalone   1/1  prusik  ClusterIP 3000/15020/15021
                        routes LIVE: /context7/mcp, /grafana/mcp (+ 2 RFC 9728 metadata routes)
-                       served by BOTH nginx-external (mcp.grigri.cloud, OpenCode) and
-                       external Envoy (192.168.193.14, Hermes) — see TODO-2.2
+                       mcp.grigri.cloud -> HTTPRoute -> Gateway external (192.168.193.14)
+                       the nginx-external Ingress object still exists, idle (rollback path)
 ns mcp-gateway-admin   mcp-gateway-admin        1/1  prusik  ClusterIP 3000/15020/15021
                        routes: []  (fail closed; Vault disabled)
-                       nginx-internal + internal Envoy, mcp.internal.grigri.cloud
+                       mcp.internal.grigri.cloud -> Gateway internal (192.168.193.13)
 ns grafana-mcp         grafana-mcp              1/1  prusik  ClusterIP 8000, healthz 8081
+                       ingress: gateway pods only (correct: its peer is the gateway, not the ingress)
 ns firecrawl-mcp       firecrawl-mcp            1/1  prusik  ClusterIP 3000 (exec probes)
+                       ingress: gateway pods only, by native NetworkPolicy, egress: DNS + firecrawl-api:3002
 ns hermes              hermes-0                 containers: grafana-mcp, grafana-mcp-refresher, hermes
                        hermes-mcp-gateway       token-refresher deployment (Kanidm token exchange)
 ns mcp-canary          EMPTY — orphan, no ArgoCD Application
 ```
+
+Ingress layer, measured 2026-11-10 after the migration ended: Envoy `external` = `192.168.193.14`,
+`internal` = `192.168.193.13`; ingress-nginx still runs (`192.168.193.1` / `.4`) and still reconciles
+the old Ingress objects, but serves no MCP traffic. Both data planes are in the CNP allow-lists —
+deliberately, because nginx is the rollback path (G15).
 
 ArgoCD: `mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`, `firecrawl-mcp` all Synced/Healthy.
 
@@ -191,6 +216,19 @@ delivering nothing, so G3 and G6 should be decided together.
   `kubectl run/apply`"* already has such a method (`jobs/verify-networkpolicy.yaml`), and its
   *"Two-human parity run … no live AB run has been done"* already has a harness
   (`identity-ab/`, whose LIVE tier skips loudly without prerequisites rather than passing vacuously).
+- **TODO-1.7** (G14) **Repair the ingress-era assertions and comments.** Both objects exist, so these
+  assertions pass while saying nothing about the serving path — the most expensive kind of green.
+  Rule for every one of them: assert **both** objects and label them (`HTTPRoute` = serving path,
+  `Ingress` = rollback path), so neither can silently become the only one.
+  - `test/mcp-gateway/foundation-checks.py` (`grep -n 'nginx-external'`, ~156) and
+    `test/mcp-gateway/route-checks.py` (`grep -n 'ingress unchanged'`, ~316) — extend to the HTTPRoute
+    (parentRef gateway `external`, hostname, backend port) rather than replacing the Ingress check.
+  - `apps/grafana-mcp/values.yaml` (`grep -n 'nginx-external Ingress carries no auth'`),
+    `apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml` and
+    `apps/mcp-gateway-admin/templates/ciliumnetworkpolicy.yaml` (`grep -n 'ingress-nginx-external'`) —
+    comments only. Say "envoy proxies serve; nginx rules retained as the rollback path (G15)".
+  - Do **not** touch `scripts/gateway-check.sh`'s `--compare` help text or `scripts/eg-host-diff.sh`:
+    both deliberately reference nginx as a comparison target and are still correct.
 
 ### Phase 2 — Observability and handoff safety (no auth change)
 
@@ -198,22 +236,26 @@ delivering nothing, so G3 and G6 should be decided together.
   `grafana-mcp` sets `serviceMonitor.enabled: false`; either enable it or document why the backend
   is intentionally unscraped. If enabled, the CNP needs a metrics rule from Prometheus pods —
   follow the shape already used on the gateway planes, and re-run the probe-safety checks.
-- **TODO-2.2** (G9 — now a maintenance item, not a risk) The Envoy switchover constraint is already
-  satisfied. Measured 2026-11-10, both planes serve simultaneously:
+- **TODO-2.2** (G9 — closed; what remains is a drift guard) The migration ended and Envoy serves
+  both planes. Measured 2026-11-10:
 
-  | CNP | app-port `fromEndpoints` | live source seen in gateway logs |
+  | CNP | app-port `fromEndpoints` | what actually forwards |
   |---|---|---|
-  | `mcp-gateway` (public) | `ingress-nginx` + `component: controller` in `ingress-nginx-external`; **and** `envoy` + `component: proxy` + `gateway.envoyproxy.io/owning-gateway-name: external` in `envoy-gateway` | OpenCode → `10.0.4.148` (`ingress-nginx-external-controller-…h7bhn`); Hermes → `10.0.4.6` / `10.0.4.44` (`envoy-envoy-gateway-external-…`) |
-  | `mcp-gateway-admin` | `ingress-nginx` in `ingress-nginx`; **and** `envoy` proxy with `owning-gateway-name: internal` | `10.0.4.73`, `10.0.4.141` (internal Envoy proxies) |
-  | `grafana-mcp` | gateway pods only (`agentgateway-standalone` / `instance=mcp-gateway` / `component=standalone`) — unchanged and correct: the backend's peer is the gateway, not the ingress | n/a |
+  | `mcp-gateway` (public) | `ingress-nginx`/`controller` in `ingress-nginx-external` **and** `envoy`/`proxy` + `owning-gateway-name: external` in `envoy-gateway` | Envoy external only (`src.addr` `10.0.4.6`, `10.0.4.44`) |
+  | `mcp-gateway-admin` | `ingress-nginx` in `ingress-nginx` **and** `envoy`/`proxy` + `owning-gateway-name: internal` | Envoy internal only |
+  | `grafana-mcp` | gateway pods (`agentgateway-standalone` / `instance=mcp-gateway` / `component=standalone`) on 8000, plus `world` on 8081 for kubelet probes | n/a — the backend's peer is the gateway, not the ingress. The 8081 `world` rule is the measured probe path (§6.1), **not** a mistake to "fix" |
 
-  Remaining work, in order:
-  1. Nothing to do before switchover — it is already carrying traffic.
-  2. When nginx stops serving these hosts, **remove the `ingress-nginx` rules** from both gateway CNPs
-     so the allow-list does not keep a dead data plane in it. One values/template edit per chart.
-  3. If Envoy's proxy pod labels ever change (`gateway.envoyproxy.io/owning-gateway-name`,
-     `app.kubernetes.io/component: proxy`), the routes fail closed. Add a chart check asserting the
-     rendered selector matches the live Envoy pod labels — the same class of bug as §6.4.
+  Remaining work, deliberately small:
+  1. **Do not remove the `ingress-nginx` rules.** They are the allow-list for the documented rollback
+     path (G15). They become removable only in ingress-migration Phase 6, in the same change that
+     deletes ingress-nginx — never earlier, and never as gateway-side "tidying".
+  2. Add the drift guard: a chart check asserting the rendered Envoy selector matches the live proxy
+     pod labels (`app.kubernetes.io/component: proxy`, `app.kubernetes.io/name: envoy`,
+     `gateway.envoyproxy.io/owning-gateway-name`). If those labels change, the routes fail closed with
+     no error anywhere — the same class of bug as §6.4.
+  3. Explain residual nginx traffic: 404 `GET /` from `10.0.4.148`/`10.0.4.234` (nginx-external pods)
+     still appears in the gateway log. Before Phase 6, establish whether that is a leftover public-DNS
+     record pointing at `192.168.193.4` or nginx's own probe behaviour. See TODO-2.7.
 - **TODO-2.3** (G12) Decide the audit retention posture: full `jwt.sub` in Loki for 180 days vs
   hashed/truncated. The acceptance tooling already hashes subjects, so a consistent choice is cheap.
   Add a dashboard or at least one alert on gateway `http.status >= 500` and on `403` rate.
@@ -234,16 +276,61 @@ delivering nothing, so G3 and G6 should be decided together.
   credentials, `MCP_IDENTITY_TARGET`, and issuer/audience if not inferred). This is the committed
   path to closing the predecessor plan's two-identity parity item, and it is read-only by design.
   Owner approval needed for the credential provisioning only.
+- **TODO-2.6** (G15) **Write the CNP↔rollback coupling down in both places it can be acted on.**
+  1. `docs/network/ingress.md`, rollback section: state that a pfSense/DNS rollback to nginx is only
+     effective for hosts whose CiliumNetworkPolicy still lists the nginx controllers, and name
+     `apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml` +
+     `apps/mcp-gateway-admin/templates/ciliumnetworkpolicy.yaml` as examples that do. Add this to the
+     Phase 6 removal checklist as a gate: "remove the nginx `fromEndpoints` rules only in the change
+     that deletes ingress-nginx".
+  2. Both CNP templates: a comment on the nginx rule reading *retained as the documented ingress
+     rollback path; removable only in ingress-migration Phase 6* — so a reader who sees dead weight
+     cannot conclude it is safe to delete.
+  3. `docs/conventions/gateway-api-routes.md` already documents the Hermes `hostAliases` pin to
+     `192.168.193.14`; confirm it still matches `apps/hermes/values.yaml` and that it survives the
+     Phase 6 DNS cleanup (an upsert-only DNS record pitfall is recorded at `2a3b8dbb0` — check the
+     same trap does not apply to this override).
+  4. This is docs and comments only: **no CNP selector change**, so no risk to the live allow-list.
+- **TODO-2.7** (G15, residual traffic) Determine whether anything still reaches these hosts through
+  nginx. Read-only, in this order:
+  1. `bash scripts/gateway-check.sh` — it already checks Envoy proxies, gateways, routes, pfSense and
+     DNS for 12 items, but **not** the MCP hosts; note which of its per-host checks would cover them.
+  2. Check public DNS for `mcp.grigri.cloud` and `grafana.grigri.cloud` against `192.168.193.4`, and
+     the pfSense alias contents, for a stale record still resolving to nginx.
+  3. Only if a stale record exists, propose a DNS fix through the ingress migration's own docs — not
+     as part of this plan. Record the answer either way; "no residual traffic" is itself a finding that
+     unblocks Phase 6's CNP rule removal.
+- **TODO-2.8** (G14) Extend `scripts/gateway-check.sh` to cover `mcp.grigri.cloud` and
+  `mcp.internal.grigri.cloud` if its per-host probe list is data-driven; otherwise add the two hosts
+  where the list lives. The gateway's healthz on 15021 is `world`-reachable, so a cheap HTTP probe is
+  enough to prove "route accepted and forwarding" without touching auth.
 
 ### Phase 3 — Consolidation (the actual MVP completion)
 
 - **TODO-3.1** (G1) **Remove the Hermes Grafana sidecar.** Owner approval gate 3 is now satisfiable:
-  parity is measured. Steps: confirm `global.mcpGateway.enabled: true` is the only path Hermes uses
-  for Grafana; drop the `grafana-mcp` and `grafana-mcp-refresher` containers, the
-  `grafana-mcp-token-init` init container and the `/shared` volume from `apps/hermes/values.yaml`;
-  keep `kanidm-service-account.yaml`'s `grafana-mcp` SA only if the token exchange still consumes it
-  (`identity.subjectTokenSecret: grafana-mcp-token` — **verify before deleting anything**).
-  Rollback: revert the commit; the sidecar returns with the pod.
+  parity is measured and Hermes already lists `homelab-grafana` through the gateway. Measured
+  inventory of what the sidecar consists of (`apps/hermes/values.yaml`, grep each name):
+
+  | Resource | Role | Disposition |
+  |---|---|---|
+  | container `grafana-mcp` | in-pod `mcp-grafana:2.2.0`, reads JWT from `/shared/grafana-jwt` | remove |
+  | container `grafana-mcp-refresher` | re-exchanges the JWT every 600 s | remove |
+  | initContainer `grafana-mcp-token-init` | first exchange at pod start | remove |
+  | volume `grafana-mcp-shared` (emptyDir, 1 Mi) | `/shared` shared by all three | remove **only after** the step below |
+  | initContainer `fix-sa-token` | copies the SA token into `/shared` | **verify first**: keep if the main `hermes` container mounts `/shared`; remove only if the mount list proves it is sidecar-only |
+  | MCP server entry `grafana` → `http://localhost:8080/sse`, `auth=None` | the bypassing server itself | remove from the Hermes MCP config |
+  | deployment `hermes-mcp-gateway` | Kanidm token exchange **for the gateway** OAuth | **keep** — unrelated to the sidecar |
+
+  Steps: confirm `global.mcpGateway.enabled: true` and that the gateway server entry is the only
+  Grafana path; check whether `identity.subjectTokenSecret: grafana-mcp-token` is consumed by
+  anything other than the sidecar before deleting the SA; render and diff
+  (`helm template --include-crds --namespace hermes hermes apps/hermes/`) so the removal is reviewed
+  as a diff, not as prose.
+  Acceptance: `test/mcp-gateway/hermes-live-acceptance.py` still prints `ACCEPTANCE_PASS` with
+  `servers: 2`, `hermes-0` goes `3/3 → 1/1`, and Loki shows a new Grafana call arriving at the gateway
+  from Hermes with a `jwt.sub`.
+  Rollback: `git revert`; the sidecar returns with the pod. No CNP change is involved — the gateway
+  CNPs are unaffected by this removal.
 - **TODO-3.2** (G4) **Retire bypassing OpenCode servers, one at a time, owner-approved per server.**
   Recommended order and rationale (the two Grafana entries are *not* equivalent — measured from
   `GRAFANA_URL` in `~/.config/opencode/opencode.json`):
@@ -265,32 +352,74 @@ delivering nothing, so G3 and G6 should be decided together.
 
 ### Phase 4 — Backend onboarding (each needs an owner decision first)
 
-- **TODO-4.1** (G2) Firecrawl. Two independent gates, do not collapse them:
-  1. fetcher egress/SSRF control — prior attempt regressed the `firecrawl` backend with an
-     **unknown root cause**; the required capture gates are in
-     `docs/troubleshooting/mcp-firecrawl-egress-regression.md`. No re-attempt is authorised yet.
-  2. the group decision for who may use web access.
-  Only then add the `/firecrawl/mcp` route with `credential: none` and whole-backend scope
-  `mcp_firecrawl`. Note the scope is *already granted* to `mcp-gateway-agents`, so today it is inert
-  identity surface — consider removing it until the route exists.
+- **TODO-4.1** (G2) Firecrawl **route** — revision 1 wrongly coupled this to the fetcher egress
+  regression. They are separable, and the measurements say so:
+
+  | Measured | Consequence |
+  |---|---|
+  | `apps/firecrawl-mcp/templates/networkpolicy.yaml` already limits ingress to the gateway pods and egress to DNS + `firecrawl-api:3002` | adding a route changes no policy surface on the backend |
+  | `apps/firecrawl-mcp/values.yaml`: **no `FIRECRAWL_API_KEY` by design**, upstream fixed to `http://firecrawl-api.firecrawl.svc.cluster.local:3002` | the route needs no Vault-delivered upstream secret; `credential: none` is honest |
+  | exec probes + 13 committed assertions in `apps/firecrawl-mcp/tests/test_exec_probes.py` | the pod is probe-immune under the existing native NPs |
+  | `mcp_firecrawl` is already in the `mcp-gateway-agents` scopeMap | the authorisation surface exists today and is inert |
+
+  So the only gate is the **group decision**: who may use a shared, anonymous web fetcher. Note the
+  architectural deviation this creates and record it in the design doc: unlike Grafana, Firecrawl is
+  **not** caller-preserving — every caller's fetches run under the same upstream identity. The
+  gateway audit still names the caller, but the destination control is per-group, not per-person.
+  That is the trade the owner is being asked to accept.
+  Steps once approved: add `/firecrawl/mcp` (+ its RFC 9728 metadata route) to
+  `apps/mcp-gateway/values.yaml` with `statefulMode: stateless`, scope `mcp_firecrawl`,
+  `credential: none`; `helm template` diff; ArgoCD sync; acceptance per §5.
+  Interim option if the group decision will take longer: **remove the inert `mcp_firecrawl` grant**
+  until the route exists, so no identity surface is granted for a path that cannot be taken.
 - **TODO-4.2** (G3) Vault. The zero-custom-code path is identified and locally measured: per-route
   `x-vault-token` allow **plus** `statefulMode: stateless` (stateful mode caches the backend
   credential per MCP session, so a session id behaves like a bearer). Owner must accept both
   deviations. Then: create the admin scope + group, enable the route, and re-verify that the public
-  plane still has no Vault path.
-- **TODO-4.3** (G8) `firecrawl` backend namespace policy — only attempt after G2's egress gate is
-  understood; it is the same subsystem that regressed before.
+  plane still has no Vault path (`grep -c vault apps/mcp-gateway/values.yaml` must stay `0`).
+  Note the admin plane currently consumes a pod, a CNP, an Ingress, an HTTPRoute and a scrape target
+  to serve nothing — G3 and G6 are worth deciding together.
+- **TODO-4.3** (G8) **Fetcher destination control** — the `firecrawl` namespace has no pod-level
+  policy of its own, so the fetcher's outbound destinations are not constrained in-cluster. Prior
+  attempt regressed the backend with an **unknown root cause**; the capture gates are in
+  `docs/troubleshooting/mcp-firecrawl-egress-regression.md`. **No re-attempt is authorised.** This
+  stays independent of TODO-4.1: the route can ship without it, and shipping it must not be a
+  precondition for the route.
 
 ### Phase 5 — Resilience
 
-- **TODO-5.1** (G6) Placement decision: keep `prusik` pinning (single failure domain, simpler probe
-  behaviour) or spread. If spreading, remember the probe-source finding: `world` on the health port
-  matches whichever node probes the pod, so the split-port shape survives a move — but re-measure.
-- **TODO-5.2** (G5) Rollback dry run, written before executed: `git revert` + ArgoCD reconcile for
-  each plane; client-side switch-back for OpenCode and Hermes; explicit statement that removing a
-  CNP is **not** the rollback for an auth problem.
+- **TODO-5.1** (G6) Placement decision. Measured — the plan's earlier "every MCP pod pinned to
+  `prusik`" was wrong in detail, which matters because the pins are not all the same kind:
+
+  | Workload | Constraint | Replicas |
+  |---|---|---|
+  | `mcp-gateway`, `mcp-gateway-admin` | `kubernetes.io/hostname: prusik` | 1 |
+  | `hermes-0`, `hermes-mcp-gateway` | inherited `defaultPodOptions.nodeSelector` → `prusik` | 1 |
+  | `grafana-mcp` | none (currently lands on `prusik`) | 1 |
+  | `firecrawl-mcp` | `kubernetes.io/arch: amd64` only | 1 |
+
+  So the backends can already move; only the gateways and Hermes are hard-pinned. Decide per
+  workload whether the pin is deliberate or a leftover. If spreading: the probe-source finding is
+  node-independent (`world` on the health port matches whichever node's kubelet probes the pod, so
+  the split-port shape survives a move), but re-measure rather than trust it — §6.1 is the trap that
+  cost the most time in this project.
+- **TODO-5.2** (G5) **Rollback dry run, written before executed.** Three layers, each with its own
+  method — the layers are not interchangeable:
+  1. **Config**: `git revert` + ArgoCD reconcile, per plane. Note the CNP rollback is template-only
+     (`networkIsolation: false`), no pod churn.
+  2. **Client**: OpenCode `opencode.json` entry restored from the retired server's known-good block
+     (so TODO-3.2 must **save each block before deleting it**); Hermes sidecar restored by reverting
+     TODO-3.1.
+  3. **Ingress**: the documented nginx rollback in `docs/network/ingress.md` (pfSense alias, unbound
+     override, pf states, Cloudflare DNS). This is the layer whose validity depends on G15 — the CNP
+     nginx rules must still be present. Exercising it is also the only real proof that the coupling
+     holds, so the dry run must include a check that a request through nginx reaches the gateway.
+  Write the whole thing down first; then exercise layer 2 (cheapest, reversible) and, if the owner
+  agrees, layer 3. Explicit statement to include: **removing a CNP is not the rollback for an auth
+  problem** — it widens exposure without fixing the failure.
 - **TODO-5.3** HA / second replica stays out of scope until session behaviour across replicas is
-  measured (design lists it as future).
+  measured (design lists it as future). Both live routes are `statefulMode: stateless`, which
+  suggests a second replica is cheap — but measure, do not infer.
 
 ## 5. Verification Checklist
 
@@ -309,6 +438,15 @@ Re-run these before trusting any claim in this document. All read-only.
 - [ ] Audit stream: `{namespace="mcp-gateway"} | json | scope="request"` in Loki shows
       `jwt.sub`, `mcp.target`, `gen_ai.tool.name`, `http.status`
 - [ ] Metrics: `up{namespace=~"mcp-gateway|mcp-gateway-admin"} == 1`
+- [ ] Serving data plane (post-migration): `kubectl --context=grigri -n envoy-gateway get gateway` →
+      both `Programmed=True`; and `src.addr` in the gateway access log resolves to `envoy-…-proxy`
+      pods, not `ingress-nginx-*`. `src.addr` is stronger evidence than reading either chart.
+- [ ] Rollback path still valid: the nginx `fromEndpoints` rules are present in both gateway CNPs and
+      still match live nginx pods (`kubectl --context=grigri get pods -n ingress-nginx-external -o wide`).
+      If ingress-migration Phase 6 has deleted nginx, this check inverts — the rules must then be
+      *gone* (G15).
+- [ ] Ingress health: `bash scripts/gateway-check.sh` (read-only, 12 checks) — extend it per TODO-2.8
+      so the MCP hosts are covered.
 - [ ] Local suites: `test/mcp-gateway/chart-checks.py` (172),
       `apps/firecrawl-mcp/tests/test_exec_probes.py` (13), `route-checks.py`, `local-boot-checks.py`,
       `foundation-checks.py`, `grafana-backend-checks.py`
@@ -374,12 +512,22 @@ Rule: **before recording a cross-workstream dependency as a gap, fetch and measu
 evidence that cannot go stale silently — `src.addr` in the gateway access log names the actual
 forwarding pod, which is stronger than reading either chart's selectors.
 
+Revision 2 repeated the lesson from the other side. TODO-2.2 told a future reader to delete the nginx
+`fromEndpoints` rules "once nginx stops serving these hosts". It has stopped serving them — and the
+rules are still required, because `docs/network/ingress.md` documents nginx as the **rollback path**
+until Phase 6. A rule that is load-bearing for recovery is not dead weight, and nothing in the
+gateway chart says so (G15).
+
+Second rule: **a transient dual-serving state is not a cleanup opportunity.** Before proposing to
+delete a selector, a rule or an object, read the neighbouring workstream's rollback doc and ask what
+depends on it *for recovery*, not just for the happy path.
+
 ## 7. Reference Information
 
 | Item | Value |
 |---|---|
-| Public gateway URL | `https://mcp.grigri.cloud` (`nginx-external`, VIP 192.168.193.4) |
-| Admin gateway URL | `https://mcp.internal.grigri.cloud` (`nginx-internal`, VIP 192.168.193.13) |
+| Public gateway URL | `https://mcp.grigri.cloud` — HTTPRoute → Envoy gateway `external`, VIP `192.168.193.14` (the nginx-external Ingress object remains, idle) |
+| Admin gateway URL | `https://mcp.internal.grigri.cloud` — HTTPRoute → Envoy gateway `internal`, VIP `192.168.193.13` (nginx-internal Ingress remains, idle) |
 | OAuth client / redirect | `mcp-gateway`, PKCE S256, `http://127.0.0.1:15000/callback`, `strictRedirectUrl: true` |
 | Issuer (public plane) | `https://idm.grigri.cloud/oauth2/openid/mcp-gateway` |
 | Scopes | `mcp_context7`, `mcp_grafana`, `mcp_firecrawl` (granted, inert — no route) |
@@ -388,8 +536,8 @@ forwarding pod, which is stronger than reading either chart's selectors.
 | grafana-mcp ports | app 8000, healthz 8081 |
 | firecrawl-mcp port | 3000 (exec probes) |
 | Hermes DNS fix | main-pod `hostAliases`: `mcp.grigri.cloud` → **`192.168.193.14`** (external Envoy Gateway LB, since `2121ca476`). Previously `192.168.193.4` (nginx-external LB) — the public IP hairpins and times out either way |
-| Data planes | **both live**: OpenCode → nginx-external (`192.168.193.4`); Hermes → external Envoy (`192.168.193.14`). Both are in the CNP allow-list |
-| Node | every MCP pod on `prusik`; pod CIDR `10.0.4.0/24`, `cilium_host` `10.0.4.252` |
+| Data planes | **Envoy only** (measured `src.addr` = the external Envoy proxy pods). ingress-nginx still runs at `192.168.193.1`/`.4`, serves no MCP traffic, and is the documented rollback path until ingress-migration Phase 6. Both planes are in the CNP allow-lists **on purpose** — see G15 |
+| Node | gateways + Hermes pinned to `prusik`; `grafana-mcp` unpinned, `firecrawl-mcp` amd64-only. Pod CIDR `10.0.4.0/24`, `cilium_host` `10.0.4.252` |
 | Cilium | v1.20.4, `enable-policy: default`, `enable-host-firewall: false`, `allow-localhost` unset |
 
 ## 8. Files to Modify
@@ -397,39 +545,48 @@ forwarding pod, which is stronger than reading either chart's selectors.
 | File | Phase | Change |
 |---|---|---|
 | `docs/design/mcp-gateway-architecture.md` | 1 | status block, inventory table, policy section |
-| `planning/mcp-gateway-implementation.md` | 1 | Task 2/5 status, "still open" list, cross-link |
+| `planning/mcp-gateway-implementation.md` | 1 | Task 2/5 status, "still open" list, 13 stale "uncommitted" lines |
 | `apps/mcp-gateway/values.yaml` | 1 | stale `mcp_grafana` "inert / 404" comment |
-| `planning/mcp-canary-*.md`, `apps/mcp-canary/` | 1 | delete or mark superseded |
+| `planning/mcp-canary-*.md` (tracked), `apps/mcp-canary/` (untracked debris) | 1 | delete or mark superseded |
+| `test/mcp-gateway/foundation-checks.py`, `route-checks.py` | 1 | assert the HTTPRoute **and** the Ingress, labelled serving vs rollback (G14) |
+| `apps/grafana-mcp/values.yaml`, `apps/mcp-gateway*/templates/ciliumnetworkpolicy.yaml` | 1 | nginx-era comments only — no selector change |
+| `docs/network/ingress.md` | 2 | rollback section: name the CNP allow-list coupling and the Phase 6 gate (G15) |
+| `docs/conventions/gateway-api-routes.md` | 2 | confirm the Hermes `hostAliases` pin survives Phase 6 DNS cleanup |
+| `test/mcp-gateway/chart-checks.py` | 2 | drift guard: rendered Envoy selector == live proxy pod labels (TODO-2.2 step 2) |
+| `scripts/gateway-check.sh` | 2 | cover `mcp.grigri.cloud` / `mcp.internal.grigri.cloud` (TODO-2.8) |
 | `apps/grafana-mcp/values.yaml`, `apps/firecrawl-mcp/values.yaml` | 2 | scrape targets (+ CNP metrics rule if enabled) |
-| `test/mcp-gateway/chart-checks.py` | 2 | assert the rendered envoy/nginx `fromEndpoints` selectors match live pod labels (TODO-2.2 step 3) |
-| `apps/mcp-gateway*/templates/ciliumnetworkpolicy.yaml` | later | drop the `ingress-nginx` rules only after nginx stops serving these hosts |
-| `apps/hermes/values.yaml`, `apps/hermes/templates/*` | 3 | remove sidecar, refresher, init container, `/shared` |
-| `test/mcp-gateway/jobs/verify-networkpolicy.yaml`, `verify-foundation-incluster.yaml` | 2 | refresh stale policy references and expectations, then re-run |
-| `~/.config/opencode/opencode.json` (not in repo) | 3 | retire bypassing servers one at a time |
-| `apps/mcp-gateway/values.yaml` | 4 | add `/firecrawl/mcp` route once both gates clear |
+| `test/mcp-gateway/jobs/verify-networkpolicy.yaml`, `verify-foundation-incluster.yaml` | 2 | refresh stale policy/ingress references, then re-run |
+| `apps/hermes/values.yaml`, `apps/hermes/templates/*` | 3 | remove sidecar, refresher, token-init, `/shared`, and the `grafana` MCP server entry |
+| `~/.config/opencode/opencode.json` (not in repo) | 3 | retire bypassing servers one at a time, **saving each block first** |
+| `apps/mcp-gateway/values.yaml` | 4 | add `/firecrawl/mcp` + metadata route once the group decision is made |
 | `apps/mcp-gateway-admin/values.yaml` | 4 | Vault scope, group, route |
-| `apps/firecrawl/**` (other workstream) | 4 | fetcher egress policy |
-| node pinning / replica values in all four charts | 5 | placement decision |
+| `apps/firecrawl/**` (separate workstream, unauthorised) | 4 | fetcher egress/destination control (G8) |
+| node pinning / replica values | 5 | per-workload placement decision |
+| `apps/mcp-gateway*/templates/ciliumnetworkpolicy.yaml` | **6 of the ingress migration** | drop the `ingress-nginx` rules only in the change that deletes ingress-nginx |
 
 ## 9. Execution Order
 
 ```
-Phase 1 (docs + cleanup)      ── no dependencies, no live change, do first
-Phase 2 (observability, jobs) ── G13 refresh + re-run; G7 scrape targets; G12 audit posture
-Phase 3 (consolidation)       ── G1 needs owner approval; G4 needs per-server approval
-Phase 4 (backends)            ── each blocked on a named owner decision / gate
-Phase 5 (resilience)          ── after Phase 3, so rollback is tested against the final shape
+Phase 1 (docs + cleanup + G14) ── no dependencies, no live change, do first
+Phase 2 (handoff safety, obs)  ── G15 rollback invariant; G13 Jobs; G7 scraping; G12 audit posture
+Phase 3 (consolidation)        ── G1 needs owner approval; G4 needs per-server approval
+Phase 4 (backends)             ── G2 route = group decision only; G3 Vault = owner decision; G8 unauthorised
+Phase 5 (resilience)           ── after Phase 3, so rollback is tested against the final shape
 ```
 
 Hard ordering rules:
 
-- **G9 is closed, not pending.** Both nginx and Envoy data planes are already allowed by the CNPs and
-  both are serving. The only remaining Envoy-related work is *removing* the nginx rules once nginx
-  stops serving these hosts (TODO-2.2 step 2) — do not do that early, or the OpenCode path fails closed.
+- **The nginx CNP rules are not debris.** G9 is closed, but removing those rules belongs to ingress-
+  migration Phase 6, in the same change that deletes ingress-nginx — because they are the allow-list
+  for the documented rollback path (G15). Gateway-side "tidying" here would make a future rollback
+  fail closed at the network layer.
 - **G1 before G4's Grafana items.** Removing the Hermes sidecar while OpenCode still has two local
   `mcp-grafana` servers does not reduce the Grafana path count.
-- **G2's egress gate before any Firecrawl route.** Gateway-side policy cannot substitute for fetcher
-  destination control.
+- **G2's route and G8's fetcher control are independent.** The route may ship on the group decision
+  alone; the fetcher egress work has an unresolved regression and must not become a precondition —
+  or be bundled — with it.
+- **Save before deleting.** Every `opencode.json` block retired in TODO-3.2 must be recorded first;
+  it is the rollback artefact for layer 2 of TODO-5.2.
 - Never weaken a CNP to make a probe pass. The split-port shape is the only measured-safe option.
 
 ## Related
@@ -439,3 +596,4 @@ Hard ordering rules:
 - [`docs/conventions/cilium.md`](../docs/conventions/cilium.md) — kubelet probes under enforced policies
 - [`docs/troubleshooting/mcp-firecrawl-egress-regression.md`](../docs/troubleshooting/mcp-firecrawl-egress-regression.md)
 - [`docs/conventions/gateway-api-routes.md`](../docs/conventions/gateway-api-routes.md)
+- [`docs/network/ingress.md`](../docs/network/ingress.md) — data planes, rollback, Phase 6 removals
