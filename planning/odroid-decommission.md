@@ -13,8 +13,8 @@ differed from the steps below and one outstanding follow-up.
 
 Redis migration is owned by the tenants, not this repo:
 
-- the isidoro tenant — isidoro
-- the calypso tenant — calypso, oauth2-proxy
+- the isidoro tenant: isidoro
+- the calypso tenant: calypso, oauth2-proxy
 
 For each of the three Redis groups (`isidoro-redis`, `calypso-redis`, `oauth2-proxy-redis`):
 
