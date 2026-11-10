@@ -16,46 +16,6 @@ minio:
     enabled: true
     existingClaim: cross-backups
 
-  ingress:
-    enabled: true
-    ingressClassName: nginx-external
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      external-dns.kubernetes.io/target: grigri.cloud
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3601"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3601"
-      # fix timeouts uploading big files disabling proxy buffering
-      nginx.ingress.kubernetes.io/proxy-buffering: "off"
-      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-      nginx.ingress.kubernetes.io/proxy-body-size: "0"
-      # https://min.io/docs/minio/linux/integrations/setup-nginx-proxy-with-minio.html
-      nginx.ingress.kubernetes.io/server-snippet: |
-        ignore_invalid_headers off;
-        chunked_transfer_encoding off;
-    hosts:
-      - &host cross-backups.grigri.cloud
-    tls:
-      - hosts:
-          - *host
-        secretName: s3-tls-certificate
-
-  consoleIngress:
-    enabled: true
-    ingressClassName: nginx-external
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      external-dns.kubernetes.io/target: grigri.cloud
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      nginx.ingress.kubernetes.io/configuration-snippet: |
-        chunked_transfer_encoding off;
-    hosts:
-      - &hostMC mc-cross-backups.grigri.cloud
-    tls:
-      - hosts:
-          - *hostMC
-        secretName: mc-s3-tls-certificate
-
   podAnnotations:
     # Cilium ingress-bandwidth only works for inter-node traffic, not same-node.
     # Since ingress-nginx-external and MinIO are both on prusik, this is a no-op.
