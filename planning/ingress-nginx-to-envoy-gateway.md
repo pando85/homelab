@@ -1704,6 +1704,19 @@ Separate commits, in order:
    listener is kept during the migration but must be gone when ingress-nginx is removed. Then
    clean what Argo does not prune: IngressClasses, admission webhook configs,
    leader-election Leases, ClusterRoles, leftover Secrets.
+   **3a. Stale DNS records (do before the removal in step 3).** external-dns runs `upsert-only`, so
+   a record whose Ingress was removed or renamed stays in Cloudflare forever (example:
+   `grafana.internal.grigri.cloud`, Grafana's name until a 2023 rename, whose TXT owner record still
+   names `ingress/monitoring/monitoring-grafana`). List every Cloudflare A record pointing at `.1` or
+   `.4`: collect hostnames from git history with
+   `git log -p --all | grep -o -E '[a-z0-9.-]+\.grigri\.cloud' | sort -u`, `dig +short <name> @1.1.1.1`
+   each, plus the Cloudflare dashboard or API listing for names that were never in git. The owner
+   deletes by hand the ones with no route, together with their `a-<name>` TXT ownership records.
+   Checked 2026-11-10: these 13 names still resolved to `192.168.193.1` and had no Ingress or route
+   (none resolved to `.4`); all are `<name>.internal.grigri.cloud`: `blackbox-exporter`, `freshrss`,
+   `grafana`, `home`, `jackett`, `plex`, `rook-ceph`, `stump`, `sunshine`, `tdarr`, `tdarr-ui`,
+   `transcorder`, `unpackerr`. The `grafana` record was being deleted the same day; re-run the check
+   instead of trusting this list.
 4. Drop nginx references from NetworkPolicies (ours and the tenants': Keycloak
    NetworkPolicies, runner policy), otel-collector rules, Loki/Tempo configs, dashboards and
    alerts (including the isidoro edge alerts and the calypso landing analytics queries).
@@ -1714,7 +1727,7 @@ Separate commits, in order:
 **Gate 6:** zero Ingress objects (or only runner ones while calypso is on `exposure: both`), no
 `nginx_ingress_controller_*` series once both are gone, no `.1`/`.4` in Cilium LB IPAM, all Argo
 apps Synced/Healthy, no listener `https-runners-staging-forkline-dev` remains on the internal
-Gateway.
+Gateway, no Cloudflare A record points at `192.168.193.1` or `.4` (step 3a).
 
 ## Verification Checklist (per route)
 

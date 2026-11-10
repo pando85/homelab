@@ -131,6 +131,7 @@ Full pitfall index (78 entries grouped by subsystem): `docs/troubleshooting/INDE
 - Introducing CRDs without `--include-crds` in helm template
 - Not waiting for webhooks (cert-manager, external-secrets) before applying dependent resources
 - Forgetting `Prune=false` on PVCs causes data loss on sync
+- Comments inside embedded config blocks (strings in `values.yaml` rendered into a ConfigMap, e.g. Alloy, Vector, Loki) are live config: editing them restarts the workload; treat such edits as config changes
 - Freshly joined node shows `Ready,SchedulingDisabled` for ~1 min: `k3s-agent` system-upgrade Plan
   has `cordon: true`. Don't uncordon by hand — resolves automatically
 - Apps with init-container workarounds: log version info, fail loudly (`exit 1`) on mismatch so

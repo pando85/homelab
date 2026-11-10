@@ -94,6 +94,14 @@ external-dns publishes to Cloudflare with policy `upsert-only` and sources `serv
   a route back, leaves the record in Cloudflare. To roll back a moved record, edit it in Cloudflare
   by hand **and** revert the source in git; otherwise external-dns re-asserts the record within its
   2 minute interval. Records are created with `ttl=1` (auto).
+- **Orphaned records:** upsert-only also means that removing or renaming a route or Ingress leaves
+  its A or CNAME record (and the `a-<name>` TXT owner record) in Cloudflare, still resolving to the
+  old target. Removal is a manual Cloudflare delete of the record and its TXT owner records. To find
+  them, collect hostnames from git history with
+  `git log -p --all | grep -o -E '[a-z0-9.-]+\.grigri\.cloud' | sort -u`, `dig +short <name> @1.1.1.1`
+  each and compare against the live routes (`kubectl get httproute,ingress -A`), and check the
+  Cloudflare dashboard or API for names never in git. Point-in-time list and cleanup step:
+  `planning/ingress-nginx-to-envoy-gateway.md` (Phase 6).
 
 ## Rolling back a Gateway switch
 
