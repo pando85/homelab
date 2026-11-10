@@ -16,7 +16,6 @@ Run: ``test/mcp-gateway/hermes-mcp/run.sh``
 
 from __future__ import annotations
 
-import difflib
 import json
 import os
 import shutil
@@ -51,27 +50,17 @@ def _values() -> dict:
 
 
 def _image(values: dict) -> str:
-    options = values["app-template"]["controllers"]["hermes"]["defaultContainerOptions"]["image"]
-    return f"{options['repository']}:{options['tag']}"
+    image = values["app-template"]["controllers"]["hermes"]["containers"]["hermes"]["image"]
+    return f"{image['repository']}:{image['tag']}"
 
 
 def _render_enabled(work: Path) -> list[dict]:
     """Render the chart with the feature on and return every document."""
     values = _values()
-    controller = values["app-template"]["controllers"]["hermes"]
     enabled = json.loads(json.dumps(values))
     # ``--set`` cannot flip the YAML aliases that share mcpGateway.enabled, so
     # the override document mirrors exactly what an operator edits in one place.
-    enabled["mcpGateway"]["enabled"] = True
-    for name in controller["initContainers"]:
-        if name.startswith("mcp-gateway-"):
-            enabled["app-template"]["controllers"]["hermes"]["initContainers"][name]["enabled"] = True
-    for name in controller["containers"]:
-        if name.startswith("mcp-gateway-"):
-            enabled["app-template"]["controllers"]["hermes"]["containers"][name]["enabled"] = True
-    for name in values["app-template"]["persistence"]:
-        if name.startswith("mcp-gateway-"):
-            enabled["app-template"]["persistence"][name]["enabled"] = True
+    enabled["global"]["mcpGateway"]["enabled"] = True
 
     path = work / "enabled-values.yaml"
     path.write_text(yaml.safe_dump(enabled))
@@ -144,8 +133,8 @@ def run_check(workspace: Path, script: str, mode: str, env: dict | None = None) 
         "--tmpfs", f"{HERMES_MOUNT}:mode=1777,size=64m",
         "-e", f"HERMES_HOME={HERMES_MOUNT}",
         "-e", "MCP_GATEWAY_CONFIG=/work/config.json",
-        # Same uid the StatefulSet renders, so file ownership of the credential
-        # is tested as it exists in the pod, not as root.
+        # Same uid the helper Deployment renders, so file ownership of the
+        # credential is tested as it exists in the pod, not as root.
         "--user", f"{AGENT_UID}:{AGENT_UID}",
     ]
     for key, value in (env or {}).items():
@@ -195,76 +184,19 @@ def test_token_files_owned_by_agent_uid(workspace: Path) -> None:
         assert "uid 10000" in output, f"check did not run as the agent uid:\n{output}"
 
 
-def test_disabled_render_identical_to_head() -> None:
-    """The default-off pod must be what it was, except one proven-inert line.
+def test_disabled_render_has_no_gateway_resources() -> None:
+    """With the flag off, no gateway ConfigMap, Deployment, or helper resources render.
 
-    Renders the committed chart and the working tree and diffs them. Exactly one
-    delta is tolerated, and the test proves it cannot do anything: the
-    ConfigMap-scoped Reloader annotation, which only fires for ConfigMaps the pod
-    references - and while the feature is off this pod references none, so no
-    annotation-triggered rollout is possible. It exists because the helpers run
-    scripts mounted from ``hermes-mcp-gateway``: without a rollout trigger, a
-    script fix would never reach the running containers.
-
-    Anything else - a new container, volume, object or annotation - fails here.
+    The strict byte-for-byte comparison against a baseline commit is in
+    ``apps/hermes/tests/test_render_enable.py::test_disabled_render_is_head_baseline``.
+    This test asserts the key property: the feature adds nothing when off, and
+    the core hermes workload is still present.
     """
     if helm is None:
         pytest.skip("helm not installed")
-    head = subprocess.run(
-        ["git", "archive", "HEAD", "apps/hermes"], capture_output=True, text=True, check=True
-    ).stdout
-    with tempfile.TemporaryDirectory() as tmp:
-        root = Path(tmp)
-        subprocess.run(["tar", "-x", "-C", root], input=head.encode(), check=True)
-        committed = root / "apps" / "hermes"
-        # Sub charts are gitignored build output: copy them so both renders use
-        # the same app-template version.
-        shutil.copytree(CHART / "charts", committed / "charts")
-
-        def render(path: Path) -> str:
-            return subprocess.run(
-                ["helm", "template", RELEASE, str(path), "--namespace", NAMESPACE],
-                capture_output=True, text=True, check=True, cwd=tmp,
-            ).stdout
-
-        before, after = render(committed), render(CHART)
-        if before == after:
-            return
-        added = [ln for ln in difflib.unified_diff(before.splitlines(), after.splitlines(),
-                                                   lineterm="")
-                  if ln.startswith("+") and not ln.startswith("+++")]
-        removed = [ln for ln in difflib.unified_diff(before.splitlines(), after.splitlines(),
-                                                     lineterm="")
-                   if ln.startswith("-") and not ln.startswith("---")]
-        allowed = {"+      annotations: ", '+        configmap.reloader.stakater.com/auto: "true"'}
-        assert set(added) <= allowed, f"unexpected default-off delta: {added}"
-        assert not removed, f"lines vanished from the disabled render: {removed}"
-
-        # ...and the tolerated line is inert while disabled: no ConfigMap volume
-        # or reference exists for Reloader to watch.
-        docs = [d for d in yaml.safe_load_all(after) if d]
-        pod = next(d for d in docs if d["kind"] == "StatefulSet")["spec"]["template"]
-        refs = [v["configMap"]["name"] for v in pod["spec"].get("volumes", [])
-                if "configMap" in v]
-        refs += [e["configMapRef"]["name"] for c in pod["spec"]["containers"]
-                 for e in c.get("envFrom", []) or [] if "configMapRef" in e]
-        assert not refs, f"disabled pod references ConfigMaps {refs}: the annotation is not inert"
-        assert not any(d["kind"] == "ConfigMap" for d in docs), "gateway ConfigMap rendered while off"
-
-
-def test_disabled_render_is_untouched() -> None:
-    """With the flag off the chart must render exactly what it rendered before.
-
-    The strict proof is the byte-for-byte comparison against the committed
-    chart (``run.sh --compare-head``); this assertion only names the resources
-    the feature would add, since "mcp-gateway" alone also matches the untouched
-    Grafana sidecar.
-    """
-    if helm is None:
-        pytest.skip("helm not installed")
-    assert _values()["mcpGateway"]["enabled"] is False, "feature must stay off by default"
     current = subprocess.run(
-        ["helm", "template", RELEASE, str(CHART), "--namespace", NAMESPACE],
+        ["helm", "template", RELEASE, str(CHART), "--namespace", NAMESPACE,
+         "--set", "global.mcpGateway.enabled=false"],
         capture_output=True, text=True, check=True,
     ).stdout
     for added in ("kind: KanidmServiceAccount\nmetadata:\n  name: hermes-mcp",
@@ -272,8 +204,13 @@ def test_disabled_render_is_untouched() -> None:
                   "name: mcp-gateway-token", "name: mcp-gateway-token-refresher",
                   "hermes-mcp-token"):
         assert added not in current, f"feature leaked into the disabled render: {added}"
-    for existing in ("grafana-mcp-refresher", "hermes-data", "nousresearch/hermes-agent:v2026.8.16.2"):
+    # The hermes container and its data volume must still be present
+    for existing in ("hermes-data", "nousresearch/hermes-agent:v2026.8.16.2"):
         assert existing in current, f"regression: {existing} vanished"
+    # No gateway ConfigMap rendered while off
+    docs = [d for d in yaml.safe_load_all(current) if d]
+    assert not any(d.get("kind") == "ConfigMap" and d.get("metadata", {}).get("name") == "hermes-mcp-gateway"
+                   for d in docs), "gateway ConfigMap rendered while off"
 
 
 def test_gateway_entry_only_declares_oauth(workspace: Path) -> None:
@@ -283,22 +220,23 @@ def test_gateway_entry_only_declares_oauth(workspace: Path) -> None:
     the reload mechanism Hermes already implements.
     """
     cfg = json.loads((workspace / "config.json").read_text())
-    entry = cfg["entry"]
-    assert entry["auth"] == "oauth"
-    assert "headers" not in entry and "env" not in entry
-    assert entry["url"].startswith("https://")
+    for name, entry in cfg["servers"].items():
+        assert entry["auth"] == "oauth", f"{name} must use oauth"
+        assert "headers" not in entry and "env" not in entry, f"{name} has unexpected auth"
+        assert entry["url"].startswith("https://"), f"{name} url must be https"
     exchange = cfg["exchange"]
     assert exchange["clientId"] == exchange["audience"], "audience must match the gateway client"
-    assert "mcp_firecrawl" in exchange["scope"], "Firecrawl grant comes from the mapped scope"
     assert exchange["marginSeconds"] > 0 and exchange["minIntervalSeconds"] > 0
+    # Verify firecrawl scope is present in the servers
+    assert "homelab-firecrawl" in cfg["servers"], "firecrawl server missing"
+    assert cfg["servers"]["homelab-firecrawl"]["oauth"]["scope"] == "mcp_firecrawl"
 
 
 def test_rendered_entry_matches_gateway_contract(workspace: Path) -> None:
     """Pin the values against what ``apps/mcp-gateway`` actually serves.
 
     * the gateway routes per target (``/firecrawl/mcp``) and has no aggregate
-      ``/mcp``, so the URL must carry the target and the serverName must say
-      which target this entry talks to;
+      ``/mcp``, so the URL must carry the target;
     * only the scopes the gateway really grants may be requested: asking for
       ``openid``/``email`` here would either fail the exchange or silently
       assume a grant that does not exist (the agent needs neither - the access
@@ -307,64 +245,69 @@ def test_rendered_entry_matches_gateway_contract(workspace: Path) -> None:
       independent of the host part of the URL.
     """
     cfg = json.loads((workspace / "config.json").read_text())
-    assert cfg["serverName"] == "homelab-firecrawl"
-    assert cfg["entry"]["url"] == "https://mcp.grigri.cloud/firecrawl/mcp"
+    firecrawl = cfg["servers"]["homelab-firecrawl"]
+    assert firecrawl["url"] == "https://mcp.grigri.cloud/firecrawl/mcp"
     from urllib.parse import urlparse
 
-    parsed = urlparse(cfg["entry"]["url"])
+    parsed = urlparse(firecrawl["url"])
     assert parsed.path == "/firecrawl/mcp", f"not a per-target route: {parsed.path}"
+    scope = firecrawl["oauth"]["scope"]
+    assert scope == "mcp_firecrawl", f"ungranted scopes: {scope}"
+    assert not {"openid", "profile", "email"} & set(scope.split())
     exchange = cfg["exchange"]
-    assert exchange["scope"] == "mcp_firecrawl", f"ungranted scopes: {exchange['scope']}"
-    assert not {"openid", "profile", "email"} & set(exchange["scope"].split())
     assert exchange["clientId"] == exchange["audience"] == "mcp-gateway"
-    assert cfg["exchange"]["url"].startswith("https://idm.grigri.cloud/")
+    assert exchange["url"].startswith("https://idm.grigri.cloud/")
 
-    values = _values()["mcpGateway"]
-    assert values["serviceAccount"]["entryManagedBy"] == "mcp-gateway-agents"
-    assert values["serviceAccount"]["name"] == "hermes-mcp", "one unique id per instance"
-    assert values["enabled"] is False, "first instance ships disabled"
+    values = _values()["global"]["mcpGateway"]
+    assert values["enabled"] is True, "feature is enabled in values.yaml"
 
 
 def test_gateway_helpers_block_startup_until_they_succeed(workspace: Path) -> None:
-    """A failing merge must NOT let Hermes start with an unconfigured entry.
+    """A failing merge must NOT let the helper refresher start with an unconfigured entry.
 
-    Both gateway steps are ordinary init containers: Kubernetes runs them to
-    completion before the app container starts and re-tries the pod until they
-    exit 0. A native sidecar (``restartPolicy: Always``) would instead be
-    allowed to fail while the agent started without its MCP entry, so the
-    rendered absence of that field is part of the fail-closed contract - as is
-    the merge script's own non-zero exit (``check_merge.py malformed``).
-    """
-    pod = next(d for d in _render_enabled(workspace)
-               if d.get("kind") == "StatefulSet")["spec"]["template"]["spec"]
-    init = {c["name"]: c for c in pod.get("initContainers", [])}
-    for name in ("mcp-gateway-config", "mcp-gateway-token"):
-        assert name in init, f"{name} must be an init container, not a sidecar"
-        assert init[name].get("restartPolicy") is None, (
-            f"{name} is a native sidecar: the agent could start before it succeeded")
-    # The exchange must finish before the agent's own container starts, so the
-    # first MCP request in the pod always finds a token file.
-    assert "hermes" in [c["name"] for c in pod["containers"]]
-
-
-def test_script_changes_roll_the_pod(workspace: Path) -> None:
-    """ConfigMap-only edits to the helper scripts must reach the running pod.
-
-    The scripts are mounted, not baked into the image, so kubelet updating the
-    mount does not re-exec the Python that is already running. Reloader is the
-    repo's answer (platform/reloader, used by home-assistant/mosquitto), and the
-    ConfigMap-scoped annotation is deliberate: it can never be woken by a Secret
-    rotation, which the existing Grafana refresher handles by design.
+    Both gateway steps are ordinary init containers in the helper Deployment:
+    Kubernetes runs them to completion before the refresher container starts and
+    re-tries the pod until they exit 0. A native sidecar (``restartPolicy: Always``)
+    would instead be allowed to fail while the refresher started without its MCP
+    entry, so the rendered absence of that field is part of the fail-closed
+    contract - as is the merge script's own non-zero exit (``check_merge.py malformed``).
     """
     docs = _render_enabled(workspace)
-    sts = next(d for d in docs if d.get("kind") == "StatefulSet")
-    annotations = sts["spec"]["template"]["metadata"].get("annotations") or {}
-    assert annotations.get("configmap.reloader.stakater.com/auto") == "true", annotations
+    dep = next(d for d in docs if d.get("kind") == "Deployment"
+               and d["metadata"]["name"] == "hermes-mcp-gateway")
+    pod = dep["spec"]["template"]["spec"]
+    init = {c["name"]: c for c in pod.get("initContainers", [])}
+    for name in ("mcp-gateway-config", "mcp-gateway-token"):
+        assert name in init, f"{name} must be an init container in the helper Deployment"
+        assert init[name].get("restartPolicy") is None, (
+            f"{name} is a native sidecar: the refresher could start before it succeeded")
+    # The exchange must finish before the refresher container starts, so the
+    # first token refresh always finds a valid credential on disk.
+    containers = [c["name"] for c in pod["containers"]]
+    assert "mcp-gateway-token-refresher" in containers
 
-    pod = sts["spec"]["template"]["spec"]
+
+def test_script_changes_roll_the_helper_pod(workspace: Path) -> None:
+    """ConfigMap-only edits to the helper scripts must reach the running helper pod.
+
+    The scripts are mounted from the ConfigMap, not baked into the image, so
+    kubelet updating the mount does not re-exec the Python that is already
+    running. The helper Deployment uses a ``checksum/config`` annotation that
+    changes whenever the ConfigMap content changes, which triggers a rolling
+    update of the Deployment. This is the helper pod's own rollout mechanism;
+    the hermes StatefulSet does not mount the ConfigMap and needs no annotation.
+    """
+    docs = _render_enabled(workspace)
+    dep = next(d for d in docs if d.get("kind") == "Deployment"
+               and d["metadata"]["name"] == "hermes-mcp-gateway")
+    annotations = dep["spec"]["template"]["metadata"].get("annotations") or {}
+    assert "checksum/config" in annotations, (
+        f"helper Deployment missing checksum/config annotation: {annotations}")
+
+    pod = dep["spec"]["template"]["spec"]
     volumes = {v["name"]: v for v in pod.get("volumes", []) if "configMap" in v}
     mounted = [n for n, v in volumes.items() if v["configMap"]["name"] == "hermes-mcp-gateway"]
-    assert mounted, "no ConfigMap volume: Reloader would have nothing to watch"
+    assert mounted, "no ConfigMap volume: checksum would have nothing to watch"
     helpers = [c["name"] for c in pod["initContainers"] + pod["containers"]
                if c["name"].startswith("mcp-gateway-")]
     readers = [c["name"] for c in pod["initContainers"] + pod["containers"]

@@ -67,18 +67,19 @@ SIBLING = {
 }
 
 
-def desired_entry() -> dict:
-    return json.loads(Path(GATEWAY_CONFIG).read_text())["entry"]
+def desired_entries() -> dict[str, dict]:
+    """All server entries from the rendered gateway config (multi-target)."""
+    return json.loads(Path(GATEWAY_CONFIG).read_text())["servers"]
 
 
-def server_name() -> str:
-    """The owned ``mcp_servers`` key, taken from the rendered chart config."""
-    return json.loads(Path(GATEWAY_CONFIG).read_text())["serverName"]
+def server_names() -> list[str]:
+    """All owned ``mcp_servers`` keys, taken from the rendered chart config."""
+    return list(json.loads(Path(GATEWAY_CONFIG).read_text())["servers"].keys())
 
 
 def private_sibling_key() -> str:
-    """A name that can never collide with the owned key."""
-    return "unmanaged-" + server_name()
+    """A name that can never collide with any owned key."""
+    return "unmanaged-" + "-".join(server_names())
 
 
 def write_config(servers: dict, extra: dict | None = None) -> None:
@@ -141,8 +142,12 @@ def main() -> int:
     if mode == "bad-entry":
         write_config({private_sibling_key(): SIBLING})
         before, *_ = snapshot()
-        Path(GATEWAY_CONFIG).write_text(json.dumps({"serverName": server_name(),
-                                                    "entry": {"command": "whoami"}}))
+        # Build a config with one broken server (no url) among otherwise valid ones
+        bad_servers = dict(desired_entries())
+        first_name = next(iter(bad_servers))
+        bad_servers[first_name] = {"command": "whoami"}  # no url, no auth
+        Path(GATEWAY_CONFIG).write_text(json.dumps({"servers": bad_servers,
+                                                    "exchange": json.loads(Path(GATEWAY_CONFIG).read_text())["exchange"]}))
         proc = run_merge()
         assert proc.returncode != 0, "entry without a url must fail closed"
         assert CONFIG.read_bytes() == before, "config rewritten after a bad entry"
@@ -159,13 +164,17 @@ def main() -> int:
         print("PASS merge output names keys only")
         return 0
 
-    # default: preserve. The owned key and its stale predecessor come from the
-    # rendered chart config, so this proves the real deployment name.
-    owned = server_name()
+    # default: preserve. The owned keys and their stale predecessors come from the
+    # rendered chart config, so this proves the real deployment names.
+    owned_names = server_names()
+    owned_entries = desired_entries()
+    # Seed one owned key with a stale entry to prove replacement (not just addition)
+    first_owned = owned_names[0]
+    stale_entry = dict(owned_entries[first_owned])
+    stale_entry["url"] = "https://old.example/firecrawl/mcp"
+    stale_entry["stale_key"] = "remove-me"
     write_config({private_sibling_key(): SIBLING,
-                  owned: {"url": "https://old.example/firecrawl/mcp",
-                          "auth": "oauth",
-                          "stale_key": "remove-me"}})
+                  first_owned: stale_entry})
     before_mode_owner = snapshot()[1:]
     proc = run_merge()
     assert proc.returncode == 0, f"merge failed: {proc.stdout}{proc.stderr}"
@@ -177,20 +186,23 @@ def main() -> int:
     assert doc["skills"] == PRIVATE["skills"], "unmanaged skills changed"
 
     servers = doc["mcp_servers"]
-    assert set(servers) == {private_sibling_key(), owned}, f"servers lost/added: {set(servers)}"
+    assert set(servers) == {private_sibling_key(), *owned_names}, f"servers lost/added: {set(servers)}"
     assert servers[private_sibling_key()] == SIBLING, "sibling MCP server entry modified"
-    assert servers[owned] == desired_entry(), "gateway entry not exact"
-    assert "stale_key" not in servers[owned], "owned entry merged instead of replaced"
+    for name in owned_names:
+        assert servers[name] == owned_entries[name], f"{name} gateway entry not exact"
+    assert "stale_key" not in servers[first_owned], "owned entry merged instead of replaced"
     # The gateway serves per-target routes only (``/<target>/mcp``): an entry
     # pointing at a bare ``/mcp`` would 404, so the chart must keep the target
-    # in the path and the serverName must say which target it is.
+    # in the path and the server name must name the target.
     from urllib.parse import urlparse
 
-    parsed = urlparse(desired_entry()["url"])
-    assert parsed.path.endswith("/mcp"), f"not an MCP route: {parsed.path}"
-    target = parsed.path.removesuffix("/mcp").strip("/")
-    assert target and target.replace("-", "") in owned.replace("-", ""), (
-        f"serverName '{owned}' does not name the url target '{target}'")
+    for name in owned_names:
+        entry = owned_entries[name]
+        parsed = urlparse(entry["url"])
+        assert parsed.path.endswith("/mcp"), f"{name}: not an MCP route: {parsed.path}"
+        target = parsed.path.removesuffix("/mcp").strip("/")
+        assert target and target.replace("-", "") in name.replace("-", ""), (
+            f"server '{name}' does not name the url target '{target}'")
     assert snapshot()[1:] == before_mode_owner, "config.yaml mode/owner changed"
 
     before = CONFIG.read_bytes()

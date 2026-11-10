@@ -55,7 +55,10 @@ def _local_gateway_config() -> str:
 
 
 GATEWAY_CONFIG = _local_gateway_config()
-SERVER_NAME = json.loads(Path(GATEWAY_CONFIG).read_text())["serverName"]
+# Multi-server config: pick the first server for detailed assertions, but the
+# token script exchanges for ALL servers.
+_ALL_SERVERS = json.loads(Path(GATEWAY_CONFIG).read_text())["servers"]
+SERVER_NAME = next(iter(_ALL_SERVERS))
 SAFE = SERVER_NAME.replace(".", "_")
 TOKENS = HOME / "mcp-tokens" / f"{SAFE}.json"
 CLIENT = HOME / "mcp-tokens" / f"{SAFE}.client.json"
@@ -115,17 +118,19 @@ def stub_server(handler) -> tuple[HTTPServer, int]:
     return srv, srv.server_address[1]
 
 
-def point_at(port: int, *, mcp_path: str = "/firecrawl/mcp") -> str:
+def point_at(port: int, *, mcp_path: str = "/grafana/mcp") -> str:
     """Repoint this check's private config at the loopback stub.
 
-    Returns the stub's MCP URL, which the reload check uses as the provider's
-    server URL: the flow must be fully hermetic, because real discovery against
-    the public gateway host is not reachable from a test container.
+    Returns the stub's MCP URL for the primary server. All servers are repointed
+    to the stub so the token script can exchange for all of them against the
+    loopback fixture.
     """
     cfg = json.loads(Path(GATEWAY_CONFIG).read_text())
     base = f"http://127.0.0.1:{port}"
     cfg["exchange"]["url"] = f"{base}/token"
-    cfg["entry"]["url"] = base + mcp_path
+    # Repoint all servers to the stub, each with its own path
+    for i, name in enumerate(cfg["servers"]):
+        cfg["servers"][name]["url"] = f"{base}/server{i}/mcp"
     Path(GATEWAY_CONFIG).write_text(json.dumps(cfg))
     return base + mcp_path
 
@@ -170,12 +175,14 @@ def good_handler(path: str, body: str):
         return 400, {"error": "unsupported_grant_type"}
     if not params.get("subject_token"):
         return 400, {"error": "invalid_request", "hint": "subject_token missing"}
+    # Echo back the requested scope so each server gets its own grant
+    req_scope = params.get("scope", "mcp_grafana")
     return 200, {
         "access_token": SECRET,
         "token_type": "Bearer",
         "expires_in": 3600,
         "refresh_token": "shall-not-be-stored",
-        "scope": "openid profile email mcp_firecrawl",
+        "scope": req_scope,
     }
 
 
@@ -285,7 +292,7 @@ def main() -> int:
         rotated = "rotated-" + SECRET
         srv2, port2 = stub_server(lambda p, b: (200, {
             "access_token": rotated, "token_type": "Bearer", "expires_in": 3600,
-            "scope": "openid profile email mcp_firecrawl"}))
+            "scope": json.loads(Path(GATEWAY_CONFIG).read_text())["servers"][SERVER_NAME]["oauth"]["scope"]}))
         point_at(port2)
         third = run_token()
         assert third.returncode == 0, third.stdout + third.stderr
@@ -349,7 +356,7 @@ def main() -> int:
         from tools.mcp_tool import sdk_httpx
 
         httpx = sdk_httpx()
-        url = json.loads(Path(GATEWAY_CONFIG).read_text())["entry"]["url"]
+        url = json.loads(Path(GATEWAY_CONFIG).read_text())["servers"][SERVER_NAME]["url"]
         assert url.startswith("http://127.0.0.1:"), "reload must run against the stub"
 
         provider = get_manager().get_or_build_provider(SERVER_NAME, url, {})
