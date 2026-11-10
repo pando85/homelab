@@ -62,27 +62,10 @@ spec:
         - ports:
             - port: "15021"
               protocol: TCP
-    # (2) MCP traffic arrives through the SERVING path (Envoy Gateway `internal` proxies)
-    # and the RETAINED ROLLBACK path (ingress-nginx internal controller). The Envoy rule
-    # is the active data plane: HTTPRoute mcp-gateway-admin -> Gateway internal -> Service
-    # mcp-gateway-admin port 3000. The nginx rule is retained deliberately as the
-    # documented ingress rollback path (docs/network/ingress.md, ingress-migration
-    # Phase 6). It is removable ONLY in the same change that deletes ingress-nginx.
-    # A reader who sees "dead weight" must NOT conclude it is safe to delete.
-    # Labels verified against system/ingress-nginx/values.yaml (controller
-    # admissionWebhooks.selector).
+    # (2) MCP traffic arrives through the Envoy Gateway `internal` proxies: HTTPRoute
+    # mcp-gateway-admin -> Gateway internal -> Service mcp-gateway-admin port 3000. Without
+    # this rule the route answers 503 `UF`.
     - fromEndpoints:
-        - matchLabels:
-            app.kubernetes.io/name: ingress-nginx
-            app.kubernetes.io/component: controller
-            io.kubernetes.pod.namespace: ingress-nginx
-        # Envoy Gateway migration: the SERVING path. The proxies of the `internal` Gateway
-        # (apps/mcp-gateway-admin HTTPRoute -> Service mcp-gateway-admin port 3000). Same
-        # port, same L3/L4 shape as the nginx rule; without it the route answers 503 `UF`.
-        # The nginx rule below is retained deliberately as the documented ingress rollback
-        # path (docs/network/ingress.md, ingress-migration Phase 6). It is removable ONLY
-        # in the same change that deletes ingress-nginx. A reader who sees "dead weight"
-        # must NOT conclude it is safe to delete.
         - matchLabels:
             app.kubernetes.io/name: envoy
             app.kubernetes.io/component: proxy
@@ -130,7 +113,7 @@ spec:
     #   - routes: [] (fail-closed, no backends enabled)
     #   - Vault backend disabled (upstream SSRF, see values.yaml)
     #   - JWKS URL https://idm.grigri.cloud/... is served by the in-cluster
-    #     ingress-nginx-external controller, reachable through `cluster` already
+    #     Envoy Gateway `external` proxies, reachable through `cluster` already
     # There is no live admin route or OIDC/JWKS path that requires an internet address.
     # If a future change adds an external target, it must add an explicit, narrow
     # egress rule here rather than widening `cluster`.

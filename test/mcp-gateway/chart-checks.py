@@ -582,14 +582,13 @@ def main():
               not any(str(app_port) in str(r.get("toPorts", [])) for r in world_rules),
               "app port must not be exposed via world entity")
 
-        # Edge admission (mcp-gateway planes only): ingress-nginx and the Envoy Gateway proxies
-        # of the owning Gateway are both named on the app port while ingress-nginx is migrated away.
+        # Edge admission (mcp-gateway planes only): only the Envoy Gateway proxies of the owning
+        # Gateway are named on the app port.
         if envoy_gateway:
             app_sel = [ep.get("matchLabels", {})
                        for r in app_port_rules for ep in r.get("fromEndpoints", [])]
-            check(f"{chart_name}: app port {app_port} admits ingress-nginx controller pods",
-                  any(m.get("app.kubernetes.io/name") == "ingress-nginx" and
-                      m.get("app.kubernetes.io/component") == "controller" for m in app_sel),
+            check(f"{chart_name}: app port {app_port} does not admit ingress-nginx controller pods",
+                  not any(m.get("app.kubernetes.io/name") == "ingress-nginx" for m in app_sel),
                   f"selectors={app_sel}")
             check(f"{chart_name}: app port {app_port} admits the {envoy_gateway} Envoy Gateway proxies",
                   any(m.get("app.kubernetes.io/name") == "envoy" and
@@ -697,12 +696,10 @@ def main():
     # ---- CNP fromEndpoints drift guard ----
     # If Envoy's proxy pod labels ever change, the CNP stops matching and the routes
     # fail closed with no error anywhere (Cilium silently drops, Envoy logs 503 UF).
-    # If someone deletes the nginx rules early, the documented ingress rollback
-    # (docs/network/ingress.md, Phase 6) fails closed at the network layer. Both
-    # conditions must fail LOUDLY here, not silently in production.
-    for chart, envoy_gw, nginx_ns in [
-        ("mcp-gateway", "external", "ingress-nginx-external"),
-        ("mcp-gateway-admin", "internal", "ingress-nginx"),
+    # That condition must fail LOUDLY here, not silently in production.
+    for chart, envoy_gw in [
+        ("mcp-gateway", "external"),
+        ("mcp-gateway-admin", "internal"),
     ]:
         cnp_docs = helm(chart, ["networkIsolation=true"])
         cnps = [d for d in cnp_docs if d.get("kind") == "CiliumNetworkPolicy"]
@@ -718,8 +715,6 @@ def main():
         all_eps = [ep for r in app_rules for ep in r.get("fromEndpoints", [])]
         envoy_eps = [ep.get("matchLabels", {}) for ep in all_eps
                      if ep.get("matchLabels", {}).get("app.kubernetes.io/name") == "envoy"]
-        nginx_eps = [ep.get("matchLabels", {}) for ep in all_eps
-                     if ep.get("matchLabels", {}).get("app.kubernetes.io/name") == "ingress-nginx"]
         # Envoy proxy drift guard: exact label set from the live proxy pods
         check(f"{chart}: CNP admits the {envoy_gw} Envoy proxy with exact live labels "
               "(drift guard: if Envoy relabels, routes fail closed with no error)",
@@ -728,13 +723,11 @@ def main():
                   and e.get("io.kubernetes.pod.namespace") == "envoy-gateway"
                   for e in envoy_eps),
               f"envoy selectors={envoy_eps}")
-        # nginx rollback drift guard: the rule must stay until Phase 6
-        check(f"{chart}: CNP retains ingress-nginx rule in {nginx_ns} "
-              "(drift guard: deleting early breaks the documented rollback path)",
-              any(e.get("app.kubernetes.io/component") == "controller"
-                  and e.get("io.kubernetes.pod.namespace") == nginx_ns
-                  for e in nginx_eps),
-              f"nginx selectors={nginx_eps}")
+        # ingress-nginx is gone: no rule may name it
+        check(f"{chart}: CNP has no ingress-nginx rule (the controllers were removed)",
+              not any(ep.get("matchLabels", {}).get("app.kubernetes.io/name") == "ingress-nginx"
+                      for ep in all_eps),
+              f"selectors={[ep.get('matchLabels', {}) for ep in all_eps]}")
 
     # grafana-mcp default-false checks
     graf_default_docs = helm("grafana-mcp")

@@ -19,8 +19,7 @@ logLevel: info
 # (templates/ciliumnetworkpolicy.yaml) in the proven split-port shape:
 #   - `world` on the dedicated health port 15021 only (kubelet probes; the only
 #     entity matching the probe source on this cluster, measured)
-#   - app port 3000 from the internal ingress-nginx controller pods and the `internal` Envoy
-#     Gateway proxies only
+#   - app port 3000 from the `internal` Envoy Gateway proxies only
 #   - metrics port 15020 from Prometheus pods in `monitoring`
 #   - egress: bare `toEntities: [cluster]` (no toPorts) plus explicit DNS pod rules
 #   - no `world` egress (no live admin route requires internet; JWKS is in-cluster)

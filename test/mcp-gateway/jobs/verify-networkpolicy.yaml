@@ -17,8 +17,7 @@
 # Scope of the policy under test (apps/mcp-gateway/templates/ciliumnetworkpolicy.yaml):
 #   ingress 15021 <- fromEntities: [world] (kubelet probes; `world` does NOT admit
 #                     cluster-identity pods, so cross-namespace pods are still denied)
-#   ingress 3000  <- fromEndpoints: ingress-nginx-external controller pods OR
-#                    Envoy Gateway `external` proxy pods (serving path)
+#   ingress 3000  <- fromEndpoints: Envoy Gateway `external` proxy pods
 #   ingress 15020 <- fromEndpoints: prometheus pods in monitoring namespace
 #   egress: toEntities: [cluster] + DNS pod rules + world:443 (context7 backend)
 #   everything else denied

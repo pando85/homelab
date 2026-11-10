@@ -23,7 +23,7 @@ Covers:
      Kanidm per-client issuer, per-route scopes_supported, and paths disjoint from the MCP
      pathPrefix (a prefix collision would silently swallow the MCP route or the metadata);
   5. isolation: networkIsolation is true and exactly one CiliumNetworkPolicy (no native
-     NetworkPolicy) is rendered, admitting ingress-nginx and the external Envoy proxies;
+     NetworkPolicy) is rendered, admitting only the external Envoy proxies;
   6. what must NOT have moved: prusik pin, session-key Secret/ExternalSecret/Password,
      probes, HTTPRoute serving path (and no Ingress), ClusterIP-only service,
      no admin listener.
@@ -351,8 +351,8 @@ def main():
                    if any(str(p.get("port")) == "3000"
                           for tp in r.get("toPorts", []) for p in tp.get("ports", []))
                    for ep in r.get("fromEndpoints", [])]
-        check("CNP admits ingress-nginx and the external Envoy Gateway proxies on 3000",
-              any(m.get("app.kubernetes.io/name") == "ingress-nginx" for m in app_sel) and
+        check("CNP admits only the external Envoy Gateway proxies on 3000",
+              not any(m.get("app.kubernetes.io/name") == "ingress-nginx" for m in app_sel) and
               any(m.get("app.kubernetes.io/name") == "envoy" and
                   m.get("gateway.envoyproxy.io/owning-gateway-name") == "external" and
                   m.get("io.kubernetes.pod.namespace") == "envoy-gateway" for m in app_sel),

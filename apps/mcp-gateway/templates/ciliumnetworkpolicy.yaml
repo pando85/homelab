@@ -60,29 +60,10 @@ spec:
         - ports:
             - port: "15021"
               protocol: TCP
-    # (2) MCP traffic arrives through the SERVING path (Envoy Gateway `external` proxies)
-    # and the RETAINED ROLLBACK path (ingress-nginx-external controller). The Envoy rule
-    # is the active data plane: HTTPRoute mcp-gateway -> Gateway external -> Service
-    # mcp-gateway-standalone port 3000. The nginx rule is retained deliberately as the
-    # documented ingress rollback path (docs/network/ingress.md, ingress-migration
-    # Phase 6). It is removable ONLY in the same change that deletes ingress-nginx.
-    # A reader who sees "dead weight" must NOT conclude it is safe to delete.
-    # Live proof of the source identity: every gateway request log carries src.addr
-    # 10.0.4.148 / 10.0.4.234, the two `ingress-nginx-external` controller pods (not
-    # hostNetwork), and the Ingress for mcp.grigri.cloud uses class nginx-external ->
-    # Service mcp-gateway-standalone port 3000.
+    # (2) MCP traffic arrives through the Envoy Gateway `external` proxies: HTTPRoute
+    # mcp-gateway -> Gateway external -> Service mcp-gateway-standalone port 3000. Without
+    # this rule the route answers 503 `UF`.
     - fromEndpoints:
-        - matchLabels:
-            app.kubernetes.io/name: ingress-nginx
-            app.kubernetes.io/component: controller
-            io.kubernetes.pod.namespace: ingress-nginx-external
-        # Envoy Gateway migration: the SERVING path. The proxies of the `external` Gateway
-        # (HTTPRoute mcp-gateway -> Service mcp-gateway-standalone port 3000). Same port,
-        # same L3/L4 shape as the nginx rule; without it the route answers 503 `UF`.
-        # The nginx rule below is retained deliberately as the documented ingress rollback
-        # path (docs/network/ingress.md, ingress-migration Phase 6). It is removable ONLY
-        # in the same change that deletes ingress-nginx. A reader who sees "dead weight"
-        # must NOT conclude it is safe to delete.
         - matchLabels:
             app.kubernetes.io/name: envoy
             app.kubernetes.io/component: proxy
