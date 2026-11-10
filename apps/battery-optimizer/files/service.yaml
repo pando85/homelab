@@ -382,10 +382,10 @@ battery_health:
 # hack/climate_shadow_prior.py in <data_dir>/analysis/v1/climate-shadow/priors/<prior>/ and the
 # private <data_dir>/climate/site.yaml.  The weather forecast is the archive above (hourly).
 climate_shadow:
-  enabled: false
+  enabled: true
   climate_config: climate.yaml        # relative to this file's directory
   mpc_config: climate-mpc.yaml        # horizon, cadence, schedule, refit: as in the B1 replay
-  prior: null                         # prior id (hex prefix); required when enabled
+  prior: "2311c010392f"                         # prior id (hex prefix); required when enabled
   offset_minutes: 10                  # after the weather fetch at :05
   forecast_max_age_minutes: 180       # older archive records: the last outdoor reading is held
   score_lookback_days: 7              # unscored decisions older than this are dropped
@@ -401,7 +401,7 @@ climate_shadow:
   # "shadow": the plan is published (advisory; nothing in the optimizer acts on it, it stays
   # read-only toward Home Assistant).  "live" is only a request: the effective mode is never live in
   # this code version (live_locked).  The shadow's own hourly run and scoring are unaffected.
-  optimizer_mode: "off"
+  optimizer_mode: "shadow"
   plan_ttl_minutes: 90                # a plan is absent for consumers this long after its decision t0
   # Read-only Home Assistant helpers of the homelab comfort controller
   # (config/integrations/appdaemon_comfort.yaml); each may be absent until it is deployed.
