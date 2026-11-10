@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Read-only, re-runnable health check of the Envoy Gateway ingress path (ingress-nginx -> Envoy
-# Gateway migration, usable before and after any gateway or pfSense change).
+# Read-only, re-runnable health check of the Envoy Gateway ingress path (usable before and after
+# any gateway or pfSense change).
 #
 # Checks, each printed as PASS, FAIL, WARN or INFO:
 #   1  Envoy proxy Deployments ready for both gateways (internal, external)
@@ -12,8 +12,8 @@
 #      curl --resolve: TLS verified, HTTP/2, status not 000 or 5xx
 #   6  Forgejo SSH (TCP 29518) answers on the external VIP with a host key
 #   7  argocd /api/webhook reaches argocd-server through the external VIP (400 = unsigned)
-#   8  pfSense, read-only over ssh: alias k8s_external_ingress equals the external VIP, port
-#      forward (rdr) rules follow the alias, host override count per IP, states to the old IP
+#   8  pfSense, read-only over ssh: alias k8s_external_gateway equals the external VIP, port
+#      forward (rdr) rules follow the alias, host override count per IP
 #   9  DNS answers from the LAN resolver for a few names (external names -> external VIP,
 #      an internal name -> internal VIP)
 #  10  firing alerts (Watchdog and InfoInhibitor left out)
@@ -24,17 +24,9 @@
 # WARN lists things to look at (alerts, Argo, response flags, listeners without routes) and does
 # not change the exit status. Known quiet baselines are in the plan, not hard-coded here.
 #
-# --compare <old ip> adds a comparison against the previous controller (ingress-nginx-external,
-# 192.168.193.4) while it still exists: per-host status differences (expected ones are listed in
-# docs/conventions/gateway-api-routes.md), the SSH host key on both IPs, host overrides and pf
-# states still pointing at the old IP. Drop it after Phase 6, when nginx is gone.
-#
-# Usage: scripts/gateway-check.sh [--context CTX] [--compare OLD_IP] [--compare-gateway GW]
-#                                 [--pfsense HOST | --no-pfsense] [--dns IP]
+# Usage: scripts/gateway-check.sh [--context CTX] [--pfsense HOST | --no-pfsense] [--dns IP]
 #                                 [--alertmanager URL] [--since DURATION]
 #   --context CTX          kubectl context (default grigri)
-#   --compare OLD_IP       also probe OLD_IP and check pfSense for leftovers on it
-#   --compare-gateway GW   gateway whose hosts are compared with OLD_IP (default external)
 #   --pfsense HOST         ssh host with pfctl and unbound (default pfsense.grigri)
 #   --no-pfsense           skip check 8
 #   --dns IP               resolver for check 9 (default 192.168.192.1)
@@ -45,8 +37,6 @@
 set -u
 
 CONTEXT=grigri
-COMPARE=
-COMPARE_GW=external
 PF_HOST=pfsense.grigri
 USE_PF=1
 DNS=192.168.192.1
@@ -64,8 +54,6 @@ usage() {
 while [[ $# -gt 0 ]]; do
   case $1 in
     --context) CONTEXT=${2:?--context needs a value}; shift ;;
-    --compare) COMPARE=${2:?--compare needs an IP}; shift ;;
-    --compare-gateway) COMPARE_GW=${2:?--compare-gateway needs a name}; shift ;;
     --pfsense) PF_HOST=${2:?--pfsense needs a host}; shift ;;
     --no-pfsense) USE_PF=0 ;;
     --dns) DNS=${2:?--dns needs an IP}; shift ;;
@@ -77,10 +65,6 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
-if [[ -n $COMPARE && ! $COMPARE =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "--compare needs an IPv4 address, got: $COMPARE" >&2
-  exit 2
-fi
 if [[ ! $SINCE =~ ^[0-9]+[smh]$ ]]; then
   echo "--since needs a duration like 30m, got: $SINCE" >&2
   exit 2
@@ -192,7 +176,6 @@ for gw in "${GATEWAYS[@]}"; do
   probe_hosts "$gw" > "$TMP/hosts-$gw"
   n=0
   problems=0
-  notes=0
   while read -r h; do
     [[ -n $h ]] || continue
     n=$((n + 1))
@@ -200,15 +183,9 @@ for gw in "${GATEWAYS[@]}"; do
     if [[ $code == 000 || $code == 5?? || $verify != 0 || $httpv != 2 ]]; then
       fail "$gw $h on $ip: status=$code tls-verify=$verify http=$httpv"
       problems=$((problems + 1))
-    elif [[ -n $COMPARE && $gw == "$COMPARE_GW" ]]; then
-      old=$(curl -s -o /dev/null -m "$MAX_TIME" -w '%{http_code}' --resolve "$h:443:$COMPARE" "https://$h/" 2> /dev/null)
-      if [[ $old != "$code" ]]; then
-        info "$gw $h: $ip=$code $COMPARE=$old (expected differences: docs/conventions/gateway-api-routes.md)"
-        notes=$((notes + 1))
-      fi
     fi
   done < "$TMP/hosts-$gw"
-  ((problems == 0)) && pass "$gw: $n hosts probed on $ip (TLS verified, h2, no 000/5xx)${COMPARE:+, $notes differ from $COMPARE}"
+  ((problems == 0)) && pass "$gw: $n hosts probed on $ip (TLS verified, h2, no 000/5xx)"
 done
 
 # 6. Forgejo SSH host key ----------------------------------------------------------------------------
@@ -219,13 +196,6 @@ if command -v ssh-keyscan > /dev/null && command -v ssh-keygen > /dev/null; then
     hk=$(hostkey "$ext")
     if [[ -z $hk ]]; then
       fail "forgejo ssh 29518 on $ext: no host key"
-    elif [[ -n $COMPARE ]]; then
-      hko=$(hostkey "$COMPARE")
-      if [[ $hk == "$hko" ]]; then
-        pass "forgejo ssh 29518: same host key on $ext and $COMPARE ($hk)"
-      else
-        fail "forgejo ssh 29518: host key differs ($ext=$hk $COMPARE=${hko:-none})"
-      fi
     else
       pass "forgejo ssh 29518 answers on $ext ($hk)"
     fi
@@ -247,37 +217,18 @@ fi
 # 8. pfSense, read-only ----------------------------------------------------------------------------------
 if ((USE_PF)); then
   if command -v ssh > /dev/null; then
-    remote='pfctl -t k8s_external_ingress -T show; echo @@RDR; pfctl -sn 2>/dev/null | grep -c "rdr.*k8s_external_ingress"; echo @@OVR; grep -E "^local-data: \"[^ ]+ A 192\.168\.193\." /var/unbound/host_entries.conf'
-    if [[ -n $COMPARE ]]; then
-      # states from this host are left out: the --compare probes open (and leave in FIN_WAIT_2)
-      # states to the old IP themselves
-      remote="$remote; echo @@STATES; sh -c 'me=\${SSH_CLIENT%% *}; pfctl -ss 2>/dev/null | grep \"$COMPARE:\" | grep -v \"\$me:\" | wc -l'"
-    fi
+    remote='pfctl -t k8s_external_gateway -T show; echo @@RDR; pfctl -sn 2>/dev/null | grep -c "rdr.*k8s_external_gateway"; echo @@OVR; grep -E "^local-data: \"[^ ]+ A 192\.168\.193\." /var/unbound/host_entries.conf'
     if ssh -o BatchMode=yes -o ConnectTimeout=8 "$PF_HOST" "$remote" > "$TMP/pf" 2> "$TMP/err"; then
       alias_val=$(sed -n '1,/^@@RDR$/p' "$TMP/pf" | grep -v '^@@' | tr -d ' ' | paste -sd, -)
       rdr=$(sed -n '/^@@RDR$/,/^@@OVR$/p' "$TMP/pf" | grep -v '^@@' | tr -d ' ')
-      sed -n '/^@@OVR$/,/^@@STATES$/p' "$TMP/pf" | grep -v '^@@' | sed -E 's/.* A ([0-9.]+)".*/\1/' | sort | uniq -c | awk '{print $2 "=" $1}' | paste -sd' ' - > "$TMP/ovr"
+      sed -n '/^@@OVR$/,$p' "$TMP/pf" | grep -v '^@@' | sed -E 's/.* A ([0-9.]+)".*/\1/' | sort | uniq -c | awk '{print $2 "=" $1}' | paste -sd' ' - > "$TMP/ovr"
       if [[ $alias_val == "${VIP[external]:-}" ]]; then
-        pass "pfSense alias k8s_external_ingress = $alias_val (external VIP)"
+        pass "pfSense alias k8s_external_gateway = $alias_val (external VIP)"
       else
-        fail "pfSense alias k8s_external_ingress = '${alias_val}' (external VIP is ${VIP[external]:-unknown})"
+        fail "pfSense alias k8s_external_gateway = '${alias_val}' (external VIP is ${VIP[external]:-unknown})"
       fi
       if [[ ${rdr:-0} -ge 1 ]]; then pass "pfSense: $rdr rdr rules follow the alias"; else fail "pfSense: no rdr rule uses the alias"; fi
       info "pfSense host overrides per IP: $(cat "$TMP/ovr")"
-      if [[ -n $COMPARE ]]; then
-        o_old=$(tr ' ' '\n' < "$TMP/ovr" | awk -F= -v ip="$COMPARE" '$1 == ip {print $2}')
-        st_old=$(sed -n '/^@@STATES$/,$p' "$TMP/pf" | grep -v '^@@' | tr -d ' ')
-        if [[ ${o_old:-0} == 0 ]]; then
-          pass "pfSense: 0 host overrides on $COMPARE"
-        else
-          fail "pfSense: ${o_old} host overrides still on $COMPARE (count them, never eyeball: Services > DNS Resolver > Host Overrides)"
-        fi
-        if [[ ${st_old:-0} == 0 ]]; then
-          pass "pfSense: 0 states to $COMPARE (this host's probe states excluded)"
-        else
-          warn "pfSense: ${st_old} states still to $COMPARE (pf keeps the rdr target of an existing state: Diagnostics > States, filter the IP, Kill)"
-        fi
-      fi
     else
       warn "pfSense ($PF_HOST) not reachable over ssh: $(head -n1 "$TMP/err"); check 8 skipped"
     fi
