@@ -2,7 +2,7 @@
 """Foundation-specific checks for the public gateway deployment.
 
 Validates the parts of the foundation that must stay true no matter which routes are
-enabled - the pod, the probes, the session key, the ingress, the identity client:
+enabled - the pod, the probes, the session key, the route, the identity client:
   * nodeSelector is prusik (the only approved node for initial rollout);
   * the gateway's only MCP surface is `routes` (the `mcp:` convenience block is gone,
     so nothing can serve that this chart did not write out in full);
@@ -11,8 +11,8 @@ enabled - the pod, the probes, the session key, the ingress, the identity client
   * probes are correct (startup/readiness on 15021 /healthz/ready);
   * JWT validation values in the RENDERED config are the exact Kanidm per-client
     issuer/audience/JWKS (the config is the only source - there is no second copy);
-  * image pinned to v1.7.0, HTTPRoute (serving path via Envoy Gateway external) +
-    Ingress nginx-external with TLS (retained rollback path), service ClusterIP only,
+  * image pinned to v1.7.0, HTTPRoute (serving path via Envoy Gateway external), no
+    Ingress, service ClusterIP only,
     adminAddr "off" (no admin listener), hardened container;
   * human scope grants carry no identity scopes and no person membership is declared;
   * SESSION_KEY is a required secretKeyRef (fail-closed).
@@ -152,11 +152,7 @@ def main():
               "cr.agentgateway.dev/agentgateway:v1.7.0" in image,
               image)
 
-    # ---- serving path (HTTPRoute) and rollback path (Ingress) ----
-    # The Envoy Gateway migration has ended. The HTTPRoute is the SERVING path for
-    # mcp.grigri.cloud; the Ingress is retained as the documented rollback path
-    # (docs/network/ingress.md, ingress-migration Phase 6). Both must exist and agree
-    # on host and backend so a rollback is a DNS/annotation flip, not a chart change.
+    # ---- serving path (HTTPRoute) ----
     hr = find(docs, "HTTPRoute")
     check("HTTPRoute exists (serving path via Envoy Gateway)", hr is not None)
     if hr:
@@ -176,24 +172,9 @@ def main():
                   bref.get("name") == "mcp-gateway-standalone" and bref.get("port") == 3000,
                   f"name={bref.get('name')} port={bref.get('port')}")
 
-    # The Ingress is the ROLLBACK path. It carries no traffic while the HTTPRoute is
-    # attached to the Envoy Gateway, but must stay deployable so a rollback is instant.
-    ing = find(docs, "Ingress")
-    check("Ingress exists (retained rollback path, docs/network/ingress.md)", ing is not None)
-    if ing:
-        check("ingress className is nginx-external (rollback, not serving)",
-              ing["spec"].get("ingressClassName") == "nginx-external")
-        tls = ing["spec"].get("tls", [])
-        check("TLS is configured",
-              len(tls) > 0 and tls[0].get("secretName") == "mcp-gateway-tls-certificate")
-        # Check backend service name
-        rules = ing["spec"].get("rules", [])
-        if rules:
-            backend = rules[0].get("http", {}).get("paths", [{}])[0].get("backend", {})
-            svc_name = backend.get("service", {}).get("name", "")
-            check("Ingress backend points to mcp-gateway-standalone service",
-                  svc_name == "mcp-gateway-standalone",
-                  f"got {svc_name}")
+    # No Ingress: the HTTPRoute is the only way in.
+    check("no Ingress is rendered (the HTTPRoute is the only serving path)",
+          find(docs, "Ingress") is None)
 
     # ---- RFC 9728 metadata paths ----
     exacts = [next(iter(m["path"].items()))[1] for r in cfg.get("routes", [])

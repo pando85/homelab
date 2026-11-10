@@ -632,7 +632,7 @@ alerts:
 
 # ---------------------------------------------------------------------------
 # Values below are NOT consumed by the official chart. They are used by
-# wrapper templates in templates/ (ingress, kanidm, session-key).
+# wrapper templates in templates/ (kanidm, session-key).
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------

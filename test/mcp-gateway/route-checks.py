@@ -25,7 +25,7 @@ Covers:
   5. isolation: networkIsolation is true and exactly one CiliumNetworkPolicy (no native
      NetworkPolicy) is rendered, admitting ingress-nginx and the external Envoy proxies;
   6. what must NOT have moved: prusik pin, session-key Secret/ExternalSecret/Password,
-     probes, HTTPRoute serving path + Ingress rollback path, ClusterIP-only service,
+     probes, HTTPRoute serving path (and no Ingress), ClusterIP-only service,
      no admin listener.
 """
 import json
@@ -380,8 +380,7 @@ def main():
     check("service stays ClusterIP with 3000/15020/15021",
           svc["spec"]["type"] == "ClusterIP"
           and {p["port"] for p in svc["spec"]["ports"]} == {3000, 15020, 15021})
-    # Serving path: HTTPRoute via Envoy Gateway (external). The Ingress is retained as
-    # the rollback path (docs/network/ingress.md, ingress-migration Phase 6).
+    # Serving path: HTTPRoute via Envoy Gateway (external).
     hr = find(docs, "HTTPRoute")
     check("HTTPRoute serving path: parentRef external/envoy-gateway, sectionName https-grigri-cloud",
           hr is not None
@@ -395,12 +394,8 @@ def main():
           and hr["spec"]["rules"][0]["backendRefs"][0]["name"] == "mcp-gateway-standalone"
           and hr["spec"]["rules"][0]["backendRefs"][0]["port"] == 3000,
           str(hr["spec"]) if hr else "no HTTPRoute")
-    ing = find(docs, "Ingress")
-    check("ingress retained as rollback path: nginx-external + TLS for mcp.grigri.cloud -> the gateway service",
-          ing["spec"]["ingressClassName"] == "nginx-external"
-          and ing["spec"]["tls"][0]["secretName"] == "mcp-gateway-tls-certificate"
-          and ing["spec"]["rules"][0]["http"]["paths"][0]["backend"]["service"]["name"]
-          == "mcp-gateway-standalone")
+    check("no Ingress is rendered (the HTTPRoute is the only serving path)",
+          find(docs, "Ingress") is None)
     o2c = find(docs, "KanidmOAuth2Client")["spec"]
     check("OAuth2 client stays public with the exact single redirect (not widened)",
           o2c["public"] is True and o2c["strictRedirectUrl"] is True
