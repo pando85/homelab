@@ -32,8 +32,6 @@ kubectl -n monitoring delete pod/monitoring-grafana-test
 scripts/deploy-dir.rh system/cert-manager
 scripts/deploy-dir.rh platform/gitea
 
-scripts/deploy-dir.rh system/ingress-nginx
-
 echo "waiting for cert-manager webhook ready"
 kubectl -n cert-manager wait --for=condition=ready pod \
   -l app.kubernetes.io/instance=cert-manager \
