@@ -373,7 +373,9 @@ raw routes).
    The operator writes `<app>-kanidm-oauth2-credentials` (`CLIENT_ID`, `CLIENT_SECRET`,
    `client-secret`) next to the policy: no `ReferenceGrant`. PKCE stays on (Envoy always sends
    S256). The scope map group must exist in Kanidm (Kaniop reports `ScopeMapUpdated=False`
-   otherwise); groups created by hand are fine.
+   otherwise): declare a `KanidmGroup` `<app>-users` in the same chart (no `members`; people are
+   added by hand, see `docs/user-guide/kanidm.md`). Each app has only its own group: there is no
+   global group to also require.
 
 2. **`SecurityPolicy`** per protected route (`templates/security-policy.yaml`); one policy may
    target several routes of the same host (they then share the cookies):
@@ -430,7 +432,7 @@ raw routes).
 | nginx / oauth2-proxy                                        | Envoy Gateway                                                                                                                                       |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `auth-url ...?allowed_groups=<g>@idm.grigri.cloud`          | client `scopeMap` group `<g>` + `authorization` allow on `groups` = `<g>@idm.grigri.cloud`                                                         |
-| `auth-url` without `allowed_groups`                         | every group of the `k8s-oauth2-proxy` client scope map (`k8s-oauth2-proxy-users`, `navidrome-users`, `hermes-users`), as http-echo                  |
+| `auth-url` without `allowed_groups`                         | no global group: give the app its own `<app>-users` (scope map and `authorization`), as http-echo                                                   |
 | `auth-response-headers: X-Auth-Request-Preferred-Username`  | `claimToHeaders` `preferred_username` (`X-Auth-Request-User` / `-Email`: `email`, oauth2-proxy's default user claim)                                |
 | `X-Auth-Request-Groups`                                     | `claimToHeaders` cannot copy arrays: add a `claimMap` with `joinStrategy: csv` on the client and map that string claim                             |
 | `auth-url` without `auth-signin` (401, no redirect)         | `oidc.denyRedirect.headers: [{name: ":path", type: RegularExpression, value: "/api([/?].*)?"}]` (navidrome external `/api`)                        |

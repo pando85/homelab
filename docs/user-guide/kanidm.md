@@ -145,6 +145,7 @@ kanidm group add-members <app>-users ${USER} -D idm_admin
 - **Service-account-only groups**: If a group consists ONLY of service account users (no person accounts), those memberships may be managed via CRD
 - **Mixed groups** (persons + service accounts): Must not use authoritative CRD member reconciliation that could remove manual person memberships. Before managing any service membership in a mixed group, determine whether the operator has additive or preserve semantics. Do not invent support — verify operator behavior first
 - **Public repo hygiene**: Do not commit person names, account privilege mappings, or membership lists to public documentation
+- **Deleting a `KanidmGroup` CR deletes the group in Kanidm together with its manual memberships** (Kaniop finalizer `kanidmgroups.kaniop.rs/finalizer`). Never move a group CR between apps or charts: the webhook rejects a second CR for the same group, so a move is delete-then-create and the members are lost. Keep the CR in the chart that owns the group, and re-add the members by hand after any accidental delete
 
 **Rationale**: CRD reconciliation may remove members not in the spec. Person accounts require manual lifecycle management (hiring, departure, role changes) that cannot be safely automated through GitOps.
 
