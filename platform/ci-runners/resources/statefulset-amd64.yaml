@@ -57,19 +57,34 @@ spec:
           resources:
             requests:
               memory: "4Gi"
-              cpu: "200m"
+              # 1 core of weight under contention (was 200m): the node's CPU
+              # requests are ~5% allocated, so this costs nothing at admission
+              # but stops the runner losing CPU shares to other pods when two
+              # Rust jobs compete for the cores.
+              cpu: "1"
             limits:
               # 12Gi gives the runner headroom for moderate concurrent loads. At
               # capacity 2 the aggregate peak is bounded by concurrency as well as
               # by this limit, but jobs can still demand ~17.4GiB individually
               # (measured on prusik), so OOM kills remain possible. The pod's total
-              # limits (12Gi + 4.5Gi + 192Mi = 16.7Gi) still exceed the node's
+              # limits (12Gi + 2Gi + 128Mi = 14.1Gi) still exceed the node's
               # 12.53Gi allocatable, so the "pod dies before node" property is
               # gone - if every container peaks simultaneously, the node itself
               # will pressure. Accepted trade-off: more runner headroom at the
               # cost of losing the strict OOM boundary.
+              #
+              # Memory stays at 12Gi (not raised into the room freed from the
+              # daemon): memory is the binding constraint on this node (MemAvailable
+              # minimum 1.0-2.6 GB, MemoryPressure ~30 min in 14d), the runner's
+              # 7d working-set peak is ~11.2-12.0Gi, and a node-level OOM evicts
+              # unrelated pods. The freed daemon memory only shrinks the overcommit.
               memory: "12Gi"
-              cpu: "5"
+              # 8 cores = 2 concurrent jobs x CARGO_BUILD_JOBS/-j4. Was 5: over
+              # 2026-11-03..10 the runner sat on that limit (peak 5.0 cores, mean
+              # 0.92) and was CFS-throttled in 15.6% of periods while the node
+              # averaged ~10% CPU (peak ~58%), so the cap, not the node, was the
+              # bottleneck. The node has 11 allocatable cores.
+              cpu: "8"
           securityContext:
             privileged: true
             runAsUser: 1001
@@ -174,8 +189,14 @@ spec:
               # they land in THIS container's cgroup - this limit bounds them, not
               # the runner's. Under-sizing it would silently cap docker jobs below
               # the runner's own budget.
-              memory: "4608Mi"
-              cpu: "3"
+              #
+              # Cut from 4608Mi / 3 cores after measuring 2026-11-03..10: the
+              # container's working-set peak was 0.78Gi and its CPU peak 0.45 cores
+              # (the window includes `docker`-label jobs, so the peak already covers
+              # them). 2Gi is ~2.5x that peak and 2 cores ~4x; the freed 2.5Gi of
+              # memory limit and 1 core go to the runner side of the node budget.
+              memory: "2Gi"
+              cpu: "2"
           startupProbe:
             exec:
               command:
@@ -469,7 +490,13 @@ spec:
               cpu: "10m"
             limits:
               memory: "128Mi"
-              cpu: "100m"
+              # 250m (was 100m): usage is tiny (7d peak ~6m at 5m averages, ~14m at 1m
+              # resolution) but the loop forks `docker system df`, `docker ps`,
+              # awk and stat every 120s, and those short multi-process bursts
+              # exhausted the 10ms-per-100ms CFS quota: 41% of periods throttled
+              # over 7d and still ~45% after the 2026-11-10 rollout, which slows
+              # the busy check. 250m raises the per-period quota to 25ms.
+              cpu: "250m"
       securityContext:
         fsGroupChangePolicy: "OnRootMismatch"
         supplementalGroups:
@@ -540,7 +567,7 @@ spec:
             path: /srv/ci-runner/docker
             type: Directory
       # No pod-level `resources` block. Limits are per-container and sum to
-      # ~16.7Gi, which exceeds this node's 12.53Gi allocatable. The runner's
+      # ~14.1Gi, which exceeds this node's 12.53Gi allocatable. The runner's
       # 12Gi limit prioritizes headroom for concurrent jobs over the strict
       # "pod dies before node" property. The legacy StatefulSet notes
       # pod-level resources do not work under kata.
