@@ -9,12 +9,12 @@ rather than maintaining an ARM outlier. Redis moved to master + replica without 
 disconnected. See the "Deviations from the original plan" section at the bottom for what
 differed from the steps below and one outstanding follow-up.
 
-## Prerequisites (external repos)
+## Prerequisites (tenant-owned)
 
-Redis migration is owned by the app gitops repos, not this one:
+Redis migration is owned by the tenants, not this repo:
 
-- `kiais/gitops` — isidoro
-- `multivara/gitops` — calypso, oauth2-proxy
+- the isidoro tenant — isidoro
+- the calypso tenant — calypso, oauth2-proxy
 
 For each of the three Redis groups (`isidoro-redis`, `calypso-redis`, `oauth2-proxy-redis`):
 

@@ -60,9 +60,10 @@ spec:
       allowedRoutes:
         namespaces:
           from: All
-    # Calypso runners: one HTTPRoute and one ext auth SecurityPolicy per runner, created by the
-    # calypso control plane in calypso-runners (calypso ADR-0069). Replaced the TLS passthrough
-    # bridge tls-bridge-runners (D4): a hostname on 443 is either passthrough or terminate.
+    # Tenant runners: one HTTPRoute and one ext auth SecurityPolicy per runner, created by the
+    # tenant control plane in the calypso-runners namespace (HTTPRoute only, from that namespace
+    # only). Replaced the TLS passthrough bridge tls-bridge-runners (D4): a hostname on 443 is
+    # either passthrough or terminate.
     - name: https-runners-staging-forkline-dev
       port: 443
       protocol: HTTPS

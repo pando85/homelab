@@ -104,7 +104,7 @@ Non-CI baseline on prusik is flat at **30–35 GiB** — every GiB of the collap
 | Culprit | Shape | Behaviour |
 |---|---|---|
 | `ci-runner-0` / `runner` (ns `ci-runners`, runc) — PRIMARY | request 4Gi, limit was 18Gi | grew idle → **10.7 GiB** (high-water **15 GiB**), anonymous/unreclaimable. Present identically in both October incidents. Lands on prusik *implicitly* through the `fast-ci-zfspv` PVC's `allowedTopologies` — it has no `nodeSelector`. |
-| `calypso-runners` gVisor pods (`autonomous-runner-*`) — SECONDARY/additive | request **0.29Gi** vs limit **16Gi** each, 2–5 concurrent | drove the *second* 2026-10-13 failure at 03:07Z, after `ci-runner-0` had already dropped. These manifests are **not in this repo** (owned by `multivara/gitops` at `/home/agil/multivara/gitops/grigri.cloud/apps/calypso/values.yaml`; app runner source at `/home/agil/multivara/calypso/crates/calypso-control-plane/src/runner_controller/k8s/runner/deployment.rs`). Do not assert specific runtime or gVisor configuration changes without checking the other repo — historical values may not match current state. |
+| `calypso-runners` gVisor pods (`autonomous-runner-*`) — SECONDARY/additive | request **0.29Gi** vs limit **16Gi** each, 2–5 concurrent | drove the *second* 2026-10-13 failure at 03:07Z, after `ci-runner-0` had already dropped. These manifests are **not in this repo** (the tenant owns the runner pod spec). Do not assert specific runtime or gVisor configuration changes without checking the live pods: historical values may not match current state. |
 
 ### The observability blind spot (why CI looked half its real size)
 
@@ -373,10 +373,10 @@ ssh prusik 'cat /sys/fs/cgroup/system.slice/memory.low /sys/fs/cgroup/system.sli
 - [ ] Observe a representative CI burst **and** a Velero backup window: no lease-loss exits, etcd
       latency <100ms p99, memory-PSI ≈0, swap rate ≈0. The 2026-10-13 apply verified the config landed
       and k3s recovered cleanly — it did not exercise behaviour under load
-- [ ] Verify calypso gVisor runner bounds in `multivara/gitops` repo
+- [ ] Verify the calypso gVisor runner bounds on the live pods (tenant-owned)
 
 **Do not claim "fixed" or "resolved"** until sustained peak test passes. The calypso second-failure
-mode remains unresolved until the other repo is updated.
+mode remains unresolved until the tenant bounds its runners.
 
 ## Deferred — next steps
 
@@ -385,11 +385,11 @@ Ordered by how much of the failure mode each one removes.
 1. **Move CI off prusik** — `planning/ci-runner-amd64-1.md`. Blocked on k8s-amd64-1 going 16 → 32 GiB
    RAM (`planning/k8s-amd64-1-node-addition.md` TODO-9.2): `ci-runner-0` peaks at 17.4 GiB / 7.68
    cores and the node has only 16 GiB, so it cannot host the runner today.
-2. **Bound the calypso gVisor runners** — different repo (`multivara/gitops`). Their
+2. **Bound the calypso gVisor runners** — a tenant workload, not managed here. Their
    0.29Gi-request / 16Gi-limit shape is the actual overcommit: the scheduler places them believing
    0.29 GiB and they take gigabytes. They drove the second failure of 2026-10-13. The existing
    ResourceQuota is CI-only; calypso is outside this repo's scope, so the second failure mode
-   remains unresolved until the other repo is updated.
+   remains unresolved until the tenant bounds its runners.
 3. **Validate MemoryLow effectiveness under load** — the 6G `MemoryLow` on `k3s.service` and the
    matching 6G on `system.slice` (via drop-in) are now **applied and verified** on prusik
    (`6442450944` in both cgroups), so the ancestor budget exists and the child's protection is not

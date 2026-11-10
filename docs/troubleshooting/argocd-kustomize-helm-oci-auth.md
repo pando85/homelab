@@ -4,7 +4,7 @@
 
 After the repo-server moved to Argo CD v3.5.4 (2026-10-12), every Application that renders a
 private OCI Helm chart through kustomize `helmCharts` (`calypso` from `git.grigri.cloud`,
-`isidoro` from `tea.millaguie.net`) went sync status `Unknown` with:
+`isidoro` from a third-party registry) went sync status `Unknown` with:
 
 ```
 failed to perform "FetchReference" on source: GET "https://<registry>/v2/<repo>/manifests/<ver>":

@@ -76,7 +76,7 @@ alloy:
       }
 
       // Relabel: build service_name to match the OTel service.name set by each
-      // Calypso binary (crates/calypso-*/src/main.rs: TelemetryConfig.service_name).
+      // Calypso binary (the service_name of its telemetry configuration).
       // This enables Tempo tracesToProfiles and Grafana profile panels to resolve
       // profiles by the same service_name used in traces and metrics.
       //

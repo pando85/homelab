@@ -5,12 +5,15 @@ annotation and snippet guidance. Background, decisions and the migration state:
 `planning/ingress-nginx-to-envoy-gateway.md` (the recipes there cover every nginx-only behaviour
 that was ported).
 
-## Migration state: routes next to Ingresses
+## Migration state: all traffic on Envoy, nginx idle until Phase 6
 
-Until ingress-nginx is decommissioned, every app carries **both** its Ingress (nginx keeps serving
-real traffic) and its route (Envoy Gateway, verified on its own VIP). Never remove an Ingress as
-part of adding a route. A **new** app gets the route with its first deploy and an Ingress only if
-it must be reachable before the switches. After the decommission only routes remain.
+All traffic is served by the Envoy Gateways: internal names resolve to `.13` since Phase 4
+(2026-11-09) and public traffic reaches `.14` since Phase 5 (2026-11-10). ingress-nginx
+(`.1` internal, `.4` external) still runs, idle, as a rollback path until Phase 6 removes it. Until
+then an existing app may still carry its Ingress next to its route; never remove an Ingress as
+part of adding a route (Phase 6 does that). A **new** app gets **only** a route: no Ingress, no
+nginx annotations. After Phase 6 only routes remain. Health of the whole path, re-runnable and
+read-only: `scripts/gateway-check.sh`.
 
 ## Gateways and listeners
 
@@ -88,15 +91,29 @@ orphans the Ingress (Argo does not prune it). That deletion is an owner decision
 
 ## DNS (external-dns)
 
-external-dns watches HTTPRoutes carrying `external-dns.kubernetes.io/enabled: "true"`. The record
-target is not set on routes: the **external Gateway** carries `external-dns.kubernetes.io/target:
-grigri.cloud` and the internal Gateway has none (its records default to `.13`).
+How names resolve (pfSense host overrides, NAT reflection, hairpin, the two VIPs) is in
+[`docs/network/ingress.md`](../network/ingress.md). This section is only the per-route how-to.
+
+external-dns publishes a route only when it carries the opt-in annotation
+`external-dns.kubernetes.io/enabled: "true"`. The record target is not set on routes: the
+**external Gateway** carries `external-dns.alpha.kubernetes.io/target: grigri.cloud` and the internal
+Gateway has none.
 
 - **External route:** annotation `external-dns.kubernetes.io/enabled: "true"` and nothing else (no
-  `target`). The record already exists (CNAME to the apex), so nothing changes.
-- **Internal route, before the internal switch:** **no external-dns annotation.** Adding it would
-  move that one internal record from `.1` to `.13` app by app. The internal switch commit adds the
-  annotation to every internal route at once.
+  `target`). The record is a **CNAME to `grigri.cloud`**. A route can never produce an A record on
+  the external Gateway.
+- **Internal route:** the same annotation; the record is an **A record to `.13`** (the Gateway
+  address). Phase 4 annotated every internal route.
+- **An A record on an external name** (for example a name that must resolve to a private IP, so it
+  works from the LAN and the cluster only): a `DNSEndpoint` (the `crd` source), because an annotated
+  external route would only produce the CNAME. Example: a tenant Keycloak host that publishes
+  `192.168.193.14`.
+- **A wildcard owned by someone else** (the tenant runner wildcard) is held by a `DNSEndpoint` of
+  its owner: do not annotate routes for names under it.
+- **upsert-only:** external-dns never deletes or reverts a record (records are created with
+  `ttl=1`, auto). Removing the annotation or rolling a change back leaves the record. Moving a
+  record back needs a manual Cloudflare edit **and** reverting the source, otherwise external-dns
+  re-asserts it within its 2 minute interval.
 - Verify no record changed: `kubectl logs -n external-dns deploy/external-dns --since=15m | grep -v 'already up to date'`.
 
 ## nginx annotation to Gateway API
@@ -265,7 +282,11 @@ table is the 2026-11-09 inventory.
 (OIDC, JWT, Lua, a new TLS hostname) modifies the listener and Envoy closes the old listener's
 connections after the drain time (60 s). A websocket or download open during such a sync is cut
 (seen once, a 121 s websocket on the pilots), nginx keeps old workers until their connections finish.
-Do not sync listener-affecting changes during a long transfer; the client reconnects.
+Do not sync listener-affecting changes during a long transfer; the client reconnects. A new or
+removed `SecurityPolicy` or `EnvoyExtensionPolicy` counts as such a change (each becomes its own
+HTTP filter in the listener's filter chain), and so does a certificate change: mechanism, how to
+see it in the Envoy config and what to batch in
+[`docs/troubleshooting/envoy-gateway-listener-drain.md`](../troubleshooting/envoy-gateway-listener-drain.md).
 
 Test a route like this (the Phase 2 reproduction): a rate-limited response longer than 60 s
 (`curl --limit-rate 50k ... -w '%{size_download} %{time_total}'` of a few MB), a websocket held
@@ -290,7 +311,23 @@ proxies **in the same commit** (an omission shows only on the Envoy path as 503 
 ```
 
 Egress policies of pods that call hairpin names (which resolve to a gateway VIP) need the same
-rule. None of the first pilots had a policy in its namespace.
+rule, with one difference: the Envoy proxy pods listen on the **container ports 10443 (https) and
+10080 (http)**, the Service ports 443 and 80 map to them. Cilium evaluates the destination after
+the Service is translated to the pod, so an egress rule for `443`/`80` toward the Envoy pods never
+matches and the call times out:
+
+```yaml
+egress:
+  - toNamespaces: [...]    # or toEndpoints with the Envoy proxy labels shown above
+    toPorts:
+      - ports:
+          - {port: "10443", protocol: TCP}
+          - {port: "10080", protocol: TCP}
+```
+
+The hairpin appears as soon as DNS points the public name at the VIP (pfSense overrides, see
+[`docs/network/ingress.md`](../network/ingress.md)): tenant runners and any pod that
+calls `https://<public name>` hits it. None of the first pilots had a policy in its namespace.
 
 ## Authentication
 
@@ -421,6 +458,41 @@ Same-host routes merge; give the skip its own route without a `SecurityPolicy`:
   `jwt_authn` itself removes every `claimToHeaders` header before it adds the claim (Envoy
   `sanitizeHeaders`), so a client-sent copy never reaches the app.
 
+### Ext auth: `pathOverride` and client identity headers
+
+For a backend that authenticates through its own service (an auth proxy, not Kanidm OIDC) the
+`SecurityPolicy` uses `extAuth.http`. Two settings decide who controls what the auth service sees:
+
+- `pathOverride` **replaces the original path and query** in the auth request with a fixed value:
+  the client has no influence on the path the auth service is asked about. Use it whenever the
+  auth service only needs the request's identity (cookies, `Authorization`), or when the path
+  carries a per-route identifier (`pathOverride: /auth/runner/<id>`).
+- plain `path` **appends the client's path** to the auth service's path: the client chooses part of
+  the auth request, so the auth service must not trust it.
+
+Whatever the auth service answers in `headersToBackend` is copied to the app. Client-sent copies of
+those identity headers must be removed first, on the listener, before any filter or route sees
+them:
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: ClientTrafficPolicy
+spec:
+  targetRefs:
+    - {group: gateway.networking.k8s.io, kind: Gateway, name: external, sectionName: <listener>}
+  headers:
+    earlyRequestHeaders:
+      removeOnMatch:                       # names match case-insensitively
+        - {type: Prefix, value: x-auth-request-}
+```
+
+Caveat: a `ClientTrafficPolicy` scoped to a **listener** (`sectionName`) **replaces** the
+gateway-wide `ClientTrafficPolicy` for that listener entirely: the timeouts and limits of
+`system/envoy-gateway/resources/policies.yaml` do not merge in. Copy every setting the listener
+still needs into the listener-scoped policy (compare with `kubectl get clienttrafficpolicy -A`).
+The header strip is a listener change: it drains that listener's long connections once (see
+"Timeouts").
+
 ### Verification (no browser needed)
 
 ```bash
@@ -459,10 +531,73 @@ cookies; a person outside the scope map group is refused by Kanidm at `/ui/oauth
   operator creates the Secret after the policy. Envoy Gateway answers 500 on the route meanwhile
   (fail closed) and recovers by itself; the proxies may log `initial fetch timed out for
   ...tls.v3.Secret` once, harmless when the bogus-code check above passes afterwards.
-- The proxies reach `idm.grigri.cloud` through cluster DNS (today the pfSense override to nginx
-  `.4`, after Phase 5 `.14`): token exchange and JWKS depend on that name resolving in pods.
+- The proxies reach `idm.grigri.cloud` through cluster DNS, which resolves it to the external
+  gateway's own VIP (`.14`, pfSense override): token exchange and JWKS depend on that name
+  resolving in pods. Verified working since Phase 5 (the Envoy cluster `idm_grigri_cloud_443` has 0
+  connect failures; a Navidrome login proved the exchange).
 - Envoy logs the raw cookie value when it cannot decrypt a token cookie (`failed to decrypt token:`
   in the proxy log): only forged or stale cookies hit it, but treat the proxy log as sensitive.
+
+## Denying a path at the edge
+
+nginx `location = /metrics { deny all; }` or `if ($uri ~ "^/metrics(/|$)") { return 404; }` in a
+configuration snippet becomes a first route rule with an `HTTPRouteFilter` direct response (the
+repo example: `apps/home-assistant/templates/httproutefilter-prometheus-deny.yaml`, which answers
+403 for an Exact path; the 404 variant only changes `statusCode`):
+
+```yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: HTTPRouteFilter
+metadata:
+  name: <app>-deny
+spec:
+  directResponse:
+    statusCode: 404
+    contentType: text/plain
+    body: {type: Inline, inline: not found}
+---
+# in the HTTPRoute, FIRST rule, before the catch-all
+rules:
+  - matches:
+      - path: {type: PathPrefix, value: /metrics}      # matches /metrics and /metrics/...
+    filters:
+      - type: ExtensionRef
+        extensionRef: {group: gateway.envoyproxy.io, kind: HTTPRouteFilter, name: <app>-deny}
+  - backendRefs: [...]
+```
+
+Why the rule must match the **normalized** path: Envoy merges duplicate slashes (`//metrics`) and
+decodes percent-encoded unreserved characters (`/%6detrics`) **before** route matching, like nginx
+`$uri`. So the rule only needs the clean path, and a request in disguise still hits it; but a
+deny written for the raw spelling would never match. Prove it with the three spellings
+(`/metrics`, `//metrics`, `/%6detrics`) plus `/metricsx` (a different path, must pass) on the
+Envoy VIP. `PathPrefix` is segment-based (`/metrics` and `/metrics/x`, not `/metricsx`); use
+`Exact` when only the one path is denied.
+
+The deny applies to the edge only: Prometheus scrapes the Service inside the cluster and is not
+affected. When the nginx equivalent is still needed (only while nginx runs), it is the snippet
+`if ($uri ~ "^/metrics(/|$)") { return 404; }` on the Ingress; nginx matches the normalized `$uri`
+as well.
+
+## Pods that must reach a public name at the gateway VIP
+
+A pod that calls a public hostname normally leaves the cluster, hits the WAN address and relies on
+NAT reflection. When it must reach the **in-cluster gateway VIP** directly (a name with no
+pfSense override, or a client that must not depend on the router), pin the name in the pod spec
+with `hostAliases`. Hermes does this for `mcp.grigri.cloud` -> `192.168.193.14`
+(`apps/hermes/values.yaml`, `defaultPodOptions.hostAliases`; the regression test
+`apps/hermes/tests/test_hostaliases_mcp_dns.py` checks the IP against the external Gateway):
+
+```yaml
+hostAliases:
+  - ip: "192.168.193.14"          # the external Gateway VIP
+    hostnames:
+      - mcp.grigri.cloud
+```
+
+An alias is an `/etc/hosts` line: it survives DNS changes, so when the VIP moves it must be edited
+in git too (the test fails when it drifts). The pod's egress NetworkPolicy must allow the Envoy
+container ports (see "NetworkPolicies"). Remove the alias once the name has a pfSense override.
 
 ## Verification (per route, before the next commit)
 
@@ -480,7 +615,20 @@ cookies; a person outside the scope map group is refused by Kanidm at `/ui/oauth
    ```
 
    Expect the same status and body size and the same response headers: on the Envoy side h2, HSTS
-   (once) and no `Server`, nothing else beyond what the app itself sends.
+   (once) and no `Server`, nothing else beyond what the app itself sends. Differences that are
+   **expected** and not a defect (seen in every host diff):
+
+   | Observed                                                      | Why                                                                            |
+   | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+   | port 80 redirect `301` on Envoy, `308` on nginx               | the gateway `http` listener redirects with 301; both are permanent             |
+   | empty body on Envoy 404, 403 and redirects                    | the status is what matters; Envoy adds no body                                 |
+   | request headers whose name contains an underscore are dropped | Envoy drops them; nothing to fix unless an app needs one (then rename it)      |
+   | paths are case-sensitive on Envoy                             | a path nginx matched case-insensitively (`~*`) needs a `(?i)` regex path       |
+   | an app root answering `200` on nginx answers `302`            | seen on nextcloud `/`; compare the redirect target, not the status             |
+   | OIDC apps ask for one more login when moving from oauth2-proxy to Envoy native OIDC | new per-host cookies, the old ones are not understood            |
+
+   Anything else is a defect until explained. The comparison with nginx only exists while nginx
+   runs: after Phase 6 compare against the previous release or the app's own expectations instead.
 3. Certificate: `openssl s_client -connect 192.168.193.13:443 -servername $H -alpn h2` shows the
    wildcard certificate (`Verification: OK`, `ALPN protocol: h2`). A request without `-k` must verify.
 4. A functional request per app (an API call, a real page, for a body-size or long request the
