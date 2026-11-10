@@ -12,7 +12,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [ArgoCD](#argocd) (6 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (9 entries)
-- [Storage & Backup](#storage--backup) (12 entries)
+- [Storage & Backup](#storage--backup) (13 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
 - [Desktop & Home](#desktop--home) (12 entries)
@@ -300,6 +300,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   fresh builds are never "old enough" (0 B reclaimed at 89%, node-wide eviction a minute later). The
   runner's native `workdir_cleanup_age` GC only covers per-job scratch dirs. See
   `docs/troubleshooting/ci-runner-amd64-disk-full.md`
+
+- The `sccache` MinIO bucket (hard quota, 14-day lifecycle) filled in ~3.5 days at ~12-14 GiB/day;
+  from then MinIO rejected PUTs (14% 4xx) while CI jobs showed 0 `L1 (s3) writes` and 0 errors,
+  because write policy `l0` silently drops failed secondary writes. Check `du -sb /export/sccache`
+  in the minio pod and the PutObject 4xx rate, not sccache errors. See
+  `docs/troubleshooting/sccache-s3-bucket-full-silent.md`
 
 ## Ansible & Infrastructure
 

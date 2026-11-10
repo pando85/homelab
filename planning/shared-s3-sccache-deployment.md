@@ -2,9 +2,13 @@
 
 ## Status and approval boundaries
 
-**Proposed, not implemented.** Prepared 2026-11-06. Approval to record, commit and push this plan
-is not approval to provision secrets, modify application/workstation configuration or deploy it.
-No bucket, credential, runner change or storage migration has been created for this plan.
+**Implemented for CI since 2026-11-06 ~19:10Z** (private bucket, quota, lifecycle, scoped
+identities, Calypso action with `cache-mode: disk-s3` default; `disk` is the rollback). Results and
+the 2026-11-10 bucket-full incident are in the
+[caching analysis](../docs/conventions/rust-build-caching.md#deployed-state-and-results). The
+phases below are the original plan; workstation access (phase 6) is not done. Approval to record,
+commit and push this plan is not approval to provision secrets, modify application/workstation
+configuration or deploy it.
 
 The [Rust build caching analysis](../docs/conventions/rust-build-caching.md) contains the measured
 evidence and rationale. This plan describes implementation order, validation gates and rollback.
@@ -264,31 +268,26 @@ Do not reduce local limits initially. Local-first sharing does not free the exis
 10 GiB cache on k8s-amd64-1, and it does not solve Docker-image disk growth. Those remain separate
 capacity decisions. No worktree-target migration is implied by enabling S3.
 
-### Known limitation: shared storage is not yet shared hits
+### Cross-host hits and path normalization
 
 The storage side is complete and verified: private `sccache` bucket, hard quota 100 GiB
 (107,374,182,400 bytes, writes past the cap rejected), one 14-day lifecycle rule
 (`sccache-expiry`), separate scoped identities (`sccache-ci` read/write, `sccache-desktop`
-read-only) and a credential file delivered to the runners. None of that makes a cache entry
-written on one host useful on another.
+read-only) and a credential file delivered to the runners.
 
 The quota was raised from 50 GiB because the original bucket filled in about 3.5 days (2026-11-06 to
-2026-11-10 ~04:30Z, ~12-14 GiB/day) and S3 writes were silently rejected (write policy `l0`); a
-lifecycle reduction is planned next.
+2026-11-10 ~04:30Z, ~12-14 GiB/day) and S3 writes were silently rejected (write policy `l0`; see
+`docs/troubleshooting/sccache-s3-bucket-full-silent.md`). A shorter lifecycle expiry is being sized
+next; this plan does not fix its value.
 
-sccache derives its cache keys from the compile invocation and its inputs, which include source
-file paths. CI builds run under a different workspace prefix than a workstation checkout, so the
-two produce different keys for the same compilation: entries land in the same bucket but are not
-looked up across hosts. Making them collide requires path normalization on the inputs (in sccache
-0.19 this is the `BASEDIRS` behavior, with the CI action passing the workspace root). That
-normalization is **not implemented and is not owned by this repository** - it belongs to the Calypso
-CI action work and the desktop rollout, each verifying against their own installed version.
-
-Read metrics accordingly: a healthy hit rate *within* CI together with close to zero cross-host hits
-is the expected state before normalization lands. Do not diagnose that as a broken shared cache, and
-do not "fix" it by changing bucket retention or the capacity cap - those are already at the values
-this plan specifies. Keep Phase 6 step 4 (workstations publishing) gated on demonstrated key
-compatibility, and treat the cross-host benefit as still to be earned.
+sccache keys include source file paths, so builds under different workspace prefixes do not collide.
+Path normalization (`normalize-paths: true`, sccache 0.19 `BASEDIRS` = workspace root) **is now
+implemented** in the Calypso action and enabled only for Validation (`rust.yml`); release workflows
+still use path-specific keys and a change enabling it is being prepared in Calypso. Workstation
+checkouts are not normalized. Cross-host hits are plausible for Validation (identical basedir shape
+on both runners) but not proven; a workstation-to-CI benefit is still to be earned. Keep Phase 6
+step 4 (workstation publishing) gated on demonstrated key compatibility, and do not respond to low
+cross-host hits by changing retention or the cap.
 
 ## Rollback
 

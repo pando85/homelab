@@ -2,10 +2,12 @@
 
 ## Status and recommendation
 
-**Proposal, not deployed.** Evidence collected on 2026-11-06. Recheck versions, storage and
-performance before implementation. This document changes no runner, workstation or bucket config.
-The [shared S3 deployment plan](../../planning/shared-s3-sccache-deployment.md) records implementation
-phases, approval gates, acceptance criteria and rollback; deployment remains unapproved.
+**CI layer deployed (since 2026-11-06 ~19:10Z); workstation layers still proposals.** The text
+below was written as a pre-deployment proposal on 2026-11-06; the evidence sections are that
+baseline, not current behavior. Deployed state, measured on 2026-11-10, is in
+[Deployed state and results](#deployed-state-and-results). The
+[shared S3 deployment plan](../../planning/shared-s3-sccache-deployment.md) records phases, approval
+gates and rollback. Workstation S3 access and per-worktree targets are not deployed.
 
 Use three complementary layers:
 
@@ -21,7 +23,7 @@ Do not deploy the previously suggested 512 MiB Redis as a replacement for the ex
 Do not assume MinIO is faster than local storage. The benefit is avoiding compilation on a local
 miss, not accelerating a local hit.
 
-## Evidence from the 2026-11-06 investigation
+## Evidence from the 2026-11-06 investigation (pre-deployment baseline)
 
 ### Runner caches
 
@@ -84,6 +86,44 @@ that an agent command uses its environment.
 Local sccache was 0.18.0, while inspected CI logs used 0.19.0. The Rust cache-key version changes
 from 6 to 7 across these releases, preventing reuse of those Rust entries. A small earlier local
 daemon sample reported 22 requests, all non-cacheable; it is not a long-term usage baseline.
+
+## Deployed state and results
+
+Verified 2026-11-10 from CI job logs and MinIO metrics.
+
+**Configuration (Calypso `.forgejo/actions/sccache-setup/action.yml`):**
+
+- `cache-mode` defaults to `disk-s3`: S3 is opt-out and `disk` is the rollback.
+- `SCCACHE_MULTILEVEL_CHAIN=disk,s3`, write policy `l0`; sccache 0.19.0 built from a pinned commit.
+- Two leased local slots of 5G under `/cache/sccache-slots`, one daemon per job, replacing the
+  single shared 10G daemon.
+- A health probe falls back to `disk` on 5xx or transport failure.
+- Path normalization (`normalize-paths: true`, BASEDIRS = workspace root) is implemented in the
+  action and enabled only for Validation (`rust.yml`). Release workflows still use path-specific
+  keys; enabling it there is being prepared in Calypso.
+
+**Results over 82 S3-era jobs:**
+
+| Measurement | Result |
+|---|---:|
+| Share of all hits served by S3 | 21.3% |
+| S3 own hit rate | ~46% |
+| Per-job hit rate, with / without S3 tier | 80.6% / 63.5% |
+| S3 hit read time | 8-17 ms (same as disk) |
+| MinIO GET TTFB p99 / PUT p95 | < 50 ms / ~0.24 s |
+| Read, write or timeout errors | none |
+
+Validation warm hit rate rose from 64% to ~97% and warm wall time from 1376 to 1013 s (prusik) and
+2477 to 1956 s (k8s-amd64-1). Three variables changed together (normalization, slot layout, S3) and
+the commit mix differs, so most of that gain is from normalization plus the slot change, not S3
+alone. S3 hits mostly rescue jobs whose leased local slot was empty or evicted. Cross-host hits are
+plausible for Validation (identical basedir shape on both runners) but not proven.
+
+**Incident, 2026-11-10:** the 50 GiB bucket filled in about 3.5 days (~12-14 GiB/day). From
+~04:20Z MinIO rejected PUTs (14% 4xx) while jobs reported 0 L1 writes and 0 write errors, because
+`l0` silently drops failed secondary writes. The quota was raised to 100 GiB; a shorter lifecycle
+expiry is being sized. See
+[sccache S3 bucket full](../troubleshooting/sccache-s3-bucket-full-silent.md).
 
 ## What Cargo and sccache reuse
 
@@ -158,7 +198,7 @@ could approach 71 GiB before filesystem compression and workload differences. Do
 targets for every registered worktree. Defer a leased pool of build directories unless measurements
 justify its additional coordination complexity.
 
-## Shared MinIO as a secondary cache
+## Shared MinIO as a secondary cache (design as proposed)
 
 ```text
 Worktree A -> isolated target --+
