@@ -41,7 +41,6 @@ resources:
   - resources/kanidm-oauth2-client-grafana.yaml
   - resources/long-term-metrics/datasource-configmap.yaml
   - resources/long-term-metrics/httproute.yaml
-  - resources/long-term-metrics/ingress.yaml
   - resources/long-term-metrics/prometheus.yaml
   - resources/long-term-metrics/prometheus-rules.yaml
   - resources/long-term-metrics/service.yaml
