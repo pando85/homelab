@@ -11,6 +11,13 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "1"
 spec:
+  logging:
+    # Proxy log levels (component: level). oauth2 at critical: the oauth2 filter logs the raw
+    # cookie value in "failed to decrypt token: <value>" at error level, which would put session
+    # cookies in Loki. Access log path has no query string for the same reason (see accessLog).
+    level:
+      default: warn
+      oauth2: critical
   telemetry:
     # Same as nginx-external: every request traced (nginx otel-sampler AlwaysOn), incoming
     # traceparent trusted. Spans go to the otel-collector (cross-namespace backendRef, allowed by
@@ -36,7 +43,9 @@ spec:
             json:
               start_time: "%START_TIME%"
               method: "%REQ(:METHOD)%"
-              path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
+              # Query string omitted on purpose (tokens, codes). Same value as the former
+              # %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% minus the query.
+              path: "%PATH(NQ:ORIG_OR_PATH)%"
               protocol: "%PROTOCOL%"
               response_code: "%RESPONSE_CODE%"
               response_flags: "%RESPONSE_FLAGS%"
