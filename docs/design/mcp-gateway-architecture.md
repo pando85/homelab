@@ -105,6 +105,9 @@ independent public ingress; gateway audit events are sent to Loki.
 to `apps/mcp-gateway-admin` (namespace `mcp-gateway-admin`) with a separate Kanidm OAuth2
 client. Its `routes: []` configuration fails closed: **Vault MCP is deferred, not deployed**,
 and there is no live route to it. Hermes does not automatically receive admin access.
+The first planned backend is a read-only **pfSense MCP**, blocked at phase 0 on a pfSense-side
+decision about exposing the REST API without the webGUI, and on a working read-only token:
+`planning/pfsense-mcp-implementation.md`.
 
 The Vault-backed secret store used by External Secrets (including the Context7 upstream API
 key) is **separate** from the deferred Vault **MCP server** on the admin side.
@@ -264,6 +267,7 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 | Context7 | MVP | Deployed route with Vault-delivered upstream key | Live |
 | Firecrawl | MVP | Live route; backend pod deployed and isolated | Active `firecrawl-mcp` service |
 | Vault MCP | Deferred | Admin gateway has `routes: []`; Vault MCP not deployed | Owner decision 2026-11-10: deferred. OIDC-passthrough research (upstream PR #129, stale image) in `planning/vault-mcp-implementation.md` §13 |
+| pfSense MCP | Planned, blocked | Not deployed; the admin plane still renders `routes: []` | First admin-plane route, read-only. Blocked at phase 0 on how to expose the REST API without also exposing the pfSense webGUI to the cluster, and on a working read-only token: `planning/pfsense-mcp-implementation.md` |
 | SearXNG | Next | REST API, internal | Deploy MCP package |
 | Playwright | Stage 2 live | Cluster browser, gateway-exposed with Kanidm OIDC | Active via `/playwright/mcp` with `statefulMode: stateful` |
 | HA, Postgres | Future | N/A | Separate phases |
