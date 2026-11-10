@@ -37,7 +37,8 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: curl
-          image: curlimages/curl:8.10.1@sha256:2201f0e4fdc9320f468d42f8a6d5cfd219f5d9d4f6a6fa3e67a4dcf2fe7cae8c
+          # Digest re-verified against Docker Hub API on 2026-11-10 (previous digest did not resolve)
+          image: curlimages/curl:8.10.1@sha256:d9b4541e214bcd85196d6e92e2753ac6d0ea699f0af5741f8c6cccbfcf00ef4b
           command: ["/bin/sh", "-c"]
           args:
             - |
