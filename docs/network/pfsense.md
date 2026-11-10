@@ -2,7 +2,8 @@
 
 pfSense configuration is not managed in git. This page records the parts the Kubernetes cluster
 depends on, so that changes can be planned against them. Snapshot taken 2026-11-09 on pfSense
-2.8.1 by read-only inspection. Re-check before acting on any value here.
+2.8.1 by read-only inspection, updated 2026-11-10 after the external switch (Phase 5). Re-check
+before acting on any value here.
 
 For the FRR (BGP) setup on the cluster side, see
 [Cilium BGP control plane](../deployment/cilium-bgp-control-plane.md). For the planned changes,
@@ -32,15 +33,17 @@ The VIPs live in 192.168.193.0/24 and are learned by pfSense over BGP
 
 | Address | Service |
 |---------|---------|
-| 192.168.193.1 | ingress-nginx (internal) |
+| 192.168.193.1 | ingress-nginx (internal), idle rollback path |
 | 192.168.193.2 | UniFi |
 | 192.168.193.3 | transcoder-rabbit |
-| 192.168.193.4 | ingress-nginx (external) |
+| 192.168.193.4 | ingress-nginx (external), idle rollback path |
 | 192.168.193.5 | coturn (TURN) |
 | 192.168.193.7 | qBittorrent |
 | 192.168.193.8 | Kanidm LDAPS |
 | 192.168.193.9 | Mosquitto |
 | 192.168.193.10 | Mosquitto TLS |
+| 192.168.193.13 | Envoy Gateway (internal) |
+| 192.168.193.14 | Envoy Gateway (external) |
 
 Aliases that reference addresses not advertised over BGP:
 
@@ -49,13 +52,6 @@ Aliases that reference addresses not advertised over BGP:
 | 192.168.193.6 | `k8s_deluge` | Not advertised |
 | 192.168.193.11 | `k8s_pt` | Not advertised |
 
-Planned (see the planning document above):
-
-| Address | Service |
-|---------|---------|
-| 192.168.193.13 | Envoy Gateway (internal) |
-| 192.168.193.14 | Envoy Gateway (external) |
-
 ## 3. Port forwards
 
 All rules are on WAN, with the destination set to the WAN address. The filter rule is
@@ -63,7 +59,7 @@ auto-associated with each redirect.
 
 | Rule | Ports (port alias) | Target (host alias) |
 |------|--------------------|---------------------|
-| grigri port redirect tcp | `external_ingress_tcp` = 80, 443, 29518 | `k8s_external_ingress` (192.168.193.4) |
+| grigri port redirect tcp | `external_ingress_tcp` = 80, 443, 29518 | `k8s_external_ingress` (192.168.193.14) |
 | TURN tcp | `turn_tcp` = 3478, 3479, 5349 | `k8s_turn` (192.168.193.5) |
 | TURN udp | `turn_udp` = 3478, 3479 | `k8s_turn` (192.168.193.5) |
 | qbittorrent | `qbittorrent_tcp` = 50413 | `k8s_qbittorrent` (192.168.193.7) |
@@ -81,7 +77,7 @@ Host aliases:
 
 | Alias | Address | Note |
 |-------|---------|------|
-| `k8s_external_ingress` | 192.168.193.4 | |
+| `k8s_external_ingress` | 192.168.193.14 | Was `.4` (nginx-external) until 2026-11-10; rollback is this one edit |
 | `k8s_turn` | 192.168.193.5 | |
 | `k8s_plex` | 192.168.193.5 | Stale description: same address as `k8s_turn` |
 | `k8s_qbittorrent` | 192.168.193.7 | |
@@ -114,9 +110,9 @@ Host overrides (split horizon):
 
 | Override | Address | Aliases |
 |----------|---------|---------|
-| `freshrss.grigri.cloud` | 192.168.193.4 | See the list below |
-| `app.staging.forkline.dev` | 192.168.193.4 | `auth`, `idm`, `api`, `mcp-fixture` (all `.staging.forkline.dev`) |
-| `mintpsicologia.es` | 192.168.193.4 | `www.mintpsicologia.es` |
+| `freshrss.grigri.cloud` | 192.168.193.14 | See the list below |
+| `app.staging.forkline.dev` | 192.168.193.14 | `auth`, `idm`, `api`, `mcp-fixture` (all `.staging.forkline.dev`) |
+| `mintpsicologia.es` | 192.168.193.14 | `www.mintpsicologia.es` |
 | `turn.grigri.cloud` | 192.168.193.5 | |
 | `unifi-controller.grigri` | 192.168.193.2 | `unifi.grigri` |
 

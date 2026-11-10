@@ -251,7 +251,7 @@ This integration required several workarounds due to limitations in GoTrue and R
 
 #### GoTrue SSRF Protection
 
-**Problem:** GoTrue's custom OAuth provider API (`/admin/custom-providers`) validates URLs and blocks private IPs (RFC 1918) to prevent SSRF attacks. Since `idm.grigri.cloud` resolves to `192.168.193.4` from within the cluster, registration fails with "URL cannot resolve to private network addresses".
+**Problem:** GoTrue's custom OAuth provider API (`/admin/custom-providers`) validates URLs and blocks private IPs (RFC 1918) to prevent SSRF attacks. Since `idm.grigri.cloud` resolves to `192.168.193.14` (the external Envoy Gateway) from within the cluster, registration fails with "URL cannot resolve to private network addresses".
 
 **Attempted Solutions:**
 - `GOTRUE_CUSTOM_OAUTH_PRIVATE_HOSTS` environment variable - doesn't exist in GoTrue v2.196.0

@@ -185,7 +185,7 @@ Does your app need S3-compatible object storage?
 ```
 Internet
   │
-  ├── nginx-external (192.168.193.4)
+  ├── external Envoy Gateway (192.168.193.14)
   │   ├── s3.grigri.cloud → s3-public MinIO (presigned URLs)
   │   ├── mc-s3.grigri.cloud → s3-public MinIO (console)
   │   └── cross-backups.grigri.cloud → cross-backups MinIO (backup ingestion)

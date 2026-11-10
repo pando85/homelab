@@ -2,7 +2,7 @@
 
 ## Problem
 
-GoTrue's custom OAuth provider API (`/admin/custom-providers`) validates URLs and blocks private IPs (RFC 1918) to prevent SSRF attacks. When trying to register a custom OAuth provider pointing to an internal service (e.g., `idm.grigri.cloud` resolving to `192.168.193.4`), the API returns:
+GoTrue's custom OAuth provider API (`/admin/custom-providers`) validates URLs and blocks private IPs (RFC 1918) to prevent SSRF attacks. When trying to register a custom OAuth provider pointing to an internal service (e.g., `idm.grigri.cloud` resolving to `192.168.193.14`, the external Envoy Gateway), the API returns:
 
 ```
 400: URL cannot resolve to private network addresses

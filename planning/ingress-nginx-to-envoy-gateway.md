@@ -11,8 +11,8 @@ This also delivers the grigri (staging) platform part of
 Forkline Remote): experimental-channel Gateway API CRDs, a shared external Gateway with HTTPS
 listeners plus a TLS passthrough listener, and the router 443 switch away from `192.168.193.4`.
 
-**Status: Phases 0-4 done, Gate 4 running since 2026-11-09 23:27 UTC (2026-11-10); Phase 5 waits for the
-owner's yes. See Execution Status and Autonomy Scope.**
+**Status: Phases 0-5 executed (Phase 5 on 2026-11-10 07:04 UTC), Gate 5 running; P5.3 and the runner
+bridge swap still open. See Execution Status and Autonomy Scope.**
 
 Strategy in one paragraph: run Envoy Gateway **side by side** on two new Cilium LB VIPs
 (`.13` internal, `.14` external). Every app gets its internal and external routes and is verified
@@ -53,7 +53,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 2     | done        | Pilots without auth and auth pilots (kanidm route, http-echo, esphome, navidrome, radarr external) live and verified without a browser; the Gate 2 owner items (interactive login, refusal for a person outside the group) stay open. Procedure: `docs/conventions/gateway-api-routes.md`. |
 | 3     | done        | Every homelab Ingress host has an Envoy route on the matching gateway, tenant hosts included (multivara, kiais). Tracking list and Gate 3 results in Phase 3. |
 | 4     | done, Gate 4 running | Executed 2026-11-09 (Phase 4, Executed). Watch 3-7 days. P4.1 (pfSense) done, owner. |
-| 5     | prepared    | Commits prepared locally, not pushed; waits for the owner's yes after Gate 4. |
+| 5     | done, Gate 5 running | Executed 2026-11-10 (Phase 5, Executed). P5.1 and P5.2 (pfSense) done, owner. Open: P5.3, runner bridge swap. |
 | 6     | not started |                                                                                                                                   |
 
 ### Phase 1 progress (2026-11-09)
@@ -1601,6 +1601,42 @@ Low-traffic time. The owner does the pfSense steps; an agent watches and verifie
 Rollback: P5.1 and P5.2 back to `.4` (seconds), revert the hermes commit, and set the
 `idm.isidoro.grigri.cloud` A record back to `.4` by hand (`upsert-only` never reverts it). Routes
 stay in place.
+
+**Executed 2026-11-10** (P5.1 and P5.2 by the owner at pfSense, the rest by an agent):
+
+- Pre-window (06:40-06:50 UTC): homelab `67badb6dc` runner Certificates `app-staging-forkline-dev`
+  and `internal-app-staging-forkline-dev` Ready and the internal verification listener
+  `https-runners-staging-forkline-dev` Programmed; `2121ca476` hermes `hostAliases` to `.14`;
+  multivara gitops PR 209 merged as `9a30c596` (calypso chart 0.52.0-rc.3, `exposure: both`,
+  parentRefs external and internal, auth proxy sign-in settings; adds RBAC for httproutes and
+  securitypolicies, ReferenceGrant `calypso/calypso-auth-proxy-runner-extauth`, BackendTrafficPolicy
+  `calypso-runners/calypso-control-plane-runners`). Argo showed calypso Progressing while that
+  BackendTrafficPolicy had no status (no runner routes yet); it became Healthy later.
+- P5.1 (~07:04 UTC): alias `k8s_external_ingress` changed to `192.168.193.14` (21 rdr rules, 29518
+  included, follow it).
+- P5.2 (~07:05 UTC): the three host overrides (`freshrss.grigri.cloud` +28 aliases,
+  `app.staging.forkline.dev` +4 aliases, `mintpsicologia.es` + www) changed to `.14`: 36 names on
+  `.14`, 0 on `.4`. Lesson: the `app.staging.forkline.dev` override was missed on the first pass and
+  caught by the post-check script (`overrides(.4)` count); keep that check in any future pfSense step.
+- Verification: post-check ALL PASS; from an outside host 48 of 49 public hosts match nginx's status
+  with valid TLS (the 49th, `idm.isidoro.grigri.cloud`, publishes a private IP and is LAN-only by
+  design); Forgejo SSH 29518 shows the same host key from outside; argocd `/api/webhook` 400
+  unsigned from outside and GitHub webhook deliveries 200 after the switch; websocket upgrade 101
+  (Home Assistant); OIDC logins pass for Grafana, Forgejo, Dawarich (app OIDC clients, hairpin to
+  `idm.grigri.cloud` via `.14`) and Navidrome (Envoy native OIDC, token exchange from the proxies to
+  `idm.grigri.cloud` via `.14`, the previously untestable Envoy-to-own-VIP idm path, now verified);
+  Envoy cluster `idm_grigri_cloud_443` 0 connect failures; no UF/UH/URX/UC flags; no new alert
+  attributable to the switch.
+- Post-window commits (07:20 UTC): homelab `b81237b22` nginx-external Service no longer publishes
+  DNS; kiais gitops `89f47a9` DNSEndpoint `isidoro-keycloak/idm-isidoro`, A
+  `idm.isidoro.grigri.cloud` to `192.168.193.14` (external-dns changed it at 07:21:53).
+- Not done in the window, still open: calypso runners stay on the TLS passthrough bridge (it lives on
+  the `.14` gateway, so runners keep working); the bridge swap commit waits for a runner verified
+  through the internal listener (V1-V5). P5.3 (kill leftover pf states to `.4`) after traffic on
+  nginx-external decays. Gate 5 watch.
+- Known non-regressions seen in tests: `argocd.grigri.cloud/` is 404 on both (only `/api/webhook`
+  is public; the UI is on `argocd.internal`); the Navidrome PWA manifest request is redirected to idm
+  and blocked by CORS (cosmetic).
 
 **Gate 5:** one week without regressions.
 
