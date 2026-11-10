@@ -1,5 +1,5 @@
-# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim, one policy
-# per UI route (the `*-subsonic` routes have none). Pattern: docs/conventions/envoy-gateway-auth.md
+# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `access` claim, one policy
+# per UI route (the `*-subsonic` routes have none). Pattern: docs/conventions/gateway-api-routes.md
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
@@ -22,7 +22,7 @@ spec:
     redirectURL: https://navidrome.internal.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
-    scopes: [openid, profile, email, groups]
+    scopes: [openid, profile, email]
     cookieNames:
       accessToken: oidc-access-token
       idToken: oidc-id-token
@@ -45,16 +45,17 @@ spec:
     # parity with nginx (`allowed_groups=navidrome-users`, plus a group of the oauth2-proxy client
     # scope map): `navidrome-users` is itself in that scope map, so both are one group check.
     rules:
-      - name: allowed-groups
+      - name: allowed-access
         action: Allow
         principal:
           jwt:
             provider: kanidm
             claims:
-              - name: groups
+              # claim map of the navidrome client (members of navidrome-users)
+              - name: access
                 valueType: StringArray
                 values:
-                  - navidrome-users@idm.grigri.cloud
+                  - navidrome
 ---
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
@@ -83,7 +84,7 @@ spec:
         - name: ":path"
           type: RegularExpression
           value: "/api([/?].*)?"
-    scopes: [openid, profile, email, groups]
+    scopes: [openid, profile, email]
     cookieNames:
       accessToken: oidc-access-token
       idToken: oidc-id-token
@@ -106,13 +107,14 @@ spec:
     # parity with nginx (`allowed_groups=navidrome-users`, plus a group of the oauth2-proxy client
     # scope map): `navidrome-users` is itself in that scope map, so both are one group check.
     rules:
-      - name: allowed-groups
+      - name: allowed-access
         action: Allow
         principal:
           jwt:
             provider: kanidm
             claims:
-              - name: groups
+              # claim map of the navidrome client (members of navidrome-users)
+              - name: access
                 valueType: StringArray
                 values:
-                  - navidrome-users@idm.grigri.cloud
+                  - navidrome

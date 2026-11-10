@@ -1,7 +1,7 @@
 ---
-# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim, on the
+# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `access` claim, on the
 # protected external routes (the `radarr-external-apikey*` routes have none).
-# Pattern: docs/conventions/envoy-gateway-auth.md
+# Pattern: docs/conventions/gateway-api-routes.md
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
 metadata:
@@ -26,7 +26,7 @@ spec:
     redirectURL: https://radarr.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
-    scopes: [openid, profile, email, groups]
+    scopes: [openid, profile, email]
     cookieNames:
       accessToken: oidc-access-token
       idToken: oidc-id-token
@@ -43,14 +43,14 @@ spec:
   authorization:
     defaultAction: Deny
     rules:
-      - name: allowed-groups
+      - name: allowed-access
         action: Allow
         principal:
           jwt:
             provider: kanidm
             claims:
-              # nginx `allowed_groups=radarr-users@idm.grigri.cloud` (SPN form)
-              - name: groups
+              # claim map of the radarr client (members of radarr-users)
+              - name: access
                 valueType: StringArray
                 values:
-                  - radarr-users@idm.grigri.cloud
+                  - radarr

@@ -1,7 +1,7 @@
 ---
 # Envoy Gateway native OIDC against Kanidm + JWT authorization on the per-app `access` claim.
 # No `groups` scope: every group in the ID token pushed the `oidc-id-token` cookie over 4096 B.
-# Pattern: docs/conventions/envoy-gateway-auth.md
+# Pattern: docs/conventions/gateway-api-routes.md
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
 metadata:

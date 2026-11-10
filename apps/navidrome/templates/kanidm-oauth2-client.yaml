@@ -17,7 +17,15 @@ spec:
   # same group nginx allows today (`allowed_groups=navidrome-users@idm.grigri.cloud`)
   scopeMap:
     - group: navidrome-users
-      scopes: [openid, profile, email, groups]
+      scopes: [openid, profile, email]
+  # per-app claim for the SecurityPolicy authorization: small, unlike the `groups` scope, which
+  # lists every group of the person and overflowed the 4096 B `oidc-id-token` cookie
+  claimMap:
+    - name: access
+      joinStrategy: array
+      valuesMap:
+        - group: navidrome-users
+          values: [navidrome]
   # short `preferred_username`: navidrome maps it to its own user (ND_REVERSEPROXYUSERHEADER)
   preferShortUsername: true
   strictRedirectUrl: true

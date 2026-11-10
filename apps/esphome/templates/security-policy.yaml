@@ -1,6 +1,6 @@
 ---
-# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim.
-# Pattern: docs/conventions/envoy-gateway-auth.md
+# Envoy Gateway native OIDC against Kanidm + JWT authorization on the `access` claim.
+# Pattern: docs/conventions/gateway-api-routes.md
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: SecurityPolicy
 metadata:
@@ -22,7 +22,7 @@ spec:
     redirectURL: https://esphome.internal.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
-    scopes: [openid, profile, email, groups]
+    scopes: [openid, profile, email]
     cookieNames:
       accessToken: oidc-access-token
       idToken: oidc-id-token
@@ -39,14 +39,14 @@ spec:
   authorization:
     defaultAction: Deny
     rules:
-      - name: allowed-groups
+      - name: allowed-access
         action: Allow
         principal:
           jwt:
             provider: kanidm
             claims:
-              # nginx `allowed_groups=esphome-users@idm.grigri.cloud` (SPN form)
-              - name: groups
+              # claim map of the esphome client (members of esphome-users)
+              - name: access
                 valueType: StringArray
                 values:
-                  - esphome-users@idm.grigri.cloud
+                  - esphome
