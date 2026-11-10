@@ -111,7 +111,7 @@ There are **three** MinIO instances, pick by who fetches the objects:
 - Server-side I/O only? → **Internal MinIO** (`platform/minio/`)
 - Receiving backups from external machines? → **Cross-backups** (`apps/cross-backups/`)
 
-> **Gotcha:** The internal MinIO host `s3.internal.grigri.cloud` is `nginx-internal` only. If an
+> **Gotcha:** The internal MinIO host `s3.internal.grigri.cloud` is on the internal Gateway only. If an
 > app generates presigned URLs against it, external clients fail to download. Use `apps/s3-public/`
 > and set the app's public endpoint to `https://s3.grigri.cloud`. See `docs/deployment/s3-public.md`.
 
@@ -155,8 +155,8 @@ Then add `<app>Password` to Vault `/s3-public/users` and to
 ### 2.3 API Gateway: Kong vs Gateway API routes
 
 Routing is done with Gateway API `HTTPRoute`s on the Envoy Gateways; see
-[`gateway-api-routes.md`](gateway-api-routes.md) for the how-to (listeners, annotations, nginx
-behaviour equivalents, backend TLS, Lua, NetworkPolicies, verification).
+[`gateway-api-routes.md`](gateway-api-routes.md) for the how-to (listeners, annotations, auth,
+timeouts, backend TLS, Lua, NetworkPolicies, verification).
 
 **Use an HTTPRoute when:**
 - The app just needs path-based routing (`/api/*` → backend)
@@ -237,6 +237,16 @@ env:
 - Open WebUI: `/oauth/oidc/callback`
 
 Check the app's documentation for the exact callback URL format.
+
+**App without its own login (protected at the gateway):** the route gets a `SecurityPolicy`
+(Envoy Gateway native OIDC against Kanidm plus a JWT check). There is no shared proxy and no global
+group: each app has its own Kanidm client, its own `<app>-users` group and its own claim
+(`access` = `[<app>]`), so a token issued for another app never authorizes this one. Copy the
+three objects from the recipe in
+[`gateway-api-routes.md#authentication`](gateway-api-routes.md#authentication) (client,
+`SecurityPolicy`, stable route name). Apps with their own OIDC login keep it; the policy is added
+only when the app should not be reachable by anyone outside its group. Add people to the group by
+hand ([`kanidm.md`](../user-guide/kanidm.md)).
 
 ### 2.5 Secret Management
 
@@ -328,7 +338,7 @@ Decided by the owner on 2026-10-25, when the battery-optimizer egress policy was
 ```
 apps/<app-name>/
 ├── Chart.yaml                          # Helm chart metadata + dependencies
-├── values.yaml                         # App configuration (controllers, services, ingress, persistence)
+├── values.yaml                         # App configuration (controllers, services, route, persistence)
 └── templates/
     ├── postgresql.yaml                 # Zalando CR (if using Zalando)
     ├── external-secrets.yaml           # Vault secrets (if needed)
@@ -405,11 +415,13 @@ app-template:
           port: <port>
 
   # Gateway API route (internal shown; external: parentRefs `external` / `https-grigri-cloud`,
-  # host <app>.grigri.cloud, annotation external-dns.kubernetes.io/enabled: "true" only).
-  # No external-dns annotation on internal routes until the internal switch. See gateway-api-routes.md
+  # host <app>.grigri.cloud). Both carry the external-dns annotation, no cert-manager annotation.
+  # Protected apps add a SecurityPolicy, see gateway-api-routes.md
   route:
     <app-name>:
       kind: HTTPRoute
+      annotations:
+        external-dns.kubernetes.io/enabled: "true"
       hostnames:
         - <app>.internal.grigri.cloud
       parentRefs:
@@ -420,27 +432,6 @@ app-template:
         - backendRefs:
             - identifier: <app-name>
               port: <port>
-
-  # Legacy Ingress, kept until ingress-nginx is removed (the route above is the target state)
-  ingress:
-    <app-name>:
-      enabled: true
-      className: nginx-internal        # or nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      hosts:
-        - host: &host <app>.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: <app-name>
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: <app>-tls-certificate
 
   defaultPodOptions:
     securityContext:
@@ -506,7 +497,7 @@ spec:
 - [ ] Renovate hints added above image repositories
 - [ ] PVCs have `Prune=false` annotation
 - [ ] PVCs have `backup:` and `backup/retain:` labels
-- [ ] HTTPRoute on the right Gateway/listener, external-dns annotation per `gateway-api-routes.md` (and, while it exists, Ingress annotations include `cert-manager.io/cluster-issuer`)
+- [ ] HTTPRoute on the right Gateway/listener with the external-dns annotation (`gateway-api-routes.md`); no Ingress, no `cert-manager.io/*` annotation; `SecurityPolicy` if the app has no login of its own
 - [ ] ExternalSecrets reference correct Vault paths
 - [ ] OIDC redirect URLs match the app's callback path
 - [ ] Resource requests and limits are defined
@@ -604,22 +595,24 @@ helm lint apps/<app>/
 **Path-based routing conflicts**
 - HTTPRoute matching is segment-based and case-sensitive: `Exact` beats the longest `PathPrefix`
   (`/api` matches `/api/x`, not `/apix`); rule order does not matter
-- See: `docs/deployment/readest.md` for the nginx multi-path example, `gateway-api-routes.md` for routes
+- See: `docs/deployment/readest.md` for a multi-path example with rewrites, `gateway-api-routes.md` for routes
 
 **Large file uploads fail / long requests cut at 60 s**
-- Envoy has no body limit (legacy nginx: `nginx.ingress.kubernetes.io/proxy-body-size: "0"`, default 1MB)
-- The gateway-wide request timeout is 60 s: set `timeouts.request: 0s` on that route
+- Envoy has no body limit and no total request limit; the gateway-wide idle timeout is 60 s
+- For a stream that stays silent longer than 60 s, set `streamIdleTimeout` in a route
+  `BackendTrafficPolicy` (`mergeType: StrategicMerge`), never `timeouts.request`
+  (`gateway-api-routes.md`, "Timeouts")
 
 **503 from the Envoy VIP only**
-- Backend expects TLS (add a `BackendTLSPolicy` or `Backend`), or a NetworkPolicy admits only the
-  nginx namespaces. Look at `response_flags` (`UF`) in the Envoy proxy access log
+- Backend expects TLS (add a `BackendTLSPolicy` or `Backend`), or a NetworkPolicy does not admit
+  the Envoy proxy pods. Look at `response_flags` (`UF`) in the Envoy proxy access log
 
 ### 5.4 MinIO Issues
 
 **Presigned URLs don't work / external downloads fail**
 - The browser fetches presigned URLs directly, so `S3_PUBLIC_ENDPOINT` must be an
   **internet-reachable** host. The internal MinIO host (`s3.internal.grigri.cloud`) is
-  `nginx-internal` only — external clients can't reach it.
+  on the internal Gateway only — external clients can't reach it.
 - For browser-facing storage use the public MinIO (`apps/s3-public/`):
   - In-cluster endpoint (`S3_ENDPOINT`): `http://s3-public-minio.s3-public.svc:9000`
   - External endpoint (`S3_PUBLIC_ENDPOINT`): `https://s3.grigri.cloud`

@@ -43,10 +43,10 @@ annotations:
 
 ## Routes (Gateway API) and DNS Annotations
 
-Apps are exposed with Gateway API `HTTPRoute`s on the Envoy Gateways, not with nginx Ingress
-annotations or snippets. Full procedure, nginx-to-Gateway-API table, backend TLS, Lua, NetworkPolicy
-and verification: [`gateway-api-routes.md`](gateway-api-routes.md). During the migration an app
-keeps its Ingress (below) next to the route until ingress-nginx is removed.
+Apps are exposed with Gateway API `HTTPRoute`s on the Envoy Gateways. There are no `Ingress`
+objects and no `ingress:` values block (`ingress.enabled: false` on charts that default to it).
+Full procedure, backend TLS, Lua, NetworkPolicy and verification:
+[`gateway-api-routes.md`](gateway-api-routes.md).
 
 External route (the target comes from the external Gateway, never from the route):
 
@@ -55,27 +55,8 @@ annotations:
   external-dns.kubernetes.io/enabled: "true"
 ```
 
-Internal route: **no** external-dns annotation until the internal switch. Routes carry no
-`cert-manager.io/*` annotation (certificates live on the Gateways).
-
-Legacy Ingress annotations, kept only while the Ingress exists:
-
-Internal:
-
-```yaml
-annotations:
-  external-dns.kubernetes.io/enabled: "true"
-  cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-```
-
-External:
-
-```yaml
-annotations:
-  external-dns.kubernetes.io/enabled: "true"
-  external-dns.kubernetes.io/target: grigri.cloud
-  cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-```
+Internal route: the same annotation (the record is an A record to the internal Gateway address).
+Routes carry no `cert-manager.io/*` annotation: certificates live on the Gateways.
 
 ## External Secrets
 
@@ -121,7 +102,7 @@ dockerImage: postgres:16
 2. For upstream charts: add dependency block, run `helm dependency build`, commit `Chart.lock`
 3. Namespace equals folder name (auto-created by deploy script)
 4. Pin all images with Renovate hints
-5. Add an HTTPRoute on the right Envoy Gateway ([`gateway-api-routes.md`](gateway-api-routes.md)); until ingress-nginx is removed also add the Ingress with cert-manager + external-dns annotations
+5. Add an HTTPRoute on the right Envoy Gateway ([`gateway-api-routes.md`](gateway-api-routes.md)) with the external-dns annotation; protected apps also get a `SecurityPolicy`
 6. Define resource requests and limits
 7. Create ExternalSecret objects for secrets (source: Vault path)
 8. Create PVC with `Prune=false` annotation for persistent data

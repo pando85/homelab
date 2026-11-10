@@ -45,8 +45,8 @@ topologySpreadConstraints:
 |------|----------|----------------|-------|
 | `apps/m-rajoy-front/values.yaml` | 2 | ✅ | Static multi-replica |
 | `apps/telegram-bot/values.yaml` | 2 | ✅ | Static multi-replica |
-| `system/ingress-nginx/values.yaml` | 2, HPA 2-11 | ✅ | Critical path |
-| `system/ingress-nginx-external/values.yaml` | 2, HPA 2-11 | ✅ | Critical path |
+| `system/envoy-gateway/resources/envoyproxy-internal.yaml` | 2, HPA 2-11 | ✅ | Critical path |
+| `system/envoy-gateway/resources/envoyproxy-external.yaml` | 2 | ✅ | Critical path |
 | `apps/kroki/values.yaml` | 1 | ❌ | Single replica |
 | `apps/http-echo/values.yaml` | 1 | ❌ | Single replica |
 | `apps/special-web/values.yaml` | 1 | ❌ | Single replica |

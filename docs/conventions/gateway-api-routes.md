@@ -1,19 +1,16 @@
 # Exposing an App with Gateway API (Envoy Gateway)
 
-How an app gets an HTTP(S) route on the Envoy Gateways. This replaces the ingress-nginx
-annotation and snippet guidance. Background, decisions and the migration state:
-`planning/ingress-nginx-to-envoy-gateway.md` (the recipes there cover every nginx-only behaviour
-that was ported).
+How an app gets an HTTP(S) route on the Envoy Gateways. Decision and consequences:
+[ADR-0005](../adr/0005-gateway-api-with-envoy-gateway.md). Migration history, the listener contract
+and the recipes for every behaviour ported from ingress-nginx:
+`planning/ingress-nginx-to-envoy-gateway.md`.
 
-## Migration state: all traffic on Envoy, nginx idle until Phase 6
+## State
 
-All traffic is served by the Envoy Gateways: internal names resolve to `.13` since Phase 4
-(2026-11-09) and public traffic reaches `.14` since Phase 5 (2026-11-10). ingress-nginx
-(`.1` internal, `.4` external) still runs, idle, as a rollback path until Phase 6 removes it. Until
-then an existing app may still carry its Ingress next to its route; never remove an Ingress as
-part of adding a route (Phase 6 does that). A **new** app gets **only** a route: no Ingress, no
-nginx annotations. After Phase 6 only routes remain. Health of the whole path, re-runnable and
-read-only: `scripts/gateway-check.sh`.
+All traffic is served by the two Envoy Gateways: internal names resolve to `.13` and public traffic
+reaches `.14`. ingress-nginx and the shared oauth2-proxy are gone. An app gets **only** a route (plus a
+`SecurityPolicy` when it is protected): no `Ingress`, no nginx annotations, no `cert-manager.io/*`
+annotation. Health of the whole path, re-runnable and read-only: `scripts/gateway-check.sh`.
 
 ## Gateways and listeners
 
@@ -36,8 +33,8 @@ routes use the listener `https-rajoy-internal-grigri-cloud` (own certificate). A
 
 ## Writing the route
 
-Mirror the live Ingress hosts and paths exactly (`kubectl get ingress -n <ns> -o yaml`), including
-backend Service and port.
+Hostnames follow the table above. The backend is the app's Service and port (a port number, not
+the port name).
 
 ### app-template apps (`route:` block)
 
@@ -78,16 +75,15 @@ Plain YAML under `templates/`, `apiVersion: gateway.networking.k8s.io/v1`, no na
 ### Upstream chart with native route support
 
 Use the chart's own key where it exists (argo-cd, forgejo, kube-prometheus-stack, grafana, ollama,
-open-webui, wordpress, oauth2-proxy; table with gotchas in the plan) and disable the chart's
-`ingress` block **only when the Ingress is retired**. Until then both exist. Charts without route
-support (cilium hubble UI, minio, loki, vault) get a raw `HTTPRoute`:
-`system/kube-system/resources/cilium/hubble-ui-httproute.yaml` keeps `hubble.ui.ingress` untouched.
+open-webui, wordpress; table with gotchas in the plan) and keep the chart's `ingress` block disabled.
+Charts without route support (cilium hubble UI, minio, loki, vault) get a raw `HTTPRoute`:
+`system/kube-system/resources/cilium/hubble-ui-httproute.yaml`.
 
 ### Operator CRs that create the Ingress (vault)
 
-The route is a standalone `HTTPRoute` next to the CR. Do **not** remove `spec.ingress` from the Vault
-CR as part of adding it: the operator never deletes an Ingress it created, so removing the field
-orphans the Ingress (Argo does not prune it). That deletion is an owner decision.
+The route is a standalone `HTTPRoute` next to the CR; keep `spec.ingress` off. An operator never
+deletes an Ingress it created, so turning the field off on a live object orphans the Ingress (Argo
+does not prune it): delete it by hand with the owner's yes.
 
 ### gRPC and plain HTTP on one hostname
 
@@ -110,7 +106,7 @@ Gateway has none.
   `target`). The record is a **CNAME to `grigri.cloud`**. A route can never produce an A record on
   the external Gateway.
 - **Internal route:** the same annotation; the record is an **A record to `.13`** (the Gateway
-  address). Phase 4 annotated every internal route.
+  address). Every internal route carries it.
 - **An A record on an external name** (for example a name that must resolve to a private IP, so it
   works from the LAN and the cluster only): a `DNSEndpoint` (the `crd` source), because an annotated
   external route would only produce the CNAME. Example: a tenant Keycloak host that publishes
@@ -147,8 +143,9 @@ Response headers: nginx sends only `Strict-Transport-Security: max-age=31536000;
 nothing else, so an app's own `Referrer-Policy`, `Permissions-Policy` etc. pass through. Per-app
 hardening headers are added later on that app's route (filter), never gateway-wide.
 
-Never convert nginx snippets with a tool, and never guess: capture the live behaviour with `curl`
-on the nginx VIP (`.1` internal, `.4` external) first, then reproduce it on `.13` / `.14`.
+Never convert nginx snippets with a tool, and never guess: take the intended behaviour from the
+app's documentation or its previous manifests in git history, then prove it with `curl` on `.13` /
+`.14`.
 
 ### Backend TLS with a CA: `BackendTLSPolicy` (vault)
 
@@ -303,8 +300,8 @@ nginx and Envoy, resumed after 40 s on both).
 ## NetworkPolicies
 
 Before verifying, check the app's namespace: `kubectl get netpol,cnp -n <ns>` and
-`grep -rn ingress-nginx apps/<app>`. If any policy admits only the nginx namespaces, add the Envoy
-proxies **in the same commit** (an omission shows only on the Envoy path as 503 `UF`):
+`grep -rn nginx apps/<app>`. If any policy admits only named namespaces or a leftover nginx
+selector, add the Envoy proxies **in the same commit** (an omission shows only on the Envoy path as 503 `UF`):
 
 ```yaml
 - namespaceSelector:
@@ -339,7 +336,7 @@ calls `https://<public name>` hits it. None of the first pilots had a policy in 
 ## Authentication
 
 Native Envoy Gateway OIDC against Kanidm plus a JWT check on a per-app claim (plan decision D3). It replaces
-the nginx `auth-url` / `auth-signin` annotations (oauth2-proxy at `auth.grigri.cloud`) per app.
+the former nginx `auth-url` / `auth-signin` annotations (oauth2-proxy at `auth.grigri.cloud`) per app.
 Worked examples: `apps/http-echo` (identity headers), `apps/esphome` (internal only),
 `apps/navidrome` (skip paths, Lua body rewrite, 401 without redirect), `apps/radarr` (apiKey skip,
 raw routes).
@@ -360,7 +357,7 @@ raw routes).
      origin: https://<host>/
      redirectUrl:
        - https://<host>/oauth2/callback # one per host (internal and external)
-     # the group(s) of the nginx `allowed_groups=`; Kanidm issues no token to anyone else
+     # the group(s) allowed in; Kanidm issues no token to anyone else
      scopeMap:
        - group: <app>-users
          scopes: [openid, profile, email] # never `groups`: see "ID token cookie size" below
@@ -371,7 +368,7 @@ raw routes).
          valuesMap:
            - group: <app>-users
              values: [<app>]
-     preferShortUsername: true # short `preferred_username`, as oauth2-proxy sent it
+     preferShortUsername: true # short `preferred_username`
      strictRedirectUrl: true
      secretKeyAliases:
        clientSecret: [client-secret] # Envoy Gateway reads this key
@@ -414,7 +411,7 @@ raw routes).
            audiences: [<app>]
            extractFrom: { cookies: [oidc-id-token] }
            remoteJWKS: { uri: https://idm.grigri.cloud/oauth2/openid/<app>/public_key.jwk }
-           claimToHeaders: # only the headers nginx `auth-response-headers` passed
+           claimToHeaders: # only the identity headers the app reads
              - { header: X-Auth-Request-Preferred-Username, claim: preferred_username }
      authorization:
        defaultAction: Deny
@@ -434,7 +431,7 @@ raw routes).
    route: its default name changes when a second route is added, and the policy would then
    target nothing).
 
-### Mapping from nginx
+### Mapping from nginx / oauth2-proxy (for charts and docs that still show it)
 
 | nginx / oauth2-proxy                                        | Envoy Gateway                                                                                                                                       |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -603,9 +600,7 @@ Envoy VIP. `PathPrefix` is segment-based (`/metrics` and `/metrics/x`, not `/met
 `Exact` when only the one path is denied.
 
 The deny applies to the edge only: Prometheus scrapes the Service inside the cluster and is not
-affected. When the nginx equivalent is still needed (only while nginx runs), it is the snippet
-`if ($uri ~ "^/metrics(/|$)") { return 404; }` on the Ingress; nginx matches the normalized `$uri`
-as well.
+affected.
 
 ## Pods that must reach a public name at the gateway VIP
 
@@ -633,18 +628,17 @@ container ports (see "NetworkPolicies"). Remove the alias once the name has a pf
    shows `Accepted=True` and `ResolvedRefs=True` (also for `BackendTLSPolicy`, `Backend`,
    `EnvoyExtensionPolicy`). A pre-existing unrelated OutOfSync resource in `kube-system` does not
    count.
-2. Compare the new VIP with nginx, same request, `--resolve` so DNS is not involved:
+2. Request the route on the VIP, same request as a client would send, `--resolve` so DNS is not
+   involved:
 
    ```bash
    H=<host>
-   for ip in 192.168.193.13 192.168.193.1; do   # internal; use .14 and .4 for external
-     curl -sk --resolve $H:443:$ip -o /dev/null -D- -w 'code=%{http_code} h%{http_version}\n' https://$H/<path>
-   done
+   curl -sk --resolve $H:443:192.168.193.13 -o /dev/null -D- -w 'code=%{http_code} h%{http_version}\n' https://$H/<path>   # internal; .14 for external
    ```
 
-   Expect the same status and body size and the same response headers: on the Envoy side h2, HSTS
-   (once) and no `Server`, nothing else beyond what the app itself sends. Differences that are
-   **expected** and not a defect (seen in every host diff):
+   Expect the status and body the app gives, h2, HSTS (once) and no `Server`, nothing else beyond
+   what the app itself sends. Differences from the former ingress-nginx behaviour that are
+   **expected** and not a defect (they matter when porting an app or reading old captures):
 
    | Observed                                                      | Why                                                                            |
    | ------------------------------------------------------------- | ------------------------------------------------------------------------------ |
@@ -652,11 +646,9 @@ container ports (see "NetworkPolicies"). Remove the alias once the name has a pf
    | empty body on Envoy 404, 403 and redirects                    | the status is what matters; Envoy adds no body                                 |
    | request headers whose name contains an underscore are dropped | Envoy drops them; nothing to fix unless an app needs one (then rename it)      |
    | paths are case-sensitive on Envoy                             | a path nginx matched case-insensitively (`~*`) needs a `(?i)` regex path       |
-   | an app root answering `200` on nginx answers `302`            | seen on nextcloud `/`; compare the redirect target, not the status             |
    | OIDC apps ask for one more login when moving from oauth2-proxy to Envoy native OIDC | new per-host cookies, the old ones are not understood            |
 
-   Anything else is a defect until explained. The comparison with nginx only exists while nginx
-   runs: after Phase 6 compare against the previous release or the app's own expectations instead.
+   Anything else is a defect until explained.
 3. Certificate: `openssl s_client -connect 192.168.193.13:443 -servername $H -alpn h2` shows the
    wildcard certificate (`Verification: OK`, `ALPN protocol: h2`). A request without `-k` must verify.
 4. A functional request per app (an API call, a real page, for a body-size or long request the
