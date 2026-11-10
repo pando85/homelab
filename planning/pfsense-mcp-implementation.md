@@ -30,7 +30,8 @@ fetched file, a line in it, or an image layer. Anything not measured is marked U
 | Which plane | **Admin** (`apps/mcp-gateway-admin`), route `/pfsense/mcp` | Owner directive; pfSense is the network root and must not be reachable from the public plane |
 | How the gateway authenticates to the backend | A generated shared bearer (`MCP_API_KEY`) that the gateway injects via `backendAuth.key` | The server refuses to start on `streamable-http` without it (`src/main.py:131`) |
 | Gateway session mode | **stateless**, proven with the existing probe harness | Stateful mode caches a backend credential per session, which is the recorded reason the Vault route is blocked |
-| How the API-only exposure question is resolved | Open decision, `§3`. Recommended: dedicated egress source IP, then a single-IP pfSense rule | pfSense cannot tell pods apart behind masquerade, and 80 of 86 namespaces have default-allow egress |
+| How the API-only exposure question is resolved | Open decision, `§3`. Recommended: dedicated egress source IP, then a single-IP pfSense rule | pfSense cannot tell pods apart behind masquerade, and 80 of the 86 pod-running namespaces carry no egress policy |
+| Layer-7 filtering ("only API GETs") | Defence in depth on our pod only, never a substitute for the firewall decision; derive the method allowlist by measurement | An egress IP is layer-3 NAT, and L7 rules on HTTPS need TLS termination, which costs the pfSense certificate check (`§3.8`) |
 | Read-only | `MCP_READ_ONLY=true` (correct variable name, verified in source) | Exposes only the 131 read-only tools (`src/main.py:15`) |
 
 ## 2. Verified facts
@@ -71,13 +72,26 @@ Fetched `https://raw.githubusercontent.com/gensecaihq/pfsense-mcp-server/main/RE
 | `MCP_API_KEY` | **yes** for HTTP | - | Bearer the *gateway* must present. The server refuses to start on empty, placeholder or short values (`src/main.py:131-143`) |
 | `MCP_READ_ONLY` | | `false` | `true` exposes only the 131 read-only tools (`src/main.py:15`) |
 | `MCP_ALLOWED_ORIGINS` | | - | README: gateways should add their origin here. Behaviour UNVERIFIED (`§9` U4) |
+| `MCP_ENABLE_LOG_FILES` | | **`true`** | Raw log-file tools (`get_log_file`) read `/var/log/*` on pfSense through a command sink. On by default; set `false` to remove them (`src/main.py:93-95`) |
 
-Two consequences the owner's environment block does not cover:
+Three consequences the owner's environment block does not cover:
 
 1. **`MCP_API_KEY` is missing.** Without it the container starts and exits. It is not an
-   optional hardening knob.
+   optional hardening knob. Validation is `_MIN_API_KEY_LEN = 16` plus a placeholder blocklist
+   (`src/main.py:90-91`), so a generated token must clear both.
 2. **`VERIFY_SSL=true` needs `PFSENSE_CA_FILE`.** The pfSense certificate is self-signed
    (`§2.3`), so verification cannot succeed on the public trust store.
+3. **`MCP_ENABLE_LOG_FILES` defaults to on**, which exposes raw pfSense log files through the
+   MCP. Those logs contain firewall states, VPN usernames and similar material, so this should
+   be set `false` unless the owner wants it explicitly.
+
+**How "read-only" is actually enforced, and why it is not a boundary.**
+`apply_read_only_filter()` keeps a tool only when `classify_risk(name) == RiskLevel.READ`
+(`src/main.py:56-87`, classifier in `src/guardrails.py`). Classification is by **tool name**,
+not by the HTTP method the tool would issue and not by anything pfSense checks. So
+`MCP_READ_ONLY=true` is a convenience filter over the tool registry: it is worth setting, it is
+tested upstream (`tests/test_read_only_mode.py`), and it is still the wrong place to rely on.
+The authorization boundary has to be the pfSense token's own ACL (`§4`).
 
 `/health` is unauthenticated by design ("because `/mcp` requires the bearer token"), which is
 what the probes should use.
@@ -248,6 +262,54 @@ not:
 The owner should treat the DMZ-wide variant as the one to avoid: it turns every pod in the
 cluster into a potential webGUI client for the sake of one read-only integration.
 
+### 3.8 Could a dedicated egress IP filter at layer 7, allowing only API GETs?
+
+Asked by the owner 2026-11-10. Answer: **no, not by itself**, and layer-7 filtering does not
+solve the exposure problem either. Three measured facts:
+
+1. An egress IP is a layer-3 NAT function. `CiliumEgressGatewayPolicy` rewrites the source
+   address; it does not parse HTTP. Its job is to let the pfSense rule name one workload
+   instead of a node (`§3.5`). It cannot inspect methods or paths.
+2. Layer-7 filtering **is** available on this cluster: `enable-l7-proxy=true`,
+   `external-envoy-proxy=true`, and the `cilium-envoy` DaemonSet is ready on all three nodes.
+   No policy in this repo uses L7 rules yet (all four MCP-related CNPs are L3/L4 only), so this
+   would be a first. But for an **HTTPS** destination Envoy can only apply `method` and `path`
+   rules if it terminates the TLS (`terminatingTls` pod-side, `originatingTls` upstream-side,
+   certificates from a Secret). The consequence is a trust substitution: the MCP server would
+   validate *our* proxy certificate instead of pfSense's, removing precisely the property that
+   `VERIFY_SSL=true` plus `PFSENSE_CA_FILE` exists to provide. Upstream's own description of the
+   weaker setting is that it "stops authenticating the firewall".
+3. Filtering our pod does not protect pfSense from the cluster. Egress is unconstrained in 80 of
+   the 86 namespaces that run pods (`§3.3`), and behind masquerade pfSense cannot tell which pod
+   a connection came from. An L7 allowlist on the pfSense MCP pod constrains that pod only. What
+   protects pfSense from everything else is the **source scope of the firewall rule** plus the
+   **token's read-only ACL**.
+
+Where an L7 allowlist is still worth having is as defence in depth on the one workload we
+control: it stops a buggy or compromised MCP pod from reaching `/index.php` or issuing a write,
+it produces an audit log of the paths actually requested, and it is the natural place to
+rate-limit, which removes the sshguard self-DoS of `§2.4`.
+
+| Approach | TLS to pfSense | Cost | Notes |
+|---|---|---|---|
+| Cilium L7 egress policy with TLS termination | terminated by Envoy, re-originated upstream | policy only, no new component | Trust substitution as above; pfSense must accept the re-originated connection without requiring a client certificate (UNVERIFIED, `§9` U8). Would be the first L7 policy in this repo |
+| In-cluster API-only proxy (Option C), MCP talks plaintext to it | the proxy verifies pfSense's certificate against the pinned CA | one small deployment to own | Keeps pfSense TLS verified end-to-end and adds rate limiting plus a path audit log in one place. The pod-to-proxy hop is plaintext and this cluster has **no in-cluster encryption** (no `encryption` or `wireguard` keys in `cilium-config`), so the API key crosses that hop unencrypted unless pod and proxy are pinned to the same node |
+
+**A method allowlist must be measured, not assumed.** A scan of all 44 files under `src/` found
+587 `GET` call sites and only 5 non-`GET`, and all 5 are in `src/client.py`: the shared `_send`
+dispatcher (lines 191-210) and the JWT login POST (line 288), which `AUTH_METHOD=api_key` never
+uses. No tool module contains a hardcoded non-GET method. That is consistent with the read-only
+tools being GET-only but it is not proof, because read-only classification is by name (`§2.2`)
+and methods are passed as parameters. A `GET`-only allowlist has to be derived by running the
+container in read-only mode against a stub pfSense and recording every method and path it
+issues, the way `test/playwright-mcp/session-propagation-probe.py` does for the gateway.
+Guessing either breaks a legitimate read tool or leaves a hole.
+
+Recommendation: treat the egress IP (Option B) as the control that answers "only the API caller
+may reach pfSense", and add the proxy form of L7 filtering only if the audit log, the rate
+limiting or the path allowlist is judged worth a component. Do not adopt Cilium TLS termination
+unless the owner accepts that the MCP will no longer be authenticating the firewall.
+
 ## 4. Credential model
 
 Two independent credentials, and conflating them is the easy mistake.
@@ -300,8 +362,9 @@ later admin backend.
 2. **RFC 9728 discovery.** The template currently adds
    `/.well-known/oauth-protected-resource<path>` as a **second `exact` match on the
    authenticated route**, so a client that fetches metadata before it has a token gets 401
-   instead of JSON. This is the U8 suspicion recorded in
-   `vault-mcp-implementation.md`: real, and it must be fixed before the first admin route
+   instead of JSON. This is the suspicion recorded as U8 in
+   `vault-mcp-implementation.md` (that plan's own numbering, not `§9` here): real, and it must
+   be fixed before the first admin route
    ships. The public plane's measured-good shape is a separate route with `directResponse`
    (`playwright-metadata` in `apps/mcp-gateway/values.yaml`): no authentication, literal
    JSON body, `content-type: application/json`.
@@ -388,6 +451,8 @@ entry for the 401/lockout loop.
 | U4 | Does the MCP require `MCP_ALLOWED_ORIGINS` to include the gateway origin, and does the gateway forward an `Origin` header the backend rejects? | Probe with and without the variable | Would be a silent 403 on every call |
 | U5 | How does the MCP retry on a 401 from pfSense? | Read `src/client.py` retry logic, then test with a deliberately bad token against a stub | Governs the sshguard risk in `§2.4` |
 | U6 | Is `MCP_READ_ONLY` enforced per transport for `streamable-http`, not just stdio? | Source read plus tool listing over HTTP | The whole read-only claim rests on it |
+| U7 | What is the exact set of methods and paths the 131 read-only tools issue? | Run the container with `MCP_READ_ONLY=true` against a stub pfSense and record every request | Decides whether a `GET`-only L7 allowlist is safe (`§3.8`); a wrong guess breaks reads or leaves a hole |
+| U8 | Will pfSense's nginx accept a TLS connection re-originated by Envoy or by our proxy, and does it require or verify client certificates? | One probe from the cluster with a client certificate we mint | Decides whether the Cilium TLS-termination variant of `§3.8` is even possible |
 
 ## 10. Risks
 
@@ -398,6 +463,8 @@ entry for the 401/lockout loop.
 | First admin route: discovery, credential injection and isolation are all untested on this plane | Medium | Probe locally before deploying; the public plane's measured patterns are the reference |
 | Supply chain: personal Docker Hub mirror for a router-management tool | Medium | Pin the digest, cite the upstream source in the chart, re-check the digest on any bump |
 | Read-only filter is server-side, not an authorization boundary | Medium | The pfSense token's own ACL must be read-only as well; verify by attempting a write with the token directly |
+| `MCP_READ_ONLY` classifies tools **by name** (`classify_risk`), so a misnamed tool would survive the filter | Medium | Treat the token ACL as the boundary, keep the L7 allowlist question open (`§3.8`), and diff the served tool list against upstream's read-only set at acceptance |
+| Log-file tools are enabled by default and read pfSense `/var/log/*` through a command sink | Medium | Set `MCP_ENABLE_LOG_FILES=false` unless the owner explicitly wants log access |
 | amd64-only image | Low | All current nodes are amd64; a future arm64 node cannot schedule it |
 
 ## 11. Explicitly not in scope
