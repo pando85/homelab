@@ -6,7 +6,7 @@ The homelab runs **three separate MinIO instances**, each with a distinct purpos
 
 | Instance | Path | Host | Network Exposure | Purpose |
 |----------|------|------|------------------|---------|
-| **Internal** | `platform/minio/` | `s3.internal.grigri.cloud` | Cluster-only (`nginx-internal`) | In-cluster object storage, Velero backups, Kaniop backups |
+| **Internal** | `platform/minio/` | `s3.internal.grigri.cloud` | Cluster-only (internal Envoy Gateway) | In-cluster object storage, Velero backups, Kaniop backups |
 | **Public** | `apps/s3-public/` | `s3.grigri.cloud` | Internet-facing (`nginx-external`) | Apps that serve presigned URLs to browsers (e.g., Readest book downloads) |
 | **Cross-backups** | `apps/cross-backups/` | `cross-backups.grigri.cloud` | Internet-facing (`nginx-external`) | Receiving backups pushed from external machines |
 
@@ -17,7 +17,7 @@ The homelab runs **three separate MinIO instances**, each with a distinct purpos
 **Characteristics:**
 - Namespace: `minio`
 - Host: `s3.internal.grigri.cloud`
-- Ingress class: `nginx-internal` (cluster-only, not reachable from internet)
+- Route: internal Envoy Gateway `192.168.193.13` (cluster-only, not reachable from internet; DNS points there since Phase 4 on 2026-11-09, the `nginx-internal` Ingress stays only until the nginx removal)
 - Storage: ZFS-backed PVC
 - Authentication: Kanidm OIDC for console access
 
@@ -167,7 +167,7 @@ Does your app need S3-compatible object storage?
 
 **Root cause:** Internal MinIO ingress was changed to `nginx-external` or a new external ingress was added.
 
-**Fix:** Internal MinIO must use `nginx-internal` only. If you need internet-accessible storage, use `apps/s3-public/`.
+**Fix:** Internal MinIO must be routed through the internal Envoy Gateway (`192.168.193.13`) only. If you need internet-accessible storage, use `apps/s3-public/`.
 
 ### Confusing cross-backups with public MinIO
 
