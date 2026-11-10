@@ -293,6 +293,7 @@ prometheus-node-exporter:
 
 prometheus:
   prometheusSpec:
+    externalUrl: https://prometheus.internal.grigri.cloud/
     replicas: 1
     retentionSize: 100GB
     retention: 240d
