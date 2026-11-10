@@ -97,8 +97,13 @@ def main():
                   "--port" in args and "8931" in args, f"args={args}")
             check("args include --host 0.0.0.0",
                   "--host" in args and "0.0.0.0" in args, f"args={args}")
-            check("args include --user-data-dir /tmp/browser-profile",
-                  "--user-data-dir" in args and "/tmp/browser-profile" in args,
+            # Guards the exact combination that crash-looped v0.0.85 on the
+            # first deploy: --user-data-dir together with isolated mode makes
+            # the server exit 1 ("Browser userDataDir is not supported in
+            # isolated mode"). This asserts ABSENCE, not presence.
+            check("args omit --user-data-dir (incompatible with isolated mode)",
+                  "--user-data-dir" not in args
+                  and not any("browser-profile" in a for a in args),
                   f"args={args}")
             # env HOME=/tmp
             env = {e["name"]: e.get("value") for e in c.get("env", [])}
@@ -107,6 +112,11 @@ def main():
             check("PLAYWRIGHT_MCP_ISOLATED=true env var",
                   env.get("PLAYWRIGHT_MCP_ISOLATED") == "true",
                   f"PLAYWRIGHT_MCP_ISOLATED={env.get('PLAYWRIGHT_MCP_ISOLATED')}")
+            # The env form of the same flag breaks startup identically, so
+            # guarding only the CLI arg would leave the failure reachable.
+            check("no PLAYWRIGHT_MCP_USER_DATA_DIR env (same incompatibility)",
+                  "PLAYWRIGHT_MCP_USER_DATA_DIR" not in env,
+                  f"env keys={sorted(env)}")
             # probes
             for probe_name in ("livenessProbe", "readinessProbe", "startupProbe"):
                 probe = c.get(probe_name)

@@ -83,18 +83,24 @@ app-template:
             - "8931"
             - --host
             - "0.0.0.0"
-            - --user-data-dir
-            - /tmp/browser-profile
+            # NO `--user-data-dir`. It is incompatible with isolated mode and
+            # the server refuses to start when both are set. Measured on
+            # v0.0.85 during the first deploy:
+            #   Error: Browser userDataDir is not supported in isolated mode.
+            # exit 1, same second as start, CrashLoopBackOff. Upstream defines
+            # --isolated as "keep the browser profile in memory, do not save
+            # it to disk", so an on-disk profile path contradicts it.
           env:
             # Redirect HOME into the writable /tmp emptyDir so Chromium's
             # ~/.cache and fontconfig writes land on the tmpfs volume.
             # Mirrors the pattern used by apps/firecrawl-mcp.
             HOME: /tmp
-            # Stage 1: ephemeral browser profile, no PVC. The profile
-            # stays in memory for the life of the process and is wiped
-            # when the container restarts. A persisted profile would be
-            # a cookie store that Velero replicates to S3, so it needs
-            # an explicit owner decision before being enabled.
+            # Stage 1: ephemeral browser profile, no PVC. Upstream:
+            # "--isolated: keep the browser profile in memory, do not
+            # save it to disk", so no cookie store ever lands on a
+            # volume. A persisted profile would be a cookie store that
+            # Velero replicates to S3, so it needs an explicit owner
+            # decision before being enabled.
             PLAYWRIGHT_MCP_ISOLATED: "true"
             # The default `--allowed-hosts` is localhost, loopback IPs
             # and the value of --host (0.0.0.0). A port-forward client

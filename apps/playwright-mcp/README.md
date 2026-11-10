@@ -61,10 +61,16 @@ bearer-mode auth for an MCP client is unverified.
 
 ### Ephemeral browser profile
 
-Stage 1 uses an ephemeral browser profile (no PVC). The profile stays in
-memory for the life of the process and is wiped when the container restarts.
-A persisted profile would be a cookie store that Velero replicates to S3, so
-it needs an explicit owner decision before being enabled.
+Stage 1 uses an ephemeral browser profile (no PVC), set by
+`PLAYWRIGHT_MCP_ISOLATED=true`. Upstream defines `--isolated` as "keep the
+browser profile in memory, do not save it to disk", so no cookie store ever
+lands on a volume. A persisted profile would be a cookie store that Velero
+replicates to S3, so it needs an explicit owner decision before being enabled.
+
+Isolated mode and `--user-data-dir` are mutually exclusive: setting both makes
+v0.0.85 exit 1 at startup with "Browser userDataDir is not supported in
+isolated mode". `test/playwright-mcp/chart-checks.py` asserts the absence of
+both the flag and its `PLAYWRIGHT_MCP_USER_DATA_DIR` env form.
 
 ## Image facts
 
