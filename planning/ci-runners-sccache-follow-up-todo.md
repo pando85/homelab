@@ -93,6 +93,32 @@ Baseline before the changes (2026-11-03 to 2026-11-10):
   job lasts about 6 s. Decide whether a small runner label for change detection and lint is
   worth it. A queue-time measurement from the Forgejo API would back the decision.
 
+## Evaluated and rejected: cargo-nextest (2026-11-10)
+
+Measured locally on a Calypso worktree (cargo-nextest 0.9.151, same build artifacts, 4065 tests
+in 11 binaries, identical counts and skips under both runners, 3 alternating rounds each):
+
+| Scenario | `cargo test` median | nextest median | Change |
+|---|---|---|---|
+| Postgres, pinned to 8 cores (amd64-like) | 616.8 s | 610.4 s | -1.0% |
+| Postgres, pinned to 14 cores (prusik-like) | 382.7 s | 374.4 s | -2.2% |
+| Postgres, 32 cores, no cap | 406.9 s | 306.9 s | -24.6%, but 2 of 3 runs failed |
+
+- No gain at CI core counts. `calypso-control-plane` holds ~98% of test time and already
+  saturates the cores, so scheduling across binaries adds nothing.
+- Process-per-test bypasses the 12-database limit in
+  `crates/calypso-control-plane/src/db/test_support.rs` (`MAX_CONCURRENT`). Postgres hit
+  "too many clients already" at 32 threads. The fix (a 12-thread cap) also removes the gain.
+
+Follow-ups for Calypso, if test time is to be cut:
+
+- [ ] `api::public_api::tests::billing_routes_need_billing_read_scope` takes 126-137 s by itself:
+  it builds a full `AppState` 12 times without a database. It is the floor of the test phase.
+- [ ] The ~30-40 s Postgres-backed tests (for example runner-display `stage2_*`).
+- [ ] `scripts/ci/run-with-transient-retry.sh` would treat a failing test whose output contains
+  `error: failed to open` as a transient build error and retry it three times. Only relevant if a
+  runner other than `cargo test` is adopted.
+
 ## Later
 
 - [ ] **Separate disk or volume for `/srv/ci-runner` on k8s-amd64-1**, so CI cannot push the
