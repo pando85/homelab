@@ -7,8 +7,8 @@ The homelab runs **three separate MinIO instances**, each with a distinct purpos
 | Instance | Path | Host | Network Exposure | Purpose |
 |----------|------|------|------------------|---------|
 | **Internal** | `platform/minio/` | `s3.internal.grigri.cloud` | Cluster-only (internal Envoy Gateway) | In-cluster object storage, Velero backups, Kaniop backups |
-| **Public** | `apps/s3-public/` | `s3.grigri.cloud` | Internet-facing (`nginx-external`) | Apps that serve presigned URLs to browsers (e.g., Readest book downloads) |
-| **Cross-backups** | `apps/cross-backups/` | `cross-backups.grigri.cloud` | Internet-facing (`nginx-external`) | Receiving backups pushed from external machines |
+| **Public** | `apps/s3-public/` | `s3.grigri.cloud` | Internet-facing (external Envoy Gateway) | Apps that serve presigned URLs to browsers (e.g., Readest book downloads) |
+| **Cross-backups** | `apps/cross-backups/` | `cross-backups.grigri.cloud` | Internet-facing (external Envoy Gateway) | Receiving backups pushed from external machines |
 
 ## Internal MinIO (`platform/minio/`)
 
@@ -17,7 +17,7 @@ The homelab runs **three separate MinIO instances**, each with a distinct purpos
 **Characteristics:**
 - Namespace: `minio`
 - Host: `s3.internal.grigri.cloud`
-- Route: internal Envoy Gateway `192.168.193.13` (cluster-only, not reachable from internet; DNS points there since Phase 4 on 2026-11-09, the `nginx-internal` Ingress stays only until the nginx removal)
+- Route: internal Envoy Gateway `192.168.193.13` (cluster-only, not reachable from internet)
 - Storage: ZFS-backed PVC
 - Authentication: Kanidm OIDC for console access
 
@@ -64,7 +64,7 @@ Add `<app>Password` to Vault `/minio/users` and update `platform/minio/templates
 **Characteristics:**
 - Namespace: `s3-public`
 - Host: `s3.grigri.cloud` (S3 API), `mc-s3.grigri.cloud` (console)
-- Ingress class: `nginx-external` (internet-facing)
+- Route: external Envoy Gateway `192.168.193.14` (internet-facing)
 - Storage: ZFS-backed PVC (500Gi)
 - Authentication: Kanidm OIDC for console access (`s3-public-users` group)
 - Node: Pinned to `prusik`
@@ -111,7 +111,7 @@ See `docs/deployment/s3-public.md` for the full pattern.
 **Characteristics:**
 - Namespace: `cross-backups`
 - Host: `cross-backups.grigri.cloud`
-- Ingress class: `nginx-external` (internet-facing)
+- Route: external Envoy Gateway `192.168.193.14` (internet-facing)
 - Storage: ZFS-backed PVC
 - Authentication: Kanidm OIDC for console access
 
@@ -165,7 +165,7 @@ Does your app need S3-compatible object storage?
 
 **Symptom:** Security concern — backup infrastructure is internet-accessible.
 
-**Root cause:** Internal MinIO ingress was changed to `nginx-external` or a new external ingress was added.
+**Root cause:** The internal MinIO route was moved to the external Gateway or a new external route was added.
 
 **Fix:** Internal MinIO must be routed through the internal Envoy Gateway (`192.168.193.13`) only. If you need internet-accessible storage, use `apps/s3-public/`.
 

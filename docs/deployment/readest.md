@@ -5,7 +5,7 @@ Readest is an open-source ebook reader with a self-hosted stack. This deployment
 - **Zalando Postgres operator** for the database
 - **Public MinIO** (`apps/s3-public/`) for S3 storage (externally reachable for book downloads)
 - **kaniop** for OIDC integration with Kanidm
-- **nginx ingress** for path-based routing (no Kong)
+- **Envoy Gateway `HTTPRoute`s** for path-based routing (no Kong)
 
 ## Architecture
 
@@ -24,7 +24,7 @@ Internal:
   auth   ──► idm.grigri.cloud (Kanidm OIDC via kaniop)
 ```
 
-Single domain `readest.grigri.cloud` with nginx path-based routing. No separate API gateway (Kong) needed.
+Single domain `readest.grigri.cloud` with path-based `HTTPRoute` rules. No separate API gateway (Kong) needed.
 
 ## Controllers
 
@@ -198,9 +198,9 @@ The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Di
    - Change button label from "Discord" to "Kanidm"
    - Remove Google, Apple, and GitHub buttons from the UI
 
-2. **Nginx Rewrite**: Added `configuration-snippet` to the API ingress that rewrites the `provider` parameter from any hardcoded value to `custom:kanidm`. This ensures the backend always uses our custom Kanidm provider.
+2. **Provider redirect (Envoy Lua)**: an `EnvoyExtensionPolicy` on the `/auth/v1/authorize` route (`templates/envoy-extension-policy.yaml`) redirects any hardcoded `provider` value to `custom:kanidm`. This ensures the backend always uses our custom Kanidm provider.
 
-3. **Nginx Redirect**: Added `server-snippet` to the client ingress that redirects `/callback` to `/auth/v1/callback`. This routes Kanidm's OAuth callback to GoTrue's callback endpoint.
+3. **Callback redirect**: an `Exact` `/callback` rule with a `RequestRedirect` filter sends `/callback` to `/auth/v1/callback`. This routes Kanidm's OAuth callback to GoTrue's callback endpoint.
 
 4. **Custom OAuth Provider in GoTrue**: The `db-migrate` init container auto-inserts the custom OAuth provider into the `auth.custom_oauth_providers` table (idempotent `INSERT ... ON CONFLICT DO UPDATE`), bypassing GoTrue's SSRF protection that blocks private IPs. Credentials come from the kaniop-managed `readest-kanidm-oauth2-credentials` secret. The provider is configured with:
    - `identifier`: `custom:kanidm`
@@ -217,11 +217,11 @@ The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Di
 **OAuth Flow:**
 1. User clicks "Sign in with Kanidm" in Readest
 2. Init container has already patched the UI to use `provider:"custom:kanidm"`
-3. Nginx rewrites any provider parameter to `custom:kanidm` (belt and suspenders)
+3. The Lua policy redirects any provider parameter to `custom:kanidm` (belt and suspenders)
 4. GoTrue redirects to Kanidm's OAuth2 endpoint
 5. User authenticates with Kanidm
 6. Kanidm redirects to `/callback`
-7. Nginx redirects `/callback` to `/auth/v1/callback` (GoTrue's callback endpoint)
+7. The route redirects `/callback` to `/auth/v1/callback` (GoTrue's callback endpoint)
 8. GoTrue completes the authentication and redirects back to Readest
 9. User is logged in and sees their library
 
@@ -230,11 +230,11 @@ The Readest frontend hardcodes OAuth provider buttons (Google, Apple, GitHub, Di
 The official Android APK works against this deployment, but it cannot be patched like the web
 image (its JS is bundled in the APK), so login depends entirely on the server side:
 
-1. **Nginx provider rewrite preserves `redirect_to`.** The APK always sends
-   `provider=discord&redirect_to=readest://auth-callback`. The API ingress
-   `configuration-snippet` rewrites the provider to `custom:kanidm` while keeping `redirect_to`
-   (default web callback URL when absent). Uses flag variables + `return 302` — see the
-   troubleshooting doc for the nginx pitfalls ("if is evil", rewrite loops).
+1. **The provider redirect preserves `redirect_to`.** The APK always sends
+   `provider=discord&redirect_to=readest://auth-callback`. The Lua policy redirects the provider
+   to `custom:kanidm` while keeping `redirect_to` (default web callback URL when absent). It
+   ports the former nginx snippet exactly; the troubleshooting doc keeps the nginx pitfalls as
+   history.
 2. **`GOTRUE_URI_ALLOW_LIST` includes `readest://auth-callback`**, otherwise GoTrue silently
    ignores the deep-link redirect target and sends the browser back to the web UI.
 3. **`GOTRUE_CORS_ALLOWED_HEADERS: apikey`.** The Tauri WebView is cross-origin with the API, so
@@ -269,7 +269,7 @@ This integration required several workarounds due to limitations in GoTrue and R
 **Attempted Solutions:**
 - Custom Docker image - rejected to avoid maintenance burden
 - Runtime configuration (`OAUTH_PROVIDERS` env var) - Readest doesn't support this
-- CSS/JavaScript injection via nginx - didn't work reliably with Next.js SPA
+- CSS/JavaScript injection at the proxy - didn't work reliably with Next.js SPA
 
 **Workaround:** Init container patches the compiled JavaScript bundles at pod startup:
 - Searches for `provider:"discord"` and replaces with `provider:"custom:kanidm"`
@@ -298,13 +298,17 @@ The init container runs on every pod start, so changes are applied automatically
 - Find GoTrue config to override callback path - doesn't exist
 - Update Kanidm client to accept `/callback` - works but doesn't solve routing
 
-**Workaround:** Nginx redirect from `/callback` to `/auth/v1/callback`:
+**Workaround:** route redirect from `/callback` to `/auth/v1/callback` (query kept), in the
+`external` and `internal` routes of `apps/readest/values.yaml`:
 
 ```yaml
-nginx.ingress.kubernetes.io/server-snippet: |
-  location = /callback {
-    return 301 /auth/v1/callback$is_args$args;
-  }
+- matches:
+    - path: {type: Exact, value: /callback}
+  filters:
+    - type: RequestRedirect
+      requestRedirect:
+        statusCode: 301
+        path: {type: ReplaceFullPath, replaceFullPath: /auth/v1/callback}
 ```
 
 **Impact:** Adds a redirect hop to the OAuth flow. The Kanidm client must accept both `/callback` and `/auth/v1/callback` as valid redirect URLs.
@@ -319,7 +323,7 @@ nginx.ingress.kubernetes.io/server-snippet: |
 
 **Workaround:**
 1. Init container patches UI to send `provider:"custom:kanidm"` instead of `provider:"discord"`
-2. Nginx rewrite converts any remaining hardcoded provider params to `custom:kanidm`
+2. The Lua redirect converts any remaining hardcoded provider params to `custom:kanidm`
 
 **Impact:** The init container must patch all occurrences of the provider string in the JavaScript bundles.
 
@@ -373,8 +377,8 @@ Readest is a freemium SaaS product with tiered quotas. For self-hosted deploymen
 | Hack | Why | Maintenance Burden |
 |------|-----|-------------------|
 | Init container patches JS bundles | Readest UI hardcoded | Medium - must update if UI changes |
-| Nginx rewrite for provider param (preserves `redirect_to`) | Web UI hardcoded + APK can't be patched | Medium - snippet must survive UI/URL changes |
-| Nginx redirect `/callback` → `/auth/v1/callback` | GoTrue callback URL construction | Low |
+| Lua redirect for provider param (preserves `redirect_to`) | Web UI hardcoded + APK can't be patched | Medium - the script must survive UI/URL changes |
+| Route redirect `/callback` → `/auth/v1/callback` | GoTrue callback URL construction | Low |
 | Manual DB insert for custom provider | GoTrue SSRF protection | High - not GitOps-managed |
 | `db-migrate` init container | Automates schema setup (auth, extensions, graphql_public, roles, migrations) | Low - fully automated |
 | Database search_path | GoTrue can't find auth schema | Low - one-time per DB |
@@ -389,11 +393,11 @@ Mobile login deep-dive (flow, root causes, diagnosis): `docs/troubleshooting/rea
 Most breakage happens after **Renovate bumps `ghcr.io/readest/readest` or `supabase/gotrue`**.
 After merging such PRs, always smoke-test: web login (Kanidm button) and mobile login.
 
-**Triage first:** web broken → provider row / init patch / nginx snippets. Mobile-only broken →
+**Triage first:** web broken → provider row / init patch / Lua redirect / callback route. Mobile-only broken →
 CORS, `GOTRUE_URI_ALLOW_LIST`, provider rewrite. Quick check chain:
 
 ```bash
-curl -sI  "https://readest.grigri.cloud/auth/v1/authorize?provider=discord&redirect_to=readest://auth-callback" | grep -i location   # nginx rewrite
+curl -sI  "https://readest.grigri.cloud/auth/v1/authorize?provider=discord&redirect_to=readest://auth-callback" | grep -i location   # Lua redirect
 curl -sI  "https://readest.grigri.cloud/callback" | grep -i location                                                                 # callback redirect
 curl -s -D - -o /dev/null -X OPTIONS "https://readest.grigri.cloud/auth/v1/user" \
   -H "Origin: https://tauri.localhost" -H "Access-Control-Request-Method: GET" \
@@ -420,7 +424,7 @@ curl -s -D - -o /dev/null -X OPTIONS "https://readest.grigri.cloud/auth/v1/user"
   Diff old vs new bundle to see what changed (minifier output shifts between releases), adapt the
   `sed` expressions, `helm lint` + `helm template`, commit. Re-verify the login screen after sync.
 
-#### 2. Nginx provider rewrite no longer triggers (login lands on web UI / "unsupported provider")
+#### 2. Provider redirect no longer triggers (login lands on web UI / "unsupported provider")
 
 - **Symptoms:** mobile login completes but stays in browser; GoTrue logs show
   `provider=discord` reaching `/authorize` (rewrite skipped) or provider errors.
@@ -428,18 +432,19 @@ curl -s -D - -o /dev/null -X OPTIONS "https://readest.grigri.cloud/auth/v1/user"
   `provider=custom:kanidm&redirect_to=readest://auth-callback`. Check what the app actually sends:
   `adb logcat -s NativeBridgePlugin` → `Launching OAuth URL:` (new APK versions may change the URL
   shape, e.g. new provider ids, extra params, PKCE `code_challenge`).
-- **Fix:** update the `configuration-snippet` gate conditions in `apps/readest/values.yaml`
-  (both `readest-api` and `external-api` ingresses). Keep the nginx "if is evil" rules in
-  `docs/troubleshooting/readest-android-oauth.md` in mind: no nested `if`, no `map` in snippets,
-  `return 302` instead of `rewrite ... last`.
+- **Fix:** update the Lua script in `apps/readest/templates/envoy-extension-policy.yaml` (it
+  applies to the internal and external `*-authorize` routes). Prove the change with the first
+  `curl` above and with a query that must pass untouched. Changing an `EnvoyExtensionPolicy`
+  drains the listener (`docs/troubleshooting/envoy-gateway-listener-drain.md`).
 
 #### 3. `/callback` returns 404 after Kanidm login
 
 - **Symptoms:** browser shows a Next.js 404 on `readest.grigri.cloud/callback?code=...`.
 - **Diagnose:** second `curl` above must return `301 → /auth/v1/callback`. Verify the
-  `server-snippet` exists on both client ingresses (`readest-client`, `external-client`).
-- **Fix:** restore the `location = /callback { return 301 /auth/v1/callback$is_args$args; }`
-  server-snippet.
+  `/callback` redirect rule exists on both the internal and external routes
+  (`kubectl get httproute -n readest`).
+- **Fix:** restore the `Exact` `/callback` rule with the `RequestRedirect` filter in
+  `apps/readest/values.yaml`.
 
 #### 4. Login fails for everyone after DB recreation/restore (custom provider row lost)
 
@@ -505,7 +510,7 @@ claims. See `docs/troubleshooting/readest-android-oauth.md`.
 
 If Readest adds support for custom OAuth providers via runtime configuration, we can:
 - Remove the init container
-- Remove the nginx rewrite
+- Remove the Lua redirect policy
 - Use standard GoTrue custom OAuth provider registration (if SSRF protection is relaxed)
 
 If GoTrue adds support for private hosts in custom OAuth providers, we can:
@@ -550,38 +555,22 @@ S3_SECRET_ACCESS_KEY:
 `S3_ENDPOINT` is the in-cluster service for server-side reads/writes; `S3_PUBLIC_ENDPOINT` is the
 external host embedded in presigned URLs the browser fetches.
 
-## Ingress (nginx)
+## Routes (Gateway API)
 
-Single domain with path-based routing:
+Single domain with path-based routing, in the `route:` block of `apps/readest/values.yaml`:
+`readest-internal` (`readest.internal.grigri.cloud`, internal Gateway) and `readest-external`
+(`readest.grigri.cloud`, external Gateway), each with these rules:
 
-```yaml
-ingress:
-  readest:
-    enabled: true
-    className: nginx-internal  # + external ingress
-    annotations:
-      nginx.ingress.kubernetes.io/proxy-body-size: "0"  # large book uploads
-    hosts:
-      - host: readest.grigri.cloud
-        paths:
-          - path: /auth/v1
-            pathType: Prefix
-            service:
-              identifier: auth
-              port: http
-          - path: /rest/v1
-            pathType: Prefix
-            service:
-              identifier: rest
-              port: http
-          - path: /
-            pathType: Prefix
-            service:
-              identifier: client
-              port: http
-```
+| Match | Action |
+|---|---|
+| `/auth/v1` prefix | rewrite the prefix to `/`, backend `auth:9999` |
+| `/rest/v1` prefix | rewrite the prefix to `/`, backend `rest:3000` |
+| `/callback` exact | 301 to `/auth/v1/callback` |
+| everything else | backend `client:3000` |
 
-Both internal (`readest.internal.grigri.cloud`) and external (`readest.grigri.cloud`) ingresses.
+`/auth/v1/authorize` has its own routes (`*-authorize`) carrying the Lua `EnvoyExtensionPolicy`.
+There is no body limit on Envoy, so large book uploads need nothing extra. Recipes:
+[`gateway-api-routes.md`](../conventions/gateway-api-routes.md).
 
 ## Secrets (Vault)
 
@@ -790,6 +779,7 @@ apps/readest/
     ├── external-secrets.yaml        # Vault: JWT, MinIO readest user password, OIDC secret
     ├── kanidm-oauth2-client.yaml    # kaniop OIDC client
     ├── kanidm-group.yaml            # kaniop readest-users group
+    ├── envoy-extension-policy.yaml  # Lua redirect of the OAuth provider on /auth/v1/authorize
     └── configmap-init-sql.yaml      # Supabase bootstrap SQL (roles, schema, migrations)
 ```
 

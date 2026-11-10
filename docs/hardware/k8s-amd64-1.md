@@ -132,8 +132,8 @@ lspci -nn
    not transcoding or ML. The iGPU (Lucienne) is present but not exposed to containers.
 
 7. **2.5 GbE ceiling matters for ingress** — `externalTrafficPolicy: Local` with a BGP LB IP
-   (`system/ingress-nginx/values.yaml:94-96`) means a replica on this node would add a hop and a
-   bandwidth ceiling to Jellyfin streams served from prusik.
+   (`system/envoy-gateway/resources/envoyproxy-*.yaml`) means an Envoy proxy replica on this node would
+   add a hop and a bandwidth ceiling to Jellyfin streams served from prusik.
 
 8. **BIOS version 0302 is from 2021-03-10** — there are documented reports of random freezes on the
    PN51-E1 that a BIOS update mitigates. If the node exhibits hangs, check for a newer BIOS before

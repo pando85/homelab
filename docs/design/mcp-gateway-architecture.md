@@ -327,11 +327,8 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 ### Ingress
 
 - Gateway: Envoy gateway `external` (VIP 192.168.193.14) for public plane via HTTPRoute, Envoy
-  gateway `internal` (VIP 192.168.193.13) for admin plane. The old nginx Ingress objects still exist
-  and ingress-nginx still runs, but they carry no MCP traffic (measured 2026-11-10: gateway access-log
-  `src.addr` values are the external Envoy proxy pods). nginx remains the documented rollback path
-  until ingress-migration Phase 6, which is why the CiliumNetworkPolicies still list the nginx
-  controllers
+  gateway `internal` (VIP 192.168.193.13) for admin plane. ingress-nginx is gone; the
+  CiliumNetworkPolicies admit the Envoy proxy pods only
 - MCP backends: No ingress resources. All traffic through gateway
 
 ## Baseline Security Controls

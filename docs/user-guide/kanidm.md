@@ -249,12 +249,11 @@ After next login, you will receive groups `uuid` and groups `spn` in the token:
 }
 ```
 
-**Note**: When groups scope is activated your header size will be above 4k so you will need to add
-this annotation to your ingress:
-
-```yaml
-nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
-```
+**Note**: Do not request the `groups` scope for a login that goes through an Envoy Gateway
+`SecurityPolicy`: the ID token then carries every group of the person and its cookie exceeds the
+4096 B browser limit ([ID token cookie size](../troubleshooting/envoy-oidc-id-token-cookie-size.md)).
+Use a per-app claim map instead
+([Authentication](../conventions/gateway-api-routes.md#authentication)).
 
 ## Upgrade
 

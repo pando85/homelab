@@ -8,7 +8,7 @@ content to clients outside the cluster (e.g. Readest book downloads via presigne
 
 This instance is separate from:
 - **`platform/minio/`** — internal-only MinIO for cluster backups (Velero, Kaniop). Host
-  `s3.internal.grigri.cloud`, `nginx-internal` ingress. **Not** reachable from the internet.
+  `s3.internal.grigri.cloud`, internal Envoy Gateway route. **Not** reachable from the internet.
 - **`apps/cross-backups/`** — external MinIO that *receives* backups from other machines. Host
   `cross-backups.grigri.cloud`.
 
@@ -33,17 +33,16 @@ In-cluster app (e.g. readest-client)
 ```
 
 - **Namespace:** `s3-public`
-- **Node:** pinned to `prusik` (via `nodeSelector`), alongside `ingress-nginx-external` and
-  `cross-backups` MinIO.
+- **Node:** pinned to `prusik` (via `nodeSelector`), alongside `cross-backups` MinIO.
 - **Storage:** ZFS PVC `s3-public` (500Gi, `openebs-zfspv`, expandable).
-- **Ingress:** `nginx-external` for both S3 API and console.
+- **Route:** `HTTPRoute`s on the external Envoy Gateway for both S3 API and console.
 
 ## Endpoints
 
-| Purpose | URL | Ingress class |
+| Purpose | URL | Gateway |
 |---|---|---|
-| S3 API | `https://s3.grigri.cloud` | nginx-external |
-| MinIO Console | `https://mc-s3.grigri.cloud` | nginx-external |
+| S3 API | `https://s3.grigri.cloud` | external |
+| MinIO Console | `https://mc-s3.grigri.cloud` | external |
 | In-cluster S3 | `http://s3-public-minio.s3-public.svc:9000` | — |
 
 ## Console OIDC
@@ -110,10 +109,10 @@ is the external host baked into presigned URLs the browser fetches.
 ## Deployment steps
 
 1. Create the Vault secret (see above).
-2. Commit `apps/s3-public/` — ArgoCD creates the namespace, PVC, MinIO, ingresses, OIDC client.
-3. Wait for the pod + TLS certs:
+2. Commit `apps/s3-public/` — ArgoCD creates the namespace, PVC, MinIO, routes, OIDC client.
+3. Wait for the pod and for the routes to be `Accepted`:
    ```bash
-   kubectl --context=grigri get pods,ingress -n s3-public
+   kubectl --context=grigri get pods,httproute -n s3-public
    ```
 4. Add your user to the `s3-public-users` Kanidm group for console access.
 5. Point the consuming app (Readest) at the new endpoints and commit.
@@ -125,7 +124,7 @@ is the external host baked into presigned URLs the browser fetches.
 ```
 apps/s3-public/
 ├── Chart.yaml                          # minio chart dependency (5.4.0)
-├── values.yaml                         # MinIO config, external ingress, OIDC, readest bucket/user
+├── values.yaml                         # MinIO config, external route, OIDC, readest bucket/user
 └── templates/
     ├── pvc.yaml                        # ZFS PVC (500Gi)
     ├── external-secrets-users.yaml     # Vault /s3-public/users

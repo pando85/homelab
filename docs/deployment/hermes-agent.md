@@ -19,8 +19,8 @@ Parameterize by instance name `N` (e.g., `hermes`, `hermes-2`, `hermes-3`):
 | Namespace | `hermes-N` |
 | Controller/Pod | `hermes-N` / `hermes-N-0` |
 | PVC | `hermes-N-data` |
-| Ingress | `hermes-N.internal.grigri.cloud` |
-| Kanidm OAuth2 Client | `hermes-N` |
+| Route | `hermes-N.internal.grigri.cloud` (`HTTPRoute` `hermes-N-internal`) |
+| Kanidm OAuth2 Client | `hermes-N` (dashboard login) and `hermes-N-envoy` (gateway `SecurityPolicy`) |
 | Kanidm Group | `hermes-users` (shared across all instances) |
 | ServiceAccount | `hermes-agent` (in namespace `hermes-N`) |
 | Snapshot Schedule | `hermes-N-zfs-backups` |
@@ -55,13 +55,15 @@ Copy from an existing instance and replace:
 - `HERMES_DASHBOARD_PUBLIC_URL`: `https://hermes-N.internal.grigri.cloud`
 - `HERMES_DASHBOARD_OIDC_ISSUER`: `https://idm.grigri.cloud/oauth2/openid/hermes-N`
 - Secret name: `hermes-kanidm-oauth2-credentials` → `hermes-N-kanidm-oauth2-credentials`
-- Ingress host: `hermes.internal.grigri.cloud` → `hermes-N.internal.grigri.cloud`
-- TLS secret: `hermes-dashboard-tls-certificate` → `hermes-N-dashboard-tls-certificate`
+- Route host and `forceRename`: `hermes.internal.grigri.cloud` → `hermes-N.internal.grigri.cloud`, `hermes-internal` → `hermes-N-internal`
 - PVC claim: `hermes-data` → `hermes-N-data`
 - `advancedMounts` keys: `hermes` → `hermes-N`
 
-**Important**: Keep `allowed_groups=hermes-users@idm.grigri.cloud` in ingress annotations — all
-instances share the same Kanidm group.
+**Important**: the `SecurityPolicy` (`templates/security-policy.yaml`) and the `hermes-N-envoy`
+client (`templates/kanidm-oauth2-client-envoy.yaml`) keep the scope map group `hermes-users` — all
+instances share the same Kanidm group — but each instance has its own client and its own claim
+value (`access` = `[hermes-N-envoy]`). Recipe:
+[`gateway-api-routes.md`](../conventions/gateway-api-routes.md#authentication).
 
 ### 4. Create `templates/pvc.yaml`
 
@@ -255,7 +257,7 @@ If RBAC Roles have the same name across instances (e.g., `hermes-agent-radarr` i
 
 ### Dashboard Refuses to Bind (No Auth Provider)
 
-Dashboard logs `Refusing to bind dashboard to 0.0.0.0` and ingress returns 502. **Solution**: Ensure `HERMES_DASHBOARD_OIDC_ISSUER` is set and the Kanidm OAuth2 client is registered with the correct origin and redirect URL.
+Dashboard logs `Refusing to bind dashboard to 0.0.0.0` and the route returns 502. **Solution**: Ensure `HERMES_DASHBOARD_OIDC_ISSUER` is set and the Kanidm OAuth2 client is registered with the correct origin and redirect URL.
 
 ### Kanidm Rejects Redirect URI
 
@@ -273,7 +275,7 @@ Each instance needs its own Kanidm OAuth2 client with a unique issuer URL (`open
 
 - [ ] Kanidm users are members of `hermes-users` group (shared across all instances)
 - [ ] DNS propagated for `hermes-N.internal.grigri.cloud`
-- [ ] TLS certificate issued (check cert-manager)
+- [ ] Route and `SecurityPolicy` `Accepted` (`kubectl get httproute,securitypolicy -n hermes-N`)
 - [ ] Dashboard accessible at `https://hermes-N.internal.grigri.cloud`
 - [ ] OIDC login works (Kanidm OAuth2 client registered)
 - [ ] Inference provider configured

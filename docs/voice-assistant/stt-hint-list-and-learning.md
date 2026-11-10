@@ -332,8 +332,8 @@ Retention and access:
   declared in `apps/home-assistant/templates/postgresql.yaml`; credentials from the operator
   Secret. Velero backups then hold up to 30 days of text too, which should be accepted
   explicitly. A small SQLite file on its own PVC is the lighter alternative.
-- access: only the collector and the owner; no ingress; the review page (3.5) behind the existing
-  `oauth2-proxy`. Prometheus metrics expose counts only.
+- access: only the collector and the owner; no ingress; the review page (3.5) behind an Envoy Gateway
+  `SecurityPolicy`. Prometheus metrics expose counts only.
 - the whisper INFO transcript lines: either drop them in Vector for `container="whisper"` or
   patch the server to log them at DEBUG; otherwise they stay in Loki for 180 days alongside the
   store. Owner decision.
@@ -377,7 +377,7 @@ Review and approval:
 
 - weekly: a Home Assistant persistent notification with counts only ("12 proposals, local success
   rate 81 % (+3)"), linking to the review page;
-- review page: a small internal page (the collector's own, behind `oauth2-proxy`) listing
+- review page: a small internal page (the collector's own, behind an Envoy Gateway `SecurityPolicy`) listing
   proposals with approve or reject; approving an alias writes nothing to Home Assistant by itself,
   it produces the exact change for the owner to make or confirm;
 - generic changes (code, manifests, generic prefix words, metric and dashboard definitions) go
