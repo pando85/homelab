@@ -1,7 +1,5 @@
-# Envoy Gateway route (ingress-nginx migration), alongside the operator-generated Ingress
-# (`spec.ingress` in vault.yaml), which stays until the switch. The operator never deletes an
-# Ingress it created, so `spec.ingress` is not removed here. Internal route: the external-dns
-# annotation publishes its name (the Gateway address).
+# Envoy Gateway route for the Vault UI/API. Internal route: the external-dns annotation publishes
+# its name (the Gateway address).
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -21,7 +19,7 @@ spec:
           port: 8200
 ---
 # Vault listens on TLS with an operator-generated certificate (SANs: vault, vault.vault,
-# vault.vault.svc.cluster.local). Same trust as nginx `backend-protocol: HTTPS` plus validation
+# vault.vault.svc.cluster.local), validated
 # against the operator CA (`ca.crt` of the `vault-tls` Secret, rotated by the operator).
 apiVersion: gateway.networking.k8s.io/v1
 kind: BackendTLSPolicy

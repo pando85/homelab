@@ -94,29 +94,6 @@ spec:
   # Specify threshold for renewing certificates. Valid time units are "ns", "us", "ms", "s", "m", "h".
   # tlsExpiryThreshold: 168h
 
-  ingress:
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      external-dns.kubernetes.io/enabled: "true"
-      nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
-    spec:
-      ingressClassName: nginx-internal
-      rules:
-        - host: &host vault.internal.grigri.cloud
-          http:
-            paths:
-              - backend:
-                  service:
-                    name: vault
-                    port:
-                      number: 8200
-                path: /
-                pathType: Prefix
-      tls:
-        - hosts:
-            - *host
-          secretName: vault-tls-certificate
-
   volumeMounts:
     - name: vault-file
       mountPath: /vault/file
