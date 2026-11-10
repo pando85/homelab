@@ -4,6 +4,7 @@ namespace: ci-runners
 resources:
   - resources/configmap.yaml
   - resources/configmap-amd64.yaml
+  - resources/configmap-docker-daemon.yaml
   - resources/external-secret-keda.yaml
   - resources/external-secret-runner.yaml
   - resources/external-secret-runner-amd64.yaml

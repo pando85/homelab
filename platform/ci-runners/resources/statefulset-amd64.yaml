@@ -153,6 +153,10 @@ spec:
           volumeMounts:
             - name: docker-certs
               mountPath: /certs
+            - name: docker-daemon-config
+              mountPath: /etc/docker/daemon.json
+              subPath: daemon.json
+              readOnly: true
             - name: ci-runner-docker
               mountPath: /var/lib/docker
             - name: runner-data
@@ -216,12 +220,29 @@ spec:
               value: /tmp
             - name: DOCKER_HOST
               value: unix:///sock/docker.sock
-            # `df -P /var/lib/docker` measures the node's 113.8 GiB root
-            # filesystem, shared with k3s itself, so this loop is the only thing
-            # keeping CI below kubelet's DiskPressure eviction line
-            # (host_vars/k8s-amd64-1.yml `nodefs.available`). DinD is the
-            # dominant consumer: calypso builds leave ~7 GiB images per commit
-            # that no container references after the push.
+            # Low/medium tiers are keyed on Docker's own footprint (the summed Size
+            # column of `docker system df`) against DOCKER_BUDGET_GB, NOT on the
+            # filesystem. `df -P /var/lib/docker` measures the node's 113.8 GiB root
+            # fs, shared with k3s, /srv/ci-runner/{workspace,cache} and the OS
+            # (2026-11-10: Docker ~12 GiB of 78 GiB used), so a df trigger pruned
+            # Docker to fight growth Docker had not caused and reclaimed 0 B.
+            # Budget 25 GB: with ~22 GiB cache, ~18 GiB workspace and ~22 GiB
+            # k3s/OS the node then peaks near 70%, below the 78% emergency line.
+            # LOW/MED are percentages of the budget (15 GB / 20 GB).
+            #
+            # Low/medium also run only while the runner is idle (see runner_busy):
+            # a prune racing an image pull made jobs fail with `No such image`
+            # right after `docker pull` (dockerd: `lease does not exist`). A busy
+            # runner skips them with one log line per interval.
+            #
+            # The emergency tier (THRESHOLD_HIGH) still uses the filesystem
+            # percentage and runs regardless of activity: this loop is the only
+            # thing keeping CI below kubelet's DiskPressure eviction line
+            # (host_vars/k8s-amd64-1.yml `nodefs.available`). Whatever else fills
+            # the root fs (cache, workspace, OS) is not Docker's to free, but
+            # emptying Docker is the one lever this container has. DinD is the
+            # dominant consumer when builds burst: calypso builds leave ~7 GiB
+            # images per commit that no container references after the push.
             #
             # Retention is NOT age-based above MED: `docker image prune --filter
             # until=` compares against the image's *creation* time, so freshly
@@ -232,18 +253,14 @@ spec:
             #
             # 120s because a CI burst grew usage ~4.5 GiB per 10 minutes, i.e.
             # 600s could cross a whole tier unobserved.
-            #
-            # Low/medium tiers run only while the runner is idle (see runner_busy
-            # in the script). A prune racing an image pull made jobs fail with
-            # `No such image` right after `docker pull` (2026-11-10, dockerd:
-            # `lease does not exist`). A busy runner skips them with one log line
-            # per interval. The emergency tier (THRESHOLD_HIGH) runs regardless.
             - name: CHECK_INTERVAL
               value: "120"
+            - name: DOCKER_BUDGET_GB
+              value: "25"
             - name: THRESHOLD_LOW
               value: "60"
             - name: THRESHOLD_MED
-              value: "70"
+              value: "80"
             - name: THRESHOLD_HIGH
               value: "78"
           command:
@@ -251,8 +268,9 @@ spec:
             - -c
             - |
               CHECK_INTERVAL="${CHECK_INTERVAL:-120}"
+              DOCKER_BUDGET_GB="${DOCKER_BUDGET_GB:-25}"
               THRESHOLD_LOW="${THRESHOLD_LOW:-60}"
-              THRESHOLD_MED="${THRESHOLD_MED:-70}"
+              THRESHOLD_MED="${THRESHOLD_MED:-80}"
               THRESHOLD_HIGH="${THRESHOLD_HIGH:-78}"
               DOCKER_QUIET_SECONDS="${DOCKER_QUIET_SECONDS:-180}"
               DOCKER_STATE_DIR="${DOCKER_STATE_DIR:-/var/lib/docker/containerd/daemon}"
@@ -265,8 +283,40 @@ spec:
 
               trap cleanup TERM INT
 
+              # Filesystem usage (%) of the volume holding /var/lib/docker. Only the emergency
+              # tiers use it.
               get_disk_usage() {
                 df -P /var/lib/docker 2>/dev/null | awk 'NR==2 {print $5}' | tr -d '%' || echo 0
+              }
+
+              # Docker's own footprint in MB: the sum of the Size column of `docker system df`
+              # (images, containers, volumes, build cache). Exits 1 when the output cannot be
+              # parsed, so an unknown size is never mistaken for 0. Docker prints decimal
+              # units (B, kB, MB, GB, TB); shared layers can be counted twice, which errs
+              # towards pruning earlier.
+              get_docker_used_mb() {
+                docker system df --format '{{json .}}' 2>/dev/null | awk '
+                  function to_mb(s,   n, u) {
+                    n = s + 0
+                    u = s
+                    sub(/^[0-9.]+/, "", u)
+                    u = tolower(u)
+                    if (u == "b") return n / 1000000
+                    if (u == "kb") return n / 1000
+                    if (u == "mb") return n
+                    if (u == "gb") return n * 1000
+                    if (u == "tb") return n * 1000000
+                    bad = 1
+                    return 0
+                  }
+                  match($0, /"Size":"[^"]*"/) {
+                    total += to_mb(substr($0, RSTART + 8, RLENGTH - 9))
+                    rows++
+                  }
+                  END {
+                    if (rows == 0 || bad) exit 1
+                    printf "%d\n", total
+                  }'
               }
 
               # Prints why the runner is busy and returns 0, or returns 1 when it is idle.
@@ -350,32 +400,37 @@ spec:
                 ran=false
 
                 if [ "$usage" -ge "$THRESHOLD_HIGH" ]; then
-                  # Emergency tier: runs even while a job is active. In-use images,
-                  # containers and volumes are protected by dockerd itself; everything else
-                  # goes.
+                  # Emergency tier: keyed on the filesystem and run even while a job is
+                  # active. In-use images, containers and volumes are protected by dockerd
+                  # itself; everything else goes.
                   echo "high disk usage (${usage}%), pruning all unused images, build cache and volumes"
                   docker container prune -f || true
                   docker image prune -af || true
                   docker builder prune -af || true
                   docker volume prune -af || true
                   ran=true
-                elif [ "$usage" -ge "$THRESHOLD_LOW" ]; then
-                  if busy_reason=$(runner_busy); then
-                    echo "busy, skipping non-emergency cleanup (${busy_reason})"
-                  elif [ "$usage" -ge "$THRESHOLD_MED" ]; then
-                    echo "medium disk usage (${usage}%), pruning build cache and unused images (24h retention)"
+                elif busy_reason=$(runner_busy); then
+                  echo "busy, skipping non-emergency cleanup (${busy_reason})"
+                elif used_mb=$(get_docker_used_mb); then
+                  budget_pct=$((used_mb * 100 / (DOCKER_BUDGET_GB * 1000)))
+                  echo "docker footprint: ${used_mb} MB, ${budget_pct}% of the ${DOCKER_BUDGET_GB} GB budget"
+                  if [ "$budget_pct" -ge "$THRESHOLD_MED" ]; then
+                    echo "medium docker footprint (${budget_pct}% of budget), pruning build cache, unused images (24h retention) and anonymous volumes"
                     docker container prune -f || true
                     docker image prune -af --filter "until=24h" || true
                     docker builder prune -af --filter "until=24h" || true
+                    docker volume prune -f || true
                     ran=true
-                  else
-                    echo "low disk usage (${usage}%), pruning dangling images and containers"
+                  elif [ "$budget_pct" -ge "$THRESHOLD_LOW" ]; then
+                    echo "low docker footprint (${budget_pct}% of budget), pruning dangling images and containers"
                     docker image prune -f || true
                     docker container prune -f || true
                     ran=true
+                  else
+                    echo "docker footprint below budget threshold (${budget_pct}%), skipping cleanup"
                   fi
                 else
-                  echo "disk usage below threshold (${usage}%), skipping cleanup"
+                  echo "cannot read docker usage, skipping non-emergency cleanup"
                 fi
 
                 if [ "$ran" = true ]; then
@@ -465,6 +520,9 @@ spec:
             name: runner-registration-amd64
         - name: docker-certs
           emptyDir: {}
+        - name: docker-daemon-config
+          configMap:
+            name: docker-daemon-amd64
         - name: docker-run
           emptyDir: {}
         - name: sccache-s3-credentials

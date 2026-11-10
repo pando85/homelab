@@ -166,7 +166,7 @@ See `docs/troubleshooting/openebs-zfspv-slow-startup-fsgroup.md` before setting 
 
 | Workload | Actual | Character |
 |---|---|---|
-| `ci-runner-docker` (dind data-root) | 32.4 G | sustained write churn; docker-gc prunes at 80-95% |
+| `ci-runner-docker` (dind data-root) | 32.4 G | sustained write churn; docker-gc prunes at 60/80% of a 30 GB Docker budget (idle only) and at 90/95% of the filesystem (always) |
 | `ci-runner-cache` | 11 G | 7-day retention |
 | `/workspace` tmpfs | 1.8 G of 8Gi | small-file churn, in RAM |
 | Forgejo `data-gitea-zfs-0` | 33.5 G (37.1G phys) | `packages/` OCI ≈32G dominates |

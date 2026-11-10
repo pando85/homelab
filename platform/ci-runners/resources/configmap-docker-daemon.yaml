@@ -1,0 +1,54 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docker-daemon
+data:
+  # Mounted as /etc/docker/daemon.json in the `daemon` container; dockerd reads it
+  # next to the --host/--tlsverify flags that dockerd-entrypoint.sh passes.
+  #
+  # BuildKit cache self-limit. `defaultMaxUsedSpace` is the cap on the whole
+  # build cache; BuildKit's GC (runs about a minute after builds) prunes the
+  # least recently used records beyond it. 8 GB on prusik: the cache was 12 GB (6.4 GB reclaimable) on a PVC
+  # that Docker, /cache and /workspace share; with ~8 GB images the budget stays under 30 GB.
+  # Checked on docker:29.9.3-dind: with a 300MB cap, 315MB of cache shrank to
+  # 210MB within ~2 minutes ("gc cleaned up ..." in the daemon log); the legacy
+  # `defaultKeepStorage` key behaves the same (734MB to 210MB). Unknown keys under `builder.gc`
+  # are NOT rejected by `dockerd --validate`, so verify by behaviour.
+  # Only cache not referenced by an image or a running build is eligible.
+  daemon.json: |
+    {
+      "builder": {
+        "gc": {
+          "enabled": true,
+          "defaultMaxUsedSpace": "8GB"
+        }
+      }
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docker-daemon-amd64
+data:
+  # Mounted as /etc/docker/daemon.json in the `daemon` container; dockerd reads it
+  # next to the --host/--tlsverify flags that dockerd-entrypoint.sh passes.
+  #
+  # BuildKit cache self-limit. `defaultMaxUsedSpace` is the cap on the whole
+  # build cache; BuildKit's GC (runs about a minute after builds) prunes the
+  # least recently used records beyond it. 8 GB on k8s-amd64-1: about a third of the 25 GB Docker budget, the rest is
+  # for images and volumes.
+  # Checked on docker:29.9.3-dind: with a 300MB cap, 315MB of cache shrank to
+  # 210MB within ~2 minutes ("gc cleaned up ..." in the daemon log); the legacy
+  # `defaultKeepStorage` key behaves the same (734MB to 210MB). Unknown keys under `builder.gc`
+  # are NOT rejected by `dockerd --validate`, so verify by behaviour.
+  # Only cache not referenced by an image or a running build is eligible.
+  daemon.json: |
+    {
+      "builder": {
+        "gc": {
+          "enabled": true,
+          "defaultMaxUsedSpace": "8GB"
+        }
+      }
+    }
