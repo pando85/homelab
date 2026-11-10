@@ -1,6 +1,9 @@
 ---
-# Port of the nginx-external `sub_filter`: send `#/login` landings to `/`. Only plain
-# (uncompressed) HTML is buffered and rewritten, never audio or API responses.
+# Port of the nginx-external `sub_filter`, extended: when the session (Navidrome JWT or OIDC) has
+# expired the SPA switches client-side to its useless `#/login` form. The injected script reloads
+# `/app/` on load and on `hashchange` so the proxy re-authenticates; a 30 s `sessionStorage` guard
+# stops a reload loop if `#/login` persists. Only plain (uncompressed) HTML is buffered and
+# rewritten, never audio or API responses. Same policy for both hosts.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyExtensionPolicy
 metadata:
@@ -20,6 +23,29 @@ spec:
           local body = handle:body()
           if body == nil then return end
           local out, n = body:getBytes(0, body:length()):gsub("</html>",
-            '<script>if(location.hash==="#/login"){location.replace("/")}</script></html>')
+            '<script>(function(){function f(){if(location.hash!=="#/login")return;try{var t=+sessionStorage.getItem("ndr")||0;if(Date.now()-t<3e4)return;sessionStorage.setItem("ndr",Date.now())}catch(e){return}location.replace("/app/")}f();addEventListener("hashchange",f)})()</script></html>')
+          if n > 0 then body:setBytes(out) end
+        end
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyExtensionPolicy
+metadata:
+  name: navidrome-internal
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: navidrome-internal
+  lua:
+    - type: Inline
+      inline: |
+        function envoy_on_response(handle)
+          local ct = handle:headers():get("content-type") or ""
+          if not ct:find("text/html", 1, true) then return end
+          if handle:headers():get("content-encoding") ~= nil then return end
+          local body = handle:body()
+          if body == nil then return end
+          local out, n = body:getBytes(0, body:length()):gsub("</html>",
+            '<script>(function(){function f(){if(location.hash!=="#/login")return;try{var t=+sessionStorage.getItem("ndr")||0;if(Date.now()-t<3e4)return;sessionStorage.setItem("ndr",Date.now())}catch(e){return}location.replace("/app/")}f();addEventListener("hashchange",f)})()</script></html>')
           if n > 0 then body:setBytes(out) end
         end

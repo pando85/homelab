@@ -22,6 +22,12 @@ spec:
     redirectURL: https://navidrome.internal.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
+    # API calls get 401, not a cross-origin 302 the SPA reports as a CORS failure
+    denyRedirect:
+      headers:
+        - name: ":path"
+          type: RegularExpression
+          value: "/(api|auth)([/?].*)?"
     scopes: [openid, profile, email]
     cookieNames:
       accessToken: oidc-access-token
@@ -78,12 +84,13 @@ spec:
     redirectURL: https://navidrome.grigri.cloud/oauth2/callback
     # the default `/logout` would shadow the app's own path
     logoutPath: /oauth2/logout
-    # nginx-external served `/api` from its own Ingress without `auth-signin`: 401, no redirect
+    # nginx-external served `/api` from its own Ingress without `auth-signin`: 401, no redirect.
+    # `/auth` (login/refresh) too: a cross-origin 302 to the IdP is a CORS failure in the SPA
     denyRedirect:
       headers:
         - name: ":path"
           type: RegularExpression
-          value: "/api([/?].*)?"
+          value: "/(api|auth)([/?].*)?"
     scopes: [openid, profile, email]
     cookieNames:
       accessToken: oidc-access-token

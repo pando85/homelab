@@ -17,7 +17,8 @@ app-template:
             ND_REVERSEPROXYWHITELIST: "10.0.0.0/8"
             ND_SCANSCHEDULE: 1h
             ND_LOGLEVEL: info
-            ND_SESSIONTIMEOUT: 24h
+            # matches the Envoy OIDC refresh-token window
+            ND_SESSIONTIMEOUT: 168h
             ND_DATAFOLDER: /data
             ND_MUSICFOLDER: /music
             ND_AUTOIMPORTPLAYLISTS: "true"
@@ -67,7 +68,13 @@ app-template:
           namespace: envoy-gateway
           sectionName: https-internal-grigri-cloud
       rules:
-        - backendRefs:
+        - filters:
+            # plain HTML for the Lua `#/login` rewrite (templates/envoy-extension-policy.yaml)
+            - type: RequestHeaderModifier
+              requestHeaderModifier:
+                remove:
+                  - Accept-Encoding
+          backendRefs:
             - identifier: navidrome
               port: 4533
     internal-subsonic:
