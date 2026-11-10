@@ -96,7 +96,7 @@ How names resolve (pfSense host overrides, NAT reflection, hairpin, the two VIPs
 
 external-dns publishes a route only when it carries the opt-in annotation
 `external-dns.kubernetes.io/enabled: "true"`. The record target is not set on routes: the
-**external Gateway** carries `external-dns.alpha.kubernetes.io/target: grigri.cloud` and the internal
+**external Gateway** carries `external-dns.kubernetes.io/target: grigri.cloud` and the internal
 Gateway has none.
 
 - **External route:** annotation `external-dns.kubernetes.io/enabled: "true"` and nothing else (no

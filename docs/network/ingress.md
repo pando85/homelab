@@ -84,12 +84,23 @@ external-dns publishes to Cloudflare with policy `upsert-only` and sources `serv
 `gateway-httproute` and `crd`.
 
 - **Opt-in:** a route is published only with `external-dns.kubernetes.io/enabled: "true"`.
-- **External Gateway:** carries `external-dns.alpha.kubernetes.io/target: grigri.cloud`, so an
+- **External Gateway:** carries `external-dns.kubernetes.io/target: grigri.cloud`, so an
   annotated route on it produces a CNAME to `grigri.cloud`. A route cannot produce an A record
   there. For an A record (for example a name that must resolve to a private IP, as
   `idm.isidoro.grigri.cloud` does) use a `DNSEndpoint` (the `crd` source). The tenant owns the
   `DNSEndpoint` holding `*.app.staging.forkline.dev`.
 - **Internal Gateway:** has no target annotation, so annotated routes get A records to `.13`.
+- **Annotation prefix:** since external-dns v0.22.0 only `external-dns.kubernetes.io/*` is read
+  (this cluster runs v0.23.0). `external-dns.alpha.kubernetes.io/*` annotations (`target`,
+  `hostname`, `ttl`, ...) are silently ignored; there is no fallback. v0.23.0 added the opt-in flag
+  `--enable-legacy-annotation-prefix` (off by default, the configured prefix wins when both are
+  present, planned for removal). Trap: `--annotation-filter` matches the raw annotation key, so a
+  filter written with the legacy key would still select objects while their legacy `target` is
+  ignored; an object meant to get a CNAME then gets an A record from its status IP, and where a
+  CNAME already exists Cloudflare rejects it with error 81054 and the whole batch fails. The filter
+  here uses the non-alpha `enabled` key, so the 11 tenant Ingresses that still carry
+  `external-dns.alpha.kubernetes.io/enabled` are ignored entirely and their records are frozen
+  until the Ingresses go away in Phase 6.
 - **Upsert-only:** external-dns never deletes or reverts a record. Removing an annotation, or rolling
   a route back, leaves the record in Cloudflare. To roll back a moved record, edit it in Cloudflare
   by hand **and** revert the source in git; otherwise external-dns re-asserts the record within its
