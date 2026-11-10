@@ -155,6 +155,63 @@ app-template:
           backendRefs:
             - identifier: navidrome
               port: 4533
+    # PWA manifest: browsers fetch it without credentials (no login redirect)
+    internal-manifest:
+      kind: HTTPRoute
+      annotations:
+        external-dns.kubernetes.io/enabled: "true"
+      forceRename: navidrome-internal-manifest
+      hostnames:
+        - navidrome.internal.grigri.cloud
+      parentRefs:
+        - name: internal
+          namespace: envoy-gateway
+          sectionName: https-internal-grigri-cloud
+      rules:
+        - matches:
+            - path:
+                type: Exact
+                value: /app/manifest.webmanifest
+          filters:
+            - type: RequestHeaderModifier
+              requestHeaderModifier:
+                remove:
+                  # bypass routes carry no SecurityPolicy: never let a client choose the user
+                  - X-Auth-Request-User
+                  - X-Auth-Request-Email
+                  - X-Auth-Request-Preferred-Username
+                  - X-Auth-Request-Groups
+                  - X-Auth-Request-Access-Token
+          backendRefs:
+            - identifier: navidrome
+              port: 4533
+    external-manifest:
+      kind: HTTPRoute
+      forceRename: navidrome-external-manifest
+      hostnames:
+        - navidrome.grigri.cloud
+      parentRefs:
+        - name: external
+          namespace: envoy-gateway
+          sectionName: https-grigri-cloud
+      rules:
+        - matches:
+            - path:
+                type: Exact
+                value: /app/manifest.webmanifest
+          filters:
+            - type: RequestHeaderModifier
+              requestHeaderModifier:
+                remove:
+                  # bypass routes carry no SecurityPolicy: never let a client choose the user
+                  - X-Auth-Request-User
+                  - X-Auth-Request-Email
+                  - X-Auth-Request-Preferred-Username
+                  - X-Auth-Request-Groups
+                  - X-Auth-Request-Access-Token
+          backendRefs:
+            - identifier: navidrome
+              port: 4533
 
   defaultPodOptions:
     securityContext:
