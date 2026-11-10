@@ -1388,7 +1388,8 @@ Gate 2 auth status (2026-11-09):
       spoofed identity headers (navidrome, radarr), skip boundaries identical to nginx
 - [x] logout clears the Envoy cookies (no Kanidm end-session: next request re-logs silently)
 - [x] client secret and HMAC delivered (bogus-code exchange reaches Kanidm's code check)
-- [ ] **owner**: interactive login per app through the VIPs (throwaway Chromium profile with
+- [ ] **owner**: interactive login per app through the VIPs (login itself done 2026-11-10 after
+      the cookie size fix, see G3; the checks listed here are still open) (throwaway Chromium profile with
       `--host-resolver-rules`, command in the procedure doc): 200, `x-auth-request-*` values in
       the http-echo JSON, a client-sent `X-Auth-Request-Preferred-Username` not echoed (copy the
       Cookie header into a `0600` file, `curl -H @file -H 'X-Auth-Request-Preferred-Username:
@@ -1935,7 +1936,19 @@ only. `8bbf3b3fc` (KanidmGroup `http-echo-users`, owner account added by hand), 
 scope map and policy), `c856f4cc2` (dropped the second group claim from 11 policies; checked that no
 member gained access), `cbc808b9f` (docs). No SecurityPolicy references `k8s-oauth2-proxy-users`; it
 remains only in the `k8s-oauth2-proxy` client scope map and is deleted with `system/oauth2-proxy` in
-step 2. Untested: interactive login, 403 for a logged-in non-member.
+step 2. Untested: 403 for a logged-in non-member.
+
+Interactive login (2026-11-10): found broken in every browser. The `groups` scope put every group
+of the person in the ID token, the encrypted `oidc-id-token` cookie was 5680 B and the browser
+dropped it (> 4096 B): Envoy refreshed on every request, parallel asset requests reused the
+refresh token, Kanidm ended the session and assets failed with CORS errors. Fixed by dropping the
+`groups` scope everywhere and authorizing on a per-app claim map (`access: [<client name>]` for
+`<app>-users`): `87d36c4cf` (http-echo pilot), `3056771f7` (the other 17 OIDC policies, 15
+clients). Verified in Chromium with a passkey login: `oidc-id-token` 993 to 1014 B, cookies set
+once at the callback, no refresh per request; bazarr, navidrome (external), esphome (internal) and
+http-echo answer 200 on every app request across reloads (only the web app manifest, fetched
+without cookies, still gets the 302). Details:
+`docs/troubleshooting/envoy-oidc-id-token-cookie-size.md`.
 
 - Facts (live 2026-11-10): 18 OIDC SecurityPolicies (`oidc` + `jwt`, `defaultAction: Deny`,
   `refreshToken: true`, no `cookieDomain`, no `forwardAccessToken`). Every app has its own Kanidm
@@ -2123,7 +2136,9 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
   creations and updates; secrets delivered (bogus-code check). One transient `initial fetch timed
   out` for two SDS secrets when a policy became valid together with its Secret; it recovered.
   Not exercised: deliberate delete/recreate churn (needs `kubectl delete`).
-- Interactive OIDC login, Envoy 403 and the Lua `#/login` rewrite: owner test (Gate 2).
+- ~~Interactive OIDC login~~ **Done (2026-11-10):** broken by the ID token cookie size, fixed and
+  verified (G3, `87d36c4cf`, `3056771f7`). Still open: Envoy 403 for a logged-in non-member and
+  the Lua `#/login` rewrite (owner test, Gate 2).
 - Websockets silent for more than 60 s (esphome logs, Home Assistant) are expected to be cut by
   `streamIdleTimeout` like nginx; unproven on a silent websocket (the pilots only have SignalR,
   which pings every 15 s).

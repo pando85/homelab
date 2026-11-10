@@ -338,7 +338,7 @@ calls `https://<public name>` hits it. None of the first pilots had a policy in 
 
 ## Authentication
 
-Native Envoy Gateway OIDC against Kanidm plus a JWT group check (plan decision D3). It replaces
+Native Envoy Gateway OIDC against Kanidm plus a JWT check on a per-app claim (plan decision D3). It replaces
 the nginx `auth-url` / `auth-signin` annotations (oauth2-proxy at `auth.grigri.cloud`) per app.
 Worked examples: `apps/http-echo` (identity headers), `apps/esphome` (internal only),
 `apps/navidrome` (skip paths, Lua body rewrite, 401 without redirect), `apps/radarr` (apiKey skip,
@@ -363,7 +363,14 @@ raw routes).
      # the group(s) of the nginx `allowed_groups=`; Kanidm issues no token to anyone else
      scopeMap:
        - group: <app>-users
-         scopes: [openid, profile, email, groups]
+         scopes: [openid, profile, email] # never `groups`: see "ID token cookie size" below
+     # per-app claim the SecurityPolicy authorizes on; value = this client's name
+     claimMap:
+       - name: access
+         joinStrategy: array # JSON array, matched by `valueType: StringArray`
+         valuesMap:
+           - group: <app>-users
+             values: [<app>]
      preferShortUsername: true # short `preferred_username`, as oauth2-proxy sent it
      strictRedirectUrl: true
      secretKeyAliases:
@@ -398,7 +405,7 @@ raw routes).
        clientSecret: { name: <app>-kanidm-oauth2-credentials }
        redirectURL: https://<host>/oauth2/callback
        logoutPath: /oauth2/logout # the default `/logout` shadows the app's own path
-       scopes: [openid, profile, email, groups]
+       scopes: [openid, profile, email] # no `groups`: the ID token cookie must stay < 4096 B
        cookieNames: { accessToken: oidc-access-token, idToken: oidc-id-token }
      jwt:
        providers:
@@ -412,15 +419,15 @@ raw routes).
      authorization:
        defaultAction: Deny
        rules:
-         - name: allowed-groups
+         - name: allowed-access
            action: Allow
            principal:
              jwt:
                provider: kanidm
                claims:
-                 - name: groups
+                 - name: access # claim map of the client, members of `<app>-users` only
                    valueType: StringArray
-                   values: [<app>-users@idm.grigri.cloud] # SPN form, same as `allowed_groups=`
+                   values: [<app>] # the client name: a token of another client never matches
    ```
 
 3. **The route** with a stable name (`forceRename` in app-template when the release has a single
@@ -431,8 +438,8 @@ raw routes).
 
 | nginx / oauth2-proxy                                        | Envoy Gateway                                                                                                                                       |
 | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth-url ...?allowed_groups=<g>@idm.grigri.cloud`          | client `scopeMap` group `<g>` + `authorization` allow on `groups` = `<g>@idm.grigri.cloud`                                                         |
-| `auth-url` without `allowed_groups`                         | no global group: give the app its own `<app>-users` (scope map and `authorization`), as http-echo                                                   |
+| `auth-url ...?allowed_groups=<g>@idm.grigri.cloud`          | client `scopeMap` group `<g>` + `claimMap` `access` = `[<app>]` for `<g>` + `authorization` allow on `access` = `<app>`                          |
+| `auth-url` without `allowed_groups`                         | no global group: give the app its own `<app>-users` (scope map and claim map), as http-echo                                                         |
 | `auth-response-headers: X-Auth-Request-Preferred-Username`  | `claimToHeaders` `preferred_username` (`X-Auth-Request-User` / `-Email`: `email`, oauth2-proxy's default user claim)                                |
 | `X-Auth-Request-Groups`                                     | `claimToHeaders` cannot copy arrays: add a `claimMap` with `joinStrategy: csv` on the client and map that string claim                             |
 | `auth-url` without `auth-signin` (401, no redirect)         | `oidc.denyRedirect.headers: [{name: ":path", type: RegularExpression, value: "/api([/?].*)?"}]` (navidrome external `/api`)                        |
@@ -532,7 +539,8 @@ chromium --user-data-dir="$(mktemp -d)" \
 Expect: Kanidm login and consent, then the http-echo JSON with `x-auth-request-preferred-username`
 (short name) and `x-auth-request-email`; `https://http-echo.grigri.cloud/oauth2/logout` clears the
 cookies; a person outside the scope map group is refused by Kanidm at `/ui/oauth2`; an Envoy 403
-(`RBAC: access denied`) needs a token whose `groups` lack the allowed SPN (see the plan, Gate 2).
+(`RBAC: access denied`) needs a token whose `access` claim lacks the client name (see the plan,
+Gate 2).
 
 ### Gotchas
 
@@ -546,6 +554,17 @@ cookies; a person outside the scope map group is refused by Kanidm at `/ui/oauth
   connect failures; a Navidrome login proved the exchange).
 - Envoy logs the raw cookie value when it cannot decrypt a token cookie (`failed to decrypt token:`
   in the proxy log): only forged or stale cookies hit it, but treat the proxy log as sensitive.
+- **ID token cookie size:** Envoy stores the whole ID token, encrypted, in `oidc-id-token`. The
+  browser drops a cookie whose name and value exceed 4096 B, without an error. Envoy then finds no
+  ID token, refreshes on every request, parallel requests reuse the single-use refresh token and
+  Kanidm ends the session: assets get a 302 to `idm.grigri.cloud` and fail with CORS errors. The
+  `groups` scope (every group of the person) took the cookie to 5680 B; without it, and with the
+  `access` claim map instead, it is about 1000 B. Never request `groups` on an Envoy OIDC client;
+  add claims only through a small claim map. Symptom, cause and how to measure:
+  `docs/troubleshooting/envoy-oidc-id-token-cookie-size.md`.
+- A web app manifest (`<link rel="manifest">` without `crossorigin="use-credentials"`) is fetched
+  without cookies: it always gets the 302 to Kanidm and logs one CORS error per page load. Harmless
+  for the page; it is not the cookie size problem above (that one fails the app's own requests).
 
 ## Denying a path at the edge
 

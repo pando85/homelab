@@ -11,7 +11,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
 - [ArgoCD](#argocd) (6 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
-- [Networking](#networking) (9 entries)
+- [Networking](#networking) (10 entries)
 - [Storage & Backup](#storage--backup) (13 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
@@ -194,6 +194,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   query-string API keys leak into proxy logs; Argo shows `Progressing` for a label-selected
   `BackendTrafficPolicy` and only refreshes on webhooks.
   See `docs/troubleshooting/envoy-gateway-debugging.md`
+
+- Envoy Gateway OIDC: a browser silently drops a cookie over 4096 B. The `groups` scope made the
+  encrypted `oidc-id-token` cookie 5.6 KB: Envoy refreshed on every request, parallel requests
+  reused the refresh token and assets failed with CORS errors after login. Never request `groups`;
+  authorize on a per-app claim map (`access`).
+  See `docs/troubleshooting/envoy-oidc-id-token-cookie-size.md`
 
 - Armbian kernel 6.12 on Odroid HC4 breaks Cilium UDP BPF masquerading — hold kernel at 6.6 LTS
   (`24.11.1`). See `docs/troubleshooting/armbian-kernel-bpf-masquerade.md`
