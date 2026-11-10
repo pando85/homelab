@@ -5,8 +5,10 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-options: ServerSideApply=true
     # Argo does not diff a field that was removed from git (server-side apply keeps no last-applied
-    # annotation), so dropping `spec.ingress` alone never reached the cluster. Changing the
-    # metadata forces one apply that prunes it and lets the operator delete its Ingress.
+    # annotation), so dropping `spec.ingress` alone never reached the cluster. This annotation
+    # forced one apply that pruned the fields Argo owned. The remaining `spec.ingress` fields
+    # belong to older managers and need a manual `remove /spec/ingress` patch before the
+    # operator deletes its Ingress.
     homelab.grigri.cloud/spec-ingress-removed: "2026-11-10"
 spec:
   domain: idm.grigri.cloud
