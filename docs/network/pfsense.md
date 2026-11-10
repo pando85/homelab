@@ -59,7 +59,7 @@ auto-associated with each redirect.
 
 | Rule | Ports (port alias) | Target (host alias) |
 |------|--------------------|---------------------|
-| grigri port redirect tcp | `external_ingress_tcp` = 80, 443, 29518 | `k8s_external_ingress` (192.168.193.14) |
+| grigri port redirect tcp | `external_ingress_tcp` = 80, 443, 29518 | `k8s_external_gateway` (192.168.193.14) |
 | TURN tcp | `turn_tcp` = 3478, 3479, 5349 | `k8s_turn` (192.168.193.5) |
 | TURN udp | `turn_udp` = 3478, 3479 | `k8s_turn` (192.168.193.5) |
 | qbittorrent | `qbittorrent_tcp` = 50413 | `k8s_qbittorrent` (192.168.193.7) |
@@ -77,7 +77,7 @@ Host aliases:
 
 | Alias | Address | Note |
 |-------|---------|------|
-| `k8s_external_ingress` | 192.168.193.14 | Was `.4` (nginx-external) until 2026-11-10; rollback is this one edit |
+| `k8s_external_gateway` | 192.168.193.14 | External Envoy Gateway VIP. Renamed from `k8s_external_ingress` and moved from `.4` (nginx-external) on 2026-11-10; nginx is no longer the target |
 | `k8s_turn` | 192.168.193.5 | |
 | `k8s_plex` | 192.168.193.5 | Stale description: same address as `k8s_turn` |
 | `k8s_qbittorrent` | 192.168.193.7 | |
@@ -111,17 +111,19 @@ Host overrides (split horizon):
 | Override | Address | Aliases |
 |----------|---------|---------|
 | `freshrss.grigri.cloud` | 192.168.193.14 | See the list below |
-| `app.staging.forkline.dev` | 192.168.193.14 | `auth`, `idm`, `api`, `mcp-fixture` (all `.staging.forkline.dev`) |
+| `app.staging.forkline.dev` | 192.168.193.14 | `idm`, `api`, `mcp-fixture` (all `.staging.forkline.dev`); `auth` is pending removal |
 | `mintpsicologia.es` | 192.168.193.14 | `www.mintpsicologia.es` |
 | `turn.grigri.cloud` | 192.168.193.5 | |
 | `unifi-controller.grigri` | 192.168.193.2 | `unifi.grigri` |
 
 Aliases of `freshrss.grigri.cloud` (all `.grigri.cloud`):
 
-- `gitea`, `navidrome`, `wallabag`, `argocd`, `bazarr`, `jackett`, `sonarr`, `radarr`
-- `accounts`, `nextcloud`, `qbittorrent`, `jellyfin`, `idm`, `auth-kanidm`, `grafana`
+- `navidrome`, `wallabag`, `argocd`, `bazarr`, `sonarr`, `radarr`
+- `nextcloud`, `qbittorrent`, `jellyfin`, `idm`, `grafana`
 - `antdroid`, `auth`, `appdaemon`, `dawarich`, `atuin`, `git`, `gitlab`, `hass`, `searxng`
 - `readest`
+- `mcp`, `photos`, `s3`, `mc-s3`, `cross-backups`, `mc-cross-backups`, `open-webui` (added 2026-11-10;
+  `mcp` is required because pods use it)
 
 Two personal-name hostnames under the `grigri.cloud` override were left out on purpose. Read them
 from the resolver's host override list if needed.

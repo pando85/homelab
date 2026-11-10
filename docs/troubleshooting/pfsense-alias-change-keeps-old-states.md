@@ -2,8 +2,8 @@
 
 ## Problem
 
-After repointing the pfSense alias `k8s_external_ingress` (the target of the WAN port forwards for
-80, 443 and 29518) from one gateway VIP to another, some traffic still reached the old VIP. The new
+After repointing the pfSense alias then named `k8s_external_ingress`, now `k8s_external_gateway`
+(the target of the WAN port forwards for 80, 443 and 29518) from one gateway VIP to another, some traffic still reached the old VIP. The new
 target was correct and new connections used it, but the old ingress controller kept receiving
 requests.
 
@@ -27,8 +27,8 @@ Two separate effects:
 Read-only, over `ssh pfsense.grigri`:
 
 ```sh
-pfctl -t k8s_external_ingress -T show                  # alias content
-pfctl -sn | grep -c "rdr.*k8s_external_ingress"        # rdr rules using the alias (21)
+pfctl -t k8s_external_gateway -T show                  # alias content
+pfctl -sn | grep -c "rdr.*k8s_external_gateway"        # rdr rules using the alias (21)
 pfctl -ss | grep -c "192.168.193.4:"                   # states still on the old VIP
 grep -E '^local-data: "[^ ]+ A 192.168.193.' /var/unbound/host_entries.conf   # overrides: count per IP
 ```

@@ -52,7 +52,7 @@ publishes DNS.
 pfSense configuration is not in git and **changes are owner-only**; agents inspect read-only over
 `ssh pfsense.grigri`. The full inventory is in [pfSense](pfsense.md); what matters for ingress:
 
-- **Alias `k8s_external_ingress`** (Firewall > Aliases > IP) is the single target of the WAN port
+- **Alias `k8s_external_gateway`** (Firewall > Aliases > IP) is the single target of the WAN port
   forwards for 80, 443 and 29518. It expands to 21 `rdr` rules (including one per LAN
   interface for NAT reflection) plus the WAN pass rule. Editing the alias moves public traffic,
   NAT reflection and Forgejo SSH in one change. It points at `192.168.193.14`.
@@ -72,7 +72,7 @@ pfSense configuration is not in git and **changes are owner-only**; agents inspe
 Read-only checks:
 
 ```sh
-ssh pfsense.grigri 'pfctl -t k8s_external_ingress -T show; pfctl -sn | grep -c "rdr.*k8s_external_ingress"; pfctl -ss | grep -c "192.168.193.4:"'
+ssh pfsense.grigri 'pfctl -t k8s_external_gateway -T show; pfctl -sn | grep -c "rdr.*k8s_external_gateway"; pfctl -ss | grep -c "192.168.193.4:"'
 ssh pfsense.grigri 'grep -E "^local-data: \"[^ ]+ A 192.168.193\." /var/unbound/host_entries.conf'
 ```
 
@@ -125,8 +125,8 @@ external-dns publishes to Cloudflare with policy `upsert-only` and sources `serv
 
 Rollback paths exist until Phase 6 (ingress-nginx still serves the Ingresses).
 
-1. Owner sets alias `k8s_external_ingress` back to `192.168.193.4` (one edit; moves 80, 443, 29518
-   and reflection).
+1. Owner sets alias `k8s_external_gateway` back to `192.168.193.4` (one edit; moves 80, 443, 29518
+   and reflection; the alias was named `k8s_external_ingress` until 2026-11-10).
 2. Owner sets the three unbound host override IPs back to the nginx VIP (`.4` for the external
    names). Count with the override command above, do not eyeball.
 3. Kill the pf states that still point at the new VIP (Diagnostics > States, filter the IP, Kill);

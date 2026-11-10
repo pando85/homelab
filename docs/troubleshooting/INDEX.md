@@ -178,7 +178,8 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 ## Networking
 
-- Repointing the pfSense alias `k8s_external_ingress` does not move open connections: pf keeps the
+- Repointing the pfSense external alias (then named `k8s_external_ingress`, now
+  `k8s_external_gateway`) does not move open connections: pf keeps the
   redirect target of existing states (h2, SSH, webhooks stay on the old VIP), and a missed unbound
   host override stays on the old IP. Kill the states, count overrides per IP.
   See `docs/troubleshooting/pfsense-alias-change-keeps-old-states.md`
