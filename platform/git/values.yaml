@@ -12,8 +12,8 @@ forgejo:
     fsGroup: 1000
     fsGroupChangePolicy: "OnRootMismatch"
 
-  # SSH (29518) through the Envoy Gateway external Gateway (192.168.193.14), next to the nginx tcp
-  # passthrough, until the external switch. Renders TCPRoute git-forgejo-ssh -> git-forgejo-ssh:22.
+  # SSH (29518) through the Envoy Gateway external Gateway (192.168.193.14). Renders TCPRoute
+  # git-forgejo-ssh -> git-forgejo-ssh:22.
   tcpRoute:
     enabled: true
     parentRefs:

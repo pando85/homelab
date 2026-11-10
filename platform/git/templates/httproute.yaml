@@ -1,8 +1,6 @@
 ---
-# Envoy Gateway route (ingress-nginx migration). The chart Ingress (forgejo.ingress) stays until the
-# switch. The chart-native `forgejo.httpRoute` cannot be used meanwhile: the chart fails the render
-# when `ingress.enabled` and `httpRoute.enabled` are both set (and httpRoute would also rewrite
-# `server.DOMAIN`, restarting Forgejo). The SSH TCPRoute (`forgejo.tcpRoute`) is chart-native and
+# Envoy Gateway route. The chart-native `forgejo.httpRoute` is not used: it would also rewrite
+# `server.DOMAIN`, restarting Forgejo. The SSH TCPRoute (`forgejo.tcpRoute`) is chart-native and
 # unchanged. Per-route timeouts and body size: see backend-traffic-policy.yaml.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
