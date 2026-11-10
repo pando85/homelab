@@ -115,6 +115,17 @@ spec:
   # (its configuration-snippet key is invalid), so none is set here: gateway-wide values would
   # override the apps' own (Kanidm). Per-app hardening goes on the route, never gateway-wide.
   headers:
+    # Client-sent forwarding headers are dropped, so X-Forwarded-For carries only the connection
+    # address Envoy appends and apps never trust a client-chosen X-Real-IP (nginx overwrote both).
+    earlyRequestHeaders:
+      remove:
+        - X-Forwarded-For
+        - X-Real-IP
+        - Forwarded
+      # Identity headers are set by an auth proxy only: drop client-sent copies before ext auth
+      removeOnMatch:
+        - type: Prefix
+          value: x-auth-request-
     lateResponseHeaders:
       set:
         - name: Strict-Transport-Security
