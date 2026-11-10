@@ -5,10 +5,12 @@ These are behavior tests against ``helm template`` output, not source greps.
 The load-bearing assertions are:
 
 * with the switch off, the chart renders **byte-for-byte** what the chart does
-  at ``HEAD`` - so "off" really means "nothing of this feature exists";
+  at ``HEAD`` (modulo the hostAliases DNS override and the sidecar removal);
 * with the switch on, every pre-existing object (the Hermes StatefulSet first)
   is still rendered *unchanged*, and the only additions are the helper
   ConfigMap and Deployment;
+* the legacy grafana-mcp sidecar (containers, init container, shared volume)
+  has been removed and must not return;
 * the switch is a real boolean that reacts to ``--set`` on the command line,
   and a non-boolean value fails the render instead of being coerced.
 
@@ -80,10 +82,15 @@ def _baseline_chart() -> str:
 def test_disabled_render_is_head_baseline():
     """``enabled: false`` must produce exactly the manifests HEAD produces.
 
-    Exception: the hostAliases addition for mcp.grigri.cloud DNS override is
-    present in the disabled render because values.yaml cannot use Helm template
-    conditionals. The entry is harmless when unused (just an /etc/hosts entry
-    that never gets queried).
+    Exceptions (filtered out before comparison):
+    - the hostAliases addition for mcp.grigri.cloud DNS override is present in
+      the disabled render because values.yaml cannot use Helm template
+      conditionals. The entry is harmless when unused (just an /etc/hosts entry
+      that never gets queried).
+    - the legacy grafana-mcp sidecar (grafana-mcp, grafana-mcp-refresher,
+      grafana-mcp-token-init containers and grafana-mcp-shared volume) was
+      removed on 2026-11-10. The baseline commit still has them, so they are
+      filtered from the baseline before comparison.
     """
     import yaml
     baseline = _helm(_baseline_chart())
@@ -106,6 +113,34 @@ def test_disabled_render_is_head_baseline():
                 # Remove it for comparison
                 del pod_spec["hostAliases"]
 
+    # Filter out the legacy sidecar from the baseline StatefulSet (removed 2026-11-10)
+    SIDECAR_CONTAINERS = {"grafana-mcp", "grafana-mcp-refresher"}
+    SIDECAR_INIT_CONTAINERS = {"grafana-mcp-token-init"}
+    SIDECAR_VOLUMES = {"grafana-mcp-shared"}
+    for doc in baseline_docs:
+        if doc and isinstance(doc, dict) and doc.get("kind") == "StatefulSet":
+            pod_spec = doc.get("spec", {}).get("template", {}).get("spec", {})
+            pod_spec["containers"] = [c for c in pod_spec.get("containers", [])
+                                      if c["name"] not in SIDECAR_CONTAINERS]
+            pod_spec["initContainers"] = [c for c in pod_spec.get("initContainers", [])
+                                          if c["name"] not in SIDECAR_INIT_CONTAINERS]
+            pod_spec["volumes"] = [v for v in pod_spec.get("volumes", [])
+                                   if v.get("name") not in SIDECAR_VOLUMES]
+            # Remove /shared mounts from remaining containers
+            for c in pod_spec.get("containers", []) + pod_spec.get("initContainers", []):
+                c["volumeMounts"] = [m for m in c.get("volumeMounts", [])
+                                     if m["mountPath"] != "/shared"]
+            # Normalize fix-sa-token: the sidecar removal changed its mount path
+            # from /shared/serviceaccount to /sa-token and updated its command
+            # accordingly. Update the baseline to match the new state.
+            for c in pod_spec.get("initContainers", []):
+                if c["name"] == "fix-sa-token":
+                    for m in c.get("volumeMounts", []):
+                        if m["mountPath"] == "/shared/serviceaccount":
+                            m["mountPath"] = "/sa-token"
+                    if c.get("args"):
+                        c["args"] = ["cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /sa-token/ && find /sa-token -type d -exec chmod 0755 {} \\; && find /sa-token -type f -exec chmod 0644 {} \\;"]
+
     # The Envoy Gateway migration added a route, its SecurityPolicy and the OIDC client for it:
     # none of them exists in the baseline, and none touches the Hermes pod.
     envoy_additions = {("HTTPRoute", "hermes-internal"), ("SecurityPolicy", "hermes-internal"),
@@ -120,66 +155,52 @@ def test_disabled_render_is_head_baseline():
 
     assert baseline_normalized == disabled_normalized, (
         "disabled render differs from the HEAD chart render "
-        "(beyond the expected hostAliases addition for mcp.grigri.cloud)"
+        "(beyond the expected hostAliases addition for mcp.grigri.cloud "
+        "and the sidecar removal)"
     )
     assert "mcp-gateway" not in disabled
     assert "mcpGateway" not in disabled
-    print("✓ disabled render == HEAD baseline (normalized, +hostAliases for DNS override)")
+    print("✓ disabled render == HEAD baseline (normalized, +hostAliases, -sidecar)")
 
 
-def test_enabled_changes_only_the_two_cutover_scripts():
-    """Enabled state: the paired cutover touches exactly two script strings.
+def test_enabled_adds_only_the_helper_pod():
+    """Enabled state: the only additions are the helper ConfigMap and Deployment.
 
-    The architecture is *additive* for identity/routes (helper pod) and
-    *substitutive* for the Grafana JWT client, because the legacy sidecar keeps
-    working only while Grafana trusts the ``audience=grafana`` id_token. So the
-    only allowed delta in the agent's own pod is the body of
-    ``grafana-mcp-token-init`` and ``grafana-mcp-refresher``; containers,
-    images, env, volumes, mounts and annotations must be untouched, and the
-    legacy script text must survive verbatim in the off render (asserted by the
-    previous test against the pre-feature baseline).
-
-    Exception: the hostAliases addition for mcp.grigri.cloud DNS override is
-    present in the enabled render. This is filtered out for comparison.
+    After the sidecar removal (2026-11-10), the StatefulSet is identical
+    whether the flag is on or off. The feature is purely additive: it adds
+    a separate helper pod (ConfigMap + Deployment) that writes MCP server
+    entries and tokens to the hermes-data PVC.
     """
     import yaml
-    base = _helm(_baseline_chart())
+    off = _helm(CHART, "--set", f"{FLAG}=false")
     on = _helm(CHART, "--set", f"{FLAG}=true")
-    base_sts = next(d for d in yaml.safe_load_all(base) if isinstance(d, dict) and d.get("kind") == "StatefulSet")
+    off_sts = next(d for d in yaml.safe_load_all(off) if isinstance(d, dict) and d.get("kind") == "StatefulSet")
     on_sts = next(d for d in yaml.safe_load_all(on) if isinstance(d, dict) and d.get("kind") == "StatefulSet")
-    pod_b, pod_o = base_sts["spec"]["template"]["spec"], on_sts["spec"]["template"]["spec"]
+    pod_off, pod_on = off_sts["spec"]["template"]["spec"], on_sts["spec"]["template"]["spec"]
 
-    # Filter out hostAliases from the enabled render for comparison
-    pod_o_filtered = dict(pod_o)
-    if "hostAliases" in pod_o_filtered:
-        # Verify it's the expected mcp.grigri.cloud override
-        host_aliases = pod_o_filtered["hostAliases"]
-        assert len(host_aliases) == 1
-        assert host_aliases[0]["ip"] == "192.168.193.14"
-        assert host_aliases[0]["hostnames"] == ["mcp.grigri.cloud"]
-        del pod_o_filtered["hostAliases"]
+    # Filter out hostAliases from both for comparison (present in both, harmless)
+    for pod in (pod_off, pod_on):
+        pod.pop("hostAliases", None)
 
-    CUT_OVER = {"grafana-mcp-token-init", "grafana-mcp-refresher"}
+    # The StatefulSet must be identical (sidecar is gone, no cutover scripts)
     for field in ("containers", "initContainers"):
-        assert [c["name"] for c in pod_o_filtered[field]] == [c["name"] for c in pod_b[field]], f"{field} list changed"
-        for cb, co in zip(pod_b[field], pod_o_filtered[field]):
+        assert [c["name"] for c in pod_on[field]] == [c["name"] for c in pod_off[field]], f"{field} list changed"
+        for cb, co in zip(pod_off[field], pod_on[field]):
             delta = {k for k in set(cb) | set(co) if cb.get(k) != co.get(k)}
-            if cb["name"] in CUT_OVER:
-                assert delta == {"args"}, f"{cb['name']} changed beyond its script: {delta}"
-            else:
-                assert not delta, f"{cb['name']} changed with the switch on: {delta}"
-    assert pod_o_filtered["volumes"] == pod_b["volumes"], "no new volume or mount may appear"
-    assert base_sts["spec"]["template"]["metadata"] == on_sts["spec"]["template"]["metadata"], "no annotation/label delta"
-    for key, body in _docs(base).items():
+            assert not delta, f"{cb['name']} changed with the switch on: {delta}"
+    assert pod_on["volumes"] == pod_off["volumes"], "volumes changed with the switch on"
+    assert off_sts["spec"]["template"]["metadata"] == on_sts["spec"]["template"]["metadata"], "no annotation/label delta"
+    # All pre-existing objects are unchanged
+    for key in _docs(off):
         if key == ("StatefulSet", "hermes"):
             continue
-        assert on_docs_equal(key, base, on), f"pre-existing object {key} changed unexpectedly"
-    # the Envoy Gateway route, its policy and OIDC client are in both renders, not part of this feature
+        assert on_docs_equal(key, off, on), f"pre-existing object {key} changed unexpectedly"
+    # The only additions are the helper ConfigMap and Deployment
     envoy_additions = {("HTTPRoute", "hermes-internal"), ("SecurityPolicy", "hermes-internal"),
                        ("KanidmOAuth2Client", "hermes-envoy")}
-    added = sorted(set(_docs(on)) - set(_docs(base)) - envoy_additions)
+    added = sorted(set(_docs(on)) - set(_docs(off)) - envoy_additions)
     assert added == [("ConfigMap", "hermes-mcp-gateway"), ("Deployment", "hermes-mcp-gateway")], added
-    print("✓ enabled state: only the 2 cutover scripts differ + hostAliases DNS override, nothing else in the agent pod")
+    print("✓ enabled state: StatefulSet unchanged, only helper ConfigMap+Deployment added")
 
 
 def on_docs_equal(key, base_manifest, on_manifest):
@@ -192,29 +213,31 @@ def on_docs_equal(key, base_manifest, on_manifest):
     return yaml.safe_dump(a, sort_keys=True) == yaml.safe_dump(b, sort_keys=True)
 
 
-def test_cutover_scripts_are_gateway_mode_when_on():
-    """On: gateway client + access_token, and no credential in curl's argv."""
+def test_sidecar_is_removed():
+    """The legacy grafana-mcp sidecar containers and volume are gone."""
     import yaml
-    on = _helm(CHART, "--set", f"{FLAG}=true")
-    sts = next(d for d in yaml.safe_load_all(on) if isinstance(d, dict) and d.get("kind") == "StatefulSet")
-    pod = sts["spec"]["template"]["spec"]
-    scripts = {c["name"]: c["args"][0]
-               for c in pod["initContainers"] + pod["containers"]
-               if c["name"] in {"grafana-mcp-token-init", "grafana-mcp-refresher"}}
-    assert set(scripts) == {"grafana-mcp-token-init", "grafana-mcp-refresher"}
-    for name, script in scripts.items():
-        assert "client_id=mcp-gateway" in script, name
-        assert "audience=mcp-gateway" in script, name
-        assert "scope=mcp_grafana" in script, name
-        assert "--data-binary @-" in script, name
-        assert '\"access_token\"' in script or '"access_token":"[^"]*"' in script, name
-        assert "-d \"subject_token=" not in script and "id_token" not in script, name
-        assert "{{" not in script, "template left unrendered"
-    # The off render keeps the legacy script verbatim (no gateway client strings).
+    for flag_val in ("true", "false"):
+        out = _helm(CHART, "--set", f"{FLAG}={flag_val}")
+        sts = next(d for d in yaml.safe_load_all(out)
+                   if isinstance(d, dict) and d.get("kind") == "StatefulSet")
+        pod = sts["spec"]["template"]["spec"]
+        container_names = {c["name"] for c in pod.get("containers", [])}
+        init_names = {c["name"] for c in pod.get("initContainers", [])}
+        volume_names = {v.get("name") for v in pod.get("volumes", [])}
+        assert "grafana-mcp" not in container_names, f"grafana-mcp present (flag={flag_val})"
+        assert "grafana-mcp-refresher" not in container_names, f"grafana-mcp-refresher present (flag={flag_val})"
+        assert "grafana-mcp-token-init" not in init_names, f"grafana-mcp-token-init present (flag={flag_val})"
+        assert "grafana-mcp-shared" not in volume_names, f"grafana-mcp-shared present (flag={flag_val})"
+        # No container may mount /shared (the legacy sidecar path)
+        for c in pod.get("containers", []) + pod.get("initContainers", []):
+            for mount in c.get("volumeMounts", []):
+                assert mount["mountPath"] != "/shared", \
+                    f"{c['name']} mounts /shared (flag={flag_val})"
+    # No legacy script text in the rendered output
     off = _helm(CHART, "--set", f"{FLAG}=false")
-    assert "client_id=grafana" in off and "id_token" in off
-    assert "client_id=mcp-gateway" not in off.split("kind: StatefulSet")[1], "gateway mode leaked into off render"
-    print("✓ cutover scripts: gateway client/scope, stdin body, access_token; off keeps legacy verbatim")
+    assert "client_id=grafana" not in off, "legacy grafana client_id still in render"
+    assert "id_token" not in off, "legacy id_token still in render"
+    print("✓ sidecar removed: no grafana-mcp containers, no grafana-mcp-shared volume, no /shared mounts, no legacy scripts")
 
 
 def test_enabled_helper_pod_contract():
@@ -348,8 +371,8 @@ def test_git_edit_and_cli_flag_are_the_same_path():
 if __name__ == "__main__":
     print("Running MCP gateway render tests...")
     for fn in [test_disabled_render_is_head_baseline,
-               test_enabled_changes_only_the_two_cutover_scripts,
-               test_cutover_scripts_are_gateway_mode_when_on,
+               test_enabled_adds_only_the_helper_pod,
+               test_sidecar_is_removed,
                test_enabled_helper_pod_contract,
                test_enabled_configmap_shape,
                test_string_flag_fails_closed,

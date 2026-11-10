@@ -31,8 +31,9 @@ unauthorized refresh or a dynamic client registration behind this container's
 back. Rotation here refreshes ``marginSeconds`` before expiry.
 
 Identity: a Kanidm *service account* API token (workload identity), never a
-person's session - today the ``grafana-mcp`` account the working sidecar already
-uses, so no new privileged identity is introduced. The token reaches this process
+person's session - the ``grafana-mcp`` account (previously used by the in-pod
+sidecar, now used by the gateway helper pod), so no new privileged identity
+is introduced. The token reaches this process
 from a Secret reference through the environment; the exchange request is built in
 memory by ``urllib``, never through a command line, because argv is readable by
 any process in the container through ``/proc/<pid>/cmdline`` (a

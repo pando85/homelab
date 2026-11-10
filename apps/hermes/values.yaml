@@ -27,17 +27,17 @@
 # a trace in the disabled render (empty-valued annotations render as
 # ``key: ""``, templated-empty keys as ``"": "true"`` - both verified), and an
 # always-present helper container would mean an always-present
-# ``hermes-data`` mount. The legacy ``grafana-mcp`` sidecar and its refresher
-# are therefore left exactly as they are: this feature ADDS gateway routes to
-# Hermes, it does not cut anything over.
+# ``hermes-data`` mount.
 #
-# FLIP IT ONCE apps/mcp-gateway HAS:
-#   1. the Kanidm OAuth client ``mcp-gateway`` (``audience: mcp-gateway``) with
-#      the custom scopes ``mcp_grafana`` / ``mcp_context7`` mapped from a
-#      service-account-only group, and
-#   2. that group's ``spec.members`` containing the service account whose API
-#      token is in ``identity.subjectTokenSecret`` (``grafana-mcp`` reuses the
-#      identity the working sidecar already has: no new privileged identity).
+# CUTEOVER (2026-11-10): the legacy ``grafana-mcp`` sidecar, its refresher and
+# the ``grafana-mcp-token-init`` init container have been removed. Hermes now
+# reaches Grafana through the central MCP gateway at
+# ``https://mcp.grigri.cloud/grafana/mcp`` using OAuth (server name
+# ``homelab-grafana``, scope ``mcp_grafana``), with caller-preserving
+# delegation. The gateway path is validated by
+# ``test/mcp-gateway/hermes-live-acceptance.py``. The workload identity
+# (``grafana-mcp`` Kanidm service account, ``grafana-mcp-token`` Secret) is
+# retained because the gateway helper pod still reads it.
 #
 # WHAT STILL NEEDS A HUMAN AFTER THE FIRST MERGE
 # Hermes re-reads ``mcp_servers`` at gateway startup, from the interactive CLI
@@ -169,60 +169,7 @@ app-template:
             - sh
             - -c
           args:
-            - mkdir -p /shared/serviceaccount && cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /shared/serviceaccount/ && find /shared/serviceaccount -type d -exec chmod 0755 {} \; && find /shared/serviceaccount -type f -exec chmod 0644 {} \;
-        grafana-mcp-token-init:
-          image:
-            repository: curlimages/curl
-            tag: 8.23.0
-          env:
-            KANIDM_TOKEN:
-              valueFrom:
-                secretKeyRef:
-                  name: grafana-mcp-token
-                  key: token
-          command: ["/bin/sh", "-c"]
-          # Paired cutover, driven by the same ``global.mcpGateway.enabled`` bool
-          # the helper pod uses. app-template's ``enabled`` fields are
-          # boolean-locked, but ``command``/``args`` strings are templated
-          # (``charts/common/templates/loader/_generate.tpl`` evaluates every
-          # string unless ``global.templateEvaluation.excludePaths`` opts out, and
-          # ``global`` is visible in the subchart context). With the switch off
-          # this renders the original script byte-for-byte; with it on it writes
-          # the gateway-issued access token instead of the ``audience=grafana``
-          # id_token, which is what breaks the moment Grafana stops trusting the
-          # old introspection client - the container and its ``/shared`` mount
-          # stay, only the client and token shape change.
-          #
-          # The credential is piped through stdin to ``curl --data-binary @-``:
-          # ``-d "subject_token=$T"`` puts it in curl's argv, readable by any
-          # process through ``/proc/<pid>/cmdline``. ``printf`` is a shell
-          # builtin, so nothing is exec'd with it.
-          #
-          # COUPLING (do not flip one without the other): this branch assumes the
-          # Grafana MCP route at ``apps/mcp-gateway`` forwards the route token and
-          # that Grafana's OAuth client trusts ``audience=mcp-gateway`` +
-          # ``scope=mcp_grafana`` for the ``grafana-mcp`` service account. Until
-          # both are true, keep the switch off: the legacy path is what works.
-          args:
-            - |
-              {{- if .Values.global.mcpGateway.enabled -}}
-              RESPONSE=$(printf '%s' "grant_type=urn:ietf:params:oauth:grant-type:token-exchange&client_id={{ .Values.global.mcpGateway.exchange.clientId }}&audience={{ .Values.global.mcpGateway.exchange.audience }}&scope={{ index .Values.global.mcpGateway.servers "homelab-grafana" "scope" }}&subject_token=${KANIDM_TOKEN}&subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
-                | curl -sf -X POST "{{ .Values.global.mcpGateway.exchange.url }}" --data-binary @-)
-              TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-              echo -n "$TOKEN" > /shared/grafana-jwt
-              chmod 666 /shared/grafana-jwt
-              {{- else -}}
-              RESPONSE=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
-                -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
-                -d "client_id=grafana" \
-                -d "subject_token=${KANIDM_TOKEN}" \
-                -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
-                -d "audience=grafana" \
-                -d "scope=openid email profile")
-              JWT=$(echo "$RESPONSE" | grep -o '"id_token":"[^"]*"' | cut -d'"' -f4)
-              echo -n "$JWT" > /shared/grafana-jwt
-              chmod 666 /shared/grafana-jwt
-              {{- end }}
+            - cp -L /var/run/secrets/kubernetes.io/serviceaccount/* /sa-token/ && find /sa-token -type d -exec chmod 0755 {} \; && find /sa-token -type f -exec chmod 0644 {} \;
       containers:
         hermes:
           image:
@@ -258,78 +205,6 @@ app-template:
             limits:
               cpu: "8"
               memory: 4Gi
-        grafana-mcp:
-          image:
-            repository: docker.io/grafana/mcp-grafana
-            tag: "2.2.0"
-          args:
-            - -enabled-tools=datasource,prometheus,loki,alerting,dashboard
-            - -transport=sse
-            - -address=0.0.0.0:8080
-          env:
-            GRAFANA_URL: "http://monitoring-grafana.monitoring.svc.cluster.local"
-            GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE: "/shared/grafana-jwt"
-          resources:
-            requests:
-              cpu: 10m
-              memory: 64Mi
-            limits:
-              cpu: 100m
-              memory: 128Mi
-          securityContext:
-            runAsUser: 10000
-            runAsGroup: 10000
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-        grafana-mcp-refresher:
-          image:
-            repository: curlimages/curl
-            tag: 8.23.0
-          env:
-            KANIDM_TOKEN:
-              valueFrom:
-                secretKeyRef:
-                  name: grafana-mcp-token
-                  key: token
-          command: ["/bin/sh", "-c"]
-          # Same paired cutover as ``grafana-mcp-token-init``: byte-identical
-          # legacy script while the switch is off, gateway access token while on.
-          args:
-            - |
-              {{- if .Values.global.mcpGateway.enabled -}}
-              while true; do
-                sleep 600
-                RESPONSE=$(printf '%s' "grant_type=urn:ietf:params:oauth:grant-type:token-exchange&client_id={{ .Values.global.mcpGateway.exchange.clientId }}&audience={{ .Values.global.mcpGateway.exchange.audience }}&scope={{ index .Values.global.mcpGateway.servers "homelab-grafana" "scope" }}&subject_token=${KANIDM_TOKEN}&subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
-                  | curl -sf -X POST "{{ .Values.global.mcpGateway.exchange.url }}" --data-binary @-)
-                TOKEN=$(echo "$RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
-                echo -n "$TOKEN" > /shared/grafana-jwt
-              done
-              {{- else -}}
-              while true; do
-                sleep 600
-                RESPONSE=$(curl -sf -X POST "https://idm.grigri.cloud/oauth2/token" \
-                  -d "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
-                  -d "client_id=grafana" \
-                  -d "subject_token=${KANIDM_TOKEN}" \
-                  -d "subject_token_type=urn:ietf:params:oauth:token-type:access_token" \
-                  -d "audience=grafana" \
-                  -d "scope=openid email profile")
-                JWT=$(echo "$RESPONSE" | grep -o '"id_token":"[^"]*"' | cut -d'"' -f4)
-                echo -n "$JWT" > /shared/grafana-jwt
-              done
-              {{- end }}
-          resources:
-            requests:
-              cpu: 5m
-              memory: 32Mi
-            limits:
-              cpu: 50m
-              memory: 64Mi
-          securityContext:
-            runAsUser: 10000
-            runAsGroup: 10000
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
   defaultPodOptions:
     securityContext: {}
     nodeSelector:
@@ -388,20 +263,6 @@ app-template:
       globalMounts:
         - path: /opt/data
       existingClaim: hermes-data
-    grafana-mcp-shared:
-      type: emptyDir
-      sizeLimit: 1Mi
-      advancedMounts:
-        hermes:
-          fix-sa-token:
-            - path: /shared
-          grafana-mcp-token-init:
-            - path: /shared
-          grafana-mcp:
-            - path: /shared
-              readOnly: true
-          grafana-mcp-refresher:
-            - path: /shared
     sa-token-source:
       type: custom
       volumeSpec:
@@ -432,7 +293,7 @@ app-template:
       advancedMounts:
         hermes:
           fix-sa-token:
-            - path: /shared/serviceaccount
+            - path: /sa-token
           hermes:
             - path: /var/run/secrets/hermes-k8s
               readOnly: true
