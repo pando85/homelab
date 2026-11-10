@@ -52,7 +52,7 @@ committed and pushed **directly to master** (`git push origin envoy-gateway:mast
 | 1     | done        | All steps done except step 6 (ZeroSSL, waits for the owner's EAB credentials) and P1.1 (optional pfSense). Gate 1 satisfied.     |
 | 2     | done        | Pilots without auth and auth pilots (kanidm route, http-echo, esphome, navidrome, radarr external) live and verified without a browser; the Gate 2 owner items (interactive login, refusal for a person outside the group) stay open. Procedure: `docs/conventions/gateway-api-routes.md`. |
 | 3     | done        | Every homelab Ingress host has an Envoy route on the matching gateway, tenant hosts included (multivara, kiais). Tracking list and Gate 3 results in Phase 3. |
-| 4     | done, Gate 4 running | Executed 2026-11-09 (Phase 4, Executed). Watch 3-7 days. P4.1 (pfSense) pending, owner. |
+| 4     | done, Gate 4 running | Executed 2026-11-09 (Phase 4, Executed). Watch 3-7 days. P4.1 (pfSense) done, owner. |
 | 5     | prepared    | Commits prepared locally, not pushed; waits for the owner's yes after Gate 4. |
 | 6     | not started |                                                                                                                                   |
 
@@ -478,7 +478,7 @@ Shared controller config: snippets allowed (`annotations-risk-level: Critical`),
 | external names on the override list (idm, git, argocd, grafana, auth, ... 28 + forkline staging + mintpsicologia) | pfSense unbound host overrides (LAN and cluster pods)                                                                             | `192.168.193.4`   | pfSense P5.2                  |
 | external names, from the internet                                                                                 | Cloudflare CNAME to `grigri.cloud` / `ddns.staging.forkline.dev` -> public IP -> pfSense NAT                                      | public IP -> `.4` | pfSense P5.1                  |
 | external names not on the override list (mcp, photos, requests, ...) from LAN                                     | Cloudflare -> public IP -> NAT reflection                                                                                         | `.4`              | pfSense P5.1                  |
-| `k8s.grigri` (`*.k8s.grigri`)                                                                                     | unbound custom option (redirect zone)                                                                                             | `.1`              | pfSense P4.1                  |
+| `k8s.grigri` (`*.k8s.grigri`)                                                                                     | unbound custom option (redirect zone)                                                                                             | `.1`              | pfSense P4.1 (done, `.13`)    |
 
 external-dns: Cloudflare, `sources: [service, ingress]`, `policy: upsert-only`, annotation filter
 `external-dns.kubernetes.io/enabled=true`. Internal Ingresses carry no `target`, so the record is
@@ -509,7 +509,7 @@ Not in git today; Phase 0 writes it to `docs/network/pfsense.md`.
 | Override                   | IP  | Aliases                                                                                                                                                                                                                                                              |
 | -------------------------- | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `freshrss.grigri.cloud`    | .4  | 28 names: api.m.rajoy, m.rajoy, gitea, navidrome, wallabag, argocd, bazarr, jackett, sonarr, radarr, accounts, nextcloud, qbittorrent, jellyfin, idm, auth-kanidm, grafana, antdroid, auth, appdaemon, dawarich, atuin, git, gitlab, hass, isidoro, searxng, readest |
-| `app.staging.forkline.dev` | .4  | auth, idm, api `.staging.forkline.dev`                                                                                                                                                                                                                               |
+| `app.staging.forkline.dev` | .4  | auth, idm, api, mcp-fixture `.staging.forkline.dev`                                                                                                                                                                                                                               |
 | `mintpsicologia.es`        | .4  | www                                                                                                                                                                                                                                                                  |
 | `turn.grigri.cloud`        | .5  |                                                                                                                                                                                                                                                                      |
 | `unifi-controller.grigri`  | .2  | unifi.grigri                                                                                                                                                                                                                                                         |
@@ -1246,9 +1246,9 @@ can be run by an agent (`ssh pfsense.grigri`, show-only commands).
 | P0.2     | optional, any time   | FRR neighbor `192.168.192.11` (k8s-amd64-1): route-map `allow-all` in/out, `next-hop-self`, `allowas-in` like grigri/prusik; update `docs/deployment/cilium-bgp-control-plane.md`. Hygiene only, not needed for this migration | `vtysh -c 'show ip bgp summary'` shows prefixes, not `(Policy)`                                                                | remove the route-maps |
 | P1.1     | Phase 1, optional    | Aliases `k8s_internal_gateway` = .13, `k8s_external_gateway` = .14 (documentation)                                                                                                                                             | `pfctl -t <alias> -T show`                                                                                                     | delete                |
 | P1.2     | Phase 1              | nothing else: BGP `allow-all` accepts the new /32s, LAN-side interfaces already pass to the VIP range                                                                                                                          | `vtysh -c 'show ip bgp 192.168.193.0/24 longer-prefixes'` has .13 and .14                                                      |                       |
-| P4.1     | **internal switch**  | Unbound custom options: `local-data: "k8s.grigri A 192.168.193.13"` (or delete both lines if nothing uses `k8s.grigri`; only a doc mention found). **Status 2026-11-10: pending, owner; nothing uses it**                                                                              | `drill k8s.grigri @192.168.192.1`                                                                                              | restore `.1`          |
+| P4.1     | **internal switch**  | Unbound custom options: `local-data: "k8s.grigri A 192.168.193.13"` (or delete both lines if nothing uses `k8s.grigri`; only a doc mention found). **Status 2026-11-10: done, the owner changed it to `192.168.193.13` (2026-11-09/10)**                                                                              | `drill k8s.grigri @192.168.192.1`                                                                                              | restore `.1`          |
 | **P5.1** | **external switch**  | Firewall > Aliases > `k8s_external_ingress`: `192.168.193.4` -> `192.168.193.14`. Retargets the WAN port forward (80, 443, 29518), its WAN pass rule and reflection on every interface                                         | from mobile data: `curl -I https://git.grigri.cloud`, `ssh -p 29518 git@git.grigri.cloud`; `pfctl -sn \| grep 29518` shows .14 | alias back to .4      |
-| **P5.2** | **external switch**  | DNS Resolver host overrides `freshrss.grigri.cloud` (28 aliases), `app.staging.forkline.dev` (3), `mintpsicologia.es` (www): `.4` -> `.14`. IP only, no list cleanup in this window                                            | `drill idm.grigri.cloud @192.168.192.1` = .14, also from a pod                                                                 | IPs back to .4        |
+| **P5.2** | **external switch**  | DNS Resolver host overrides `freshrss.grigri.cloud` (28 aliases), `app.staging.forkline.dev` (4), `mintpsicologia.es` (www): `.4` -> `.14`. IP only, no list cleanup in this window                                            | `drill idm.grigri.cloud @192.168.192.1` = .14, also from a pod                                                                 | IPs back to .4        |
 | P5.3     | end of external soak | Diagnostics > States: kill remaining states to `192.168.193.4`                                                                                                                                                                 | `pfctl -ss \| grep -c 192.168.193.4` = 0                                                                                       | n/a                   |
 | P6.1     | Phase 6              | Rename `k8s_external_ingress` to `k8s_external_gateway` (or point the rule at the P1.1 alias)                                                                                                                                  | rule shows the new alias                                                                                                       |                       |
 | P6.2     | Phase 6              | Override list cleanup: drop dead names (gitea, jackett, accounts, auth-kanidm, and gitlab/isidoro if gone), add missing external names (mcp, photos, requests, ...); then remove the hermes hostAliases                        | `drill mcp.grigri.cloud` = .14 from a pod                                                                                      |                       |
@@ -1527,7 +1527,7 @@ false`, `--publish-status-address=192.168.193.13`). This changes the status addr
    (`idm.staging.internal`, `vault.staging.internal`, `idm-internal.isidoro`) flip only when
    the tenant route carries the non-alpha annotation in this window (tenant commits, see Executed
    and the tenant section). Verify them in step 4 against `.13`.
-3. pfSense P4.1 (`k8s.grigri`).
+3. pfSense P4.1 (`k8s.grigri`; done by the owner, `.13`).
 4. Verify: `kubectl get ingress -A` internal ones show `.13`; external-dns log shows the
    updates; `dig @1.1.1.1 argocd.internal.grigri.cloud` = .13; the records from the Phase 0
    exception list are unchanged; from a pod, `vault.internal`/`s3.internal` resolve to .13;
@@ -1561,7 +1561,7 @@ P4.1.
   BSL healthy; `s3.internal` serves sccache traffic through Envoy; no alert attributable. Not yet
   exercised: the weekly `rclone-sync` CronJobs to `s3.internal` (Thu/Fri 02:30 UTC).
 - P4.1 (pfSense unbound `k8s.grigri` local-data pointing at `.1`): nothing uses it; the owner
-  changes it to `.13` or deletes it. Pending, owner.
+  changed it to `192.168.193.13` (2026-11-09/10). Done.
 - Phase 5 commits are prepared locally and not pushed: hermes `hostAliases` `.4` to `.14`, and the
   nginx-external Service external-dns annotations removed.
 - Rollback reminder: revert `1d6e9da50` and `f1adb3e02`; external-dns is upsert-only, so records
@@ -1621,7 +1621,15 @@ Separate commits, in order:
 3. Remove `system/ingress-nginx`. Remove `system/ingress-nginx-external` **only after** calypso
    runners use HTTPRoutes and the bridge listener is replaced; until then it serves runners
    only (it also needs the `runners-subdomain` Certificate and the runner network policy
-   selector, both multivara-owned, to stay). The replacement is the runner listener of recipe 14. Then clean what Argo does not prune: IngressClasses, admission webhook configs,
+   selector, both multivara-owned, to stay). The replacement is the runner listener of recipe 14.
+   The same change also removes the calypso runner verification listener on the internal
+   Gateway (`https-runners-staging-forkline-dev` on gateway `internal`) and its Certificate
+   `internal-app-staging-forkline-dev` (both added by the homelab commit "envoy-gateway: Add
+   runner certificates and internal runner listener", not yet on master). Before that, multivara
+   gitops drops the `internal` parentRef from the calypso runner values (set in multivara gitops
+   PR 209) and sets `exposure: gateway-api`. Owner decision 2026-11-10: the internal runner
+   listener is kept during the migration but must be gone when ingress-nginx is removed. Then
+   clean what Argo does not prune: IngressClasses, admission webhook configs,
    leader-election Leases, ClusterRoles, leftover Secrets.
 4. Drop nginx references from NetworkPolicies (ours and the tenants': Keycloak
    NetworkPolicies, runner policy), otel-collector rules, Loki/Tempo configs, dashboards and
@@ -1632,7 +1640,8 @@ Separate commits, in order:
 
 **Gate 6:** zero Ingress objects (or only runner ones while the bridge exists), no
 `nginx_ingress_controller_*` series once both are gone, no `.1`/`.4` in Cilium LB IPAM, all Argo
-apps Synced/Healthy.
+apps Synced/Healthy, no listener `https-runners-staging-forkline-dev` remains on the internal
+Gateway.
 
 ## Verification Checklist (per route)
 
@@ -1701,7 +1710,7 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
   time; see "Phase 2 progress: timeouts and headers" and the roll test notes), and real traffic now
   runs on Envoy. Merge such changes outside large transfers and streams, one at a time, and
   expect websocket reconnects.
-- P4.1 (pfSense `k8s.grigri` local-data) pending, owner; the weekly `rclone-sync` CronJobs to
+- P4.1 (pfSense `k8s.grigri` local-data) done, owner (`.13`); the weekly `rclone-sync` CronJobs to
   `s3.internal` (Thu/Fri 02:30 UTC) are the first unexercised consumer of the internal switch.
 - ~~kroki: caching sidecar image and config (recipe 6).~~ **Done (`d352cc56c`):** nginx-unprivileged sidecar, see the Phase 3 tracking list.
 - Underscore headers: Envoy rejects any request with an underscore in a header name (h2 stream
