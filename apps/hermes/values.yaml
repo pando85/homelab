@@ -70,6 +70,15 @@ global:
         scope: mcp_context7
         timeout: 120
         connectTimeout: 60
+      # Firecrawl backend has no per-caller identity: every caller's fetches
+      # run under one shared upstream identity. The gateway audit still records
+      # the caller, so caller attribution lives in the gateway logs, not in the
+      # upstream request.
+      homelab-firecrawl:
+        url: https://mcp.grigri.cloud/firecrawl/mcp
+        scope: mcp_firecrawl
+        timeout: 120
+        connectTimeout: 60
 
     exchange:
       url: https://idm.grigri.cloud/oauth2/token

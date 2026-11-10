@@ -312,7 +312,7 @@ def test_enabled_configmap_shape():
               if isinstance(d, dict) and d.get("kind") == "ConfigMap"
               and d["metadata"]["name"] == "hermes-mcp-gateway")
     cfg = json.loads(cm["data"]["config.json"])
-    assert set(cfg["servers"]) == {"homelab-grafana", "homelab-context7"}
+    assert set(cfg["servers"]) == {"homelab-grafana", "homelab-context7", "homelab-firecrawl"}
     for name, entry in cfg["servers"].items():
         assert entry["auth"] == "oauth"
         # Hermes reads the scope from the oauth sub-dict (config.get("oauth"));
@@ -329,7 +329,7 @@ def test_enabled_configmap_shape():
     assert set(cm["data"]) == {"config.json", "mcp_gateway_merge.py", "mcp_gateway_token.py"}
     # No credential material in a ConfigMap, ever.
     assert "subject_token" not in cm["data"]["config.json"]
-    print("✓ ConfigMap: 2 routes with oauth.scope, exchange config, scripts, no secrets")
+    print("✓ ConfigMap: 3 routes with oauth.scope, exchange config, scripts, no secrets")
 
 
 def test_string_flag_fails_closed():

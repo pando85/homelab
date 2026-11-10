@@ -61,10 +61,10 @@ def test_rendered_config_loads_for_both_routes():
         servers, exchange = merge._load_gateway_config(path)
     finally:
         os.unlink(path)
-    assert set(servers) == {"homelab-grafana", "homelab-context7"}, sorted(servers)
+    assert set(servers) == {"homelab-grafana", "homelab-context7", "homelab-firecrawl"}, sorted(servers)
     assert exchange["clientId"] == exchange["audience"] == "mcp-gateway"
     assert exchange["marginSeconds"] == 300 and exchange["maxFailures"] == 3
-    print("✓ rendered config.json: 2 routes, exchange settings")
+    print("✓ rendered config.json: 3 routes, exchange settings")
 
 
 def test_scope_is_read_where_hermes_reads_it():
@@ -72,6 +72,7 @@ def test_scope_is_read_where_hermes_reads_it():
     cfg = _rendered_config()
     assert token._scope_of("homelab-grafana", cfg["servers"]["homelab-grafana"]) == "mcp_grafana"
     assert token._scope_of("homelab-context7", cfg["servers"]["homelab-context7"]) == "mcp_context7"
+    assert token._scope_of("homelab-firecrawl", cfg["servers"]["homelab-firecrawl"]) == "mcp_firecrawl"
     for name, entry in cfg["servers"].items():
         assert "scope" not in entry, f"{name}: top-level scope would be ignored by Hermes"
     for bad in ({}, {"oauth": {}}, {"oauth": None}, {"scope": "mcp_grafana"}):

@@ -215,7 +215,8 @@ def test_uid_0_writes_credentials_0600():
             files[pending] = json.loads(line[5:])
             pending = None
     expected = {"homelab-grafana.json", "homelab-grafana.client.json",
-                "homelab-context7.json", "homelab-context7.client.json"}
+                "homelab-context7.json", "homelab-context7.client.json",
+                "homelab-firecrawl.json", "homelab-firecrawl.client.json"}
     assert expected <= set(files), sorted(files)
     assert set(modes) == {"600:0"}, f"credential mode/owner: {sorted(set(modes))}"
     tok = files["homelab-grafana.json"]
@@ -223,7 +224,7 @@ def test_uid_0_writes_credentials_0600():
     assert tok["scope"] == "mcp_grafana" and tok["token_type"] == "Bearer"
     assert "refresh_token" not in tok, "never hand Hermes a refresh token"
     assert tok["expires_at"] > time.time() + 300, "must not be written near expiry"
-    print("✓ uid 0 (caps dropped): 4 files, mode 0600, per-route scopes, no refresh_token")
+    print("✓ uid 0 (caps dropped): 6 files, mode 0600, per-route scopes, no refresh_token")
     return tok
 
 
@@ -239,13 +240,13 @@ def test_subject_token_never_reaches_argv():
         seen = [json.loads(line) for line in fh if line.strip()]
     assert len(seen) >= 2, seen
     scopes = sorted({s["scope"] for s in seen})
-    assert scopes == ["mcp_context7", "mcp_grafana"], scopes
+    assert scopes == ["mcp_context7", "mcp_firecrawl", "mcp_grafana"], scopes
     for s in seen:
         assert s["grant_type"] == "urn:ietf:params:oauth:grant-type:token-exchange"
         assert s["audience"] == s["client_id"] == "mcp-gateway"
         assert s["has_subject_token"] and s["subject_token_prefix"] == SUBJECT[:8]
     assert not any("curl" in line for line in cmdlines.splitlines()), cmdlines
-    print("✓ credential in body only: 2 exchanges, per-route scopes, zero hits in /proc cmdlines")
+    print("✓ credential in body only: 3 exchanges, per-route scopes, zero hits in /proc cmdlines")
 
 
 _MCP_FIXTURE = """
@@ -290,14 +291,14 @@ def test_merge_adds_entries_and_is_idempotent():
     assert len(mtimes) == 2 and mtime_equal(mtimes), f"mtime churn between runs: {mtimes}"
     import yaml
     doc = yaml.safe_load(body.split("-----", 1)[1])
-    assert set(doc["mcp_servers"]) == {"local-something", "homelab-grafana", "homelab-context7"}
+    assert set(doc["mcp_servers"]) == {"local-something", "homelab-grafana", "homelab-context7", "homelab-firecrawl"}
     assert doc["mcp_servers"]["local-something"]["command"] == "npx"
     assert doc["model"]["default"] == "claude-opus-4-6"
     assert doc["gateway"]["loop_watchdog"] is False
     entry = doc["mcp_servers"]["homelab-grafana"]
     assert entry["auth"] == "oauth" and entry["oauth"]["scope"] == "mcp_grafana"
     assert entry["url"] == st["cfg"]["servers"]["homelab-grafana"]["url"]
-    print("✓ merge: 2 routes added, sibling + unrelated sections intact, no mtime churn")
+    print("✓ merge: 3 routes added, sibling + unrelated sections intact, no mtime churn")
 
 
 def test_merge_refuses_unparseable_config():

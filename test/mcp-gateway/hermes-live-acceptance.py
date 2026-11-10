@@ -52,7 +52,7 @@ async def call(server, tool, args):
 
 
 async def positive():
-    for route in ("context7", "grafana"):
+    for route in ("context7", "grafana", "firecrawl"):
         name = "homelab-" + route
         config = dict(SERVERS[name])
         assert config["auth"] == "oauth"
@@ -68,7 +68,7 @@ async def positive():
                 text = await call(server, "query-docs", {
                     "libraryId": "/vercel/next.js", "query": "GET route handler JSON response"})
                 assert "Response.json" in text and "Source:" in text
-            else:
+            elif route == "grafana":
                 identity = json.loads(await call(server, "user_info", {}))
                 payload = credential(route).split(".")[1]
                 claims = json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))
@@ -90,6 +90,27 @@ async def positive():
                     schema = tools["grafana_api_request"].input_schema
                 assert schema["properties"]["method"]["enum"] == ["GET"]
                 report("write_tools_unavailable", generic_api_methods=["GET"])
+            elif route == "firecrawl":
+                # Firecrawl has no per-caller identity upstream, but the gateway
+                # audit records the caller. Scrape example.com as a stable,
+                # harmless read-only probe that proves an actual fetch happened
+                # end to end through the gateway.
+                assert len(server._tools) > 0, "firecrawl returned no tools"
+                tools = {tool.name: tool for tool in server._tools}
+                # Try firecrawl_scrape first (least invasive), fall back to firecrawl_search
+                if "firecrawl_scrape" in tools:
+                    result = await call(server, "firecrawl_scrape", {
+                        "url": "https://example.com"})
+                    # Result may be JSON or text; just verify we got something back
+                    assert result and len(result) > 50, f"scrape returned too little: {len(result)} bytes"
+                    report("firecrawl_scrape_success", bytes=len(result), url="https://example.com")
+                elif "firecrawl_search" in tools:
+                    result = await call(server, "firecrawl_search", {
+                        "query": "example domain", "limit": 1})
+                    assert result and len(result) > 50, f"search returned too little: {len(result)} bytes"
+                    report("firecrawl_search_success", bytes=len(result))
+                else:
+                    raise AssertionError(f"firecrawl has no usable tools: {sorted(tools.keys())}")
         finally:
             await server.shutdown()
 
@@ -98,8 +119,9 @@ def negative():
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
         "protocolVersion": "2025-06-18", "capabilities": {},
         "clientInfo": {"name": "hermes-acceptance-negative", "version": "1"}}}).encode()
-    for route, source in (("context7", None), ("grafana", None),
-                          ("context7", "grafana"), ("grafana", "context7")):
+    for route, source in (("context7", None), ("grafana", None), ("firecrawl", None),
+                          ("context7", "grafana"), ("grafana", "context7"),
+                          ("firecrawl", "grafana"), ("grafana", "firecrawl")):
         headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream",
                    "X-Request-ID": RUN + "-negative"}
         if source:
@@ -120,4 +142,4 @@ if __name__ == "__main__":
     _ensure_mcp_loop()
     _run_on_mcp_loop(positive(), timeout=180)
     negative()
-    report("ACCEPTANCE_PASS", client="Hermes", servers=2)
+    report("ACCEPTANCE_PASS", client="Hermes", servers=3)

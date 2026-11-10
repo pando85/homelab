@@ -83,9 +83,12 @@ def test_gateway_entries_are_present():
     cfg = json.loads(cm["data"]["config.json"])
     assert "homelab-grafana" in cfg["servers"], "homelab-grafana route missing"
     assert "homelab-context7" in cfg["servers"], "homelab-context7 route missing"
+    assert "homelab-firecrawl" in cfg["servers"], "homelab-firecrawl route missing"
     assert cfg["servers"]["homelab-grafana"]["url"] == "https://mcp.grigri.cloud/grafana/mcp"
     assert cfg["servers"]["homelab-grafana"]["oauth"]["scope"] == "mcp_grafana"
-    print("✓ gateway entries present: homelab-grafana, homelab-context7")
+    assert cfg["servers"]["homelab-firecrawl"]["url"] == "https://mcp.grigri.cloud/firecrawl/mcp"
+    assert cfg["servers"]["homelab-firecrawl"]["oauth"]["scope"] == "mcp_firecrawl"
+    print("✓ gateway entries present: homelab-grafana, homelab-context7, homelab-firecrawl")
 
 
 def pod_containers(sts: dict) -> list:
