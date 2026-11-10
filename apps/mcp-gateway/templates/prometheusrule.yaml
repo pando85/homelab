@@ -1,0 +1,63 @@
+{{- if .Values.alerts.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mcp-gateway
+  labels:
+    release: monitoring
+spec:
+  groups:
+    - name: mcp-gateway.rules
+      rules:
+        - alert: MCPGatewayHighErrorRate
+          expr: |
+            (
+              sum by (namespace, route) (rate(agentgateway_requests_total{status=~"5.."}[5m]))
+              /
+              sum by (namespace, route) (rate(agentgateway_requests_total[5m]))
+            ) > 0.05
+            and
+            sum by (namespace, route) (rate(agentgateway_requests_total[5m])) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High 5xx error rate on MCP gateway route"
+            description: "More than 5% of requests to an MCP gateway route are returning 5xx errors."
+
+        - alert: MCPGatewayCriticalErrorRate
+          expr: |
+            (
+              sum by (namespace, route) (rate(agentgateway_requests_total{status=~"5.."}[2m]))
+              /
+              sum by (namespace, route) (rate(agentgateway_requests_total[2m]))
+            ) > 0.25
+            and
+            sum by (namespace, route) (rate(agentgateway_requests_total[2m])) > 0.1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Critical 5xx error rate on MCP gateway route"
+            description: "More than 25% of requests to an MCP gateway route are returning 5xx errors."
+
+        - alert: MCPGatewayElevated403Rate
+          expr: |
+            sum by (namespace, route) (rate(agentgateway_requests_total{status="403"}[10m])) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Elevated 403 rate on MCP gateway route"
+            description: "403 Forbidden rate is above 0.5 requests per second for 10 minutes. This indicates a caller was rejected by a scope gate or CEL rule, which is how a mis-scoped token, a missing scope grant, or a broken route shows up."
+
+        - alert: MCPGatewayTargetDown
+          expr: up{job="mcp-gateway/mcp-gateway-standalone"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "MCP gateway target is down"
+            description: "The MCP gateway target has been down for more than 5 minutes."
+{{- end }}
