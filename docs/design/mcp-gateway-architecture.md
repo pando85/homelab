@@ -1,6 +1,6 @@
 # MCP Gateway Architecture
 
-**Status:** Agreed baseline (implementation validation pending). The first live attempt of the
+**Status:** Live MVP (three public MCP routes); separate admin gateway deployed but fail-closed. The first live attempt of the
 disabled-only foundation (`9049af3bf`, deployed and reverted on 2026-11-08) failed kubelet startup probes
 on `:15021` while the process was healthy, and the grafana-mcp CNP (`838031375`) reproduced it on
 2026-11-09. Both are now **explained by measurement**, not by argument: any policy set carrying an
@@ -15,8 +15,8 @@ Matrix numbers and the reasoning trail:
 proven split-port shape: `docs/conventions/cilium.md`.
 **Neither `9049af3bf` plane ever reached Ready**, so session-key stability across reconciles was never
 observed *at that revision*. The MVP is now live and network-isolated on the official
-`agentgateway-standalone` v1.7.0 chart: the public plane serves `/context7/mcp` and `/grafana/mcp`
-plus two RFC 9728 metadata routes; the admin plane serves `routes: []` (deliberate fail-closed; the
+`agentgateway-standalone` v1.7.0 chart: the public plane serves `/grafana/mcp`, `/context7/mcp`, and `/firecrawl/mcp`
+plus three RFC 9728 protected-resource metadata routes; the admin plane serves `routes: []` (deliberate fail-closed; the
 Vault backend is deferred by owner decision 2026-11-10). Backend parity through the gateway is
 demonstrated (acceptance record in `planning/mcp-gateway-implementation.md`). Network isolation
 re-land is done: three CiliumNetworkPolicies (`mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`) are
@@ -30,9 +30,9 @@ single-node failure domain. Placement will be revisited after the isolated plane
 ## Overview
 
 Centralized MCP gateway giving AI agents and human operators a single entry point to homelab MCP
-servers (Grafana, Firecrawl, SearXNG, Vault, etc.). Two separate deployments: a public-facing
-gateway and a VPN-only admin interface. The gateway deploys the upstream
-[agentgateway](https://agentgateway.dev/) standalone binary; chart packaging is a spike item.
+servers. The public gateway currently serves Grafana, Context7, and Firecrawl; SearXNG and other
+integrations are future additions. A separate VPN-only admin gateway exists, but it has no backend
+routes enabled. Both gateways deploy upstream [agentgateway](https://agentgateway.dev/) v1.7.0.
 
 MVP consumers: OpenCode human operators and Hermes agent workloads. Home Assistant integration is
 future work.
@@ -41,8 +41,8 @@ future work.
 
 ### In Scope (MVP)
 
-- **Upstream agentgateway**: Deploy existing Rust standalone binary; chart packaging is a spike
-- **Two deployments**: Gateway (`apps/mcp-gateway` or TBD); admin interface in separate namespace.
+- **Upstream agentgateway**: Official standalone v1.7.0 chart on both planes
+- **Two deployments**: Public `apps/mcp-gateway` and private `apps/mcp-gateway-admin` in separate namespaces.
   Admin does NOT expose Vault admin backend to public plane
 - **Native MCP OAuth**: OpenCode → MCP OAuth discovery → Kanidm auth-code + PKCE → access token.
   Gateway validates (strict issuer + audience). No oauth2-proxy. Exact flow is a spike item
@@ -83,46 +83,35 @@ future work.
 
 ### Two Deployments
 
-```
-Public plane                              Admin plane (VPN-only)
-─────────────────                       ────────────────────────
-Internet/VPN
-  │
-  ├─ OpenCode (human)
-  └─ Hermes (agent)
-          │
-          ▼
-  Envoy gateway external (VIP 192.168.193.14)
-  mcp.grigri.cloud
-  (nginx remains rollback path until ingress-migration Phase 6)
-          │
-          ▼
-  ┌─────────────────────────┐            ┌─────────────────────────┐
-  │ ns: mcp-gateway         │            │ ns: mcp-gateway-admin   │
-  │                         │            │                         │
-  │ agentgateway (upstream) │            │ agentgateway (upstream) │
-  │ - access token validate │            │ - access token validate │
-  │ - group/scope check     │            │ - admin group check     │
-  │ - MCP routing + audit   │            │ - MCP routing + audit   │
-  └───────────┬─────────────┘            └───────────┬─────────────┘
-              │ ClusterIP (NetworkPolicy)             │ ClusterIP (NetworkPolicy)
-    ┌─────────┼──────────┐                            │
-    ▼         ▼          ▼                            ▼
-┌────────┐ ┌─────────┐ ┌──────────┐           ┌──────────────┐
-│Grafana │ │Firecrawl│ │SearXNG/  │           │ Vault MCP    │
-│MCP pod │ │MCP pod  │ │Context7  │           │ pod          │
-│        │ │         │ │(next)    │           │              │
-└────────┘ └─────────┘ └──────────┘           └──────────────┘
+<div align="center">
+  <img src="../images/mcp-gateway-topology.svg" width="100%" alt="MCP gateway topology: OpenCode and Hermes use Envoy and the public agentgateway with Kanidm OAuth2. Three live routes connect to Grafana MCP, external Context7, and Firecrawl MCP; a dashed placeholder indicates future MCPs. The independent VPN-only admin gateway has no enabled backend routes, and Vault MCP is deferred." />
+</div>
 
-No public-plane route to Vault MCP.
-Admin gateway does not grant Hermes automatic admin.
-```
+**Public plane (live):** Envoy `external` routes `mcp.grigri.cloud` to
+`apps/mcp-gateway` (namespace `mcp-gateway`). Its three active MCP routes are
+`/grafana/mcp` (standalone in-cluster pod, caller token passthrough),
+`/context7/mcp` (external HTTPS service, gateway-managed API key), and
+`/firecrawl/mcp` (isolated in-cluster pod). Each has its own Kanidm OAuth2 scope.
+Additional MCPs appear as an unconnected placeholder, not as deployed integrations.
+
+**Identity:** OpenCode uses OAuth2 authorization code + PKCE; Hermes uses Kanidm-issued tokens.
+The gateway validates issuer, audience, and per-route scope. MCP backend services have no
+independent public ingress; gateway audit events are sent to Loki.
+
+**Admin plane (deployed, inactive):** Envoy `internal` routes `mcp.internal.grigri.cloud`
+to `apps/mcp-gateway-admin` (namespace `mcp-gateway-admin`) with a separate Kanidm OAuth2
+client. Its `routes: []` configuration fails closed: **Vault MCP is deferred, not deployed**,
+and there is no live route to it. Hermes does not automatically receive admin access.
+
+The Vault-backed secret store used by External Secrets (including the Context7 upstream API
+key) is **separate** from the deferred Vault **MCP server** on the admin side.
 
 ### Traffic Flow
 
 **Human operator (OpenCode desktop):**
 1. OpenCode MCP client → MCP OAuth discovery → Kanidm auth-code + PKCE → access token
-2. `Authorization: Bearer <access_token>` to `https://mcp.grigri.cloud/mcp`
+2. `Authorization: Bearer <access_token>` to a per-server URL such as
+   `https://mcp.grigri.cloud/grafana/mcp`
 3. Gateway validates access token (strict issuer, strict audience, expiry)
 4. Gateway checks group membership / per-target assignment → routes to backend MCP
 5. Backend MCP executes tool call, returns result
@@ -130,7 +119,7 @@ Admin gateway does not grant Hermes automatic admin.
    2026-11-10 to keep full subject in Loki for audit trails)
 
 **Hermes agent (cluster-side):**
-1. Hermes pod → cluster-internal Service DNS → gateway
+1. Hermes pod → configured HTTPS MCP URL (`mcp.grigri.cloud/<backend>/mcp`) → Envoy external → gateway
 2. Gateway validates Kanidm service account access token
 3. Gateway checks group / target → routes to backend MCP
 4. Backend authenticates via delegated credentials or fixed service credential
@@ -267,10 +256,10 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 
 | Server | Phase | Current State | Target |
 |--------|-------|---------------|--------|
-| Grafana MCP | MVP | Live route with caller-preserving delegation | Dedicated pod in gateway ns (sidecar removal in progress) |
+| Grafana MCP | MVP | Live route, caller-preserving delegation | Standalone pod; Hermes sidecar removed |
 | Context7 | MVP | Deployed route with Vault-delivered upstream key | Live |
-| Firecrawl | MVP | Route live; backend pod deployed and isolated | Deploy `firecrawl-mcp` package |
-| Vault | Deferred | Admin plane fail-closed (`routes: []`) | Owner decision 2026-11-10: deferred |
+| Firecrawl | MVP | Live route; backend pod deployed and isolated | Active `firecrawl-mcp` service |
+| Vault MCP | Deferred | Admin gateway has `routes: []`; Vault MCP not deployed | Owner decision 2026-11-10: deferred |
 | SearXNG | Next | REST API, internal | Deploy MCP package |
 | HA, Postgres, Playwright | Future | N/A | Separate phases |
 
@@ -310,7 +299,7 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
   Before public onboarding either verify controls or record explicit owner acceptance of
   remaining homelab risk
 
-- **Status (as of this writing): attempted, rolled back, blocker open.** Fetcher egress isolation was
+- **Historical 2026-11-08 attempt (not current route status):** Fetcher egress isolation was
   committed and pushed (`0b16b31b9`), auto-deployed by ArgoCD, and within ~12 s of attach the Firecrawl
   `api`, `worker` and both `nuq` pods began timing out kubelet health probes across two nodes (selected
   endpoints' BPF reloaded 1 s after the apply) while `browser` stayed `Ready`. A scoped revert
@@ -325,11 +314,10 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
   gates required before any re-attempt:
   `docs/troubleshooting/mcp-firecrawl-egress-regression.md`.
 
-  Consequence for this design: the gateway's `firecrawl` backend route stays **disabled**, and
-  gateway-side NetworkPolicy (which only restricts who may reach the MCP pod directly) is not a
-  substitute for fetcher egress control. Firecrawl exposure therefore remains blocked on two
-  independent gates: this SSRF gate, and the group-membership decision that grants the
-  service-only `mcp-gateway-agents` workload access.
+  **Current status (2026-11-10):** `/firecrawl/mcp` is enabled and scope-gated, with live acceptance
+  recorded in `planning/mcp-gateway-gap-closure-implementation.md`. This does **not** prove the
+  underlying Firecrawl fetchers have comprehensive SSRF/egress isolation; that remains a separate
+  security concern, and gateway-only NetworkPolicy is no substitute for fetcher egress control.
 
 ### Ingress
 
