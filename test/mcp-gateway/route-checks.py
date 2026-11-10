@@ -391,12 +391,23 @@ def main():
           smap.get("mcp-gateway-agents", [])[:4] == ["openid", "email", "profile", "mcp_firecrawl"]
           and {"mcp_grafana", "mcp_context7"} <= set(smap.get("mcp-gateway-agents", [])),
           str(smap.get("mcp-gateway-agents")))
-    check("human scopes come from the EXISTING grafana-users group and nothing else",
-          set(smap) == {"mcp-gateway-agents", "grafana-users"}
-          and smap["grafana-users"] == ["mcp_grafana", "mcp_context7"], str(smap))
-    grp = find(docs, "KanidmGroup")["spec"]
+    check("human scopes come from per-route groups plus grafana-users",
+          set(smap) == {"mcp-gateway-agents", "mcp-context7-users",
+                        "mcp-firecrawl-users", "grafana-users"}
+          and smap["mcp-context7-users"] == ["mcp_context7"]
+          and smap["mcp-firecrawl-users"] == ["mcp_firecrawl"]
+          and smap["grafana-users"] == ["mcp_grafana"], str(smap))
+    groups = [d for d in docs if d.get("kind") == "KanidmGroup"]
+    workload_grp = next((g for g in groups if g["metadata"]["name"] == "mcp-gateway-agents"), None)
     check("workload group members are service accounts only (grafana-mcp, no new SA, no person)",
-          grp["members"] == ["grafana-mcp"], str(grp["members"]))
+          workload_grp is not None
+          and workload_grp["spec"]["members"] == ["grafana-mcp"],
+          str(workload_grp["spec"]["members"] if workload_grp else None))
+    for g in groups:
+        if g["metadata"]["name"] in ("mcp-context7-users", "mcp-firecrawl-users"):
+            check(f"group {g['metadata']['name']} has no members field (person membership is manual)",
+                  "members" not in g.get("spec", {}),
+                  str(list(g.get("spec", {}).keys())))
 
     print()
     print(f"=== {sum(RESULTS)} passed, {RESULTS.count(False)} failed ===")

@@ -23,6 +23,10 @@ Therefore:
     chart is still creating) reconcile eventually; the operator does not
     block rollout on them, but the group will not resolve those SPNs until
     the SAs exist.
+
+Human-facing groups (kanidm.humanGroups) are rendered below with NO `members`
+field. Membership is managed manually with `kanidm group add-members` and
+deleting the CR destroys manual memberships.
 */ -}}
 ---
 apiVersion: kaniop.rs/v1beta1
@@ -40,3 +44,18 @@ spec:
   members:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+{{- range .Values.kanidm.humanGroups }}
+---
+# Human-membership group: membership is managed manually with
+# `kanidm group add-members` and is NEVER encoded in this CRD.
+# WARNING: deleting this KanidmGroup CR destroys the group in Kanidm
+# together with all its manual memberships.
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: {{ . }}
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
+{{- end }}

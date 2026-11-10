@@ -213,6 +213,13 @@ def main():
     check("human scope map declares NO membership (people are managed in Kanidm, not in git)",
           not any(k in e for e in values["kanidm"]["oauth2Client"]["humanScopeMap"]
                   for k in ("members", "users", "persons")))
+    # Repo rule: no KanidmGroup CR for a human-facing group may carry a members field.
+    # Guard against accidentally encoding person membership in the template.
+    human_groups = [d for d in docs if d.get("kind") == "KanidmGroup"
+                    and d["metadata"]["name"] in smap]
+    check("every human-facing KanidmGroup CR has no members field (repo rule)",
+          all("members" not in g.get("spec", {}) for g in human_groups),
+          str([(g["metadata"]["name"], list(g.get("spec", {}).keys())) for g in human_groups]))
 
     # ---- adminAddr off ----
     check("adminAddr is 'off' (no admin listener)",

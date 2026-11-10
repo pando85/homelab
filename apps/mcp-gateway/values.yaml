@@ -577,6 +577,14 @@ kanidm:
     # so nothing else is a member.
     serviceMembers:
       - grafana-mcp
+  # Human-facing Kanidm groups rendered by templates/kanidm-group.yaml.
+  # These groups have NO `members` field: person membership is managed
+  # manually via `kanidm group add-members` and must never be encoded in
+  # CRDs (docs/user-guide/kanidm.md "Group membership rules").
+  # Deleting a KanidmGroup CR destroys the group and its manual memberships.
+  humanGroups:
+    - mcp-context7-users
+    - mcp-firecrawl-users
   oauth2Client:
     name: mcp-gateway
     displayname: MCP Gateway
@@ -589,6 +597,12 @@ kanidm:
     # device-code or client-credentials grant.
     redirectUrls:
       - http://127.0.0.1:15000/callback
+    # scopeMap: workload (service-account) grants. The agent group keeps ALL
+    # three MCP scopes deliberately: agents are workloads, and splitting them
+    # into the per-route human groups would require encoding service-account
+    # membership there, which risks the Kaniop operator clobbering manually
+    # added person members (CRD `members` is authoritative). Do not "finish
+    # the job" by moving agent scopes into the human groups.
     scopeMap:
       - group: mcp-gateway-agents
         scopes:
@@ -602,22 +616,31 @@ kanidm:
           # it must already be reconciled in Kanidm.
           - mcp_grafana
           - mcp_context7
-    # Human grants for the public plane. Group MEMBERSHIP is managed by the owner in
-    # Kanidm and is never declared in this chart (docs/user-guide/kanidm.md).
-    # `grafana-users` is the existing group from
+    # Human grants for the public plane. Each route is gated by its own Kanidm
+    # group so access can be granted per-route. Group MEMBERSHIP is managed by
+    # the owner in Kanidm and is never declared in this chart
+    # (docs/user-guide/kanidm.md). `grafana-users` is the existing group from
     # system/monitoring/resources/kanidm-groups-grafana.yaml; no membership change.
     # Only the MCP scopes are mapped. `openid`/`email`/`profile` are deliberately
-    # absent: a native MCP client asks for exactly the `scopes_supported` values this
-    # chart's RFC 9728 document advertises, and a bearer carrying identity claims is
-    # refused by the route policy anyway.
-    # GATE, stated rather than assumed: Kanidm refuses the WHOLE authorization when any
-    # requested scope is not in the granted set, so a client that also asks for
-    # `offline_access` (refresh tokens) has to be settled as its own deliberate change.
+    # absent: a native MCP client asks for exactly the `scopes_supported` values
+    # this chart's RFC 9728 document advertises, and a bearer carrying identity
+    # claims is refused by the route policy anyway.
+    # GATE, stated rather than assumed: Kanidm refuses the WHOLE authorization
+    # when any requested scope is not in the granted set, so a client that also
+    # asks for `offline_access` (refresh tokens) has to be settled as its own
+    # deliberate change.
+    # NOTE: a human who previously got context7 via `grafana-users` must now be
+    # added to `mcp-context7-users` manually (`kanidm group add-members`).
     humanScopeMap:
+      - group: mcp-context7-users
+        scopes:
+          - mcp_context7
+      - group: mcp-firecrawl-users
+        scopes:
+          - mcp_firecrawl
       - group: grafana-users
         scopes:
           - mcp_grafana
-          - mcp_context7
     # supScopeMap: additional scopes granted to specific groups. These are used
     # for Grafana role scopes (editor, admin) that the role_attribute_path checks.
     # Must match the grafana OAuth2 client's supScopeMap (kanidm-oauth2-client-grafana.yaml):

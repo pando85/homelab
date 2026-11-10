@@ -287,22 +287,75 @@ def main():
                                              "backends.grafana.resource="
                                              "https://mcp.grigri.cloud/grafana/mcp"])))
     # B2: human scope grants
-    # Public gateway: humanScopeMap has grafana-users group with mcp_grafana and mcp_context7
-    # Admin gateway: humanScopeMap is empty (no human access to admin plane)
+    # Public gateway: humanScopeMap has per-route groups (mcp-context7-users,
+    # mcp-firecrawl-users) plus the existing grafana-users for mcp_grafana.
+    # Admin gateway: humanScopeMap is empty (no human access to admin plane).
     pub_vals = open("apps/mcp-gateway/values.yaml").read()
     adm_vals = open("apps/mcp-gateway-admin/values.yaml").read()
 
-    # Public gateway should have grafana-users in humanScopeMap
-    pub_m = re.search(r"humanScopeMap:\s*\n((?:\s+- .+\n)+)", pub_vals)
-    check("mcp-gateway: humanScopeMap has grafana-users group",
-          pub_m is not None and "grafana-users" in pub_m.group(1),
-          (pub_m.group(0)[:100] if pub_m else "not found"))
+    # Public gateway: exactly three group->scope pairs
+    # Extract the humanScopeMap block: from the key to the next key at same indent
+    pub_hsm_match = re.search(r"^    humanScopeMap:\n((?:      .*\n)*)", pub_vals, re.M)
+    pub_hsm_block = pub_hsm_match.group(1) if pub_hsm_match else ""
+    check("mcp-gateway: humanScopeMap has mcp-context7-users group",
+          "mcp-context7-users" in pub_hsm_block,
+          pub_hsm_block[:120] or "not found")
+    check("mcp-gateway: humanScopeMap has mcp-firecrawl-users group",
+          "mcp-firecrawl-users" in pub_hsm_block,
+          pub_hsm_block[:120] or "not found")
+    check("mcp-gateway: humanScopeMap still has grafana-users group",
+          "grafana-users" in pub_hsm_block,
+          pub_hsm_block[:120] or "not found")
+    # mcp_context7 must NOT be granted by grafana-users anymore
+    check("mcp-gateway: grafana-users does NOT grant mcp_context7 (moved to mcp-context7-users)",
+          not re.search(
+              r"-\s+group:\s+grafana-users\s*\n\s+scopes:\s*\n(?:\s+- mcp_\w+\n)*\s+- mcp_context7",
+              pub_hsm_block),
+          "grafana-users still grants mcp_context7")
 
     # Admin gateway should have empty humanScopeMap
     adm_m = re.search(r"humanScopeMap:\s*\n?((?:\s*- .+\n?)+|\[\])", adm_vals)
     check("mcp-gateway-admin: humanScopeMap ships empty (no human grant wired)",
           adm_m is not None and (adm_m.group(1).strip() == "[]" or not adm_m.group(1).strip()),
           (adm_m.group(0)[:60] if adm_m else "not found"))
+
+    # Rendered KanidmGroup CRs: the two new human groups must exist with no `members` key
+    pub_docs = helm("mcp-gateway")
+    rendered_groups = [d for d in pub_docs if d.get("kind") == "KanidmGroup"]
+    rendered_group_names = {g["metadata"]["name"] for g in rendered_groups}
+    check("mcp-gateway: mcp-context7-users renders as KanidmGroup CR",
+          "mcp-context7-users" in rendered_group_names,
+          str(sorted(rendered_group_names)))
+    check("mcp-gateway: mcp-firecrawl-users renders as KanidmGroup CR",
+          "mcp-firecrawl-users" in rendered_group_names,
+          str(sorted(rendered_group_names)))
+    for g in rendered_groups:
+        if g["metadata"]["name"] in ("mcp-context7-users", "mcp-firecrawl-users"):
+            check(f"mcp-gateway: group {g['metadata']['name']} has no members field",
+                  "members" not in g.get("spec", {}),
+                  str(list(g.get("spec", {}).keys())))
+
+    # Rendered OAuth2Client scopeMap: exactly the four expected entries
+    o2c = find(pub_docs, "KanidmOAuth2Client")
+    check("mcp-gateway: rendered OAuth2Client exists", o2c is not None)
+    if o2c:
+        smap = {e["group"]: e["scopes"] for e in o2c["spec"]["scopeMap"]}
+        check("mcp-gateway: rendered scopeMap has exactly 4 group entries",
+              set(smap) == {"mcp-gateway-agents", "mcp-context7-users",
+                            "mcp-firecrawl-users", "grafana-users"},
+              str(sorted(smap)))
+        check("mcp-gateway: mcp-gateway-agents still grants all 3 mcp scopes (agent path)",
+              {"mcp_firecrawl", "mcp_grafana", "mcp_context7"} <= set(smap.get("mcp-gateway-agents", [])),
+              str(smap.get("mcp-gateway-agents")))
+        check("mcp-gateway: mcp-context7-users grants mcp_context7",
+              smap.get("mcp-context7-users") == ["mcp_context7"],
+              str(smap.get("mcp-context7-users")))
+        check("mcp-gateway: mcp-firecrawl-users grants mcp_firecrawl",
+              smap.get("mcp-firecrawl-users") == ["mcp_firecrawl"],
+              str(smap.get("mcp-firecrawl-users")))
+        check("mcp-gateway: grafana-users grants only mcp_grafana",
+              smap.get("grafana-users") == ["mcp_grafana"],
+              str(smap.get("grafana-users")))
 
     # comment-aware: prose explaining WHY the group is withheld must not fail this
     for chart in CHARTS:
