@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-11-10):** the diagnostic question this document was written to answer was
+> settled by the probe/policy matrix rows S1-S6 in `planning/mcp-gateway-implementation.md`. The
+> canary namespace and chart debris have been removed.
+
 # MCP Canary Diagnostic: Implementation-Ready Handoff
 
 ## Purpose

@@ -14,11 +14,13 @@ Matrix numbers and the reasoning trail:
 `docs/troubleshooting/mcp-firecrawl-egress-regression.md` ("Measured answer"); durable rule and the
 proven split-port shape: `docs/conventions/cilium.md`.
 **Neither `9049af3bf` plane ever reached Ready**, so session-key stability across reconciles was never
-observed *at that revision*. The policy-free foundation that replaced it is live: at `3a1e2d19e` the
-public plane answers `/context7/mcp` → 401, `/grafana/mcp` → 404 (route present, disabled) and the
-RFC 9728 protected-resource metadata for `/context7/mcp` → 200 (re-verified 2026-11-09). Backend
-*parity* through the gateway is still not demonstrated. Policy re-land is unblocked in principle - the
-shape is known and measured - and is tracked in `planning/mcp-gateway-implementation.md`.
+observed *at that revision*. The MVP is now live and network-isolated on the official
+`agentgateway-standalone` v1.7.0 chart: the public plane serves `/context7/mcp` and `/grafana/mcp`
+plus two RFC 9728 metadata routes; the admin plane serves `routes: []` (deliberate fail-closed; the
+Vault backend is deferred by owner decision 2026-11-10). Backend parity through the gateway is
+demonstrated (acceptance record in `planning/mcp-gateway-implementation.md`). Network isolation
+re-land is done: three CiliumNetworkPolicies (`mcp-gateway`, `mcp-gateway-admin`, `grafana-mcp`) are
+live and `Valid=True` in the measured split-port shape.
 **Provisional placement:** both planes and the diagnostic canary are pinned to node `prusik` via
 `nodeSelector: kubernetes.io/hostname=prusik` for diagnosis and initial rollout, accepting a
 single-node failure domain. Placement will be revisited after the isolated planes run stably.
@@ -58,8 +60,10 @@ future work.
 - **Grafana MCP standalone**: Move from Hermes sidecar to dedicated pod in gateway ns.
   Gateway connects via ClusterIP/pod network. Remove sidecar after parity.
   Only first Hermes has the sidecar now
-- **Baseline audit**: Redacted — caller, backend principal, target, tool, outcome. No raw payload
-  logging. Metrics inventory confirmed during spike
+- **Baseline audit**: Full `jwt.sub` kept in Loki (180-day retention) because audit trails are wanted
+  (owner decision 2026-11-10); the gateway log lines carry `jwt.sub`, `mcp.target`,
+  `mcp.method.name`, `gen_ai.tool.name`, `http.status`, `trace.id`/`span.id`, no payload. Metrics
+  inventory confirmed during spike
 
 ### Out of Scope
 
@@ -84,8 +88,9 @@ Internet/VPN
   └─ Hermes (agent)
           │
           ▼
-  nginx-external
+  Envoy gateway external (VIP 192.168.193.14)
   mcp.grigri.cloud
+  (nginx remains rollback path until ingress-migration Phase 6)
           │
           ▼
   ┌─────────────────────────┐            ┌─────────────────────────┐
@@ -117,7 +122,8 @@ Admin gateway does not grant Hermes automatic admin.
 3. Gateway validates access token (strict issuer, strict audience, expiry)
 4. Gateway checks group membership / per-target assignment → routes to backend MCP
 5. Backend MCP executes tool call, returns result
-6. Gateway logs redacted audit event (caller, backend, tool, outcome)
+6. Gateway logs audit event with full `jwt.sub` (caller, backend, tool, outcome; owner decision
+   2026-11-10 to keep full subject in Loki for audit trails)
 
 **Hermes agent (cluster-side):**
 1. Hermes pod → cluster-internal Service DNS → gateway
@@ -217,11 +223,11 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 
 | Server | Phase | Current State | Target |
 |--------|-------|---------------|--------|
-| Grafana MCP | MVP | Sidecar in first Hermes pod | Dedicated pod in gateway ns |
-| Firecrawl | MVP | REST API, network-isolated | Deploy `firecrawl-mcp` package |
-| Vault | MVP (private, phased) | No MCP yet | Planned, needs spike |
+| Grafana MCP | MVP | Live route with caller-preserving delegation | Dedicated pod in gateway ns (sidecar removal in progress) |
+| Context7 | MVP | Deployed route with Vault-delivered upstream key | Live |
+| Firecrawl | MVP | Backend pod deployed and isolated; gateway route being added | Deploy `firecrawl-mcp` package |
+| Vault | Deferred | Admin plane fail-closed (`routes: []`) | Owner decision 2026-11-10: deferred |
 | SearXNG | Next | REST API, internal | Deploy MCP package |
-| Context7 | Next | External (upstream) | Evaluate centralized deployment |
 | HA, Postgres, Playwright | Future | N/A | Separate phases |
 
 ## Network & Trust Boundaries
@@ -248,11 +254,9 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
   that does not include `world` on the probe port is a pod-kill switch, not a hardening measure.
 - **Timing**: attach the CNP at or before the workload - measured safe (policy present 6 m 32 s before
   the endpoint was recreated → Ready in 6 s, 0 probe failures). Keep `failureThreshold >= 6`.
-- **Pending source fix (not a doc change)**: the reverted foundation chart carried a comment justifying
-  leaving 15021 off the ingress list because a policy "cannot name the node". That reasoning is wrong and
-  the cure it implies is measured useless; the comment must be removed when the CNPs are written by the
-  source owner. The current tree renders no policy (`networkIsolation: false`), so nothing live depends
-  on it today
+- **Source fix done**: the reverted foundation chart carried a comment justifying leaving 15021 off the
+  ingress list because a policy "cannot name the node". That reasoning was wrong and the cure it implied
+  was measured useless; the comment has been removed and the three CNPs are live and `Valid=True`
 - **ClusterIP is not isolation**: the CNP above is the isolation mechanism
 
 ### SSRF
@@ -285,7 +289,12 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 
 ### Ingress
 
-- Gateway: `nginx-external` for public plane, `nginx-internal` for admin plane
+- Gateway: Envoy gateway `external` (VIP 192.168.193.14) for public plane via HTTPRoute, Envoy
+  gateway `internal` (VIP 192.168.193.13) for admin plane. The old nginx Ingress objects still exist
+  and ingress-nginx still runs, but they carry no MCP traffic (measured 2026-11-10: gateway access-log
+  `src.addr` values are the external Envoy proxy pods). nginx remains the documented rollback path
+  until ingress-migration Phase 6, which is why the CiliumNetworkPolicies still list the nginx
+  controllers
 - MCP backends: No ingress resources. All traffic through gateway
 
 ## Baseline Security Controls

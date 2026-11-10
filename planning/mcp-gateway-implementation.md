@@ -44,7 +44,8 @@ measured clean, so its root cause is still UNKNOWN.
 > gap register, consolidation order and owner-decision gates — is tracked in
 > [`mcp-gateway-gap-closure-implementation.md`](mcp-gateway-gap-closure-implementation.md)
 > (measured against `449a35331`, 2026-11-10). Several status lines below are stale relative to the
-> live cluster; that file's Phase 1 lists each one.
+> live cluster; that file's Phase 1 lists each one. The Envoy migration has ended (2026-11-10);
+> gap-closure revision 2 is the current authority.
 
 ## Overview
 
@@ -73,9 +74,10 @@ its own Kanidm OAuth2 client so a token minted for one plane cannot be replayed 
 Native OAuth resource-server auth (signed JWT + JWKS, no oauth2-proxy, no cookie redirect),
 CiliumNetworkPolicy isolation (applied in the measured split-port shape — see the isolation section below), one dedicated pod per
 backend. Routes render from values; `de20f415e` enabled the **context7** route and the RFC 9728 discovery
-routes on the public plane, while the **grafana** route stays commented out until Grafana's `auth.jwt`
-trusts the `mcp-gateway` client - a live route answers 401 to an unauthenticated caller and a
-specified-but-disabled route answers 404 (both observed live at `3a1e2d19e`).
+routes on the public plane, and the **grafana** route is now live with caller-preserving delegation
+(`backendAuth.passthrough`); the Grafana-side trust question was settled by the subject-only identity
+mapping (`username_claim = sub`) in `system/monitoring/values.yaml`. Two distinct callers were observed
+reaching Grafana with different native org roles.
 
 Every "measured" statement below comes from the local suites in `test/mcp-gateway/` running the
 pinned v1.7.0 binary (and pinned Grafana/mcp-grafana/firecrawl images) against chart-rendered
@@ -360,7 +362,7 @@ group-membership decision).
 
 ## Task 1: Foundation (Gateway + Auth + NetworkPolicy)
 
-**Implemented locally** (`apps/mcp-gateway/`, `apps/mcp-gateway-admin/`, uncommitted). One chart
+**Implemented locally** (`apps/mcp-gateway/`, `apps/mcp-gateway-admin/`). One chart
 per plane; both render fail-closed and both were booted with the pinned binary.
 
 ### 1.1 Chart Structure
@@ -432,10 +434,9 @@ per plane; both render fail-closed and both were booted with the pinned binary.
   near-miss scope; 200 for a scoped caller; unmapped path 404; RFC 9728 metadata returns the exact
   issuer at the URL the gateway advertises; the backend always sees the pinned Host; and the admin
   delegation route forwards the caller's own credential.
-  **Caveat (2026-11-09): that file is not in the committed tree** - it came with `9049af3bf` and the
-  revert removed it, so this line is historical local evidence only. The tree carries
-  `foundation-checks.py` (51/51) and `grafana-backend-checks.py` (18/18); re-run any authz case from a
-  landed file before citing it.
+  **Caveat (2026-11-09, superseded 2026-11-10): that file is now tracked** in `test/mcp-gateway/`
+  (`git ls-files test/mcp-gateway/` returns 34 files including `e2e-authz.py`). The earlier note
+  said it came with `9049af3bf` and the revert removed it; it has since been committed.
 - [x] **Header/credential boundary** (`session-isolation-probe.py`): the caller's backend-URL and
   credential-override headers never reach a backend, while an unnamed header does - so the deny
   list, not the gateway default, is the protection.
@@ -510,15 +511,16 @@ validation. Local part: met. Live part: needs the Kanidm clients plus owner appr
 
 ## Task 2: Grafana MCP (standalone + caller-preserving delegation)
 
-**Status:** candidate implemented in the admin chart and **disabled** (`backends.grafana.enabled:
-false`). The existing Hermes sidecar keeps working; nothing about it is changed. Two owner
-decisions and one test prerequisite are outstanding - see the gates at the end.
+**Status:** live on the public plane with `backendAuth.passthrough`, serving caller-preserving
+delegation. The Grafana-side trust question was settled by the subject-only identity mapping
+(`username_claim = sub`) in `system/monitoring/values.yaml`. The Hermes legacy in-pod grafana-mcp
+sidecar removal is in progress (approved in a separate concurrent change).
 
 ### Measured on the pinned versions (local containers: Grafana `13.3.0-distroless`,
 ### mcp-grafana `2.1.1`). The scripts named below - `grafana-jwt-mapping-probe.py`,
 ### `grafana-merged-keyset-probe.py`, `grafana-forwarding-probe.py`,
-### `grafana-sub-alias-probe.py` - are local research probes: uncommitted, pending product review, and
-### not part of the foundation. The findings stand as local evidence; none of them is live parity, and
+### `grafana-sub-alias-probe.py` - are tracked in `test/mcp-gateway/` (`git ls-files` returns 34
+### files). The findings stand as local evidence; none of them is live parity, and
 ### the merged-key-set finding among them is **retracted outright**: its fixture used one issuer for both
 ### clients, which hid the issuer-trust failure described in item 4 below.
 
@@ -600,13 +602,13 @@ measured Grafana behaviour: `[auth.jwt]` attributes a caller from `username_clai
 and Kanidm v1.11.2 puts no login claim into an ACCESS token (`claim_map` and `jwtLegacyCryptoEnable`
 do not move claims into access tokens; there is no human token-exchange; ID-JAG `CrossAppAccessAuth`
 exists in v1.7.0 but needs IdP support Kanidm does not have). Measured, on the live claim name
-(`username_claim = preferred_username`, `grafana-jwt-mapping-probe.py`, a local uncommitted probe): an ACCESS-token bearer is
+(`username_claim = preferred_username`, `grafana-jwt-mapping-probe.py`, tracked in `test/mcp-gateway/`): an ACCESS-token bearer is
 declined for having no login/email claim and **creates no user** - correct fail-closed behaviour.
 
 That is not the whole answer, and the newer probe narrows the gap considerably: with
 `username_claim = sub` the ACCESS token *does* identify someone (Kanidm's `sub` is the account UUID),
 it just identifies a person Grafana has never bound (see option (d) below, measured
-`grafana-sub-alias-probe.py`, a local uncommitted probe).
+`grafana-sub-alias-probe.py`, tracked in `test/mcp-gateway/`).
 
 This is an identity-layer gap, not a gateway gap, and it is **not** to be solved by changing the edge
 credential. The owner's options:
@@ -627,7 +629,7 @@ credential. The owner's options:
   the `('jwt', sub)` connection to that existing user.
 
 **Option (d) has a LOCAL positive only - native secure integration is still pending**
-(`grafana-sub-alias-probe.py`, a local uncommitted probe; 16/16 assertions on a fixture, disposable Grafana `13.3.0-distroless`
+(`grafana-sub-alias-probe.py`, tracked in `test/mcp-gateway/`; 16/16 assertions on a fixture, disposable Grafana `13.3.0-distroless`
 with its own SQLite file, synthetic identities only, real generic-OAuth authorization-code flow against
 a local Kanidm-stub issuer - the live instance was never touched). **What that fixture does NOT
 establish**: it served BOTH planes from a single issuer, so it does not exercise the canonical
@@ -876,7 +878,7 @@ configuration change", not "unknown".
    does not satisfy the two-user gate - do not mark Vault safe because sessions are encrypted or
    time-limited.
 7. **The official product was run behind the pinned gateway - measured support for option (a)**
-   (`vault-official-stateless-probe.py`, a local uncommitted probe, re-run after review: **28/28
+   (`vault-official-stateless-probe.py`, tracked in `test/mcp-gateway/`, re-run after review: **28/28
    REQUIRED held, 4/4 known-bad CONTROLS reproduced, 12 OBSERVED, 2 NOT-TESTED** (live two-human
    A/B; production per-route `X-Vault-Token` allow not wired). These counts replace the earlier
    "24 cases" framing; the security negatives are still **incomplete**, so nothing here is a pass
@@ -931,7 +933,9 @@ proven live, no direct ingress to the backend. **Owner approval gate** before de
 
 ## Task 5: Migration (OpenCode / Hermes)
 
-NOT STARTED
+Both Kanidm OAuth2 clients (`mcp-gateway` public, `mcp-gateway-admin` internal) are migrated and
+live. What remains for consumer migration (OpenCode, Hermes) is tracked in the gap-closure plan's
+G4.
 
 **SUPERSEDED (2026-11-09 E2E acceptance):** The Hermes migration path does not trigger PVC-based
 config-overwrite recovery. The gateway route is declarative (main-pod-only `hostAliases` for DNS
@@ -951,34 +955,35 @@ modes but is not applicable to this migration path.
 chart-rendered configs. Cluster-level verification has **not** run (no gateway/Kanidm resource exists;
 live checks need an approved deployment).
 
-Executed locally (all green, 2026-11-08). The files in the paths below are the local working-copy
-test suite: after the first-deploy revert they are **not committed**, so treat each path as local
-evidence until the foundation re-lands:
+Executed locally (all green, 2026-11-08). The files in the paths below are the tracked test suite
+(`git ls-files test/mcp-gateway/` returns 34 files including `e2e-authz.py`, `local-render.sh`, all
+the grafana/vault probes, plus `identity-ab/` and `jobs/`):
 
 | suite | what it proves | result |
 |---|---|---|
-| `local-render.sh` (local runner, **not committed**: as written it trips the repo's shellcheck pre-commit hook - SC2155 at line 50 plus three SC2015 infos - so it stays out of the foundation until fixed) | renders both charts, boots the pinned v1.7.0 binary per plane: readiness on 15021, metrics on 15020, nothing listening on 15000, `404` on every backend path with `routes: []`, AES session active | 19 pass / 0 fail |
+| `local-render.sh` (local runner, tracked in `test/mcp-gateway/`; as written it trips the repo's shellcheck pre-commit hook - SC2155 at line 50 plus three SC2015 infos - so it stays out of the foundation until fixed) | renders both charts, boots the pinned v1.7.0 binary per plane: readiness on 15021, metrics on 15020, nothing listening on 15000, `404` on every backend path with `routes: []`, AES session active | 19 pass / 0 fail |
 | `test/mcp-gateway/chart-checks.py` | structural invariants on the rendered objects: fail-closed default, per-plane issuer/audience, CEL shape per `credential`, `backendAuth.passthrough` placement, no `session:` block in config, egress rules absent while disabled and added per enabled backend, ClusterIP only with separate metrics/healthz ports, every shipped backend disabled, no backend *setting* `credential: idToken`, scopeMap/groups render, plus review B1/B2/B3: the charts render **no Secret** and no `randAlphaNum`/`lookup` in template logic, the ESO `Password` + `ExternalSecret(CreatedOnce, target.immutable)` pair with a required `secretKeyRef`, byte-identical repeated renders, a 64-hex/32-byte key arithmetic check, `humanScopeMap: []` on both planes, Grafana's candidate on the **public** plane only, and no admin egress path to it | 172 pass / 0 fail |
 | `test/mcp-gateway/e2e-authz.py` | cases A-N against the real gateway: anonymous 401 + challenge discovery, wrong-audience 401, missing scope 403, scoped 200 with the bearer stripped (`credential: none`), unmapped path 404, multi-scope string, near-miss 403, resource metadata at the advertised URL, pinned `Host`, AES session, then the admin plane: public-plane token 401, ID-token bearer 403, ACCESS bearer 200 forwarded verbatim, near-miss 403, and all injected credential/target-override headers stopped while a control header still passes | all passed |
 | `test/mcp-gateway/session-isolation-probe.py` | SESSION_KEY present -> AES ids (208 chars, no warning); no key + read-only config -> base64 ids (104 chars) **with** the `MCP session IDs are not encrypted` warning; query params dropped; 12 override headers stopped; B replaying A's session id is served with **B's own** bearer in both modes | all passed |
 | `test/mcp-gateway/session-binding-probe.py` | the Vault two-user gate, three shapes: baseline stateful/one target = **LEAK** (B served with A's cached credential), `statefulMode: stateless` = **OK**, per-caller `condition: jwt.sub` = **REFUSED** (`404 session not found`) | reproduced, gate verdict unchanged |
-| `grafana-merged-keyset-probe.py` (local, uncommitted) | **result RETRACTED as unsafe, not pending review**: pinning `iss` rejects the second client, an `iss` array makes Grafana fail at startup, and a merged key set without `iss` pinning trusts any issuer signed by a listed key. The earlier reading ("each token mapped to its own existing
+| `grafana-merged-keyset-probe.py` (tracked in `test/mcp-gateway/`) | **result RETRACTED as unsafe, not pending review**: pinning `iss` rejects the second client, an `iss` array makes Grafana fail at startup, and a merged key set without `iss` pinning trusts any issuer signed by a listed key. The earlier reading ("each token mapped to its own existing
 user; unlisted `aud` and a third key -> 401") came from a fixture whose single issuer masked exactly that
 gap | retracted - unsafe, do not ship |
-| `grafana-jwt-mapping-probe.py`, `grafana-forwarding-probe.py` (local, uncommitted, pending review), `backend-auth-probe.py` | claim-mapping and header-forwarding/overwrite behaviour of Grafana 13.3.0 / mcp-grafana 2.1.1 (Task 2 findings) | passed |
-| `grafana-sub-alias-probe.py` (local, uncommitted, pending review) | **LOCAL fixture evidence for Task 2 option (d)** (single issuer for both planes, so no per-client `iss`/aud coverage): a real generic-OAuth authorization-code login against a local Kanidm-stub issuer (per-client JWKS, CA bind-mounted, synthetic identities only), then the JWT path on the pinned `13.3.0-distroless` image - OAuth-module binding and native Editor read straight out of the fixture's SQLite, sub-only ACCESS before/after the one-time identity-claim bootstrap, the `('jwt', sub)` row landing on the SAME userId, a JWT-authenticated dashboard write with no session cookie involved, `auto_sign_up` false vs true, unknown-sub refusal, and the audience-value gap that keeps the class gate at the gateway | 16 pass / 0 fail |
-| `vault-official-stateless-probe.py` (local, uncommitted, pending review) | **LOCAL fixture evidence for Task 4** (21 REQUIRED + 4 CONTROLS + 11 OBSERVED + 1 NOT TESTED; security negatives incomplete, TLS not established), official `hashicorp/vault-mcp-server:0.2.0` (digest-pinned) behind the pinned gateway with a disposable `hashicorp/vault:1.15` dev fixture, two native ACL identities and **no ambient `VAULT_TOKEN`**: shipped route vs the two test-only deviations (stateful + `x-vault-token` unstripped, and `statefulMode: stateless`), cross-instance session-id acceptance, credential-rotation staleness, per-caller ACL isolation, `VAULT_ADDR` header/query override with a Vault-less canary listener, and the edge 401 without a bearer | 24 cases, 0 failures (13 assertions + 15 measured verdicts) |
+| `grafana-jwt-mapping-probe.py`, `grafana-forwarding-probe.py` (tracked in `test/mcp-gateway/`), `backend-auth-probe.py` | claim-mapping and header-forwarding/overwrite behaviour of Grafana 13.3.0 / mcp-grafana 2.1.1 (Task 2 findings) | passed |
+| `grafana-sub-alias-probe.py` (tracked in `test/mcp-gateway/`) | **LOCAL fixture evidence for Task 2 option (d)** (single issuer for both planes, so no per-client `iss`/aud coverage): a real generic-OAuth authorization-code login against a local Kanidm-stub issuer (per-client JWKS, CA bind-mounted, synthetic identities only), then the JWT path on the pinned `13.3.0-distroless` image - OAuth-module binding and native Editor read straight out of the fixture's SQLite, sub-only ACCESS before/after the one-time identity-claim bootstrap, the `('jwt', sub)` row landing on the SAME userId, a JWT-authenticated dashboard write with no session cookie involved, `auto_sign_up` false vs true, unknown-sub refusal, and the audience-value gap that keeps the class gate at the gateway | 16 pass / 0 fail |
+| `vault-official-stateless-probe.py` (tracked in `test/mcp-gateway/`) | **LOCAL fixture evidence for Task 4** (21 REQUIRED + 4 CONTROLS + 11 OBSERVED + 1 NOT TESTED; security negatives incomplete, TLS not established), official `hashicorp/vault-mcp-server:0.2.0` (digest-pinned) behind the pinned gateway with a disposable `hashicorp/vault:1.15` dev fixture, two native ACL identities and **no ambient `VAULT_TOKEN`**: shipped route vs the two test-only deviations (stateful + `x-vault-token` unstripped, and `statefulMode: stateless`), cross-instance session-id acceptance, credential-rotation staleness, per-caller ACL isolation, `VAULT_ADDR` header/query override with a Vault-less canary listener, and the edge 401 without a bearer | 24 cases, 0 failures (13 assertions + 15 measured verdicts) |
 
 Still open, and **not** satisfiable locally:
 
-- [ ] Two-human parity run for Grafana delegation (design in Task 2) - needs two distinct identities
-      with different native rights; no live AB run has been done.
+- [ ] Two-human parity run for Grafana delegation (design in Task 2) - harness exists at
+      `test/mcp-gateway/identity-ab/` (LIVE tier skips loudly without prerequisites rather than
+      passing vacuously; owner decided 2026-11-10 to run OFFLINE tier only).
 - [ ] `mcp_firecrawl` / `mcp_grafana` scope denial and grant behaviour **in the cluster**, once the
       Kanidm clients exist.
-- [ ] Direct-to-backend access denied from an ordinary pod (NetworkPolicy) - must be verified with a
-      committed, approved test method, never ad-hoc `kubectl run/apply`.
+- [ ] Direct-to-backend access denied from an ordinary pod (NetworkPolicy) - committed, approved test
+      method exists at `test/mcp-gateway/jobs/verify-networkpolicy.yaml`.
 - [ ] Public plane cannot reach admin-plane routes (verified here by audience separation locally; the
-      real plane separation is an ingress/nginx + policy matter).
+      real plane separation is an ingress/Envoy + policy matter).
 - [ ] Gateway outage produces no bypass; restrictive policies are not reopened by additive ones.
 - [ ] Firecrawl: all live egress/SSRF assertions - see
       `docs/troubleshooting/mcp-firecrawl-egress-regression.md` gates.
@@ -999,7 +1004,9 @@ require an approved deployment.
 
 ## Rollback
 
-NOT STARTED
+Owner decision 2026-11-10: a separate rollback exercise is not needed for the validated routes.
+Per-change `git revert` restores the previous state, and the Hermes legacy in-pod grafana-mcp
+sidecar (removal in progress, approved in a separate concurrent change) itself was the rollback path.
 
 - [ ] **Git revert**: normal approval GitOps, `git revert` + push + ArgoCD sync. Don't remove NetworkPolicy/reopen bypass
 - [ ] **Sidecar restoration**: can restore pre-migration Grafana sidecar only if explicitly controlled temporary migration (not pretend satisfies final invariant). Preferable: switch clients to previous working gateway OR pause migration BEFORE exclusivity cutover

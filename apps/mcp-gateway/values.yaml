@@ -521,9 +521,8 @@ kanidm:
           - mcp_firecrawl
           # Per-route scopes. A scope is only a permission to ASK for a bearer; the
           # gateway's own route policy decides. `mcp_grafana` is granted now and is
-          # inert now: the grafana MCP route is not rendered, so a bearer carrying it
-          # gets 404 "route not found" (measured) - and it must already be reconciled
-          # in Kanidm when the Grafana JWT cutover flips that route on.
+          # consumed by the grafana route (live with caller-preserving delegation);
+          # it must already be reconciled in Kanidm.
           - mcp_grafana
           - mcp_context7
     # Human grants for the public plane. Group MEMBERSHIP is managed by the owner in
