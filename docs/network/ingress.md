@@ -105,6 +105,13 @@ external-dns publishes to Cloudflare with policy `upsert-only` and sources `serv
   a route back, leaves the record in Cloudflare. To roll back a moved record, edit it in Cloudflare
   by hand **and** revert the source in git; otherwise external-dns re-asserts the record within its
   2 minute interval. Records are created with `ttl=1` (auto).
+- **No record type changes:** upsert-only can never change a name's record TYPE (A to CNAME or back).
+  external-dns tries to CREATE the new type while the old record exists, and Cloudflare rejects it
+  (error 81054, "A CNAME record with that host already exists"). The whole batch then fails every
+  interval; external-dns falls back to individual changes, so only the conflicting names stay stuck.
+  When moving a name between gateways or sources, keep its record type (A stays A, CNAME stays
+  CNAME) or delete the old record by hand first. An annotated route on the external Gateway yields
+  a CNAME and a `DNSEndpoint` yields an A, so moving a name from one to the other is a type change.
 - **Orphaned records:** upsert-only also means that removing or renaming a route or Ingress leaves
   its A or CNAME record (and the `a-<name>` TXT owner record) in Cloudflare, still resolving to the
   old target. Removal is a manual Cloudflare delete of the record and its TXT owner records. To find

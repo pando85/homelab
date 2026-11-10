@@ -89,6 +89,13 @@ The route is a standalone `HTTPRoute` next to the CR. Do **not** remove `spec.in
 CR as part of adding it: the operator never deletes an Ingress it created, so removing the field
 orphans the Ingress (Argo does not prune it). That deletion is an owner decision.
 
+### gRPC and plain HTTP on one hostname
+
+Gateway API accepts only one of a `GRPCRoute` and an `HTTPRoute` that share a hostname on the same
+listener (the other conflicts and is not accepted). An app that serves both gRPC and plain HTTP
+paths on one hostname uses a single `HTTPRoute`, with an h2c backend for the gRPC paths: set
+`appProtocol: kubernetes.io/h2c` on the Service port.
+
 ## DNS (external-dns)
 
 How names resolve (pfSense host overrides, NAT reflection, hairpin, the two VIPs) is in
