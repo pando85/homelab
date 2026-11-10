@@ -484,6 +484,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   delete CRs, clean S3 with `mc rm --recursive --force --versions`, then recreate schedule.
   See `docs/troubleshooting/kaniop-backup-system.md`
 
+- Kanidm supports neither dynamic client registration (DCR) nor client-id metadata documents
+  (CIMD). Every OAuth client must be pre-registered in git via `KanidmOAuth2Client` and its
+  `client_id` supplied to the client out of band; a native MCP client that falls through CIMD and
+  DCR to nothing fails with "expecting a client_id". The authorization-server metadata document is
+  the source of truth. See `docs/troubleshooting/kanidm-no-dcr-mcp-client-id.md`
+
 - Kanidm restore requires `KanidmRestore` CR with matching `targetRef.uid`, pinned `restoreImage`,
   and safety backup (or break-glass annotations). Restore job permission bug (#1005) causes failures.
   See `docs/troubleshooting/kanidm-restore-procedure.md`

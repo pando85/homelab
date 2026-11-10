@@ -103,6 +103,15 @@ Common optional flags:
 | `allowLocalhostRedirect: true` | CLI tools that redirect to localhost |
 | `jwtLegacyCryptoEnable: true` | App needs legacy JWT encryption |
 
+**Client identification is out of band.** Kanidm exposes no `registration_endpoint` and no
+client-id metadata document (CIMD) support: the authorization-server metadata document at
+`<issuer>/.well-known/oauth-authorization-server` omits both fields. Clients are pre-registered
+with `KanidmOAuth2Client` and the `client_id` must be supplied to the client out of band. When
+`preferShortUsername: true` is set, the `client_id` is the short name (the `metadata.name` of the
+CR). A native MCP client that falls through CIMD and dynamic client registration to nothing fails
+expecting a `client_id`. Full diagnosis and the reference implementation for in-cluster agents:
+[`docs/troubleshooting/kanidm-no-dcr-mcp-client-id.md`](../troubleshooting/kanidm-no-dcr-mcp-client-id.md).
+
 ### 3. Consume the secret
 
 The operator creates a secret named `<app>-kanidm-oauth2-credentials` with keys `CLIENT_ID` and
@@ -146,6 +155,11 @@ kanidm group add-members <app>-users ${USER} -D idm_admin
 - **Mixed groups** (persons + service accounts): Must not use authoritative CRD member reconciliation that could remove manual person memberships. Before managing any service membership in a mixed group, determine whether the operator has additive or preserve semantics. Do not invent support — verify operator behavior first
 - **Public repo hygiene**: Do not commit person names, account privilege mappings, or membership lists to public documentation
 - **Deleting a `KanidmGroup` CR deletes the group in Kanidm together with its manual memberships** (Kaniop finalizer `kanidmgroups.kaniop.rs/finalizer`). Never move a group CR between apps or charts: the webhook rejects a second CR for the same group, so a move is delete-then-create and the members are lost. Keep the CR in the chart that owns the group, and re-add the members by hand after any accidental delete
+- **A `KanidmGroup` CR rendered WITHOUT a `members` field does not clobber manual memberships.**
+  Measured 2026-11-10 on the MCP gateway: the chart renders per-route human groups with no `members`
+  field, a Kaniop reconcile ran after the owner added people by hand, and the manual membership was
+  left intact. The CRD schema says `members` is authoritative *when present*; omitting it is the safe
+  way to create a group whose membership is managed out-of-band
 
 **Rationale**: CRD reconciliation may remove members not in the spec. Person accounts require manual lifecycle management (hiring, departure, role changes) that cannot be safely automated through GitOps.
 
@@ -164,7 +178,9 @@ The status should show `ready: true` and all conditions `True`.
 
 ### Manual CLI method (legacy)
 
-Example with Grafana:
+Example with Grafana. Note that these examples use `-D admin`, which was the historical bind account;
+the correct bind account for group management today is `idm_admin` (its credentials are in the
+owner's password store). The modern Kaniop section above uses `idm_admin` throughout.
 
 ```bash
 kanidm system oauth2 create grafana grafana  https://grafana.grigri.cloud/login/generic_oauth -D admin
@@ -184,6 +200,28 @@ If PKCE needs to be disabled:
 ```bash
 kanidm system oauth2 warning-insecure-client-disable-pkce ${CLIENT}
 ```
+
+### kanidm CLI on a workstation
+
+Measured 2026-11-10 on the operator's workstation (client 1.12.0 against server 1.11.2):
+
+- **There is no `~/.config/kanidm/config`.** The only config file present is the packaged example
+  `/etc/kanidm/config`, whose `uri` is the placeholder `https://idm.example.com`. Every `kanidm`
+  command must therefore pass `-H https://idm.grigri.cloud` explicitly, or the operator must create
+  a real instance config at `~/.config/kanidm/config` with the correct `uri`.
+- **Client/server version mismatch warning is benign.** The CLI prints "Mismatched client and server
+  version" on every call; group read/write operations succeed regardless.
+- **Non-interactive login.** `kanidm login` prompts on the TTY and fails with
+  `IO(NotConnected, "not a terminal")` in a non-interactive shell. The `KANIDM_PASSWORD` environment
+  variable is honoured instead (it backs the `--password` option), which is how an agent or script
+  can log in without a TTY. Never put the password in argv or in a file that is not `0600` and
+  shredded afterwards.
+- **Bind account.** For group management, bind as `idm_admin`, not `admin`. The `admin` account
+  still exists but is the historical bootstrap identity; `idm_admin` is the operator account the
+  Kaniop operator and the rest of the automation expect.
+- **Logout after a session.** `kanidm logout -D idm_admin -H https://idm.grigri.cloud` revokes the
+  cached token in `~/.cache/kanidm_cli`. Do it after a session so no long-lived ReadWrite token
+  sits on disk.
 
 ## Use groups in SSO
 

@@ -1,6 +1,9 @@
 # MCP Gateway Gap Closure Implementation Plan
 
-**Status:** Phases 1-4 executed (2026-11-10). G1, G2, G6, G10-G14 done; G3 deferred; G4 pending owner action; G5 closed by decision; G7, G15 partial. See Execution log (section 4.6).
+**Status:** Phases 1-4 executed (2026-11-10). G1, G2, G4, G6, G10-G14 done; G3 deferred; G5 closed by
+decision; G7, G15 partial. G4 is done for the three gateway routes: the owner converted the bypassing
+OpenCode servers to remote gateway entries. Per-route human authorisation landed in `fa96d899a`. See
+the Execution log and its addendum in section 4.
 **Anchor revision:** revision 2, measured against `origin/master` at `2a3b8dbb0` (2026-11-10).
 Findings are timestamped; the cluster moves — re-run §5 before trusting any line here.
 **What changed in revision 2:** the Envoy Gateway migration **ended**. Envoy is now the sole serving
@@ -15,18 +18,20 @@ measured probe/policy matrices, and the E2E acceptance record. Do not duplicate 
 
 ## 1. Overview
 
-The gateway MVP is **live, network-isolated, and serving two real routes** to two real clients
+The gateway MVP is **live, network-isolated, and serving three real routes** to two real clients
 (OpenCode and Hermes). Measured against the design doc's own MVP definition
-(`planning/mcp-gateway-implementation.md`, "Success Criteria"), **4 of 7 criteria are met**.
+(`planning/mcp-gateway-implementation.md`, "Success Criteria"), **6 of 7 criteria are met** (see the
+scorecard in §1.1; only the deferred Vault admin plane, criterion 4, is open).
 
 This plan records the remaining gaps as a prioritised register, separates what an agent can do
 unaided from what needs an owner decision, and gives re-verification commands so the next session
 starts from measurement rather than from this document's claims.
 
 The dominant theme is **consolidation, not construction**: the gateway currently exists *alongside*
-the legacy paths it was meant to replace. Two Grafana MCP paths and one Firecrawl path still bypass
-the gateway entirely (OpenCode `context7`, `grafana-grigri`, and `firecrawl` local; the `grafana-forkline`
-server targets a different, external Grafana and is out of scope).
+the legacy paths it was meant to replace. As of `fa96d899a` the OpenCode bypasses are closed:
+`context7`, `grafana-grigri` and `firecrawl` are remote gateway entries, not local servers. What is
+left local is deliberate: `grafana-forkline` targets a different, external Grafana and is out of this
+gateway's scope, `searxng` has no gateway route yet, `playwright` is out of scope by design.
 
 A second theme, new in revision 2, is **handoff debt**: the ingress layer under this gateway changed
 underneath it. The gateway itself needed no change — its CNPs already allowed the Envoy proxies — but
@@ -35,8 +40,9 @@ move with it. That class of debt is silent: nothing fails, the assertions just s
 
 **Update 2026-11-10:** Phases 1-4 are substantially complete. Hermes is fully migrated (no sidecar,
 three gateway servers). Firecrawl route is live. Placement is pinned to `prusik`. Verification assets
-were repaired and re-run. Remaining work: OpenCode bypass server retirement (owner action), deferred
-Vault admin plane decision, and ingress-migration Phase 6 coupling (G15).
+were repaired and re-run. OpenCode bypass retirement is done for the three routes (owner action, see
+G4 and section 10), and each of those routes is now gated by its own human Kanidm group (`fa96d899a`).
+Remaining work: deferred Vault admin plane decision, and ingress-migration Phase 6 coupling (G15).
 
 ### 1.1 Success Criteria scorecard (measured 2026-11-10)
 
@@ -46,9 +52,9 @@ Vault admin plane decision, and ingress-migration Phase 6 coupling (G15).
 | 2 | Grafana MCP standalone (**sidecar removed**) | **MET** | sidecar removed from `hermes-0` (commit 8b1b7007a); pod now `1/1` |
 | 3 | Firecrawl MCP deployed | **MET** | route `/firecrawl/mcp` live, scope-gated, stateless; acceptance passed — see G2 |
 | 4 | Vault MCP deployed (admin-only, scope decided) | **NOT MET / DEFERRED** | admin plane stays fail-closed (`routes: []`); owner decision 2026-11-10 — see G3 |
-| 5 | OpenCode/Hermes migrated (≥1 instance each) | **MET (Hermes), PENDING (OpenCode)** | Hermes: 3 gateway servers, no bypass; OpenCode: 2 of 8 through gateway — see G4 |
+| 5 | OpenCode/Hermes migrated (≥1 instance each) | **MET (both)** | Hermes: 3 gateway servers, no bypass. OpenCode: all three routes converted to remote gateway entries, see G4 |
 | 6 | All tests pass, rollback tested | **MET (tests), CLOSED (rollback)** | suites green, Jobs re-run and repaired (G13); rollback closed by decision (G5) — `git revert` + ArgoCD is the path |
-| 7 | Owner approval recorded for each gate | **MET** | all gates decided: 1-3, 6, 7 approved; 4 deferred; 5 closed; G4 pending owner action |
+| 7 | Owner approval recorded for each gate | **MET** | all gates decided: 1-3, 6, 7 approved; 4 deferred; 5 closed; G4 executed by the owner |
 
 ### 1.2 What is already correct (do not "fix" these)
 
@@ -91,9 +97,9 @@ residual risk or missing control; **Low** = hygiene/documentation.
 | ID | Gap | Sev | Blocked on | Phase |
 |----|-----|-----|-----------|-------|
 | G1 | **DONE** — Hermes legacy `grafana-mcp` sidecar removed; `hermes-0` now `1/1` with initContainer `fix-sa-token` (kept for SA token prep) and container `hermes` only. `grafana-mcp`, `grafana-mcp-refresher`, `grafana-mcp-token-init` resources, `grafana-mcp-shared` volume, and `localhost:8080/sse` server entry removed. Commit 8b1b7007a. | High | — | 3 |
-| G2 | **DONE** — Firecrawl route `/firecrawl/mcp` plus RFC 9728 discovery live. Scope-gated on `mcp_firecrawl` with exact-match CEL, `statefulMode: stateless`, no backend credential, Authorization and Cookie stripped. Authorized for `mcp-gateway-agents` group (no Kanidm change). Commits 8fa3885ff (route) and b351fb11a (Hermes client). Validated: acceptance printed ACCEPTANCE_PASS with servers: 3, real `firecrawl_scrape` returned 610 bytes, 403 for all wrong-scope combinations. | High | — | 4 |
+| G2 | **DONE** — Firecrawl route `/firecrawl/mcp` plus RFC 9728 discovery live. Scope-gated on `mcp_firecrawl` with exact-match CEL, `statefulMode: stateless`, no backend credential, Authorization and Cookie stripped. Authorized for `mcp-gateway-agents` group (no Kanidm change). Commits 8fa3885ff (route) and b351fb11a (Hermes client). Validated: acceptance printed ACCEPTANCE_PASS with servers: 3, real `firecrawl_scrape` returned 610 bytes, 403 for all wrong-scope combinations. Follow-up: humans are gated by `mcp-firecrawl-users` (`fa96d899a`), see the Execution log addendum. | High | — | 4 |
 | G3 | **DEFERRED by owner decision 2026-11-10** — Vault MCP not deployed; admin plane stays fail-closed (`routes: []`). Open question: should the admin plane exist at all while serving nothing? It consumes a pod, CNP, Ingress, HTTPRoute and scrape target. | High | owner decision deferred | 4 |
-| G4 | **PENDING OWNER ACTION** — OpenCode bypass servers not retired by agent decision. Owner will edit `~/.config/opencode/opencode.json`. See new section 10 (Handover). | High | owner action required | 3 |
+| G4 | **DONE (owner action, measured 2026-11-10)** — OpenCode bypass servers retired for the three gateway routes. `~/.config/opencode/opencode.json` now holds remote entries: `context7` `https://mcp.grigri.cloud/context7/mcp` with `oauth.scope: mcp_context7`, `grafana-grigri` `https://mcp.grigri.cloud/grafana/mcp` with `mcp_grafana`, `firecrawl` `https://mcp.grigri.cloud/firecrawl/mcp` with `mcp_firecrawl`; all three `type: remote`, `callback_port: 15000`. The local `context7` and `firecrawl` servers no longer exist in the config. Still local by decision: `grafana-forkline` (external Grafana), `searxng` (no route), `playwright` (out of scope). See section 10. | High | — | 3 |
 | G5 | **CLOSED BY OWNER DECISION 2026-11-10** — No separate rollback exercise. Rationale: for validated routes, `git revert` + ArgoCD reconcile restores previous state; Hermes sidecar was the rollback path until G1 removed it; only artefact retained is that retired OpenCode server blocks must be saved before deletion. Ingress-layer rollback belongs to ingress migration (tracked as G15). | Medium | — | 5 |
 | G6 | **DONE** — Owner decision: pin everything MCP to `prusik`. `grafana-mcp` gained `kubernetes.io/hostname: prusik`; `firecrawl-mcp` gained same pin while keeping `kubernetes.io/arch: amd64`; gateway planes and Hermes already pinned. Verified `prusik` is amd64 with capacity. Commit 8fa3885ff. | Medium | — | 5 |
 | G7 | **PARTIAL / RE-SCOPED** — ServiceMonitor for grafana-mcp enabled but produced `up == 0` (image has no HTTP client), so reverted along with CNP rule widening app port to Prometheus. firecrawl-mcp confirmed no `/metrics` endpoint (404). Net position: neither backend scraped, deliberately; gateway-side `agentgateway_requests_total` carries route and status labels for visibility. | Medium | — | 2 |
@@ -112,7 +118,8 @@ residual risk or missing control; **Low** = hygiene/documentation.
 
 ```
 ns mcp-gateway         mcp-gateway-standalone   1/1  prusik  ClusterIP 3000/15020/15021
-                       routes LIVE: /context7/mcp, /grafana/mcp (+ 2 RFC 9728 metadata routes)
+                       routes LIVE: /context7/mcp, /grafana/mcp, /firecrawl/mcp
+                       (+ 3 RFC 9728 metadata routes), all statefulMode: stateless
                        mcp.grigri.cloud -> HTTPRoute -> Gateway external (192.168.193.14)
                        the nginx-external Ingress object still exists, idle (rollback path)
 ns mcp-gateway-admin   mcp-gateway-admin        1/1  prusik  ClusterIP 3000/15020/15021
@@ -122,9 +129,9 @@ ns grafana-mcp         grafana-mcp              1/1  prusik  ClusterIP 8000, hea
                        ingress: gateway pods only (correct: its peer is the gateway, not the ingress)
 ns firecrawl-mcp       firecrawl-mcp            1/1  prusik  ClusterIP 3000 (exec probes)
                        ingress: gateway pods only, by native NetworkPolicy, egress: DNS + firecrawl-api:3002
-ns hermes              hermes-0                 containers: grafana-mcp, grafana-mcp-refresher, hermes
+ns hermes              hermes-0                 container: hermes (sidecar removed, G1/8b1b7007a)
                        hermes-mcp-gateway       token-refresher deployment (Kanidm token exchange)
-ns mcp-canary          EMPTY — orphan, no ArgoCD Application
+ns mcp-canary          DELETED (G11), verified absent 2026-11-10
 ```
 
 Ingress layer, measured 2026-11-10 after the migration ended: Envoy `external` = `192.168.193.14`,
@@ -142,12 +149,12 @@ OpenCode (`~/.config/opencode/opencode.json`, `mcp` + `mcp.servers`):
 |---|---|---|
 | `homelab-context7` | remote, OAuth PKCE | **yes** |
 | `homelab-grafana` | remote, OAuth PKCE | **yes** |
-| `context7` | local `npx @upstash/context7-mcp@latest` | no — duplicate of the gateway route |
-| `grafana-grigri` | local `mcp-grafana`, `GRAFANA_URL=https://grafana.grigri.cloud` | no — **same instance the gateway fronts**, with local credentials: a true bypass |
-| `grafana-forkline` | local `mcp-grafana`, `GRAFANA_URL=https://grafana.nbg1-c01.forkline.dev` | no — but a **different, external** Grafana: out of this gateway's scope |
-| `firecrawl` | local `npx firecrawl-mcp` → `firecrawl.internal.grigri.cloud` | no |
-| `searxng` | local `npx mcp-searxng` → `searxng.internal.grigri.cloud` | no |
-| `playwright` | local `npx @playwright/mcp@latest` | no — out of scope by design |
+| `context7` | remote `https://mcp.grigri.cloud/context7/mcp`, OAuth scope `mcp_context7` | **yes** (was a local duplicate, converted 2026-11-10) |
+| `grafana-grigri` | remote `https://mcp.grigri.cloud/grafana/mcp`, OAuth scope `mcp_grafana` | **yes** (was a local `mcp-grafana` with local credentials against the same instance, converted 2026-11-10) |
+| `grafana-forkline` | local `mcp-grafana`, `GRAFANA_URL=https://grafana.nbg1-c01.forkline.dev` | no, deliberately: a **different, external** Grafana, out of this gateway's scope |
+| `firecrawl` | remote `https://mcp.grigri.cloud/firecrawl/mcp`, OAuth scope `mcp_firecrawl` | **yes** (was a local `firecrawl-mcp`, converted 2026-11-10) |
+| `searxng` | local `npx mcp-searxng` → `searxng.internal.grigri.cloud` | no gateway route yet |
+| `playwright` | local `npx @playwright/mcp@latest` | no, out of scope by design |
 
 Hermes (`hermes-0`, via `hermes_cli.mcp_config._get_mcp_servers()`):
 
@@ -155,12 +162,15 @@ Hermes (`hermes-0`, via `hermes_cli.mcp_config._get_mcp_servers()`):
 |---|---|---|
 | `homelab-context7` | `https://mcp.grigri.cloud/context7/mcp` | oauth |
 | `homelab-grafana` | `https://mcp.grigri.cloud/grafana/mcp` | oauth |
-| `grafana` | `http://localhost:8080/sse` (sidecar) | **none** — shared SA token via `/shared/grafana-jwt` |
+| `homelab-firecrawl` | `https://mcp.grigri.cloud/firecrawl/mcp` | oauth |
 | `comunio` | local node command | none (unrelated workload) |
 
-Consequence: an agent that picks `grafana` instead of `homelab-grafana` gets a **shared** backend
-identity and produces **no** gateway audit record. That is the exact failure mode the architecture's
-"No silent fallback" and "single entry point" goals exist to prevent.
+Measured 2026-11-10 after G1: the sidecar entry `grafana` → `http://localhost:8080/sse` (no auth, shared
+SA token via `/shared/grafana-jwt`) is gone, so `homelab-grafana` is the only Grafana path from Hermes.
+
+Consequence (then, and the reason for G1): an agent that picked `grafana` instead of `homelab-grafana`
+got a **shared** backend identity and produced **no** gateway audit record. That is the exact failure
+mode the architecture's "No silent fallback" and "single entry point" goals exist to prevent.
 
 ### 3.3 Why the admin plane is idle
 
@@ -338,7 +348,12 @@ delivering nothing, so G3 and G6 should be decided together.
   Rollback: `git revert`; the sidecar returns with the pod. No CNP change is involved — the gateway
   CNPs are unaffected by this removal.
 - **TODO-3.2** (G4) **Retire bypassing OpenCode servers, one at a time, owner-approved per server.**
-  Recommended order and rationale (the two Grafana entries are *not* equivalent — measured from
+  **DONE (owner action, measured 2026-11-10)** for items 1, 2 and the `firecrawl` part of item 4: each
+  local server was **replaced in place** by a remote gateway entry of the same name rather than deleted,
+  so the agent-facing server names did not change. The local `context7` and `firecrawl` servers no longer
+  exist in the config. Items 3 and 5 stay local by decision; `searxng` still has no route. The order and
+  rationale below are kept as history because they are the reason the three routes were safe to convert.
+  Recommended order and rationale (the two Grafana entries are *not* equivalent, measured from
   `GRAFANA_URL` in `~/.config/opencode/opencode.json`):
   1. `context7` (local) — pure duplicate of a working gateway route; zero capability loss.
   2. `grafana-grigri` — targets `https://grafana.grigri.cloud`, **the same instance** the gateway's
@@ -443,6 +458,7 @@ Commits landed today:
 | e8718d549 | hermes-mcp suite repair |
 | 30abdcd74 | job image digest fix |
 | 18154236f | in-cluster re-verification |
+| fa96d899a | per-route Kanidm human groups for context7 and firecrawl |
 
 **Lesson:** commit 8fa3885ff has a subject mentioning only the firecrawl route but also contains
 grafana-mcp and firecrawl-mcp changes. An earlier aborted pre-commit run left unrelated paths staged;
@@ -452,6 +468,64 @@ and always check `git show --stat` after committing.
 **Note:** concurrent workstream removed Hermes `hostAliases` pin (commit 78ae995ee) because public DNS
 now resolves `mcp.grigri.cloud` to the Envoy address directly. Any line in this plan describing that
 pin as current is historical.
+
+### Execution log addendum: per-route human authorisation (fa96d899a)
+
+`grafana-users` used to grant both `mcp_grafana` and `mcp_context7`, so a human who could reach Grafana
+could reach context7, and no group granted `mcp_firecrawl` to humans at all. The chart now renders one
+group per route that needs its own human gate.
+
+What landed:
+
+| Item | Shape |
+|---|---|
+| New values key | `kanidm.humanGroups: [mcp-context7-users, mcp-firecrawl-users]` |
+| New template | `apps/mcp-gateway/templates/kanidm-group.yaml` renders each name as a `KanidmGroup` with **no `members` field** (person membership is never encoded in CRDs, `docs/user-guide/kanidm.md`) |
+| Human scope map | `kanidm.oauth2Client.humanScopeMap` is now three entries: `mcp-context7-users` → [`mcp_context7`], `mcp-firecrawl-users` → [`mcp_firecrawl`], `grafana-users` → [`mcp_grafana`] |
+| Workload scope map | `mcp-gateway-agents` → [`openid`, `email`, `profile`, `mcp_firecrawl`, `mcp_grafana`, `mcp_context7`], deliberately **unchanged** |
+| Removed | `mcp_context7` from `grafana-users` |
+
+Why the workload group keeps all three scopes while humans are split per route: agents are workloads.
+Splitting them would mean encoding service-account membership in the per-route human groups, and CRD
+`members` is authoritative when present, so a reconcile could clobber people the owner added by hand.
+The asymmetry is intentional; do not "finish the job" by moving agents into the human groups.
+
+Live verification (measured 2026-11-10, all read-only):
+
+- Both `KanidmGroup` CRs report `ready: true` with condition `Exists=True` ("Group exists.").
+- The `KanidmOAuth2Client` `mcp-gateway` reports `ScopeMapUpdated=True` and every other condition
+  `True`; its live `spec.scopeMap` matches the four-group shape above.
+- A Kaniop reconcile ran **after** the manual membership change and left the membership intact. That is
+  the evidence that a `KanidmGroup` CR without a `members` field does not clobber manually added people.
+- The owner added themselves to both new groups with the CLI and confirmed with
+  `kanidm group list-members`:
+
+  ```bash
+  kanidm group add-members <group> <account> -D idm_admin -H https://idm.grigri.cloud
+  ```
+
+  (Person names and account names are not recorded here, per the repo rule.)
+- Suites after the change: `chart-checks` 200/0, `foundation-checks` 61/0, `route-checks` 110/0,
+  `local-boot-checks` 79/0, `helm lint` clean.
+
+Caveat this introduces (stated as a rule, not about anyone): `mcp_context7` left `grafana-users`, so any
+other member of `grafana-users` loses context7 on a **new** OAuth consent. Kanidm evaluates scope maps at
+consent time, so an already-issued token keeps working until it expires and the loss only materialises on
+re-consent. The remedy is manual:
+
+```bash
+kanidm group add-members mcp-context7-users <account> -D idm_admin -H https://idm.grigri.cloud
+```
+
+The population affected is the household/other members of `grafana-users`, which is exactly why this was
+announced rather than shipped silently.
+
+CLI reality on the operator's workstation (measured, durable): every `kanidm` command must pass
+`-H https://idm.grigri.cloud` (there is no `~/.config/kanidm/config`; the packaged `/etc/kanidm/config`
+`uri` is still the `https://idm.example.com` placeholder), the client 1.12.0 / server 1.11.2 mismatch
+warning is benign for group read/write, `KANIDM_PASSWORD` replaces the interactive `kanidm login` prompt
+in a non-TTY shell, and `kanidm logout -D idm_admin -H <url>` should follow a session so no long-lived
+ReadWrite token stays in `~/.cache/kanidm_cli`. Full notes: `docs/user-guide/kanidm.md`.
 
 ## 5. Verification Checklist
 
@@ -464,9 +538,14 @@ Re-run these before trusting any claim in this document. All read-only.
 - [ ] Live routes: `kubectl --context=grigri -n mcp-gateway get cm mcp-gateway-standalone-config -o jsonpath='{.data.config\.yaml}' | grep -E 'name:|host:|statefulMode'`
 - [ ] Hermes acceptance (the authoritative functional test):
       `kubectl --context=grigri exec -i -n hermes hermes-0 -c hermes -- python - < test/mcp-gateway/hermes-live-acceptance.py`
-      → must print `"check": "ACCEPTANCE_PASS"` with `"servers": 2`
-- [ ] OpenCode side: one real `homelab-context7` `query-docs` call and one `homelab-grafana`
-      `list_datasources` call, both returning real upstream content
+      → must print `"check": "ACCEPTANCE_PASS"` with `"servers": 3` (context7, grafana, firecrawl)
+- [ ] OpenCode side: one real `homelab-context7` `query-docs` call, one `homelab-grafana`
+      `list_datasources` call, and one `firecrawl` scrape, all returning real upstream content
+- [ ] Per-route human groups (after fa96d899a):
+      `kubectl --context=grigri -n mcp-gateway get kanidmgroups.kaniop.rs` lists `mcp-context7-users`,
+      `mcp-firecrawl-users`, `mcp-gateway-agents`, all `ready: true`; and
+      `kubectl --context=grigri -n mcp-gateway get kanidmoauth2clients.kaniop.rs mcp-gateway -o jsonpath='{.status.conditions}'`
+      shows `ScopeMapUpdated=True`
 - [ ] Audit stream: `{namespace="mcp-gateway"} | json | scope="request"` in Loki shows
       `jwt.sub`, `mcp.target`, `gen_ai.tool.name`, `http.status`
 - [ ] Metrics: `up{namespace=~"mcp-gateway|mcp-gateway-admin"} == 1`
@@ -479,9 +558,9 @@ Re-run these before trusting any claim in this document. All read-only.
       *gone* (G15).
 - [ ] Ingress health: `bash scripts/gateway-check.sh` (read-only, 12 checks) — extend it per TODO-2.8
       so the MCP hosts are covered.
-- [ ] Local suites: `test/mcp-gateway/chart-checks.py` (172),
-      `apps/firecrawl-mcp/tests/test_exec_probes.py` (13), `route-checks.py`, `local-boot-checks.py`,
-      `foundation-checks.py`, `grafana-backend-checks.py`
+- [ ] Local suites: `test/mcp-gateway/chart-checks.py` (200 as of fa96d899a),
+      `apps/firecrawl-mcp/tests/test_exec_probes.py` (13), `route-checks.py` (110),
+      `local-boot-checks.py` (79), `foundation-checks.py` (61), `grafana-backend-checks.py`
 - [ ] Denied-path check after any CNP edit: TCP from an unlisted pod to the app port must time out.
       Prefer the committed Job over ad-hoc pods — `test/mcp-gateway/jobs/verify-networkpolicy.yaml`
       (needs TODO-2.4's header/expectation refresh first); owner applies and deletes it.
@@ -562,8 +641,9 @@ depends on it *for recovery*, not just for the happy path.
 | Admin gateway URL | `https://mcp.internal.grigri.cloud` — HTTPRoute → Envoy gateway `internal`, VIP `192.168.193.13` (nginx-internal Ingress remains, idle) |
 | OAuth client / redirect | `mcp-gateway`, PKCE S256, `http://127.0.0.1:15000/callback`, `strictRedirectUrl: true` |
 | Issuer (public plane) | `https://idm.grigri.cloud/oauth2/openid/mcp-gateway` |
-| Scopes | `mcp_context7`, `mcp_grafana`, `mcp_firecrawl` (granted, inert — no route) |
-| Human grant | group `grafana-users` → `mcp_grafana` + `mcp_context7`; `supScopeMap`: `grafana-mcp-users`→`editor`, `grafana-admins`→`admin` |
+| Scopes | `mcp_context7`, `mcp_grafana`, `mcp_firecrawl` (all three live: one route each, all `stateless`) |
+| Human grant | per-route, via `kanidm.oauth2Client.humanScopeMap`: `mcp-context7-users`→`mcp_context7`, `mcp-firecrawl-users`→`mcp_firecrawl`, `grafana-users`→`mcp_grafana` (person membership manual, never in CRDs); workload grant: `mcp-gateway-agents`→all three scopes; `supScopeMap`: `grafana-mcp-users`→`editor`, `grafana-admins`→`admin` |
+| Per-route discovery | Each route's RFC 9728 document advertises exactly ONE scope: `.../context7/mcp`→`["mcp_context7"]`, `.../grafana/mcp`→`["mcp_grafana"]`, `.../firecrawl/mcp`→`["mcp_firecrawl"]`, all with `authorization_servers: ["https://idm.grigri.cloud/oauth2/openid/mcp-gateway"]` |
 | Gateway ports | app 3000, metrics 15020, healthz 15021 (`adminAddr: "off"`, nothing on 15000) |
 | grafana-mcp ports | app 8000, healthz 8081 |
 | firecrawl-mcp port | 3000 (exec probes) |
@@ -589,8 +669,8 @@ depends on it *for recovery*, not just for the happy path.
 | `apps/grafana-mcp/values.yaml`, `apps/firecrawl-mcp/values.yaml` | 2 | scrape targets (+ CNP metrics rule if enabled) |
 | `test/mcp-gateway/jobs/verify-networkpolicy.yaml`, `verify-foundation-incluster.yaml` | 2 | refresh stale policy/ingress references, then re-run |
 | `apps/hermes/values.yaml`, `apps/hermes/templates/*` | 3 | remove sidecar, refresher, token-init, `/shared`, and the `grafana` MCP server entry |
-| `~/.config/opencode/opencode.json` (not in repo) | 3 | retire bypassing servers one at a time, **saving each block first** |
-| `apps/mcp-gateway/values.yaml` | 4 | add `/firecrawl/mcp` + metadata route once the group decision is made |
+| `~/.config/opencode/opencode.json` (not in repo) | 3 | **DONE** for the three routes (owner replaced each bypassing local server with a remote gateway entry; see G4 and section 10) |
+| `apps/mcp-gateway/values.yaml` | 4 | **DONE** (G2): `/firecrawl/mcp` + metadata route added; **DONE** (fa96d899a): per-route `kanidm.humanGroups` and `humanScopeMap` rendered |
 | `apps/mcp-gateway-admin/values.yaml` | 4 | Vault scope, group, route |
 | `apps/firecrawl/**` (separate workstream, unauthorised) | 4 | fetcher egress/destination control (G8) |
 | node pinning / replica values | 5 | per-workload placement decision |
@@ -601,7 +681,7 @@ depends on it *for recovery*, not just for the happy path.
 ```
 Phase 1 (docs + cleanup + G14) ── no dependencies, no live change, do first
 Phase 2 (handoff safety, obs)  ── G15 rollback invariant; G13 Jobs; G7 scraping; G12 audit posture
-Phase 3 (consolidation)        ── G1 needs owner approval; G4 needs per-server approval
+Phase 3 (consolidation)        ── G1 done; G4 done for the three routes (owner action)
 Phase 4 (backends)             ── G2 route = group decision only; G3 Vault = owner decision; G8 unauthorised
 Phase 5 (resilience)           ── after Phase 3, so rollback is tested against the final shape
 ```
@@ -612,8 +692,10 @@ Hard ordering rules:
   migration Phase 6, in the same change that deletes ingress-nginx — because they are the allow-list
   for the documented rollback path (G15). Gateway-side "tidying" here would make a future rollback
   fail closed at the network layer.
-- **G1 before G4's Grafana items.** Removing the Hermes sidecar while OpenCode still has two local
-  `mcp-grafana` servers does not reduce the Grafana path count.
+- **G1 before G4's Grafana items.** (Satisfied 2026-11-10: G1 landed in `8b1b7007a`, G4's Grafana
+  item retired when the owner converted `grafana-grigri` to a remote gateway entry.) Removing the
+  Hermes sidecar while OpenCode still had two local `mcp-grafana` servers would not have reduced the
+  Grafana path count; the ordering rule held.
 - **G2's route and G8's fetcher control are independent.** The route may ship on the group decision
   alone; the fetcher egress work has an unresolved regression and must not become a precondition —
   or be bundled — with it.
@@ -623,7 +705,7 @@ Hard ordering rules:
 
 ## 10. Handover: connecting OpenCode to the gateway
 
-Gateway entry points:
+Gateway entry points (measured 2026-11-10):
 
 - `https://mcp.grigri.cloud/context7/mcp`
 - `https://mcp.grigri.cloud/grafana/mcp`
@@ -631,30 +713,87 @@ Gateway entry points:
 
 All use OAuth PKCE against issuer `https://idm.grigri.cloud/oauth2/openid/mcp-gateway`,
 redirect `http://127.0.0.1:15000/callback`. Each publishes RFC 9728 discovery at
-`/.well-known/oauth-protected-resource/<target>/mcp`, so a discovery-capable client needs only the URL.
+`/.well-known/oauth-protected-resource/<target>/mcp`, so a discovery-capable client needs only the URL
+**plus** the out-of-band `client_id` and `redirect_uri`. Kanidm supports neither dynamic client
+registration (DCR) nor client-id metadata documents (CIMD): the authorization-server metadata
+document at `.../.well-known/oauth-authorization-server` omits both `registration_endpoint` and
+`client_id_metadata_document_supported`. A client that falls through CIMD and DCR to nothing fails
+expecting a `client_id`. The pre-registered client is `mcp-gateway` (the short name, because the
+`KanidmOAuth2Client` sets `preferShortUsername: true`), and it is `public: true` (PKCE only, no
+secret). Each OpenCode server's `oauth` block must therefore include:
 
-Required scope per route: `mcp_context7`, `mcp_grafana`, `mcp_firecrawl`.
+```json
+{
+  "client_id": "mcp-gateway",
+  "redirect_uri": "http://127.0.0.1:15000/callback",
+  "scope": "<the single scope the route's RFC 9728 document advertises>",
+  "callback_port": 15000
+}
+```
 
-**Caveat:** human callers receive scopes via Kanidm `humanScopeMap` for group `grafana-users`, which
-currently contains only `mcp_grafana` and `mcp_context7`. OpenCode can use context7 and grafana routes
-now, but firecrawl returns 403 for humans until the owner adds `mcp_firecrawl` to `humanScopeMap` in
-`apps/mcp-gateway/values.yaml`. The route is live for agent group `mcp-gateway-agents` (Hermes can use it).
+After editing the config, clear any cached credentials and re-authorise: `opencode mcp logout <server>`.
+Full diagnosis and the reference implementation for in-cluster agents:
+[`docs/troubleshooting/kanidm-no-dcr-mcp-client-id.md`](../docs/troubleshooting/kanidm-no-dcr-mcp-client-id.md).
 
-**Retirement order for `~/.config/opencode/opencode.json`:**
+**Per-route discovery advertises exactly ONE scope.** Measured live:
 
-Save each block to a file before deleting it.
+| Route | `scopes_supported` | `authorization_servers` |
+|---|---|---|
+| `.../context7/mcp` | `["mcp_context7"]` | `["https://idm.grigri.cloud/oauth2/openid/mcp-gateway"]` |
+| `.../grafana/mcp` | `["mcp_grafana"]` | `["https://idm.grigri.cloud/oauth2/openid/mcp-gateway"]` |
+| `.../firecrawl/mcp` | `["mcp_firecrawl"]` | `["https://idm.grigri.cloud/oauth2/openid/mcp-gateway"]` |
 
-1. `context7` local — pure duplicate of working gateway route
-2. `grafana-grigri` — targets same Grafana as gateway but with local credential instead of caller bearer;
-   retiring removes unaudited path
-3. `firecrawl` local — only after `mcp_firecrawl` granted to humans, otherwise capability loss
+Corollary (and the reason a client must be configured with one server per route, not one server that
+asks for all three scopes): Kanidm refuses the **whole** authorization when any requested scope is not
+in the granted set. A caller that asks for `mcp_context7` and `mcp_firecrawl` in the same request is
+refused wholesale unless they are a member of **both** `mcp-context7-users` and `mcp-firecrawl-users`.
+Per-server single-scope configuration is therefore required.
 
-Leave unchanged: `grafana-forkline` (different external Grafana), `searxng` (no gateway route yet),
-`playwright` (out of scope by design).
+**Human authorisation is per-route** (since `fa96d899a`):
 
-**Post-retirement check:** one real tool call through corresponding `homelab-*` server, plus check
-gateway audit stream in Loki (`{namespace="mcp-gateway"} | json | scope="request"`) to confirm call
-recorded with caller's `jwt.sub`.
+| Kanidm group | Scope granted | Route gated |
+|---|---|---|
+| `mcp-context7-users` | `mcp_context7` | `/context7/mcp` |
+| `mcp-firecrawl-users` | `mcp_firecrawl` | `/firecrawl/mcp` |
+| `grafana-users` | `mcp_grafana` | `/grafana/mcp` |
+
+Workloads use `mcp-gateway-agents`, which keeps all three scopes. Person membership in the human
+groups is managed manually with `kanidm group add-members <group> <account> -D idm_admin -H https://idm.grigri.cloud`
+and is never encoded in CRDs (`docs/user-guide/kanidm.md`).
+
+**Caveat from the split** (stated as a rule, not about anyone): `mcp_context7` moved out of
+`grafana-users`, so any other member of `grafana-users` loses context7 on a **new** OAuth consent.
+Kanidm evaluates scope maps at consent time, so an already-issued token keeps working until it
+expires and the loss only materialises on re-consent. The remedy is manual:
+
+```bash
+kanidm group add-members mcp-context7-users <account> -D idm_admin -H https://idm.grigri.cloud
+```
+
+The population affected is the household/other members of `grafana-users`.
+
+**OpenCode config state (measured 2026-11-10):** `~/.config/opencode/opencode.json` now holds three
+remote gateway entries, one per route, each with `type: remote` and `oauth.scope` set to exactly the
+scope that route's discovery advertises:
+
+| Server name | URL | OAuth scope |
+|---|---|---|
+| `context7` | `https://mcp.grigri.cloud/context7/mcp` | `mcp_context7` |
+| `grafana-grigri` | `https://mcp.grigri.cloud/grafana/mcp` | `mcp_grafana` |
+| `firecrawl` | `https://mcp.grigri.cloud/firecrawl/mcp` | `mcp_firecrawl` |
+
+All three use `oauth.callback_port: 15000`. The local `context7` and `firecrawl` servers no longer
+exist in the config. The retirement-order rationale (the local `context7` duplicate, the local
+`grafana-grigri` that bypassed the gateway against the same instance, the local `firecrawl` that
+required the human grant to land first) is kept as history: the blocks were replaced in place rather
+than deleted, so agent-facing server names did not change.
+
+**Still local by decision:** `grafana-forkline` (different, external Grafana, out of this gateway's
+scope), `searxng` (no gateway route yet), `playwright` (out of scope by design).
+
+**Post-retirement check:** one real tool call through each `homelab-*` server, plus check the
+gateway audit stream in Loki (`{namespace="mcp-gateway"} | json | scope="request"`) to confirm the
+call is recorded with the caller's `jwt.sub`.
 
 ## Related
 

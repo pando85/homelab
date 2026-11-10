@@ -51,7 +51,11 @@ future work.
   Create a new group only if no existing group fits, with approval.
   **Group membership**: Person accounts must be added manually (see `docs/user-guide/kanidm.md`); never encode person membership in CRDs or reconcile through Git. Service-account-only groups may use CRD membership
 - **Per-MCP access**: Any configured existing group grants that MCP, not every MCP.
-  Whole MCP = all tools allowed
+  Whole MCP = all tools allowed. Implemented as one human Kanidm group per route
+  (`mcp-context7-users`, `mcp-firecrawl-users`, plus the existing `grafana-users`), with a matching
+  `humanScopeMap` entry per route. Workloads use a single group (`mcp-gateway-agents`) that keeps
+  every MCP scope; the asymmetry is deliberate (see the Execution log addendum in
+  `planning/mcp-gateway-gap-closure-implementation.md`)
 - **Network isolation**: Default-deny NetworkPolicy; gateway-only ingress. No NodePort/LB/hostPort
 - **Auth delegation** where supported; otherwise per-MCP fixed service credential. No silent
   fallback; if blocked, decide per-MCP, do not impose broker
@@ -147,6 +151,14 @@ Admin gateway does not grant Hermes automatic admin.
 - **Caller identification**: Stable `sub` claim plus client identity. Username optional;
   do not assume `preferred_username` in access token
 
+**Client pre-registration is mandatory.** Kanidm supports neither dynamic client registration nor
+client-id metadata documents: every OAuth client must be pre-registered in git via
+`KanidmOAuth2Client` and its `client_id` supplied to the client out of band. Human callers satisfy
+this with browser authorization-code + PKCE using the pre-registered `client_id: mcp-gateway`;
+in-cluster agents satisfy it with the token-exchange grant (`urn:ietf:params:oauth:grant-type:token-exchange`)
+using a service-account subject token. See
+[`docs/troubleshooting/kanidm-no-dcr-mcp-client-id.md`](../troubleshooting/kanidm-no-dcr-mcp-client-id.md).
+
 ### Token Validation
 
 - Valid issuer: exact match to discovered/configured issuer, no wildcard
@@ -154,6 +166,36 @@ Admin gateway does not grant Hermes automatic admin.
   must not accept arbitrary client audience)
 - Not expired: `exp` claim
 - Group/scope extraction: Kanidm OAuth scopes or supported lookup (spike to confirm mechanism)
+
+### Scope Mapping (implemented 2026-11-10)
+
+Human callers receive scopes via `kanidm.oauth2Client.humanScopeMap` in `apps/mcp-gateway/values.yaml`,
+one entry per route:
+
+| Kanidm group | Scope granted | Route gated |
+|---|---|---|
+| `mcp-context7-users` | `mcp_context7` | `/context7/mcp` |
+| `mcp-firecrawl-users` | `mcp_firecrawl` | `/firecrawl/mcp` |
+| `grafana-users` | `mcp_grafana` | `/grafana/mcp` |
+
+Workloads use a single group (`mcp-gateway-agents`) that keeps **all three** MCP scopes plus
+`openid`/`email`/`profile`. The asymmetry is deliberate: splitting workloads into the per-route human
+groups would require encoding service-account membership there, and the Kaniop CRD `members` field is
+authoritative when present, so a reconcile could clobber people the owner added by hand.
+
+Each route's RFC 9728 discovery document advertises **exactly one** scope in `scopes_supported`
+(`mcp_context7`, `mcp_grafana`, `mcp_firecrawl` respectively), with `authorization_servers` pointing at
+`https://idm.grigri.cloud/oauth2/openid/mcp-gateway`. Corollary: Kanidm refuses the whole authorization
+when any requested scope is not in the granted set, so a client that asks for a union of scopes (for
+example all three at once) is refused wholesale unless the caller is a member of every corresponding
+group. Per-server single-scope configuration is therefore required.
+
+Person membership in the human groups is managed manually with
+`kanidm group add-members <group> <account> -D idm_admin -H https://idm.grigri.cloud` and is never
+encoded in CRDs (see `docs/user-guide/kanidm.md` "Group membership rules"). The `KanidmGroup` CRs for
+the human groups are rendered with **no `members` field**, so a Kaniop reconcile leaves manual
+membership intact (measured 2026-11-10: a reconcile ran after the manual membership change and did not
+clobber it).
 
 ### Backend Credential Patterns
 
@@ -214,7 +256,9 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
    long-lived desktop clients
 2. **Group membership mechanism**: OAuth scopes vs supported lookup — verify which Kanidm supports
 3. **Existing group suitability**: Confirm `grafana-mcp-users`, `hermes-users` memberships and
-   whether they fit the per-target model. No assumptions
+   whether they fit the per-target model. No assumptions. **Resolved (2026-11-10):** per-route human
+   groups landed (`mcp-context7-users`, `mcp-firecrawl-users`, plus the existing `grafana-users`);
+   workload access is via `mcp-gateway-agents`. See the Scope Mapping subsection above.
 4. **Kanidm user-token exchange**: Not verified for human delegation. If blocked, record per-MCP
    decision: supported delegated alternative, explicitly approved shared service credential,
    or defer target
