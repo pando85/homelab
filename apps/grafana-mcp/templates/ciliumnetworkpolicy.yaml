@@ -13,18 +13,16 @@
 # PORTS - read off the rendered subchart output, not assumed
 # ---------------------------------------------------------
 #   8000  MCP app listener (`--address 0.0.0.0:8000`, the only containerPort, Service
-#         `mcp-http`)
+#         `mcp-http`). Also serves /metrics (the binary always exposes metrics on the
+#         main listener; serviceMonitor scrapes this port).
 #   8081  health listener (`--healthz-address :8081`), readiness + liveness on
 #         `/healthz` - DEDICATED, so allowing it exposes nothing else
-#   metrics: none. `serviceMonitor.enabled` is false and the pod declares no metrics
-#          port, so there is no metrics rule to write and nothing for prometheus to
-#          reach here.
 #
 # `world` on 8081 is owner-accepted residual exposure: that listener serves the health
 # body only, pod IPs are not routable from outside the cluster, and unlike the app
 # listener it has no Host/Origin validation to trip over (`--healthz-address` is exempt
-# - measured). It also survives rescheduling: this pod has no nodeSelector, and `world`
-# matches whichever node ends up probing it, which `host`/`remote-node` did not.
+# - measured). `world` matches whichever node probes it, which `host`/`remote-node`
+# did not (measured restart-loop on 838031375).
 #
 # NEW MEASURED FACT: with `world` on the health port, an in-cluster pod that is NOT
 # named in `fromEndpoints` is DENIED on the health port as well. So `world` does not
@@ -55,18 +53,22 @@ spec:
         - ports:
             - port: "8081"
               protocol: TCP
-    # (2) The MCP listener is reachable from the gateway plane and nothing else. One
-    # shared process forwards each caller's own bearer, so the network path is what
-    # makes "no direct backend access" true: a pod outside this allowlist cannot even
-    # open the connection, let alone present a credential. Labels are the gateway's
-    # rendered + live pod labels; the service name the gateway dials is
-    # grafana-mcp.grafana-mcp.svc.cluster.local:8000, matching --allowed-hosts.
+    # (2) The MCP listener is reachable from the gateway plane and Prometheus (for
+    # metrics scraping). One shared process forwards each caller's own bearer, so the
+    # network path is what makes "no direct backend access" true: a pod outside this
+    # allowlist cannot even open the connection, let alone present a credential.
+    # Labels are the gateway's rendered + live pod labels; the service name the
+    # gateway dials is grafana-mcp.grafana-mcp.svc.cluster.local:8000, matching
+    # --allowed-hosts. Metrics are served on the same port (8000) at /metrics.
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: agentgateway-standalone
             app.kubernetes.io/instance: mcp-gateway
             app.kubernetes.io/component: standalone
             io.kubernetes.pod.namespace: mcp-gateway
+        - matchLabels:
+            app.kubernetes.io/name: prometheus
+            io.kubernetes.pod.namespace: monitoring
       toPorts:
         - ports:
             - port: "8000"

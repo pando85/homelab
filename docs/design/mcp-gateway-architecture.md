@@ -225,7 +225,7 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 |--------|-------|---------------|--------|
 | Grafana MCP | MVP | Live route with caller-preserving delegation | Dedicated pod in gateway ns (sidecar removal in progress) |
 | Context7 | MVP | Deployed route with Vault-delivered upstream key | Live |
-| Firecrawl | MVP | Backend pod deployed and isolated; gateway route being added | Deploy `firecrawl-mcp` package |
+| Firecrawl | MVP | Route live; backend pod deployed and isolated | Deploy `firecrawl-mcp` package |
 | Vault | Deferred | Admin plane fail-closed (`routes: []`) | Owner decision 2026-11-10: deferred |
 | SearXNG | Next | REST API, internal | Deploy MCP package |
 | HA, Postgres, Playwright | Future | N/A | Separate phases |

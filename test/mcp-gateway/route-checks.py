@@ -197,6 +197,52 @@ def main():
     check("context7 route is not host-pinned (a client may SNI any name the ingress forwards)",
           "hostnames" not in ctx)
 
+    # ---------------- 2b. firecrawl (LIVE) ----------------
+    fc = by_name(routes, "firecrawl")
+    check("firecrawl route exists (enabled=true)",
+          fc is not None, "firecrawl route should be rendered when backend is enabled")
+    if fc:
+        fpol = fc["policies"]
+        fauthn = fpol["mcpAuthentication"]
+        check("firecrawl route matches its flag values (path, scope, resource)",
+              path_of(fc) == (("pathPrefix", backends["firecrawl"]["path"]),)
+              and fauthn["resourceMetadata"]["resource"] == backends["firecrawl"]["resource"],
+              str(path_of(fc)))
+        check("firecrawl issuer is the exact Kanidm per-client path",
+              fauthn["issuer"] == ISSUER)
+        check("firecrawl audience is pinned to the OAuth2 client name",
+              fauthn["audiences"] == ["mcp-gateway"])
+        check("firecrawl JWKS URL is Kanidm's public_key.jwk",
+              fauthn["jwks"] == {"url": JWKS})
+        check("firecrawl mode is strict",
+              fauthn.get("mode") == "strict")
+        check("firecrawl resourceMetadata holds the absolute route URL and its scope",
+              fauthn["resourceMetadata"] == {"resource": f"{PUBLIC}/firecrawl/mcp",
+                                            "scopesSupported": ["mcp_firecrawl"]},
+              str(fauthn["resourceMetadata"]))
+        frules = [r["require"] for r in fpol["authorization"]["rules"]]
+        check("firecrawl authorization is fail-closed: no identity claims, then mcp_firecrawl",
+              frules == [
+                  "!has(jwt.email)",
+                  "!has(jwt.preferred_username)",
+                  "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_firecrawl')",
+              ], json.dumps(frules))
+        fremoved = fpol["requestHeaderModifier"]["remove"]
+        for h in ("Authorization", "Cookie"):
+            check(f"firecrawl strips {h} at the edge", h in fremoved, str(fremoved))
+        check("firecrawl has NO backendAuth (no upstream credential injected)",
+              fpol.get("backendAuth") is None,
+              json.dumps(fpol.get("backendAuth")))
+        fbe = fc["backends"][0]["mcp"]
+        check("firecrawl backend is stateless",
+              fbe["statefulMode"] == "stateless")
+        ftgt = fbe["targets"][0]
+        check("firecrawl target is the in-cluster service, split host/port/path",
+              ftgt["mcp"] == {"host": "firecrawl-mcp.firecrawl-mcp.svc.cluster.local",
+                              "port": 3000, "path": "/mcp"}, str(ftgt["mcp"]))
+        check("firecrawl target has no backendTLS (plain HTTP inside the cluster)",
+              "backendTLS" not in (ftgt.get("policies") or {}))
+
     # ---------------- 3. grafana (PRESENT, DISABLED) ----------------
     # The grafana route is now live (enabled=true), so we check it directly from the rendered config
     graf = by_name(routes, "grafana")
@@ -234,8 +280,8 @@ def main():
 
     # ---------------- 4. RFC 9728 discovery ----------------
     meta = [r for r in routes if "metadata" in r["name"]]
-    check("both discovery routes are rendered (grafana's is live even while its MCP route is off)",
-          {r["name"] for r in meta} == {"context7-metadata", "grafana-metadata"})
+    check("all three discovery routes are rendered (context7, grafana, firecrawl)",
+          {r["name"] for r in meta} == {"context7-metadata", "grafana-metadata", "firecrawl-metadata"})
     for r in meta:
         name = r["name"].replace("-metadata", "")
         spec = backends[name]

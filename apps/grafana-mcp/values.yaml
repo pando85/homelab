@@ -46,6 +46,12 @@ grafana-mcp:
 
   replicas: 1
 
+  # Pin to prusik node for consistency with the gateway planes and Hermes.
+  # Owner decision (2026-11-10): single failure domain accepted for simplicity
+  # and because probe behaviour is measured on prusik.
+  nodeSelector:
+    kubernetes.io/hostname: prusik
+
   grafana:
     # Values key (subchart `grafana.url`, rendered verbatim into GRAFANA_URL by
     # grafana-mcp-0.34.0 templates/deployment.yaml). Fixed in-cluster URL; not caller-controllable
@@ -178,8 +184,17 @@ grafana-mcp:
     timeoutSeconds: 3
     failureThreshold: 3
 
+  # Metrics are served on the main listener (port 8000) at /metrics. The binary
+  # always exposes them (--help: "/healthz and /metrics are always served at the
+  # root"). The upstream chart's serviceMonitor template scrapes port `mcp-http`
+  # when `metrics.port` is empty (the default), which is correct here.
   serviceMonitor:
-    enabled: false
+    enabled: true
+    labels:
+      release: monitoring
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
 
 # Reaching Grafana is the gateway's job only: a NetworkPolicy/CNP must restrict Grafana
 # ingress to this backend plus the browser path, otherwise a caller could bypass the

@@ -63,6 +63,7 @@ import urllib.request
 
 from cryptography.hazmat.primitives.asymmetric import ec
 import jwt
+import yaml
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import chartconfig  # noqa: E402  (renders the real charts; see chartconfig.py)
@@ -254,42 +255,96 @@ def issuer_url():
 
 
 def render_public_config():
-    """The shipping firecrawl route on the PUBLIC plane, straight from the chart."""
-    return chartconfig.render(
+    """The shipping firecrawl route on the PUBLIC plane, straight from the chart.
+
+    The chart's routes point to in-cluster services and the real Kanidm issuer, but
+    the e2e test needs them to point to loopback backends and a stub issuer. Parse
+    the rendered config, retarget, and serialize back.
+    """
+    config_text = chartconfig.render(
         "apps/mcp-gateway", "mcp-gateway", "mcp-gateway",
-        ["backends.firecrawl.enabled=true",
-         f"backends.firecrawl.url=http://{BACKEND_HOST}:{BACKEND_PORT}/mcp",
-         f"backends.firecrawl.hostHeader={BACKEND_HOST}:{BACKEND_PORT}",
-         f"backends.firecrawl.resource=http://{BACKEND_HOST}:{GW_PORT}/firecrawl/mcp",
-         f"auth.issuer={issuer_url()}",
-         f"auth.jwksUrl={issuer_url()}/jwks",
-         f"gateway.port={GW_PORT}"],
+        ["backends.firecrawl.enabled=true"],
         ("mcpAuthentication", "requestHeaderModifier", "jwt.scope.split(' ')"))
+    # Parse and retarget
+    cfg = yaml.safe_load(config_text)
+    # Change gateway port to the ephemeral test port
+    cfg["gateways"]["default"]["port"] = GW_PORT
+    cfg["gateways"]["default"]["bindAddress"] = BACKEND_HOST
+    # Retarget issuer and JWKS to the stub
+    for route in cfg["routes"]:
+        authn = (route.get("policies") or {}).get("mcpAuthentication")
+        if authn:
+            authn["issuer"] = issuer_url()
+            if "jwks" in authn:
+                authn["jwks"]["url"] = f"{issuer_url()}/jwks"
+        # Retarget resource metadata to loopback
+        res_meta = (authn or {}).get("resourceMetadata")
+        if res_meta and "resource" in res_meta:
+            res_meta["resource"] = res_meta["resource"].replace(
+                "https://mcp.grigri.cloud", f"http://{BACKEND_HOST}:{GW_PORT}")
+    # Retarget firecrawl backend to loopback
+    for route in cfg["routes"]:
+        if route.get("name") == "firecrawl":
+            for be in route.get("backends", []):
+                for tgt in be.get("mcp", {}).get("targets", []):
+                    tgt["mcp"]["host"] = BACKEND_HOST
+                    tgt["mcp"]["port"] = BACKEND_PORT
+    # Retarget context7 backend to loopback (for cases that test it)
+    for route in cfg["routes"]:
+        if route.get("name") == "context7":
+            for be in route.get("backends", []):
+                for tgt in be.get("mcp", {}).get("targets", []):
+                    tgt["mcp"]["host"] = BACKEND_HOST
+                    tgt["mcp"]["port"] = BACKEND_PORT
+                    # Remove backendTLS for loopback
+                    tgt.pop("policies", None)
+    # Serialize back to YAML
+    return yaml.dump(cfg, sort_keys=False, width=4096)
 
 
 def render_admin_config():
     """The delegation candidate on the PUBLIC plane, straight from the chart.
 
     Grafana MCP is a public-plane backend (`mcp.grigri.cloud`) per the approved
-    architecture; only Vault belongs to the admin plane. `credential: accessToken`
-    makes the route authorize on the access token's `scope` string and emit
-    `backendAuth.passthrough`, so the caller's own credential reaches the backend.
-    The route stays disabled in values; enabling it is an owner decision recorded in
-    planning/mcp-gateway-implementation.md (Task 2).
+    architecture; only Vault belongs to the admin plane. `credential: passthrough`
+    makes the route forward the caller's own validated bearer, so the backend can
+    attribute the call.
     """
-    return chartconfig.render(
+    config_text = chartconfig.render(
         "apps/mcp-gateway", "mcp-gateway-deleg", "mcp-gateway",
-        ["backends.grafana.enabled=true",
-         f"backends.grafana.url=http://{BACKEND_HOST}:{BACKEND_PORT}/mcp",
-         f"backends.grafana.hostHeader={BACKEND_HOST}:{BACKEND_PORT}",
-         f"backends.grafana.resource=http://{BACKEND_HOST}:{ADMIN_GW_PORT}/grafana/mcp",
-         f"auth.issuer={issuer_url()}",
-         f"auth.jwksUrl={issuer_url()}/jwks",
-         f"gateway.port={ADMIN_GW_PORT}"],
+        ["backends.grafana.enabled=true"],
         ("jwt.scope.split(' ').exists(s, s == 'mcp_grafana')", "backendAuth",
-         "passthrough", "- x-grafana-service-account-token", "- vault_addr"),
+         "passthrough"),
         # Two gateways on one host would both want the default 15020/15021 ops ports.
         stats_port=ADMIN_GW_PORT + 1, readiness_port=ADMIN_GW_PORT + 2)
+    # Parse and retarget
+    cfg = yaml.safe_load(config_text)
+    # Change gateway port to the admin test port
+    cfg["gateways"]["default"]["port"] = ADMIN_GW_PORT
+    cfg["gateways"]["default"]["bindAddress"] = BACKEND_HOST
+    # Keep only the grafana route
+    cfg["routes"] = [r for r in cfg["routes"] if r.get("name") == "grafana"]
+    # Retarget issuer and JWKS to the stub
+    for route in cfg["routes"]:
+        authn = (route.get("policies") or {}).get("mcpAuthentication")
+        if authn:
+            authn["issuer"] = issuer_url()
+            if "jwks" in authn:
+                authn["jwks"]["url"] = f"{issuer_url()}/jwks"
+        # Retarget resource metadata to loopback
+        res_meta = (authn or {}).get("resourceMetadata")
+        if res_meta and "resource" in res_meta:
+            res_meta["resource"] = res_meta["resource"].replace(
+                "https://mcp.grigri.cloud", f"http://{BACKEND_HOST}:{ADMIN_GW_PORT}")
+    # Retarget grafana backend to loopback
+    for route in cfg["routes"]:
+        if route.get("name") == "grafana":
+            for be in route.get("backends", []):
+                for tgt in be.get("mcp", {}).get("targets", []):
+                    tgt["mcp"]["host"] = BACKEND_HOST
+                    tgt["mcp"]["port"] = BACKEND_PORT
+    # Serialize back to YAML
+    return yaml.dump(cfg, sort_keys=False, width=4096)
 
 
 def boot_gateway(binary, config, config_path, log_path, port):

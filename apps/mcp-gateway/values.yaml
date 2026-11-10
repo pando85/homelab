@@ -262,6 +262,34 @@ agentgateway-standalone:
             headers:
               content-type: "'application/json'"
               cache-control: "'public, max-age=300'"
+      - name: firecrawl-metadata
+        gateways:
+          - default
+        hostnames:
+          - mcp.grigri.cloud
+        matches:
+          - path:
+              exact: /.well-known/oauth-protected-resource/firecrawl/mcp
+        policies:
+          directResponse:
+            status: 200
+            body: |-
+              {
+                "resource": "https://mcp.grigri.cloud/firecrawl/mcp",
+                "authorization_servers": [
+                  "https://idm.grigri.cloud/oauth2/openid/mcp-gateway"
+                ],
+                "scopes_supported": [
+                  "mcp_firecrawl"
+                ],
+                "bearer_methods_supported": [
+                  "header"
+                ],
+                "resource_name": "homelab firecrawl MCP"
+              }
+            headers:
+              content-type: "'application/json'"
+              cache-control: "'public, max-age=300'"
 
       # ---------------------------------------------------------------------
       # context7: LIVE. The upstream is authenticated with OUR Context7 API key,
@@ -454,6 +482,49 @@ agentgateway-standalone:
                       set:
                         Host: grafana-mcp.grafana-mcp.svc.cluster.local:8000
               statefulMode: stateless
+
+      # ---------------------------------------------------------------------
+      # firecrawl: LIVE. The upstream has no per-caller identity and no API key
+      # the gateway injects. Every caller's fetches run under one shared upstream
+      # identity; the gateway audit still names the caller (jwt.sub), but
+      # destination control is per-group, not per-person.
+      # ---------------------------------------------------------------------
+      - name: firecrawl
+        gateways:
+          - default
+        matches:
+          - path:
+              pathPrefix: /firecrawl/mcp
+        policies:
+          mcpAuthentication:
+            mode: strict
+            issuer: https://idm.grigri.cloud/oauth2/openid/mcp-gateway
+            audiences:
+              - mcp-gateway
+            jwks:
+              url: https://idm.grigri.cloud/oauth2/openid/mcp-gateway/public_key.jwk
+            resourceMetadata:
+              resource: https://mcp.grigri.cloud/firecrawl/mcp
+              scopesSupported:
+                - mcp_firecrawl
+          authorization:
+            rules:
+              - require: "!has(jwt.email)"
+              - require: "!has(jwt.preferred_username)"
+              - require: "has(jwt.scope) && jwt.scope.split(' ').exists(s, s == 'mcp_firecrawl')"
+          requestHeaderModifier:
+            remove:
+              - Authorization
+              - Cookie
+        backends:
+          - mcp:
+              targets:
+                - name: firecrawl
+                  mcp:
+                    host: firecrawl-mcp.firecrawl-mcp.svc.cluster.local
+                    port: 3000
+                    path: /mcp
+              statefulMode: stateless
       # ---------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -581,6 +652,17 @@ backends:
     # stripped at the edge (measured: the upstream sees exactly one Authorization
     # header, and it is the key).
     credential: apiKeyFile
+
+  firecrawl:
+    enabled: true
+    path: /firecrawl/mcp
+    scope: mcp_firecrawl
+    resource: https://mcp.grigri.cloud/firecrawl/mcp
+    # Upstream credential: none. The Firecrawl backend has no per-caller identity
+    # and no API key the gateway injects. Every caller's fetches run under one
+    # shared upstream identity; the gateway audit still names the caller
+    # (jwt.sub), but destination control is per-group, not per-person.
+    credential: none
 
 # Session key generation (ESO) - used by templates/session-key-*.yaml
 # These values are consumed by wrapper templates, NOT by the official chart

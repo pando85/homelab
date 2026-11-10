@@ -30,8 +30,12 @@ app-template:
         # The upstream image is amd64-only (verified: single-arch manifest,
         # linux/amd64). The cluster has ARM64 nodes, so pin the architecture or
         # the scheduler can place this pod where it can never start.
+        # Pin to prusik node for consistency with the gateway planes and Hermes.
+        # Owner decision (2026-11-10): single failure domain accepted for simplicity
+        # and because probe behaviour is measured on prusik.
         nodeSelector:
           kubernetes.io/arch: amd64
+          kubernetes.io/hostname: prusik
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -125,4 +129,9 @@ app-template:
 
   # No ingress: reachable only in-cluster, and only from the gateway pod.
   ingress: {}
+  # No metrics endpoint. The upstream image (ghcr.io/firecrawl/firecrawl-mcp-server)
+  # exposes no /metrics path (verified: GET /metrics -> 404 on v3.38.0). Gateway-side
+  # signals (audit log, HTTP status codes) are the only observability available.
+  # If upstream adds a metrics endpoint, enable serviceMonitor and add a CNP rule
+  # allowing Prometheus (namespace monitoring) to reach the metrics port.
   serviceMonitor: {}

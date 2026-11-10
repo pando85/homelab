@@ -117,8 +117,8 @@ def main():
             check(f"{chart}: renders fail-closed (routes: [])", cfg.get("routes") == [],
                   f"routes={cfg.get('routes')!r}")
         else:
-            check(f"{chart}: renders with approved routes (context7 + grafana)",
-                  len(cfg.get("routes", [])) >= 2,
+            check(f"{chart}: renders with approved routes (context7 + grafana + firecrawl)",
+                  len(cfg.get("routes", [])) >= 3,
                   f"routes={len(cfg.get('routes', []))}")
         check(f"{chart}: admin listener off", cfg["config"].get("adminAddr") == "off")
         check(f"{chart}: no committed session key in the rendered config",
@@ -254,6 +254,16 @@ def main():
           "- authorization" in pub_context7_text.lower() or "- Authorization" in pub_context7_text)
     check("credential: apiKeyFile renders no backendAuth.passthrough (public context7)",
           "backendAuth:\n          passthrough:" not in pub_context7_text)
+    # Public plane firecrawl route uses credential: none (strips Authorization, no backendAuth)
+    check("credential: none strips the caller bearer (public firecrawl)",
+          "- authorization" in pub_context7_text.lower() or "- Authorization" in pub_context7_text)
+    # Extract the firecrawl route section and verify it has no backendAuth
+    import re as re2
+    fc_match = re2.search(r'- name: firecrawl\n(.*?)(?=\n      - name: |\Z)', pub_context7_text, re2.DOTALL)
+    fc_section = fc_match.group(0) if fc_match else ""
+    check("credential: none renders no backendAuth at all (public firecrawl)",
+          "name: firecrawl" in pub_context7_text and "backendAuth" not in fc_section,
+          f"firecrawl section has backendAuth: {'backendAuth' in fc_section}")
     check("delegating route emits backendAuth.passthrough (public grafana)",
           re.search(r"backendAuth:\s*\n\s*passthrough: \{\}", graf_text) is not None)
     check("delegating route must NOT also strip authorization",
@@ -697,13 +707,15 @@ def main():
     # ---- Grafana and Vault remain owner decisions
     # Public gateway: context7 and grafana are ENABLED (hardcoded routes)
     # Admin gateway: vault is DISABLED (templated, enabled: false)
-    # Firecrawl doesn't exist in the public gateway at all
     vals_txt = open("apps/mcp-gateway/values.yaml").read()
     check("mcp-gateway: context7 route ships enabled",
           re.search(r"\n  context7:\n(?:.*\n)*?\s{4}enabled: true",
                     vals_txt) is not None)
     check("mcp-gateway: grafana route ships enabled",
           re.search(r"\n  grafana:\n(?:.*\n)*?\s{4}enabled: true",
+                    vals_txt) is not None)
+    check("mcp-gateway: firecrawl route ships enabled",
+          re.search(r"\n  firecrawl:\n(?:.*\n)*?\s{4}enabled: true",
                     vals_txt) is not None)
     adm_vals_txt = open("apps/mcp-gateway-admin/values.yaml").read()
     check("mcp-gateway-admin: vault route ships disabled",

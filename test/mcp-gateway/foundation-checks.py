@@ -87,6 +87,8 @@ def main():
           f"routes={prefixes} enabled={enabled}")
     check("grafana backend is enabled after the Grafana JWT cutover",
           values["backends"]["grafana"]["enabled"] is True)
+    check("firecrawl backend is enabled (route live)",
+          values["backends"]["firecrawl"]["enabled"] is True)
 
     # ---- session key ESO lifecycle ----
     es = find(docs, "ExternalSecret")
@@ -198,7 +200,8 @@ def main():
               for m in r["matches"] if "exact" in m["path"]]
     check("RFC 9728 discovery is gateway-served for every backend, enabled or not",
           set(exacts) == {"/.well-known/oauth-protected-resource/grafana/mcp",
-                          "/.well-known/oauth-protected-resource/context7/mcp"},
+                          "/.well-known/oauth-protected-resource/context7/mcp",
+                          "/.well-known/oauth-protected-resource/firecrawl/mcp"},
           str(exacts))
 
     # ---- human scope grants: scopes only, never membership, never identity ----
