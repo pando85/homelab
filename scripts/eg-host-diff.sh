@@ -19,6 +19,7 @@
 #
 # Usage: scripts/eg-host-diff.sh [--envoy-only] [--context CTX] [--delay SECS]
 # Output goes to stdout, progress and the summary to stderr. No credentials are sent.
+# For the overall health of the path (gateways, routes, pfSense, DNS, alerts) see scripts/gateway-check.sh.
 set -euo pipefail
 
 CONTEXT=grigri
