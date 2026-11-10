@@ -42,47 +42,7 @@ app-template:
         http:
           port: *port
 
-  ingress:
-    m-rajoy-api:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-        external-dns.kubernetes.io/enabled: "true"
-      hosts:
-        - host: &host api.m.rajoy.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: m-rajoy-api
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: m-rajoy-api-tls-certificate
-
-    external:
-      enabled: true
-      className: nginx-external
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        external-dns.kubernetes.io/target: grigri.cloud
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      hosts:
-        - host: &host api.m.rajoy.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: m-rajoy-api
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: m-rajoy-api-external-tls-certificate
-
-  # Envoy Gateway routes (ingress-nginx migration). The Ingresses above stay until the switch.
+  # Envoy Gateway routes.
   # Internal routes carry the external-dns annotation (the Gateway address is published in DNS).
   route:
     internal:

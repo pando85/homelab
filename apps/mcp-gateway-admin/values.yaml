@@ -2,7 +2,7 @@
 
 # --------------------------------------------------------------------------
 # MCP Gateway (admin plane, private). Mirror of apps/mcp-gateway with:
-#   * nginx-internal ingress (mcp.internal.grigri.cloud), LAN+VPN reach
+#   * internal Envoy Gateway route (mcp.internal.grigri.cloud), LAN+VPN reach
 #   * Separate Kanidm OAuth2 client (mcp-gateway-admin) so tokens issued to
 #     the admin client cannot be replayed on the public plane and vice versa
 #   * No backend routes enabled: Vault MCP v0.2.0 has a VAULT_ADDR query
@@ -124,30 +124,9 @@ app-template:
           port: *healthzPort
           protocol: TCP
 
-  ingress:
-    mcp:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      hosts:
-        - host: &host mcp.internal.grigri.cloud
-          paths:
-            - path: /
-              pathType: Prefix
-              service:
-                identifier: agentgateway
-                port: http
-      tls:
-        - hosts:
-            - *host
-          secretName: mcp-gateway-admin-tls-certificate
-
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
-  # Internal route: the external-dns annotation publishes its name (the Gateway address). The Ingress sets no
-  # timeout annotations (nginx defaults: 60 s idle), so the Gateway defaults (60 s stream idle,
-  # no total limit) are the same behaviour for MCP streams.
+  # Envoy Gateway route.
+  # Internal route: the external-dns annotation publishes its name (the Gateway address). No
+  # timeout override: the Gateway defaults (60 s stream idle, no total limit) fit MCP streams.
   route:
     mcp:
       kind: HTTPRoute

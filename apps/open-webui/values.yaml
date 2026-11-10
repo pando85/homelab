@@ -44,17 +44,7 @@ open-webui:
     repository: ghcr.io/open-webui/open-webui
     tag: v0.13.3
 
-  ingress:
-    enabled: true
-    class: nginx-external
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      external-dns.kubernetes.io/target: grigri.cloud
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-    host: open-webui.grigri.cloud
-    tls: true
-
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch.
+  # Envoy Gateway route.
   # No httpsRedirect: the Gateways have their own http redirect routes.
   route:
     enabled: true

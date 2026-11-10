@@ -15,25 +15,8 @@ ollama:
       value: Europe/Madrid
     - name: OLLAMA_DEBUG
       value: "0"
-  ingress:
-    enabled: true
-    className: nginx-internal
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-    hosts:
-      - host: &host ollama.internal.grigri.cloud
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - hosts:
-          - *host
-        secretName: ollama-tls-certificate
-
-  # Envoy Gateway route (ingress-nginx migration). The Ingress above stays until the switch. The
-  # chart's HTTPRoute (`httpRoute`) has no annotations key, so the route is a raw template
-  # (templates/httproute.yaml) that carries the external-dns annotation.
+  # Envoy Gateway route. The chart's HTTPRoute (`httpRoute`) has no annotations key, so the route
+  # is a raw template (templates/httproute.yaml) that carries the external-dns annotation.
   httpRoute:
     enabled: false
 
