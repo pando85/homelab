@@ -1,0 +1,9 @@
+---
+apiVersion: kaniop.rs/v1beta1
+kind: KanidmGroup
+metadata:
+  name: http-echo-users
+spec:
+  kanidmRef:
+    name: kanidm
+    namespace: kanidm
