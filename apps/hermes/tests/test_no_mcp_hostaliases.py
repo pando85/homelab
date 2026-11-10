@@ -7,6 +7,9 @@ now has a DNS host override for it, so pods resolve it through
 CoreDNS/nodelocaldns like every other internal name. A hostAliases pin would
 silently go stale if the LoadBalancer IP ever changes.
 
+The workaround was removed in commit 78ae995ee ("hermes: Remove the mcp.grigri.cloud
+hostAliases workaround"). This test ensures it is not re-introduced.
+
 Run: ``python3 apps/hermes/tests/test_no_mcp_hostaliases.py`` from anywhere.
 """
 

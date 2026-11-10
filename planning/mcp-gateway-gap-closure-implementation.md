@@ -1,6 +1,6 @@
 # MCP Gateway Gap Closure Implementation Plan
 
-**Status:** Not started. This is the continuation plan for the MCP gateway work.
+**Status:** Phases 1-4 executed (2026-11-10). G1, G2, G6, G10-G14 done; G3 deferred; G4 pending owner action; G5 closed by decision; G7, G15 partial. See Execution log (section 4.6).
 **Anchor revision:** revision 2, measured against `origin/master` at `2a3b8dbb0` (2026-11-10).
 Findings are timestamped; the cluster moves — re-run §5 before trusting any line here.
 **What changed in revision 2:** the Envoy Gateway migration **ended**. Envoy is now the sole serving
@@ -24,25 +24,31 @@ unaided from what needs an owner decision, and gives re-verification commands so
 starts from measurement rather than from this document's claims.
 
 The dominant theme is **consolidation, not construction**: the gateway currently exists *alongside*
-the legacy paths it was meant to replace. Three Grafana MCP paths and one Firecrawl path still bypass
-it entirely.
+the legacy paths it was meant to replace. Two Grafana MCP paths and one Firecrawl path still bypass
+the gateway entirely (OpenCode `context7`, `grafana-grigri`, and `firecrawl` local; the `grafana-forkline`
+server targets a different, external Grafana and is out of scope).
 
 A second theme, new in revision 2, is **handoff debt**: the ingress layer under this gateway changed
 underneath it. The gateway itself needed no change — its CNPs already allowed the Envoy proxies — but
 the tests, Jobs and comments that describe "how traffic arrives" were written for nginx and did not
 move with it. That class of debt is silent: nothing fails, the assertions just stop meaning anything.
 
+**Update 2026-11-10:** Phases 1-4 are substantially complete. Hermes is fully migrated (no sidecar,
+three gateway servers). Firecrawl route is live. Placement is pinned to `prusik`. Verification assets
+were repaired and re-run. Remaining work: OpenCode bypass server retirement (owner action), deferred
+Vault admin plane decision, and ingress-migration Phase 6 coupling (G15).
+
 ### 1.1 Success Criteria scorecard (measured 2026-11-10)
 
 | # | Criterion (verbatim from the predecessor plan) | State | Evidence |
 |---|---|---|---|
 | 1 | agentgateway deployed (public + admin) | **MET** | both pods `1/1 Running`; admin restarts 17 (pre-existing baseline, no new), public 0 |
-| 2 | Grafana MCP standalone (**sidecar removed**) | **PARTIAL** | standalone pod live and serving; sidecar still in `hermes-0` — see G1 |
-| 3 | Firecrawl MCP deployed | **PARTIAL** | pod live; **no gateway route exists at all** — see G2 |
-| 4 | Vault MCP deployed (admin-only, scope decided) | **NOT MET** | `backends.vault.enabled: false`; admin `routes: []` — see G3 |
-| 5 | OpenCode/Hermes migrated (≥1 instance each) | **MET (letter), NOT (spirit)** | 2 of 8 OpenCode servers go through the gateway — see G4 |
-| 6 | All tests pass, rollback tested | **PARTIAL** | suites green and **all tracked in git** (the predecessor plan wrongly calls them uncommitted); rollback never exercised — see G5; committed in-cluster Jobs never re-run since isolation landed — see G13 |
-| 7 | Owner approval recorded for each gate | **PARTIAL** | gates 1, 2, 7 done; 3 pending; 4, 5 not reached |
+| 2 | Grafana MCP standalone (**sidecar removed**) | **MET** | sidecar removed from `hermes-0` (commit 8b1b7007a); pod now `1/1` |
+| 3 | Firecrawl MCP deployed | **MET** | route `/firecrawl/mcp` live, scope-gated, stateless; acceptance passed — see G2 |
+| 4 | Vault MCP deployed (admin-only, scope decided) | **NOT MET / DEFERRED** | admin plane stays fail-closed (`routes: []`); owner decision 2026-11-10 — see G3 |
+| 5 | OpenCode/Hermes migrated (≥1 instance each) | **MET (Hermes), PENDING (OpenCode)** | Hermes: 3 gateway servers, no bypass; OpenCode: 2 of 8 through gateway — see G4 |
+| 6 | All tests pass, rollback tested | **MET (tests), CLOSED (rollback)** | suites green, Jobs re-run and repaired (G13); rollback closed by decision (G5) — `git revert` + ArgoCD is the path |
+| 7 | Owner approval recorded for each gate | **MET** | all gates decided: 1-3, 6, 7 approved; 4 deferred; 5 closed; G4 pending owner action |
 
 ### 1.2 What is already correct (do not "fix" these)
 
@@ -84,21 +90,21 @@ residual risk or missing control; **Low** = hygiene/documentation.
 
 | ID | Gap | Sev | Blocked on | Phase |
 |----|-----|-----|-----------|-------|
-| G1 | Hermes legacy `grafana-mcp` sidecar not removed; two Grafana MCP paths live, legacy one has `auth=None` + shared SA token | High | owner approval (gate 3, now satisfiable) | 3 |
-| G2 | Firecrawl: pod deployed, chart **already** restricts ingress to gateway pods and egress to `firecrawl-api:3002`, **no API key by design** — yet no route exists in the gateway chart, while `mcp_firecrawl` is already granted → inert scope, unreachable pod | High | group decision (who may fetch arbitrary web pages) only; fetcher-side control is G8 | 4 |
-| G3 | Vault MCP not deployed; admin plane serves nothing (`routes: []`, `scopeMap: []`, group disabled) | High | owner decision: per-route `x-vault-token` allow + stateless | 4 |
-| G4 | Not a single entry point: 6 of 8 OpenCode MCP servers bypass the gateway — a duplicate `context7`, plus `grafana-grigri` hitting the *same* Grafana the gateway fronts with a local credential (`grafana-forkline` is a different, external instance and stays out of scope) | High | per-server owner decision | 3 |
-| G5 | Rollback never tested (no dry run, no tested client switch-back) | Medium | owner approval of method | 5 |
-| G6 | Placement still provisional: both gateway planes and Hermes are pinned to `prusik`; `grafana-mcp` has no `nodeSelector` (happens to land there), `firecrawl-mcp` is pinned to `amd64` only; 1 replica each | Medium | owner decision (plan said revisit once stable — stable >24 h) | 5 |
-| G7 | No Prometheus target for `grafana-mcp` / `firecrawl-mcp`; backend failure only visible via gateway-side errors | Medium | none | 2 |
+| G1 | **DONE** — Hermes legacy `grafana-mcp` sidecar removed; `hermes-0` now `1/1` with initContainer `fix-sa-token` (kept for SA token prep) and container `hermes` only. `grafana-mcp`, `grafana-mcp-refresher`, `grafana-mcp-token-init` resources, `grafana-mcp-shared` volume, and `localhost:8080/sse` server entry removed. Commit 8b1b7007a. | High | — | 3 |
+| G2 | **DONE** — Firecrawl route `/firecrawl/mcp` plus RFC 9728 discovery live. Scope-gated on `mcp_firecrawl` with exact-match CEL, `statefulMode: stateless`, no backend credential, Authorization and Cookie stripped. Authorized for `mcp-gateway-agents` group (no Kanidm change). Commits 8fa3885ff (route) and b351fb11a (Hermes client). Validated: acceptance printed ACCEPTANCE_PASS with servers: 3, real `firecrawl_scrape` returned 610 bytes, 403 for all wrong-scope combinations. | High | — | 4 |
+| G3 | **DEFERRED by owner decision 2026-11-10** — Vault MCP not deployed; admin plane stays fail-closed (`routes: []`). Open question: should the admin plane exist at all while serving nothing? It consumes a pod, CNP, Ingress, HTTPRoute and scrape target. | High | owner decision deferred | 4 |
+| G4 | **PENDING OWNER ACTION** — OpenCode bypass servers not retired by agent decision. Owner will edit `~/.config/opencode/opencode.json`. See new section 10 (Handover). | High | owner action required | 3 |
+| G5 | **CLOSED BY OWNER DECISION 2026-11-10** — No separate rollback exercise. Rationale: for validated routes, `git revert` + ArgoCD reconcile restores previous state; Hermes sidecar was the rollback path until G1 removed it; only artefact retained is that retired OpenCode server blocks must be saved before deletion. Ingress-layer rollback belongs to ingress migration (tracked as G15). | Medium | — | 5 |
+| G6 | **DONE** — Owner decision: pin everything MCP to `prusik`. `grafana-mcp` gained `kubernetes.io/hostname: prusik`; `firecrawl-mcp` gained same pin while keeping `kubernetes.io/arch: amd64`; gateway planes and Hermes already pinned. Verified `prusik` is amd64 with capacity. Commit 8fa3885ff. | Medium | — | 5 |
+| G7 | **PARTIAL / RE-SCOPED** — ServiceMonitor for grafana-mcp enabled but produced `up == 0` (image has no HTTP client), so reverted along with CNP rule widening app port to Prometheus. firecrawl-mcp confirmed no `/metrics` endpoint (404). Net position: neither backend scraped, deliberately; gateway-side `agentgateway_requests_total` carries route and status labels for visibility. | Medium | — | 2 |
 | G8 | `firecrawl` **backend** namespace has no pod-level policy (only `firecrawl-mcp` is isolated) | Medium | needs its own measurement; prior attempt regressed | 4 |
 | G9 | ~~Envoy switchover dependency~~ **CLOSED, and now final** — the migration ended. Envoy external (`192.168.193.14`) serves the public plane, Envoy internal (`192.168.193.13`) the admin plane; `src.addr` confirms no MCP route request comes from nginx. Nothing to do | — | none | — |
-| G10 | Documentation drift: design doc + plan + one values comment still describe the pre-isolation, pre-parity state | Low | none | 1 |
-| G11 | Canary leftovers: orphan `mcp-canary` namespace, untracked `apps/mcp-canary/` debris, two superseded canary planning docs | Low | none | 1 |
-| G12 | `jwt.sub` logged in full into Loki (180-day retention) while the design says "redacted"; no dashboards/alerts on the gateway audit stream | Low | owner decision on retention/pseudonymisation | 2 |
-| G13 | Committed verification assets are stale and have not been re-run since isolation landed: `jobs/verify-networkpolicy.yaml` still names the deleted native-NP template, and the predecessor plan calls 13 tracked suites/lines "uncommitted" | Medium | owner approval to apply the Jobs | 1, 2 |
-| G14 | **Ingress-era assertions survive the migration.** `foundation-checks.py:14,156` and `route-checks.py:316` still assert "the Ingress is `nginx-external` with TLS"; both `jobs/*.yaml` headers and three chart comments still describe nginx as the traffic source. They pass (the Ingress objects still exist) while proving nothing about the serving path — worse than failing | Medium | none (text/assertion change) | 1, 2 |
-| G15 | **The rollback path depends on an undocumented invariant.** `docs/network/ingress.md` documents rolling back to nginx by re-pointing pfSense/DNS, but a network rollback only works while the gateway CNPs still list the nginx controllers. Nothing states that coupling, and revision 1 of this plan told a future reader to delete those rules as "dead weight" | Medium | none (doc + comment) | 2 |
+| G10 | **DONE** — Documentation corrected; canary planning docs carry superseded banners. | Low | — | 1 |
+| G11 | **DONE** — Untracked `apps/mcp-canary/` debris deleted, orphan `mcp-canary` namespace deleted with owner approval. | Low | — | 1 |
+| G12 | **DONE, OWNER DECISION** — Full `jwt.sub` kept in Loki (audit trails wanted); design doc wording corrected. Alerting added: PrometheusRule with MCPGatewayHighErrorRate, MCPGatewayCriticalErrorRate, MCPGatewayElevated403Rate, MCPGatewayTargetDown. Metric names verified against live series: `agentgateway_requests_total` with labels namespace, route, status, method, protocol, reason, pod, job. Commit fe5837fe0. | Low | — | 2 |
+| G13 | **DONE** — Committed Jobs repaired and run in-cluster for first time since isolation. Results: NETPOL_VERIFY_PASS 3/3 (cross-namespace access times out), FOUNDATION_VERIFY_PASS 4/4 for prometheus-labelled pod, 3/3 for unlabelled. Jobs deleted after. Three defects fixed: curl digest did not resolve (replaced with verified 64-char manifest), blocked-detection parsed `000000` (curl emits `000`, `|| echo 000` appended another), assertion expected any monitoring pod to scrape 15020 while policy admits only prometheus-labelled pods. Commits 30abdcd74, 18154236f. | Medium | — | 1, 2 |
+| G14 | **DONE** — `foundation-checks.py` and `route-checks.py` now assert HTTPRoute serving path alongside retained nginx Ingress rollback path; `chart-checks.py` gained drift guard asserting rendered Envoy proxy selector matches live labels and that nginx rules are present. Stale nginx-era comments corrected in gateway CNP templates and `apps/grafana-mcp/values.yaml`. Suite counts: route-checks 108/0, chart-checks 187/0, foundation-checks 60/0, local-boot-checks 79/0. Commit d760a5f81. | Medium | — | 1, 2 |
+| G15 | **PARTIAL** — CNP templates now carry comments stating nginx rules are retained rollback path, removable only in ingress-migration Phase 6 (commit 3c99e3f5c). Still outstanding: reciprocal note in `docs/network/ingress.md`, extending `scripts/gateway-check.sh` to MCP hosts (skipped as another session was editing that script). | Medium | ingress-migration Phase 6 | 2 |
 
 ## 3. Context & Current State (measured)
 
@@ -421,6 +427,32 @@ delivering nothing, so G3 and G6 should be decided together.
   measured (design lists it as future). Both live routes are `statefulMode: stateless`, which
   suggests a second replica is cheap — but measure, do not infer.
 
+### Execution log (2026-11-10)
+
+Commits landed today:
+
+| Commit | Subject |
+|--------|---------|
+| bf6c92f36 | docs corrections |
+| d760a5f81 | test assertions for both data planes |
+| 3c99e3f5c | CNP retention comments |
+| 8b1b7007a | hermes sidecar removal |
+| 8fa3885ff | firecrawl route plus backend placement pins and grafana-mcp scrape attempt (later reverted) |
+| fe5837fe0 | gateway alerts |
+| b351fb11a | hermes firecrawl client entry |
+| e8718d549 | hermes-mcp suite repair |
+| 30abdcd74 | job image digest fix |
+| 18154236f | in-cluster re-verification |
+
+**Lesson:** commit 8fa3885ff has a subject mentioning only the firecrawl route but also contains
+grafana-mcp and firecrawl-mcp changes. An earlier aborted pre-commit run left unrelated paths staged;
+`git commit` commits the whole index. Rule: stage and commit in one step, or use `git commit -- <paths>`,
+and always check `git show --stat` after committing.
+
+**Note:** concurrent workstream removed Hermes `hostAliases` pin (commit 78ae995ee) because public DNS
+now resolves `mcp.grigri.cloud` to the Envoy address directly. Any line in this plan describing that
+pin as current is historical.
+
 ## 5. Verification Checklist
 
 Re-run these before trusting any claim in this document. All read-only.
@@ -588,6 +620,41 @@ Hard ordering rules:
 - **Save before deleting.** Every `opencode.json` block retired in TODO-3.2 must be recorded first;
   it is the rollback artefact for layer 2 of TODO-5.2.
 - Never weaken a CNP to make a probe pass. The split-port shape is the only measured-safe option.
+
+## 10. Handover: connecting OpenCode to the gateway
+
+Gateway entry points:
+
+- `https://mcp.grigri.cloud/context7/mcp`
+- `https://mcp.grigri.cloud/grafana/mcp`
+- `https://mcp.grigri.cloud/firecrawl/mcp`
+
+All use OAuth PKCE against issuer `https://idm.grigri.cloud/oauth2/openid/mcp-gateway`,
+redirect `http://127.0.0.1:15000/callback`. Each publishes RFC 9728 discovery at
+`/.well-known/oauth-protected-resource/<target>/mcp`, so a discovery-capable client needs only the URL.
+
+Required scope per route: `mcp_context7`, `mcp_grafana`, `mcp_firecrawl`.
+
+**Caveat:** human callers receive scopes via Kanidm `humanScopeMap` for group `grafana-users`, which
+currently contains only `mcp_grafana` and `mcp_context7`. OpenCode can use context7 and grafana routes
+now, but firecrawl returns 403 for humans until the owner adds `mcp_firecrawl` to `humanScopeMap` in
+`apps/mcp-gateway/values.yaml`. The route is live for agent group `mcp-gateway-agents` (Hermes can use it).
+
+**Retirement order for `~/.config/opencode/opencode.json`:**
+
+Save each block to a file before deleting it.
+
+1. `context7` local — pure duplicate of working gateway route
+2. `grafana-grigri` — targets same Grafana as gateway but with local credential instead of caller bearer;
+   retiring removes unaudited path
+3. `firecrawl` local — only after `mcp_firecrawl` granted to humans, otherwise capability loss
+
+Leave unchanged: `grafana-forkline` (different external Grafana), `searxng` (no gateway route yet),
+`playwright` (out of scope by design).
+
+**Post-retirement check:** one real tool call through corresponding `homelab-*` server, plus check
+gateway audit stream in Loki (`{namespace="mcp-gateway"} | json | scope="request"`) to confirm call
+recorded with caller's `jwt.sub`.
 
 ## Related
 

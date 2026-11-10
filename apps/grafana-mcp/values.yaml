@@ -184,17 +184,19 @@ grafana-mcp:
     timeoutSeconds: 3
     failureThreshold: 3
 
-  # Metrics are served on the main listener (port 8000) at /metrics. The binary
-  # always exposes them (--help: "/healthz and /metrics are always served at the
-  # root"). The upstream chart's serviceMonitor template scrapes port `mcp-http`
-  # when `metrics.port` is empty (the default), which is correct here.
+  # The backend's /metrics endpoint is unverified: the pod image ships no HTTP client
+  # (no curl, wget, or shell), so it cannot be probed from inside the pod, and a
+  # ServiceMonitor enabled against an unconfirmed endpoint produces a permanently-down
+  # Prometheus target (noise). No ServiceMonitor is enabled and the app port stays
+  # restricted to the gateway in the CNP. Gateway-side signals
+  # (agentgateway_requests_total per route, which includes the grafana route) remain
+  # the observability path.
+  # To re-attempt: verify /metrics from an identity the CNP admits (e.g. a temporary
+  # probe pod carrying app.kubernetes.io/name: prometheus in namespace monitoring, or
+  # check the upstream grafana-community/grafana-mcp chart's metrics documentation).
+  # Enabling the ServiceMonitor requires a matching CNP ingress rule for prometheus.
   serviceMonitor:
-    enabled: true
-    labels:
-      release: monitoring
-    interval: 30s
-    scrapeTimeout: 10s
-    path: /metrics
+    enabled: false
 
 # Reaching Grafana is the gateway's job only: a NetworkPolicy/CNP must restrict Grafana
 # ingress to this backend plus the browser path, otherwise a caller could bypass the
