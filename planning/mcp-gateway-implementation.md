@@ -40,6 +40,12 @@ measured clean, so its root cause is still UNKNOWN.
 **Architecture:** [docs/design/mcp-gateway-architecture.md](../docs/design/mcp-gateway-architecture.md)
 **Owner approval required before any live deployment**
 
+> **Continuation:** this file records the build-out and the measured matrices. The remaining work —
+> gap register, consolidation order and owner-decision gates — is tracked in
+> [`mcp-gateway-gap-closure-implementation.md`](mcp-gateway-gap-closure-implementation.md)
+> (measured against `449a35331`, 2026-11-10). Several status lines below are stale relative to the
+> live cluster; that file's Phase 1 lists each one.
+
 ## Overview
 
 **Review corrections applied (2026-11-08, foundation review; revised 2026-11-09):** B1 session key moved off
