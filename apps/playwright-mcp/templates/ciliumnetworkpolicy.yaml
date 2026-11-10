@@ -1,0 +1,101 @@
+{{- if .Values.networkIsolation }}
+---
+# CiliumNetworkPolicy for the Playwright MCP server (release `playwright-mcp`).
+#
+# THREAT MODEL
+# ------------
+# The browser is driven by an agent and visits arbitrary URLs, so it is treated
+# as untrusted. Cluster and LAN destinations are denied to prevent it becoming
+# a pivot (SSRF into the cluster, the LAN, or pfSense). The pod holds no
+# cluster identity (automountServiceAccountToken: false). Upstream states
+# plainly: "Playwright MCP is **not** a security boundary" - the CNP is what
+# makes the isolation real.
+#
+# INGRESS: `kubectl port-forward` only. The kubelet's streaming server enters
+# the pod's network namespace and connects to 127.0.0.1:8931 from within the
+# netns, which Cilium classifies as the endpoint's own localhost traffic and
+# allows regardless of the ingress rule. The `fromEntities: [host]` rule is
+# belt-and-braces for the host-side path. Nothing else may reach the pod: no
+# `world` (that would expose the browser driver to the LAN), no `cluster`, no
+# `fromEndpoints`. Exec probes are immune to ingress policy by construction
+# (docs/conventions/cilium.md).
+#
+# EGRESS: DNS to the real node-local-dns and kube-dns pods in kube-system
+# (Cilium DNATs the 169.254.25.10 anycast and 10.43.0.10 Service to the pods,
+# so policy must select pods, not addresses). Internet-only via toCIDRSet
+# 0.0.0.0/0 with an except list covering the cluster's pod CIDR (10.0.0.0/8
+# from cilium-config cluster-pool-ipv4-cidr, corroborated by live pod IPs all
+# in 10.0.x), service CIDR (10.43.0.0/16 from k3s default, corroborated by
+# kube-dns ClusterIP 10.43.0.10 and live Service IPs), RFC1918 (10.0.0.0/8,
+# 172.16.0.0/12, 192.168.0.0/16), link-local (169.254.0.0/16), and CGNAT
+# (100.64.0.0/10). The DNS anycast 169.254.25.10 is in the except list but
+# still works because the DNS rule selects the pods by label.
+#
+# ROLLBACK: set `networkIsolation: false` in values.yaml to disable the CNP.
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: playwright-mcp
+  labels:
+    app.kubernetes.io/name: playwright-mcp
+    app.kubernetes.io/instance: playwright-mcp
+spec:
+  # Pod labels verified against the rendered Deployment:
+  # app.kubernetes.io/name=playwright-mcp, instance=playwright-mcp,
+  # controller=playwright-mcp.
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/name: playwright-mcp
+      app.kubernetes.io/instance: playwright-mcp
+      app.kubernetes.io/controller: playwright-mcp
+  ingress:
+    # `kubectl port-forward` path. The kubelet's streaming server enters the
+    # pod's netns and connects to 127.0.0.1:8931, which is the endpoint's own
+    # localhost traffic. Cilium allows same-endpoint loopback regardless of
+    # the ingress rule; this rule is belt-and-braces for the host-side path.
+    # No `world` (that would expose the browser driver to the LAN), no
+    # `cluster`, no `fromEndpoints`. Exec probes are immune by construction.
+    - fromEntities:
+        - host
+      toPorts:
+        - ports:
+            - port: "8931"
+              protocol: TCP
+  egress:
+    # DNS. nodelocaldns answers at 169.254.25.10 and kube-dns at 10.43.0.10,
+    # but Cilium DNATs to the real pods, so policy must select the pods, not
+    # the addresses. Scoped to the two DNS workloads in kube-system.
+    - toEndpoints:
+        - matchLabels:
+            k8s-app: node-local-dns
+            io.kubernetes.pod.namespace: kube-system
+        - matchLabels:
+            k8s-app: kube-dns
+            io.kubernetes.pod.namespace: kube-system
+      toPorts:
+        - ports:
+            - port: "53"
+              protocol: UDP
+            - port: "53"
+              protocol: TCP
+    # Internet only. The except list covers the cluster's pod CIDR
+    # (10.0.0.0/8, from cilium-config cluster-pool-ipv4-cidr), service CIDR
+    # (10.43.0.0/16, k3s default), RFC1918 (10.0.0.0/8, 172.16.0.0/12,
+    # 192.168.0.0/16), link-local (169.254.0.0/16), and CGNAT (100.64.0.0/10).
+    # The DNS anycast 169.254.25.10 is in the except list but still works
+    # because the DNS rule above selects the pods by label.
+    - toCIDRSet:
+        - cidr: 0.0.0.0/0
+          except:
+            # Pod CIDR (Cilium cluster-pool, live pods all in 10.0.x)
+            - 10.0.0.0/8
+            # Service CIDR (k3s default, kube-dns 10.43.0.10)
+            - 10.43.0.0/16
+            # RFC1918 (10.0.0.0/8 already listed above for pods)
+            - 172.16.0.0/12
+            - 192.168.0.0/16
+            # Link-local (nodelocaldns anycast 169.254.25.10)
+            - 169.254.0.0/16
+            # CGNAT
+            - 100.64.0.0/10
+{{- end }}

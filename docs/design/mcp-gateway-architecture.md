@@ -78,7 +78,7 @@ future work.
 - **Platform hardening**: Privileged node/RBAC limitation brief only, not a comprehensive project
 - **Session engineering**: Single replica allowed initially; session behaviour tested during spike.
   No "stateless / no initialize / pooling" claims without verification
-- **Playwright remote browser**: Distinct workload, later phase
+- **Playwright remote browser**: Stage 1 landed (cluster browser, no ingress, port-forward access). Stage 2 (authenticated exposure) pending the two unknowns in `apps/playwright-mcp/README.md`
 
 ## Architecture Topology
 
@@ -262,7 +262,8 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 | Firecrawl | MVP | Live route; backend pod deployed and isolated | Active `firecrawl-mcp` service |
 | Vault MCP | Deferred | Admin gateway has `routes: []`; Vault MCP not deployed | Owner decision 2026-11-10: deferred |
 | SearXNG | Next | REST API, internal | Deploy MCP package |
-| HA, Postgres, Playwright | Future | N/A | Separate phases |
+| Playwright | Stage 1 live | Cluster browser, port-forward only, no ingress | Stage 2: authenticated exposure pending two unknowns |
+| HA, Postgres | Future | N/A | Separate phases |
 
 ## Network & Trust Boundaries
 
@@ -368,7 +369,7 @@ secrets in URLs. No real credential or user data was exposed; synthetic fixture 
 - Approval workflows for sensitive write operations
 - Caller-bound dynamic credentials for backends that support it
 - PostgreSQL MCP (see below)
-- Playwright remote browser
+- Playwright remote browser: Stage 1 landed (cluster browser, port-forward only). Stage 2 (authenticated exposure) pending the two unknowns in `apps/playwright-mcp/README.md`
 
 ## PostgreSQL MCP (Future)
 

@@ -1,0 +1,202 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/bjw-s-labs/helm-charts/main/charts/library/common/values.schema.json
+
+# --------------------------------------------------------------------------
+# Playwright MCP server with a co-located headless Chromium.
+#
+# Stage 1 (this chart): one pod, MCP server + browser together, reachable
+# only via `kubectl port-forward` on 127.0.0.1:8931. No HTTPRoute, no
+# Ingress, no Envoy SecurityPolicy, no Kanidm OAuth client or group. The
+# upstream image is NOT a security boundary (quoted in the README) and
+# exposing an unauthenticated browser driver to the LAN is not acceptable.
+#
+# Stage 2 (pending): authenticated exposure via the Envoy Gateway. Two
+# unknowns must be resolved before that is wired:
+#   (a) does a Kanidm `claimMap` value land in the ACCESS token or only
+#       the ID token?
+#   (b) can an Envoy Gateway SecurityPolicy jwt provider extract from the
+#       `Authorization` header and authorize on that claim?
+# Neither is implemented here.
+#
+# Image facts (verified against mcr.microsoft.com/playwright/mcp:v0.0.85):
+#   * multi-arch index (amd64 + arm64)
+#   * ENTRYPOINT is `/usr/bin/tini -s -- node /app/cli.js --headless
+#     --browser chromium --no-sandbox` - the image already runs the MCP
+#     server under tini with the right browser flags, so the container
+#     only needs to append `--port 8931 --host 0.0.0.0`. Keeping the
+#     image's own ENTRYPOINT (rather than overriding it with `command:`)
+#     preserves tini as PID 1, which matters for reaping Chromium's
+#     child processes. Repo precedent for `args:` without `command:`:
+#     apps/hermes-2, apps/bazarr.
+#   * USER node (uid 1000, gid 1000, verified from image history)
+#   * WORKDIR /home/node
+#   * PLAYWRIGHT_BROWSERS_PATH=/ms-playwright (pre-installed browsers)
+#   * the image serves the MCP Streamable HTTP endpoint at /mcp
+#
+# Upstream long-lived service form (from the image README):
+#   docker run -d -i --init --entrypoint node -p 8931:8931 \
+#     mcr.microsoft.com/playwright/mcp \
+#     /app/cli.js --headless --browser chromium --no-sandbox \
+#     --port 8931 --host 0.0.0.0
+# --------------------------------------------------------------------------
+app-template:
+  controllers:
+    playwright-mcp:
+      type: deployment
+      strategy: RollingUpdate
+      replicas: 1
+      pod:
+        enableServiceLinks: false
+        # The pod needs no cluster identity. A browser with a ServiceAccount
+        # token is the worst case: an attacker who controls the browser
+        # controls the cluster.
+        automountServiceAccountToken: false
+        # Multi-arch image, but pin the architecture so a scheduler surprise
+        # cannot change the browser build. The cluster has only amd64 nodes
+        # today; this is a future-proofing guard.
+        #
+        # NOT pinned to prusik by hostname. Prusik is documented as
+        # RAM-bound (docs/conventions/prusik-fast-storage-tier.md) and at
+        # the time of writing sits at 88% memory requests and 84% actual
+        # usage. A 2Gi-limit browser pod does not comfortably fit on the
+        # most loaded node; the scheduler will place the pod wherever
+        # capacity allows. If a future capacity check shows prusik has
+        # headroom, pinning can be added.
+        nodeSelector:
+          kubernetes.io/arch: amd64
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          seccompProfile:
+            type: RuntimeDefault
+      containers:
+        main:
+          image:
+            # renovate: datasource=docker depName=mcr.microsoft.com/playwright/mcp
+            repository: mcr.microsoft.com/playwright/mcp
+            tag: v0.0.85
+          # Args are appended to the image's own ENTRYPOINT (see header
+          # comment). No `command:` override: that would drop tini as
+          # PID 1 and Chromium's zombie children would accumulate.
+          args:
+            - --port
+            - "8931"
+            - --host
+            - "0.0.0.0"
+            - --user-data-dir
+            - /tmp/browser-profile
+          env:
+            # Redirect HOME into the writable /tmp emptyDir so Chromium's
+            # ~/.cache and fontconfig writes land on the tmpfs volume.
+            # Mirrors the pattern used by apps/firecrawl-mcp.
+            HOME: /tmp
+            # Stage 1: ephemeral browser profile, no PVC. The profile
+            # stays in memory for the life of the process and is wiped
+            # when the container restarts. A persisted profile would be
+            # a cookie store that Velero replicates to S3, so it needs
+            # an explicit owner decision before being enabled.
+            PLAYWRIGHT_MCP_ISOLATED: "true"
+            # The default `--allowed-hosts` is localhost, loopback IPs
+            # and the value of --host (0.0.0.0). A port-forward client
+            # sends Host: 127.0.0.1:8931, which is a loopback IP and
+            # therefore allowed. Accessing the Service by its cluster
+            # DNS name would be rejected with 403 - that is intentional
+            # in Stage 1 (no in-cluster callers).
+          resources:
+            requests:
+              cpu: 100m
+              memory: 250Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          probes:
+            # Exec probes are mandatory here. The CNP has an ingress
+            # section, and docs/conventions/cilium.md records that any
+            # ingress section on a pod with httpGet/tcpSocket probes
+            # denies the kubelet probe source unless `world` is added.
+            # Exec probes are immune by construction. The upstream
+            # server answers GET /mcp with 405 or 406 (no session, no
+            # Accept match) - both are <500 and therefore healthy. A
+            # connection refused (server not yet listening) exits 1.
+            liveness: &probes
+              enabled: true
+              custom: true
+              spec:
+                exec: &execProbe
+                  command:
+                    - node
+                    - -e
+                    - |
+                      const http=require('http');
+                      const req=http.request({hostname:'127.0.0.1',port:8931,path:'/mcp',method:'GET',timeout:3000,headers:{'Accept':'application/json, text/event-stream'}},(res)=>{
+                        process.exit(res.statusCode<500?0:1);
+                      });
+                      req.on('error',()=>process.exit(1));
+                      req.on('timeout',()=>{req.destroy();process.exit(1)});
+                      req.end();
+                initialDelaySeconds: 10
+                periodSeconds: 10
+                timeoutSeconds: 5
+                failureThreshold: 3
+            readiness: *probes
+            startup:
+              enabled: true
+              custom: true
+              spec:
+                exec: *execProbe
+                failureThreshold: 30
+                periodSeconds: 5
+                timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            # readOnlyRootFilesystem is feasible because all writes are
+            # directed to the writable emptyDir volumes:
+            #   * /tmp (emptyDir, disk-backed) - HOME, browser profile
+            #     (via --user-data-dir), Chromium cache, fontconfig
+            #   * /dev/shm (emptyDir, medium Memory, 1Gi) - Chromium
+            #     shared memory (the 64MiB default crashes Chromium)
+            # The image's /app and /ms-playwright are pre-installed and
+            # owned by node:node, so the read-only root is enough for
+            # the server and browser binaries.
+            #
+            # If Chromium ever fails to start with a read-only path
+            # error, flip this to false as a one-line rollback. The
+            # live-acceptance script drives a real browser_navigate and
+            # will surface any such failure immediately.
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+  service:
+    playwright-mcp:
+      controller: playwright-mcp
+      ports:
+        http:
+          port: 8931
+          protocol: TCP
+
+  persistence:
+    tmp:
+      type: emptyDir
+      globalMounts:
+        - path: /tmp
+    shm:
+      type: emptyDir
+      medium: Memory
+      sizeLimit: 1Gi
+      globalMounts:
+        - path: /dev/shm
+
+  configMap: {}
+  # No ingress of any kind. Stage 1 access is `kubectl port-forward`
+  # only. See README.md for the Stage 2 unknowns.
+  ingress: {}
+  route: {}
+  serviceMonitor: {}
+
+# Wrapper-chart own resources (templates/ciliumnetworkpolicy.yaml).
+# Set to false to disable the CNP (rollback). The CNP is what makes
+# the threat model real: without it the browser can reach the cluster
+# and the LAN, which is the SSRF pivot the architecture forbids.
+networkIsolation: true
