@@ -107,7 +107,7 @@ server:
   # Envoy Gateway route.
   # The external-dns annotation publishes the name (the Gateway address). The external /api/webhook
   # route is resources/httproute-external.yaml. No grpcroute: the Service port has no h2c appProtocol,
-  # so the backend speaks HTTP/1.1 like behind nginx today (CLI needs `--grpc-web`, as with nginx).
+  # so the backend speaks HTTP/1.1 (the CLI needs `--grpc-web`).
   httproute:
     enabled: true
     annotations:
