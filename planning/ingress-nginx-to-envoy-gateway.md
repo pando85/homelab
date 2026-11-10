@@ -2168,9 +2168,10 @@ parallel from Phase 1; Forkline Remote staging works from Phase 5 on.
   off (Vault's does not), and the unmerged calypso network policies that hard-code `.4`. Decided
   since: web auth (ext auth), Keycloak backend TLS.
 - isidoro `/metrics` is publicly reachable (tenant owner's call).
-- Envoy logs the raw cookie value when it cannot decrypt an OIDC cookie (`failed to decrypt token`,
-  Phase 2 findings), so session cookies land in Loki. Mitigation to decide (for example a filter
-  in the log pipeline or a lower proxy log level); until then treat Envoy proxy logs as sensitive.
+- ~~Envoy logs the raw cookie value when it cannot decrypt an OIDC cookie (`failed to decrypt token`)~~
+  **Resolved (`920be726e`):** `oauth2` logger at `critical` (EnvoyProxy `spec.logging.level`), access
+  log path without the query string (`%PATH(NQ:ORIG_OR_PATH)%`); the existing 97 lines were synthetic
+  test values.
 - Operating rule from Phase 4 on: any listener-modifying change (a new SecurityPolicy, a listener,
   a certificate on a listener) makes Envoy drain long-lived connections after 60 s (the drain
   time; see "Phase 2 progress: timeouts and headers" and the roll test notes), and real traffic now
