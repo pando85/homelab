@@ -55,13 +55,13 @@ config:
         - sources:
             - from: connection
 
-    # Transform nginx and Envoy Gateway SERVER spans to CLIENT spans to fix service graph
-    transform/nginx:
+    # Transform Envoy Gateway SERVER spans to CLIENT spans to fix service graph
+    transform/envoy:
       error_mode: ignore
       trace_statements:
         - context: span
           statements:
-            - set(span.kind.string, "Client") where resource.attributes["service.name"] == "nginx-external" or resource.attributes["service.name"] == "envoy-external"
+            - set(span.kind.string, "Client") where resource.attributes["service.name"] == "envoy-external"
 
     # Tail-based sampling: service-aware policy to restore Calypso spanmetrics
     # After PR #2331 reduced Calypso span volume from ~2000 to ~5 spans/trace,
@@ -103,13 +103,12 @@ config:
         - name: latency-policy
           type: latency
           latency: {threshold_ms: 5000}
-        # Edge proxies (nginx, and Envoy Gateway during the migration): 100% sampling to verify
-        # OTel propagation end-to-end
-        - name: nginx-external-full-sampling
+        # Edge proxy (Envoy Gateway): 100% sampling to verify OTel propagation end-to-end
+        - name: envoy-external-full-sampling
           type: string_attribute
           string_attribute:
             key: service.name
-            values: ["nginx-external", "envoy-external"]
+            values: ["envoy-external"]
             enabled_regex_matching: false
         # Default: 10% probabilistic for non-Calypso services
         - name: default-policy
@@ -143,7 +142,7 @@ config:
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [k8sattributes, transform/nginx, tail_sampling, batch]
+        processors: [k8sattributes, transform/envoy, tail_sampling, batch]
         exporters: [otlp/tempo]
 
 service:
