@@ -43,8 +43,8 @@ bare-metal. We use custom Ansible playbooks and roles to setup the Kubernetes cl
   manages DNS records from my cluster in a cloud DNS provider.
 - [jetstack/cert-manager](https://cert-manager.io/docs/): Creates SSL certificates for services in
   my Kubernetes cluster.
-- [kubernetes/ingress-nginx](https://github.com/kubernetes/ingress-nginx/): Ingress controller to
-  expose HTTP traffic to pods over DNS.
+- [envoyproxy/gateway](https://gateway.envoyproxy.io/): Gateway API implementation (Envoy) to
+  expose HTTP traffic to pods over DNS, with native OIDC against Kanidm.
 - [openebs/zfs-localpv](https://github.com/openebs/zfs-localpv): CSI Driver for dynamic
   provisioning of Persistent Local Volumes for Kubernetes using ZFS.
 - [kanidm](https://kanidm.com/): A simple, secure and fast identity management platform.
@@ -96,12 +96,14 @@ All connections outside the cluster are handled with TLS using
 [Cilium](https://cilium.io/) is configured with BGP control plane, both on my router and within the
 Kubernetes cluster.
 
-### Ingress Controllers
+### Gateways
 
-For external access, port forwarding is configured for ports `80` and `443`, directing traffic to
-the load balancer IP of the Kubernetes ingress controller.
+Two [Envoy Gateway](https://gateway.envoyproxy.io/) `Gateway`s serve all HTTP(S) traffic, each on
+its own load balancer IP: `external` for public access and `internal` for LAN-only names. Apps
+attach with Gateway API `HTTPRoute`s.
 
-There are also another ingress controller for internal use.
+For external access, port forwarding is configured for ports `80` and `443` (and Forgejo SSH),
+directing traffic to the load balancer IP of the `external` Gateway.
 
 ### Internal DNS
 

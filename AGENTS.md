@@ -7,7 +7,7 @@ under `docs/`, and only keep high-signal reminders here.
 
 Self-hosted K3s homelab via GitOps. Principles: declarative infra, repeatable automation, small blast radius, version pinning, minimal drift.
 
-**Tech Stack:** K3s, ArgoCD, Helm (template-only), Ansible (bootstrap), External Secrets + Vault, cert-manager, ingress-nginx, Renovate, ZFS, Cilium (BGP).
+**Tech Stack:** K3s, ArgoCD, Helm (template-only), Ansible (bootstrap), External Secrets + Vault, cert-manager, Envoy Gateway (Gateway API), Renovate, ZFS, Cilium (BGP).
 
 **Cluster Access:** This is a GitOps repository. `kubectl --context=grigri`. Metrics: https://prometheus.internal.grigri.cloud
 
