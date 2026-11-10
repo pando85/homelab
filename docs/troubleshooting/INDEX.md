@@ -9,7 +9,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 ## Table of Contents
 
 - [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
-- [ArgoCD](#argocd) (6 entries)
+- [ArgoCD](#argocd) (7 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (10 entries)
 - [Storage & Backup](#storage--backup) (13 entries)
@@ -119,6 +119,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   does not converge); a Job `activeDeadlineSeconds` above `controller.sync.timeout.seconds` reports
   "controller sync timeout" instead of the real failure; a `0400` Secret is unreadable by a nonroot
   hook pod. See `docs/troubleshooting/argocd-helm-hook-provisioning.md`
+
+- A field removed from git persists on a server-side-applied CR while the Argo CD app stays `Synced`: a
+  stale `argocd-controller` `Update` entry in `managedFields` (from before the SSA switch) still owns it,
+  and `ClientSideApplyMigration` only migrates `kubectl-client-side-apply`. Check `managedFields`, then a
+  one-time patch (or drop the stale entry); operator-generated objects (Ingress from Kanidm/Vault
+  `spec.ingress`) need the operator or a one-off cleanup. See
+  `docs/troubleshooting/argocd-ssa-stale-field-manager.md`
 
 ## Monitoring & Observability
 

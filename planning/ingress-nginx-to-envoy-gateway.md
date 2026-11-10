@@ -1770,7 +1770,23 @@ Gateway, no Cloudflare A record points at `192.168.193.1` or `.4` (step 3a; met 
   Service or pfSense route; all Argo apps Synced/Healthy; no internal runner listener; no Cloudflare A record
   at `.1`/`.4` (public resolver spot checks of `idm`, `bazarr` and `antdroid` answer the public address).
   Ingresses left: `vault/vault` (orphan) and `kanidm/kanidm` (operator-owned, see A).
-- **Owner leftovers:** `kubectl --context=grigri -n vault delete ingress vault`; remove the rest of
+- **Owner-authorized cleanup done 2026-11-10** (an agent):
+  - Kanidm CR `spec.ingress` removed by a one-time JSON patch. Cause: a stale `argocd-controller` `Update`
+    managedFields entry from before the CR switched to server-side apply still owned the field, so SSA did
+    not prune it; Argo CD's `ClientSideApplyMigration` only migrates `kubectl-client-side-apply`. The operator
+    then deleted Ingress `kanidm/kanidm`. See `docs/troubleshooting/argocd-ssa-stale-field-manager.md`.
+  - Orphaned operator-generated Ingress `vault/vault` deleted.
+  - Namespaces `ingress-nginx`, `ingress-nginx-external` and `oauth2-proxy` deleted (leftovers only: Leases,
+    admission Secrets, the nginx dashboard ConfigMap, default ServiceAccount, `kube-root-ca.crt`; no pods, PVCs
+    or Argo Applications). No namespace stuck in Terminating.
+  - Vault `secret/oauth2-proxy/cookie` metadata deleted (the path had no other keys; no repo reference left
+    but this plan).
+  - Cloudflare `auth.grigri.cloud`: the CNAME and its three external-dns TXT records (`auth`, `a-auth`,
+    `cname-auth`, all owned by `ingress/oauth2-proxy/oauth2-proxy`) deleted through external-dns's scoped
+    token, with a JSON backup first; `auth-kanidm` records untouched; the name no longer resolves at the
+    public resolver, other names still do.
+  - **Gate 6 fully met: 0 Ingress objects cluster-wide.**
+- **Owner leftovers (all done, listed for the record):** `kubectl --context=grigri -n vault delete ingress vault`; remove the rest of
   `spec.ingress` from the Kanidm CR (`kubectl --context=grigri -n kanidm patch kanidm kanidm --type=json
   -p '[{"op":"remove","path":"/spec/ingress"}]'`, the operator then deletes its Ingress and the
   `idm-external-tls-certificate` Certificate follows); `kubectl --context=grigri delete ns ingress-nginx
