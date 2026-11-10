@@ -33,9 +33,25 @@ sum(increase(minio_s3_requests_4xx_errors_total{job="minio",api="putobject"}[1d]
   / sum(increase(minio_s3_requests_total{job="minio",api="putobject"}[1d]))
 ```
 
+Per-bucket series (Prometheus job `minio-bucket`, scraped from `/minio/v2/metrics/bucket`):
+
+```promql
+# Usage as a fraction of the quota (alerts at 0.70 and 0.90)
+minio_bucket_usage_total_bytes{job="minio-bucket",bucket="sccache"}
+  / on (bucket) minio_bucket_quota_total_bytes{job="minio-bucket",bucket="sccache"}
+
+# Rejected PUTs for the bucket (should be 0)
+sum(rate(minio_bucket_requests_4xx_errors_total{job="minio-bucket",bucket="sccache",api="putobject"}[10m]))
+```
+
+Also `minio_bucket_usage_object_total`, `minio_bucket_requests_total`, `minio_bucket_traffic_{received,sent}_bytes`.
+Alerts (`platform/minio/rules/sccache.yaml`): `SccacheBucketUsageHigh`, `SccacheBucketUsageCritical`,
+`SccacheBucketFullIn24h`, `SccachePutRejections`, `SccacheLifecycleNotExpiring`. Dashboard: Grafana
+"sccache S3". Design and open work: `planning/sccache-s3-observability.md`.
+
 In a CI job log, check the `L1 (s3) writes` line of the sccache stats: persistent 0 across jobs that
-compiled new crates means S3 writes are failing. Per-bucket usage and quota metrics are not
-scraped yet; see `planning/sccache-s3-observability.md`.
+compiled new crates means S3 writes are failing. Client-side per-level stats are not in Loki yet
+(needs a Calypso change, see the planning doc).
 
 ## Fix / Workaround
 

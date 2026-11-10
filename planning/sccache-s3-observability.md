@@ -1,6 +1,21 @@
 # sccache S3 observability plan
 
-**Status: plan only, nothing implemented.** Prepared 2026-11-10 from read-only checks (kubectl
+**Status (2026-11-10): homelab parts implemented locally, pending push and ArgoCD sync; client-side
+stats pending a Calypso change.** Implemented in `platform/minio/`: `templates/probe-bucket.yaml`
+(job `minio-bucket`, 60s, 36 series after relabelling, `inflight` and TTFB dropped), alerts in
+`templates/prometheus-rules.yaml` + `rules/sccache.yaml` (`SccacheBucketUsageHigh`,
+`SccacheBucketUsageCritical`, `SccacheBucketFullIn24h`, `SccachePutRejections`,
+`SccacheLifecycleNotExpiring`; quota read from `minio_bucket_quota_total_bytes`, nothing hardcoded)
+and `dashboards/sccache.json` (dashboard "sccache S3", uid `sccache-s3`). Differences from the
+sketches below: alert names/severities as listed (PUT rejections is a warning on rate > 0 for 30m,
+lifecycle is `info`: lowest usage of the last 7d above the highest usage 8d ago, inert until 9 days
+of series history exist); the live quota already reads 214,748,364,800, so the quota caveat in
+section 1 no longer applies; TTFB panels use the cluster-wide `minio_s3_requests_ttfb_seconds_distribution`
+(per api), not a per-bucket one. Not verified until deployed: the new series themselves, `up{job="minio-bucket"}`,
+`promtool check rules` (not installed here; expressions were syntax-checked against live Prometheus
+with substituted metrics). Section 3 (client side) and dashboard panel 6 remain open.
+
+Original status: plan only. Prepared 2026-11-10 from read-only checks (kubectl
 get/exec-curl on the MinIO pod, Prometheus and Loki via Grafana). Background:
 [caching analysis](../docs/conventions/rust-build-caching.md#deployed-state-and-results),
 [bucket-full incident](../docs/troubleshooting/sccache-s3-bucket-full-silent.md).
