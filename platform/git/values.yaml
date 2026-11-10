@@ -12,30 +12,6 @@ forgejo:
     fsGroup: 1000
     fsGroupChangePolicy: "OnRootMismatch"
 
-  ingress:
-    enabled: true
-    className: nginx-external
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      external-dns.kubernetes.io/target: grigri.cloud
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-      # fix timeouts uploading big files disabling proxy buffering
-      nginx.ingress.kubernetes.io/proxy-buffering: "off"
-      nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
-      nginx.ingress.kubernetes.io/proxy-body-size: 35G
-    hosts:
-      - host: &host git.grigri.cloud
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - secretName: git-tls-certificate
-        hosts:
-          - *host
-
   # SSH (29518) through the Envoy Gateway external Gateway (192.168.193.14), next to the nginx tcp
   # passthrough, until the external switch. Renders TCPRoute git-forgejo-ssh -> git-forgejo-ssh:22.
   tcpRoute:
