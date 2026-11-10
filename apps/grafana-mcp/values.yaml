@@ -62,7 +62,8 @@ grafana-mcp:
     # IN-CLUSTER SERVICE, not the public `grafana.grigri.cloud` host - measured, not assumed:
     #   * per-user tokens survive the direct path. Grafana validates the bearer itself
     #     (`[auth.jwt] enabled = true`, `header_name = Authorization`), and the live
-    #     nginx-external Ingress carries no auth or header-rewrite annotation at all (only
+    #     the Envoy HTTPRoute (serving path, parentRef Gateway external) carries no auth
+    #     or header-rewrite annotation at all (only
     #     cert-manager, external-dns and ArgoCD tracking), so it adds TLS and host routing and
     #     nothing else. The same `Authorization` header arrives either way.
     #   * on the Service path itself: `/api/health` -> 200 (Grafana 13.3.0, database ok) and an

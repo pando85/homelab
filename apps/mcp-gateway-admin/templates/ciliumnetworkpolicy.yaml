@@ -62,20 +62,27 @@ spec:
         - ports:
             - port: "15021"
               protocol: TCP
-    # (2) MCP traffic arrives only through the INTERNAL ingress controller
-    # (ingress-nginx, namespace `ingress-nginx`, class `nginx-internal`). The Ingress
-    # for mcp.internal.grigri.cloud uses class nginx-internal -> Service mcp-gateway-admin
-    # port 3000. Nothing else is allowed to call the gateway. Labels verified against
-    # system/ingress-nginx/values.yaml (controller admissionWebhooks.selector).
+    # (2) MCP traffic arrives through the SERVING path (Envoy Gateway `internal` proxies)
+    # and the RETAINED ROLLBACK path (ingress-nginx internal controller). The Envoy rule
+    # is the active data plane: HTTPRoute mcp-gateway-admin -> Gateway internal -> Service
+    # mcp-gateway-admin port 3000. The nginx rule is retained deliberately as the
+    # documented ingress rollback path (docs/network/ingress.md, ingress-migration
+    # Phase 6). It is removable ONLY in the same change that deletes ingress-nginx.
+    # A reader who sees "dead weight" must NOT conclude it is safe to delete.
+    # Labels verified against system/ingress-nginx/values.yaml (controller
+    # admissionWebhooks.selector).
     - fromEndpoints:
         - matchLabels:
             app.kubernetes.io/name: ingress-nginx
             app.kubernetes.io/component: controller
             io.kubernetes.pod.namespace: ingress-nginx
-        # Envoy Gateway migration: the proxies of the `internal` Gateway
+        # Envoy Gateway migration: the SERVING path. The proxies of the `internal` Gateway
         # (apps/mcp-gateway-admin HTTPRoute -> Service mcp-gateway-admin port 3000). Same
         # port, same L3/L4 shape as the nginx rule; without it the route answers 503 `UF`.
-        # The nginx rule stays until ingress-nginx is decommissioned.
+        # The nginx rule below is retained deliberately as the documented ingress rollback
+        # path (docs/network/ingress.md, ingress-migration Phase 6). It is removable ONLY
+        # in the same change that deletes ingress-nginx. A reader who sees "dead weight"
+        # must NOT conclude it is safe to delete.
         - matchLabels:
             app.kubernetes.io/name: envoy
             app.kubernetes.io/component: proxy
