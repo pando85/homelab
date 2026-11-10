@@ -50,16 +50,6 @@ spec:
                 valueType: StringArray
                 values:
                   - tanque-users@idm.grigri.cloud
-              # BEGIN parity (a): nginx also required a group of the oauth2-proxy client scope map
-              # (k8s-oauth2-proxy-users, navidrome-users, hermes-users). Claims are ANDed, values ORed.
-              # Drop this block to allow every member of tanque-users@idm.grigri.cloud.
-              - name: groups
-                valueType: StringArray
-                values:
-                  - k8s-oauth2-proxy-users@idm.grigri.cloud
-                  - navidrome-users@idm.grigri.cloud
-                  - hermes-users@idm.grigri.cloud
-              # END parity
 ---
 # Envoy Gateway native OIDC against Kanidm + JWT authorization on the `groups` claim.
 # Pattern: docs/conventions/gateway-api-routes.md ("Authentication")
@@ -112,13 +102,3 @@ spec:
                 valueType: StringArray
                 values:
                   - tanque-users@idm.grigri.cloud
-              # BEGIN parity (a): nginx also required a group of the oauth2-proxy client scope map
-              # (k8s-oauth2-proxy-users, navidrome-users, hermes-users). Claims are ANDed, values ORed.
-              # Drop this block to allow every member of tanque-users@idm.grigri.cloud.
-              - name: groups
-                valueType: StringArray
-                values:
-                  - k8s-oauth2-proxy-users@idm.grigri.cloud
-                  - navidrome-users@idm.grigri.cloud
-                  - hermes-users@idm.grigri.cloud
-              # END parity

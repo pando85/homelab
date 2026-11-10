@@ -50,13 +50,3 @@ spec:
                 valueType: StringArray
                 values:
                   - appdaemon-users@idm.grigri.cloud
-              # BEGIN parity (a): nginx also required a group of the oauth2-proxy client scope map
-              # (k8s-oauth2-proxy-users, navidrome-users, hermes-users). Claims are ANDed, values ORed.
-              # Drop this block to allow every member of appdaemon-users@idm.grigri.cloud.
-              - name: groups
-                valueType: StringArray
-                values:
-                  - k8s-oauth2-proxy-users@idm.grigri.cloud
-                  - navidrome-users@idm.grigri.cloud
-                  - hermes-users@idm.grigri.cloud
-              # END parity
