@@ -153,20 +153,6 @@ app-template:
         enableServiceLinks: false
         runtimeClassName: kata
         automountServiceAccountToken: false
-        # DNS override for mcp.grigri.cloud: the public DNS resolves to 79.117.1.43
-        # (external IP), but the external Envoy Gateway LoadBalancer listens on
-        # 192.168.193.14 (internal Cilium BGP IP). Without this override, the hermes
-        # pod cannot reach the MCP gateway via HTTPS (connection times out).
-        # idm.grigri.cloud and grafana.grigri.cloud already resolve correctly via
-        # the upstream DNS (split-horizon at the network level), but mcp.grigri.cloud
-        # is not in that DNS, so we override it here. Only needed when
-        # global.mcpGateway.enabled=true, but added unconditionally to the pod spec
-        # because app-template doesn't support conditional pod options. The entry
-        # is harmless when unused (just an /etc/hosts entry).
-        hostAliases:
-          - ip: "192.168.193.14"
-            hostnames:
-              - mcp.grigri.cloud
       serviceAccount:
         name: hermes-agent
       initContainers:

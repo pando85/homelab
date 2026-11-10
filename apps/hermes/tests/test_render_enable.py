@@ -5,7 +5,7 @@ These are behavior tests against ``helm template`` output, not source greps.
 The load-bearing assertions are:
 
 * with the switch off, the chart renders **byte-for-byte** what the chart does
-  at ``HEAD`` (modulo the hostAliases DNS override and the sidecar removal);
+  at ``HEAD`` (modulo the sidecar removal);
 * with the switch on, every pre-existing object (the Hermes StatefulSet first)
   is still rendered *unchanged*, and the only additions are the helper
   ConfigMap and Deployment;
@@ -57,7 +57,7 @@ def _baseline_chart() -> str:
 
     Uses commit 004a96473 (mcp-gateway: Attach the Context7 API key to the context7 route)
     as the baseline before the DNS fix was added. This ensures tests compare against
-    the state before hostAliases was introduced.
+    the state before the (since removed) mcp.grigri.cloud hostAliases workaround.
 
     ``git archive`` is read-only - it touches no index, no worktree and no refs.
     ``charts/`` is a build artifact (``helm dependency build``), not tracked, and
@@ -83,10 +83,6 @@ def test_disabled_render_is_head_baseline():
     """``enabled: false`` must produce exactly the manifests HEAD produces.
 
     Exceptions (filtered out before comparison):
-    - the hostAliases addition for mcp.grigri.cloud DNS override is present in
-      the disabled render because values.yaml cannot use Helm template
-      conditionals. The entry is harmless when unused (just an /etc/hosts entry
-      that never gets queried).
     - the legacy grafana-mcp sidecar (grafana-mcp, grafana-mcp-refresher,
       grafana-mcp-token-init containers and grafana-mcp-shared volume) was
       removed on 2026-11-10. The baseline commit still has them, so they are
@@ -99,19 +95,6 @@ def test_disabled_render_is_head_baseline():
     # Parse both renders
     baseline_docs = list(yaml.safe_load_all(baseline))
     disabled_docs = list(yaml.safe_load_all(disabled))
-
-    # Filter out the hostAliases from the StatefulSet in disabled render
-    for doc in disabled_docs:
-        if doc and isinstance(doc, dict) and doc.get("kind") == "StatefulSet":
-            pod_spec = doc.get("spec", {}).get("template", {}).get("spec", {})
-            if "hostAliases" in pod_spec:
-                # Check it's the expected mcp.grigri.cloud override
-                host_aliases = pod_spec["hostAliases"]
-                assert len(host_aliases) == 1
-                assert host_aliases[0]["ip"] == "192.168.193.14"
-                assert host_aliases[0]["hostnames"] == ["mcp.grigri.cloud"]
-                # Remove it for comparison
-                del pod_spec["hostAliases"]
 
     # Filter out the legacy sidecar from the baseline StatefulSet (removed 2026-11-10)
     SIDECAR_CONTAINERS = {"grafana-mcp", "grafana-mcp-refresher"}
@@ -155,12 +138,11 @@ def test_disabled_render_is_head_baseline():
 
     assert baseline_normalized == disabled_normalized, (
         "disabled render differs from the HEAD chart render "
-        "(beyond the expected hostAliases addition for mcp.grigri.cloud "
-        "and the sidecar removal)"
+        "(beyond the sidecar removal)"
     )
     assert "mcp-gateway" not in disabled
     assert "mcpGateway" not in disabled
-    print("✓ disabled render == HEAD baseline (normalized, +hostAliases, -sidecar)")
+    print("✓ disabled render == HEAD baseline (normalized, -sidecar)")
 
 
 def test_enabled_adds_only_the_helper_pod():
@@ -177,10 +159,6 @@ def test_enabled_adds_only_the_helper_pod():
     off_sts = next(d for d in yaml.safe_load_all(off) if isinstance(d, dict) and d.get("kind") == "StatefulSet")
     on_sts = next(d for d in yaml.safe_load_all(on) if isinstance(d, dict) and d.get("kind") == "StatefulSet")
     pod_off, pod_on = off_sts["spec"]["template"]["spec"], on_sts["spec"]["template"]["spec"]
-
-    # Filter out hostAliases from both for comparison (present in both, harmless)
-    for pod in (pod_off, pod_on):
-        pod.pop("hostAliases", None)
 
     # The StatefulSet must be identical (sidecar is gone, no cutover scripts)
     for field in ("containers", "initContainers"):
