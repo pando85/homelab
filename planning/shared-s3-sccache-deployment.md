@@ -95,7 +95,7 @@ Proposed initial settings, subject to verified capacity and backend support:
 | Anonymous access | Disabled |
 | Versioning / object locking | Disabled |
 | Purge existing contents during provisioning | Disabled |
-| Storage ceiling | 50 GiB = 53,687,091,200 bytes, hard quota (verified: oversized writes rejected) |
+| Storage ceiling | 100 GiB = 107,374,182,400 bytes, hard quota (raised from 50 GiB on 2026-11-10; verified: oversized writes rejected) |
 | Object expiration | 14 days; one lifecycle rule `sccache-expiry`; tune from observed reuse |
 | Backups | Do not add cache contents to backup jobs |
 | Authorization | Dedicated bucket-scoped policies; no administrative or backup-bucket access |
@@ -105,9 +105,9 @@ local disk, not the bucket. Define capacity/error alerts and preserve operationa
 other MinIO consumers.
 
 Quota behavior is confirmed on the installed server version (Silo/mc `RELEASE.2026-10-26T00-00-00Z`):
-`mc quota set --size 53687091200b` reports `{"quota":53687091200,"type":"hard"}` and a write past the
+`mc quota set --size <bytes>b` reports `{"quota":<bytes>,"type":"hard"}` and a write past the
 cap fails with "Bucket quota exceeded", so compile jobs degrade to their local cache instead of
-filling the pool. Note `50gb` would be decimal 50,000,000,000 - the cap is expressed in bytes.
+filling the pool. Note `100gb` would be decimal 100,000,000,000 - the cap is expressed in bytes.
 The desired values live in `platform/minio/templates/sccache-config.yaml` and are applied and
 re-asserted by the `minio-sccache-provisioning` post-install/post-upgrade hook Job
 (`platform/minio/templates/sccache-provisioning.yaml`); see
@@ -266,11 +266,15 @@ capacity decisions. No worktree-target migration is implied by enabling S3.
 
 ### Known limitation: shared storage is not yet shared hits
 
-The storage side is complete and verified: private `sccache` bucket, hard quota 50 GiB
-(53,687,091,200 bytes, writes past the cap rejected), one 14-day lifecycle rule
+The storage side is complete and verified: private `sccache` bucket, hard quota 100 GiB
+(107,374,182,400 bytes, writes past the cap rejected), one 14-day lifecycle rule
 (`sccache-expiry`), separate scoped identities (`sccache-ci` read/write, `sccache-desktop`
 read-only) and a credential file delivered to the runners. None of that makes a cache entry
 written on one host useful on another.
+
+The quota was raised from 50 GiB because the original bucket filled in about 3.5 days (2026-11-06 to
+2026-11-10 ~04:30Z, ~12-14 GiB/day) and S3 writes were silently rejected (write policy `l0`); a
+lifecycle reduction is planned next.
 
 sccache derives its cache keys from the compile invocation and its inputs, which include source
 file paths. CI builds run under a different workspace prefix than a workstation checkout, so the

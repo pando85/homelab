@@ -27,9 +27,9 @@ data:
   SCCACHE_S3_ENDPOINT: minio
   SCCACHE_S3_PORT: "9000"
   SCCACHE_S3_BUCKET: sccache
-  # Hard capacity cap. 50 GiB is 53,687,091,200 bytes (IEC); "50gb" would be 50,000,000,000.
+  # Hard capacity cap. 100 GiB is 107,374,182,400 bytes (IEC); "100gb" would be 100,000,000,000.
   # Enforced by the server: writes past the cap are rejected, not merely reported.
-  SCCACHE_QUOTA_BYTES: "53687091200"
+  SCCACHE_QUOTA_BYTES: "107374182400"
   # Disposable cache: objects expire after 14 days. Exactly one rule, with this stable ID, so
   # provisioning converges instead of accumulating rules.
   SCCACHE_EXPIRY_DAYS: "14"
