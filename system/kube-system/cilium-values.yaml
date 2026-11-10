@@ -133,18 +133,6 @@ hubble:
   ui:
     enabled: true
     rollOutPods: true
-    ingress:
-      enabled: true
-      className: nginx-internal
-      annotations:
-        external-dns.kubernetes.io/enabled: "true"
-        cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      hosts:
-        - &host hubble.internal.grigri.cloud
-      tls:
-        - secretName: hubble-tls-certificate
-          hosts:
-            - *host
 
 installNoConntrackIptablesRules: true
 kubeProxyReplacement: true
