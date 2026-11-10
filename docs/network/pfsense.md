@@ -115,7 +115,7 @@ Host overrides (split horizon):
 | Override | Address | Aliases |
 |----------|---------|---------|
 | `freshrss.grigri.cloud` | 192.168.193.4 | See the list below |
-| `app.staging.forkline.dev` | 192.168.193.4 | `auth`, `idm`, `api` (all `.staging.forkline.dev`) |
+| `app.staging.forkline.dev` | 192.168.193.4 | `auth`, `idm`, `api`, `mcp-fixture` (all `.staging.forkline.dev`) |
 | `mintpsicologia.es` | 192.168.193.4 | `www.mintpsicologia.es` |
 | `turn.grigri.cloud` | 192.168.193.5 | |
 | `unifi-controller.grigri` | 192.168.193.2 | `unifi.grigri` |
