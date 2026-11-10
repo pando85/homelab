@@ -459,6 +459,7 @@ Same-host routes merge; give the skip its own route without a `SecurityPolicy`:
                  X-Auth-Request-Groups, X-Auth-Request-Access-Token]
 ```
 
+- PWA manifests (`manifest.webmanifest`) are a standard skip path: browsers fetch them without credentials, so an OIDC redirect fails with a CORS error. Skip the exact manifest path only, not icons (`apps/bazarr`, `apps/navidrome`).
 - Gateway API prefixes are segment-based: `^/(rest|share)` in nginx also skipped `/restx`; Envoy
   does not (stricter, accepted).
 - A query-based skip (radarr `apiKey`) is `path: RegularExpression` + `queryParams:
