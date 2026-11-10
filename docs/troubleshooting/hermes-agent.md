@@ -46,7 +46,7 @@ isolation.
 ## Dashboard OIDC Auth
 
 The dashboard uses the self-hosted OIDC provider (Kanidm) for authentication. Two layers protect
-it: oauth2-proxy at the ingress (group-gated) and the dashboard's own OIDC session.
+it: Envoy Gateway native OIDC on the route (group-gated) and the dashboard's own OIDC session.
 
 ### Dashboard refuses to bind (no auth provider)
 

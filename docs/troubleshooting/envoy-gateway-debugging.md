@@ -50,12 +50,12 @@ Read the `response_flags` field of the access log (Loki or `kubectl logs`):
 | `DC`                    | Downstream closed: normal for streaming clients                |
 | `UF` / `UH` / `URX` / `UC` | Upstream failure: investigate the backend                   |
 
-### Behaviour differences from nginx that are expected
+### Envoy behaviour that looks like a bug but is expected
 
 Port 80 redirects with 301 (nginx 308); 404/403/redirects have empty bodies; headers containing
 underscores are dropped; `nextcloud` `/` answers 302 on Envoy and 200 on nginx. Envoy merges
 duplicate slashes and decodes unreserved percent-encoding before matching, so a deny rule must match
-the normalized path. See `scripts/eg-host-diff.sh`.
+the normalized path.
 
 ## Fix / Workaround
 
