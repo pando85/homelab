@@ -39,22 +39,7 @@ alertmanager:
             requests:
               storage: 500Mi
 
-  ingress:
-    enabled: true
-    ingressClassName: nginx-internal
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      external-dns.kubernetes.io/enabled: "true"
-    hosts:
-      - alertmanager.internal.grigri.cloud
-    paths:
-      - /
-    tls:
-      - secretName: alertmanager-general-tls
-        hosts:
-          - alertmanager.internal.grigri.cloud
-
-  # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
+  # Envoy Gateway route.
   # Internal route: the external-dns annotation publishes its name (the Gateway address).
   route:
     main:
@@ -79,21 +64,7 @@ grafana:
     userKey: username
     passwordKey: password
 
-  ingress:
-    enabled: true
-    ingressClassName: nginx-external
-    annotations:
-      external-dns.kubernetes.io/enabled: "true"
-      external-dns.kubernetes.io/target: grigri.cloud
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-    hosts:
-      - &host grafana.grigri.cloud
-    tls:
-      - secretName: grafana-general-tls
-        hosts:
-          - *host
-
-  # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
+  # Envoy Gateway route.
   route:
     main:
       enabled: true
@@ -317,22 +288,7 @@ prometheus:
             requests:
               storage: 150Gi
 
-  ingress:
-    enabled: true
-    ingressClassName: nginx-internal
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod-dns
-      external-dns.kubernetes.io/enabled: "true"
-    hosts:
-      - prometheus.internal.grigri.cloud
-    paths:
-      - /
-    tls:
-      - secretName: prometheus-general-tls
-        hosts:
-          - prometheus.internal.grigri.cloud
-
-  # Envoy Gateway route (ingress-nginx migration). The ingress above stays until the switch.
+  # Envoy Gateway route.
   # Internal route: the external-dns annotation publishes its name (the Gateway address).
   route:
     main:
