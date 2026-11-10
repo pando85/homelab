@@ -35,7 +35,6 @@ resources:
   - resources/etcd-host-memory-rules.yaml
   - resources/etcd-scrape-config.yaml
   - resources/grafana-admin-secret.yaml
-  - resources/grafana-internal-redirect.yaml
   - resources/gvisor-memory-recording-rules.yaml
   - resources/kanidm-groups-grafana.yaml
   - resources/kanidm-groups-grafana-mcp.yaml
