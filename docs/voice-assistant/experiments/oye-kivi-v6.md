@@ -139,3 +139,20 @@ Any FAIL: no deploy. Nothing is packaged before a PASS (the v6 package output st
 - Stage 3 (morning of 2026-11-14): `UNTIL=<...> bash ~/homelab/scripts/voice-assistant/wakeword/v6p1_stage3.sh`: the same copy
   command (existing pieces are skipped), extract and autolabel, calibration, `v6_replay.py` on test3-v6p1 (2026-11-13) and
   on test2-v5era, `kivi_score.py`, `live_eval.py`, `seq_eval.py` -> `v6p1/gate/`.
+
+## C3 relabel rule for real attempts (pre-registered 2026-11-11, before any label exists)
+
+Why: the owner reports many "oye Kivi" calls that v5 did not answer. In the room replay such a missed real attempt counts
+as a "false wake" for every model that catches it, so v6's 13 test2-v5era events may include genuine attempts (the
+2026-11-09 evening cluster could be retries).
+
+- Events to review: the union of the TFLite replay events on test2-v5era of v5 at raw 0.9754, v6 (`oye_kivi_ctx`) at
+  0.9595 and the ablation at 0.9285, merged when within +-2 s on the same TV. The v6.1 arms are not scored on them.
+- Each event becomes a 6 s window in the format of the missed-wake candidates; the review table is shuffled and shows no
+  model, score or rank; the event-to-model mapping is kept in a separate file that the review never shows.
+- The owner labels blind, as for the miss candidates (`attempt`, `other-speech`, `tv-media`, `noise`, `unclear`).
+- An event labelled `attempt` (any speaker) is removed from the false-wake count of EVERY model and counts as a missed
+  attempt for each model that did not fire on it. `unclear`, `tv-media`, `other-speech` and `noise` stay false wakes
+  (the conservative side).
+- C3 is then recomputed for v5, v6 and the ablation with the same thresholds and the same evening rules. Nothing else
+  changes: no threshold, no model, no other criterion.
