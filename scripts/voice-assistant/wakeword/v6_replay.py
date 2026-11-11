@@ -61,6 +61,19 @@ def poisson(k, t):
     return [round(lo, 3), round(hi, 3)]
 
 
+def hours_by_date(t0, n):
+    """{Europe/Madrid date: hours} of a piece starting at epoch t0 with n samples (split at local midnight)."""
+    out, t, t1 = {}, t0, t0 + n / 16000
+    while t < t1:
+        d = datetime.fromtimestamp(t, TZ)
+        nxt = datetime(d.year, d.month, d.day, tzinfo=TZ).timestamp() + 86400
+        nxt = datetime.fromtimestamp(nxt, TZ).replace(hour=0, minute=0, second=0).timestamp()
+        e = min(t1, nxt)
+        out[d.date().isoformat()] = out.get(d.date().isoformat(), 0.0) + (e - t) / 3600
+        t = e
+    return out
+
+
 def c3_verdict(dev, cand, ref, slack=1):
     """Stage-3 C3 (pre-registered 2026-11-11): (a) per device, evening events <= max(1, round(evening hours / 6));
     (b) pooled, evening events / (evening hours / 6) <= 1; (c) total events <= REF's total + slack."""
@@ -78,8 +91,10 @@ def c3_verdict(dev, cand, ref, slack=1):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dataset-root", default="/work/workspaces/kivi-wakeword/datasets/real")
-    ap.add_argument("--set", required=True, help="directory of the copied pieces (kivi_negatives.py --out-name)")
-    ap.add_argument("--part", required=True)
+    ap.add_argument("--set", help="directory of the copied pieces (kivi_negatives.py --out-name)")
+    ap.add_argument("--part", help="the manifest `split` value to keep, or * for all")
+    ap.add_argument("--src", action="append", default=[], metavar="SET:PART",
+                    help="instead of --set/--part, several sources in one pass (PART may be *)")
     ap.add_argument("--local-date", help="comma list of Europe/Madrid dates")
     ap.add_argument("--model", action="append", required=True, metavar="NAME=uncalibrated.tflite:RAW")
     ap.add_argument("--gate", metavar="CAND:REF", help="also print the C3 verdict of CAND against REF")
@@ -90,8 +105,13 @@ def main():
     _install(a.model)
     _, thr = parse_specs(a.model)
     dates = set(a.local_date.split(",")) if a.local_date else None
-    pieces = [p for p in K.read_pieces(a.dataset_root, a.set) if p["part"] == a.part and
-              (dates is None or datetime.fromtimestamp(p["start"], TZ).date().isoformat() in dates)]
+    srcs = [tuple(x.split(":", 1)) for x in a.src] or [(a.set, a.part)]
+    pieces = []
+    for st, part in srcs:
+        for p in K.read_pieces(a.dataset_root, st):
+            if (part in ("*", p["part"])) and \
+                    (dates is None or datetime.fromtimestamp(p["start"], TZ).date().isoformat() in dates):
+                pieces.append({**p, "set": st})
     tasks = K.plan_tasks(pieces, 1200.0)
     res = {}
     with mp.get_context("spawn").Pool(a.jobs) as pool:
@@ -100,6 +120,7 @@ def main():
             if i % 20 == 0:
                 print(f"{i + 1}/{len(tasks)}", file=sys.stderr, flush=True)
     dev = {n: {} for n in K.NAMES}
+    detail = []
     for pc in pieces:
         d = pc["device"]
         hours = pc["n"] / 16000 / 3600
@@ -109,15 +130,26 @@ def main():
         p = np.concatenate([x[1] for x in parts]) if parts else np.zeros((0, len(K.NAMES)))
         o = np.argsort(t, kind="stable")
         t, p = t[o], p[o]
+        row = {"set": pc["set"], "clip": pc["clip"], "device": d, "part": pc["part"],
+               "hours_by_date": hours_by_date(pc["start"], pc["n"]),
+               "evening_h_by_date": R.evening_hours(datetime.fromtimestamp(pc["start"], TZ).isoformat(), pc["n"]),
+               "events": {}}
         for k, n in enumerate(K.NAMES):
             c = dev[n].setdefault(d, {"k": 0, "k_evening": 0, "hours": 0.0, "evening_h": 0.0})
             c["hours"] += hours
             c["evening_h"] += eh
             for x in K.detections_of(t, p[:, k], thr[n]):
+                lt = datetime.fromtimestamp(pc["start"] + x, TZ)
+                ev = int(18 <= lt.hour < 24)
                 c["k"] += 1
-                c["k_evening"] += int(18 <= datetime.fromtimestamp(pc["start"] + x, TZ).hour < 24)
-    out = {"set": a.set, "part": a.part, "local_date": a.local_date, "thresholds": thr, "pieces": len(pieces),
-           "tasks": len(tasks), "models": {}}
+                c["k_evening"] += ev
+                e = row["events"].setdefault(n, {}).setdefault(lt.date().isoformat(), [0, 0])
+                e[0] += 1
+                e[1] += ev
+                row.setdefault("times", {}).setdefault(n, []).append(round(float(x), 2))
+        detail.append(row)
+    out = {"sources": [f"{x}:{y}" for x, y in srcs], "local_date": a.local_date, "thresholds": thr,
+           "pieces": len(pieces), "tasks": len(tasks), "models": {}, "pieces_detail": detail}
     for n, dd in dev.items():
         h = sum(v["hours"] for v in dd.values())
         eh = sum(v["evening_h"] for v in dd.values())

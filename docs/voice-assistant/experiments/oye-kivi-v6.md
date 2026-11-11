@@ -156,3 +156,43 @@ as a "false wake" for every model that catches it, so v6's 13 test2-v5era events
   (the conservative side).
 - C3 is then recomputed for v5, v6 and the ablation with the same thresholds and the same evening rules. Nothing else
   changes: no threshold, no model, no other criterion.
+
+## Owner labelling queue (in this order; every review is resumable, `q` quits, owner labels always win)
+
+```
+cd ~/homelab/scripts/voice-assistant/wakeword
+P=/work/workspaces/kivi-wakeword/.venv/bin/python
+$P kivi_live_wakes.py review --table c3_events.csv        # 1. the C3 events: decides v6 now (blind, shuffled)
+$P kivi_live_wakes.py review --table miss_candidates.csv  # 2. missed-wake candidates of the v5-era room audio
+$P kivi_live_wakes.py review --only-uncertain             # 3. the uncertain live wake clips (auto-labeller)
+```
+
+1. `c3_events.csv` (`datasets/real/live-misses/`): the union of the replay events of v5, v6 and the ablation on
+   test2-v5era, merged within +-2 s, 6 s windows, shuffled; no model, score or rank is shown. Labels as for the miss
+   candidates (a = attempt, o = other speech, t = TV / media, n = noise, u = unclear). The relabel rule above applies.
+2. `miss_candidates.csv`: 40 windows where v5 did not fire but a model peaked (see the
+   [v5-era mining note](oye-kivi-v5era-mining.md)).
+3. The live wake clips that the auto-labeller left uncertain (`unclear`, low confidence, or `true` without a speaker).
+
+### Amendment 1 (2026-11-11, about 23:00 Madrid; before any 2026-11-12 audio is read)
+
+Risk: the mined hard negatives may contain real "oye Kivi" calls that v5 missed live. Every mined event (v6 raw >= 0.5,
+v5 raw >= 0.3) with retry evidence was flagged and its windows **dropped** (not relabelled as positives); then p1a, p1b
+and p1c were **retrained with the same recipe** (`v6p1_filter_hard.py`, `v6p1_train.sh`; the pre-filter arms are kept
+in `v6p1/runs_prefilter/` and are not candidates). Retry evidence, same TV: a live wake detection or an stt-only run
+(mic button, push to talk) within 30 s before or after, another v4/v5/v6 event (raw >= 0.5) 5 to 30 s before or after,
+or a missed-wake candidate within 6 s.
+
+| Model, day | events: kept / dropped (day; evening) | windows kept / dropped |
+| --- | --- | --- |
+| v6, 2026-11-06 | day 11 / 9; evening 1 / 2 | 40 / 33 |
+| v6, 2026-11-08 | day 1 / 0; evening 2 / 6 | 11 / 19 |
+| v6, 2026-11-10 | day 26 / 38; evening 14 / 16 | 137 / 193 |
+| v6 total | 55 kept, 71 dropped (of 126) | 188 / 245 (day 130, evening 58 kept) |
+| v5, 2026-11-06 | day 179 / 249; evening 49 / 58 | 997 / 1,324 |
+| v5, 2026-11-08 | day 10 / 7; evening 149 / 188 | 629 / 828 |
+| v5, 2026-11-10 | day 281 / 356; evening 98 / 109 | 1,522 / 2,082 |
+| v5 total | 766 kept, 967 dropped (of 1,733) | 3,148 / 4,234 |
+
+Reasons (an event can have several): other-event 1,031, miss-candidate 33, live 20, stt-only 8. Nothing else changes: the
+stage-2 rule and the stage-3 gate above stand as written.
