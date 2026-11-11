@@ -224,10 +224,17 @@ def is_evening(start_utc, t_s):
     return EVENING[0] <= lt.hour < EVENING[1], lt.date().isoformat()
 
 
+def local_date(start_utc):
+    return datetime.fromtimestamp(_utc(start_utc).timestamp(), TZ).date().isoformat()
+
+
 def load_index(a):
+    """Pieces of the parts in --part, optionally only those whose start lies on a --local-date (Europe/Madrid; the
+    copies are cut at local midnight, so a piece belongs to one local date)."""
     idx = json.loads(Path(a.index).read_text())["pieces"]
     parts = set(a.part.split(","))
-    return [p for p in idx if p["part"] in parts]
+    dates = set(a.local_date.split(",")) if getattr(a, "local_date", None) else None
+    return [p for p in idx if p["part"] in parts and (dates is None or local_date(p["start_utc"]) in dates)]
 
 
 def heads_from(a):
@@ -329,17 +336,21 @@ def cmd_curve(a):
 
 
 def cmd_mine(a):
-    """Hard negatives: the windows (16, 96) of every step where the mining head scores above --above (2 s apart
-    at most one per local maximum, up to --per-event steps around each peak)."""
+    """Hard negatives: the windows (16, 96) of every step where the mining head scores above --above, plus --around
+    steps either side. With --split-evening, windows whose step lies in 18-24 Europe/Madrid go to <out>_evening.npy and
+    the rest to <out>_day.npy (so training can weight evenings up). --summary writes counts per part, device, local
+    date and evening (steps above the floor, distinct events with the 2 s refractory, windows kept)."""
     pieces = load_index(a)
     hd = Head(a.model[0].split("=", 1)[1])
-    keep = []
+    keep = {"day": [], "evening": []}
+    summ = {}
     for pc in pieces:
         e = np.load(pc["emb"], mmap_mode="r")
         steps, p = piece_probs(hd, e)
         hit = np.flatnonzero(p > a.above)
         if not len(hit):
             continue
+        times = step_time(steps)
         sel = set()
         for i in hit:
             for d in range(-a.around, a.around + 1):
@@ -347,12 +358,37 @@ def cmd_mine(a):
                     sel.add(i + d)
         sel = np.array(sorted(sel))
         v = window_view(e)
-        keep.append(np.asarray(v[steps[sel] - 15], np.float16))
-        print(pc["device"], len(hit), len(sel), flush=True)
-    X = np.concatenate(keep) if keep else np.zeros((0, 16, 96), np.float16)
-    np.save(a.out, X)
-    os.chmod(a.out, 0o600)
-    print(a.out, X.shape)
+        ev = np.array([is_evening(pc["start_utc"], float(times[i]))[0] for i in sel])
+        X = np.asarray(v[steps[sel] - 15], np.float16)
+        keep["evening"].append(X[ev])
+        keep["day"].append(X[~ev])
+        events = detections(times, p, a.above)
+        for i in events:
+            evn, day = is_evening(pc["start_utc"], float(times[i]))
+            k = f"{pc['part']}|{pc['device']}|{day}|{'evening' if evn else 'day'}"
+            c = summ.setdefault(k, {"events": 0, "steps": 0, "windows": 0})
+            c["events"] += 1
+        for i, evn in zip(sel, ev):
+            day = is_evening(pc["start_utc"], float(times[i]))[1]
+            k = f"{pc['part']}|{pc['device']}|{day}|{'evening' if evn else 'day'}"
+            c = summ.setdefault(k, {"events": 0, "steps": 0, "windows": 0})
+            c["windows"] += 1
+            c["steps"] += int(p[i] > a.above)
+    outs = {}
+    if a.split_evening:
+        for k in ("day", "evening"):
+            outs[a.out.replace(".npy", f"_{k}.npy")] = keep[k]
+    else:
+        outs[a.out] = keep["day"] + keep["evening"]
+    for f, parts in outs.items():
+        X = np.concatenate(parts) if parts else np.zeros((0, 16, 96), np.float16)
+        np.save(f, X)
+        os.chmod(f, 0o600)
+        print(f, X.shape, flush=True)
+    if a.summary:
+        Path(a.summary).write_text(json.dumps(dict(sorted(summ.items())), indent=1))
+    for k, c in sorted(summ.items()):
+        print(k, c, flush=True)
 
 
 def cmd_windows(a):
@@ -385,12 +421,14 @@ def main():
     p = sp.add_parser("windows")
     p.add_argument("--index", required=True)
     p.add_argument("--part", required=True)
+    p.add_argument("--local-date")
     p.add_argument("--stride", type=int, default=8)
     p.add_argument("--out", required=True)
     for name in ("score", "curve", "mine"):
         p = sp.add_parser(name)
         p.add_argument("--index", required=True)
         p.add_argument("--part", required=True, help="comma list: mine-v5era, test2-v5era, old")
+        p.add_argument("--local-date", help="comma list of Europe/Madrid dates (YYYY-MM-DD) to keep")
         p.add_argument("--model", action="append", required=True, metavar="NAME=head.onnx")
         if name == "score":
             p.add_argument("--thresholds", required=True)
@@ -400,6 +438,8 @@ def main():
             p.add_argument("--above", type=float, default=0.3)
             p.add_argument("--around", type=int, default=1)
             p.add_argument("--out", required=True)
+            p.add_argument("--split-evening", action="store_true")
+            p.add_argument("--summary")
     a = ap.parse_args()
     {"embed": cmd_embed, "score": cmd_score, "curve": cmd_curve, "mine": cmd_mine, "windows": cmd_windows}[a.cmd](a)
 

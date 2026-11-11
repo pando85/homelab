@@ -76,3 +76,66 @@ H=$HOME/homelab/scripts/voice-assistant/wakeword
 .venv/bin/python -I $H/v6_cuts.py live --out v6/cuts/live.jsonl
 bash v6/feats.sh; bash v6/room.sh; bash v6/train.sh; bash v6/eval.sh   # in systemd scopes (MemoryMax, CPUQuota)
 ```
+
+## v6.1 (owner approval 2026-11-11): stage 1 done, stages 2 and 3 PRE-REGISTERED
+
+Written and committed on 2026-11-11 (evening, Madrid), before any 2026-11-12 or 2026-11-13 audio exists. v6 stays
+undeployed. **test2-v5era is not read again for any purpose** until its one final run in stage 3.
+
+### Stage 1 (done 2026-11-11)
+
+- Hard negatives on ALL even-day room audio (2026-11-06 old set, 2026-11-08 and 2026-11-10 v5 era; both TVs; 11-10 is
+  training data now, 2026-11-12 replaces it for selection), `v6_room.py mine --split-evening`:
+  - v6 (uncalibrated `oye_kivi_ctx`) raw >= 0.5, +-1 step: **126 events, 433 windows** (day 298, evening 135):
+    11-06 day 20 events / 64 windows, evening 3 / 9; 11-08 day 1 / 4, evening 8 / 26; 11-10 day 64 / 230,
+    evening 30 / 100 (c3-a 38 events, c3-b 88).
+  - v5 raw >= 0.3, +-1 step: 1,733 events, 7,382 windows (11-06 535 events, 11-08 354, 11-10 844).
+  - room negative windows (stride 8) of 2026-11-05 (grandfathered), -06, -08, -10: 517,570.
+- 500 synthetic context clips (1,000 windows) held out of training for stage 2.
+- Three arms (v6 data and settings otherwise: 4000 steps, lr 2e-4, seed 2; synthetic context data kept):
+  - `p1a`: warm start v6; v6 hard negatives day 32/step weight 6, evening 32/step weight 12; v5 hard 128/step w3
+  - `p1b`: warm start v5; same data and weights as p1a
+  - `p1c`: warm start v6; v6 hard negatives day 48/step w12, evening 48/step w24; v5 hard 128/step w6
+
+  Script `scripts/voice-assistant/wakeword/v6p1_train.sh`, about 1.5 min per arm. No arm has been scored on any day-split audio.
+
+### Stage 2 rule (selection on 2026-11-12, even, fresh): `v6p1_select.py`, `v6p1_stage2.sh`
+
+1. Reference: v5 `oye_kivi_next` at raw 0.9754 on the 2026-11-12 room audio (part `sel-v6p1`, local date 2026-11-12):
+   total false wakes E5 (server rule: above raw, 2 s refractory).
+2. Threshold per arm: the lowest raw value t on the grid 0.9000, 0.9005, ..., 0.9995 such that at t **and at every grid
+   value above it** (a) total events <= max(E5, 1) and (b) on each TV, evening (18-24 Madrid) events <= max(1,
+   round(evening hours / 6)). No such t: the arm is not eligible. No eligible arm: stop (no v6.1).
+3. Arm: the highest R = mean accept rate at its threshold over (i) `v6/feat/pos_test.npy` (2,367 isolated synthetic
+   windows, train voices, held out of every run), (ii) `v6p1/feat/ctxp_syn_pos_val.npy` (1,000 windows of the 500 held-out
+   context clips), (iii) the 2026-11-12 live true wakes (label true, trigger wake, exact replay) when there are at least 3.
+4. Tie-break when the best two R are within 1.0 point: fewer 2026-11-12 room events at their thresholds, then the lower
+   accept rate on `v6/feat/near_test.npy` (synthetic near-phrases, train voices), then the order p1a, p1c, p1b.
+
+Stage 2 reads nothing else: no odd-day data, not the 2026-11-11 session, not the held-out-voice synthetic sets.
+
+### Stage 3 gate (run once, after 2026-11-13 ends): `v6p1_stage3.sh`; the chosen arm at its stage-2 threshold
+
+| # | Criterion (PASS needs all) |
+| --- | --- |
+| C1 | 2026-11-11 session: v6.1 >= v5 on pc-desk AND webcam (66 cues each), and no cell (3 m off pooled, 3 m on, 1.5 m on, 1.5 m off) lower than v5 by more than 1 take on either device |
+| C2 | near-phrase false accepts on that session <= v5 + 1 per device |
+| C3a | 2026-11-13 room audio (part `test3-v6p1`, local date 2026-11-13; TFLite replay `v6_replay.py`): per TV evening events <= max(1, round(evening hours / 6)), pooled per-evening point estimate <= 1, and total <= v5's total on 2026-11-13 + 1 |
+| C3b | test2-v5era, one final TFLite replay: total <= v5 + 1 (= 6 if v5 reproduces its 5), per TV evening events <= max(1, round(evening hours / 6)) and pooled per evening <= 1 |
+| C4 | live clips of the test days 2026-11-09, -11 and -13 (exact replay): v6.1 detects >= as many `true` as v5 and fires on <= as many `false` |
+| C5 | held-out-voice synthetic sets clean / TV 10 dB / quiet: not lower than v5 by more than 5 points on any |
+| C6 | no odd-day data in training or selection (2026-11-05 and -07 grandfathered); the calibrated tflite crosses 0.5 exactly where the raw file crosses t; sha256 recorded; loads in pyopen-wakeword 1.1.0 |
+
+Any FAIL: no deploy. Nothing is packaged before a PASS (the v6 package output stays where it is, uncommitted).
+
+### Exact commands
+
+- Stage 2 (morning of 2026-11-13, at or after 08:00 Madrid, so the files of the 11-12 evening are closed):
+  `UNTIL=<UTC ISO time about 15 min ago> bash ~/homelab/scripts/voice-assistant/wakeword/v6p1_stage2.sh`. It runs
+  `kivi_negatives.py --hours 1000 --since 2026-11-11T16:52:39Z --until $UNTIL --exclude-pipeline "Kiwi Test"
+  --out-name negatives-v6p1 --part-test-day test3-v6p1 --part-mine-day sel-v6p1` (dry run first),
+  `kivi_live_wakes.py extract` and `autolabel` (local), `v6_room.py embed`, then `v6p1_select.py` -> `v6p1/selection.json`.
+  The 11-13 pieces this copy also writes are `test3-v6p1` and are not read before stage 3.
+- Stage 3 (morning of 2026-11-14): `UNTIL=<...> bash ~/homelab/scripts/voice-assistant/wakeword/v6p1_stage3.sh`: the same copy
+  command (existing pieces are skipped), extract and autolabel, calibration, `v6_replay.py` on test3-v6p1 (2026-11-13) and
+  on test2-v5era, `kivi_score.py`, `live_eval.py`, `seq_eval.py` -> `v6p1/gate/`.
