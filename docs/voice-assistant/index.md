@@ -61,6 +61,9 @@ services.
 - [oye Kivi v6](experiments/oye-kivi-v6.md) (2026-11-11): context-trained candidate `oye_kivi_ctx`. Better
   recall on the held-out PC session (TV on included) and fewer near-phrase accepts than v4, but more room false
   wakes than v5 on the odd-day room audio: not deployable (criterion C3 fails). Replay framing fixed.
+- [oye Kivi data quality](experiments/oye-kivi-data-quality.md) (2026-11-11): ASR phrase check, grouped
+  out-of-fold labels and coverage of real use for the v6 data. A handful of real attempts used as negatives and one
+  weak synthetic voice; the larger gap is coverage (no real TV-on wake, synthetic context far from real use).
 - [Custom wake word "kivi"](experiments/kivi-wake-word.md): openWakeWord model for the lone word
   "kivi", trained on synthetic Spanish voices, measured against `alexa` with the server's exact
   features (recall, false accepts per hour, near-words), deployment notes (`--custom-model-dir`,
