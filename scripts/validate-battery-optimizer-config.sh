@@ -1,98 +1,64 @@
 #!/usr/bin/env bash
-# Validate that battery-optimizer service.yaml preserves production overrides
-# when re-vendoring from the app repository template.
+# Validate the battery-optimizer site overrides file.
 #
 # Usage: scripts/validate-battery-optimizer-config.sh
 #
-# This script checks that critical site-specific values are not accidentally
-# reverted to template defaults during config re-vendoring.
+# The image ships the base configs (/app/config); the homelab holds only the sparse
+# apps/battery-optimizer/files/service-overrides.yaml. This checks that every site-specific leaf is
+# present with its exact value and type, and that no base config is vendored back into files/.
 
 set -euo pipefail
 
-CONFIG_FILE="apps/battery-optimizer/files/service.yaml"
+FILES_DIR="apps/battery-optimizer/files"
+OVERRIDES="$FILES_DIR/service-overrides.yaml"
 
-if [[ ! -f "$CONFIG_FILE" ]]; then
-    echo "ERROR: Config file not found: $CONFIG_FILE"
+if [[ ! -f "$OVERRIDES" ]]; then
+    echo "ERROR: overrides file not found: $OVERRIDES"
     exit 1
 fi
 
-ERRORS=0
-
-# Check climate_shadow.enabled
-if ! grep -q "^climate_shadow:" "$CONFIG_FILE"; then
-    echo "ERROR: climate_shadow section not found"
-    ERRORS=$((ERRORS + 1))
-elif ! grep -A 1 "^climate_shadow:" "$CONFIG_FILE" | grep -q "enabled: true"; then
-    echo "ERROR: climate_shadow.enabled is not 'true' (production override required)"
-    echo "       Template default is 'false', but this deployment must have 'enabled: true'"
-    ERRORS=$((ERRORS + 1))
-fi
-
-# Check climate_shadow.prior
-if ! grep -A 5 "^climate_shadow:" "$CONFIG_FILE" | grep -q 'prior: "2311c010392f"'; then
-    echo "ERROR: climate_shadow.prior is not '2311c010392f' (site-specific prior required)"
-    echo "       Template default is 'null', but this deployment must have a prior ID"
-    ERRORS=$((ERRORS + 1))
-fi
-
-# Check climate_shadow.optimizer_mode
-if ! grep -A 20 "^climate_shadow:" "$CONFIG_FILE" | grep -q 'optimizer_mode: "shadow"'; then
-    echo "ERROR: climate_shadow.optimizer_mode is not 'shadow' (advisory mode required)"
-    echo "       Template default is 'off', but this deployment must have 'shadow'"
-    ERRORS=$((ERRORS + 1))
-fi
-
-# Check top-level mode
-if ! grep -q "^mode: live" "$CONFIG_FILE"; then
-    echo "ERROR: top-level mode is not 'live' (production override required)"
-    echo "       Template default is 'shadow', but this deployment must have 'mode: live'"
-    ERRORS=$((ERRORS + 1))
-fi
-
-# Check the values the 0.16.0 re-vendor silently reset (restored 2026-11-11).  Parsed as YAML,
-# so comments and layout do not matter.  full_charge.mode is deliberately not pinned.
-PARSE_OUT=$(python3 - "$CONFIG_FILE" <<'PY'
+python3 - "$FILES_DIR" "$OVERRIDES" <<'PY'
+import pathlib
 import sys
 
 import yaml
 
-with open(sys.argv[1]) as f:
+files_dir, overrides = sys.argv[1:3]
+errors = []
+
+for name in ("service.yaml", "tariff.yaml", "climate.yaml", "climate-mpc.yaml"):
+    if (pathlib.Path(files_dir) / name).exists():
+        errors.append(f"{files_dir}/{name} must not be vendored: the image ships it in /app/config")
+
+with open(overrides) as f:
     cfg = yaml.safe_load(f)
 
-# dotted path -> (required value, template default)
-checks = {
-    "planning.high_soc_cost_eur_per_kwh_h": (0.01, 0.0),
-    "planning.charge_soft_cap_eur_per_kwh": (0.005, 0.0),
-    "planning.discharge_margin_bound": (True, False),
-    "planning.thermal.mode": ("shadow", "off"),
-    "actuation.load_following.enabled": (True, False),
-    "actuation.load_following.max_w": (2500, None),
-    "full_charge.enabled": (True, False),
+# dotted path -> required value
+expected = {
+    "mode": "live",
+    "planning.high_soc_cost_eur_per_kwh_h": 0.01,
+    "planning.charge_soft_cap_eur_per_kwh": 0.005,
+    "planning.discharge_margin_bound": True,
+    "planning.thermal.mode": "shadow",
+    "actuation.load_following.enabled": True,
+    "actuation.load_following.max_w": 2500,
+    "full_charge.enabled": True,
+    "climate_shadow.enabled": True,
+    "climate_shadow.prior": "2311c010392f",
+    "climate_shadow.optimizer_mode": "shadow",
 }
-for path, (want, template) in checks.items():
+for path, want in expected.items():
     node = cfg
     for key in path.split("."):
-        node = node.get(key) if isinstance(node, dict) else None
-    # type(): True == 1 and 0.01 == 1e-2, but a bool must not match an int or the string "on"
+        node = node.get(key, None) if isinstance(node, dict) else None
+    # type(): True == 1, but a bool must not match an int or the string "on"
     if node != want or type(node) is not type(want):
-        print(f"{path} is {node!r}, expected {want!r} (template default {template!r})")
+        errors.append(f"{path} is {node!r}, expected {want!r}")
+
+for line in errors:
+    print(f"ERROR: {line}")
+if errors:
+    print(f"\nFound {len(errors)} violation(s) in {overrides}; see docs/deployment/battery-optimizer.md")
+    sys.exit(1)
+print(f"OK: {overrides} holds all {len(expected)} site overrides")
 PY
-) || { echo "ERROR: could not parse $CONFIG_FILE (python3 with PyYAML required)"; exit 1; }
-
-if [[ -n "$PARSE_OUT" ]]; then
-    while IFS= read -r line; do
-        echo "ERROR: $line"
-        ERRORS=$((ERRORS + 1))
-    done <<< "$PARSE_OUT"
-    echo "       Production values reverted by the 0.16.0 re-vendor; see docs/deployment/battery-optimizer.md"
-fi
-
-if [[ $ERRORS -gt 0 ]]; then
-    echo ""
-    echo "Found $ERRORS production override violation(s)."
-    echo "See docs/deployment/battery-optimizer.md 'Re-vendoring Config Files' for guidance."
-    exit 1
-fi
-
-echo "✓ All production overrides preserved"
-exit 0

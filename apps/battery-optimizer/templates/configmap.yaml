@@ -3,13 +3,7 @@ kind: ConfigMap
 metadata:
   name: battery-optimizer-config
 data:
-  tariff.yaml: |
-{{ .Files.Get "files/tariff.yaml" | indent 4 }}
-  service.yaml: |
-{{ .Files.Get "files/service.yaml" | indent 4 }}
-  # The climate shadow's configs, next to service.yaml (its paths are relative to it). Keep them
-  # byte-identical to the app repo: their sha256 is the lineage of every climate record.
-  climate.yaml: |
-{{ .Files.Get "files/climate.yaml" | indent 4 }}
-  climate-mpc.yaml: |
-{{ .Files.Get "files/climate-mpc.yaml" | indent 4 }}
+  # Site overrides only. service.yaml, tariff.yaml, climate.yaml and climate-mpc.yaml ship in the
+  # image under /app/config and are never vendored here.
+  service-overrides.yaml: |
+{{ .Files.Get "files/service-overrides.yaml" | indent 4 }}

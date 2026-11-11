@@ -48,10 +48,10 @@ repos:
         files: apps/readest/(values\.yaml|files/sql/)
         pass_filenames: false
       - id: validate-battery-optimizer-config
-        name: Validate battery-optimizer production overrides
+        name: Validate battery-optimizer site overrides
         entry: scripts/validate-battery-optimizer-config.sh
         language: script
-        files: apps/battery-optimizer/files/service\.yaml
+        files: apps/battery-optimizer/files/
         pass_filenames: false
       - id: no-session-links
         name: Refuse AI session links and trailers in commit messages
