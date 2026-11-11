@@ -8,11 +8,12 @@ tv_abrir_app:
     no_tv (no hay tele en esa habitación), tv_unavailable (la tele no responde), no_app (esa tele
     no tiene esa app), tv_off (no se ha podido encender la tele). Si la tele está apagada, la enciende
     primero.
-  # queued with max 1: a second command that arrives while the first one still waits for the TV to
+  # queued with max 2: a second command that arrives while the first one still waits for the TV to
   # power on (up to 10 s) runs after it, in the order spoken, instead of being dropped (mode single
-  # would drop it and the caller would get no response). One waiting run at most; a third is dropped.
+  # would drop it and the caller would get no response). max 2 = one running plus one waiting; a
+  # third is dropped.
   mode: queued
-  max: 1
+  max: 2
   fields:
     app:
       name: Aplicación
