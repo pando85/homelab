@@ -391,3 +391,8 @@ $R enable   --version v5-oye-kivi-2026-11-08 --tv c3-a --yes-owner-approved
 6. If a *confirmed* false wake ever appears on c3-a, mine it into the real negative pool at confuser weight
    (`--extra-neg <npy>:64:6`) and re-run the head: that is the loop that actually reduces false wakes per
    hour, and it needs no new recordings.
+
+## Next: v6 plan
+
+Next: v6 plan -> kivi-models `docs/plan/2026-11-v6-plan.md` (private repository; owner decisions of
+2026-11-11 and the v6 training plan).
