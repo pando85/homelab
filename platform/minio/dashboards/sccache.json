@@ -1212,7 +1212,7 @@
     {
       "id": 20,
       "type": "row",
-      "title": "Client-side stats (Loki SCCACHE_STATS, pending Calypso change)",
+      "title": "Client-side stats (Loki SCCACHE_STATS)",
       "collapsed": false,
       "gridPos": {
         "x": 0,
@@ -1224,23 +1224,200 @@
     },
     {
       "id": 21,
-      "type": "text",
-      "title": "Pending",
+      "type": "stat",
+      "title": "Jobs reporting (24h)",
+      "description": "Number of CI jobs that emitted SCCACHE_STATS in the last 24h.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
       "gridPos": {
         "x": 0,
         "y": 48,
-        "w": 24,
+        "w": 8,
         "h": 4
       },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "count(count_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json [24h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
       "options": {
-        "mode": "markdown",
-        "content": "Per-level hits, misses, L1 writes and errors need the sccache-setup action in Calypso to emit one `SCCACHE_STATS {json}` line per job to the runner container stdout (see `planning/sccache-s3-observability.md`, section 3, option A). Add panels here once the line appears in Loki (`unwrap`/`json` on l0_hits, l1_hits, misses, l1_writes, errors)."
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
       }
     },
     {
-      "id": 22,
-      "type": "logs",
-      "title": "SCCACHE_STATS lines (empty until the Calypso change ships)",
+      "id": 23,
+      "type": "stat",
+      "title": "Cache errors (24h)",
+      "description": "Sum of cache_write_errors and cache_read_errors across all jobs in 24h.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 48,
+        "w": 8,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(sum_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | unwrap cache_write_errors [24h])) + sum(sum_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | unwrap cache_read_errors [24h]))",
+          "legendFormat": "",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "Read-write jobs, 0 S3 writes (24h)",
+      "description": "Silent S3 write failure signal: jobs in read-write mode that reported zero L1 writes. Empty result means zero (healthy).",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 48,
+        "w": 8,
+        "h": 4
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "count(count_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | s3_write_mode=\"read-write\" | l1_writes == 0 [24h])) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "textMode": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      }
+    },
+    {
+      "id": 25,
+      "type": "timeseries",
+      "title": "Hits by level",
+      "description": "L0 (disk) and L1 (S3) hits over time, summed across all jobs.",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -1248,6 +1425,148 @@
       "gridPos": {
         "x": 0,
         "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(sum_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | unwrap l0_hits [$__interval]))",
+          "legendFormat": "L0 (disk)",
+          "refId": "A",
+          "queryType": "range"
+        },
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum(sum_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | unwrap l1_hits [$__interval]))",
+          "legendFormat": "L1 (S3)",
+          "refId": "B",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 26,
+      "type": "bargauge",
+      "title": "Hit rate by job (24h)",
+      "description": "Per-job hit rate (hits_total / compile_requests) over the last 24h.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 52,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "sum by (ci_job) (sum_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | unwrap hits_total [24h])) / sum by (ci_job) (sum_over_time({namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | unwrap compile_requests [24h]))",
+          "legendFormat": "{{ci_job}}",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.3
+              },
+              {
+                "color": "green",
+                "value": 0.7
+              }
+            ]
+          },
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": true
+        },
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "showUnfilled": true
+      }
+    },
+    {
+      "id": 22,
+      "type": "logs",
+      "title": "SCCACHE_STATS per job",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 60,
         "w": 24,
         "h": 8
       },
@@ -1257,7 +1576,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\"",
+          "expr": "{namespace=\"ci-runners\",container=\"runner\"} |= \"SCCACHE_STATS\" | regexp \"SCCACHE_STATS (?P<payload>.+)\" | regexp \"\\\"job\\\":\\\"(?P<ci_job>[^\\\"]+)\\\"\" | line_format \"{{.payload}}\" | json | line_format \"{{.ci_job}} run={{.run_id}} {{.s3_write_mode}} cr={{.compile_requests}} l0={{.l0_hits}} s3={{.l1_hits}} miss={{.misses}} w={{.l1_writes}} err={{.cache_write_errors}}\"",
           "queryType": "range",
           "refId": "A"
         }
