@@ -1451,10 +1451,19 @@ def cmd_promote(a):
         selects = {tv: states.get(e["select"], {}).get("state") for tv, e in ents.items()}
         muted = {tv: states.get(e["muted"], {}).get("state") if e["muted"] else None for tv, e in ents.items()}
         t0 = dt.datetime.now(dt.timezone.utc)
-        prev = st.get("promotion", {}).get("previous_wake_word") or (
+        prev = a.previous_wake_word or st.get("promotion", {}).get("previous_wake_word") or (
             target["wake_word_id"] if target["wake_word_id"] != mid else "alexa")
+        if prev == mid:
+            raise Refused(f"previous wake word {prev!r} is the model itself; pass --previous-wake-word")
+        changed = False
         if target["wake_word_id"] == mid:
             say(f"promote: {target['name']!r} already uses {mid}")
+            if a.previous_wake_word and not (st.get("promotion") or {}).get("previous_wake_word"):
+                # found live without a driver record (changed outside the driver): record it, change nothing
+                if will(f"record the promotion of {mid} into {target['name']!r} (previous {prev}); no Home Assistant change"):
+                    st["promotion"] = {"pipeline_id": target["id"], "pipeline": target["name"], "previous_wake_word": prev,
+                                       "observed_at": now_utc(), "recorded_after_the_fact": True}
+                    save_state(st)
         elif will(f"pipeline {target['name']!r}: wake_word_id {target['wake_word_id']} -> {mid} (all else unchanged); "
                   "Home Assistant ends its open runs"):
             ha.call("assist_pipeline/pipeline/update", pipeline_id=target["id"], **promoted_fields(target, mid))
@@ -1463,6 +1472,10 @@ def cmd_promote(a):
                 raise Refused(f"other fields changed: {target} -> {after}")
             st["promotion"] = {"pipeline_id": target["id"], "pipeline": target["name"], "previous_wake_word": prev,
                                "promoted_at": now_utc()}
+            save_state(st)
+            changed = True
+        if a.owner_override and not PLAN and "promotion" in st:
+            st["promotion"]["owner_override"] = a.owner_override
             save_state(st)
         back = "preferred" if target["id"] == plist["preferred_pipeline"] else target["name"]
         trial = find_pipeline(plist, trial_name)
@@ -1473,9 +1486,14 @@ def cmd_promote(a):
                 ha.kick(trial)
                 st.setdefault("tvs", {}).pop(tv, None)
                 save_state(st)
+                changed = True
+        if trial is None and not PLAN:
+            # the trial pipeline is gone: its recorded TV entries are stale (nothing can select it)
+            st.pop("tvs", None)
+            save_state(st)
         if PLAN:
             return
-        seen = wait_new_run(ha, target["id"], t0)
+        seen = wait_new_run(ha, target["id"], t0) if changed else None
         states = ha.states()
         plist = ha.pipelines()
         live = {}
@@ -1656,6 +1674,10 @@ def build_parser():
 
     p = sub("promote", cmd_promote, ha=True, owner=True)
     p.add_argument("--pipeline", default="preferred", help="household pipeline to switch (default: the preferred one)")
+    p.add_argument("--previous-wake-word", help="the wake word id demote goes back to (default: the pipeline's current one; "
+                   "needed when the pipeline already uses the model, e.g. changed outside the driver)")
+    p.add_argument("--owner-override", metavar="REASON",
+                   help="record the owner's reason when the gate is not 'pass' (the driver never refuses on the gate; the owner does)")
 
     p = sub("demote", cmd_demote, ha=True)
     p.add_argument("--pipeline", default="preferred")

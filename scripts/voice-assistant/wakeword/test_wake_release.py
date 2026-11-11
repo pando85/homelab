@@ -326,3 +326,50 @@ def test_promote_needs_owner_and_demote_does_not(releases, tmp_path, monkeypatch
     monkeypatch.setattr(W.HA, "__enter__", fake_enter)
     assert W.main(["promote", "--version", V]) == 2 and not entered      # refused before any HA contact
     assert W.main(["demote", "--version", V]) == 2 and entered == [1]    # rollback goes straight to HA
+
+
+class FakeHA:
+    """Just enough HA for promote: Kiwi already on the model (changed outside the driver), no trial pipeline."""
+    updates = []
+
+    def __init__(self, *a, **k):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *e):
+        pass
+
+    def wake_words(self):
+        return ["alexa", "oye_kivi"]
+
+    def pipelines(self):
+        kiwi = {"id": "k", "name": "Kiwi", "wake_word_entity": "wake_word.openwakeword", "wake_word_id": "oye_kivi"}
+        return {"preferred_pipeline": "k", "pipelines": [kiwi]}
+
+    def states(self):
+        return {}
+
+    def call(self, t, **kw):
+        if t == "config/entity_registry/list":
+            return []
+        FakeHA.updates.append(t)
+        return {}
+
+
+def test_promote_records_a_change_made_outside_the_driver(releases, tmp_path, monkeypatch):
+    make_state(releases, tmp_path)
+    st = W.load_state(V)
+    st["tvs"] = {"c3-a": {"previous": "preferred"}}                      # stale: the trial pipeline is gone
+    W.save_state(st)
+    monkeypatch.setattr(W, "HA", FakeHA)
+    monkeypatch.setattr(W, "devices_map", lambda: {})
+    assert W.main(["promote", "--version", V, "--yes-owner-approved", "--previous-wake-word", "alexa",
+                   "--owner-override", "gate incomplete, owner decision"]) == 0
+    assert FakeHA.updates == []                                          # nothing written to Home Assistant
+    st = W.load_state(V)
+    assert st["promotion"]["previous_wake_word"] == "alexa" and st["promotion"]["recorded_after_the_fact"]
+    assert "tvs" not in st
+    assert st["log"][-1]["step"] == "promote"
+    assert W.main(["promote", "--version", V, "--yes-owner-approved", "--previous-wake-word", "oye_kivi"]) == 2  # the model itself
