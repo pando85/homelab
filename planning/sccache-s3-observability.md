@@ -128,14 +128,42 @@ Owner approval needed: pushes, ArgoCD syncs, any Calypso change. Not needed: rea
 
 ## Remaining gaps (2026-11-11)
 
-1. **Container jobs not in Loki.** Container jobs (e.g. `forkline-cli-release.yml` `build-unix`)
-   emit SCCACHE_STATS to the job log but skip the Loki copy (`/.dockerenv` branch in the action).
-   A Calypso change is planned so ALL sccache jobs reach Loki (mechanism under evaluation: direct
-   Loki push vs pushgateway).
-2. **No client-side alerting yet.** No Loki ruler rules; deferred until the container-job coverage
-   mechanism is chosen.
-3. **`SccacheLifecycleNotExpiring` inert** until ~2026-11-19. The alert needs 8-day-offset history;
+1. **No client-side alerting yet.** No Loki ruler rules; deferred until the container-job coverage
+   mechanism is chosen. The container-job path is now complete (see Closed gaps below), so
+   client-side alerting can be evaluated as Phase 3 work.
+2. **`SccacheLifecycleNotExpiring` inert** until ~2026-11-19. The alert needs 8-day-offset history;
    the series started 2026-11-10T13:07Z.
+
+## Closed gaps (2026-11-11)
+
+1. **Container jobs now in Loki.** Calypso PR #2903 (merged) implemented direct HTTP push from
+   container jobs to Loki (`.ci/sccache-stats-line.sh`, `/.dockerenv` branch). The push URL is
+   `http://loki.loki.svc:3100/loki/api/v1/push` (auth_enabled false). The homelab runner config
+   was updated in two commits: `e43f34228` added `container.options` mounts for `/cache` and
+   `/sccache-credentials`; `ca27baae0` added them to `container.valid_volumes` (the runner
+   validates both allow-lists; with `valid_volumes: []` the mounts were silently dropped — see
+   `docs/troubleshooting/forgejo-runner-valid-volumes.md`). End-to-end verification: test run
+   75307 on ci-runner-0 (prusik) DinD — mounts accepted, pin current via jq, slot0 leased with
+   disk+s3 levels, and `loki: pushed (container job)`. The line is queryable in Loki: stream
+   `{namespace="ci-runners",source="sccache-stats-push"}`, payload
+   `container-sccache run=75307 runner=ad70c092f872 cr=6 hits=0 w=0 err=0`. This is the first
+   proven container-job stats delivery.
+2. **z800 workstation coverage complete.** z800 reports to Loki in both host-mode and docker-mode
+   jobs. Commit `7e5ff8f` set `SCCACHE_STATS_LOKI_URL=https://loki.internal.grigri.cloud` in both
+   the compose environment (host-mode jobs) and runner.envs (docker-mode jobs) — cluster DNS
+   `loki.loki.svc` does not resolve on z800. Commit `4cadba9` added docker-mode `/cache` +
+   credentials mounts via a `@@SECRETS_DIR@@` placeholder rendered by `scripts/render-secrets.sh`
+   to the repo's secrets dir (host paths). Both applied and verified.
+3. **Strict container test + CARGO_INCREMENTAL fix.** Calypso PR #2909 (merged, `68cc7d28`)
+   installed `jq` and `curl` in the container workflows (the `cargo-zigbuild` image lacks them;
+   `sccache-pin.sh` needs `jq` on every path; `curl` is the S3 health probe — missing it silently
+   falls back to disk mode). The test workflow `sccache-container-test.yml` is now STRICT: it
+   asserts the binary exists, a slot is leased, and `compile_requests > 0`, failing loudly on
+   mismatch. Calypso branch `fix/sccache-test-incremental` (commit `781931ed8`, PR pending) sets
+   `CARGO_INCREMENTAL="0"` on the test build step — the throwaway `cargo new` dev-profile build
+   enables incremental compilation, which sccache never caches (run 75307 had all 6 requests land
+   in `requests_not_cacheable`, failing the `compile_requests > 0` assertion even though delivery
+   worked).
 
 ## Verified LogQL pipeline
 

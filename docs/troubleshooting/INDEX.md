@@ -8,7 +8,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 ## Table of Contents
 
-- [Kubernetes & GitOps](#kubernetes--gitops) (15 entries)
+- [Kubernetes & GitOps](#kubernetes--gitops) (16 entries)
 - [ArgoCD](#argocd) (7 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (10 entries)
@@ -16,7 +16,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
 - [Desktop & Home](#desktop--home) (12 entries)
-- [Applications](#applications) (11 entries)
+- [Applications](#applications) (12 entries)
 
 ---
 
@@ -87,6 +87,16 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `nodefs.available<10%` evicts at 90% used, not 95%. Check the live values with
   `kubectl get --raw /api/v1/nodes/<node>/proxy/configz | jq .kubeletconfig.evictionHard`. See
   `docs/troubleshooting/ci-runner-amd64-disk-full.md`
+
+- Forgejo runner `container.options` bind-mounts are silently dropped unless the sources are also
+  in `container.valid_volumes` — the runner applies both allow-lists, and the chart default
+  `valid_volumes: []` rejects everything. Do NOT use `**` (too broad); allow-list exactly the
+  sources the runner needs to pass through (`/cache`, `/sccache-credentials`). The runner log
+  shows `is not a valid volume, will be ignored` for each rejected source. Secondary: the
+  `cargo-zigbuild` image lacks `jq` and `curl` (sccache pin and S3 probe silently fail without
+  them), and dev-profile `cargo new` builds are never sccache-cacheable (incremental compilation
+  → `requests_not_cacheable`), so cache tests must set `CARGO_INCREMENTAL=0`. See
+  `docs/troubleshooting/forgejo-runner-valid-volumes.md`
 
 ## ArgoCD
 
