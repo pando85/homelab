@@ -1,7 +1,7 @@
 # "oye Kivi" v6: context-trained candidate (2026-11-11)
 
 Plan and owner decisions: kivi-models `docs/plan/2026-11-v6-plan.md` (private). Follows the
-[vnext ablations](oye-kivi-vnext-ablations.md) (v5). **Deployed 2026-11-11 by owner decision despite the C3 FAIL** (see [Deployment](#deployment-2026-11-11-by-owner-decision-despite-c3-fail)); the first training and measurement was offline.
+[vnext ablations](oye-kivi-vnext-ablations.md) (v5). **Live 2026-11-11 22:11 to about 22:40 UTC by owner decision despite the C3 FAIL, then rolled back by the owner ("more false positives")**; v5 is the household wake word again (see [Deployment](#deployment-2026-11-11-by-owner-decision-despite-c3-fail-rolled-back-the-same-evening)).
 Numbers only; speakers are spk01 and spk02. Work directory `/work/workspaces/kivi-wakeword/v6/` (`results.md` there has
 every table; data in [data register](../data-register.md) row 22).
 
@@ -10,15 +10,20 @@ every table; data in [data register](../data-register.md) row 22).
 than spk01 without raising false wakes per evening.
 
 **Result:** recall up, confusers down, but **room false wakes up** at the pre-registered threshold. The candidate
-`oye_kivi_ctx` (`v6-oye-kivi-2026-11-11`, raw 0.9595 = server 0.5) fails the auto-deploy criterion C3. **It was deployed anyway on 2026-11-11 by owner decision**
-(see [Deployment](#deployment-2026-11-11-by-owner-decision-despite-c3-fail)). The other-speaker and TV-microphone parts of the hypothesis cannot be tested yet (no odd-day data).
+`oye_kivi_ctx` (`v6-oye-kivi-2026-11-11`, raw 0.9595 = server 0.5) fails the auto-deploy criterion C3. **It was deployed anyway on 2026-11-11 by owner decision and rolled back
+about 30 minutes later** (see [Deployment](#deployment-2026-11-11-by-owner-decision-despite-c3-fail-rolled-back-the-same-evening)). The other-speaker and TV-microphone parts of the hypothesis cannot be tested yet (no odd-day data).
 
-## Deployment (2026-11-11, by owner decision despite the C3 FAIL)
+## Deployment (2026-11-11, by owner decision despite the C3 FAIL; rolled back the same evening)
 
 The owner ordered "Deploy V6 now" on the evening of 2026-11-11, knowing that C3 failed (13 replay events against v5's 5
 over 79.5 h; some of the extra events may be real missed calls of the household that v5 did not wake on). This is an
-owner override of the pre-registered auto-deploy rule for this one release; v6.1 and v6.2 below are still pre-registered
-and may replace it.
+owner override of the pre-registered auto-deploy rule for this one release.
+
+**Outcome: rolled back by the owner at about 22:40 UTC (reason: "owner: more false positives", i.e. it felt like more
+false wakes than v5). "Kiwi" is on `oye_kivi_next` (v5) again; v6 was live for about 30 minutes, so this is a subjective
+report, not a measurement.** It is consistent with C3 (13 vs 5 replay events) but is not counted as evidence beyond the
+owner's report. The release state's `demote` step was recorded afterwards at 22:42Z with `wake_release.py demote`
+("Kiwi" already used `oye_kivi_next`, nothing written to Home Assistant). v6.1 and v6.2 below remain pre-registered.
 
 - Release `v6-oye-kivi-2026-11-11` (kivi-models commit `8e989e5`, annotated tag of the same name), image
   `git.grigri.cloud/agil/kivi-models:v6-oye-kivi-2026-11-11@sha256:6448161ad63e` (CI run 7; anonymous pull refused).
@@ -33,10 +38,9 @@ and may replace it.
   c3-a OK, c3-b OK (newest run on "Kiwi" with `wake_word-start` and no error). Wake files of both TVs grew about
   32 kB/s over 30 s.
 - Gate: not run; recorded as an owner override. Threshold raw 0.9595 = server 0.5 (not interchangeable with v5's 0.9754).
-- **Rollback:** `python3 wake_release.py demote --version v6-oye-kivi-2026-11-11` (from
-  `scripts/voice-assistant/wakeword/`); "Kiwi" goes back to `oye_kivi_next` and both TVs follow within about 15 s.
-- What to watch: false wakes in the evening (v6: 2.2 per evening on the replay, v5: 0) and real missed calls. Every
-  live wake and its outcome from now on counts as evidence for v6.1/v6.2 labelling.
+- **Rollback (done by the owner, about 22:40 UTC):** "Kiwi" back on `oye_kivi_next`; the command is `python3 wake_release.py demote
+  --version v6-oye-kivi-2026-11-11`. The v6 image stays pinned (it also serves v5, v4 and `kivi`), so no image rollback.
+- Open: the 30 live minutes are too short to count; the false-wake question stays for v6.1/v6.2 (selection and gate pre-registered below).
 
 ## Step 0: the replay bug
 
