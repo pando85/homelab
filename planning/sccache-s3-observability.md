@@ -153,13 +153,13 @@ Owner approval needed: pushes, ArgoCD syncs, any Calypso change. Not needed: rea
    the compose environment (host-mode jobs) and runner.envs (docker-mode jobs) — cluster DNS
    `loki.loki.svc` does not resolve on z800. Commit `4cadba9` added docker-mode `/cache` +
    credentials mounts via a `@@SECRETS_DIR@@` placeholder rendered by `scripts/render-secrets.sh`
-   to the repo's secrets dir (host paths). Both applied and verified.
+   to the repo's secrets dir (host paths). Both applied and verified. Caveat: z800's docker storage is a fixed 50G ZFS zvol (manjaro/docker) with no docker-gc (unlike the cluster runners), so it can fill up and block ALL docker-mode jobs — observed 2026-11-11 when 100% full made apt fail to install node, failing the strict test until pruned; a durable fix (GC timer or zvol resize) is deferred.
 3. **Strict container test + CARGO_INCREMENTAL fix.** Calypso PR #2909 (merged, `68cc7d28`)
    installed `jq` and `curl` in the container workflows (the `cargo-zigbuild` image lacks them;
    `sccache-pin.sh` needs `jq` on every path; `curl` is the S3 health probe — missing it silently
    falls back to disk mode). The test workflow `sccache-container-test.yml` is now STRICT: it
    asserts the binary exists, a slot is leased, and `compile_requests > 0`, failing loudly on
-   mismatch. Calypso branch `fix/sccache-test-incremental` (commit `781931ed8`, PR pending) sets
+   mismatch. Calypso PR #2911 (merged, `6e0ba2beb`) sets
    `CARGO_INCREMENTAL="0"` on the test build step — the throwaway `cargo new` dev-profile build
    enables incremental compilation, which sccache never caches (run 75307 had all 6 requests land
    in `requests_not_cacheable`, failing the `compile_requests > 0` assertion even though delivery
