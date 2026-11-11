@@ -376,7 +376,8 @@ $R enable   --version v5-oye-kivi-2026-11-08 --tv c3-a --yes-owner-approved
    Record it with `--split test` at recording time and adopt the older sessions with
    `extract --adopt-session` rather than re-extracting them.
 2. **spk02 on c3-b** (gate needs >= 2 speakers; today's real data is one speaker).
-3. **Fresh room exposure, as a new part.** The chosen head is at 0.12/h [0.003, 0.67] on the 8.31 h test
+3. **Fresh room exposure, as a new part.** (First round done 2026-11-11 on 146 h with an alternating-day split:
+   [v5-era replay and missed-wake mining](oye-kivi-v5era-mining.md).) The chosen head is at 0.12/h [0.003, 0.67] on the 8.31 h test
    part, but that part has now been inspected for v4, `rn_rp_h`, `rn_rp_h3` and `h_c120_w64` and was even
    the tie-break in Result 7, so it cannot also carry the 0.25/h proof. Extend `v3/room_split.json` with
    the days recorded *after* the trial started, keep the old test part as history, and require ~15 h per

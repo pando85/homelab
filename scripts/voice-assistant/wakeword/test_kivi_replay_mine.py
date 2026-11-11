@@ -73,13 +73,14 @@ def test_window_bounds_retry_rank_and_selection():
     assert R.window_bounds(1, 0, n) == (0, 6 * RATE)                                       # shifted to stay inside
     assert R.window_bounds(99.5, 0, n) == (94 * RATE, 100 * RATE)
     mk = lambda dev, t, peak, part="mine-v5era": {"device": dev, "part": part, "t_abs": t, "peak": peak}   # noqa: E731
-    pool = [mk("c3-a", 100, [0.1, 0.6, 0.9]), mk("c3-a", 120, [0.0, 0.1, 0.55]), mk("c3-b", 100, [0.0, 0.0, 0.8])]
+    pool = [mk("c3-a", 100, [0.1, 0.6, 0.9]), mk("c3-a", 120, [0.0, 0.1, 0.55]), mk("c3-b", 100, [0.0, 0.0, 0.8]),
+            mk("c3-a", 103, [0.0, 0.0, 0.5])]            # 3 s after the first: the same utterance, not evidence for it
     live, stt = {"c3-a": [140.0]}, {"c3-a": [150.0], "c3-b": [101.0, 140.0]}
     R.rank_pool(pool, live, stt)
     assert pool[0]["retry"]["kind"] == "cand" and pool[0]["retry"]["dt_s"] == 20.0          # the other candidate 20 s later; live at +40 is out
     assert pool[1]["retry"]["kind"] == "live" and pool[1]["retry"]["detail"].startswith("live+20.0s;stt-only+30.0s")
     assert pool[2]["retry"]["kind"] == "stt-only" and pool[2]["retry"]["dt_s"] == 1.0       # +40 s is outside the window
-    assert pool[0]["rank"] == pytest.approx(0.9 + 0.25 * 0.6 + 0.01 + 0.25)
+    assert pool[0]["rank"] == pytest.approx(0.9 + 0.25 * 0.6 + 0.01 + 0.1)
     assert pool[1]["rank"] == pytest.approx(0.55 + 0.025 + 0.5)
     # selection: balanced over (part, device), minimum separation on the same device, a short cell yields its turns
     big = [mk(d, 1000 + 20 * i + (50000 if part[0] == "t" else 0), [0, 0, 0.5 + i / 1000], part) | {"rank": 1 - i / 1000, "retry": {"kind": ""}}

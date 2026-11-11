@@ -64,6 +64,7 @@ MERGE_S = 1.5
 EVENING = (18, 24)                                         # local hours (Europe/Madrid)
 DEFAULT_OUT = "scores/v5era-replay"
 RETRY_S = 30.0
+CAND_MIN_S = 5.0                                           # another event closer than this is the same utterance, not a retry
 MAX_CANDIDATES = 40
 MIN_SEP_S = 10.0
 WINDOW_S = 6.0
@@ -483,18 +484,18 @@ def cmd_selfcheck(a, out=print):
 
 def rank_score(peak, retry_kind):
     """Higher = more worth a listen: v5 peak (closeness to its raw point) + 0.25 v4 + 0.10 v1 (agreement) + retry
-    evidence (a live detection or an stt-only run after it +0.5, another candidate +0.25)."""
+    evidence (a live detection or an stt-only run after it +0.5, another candidate 5 to 30 s later +0.1)."""
     v1, v4, v5 = peak
-    return round(v5 + 0.25 * v4 + 0.10 * v1 + {"live": 0.5, "stt-only": 0.5, "cand": 0.25}.get(retry_kind, 0.0), 4)
+    return round(v5 + 0.25 * v4 + 0.10 * v1 + {"live": 0.5, "stt-only": 0.5, "cand": 0.1}.get(retry_kind, 0.0), 4)
 
 
 def retry_evidence(cand, pool, live_times, stt_times, window=RETRY_S):
     """What follows the candidate within `window` s on the same device: a live detection, an stt-only run
-    (push-to-talk / mic button) or another event of the pool. {"kind", "dt_s", "detail"}."""
+    (push-to-talk / mic button) or another event of the pool 5 to 30 s later. {"kind", "dt_s", "detail"}."""
     t, dev = cand["t_abs"], cand["device"]
     found = [("live", x - t) for x in live_times.get(dev, ()) if 0 < x - t <= window]
     found += [("stt-only", x - t) for x in stt_times.get(dev, ()) if 0 < x - t <= window]
-    found += [("cand", o["t_abs"] - t) for o in pool if o is not cand and o["device"] == dev and 0 < o["t_abs"] - t <= window]
+    found += [("cand", o["t_abs"] - t) for o in pool if o is not cand and o["device"] == dev and CAND_MIN_S <= o["t_abs"] - t <= window]
     if not found:
         return {"kind": "", "dt_s": "", "detail": ""}
     order = {"live": 0, "stt-only": 1, "cand": 2}
@@ -566,12 +567,14 @@ MISS_FIELDS = L.MISS_FIELDS
 
 
 def candidate_pool(res, floor, v5_point=SERVER_RAW["oye_kivi_next"]):
-    """Events where v5 did not fire in the replay (peak at or below its raw point) but some model peaks at `floor` or more."""
+    """Events where v5 did not fire in the replay (peak at or below its raw point) but v4 or v5 peaks at `floor` or more.
+    The old single-word model (v1) alone is not a candidate for "oye Kivi" (it chatters: 12k events above 0.5); it counts
+    as agreement in the rank."""
     pool = []
     for r in res:
         pc = r["piece"]
         for e in r["events"]:
-            if e["peak"][2] > v5_point or max(e["peak"]) < floor:
+            if e["peak"][2] > v5_point or max(e["peak"][1:]) < floor:
                 continue
             pool.append({"device": pc["device"], "part": pc["part"], "piece": pc, "peak": e["peak"], "t_abs": e["t_abs"]})
     return pool
@@ -590,7 +593,7 @@ def cmd_candidates(a, fetcher=None, out=print):
     pool = rank_pool(candidate_pool(res, a.floor), live_detection_times(root),
                      stt_only_times(fetcher or L.get_fetcher(a), L.devices_prefix(a)))
     chosen = select_candidates(pool, a.limit)
-    out(f"pool (v5 at or below its raw point {SERVER_RAW['oye_kivi_next']}, some model peak >= {a.floor}): {len(pool)} event(s); "
+    out(f"pool (v5 at or below its raw point {SERVER_RAW['oye_kivi_next']}, v4 or v5 peak >= {a.floor}): {len(pool)} event(s); "
         + ", ".join(f"{k[0]}/{k[1]} {v}" for k, v in sorted(Counter((c["part"], c["device"]) for c in pool).items())))
     out("pool by retry evidence: " + ", ".join(f"{k or 'none'} {v}" for k, v in sorted(Counter(c["retry"]["kind"] for c in pool).items())))
     misses = root / "live-misses"
@@ -639,7 +642,7 @@ def main(argv=None):
     ap.add_argument("--chunk-s", type=float, default=1200.0)
     ap.add_argument("--warm-s", type=float, default=60.0)
     ap.add_argument("--bench-s", type=float, help="(score) only time this many seconds of audio per worker; saves nothing")
-    ap.add_argument("--floor", type=float, default=0.5, help="(candidates) some model peak at least this")
+    ap.add_argument("--floor", type=float, default=0.5, help="(candidates) v4 or v5 peak at least this")
     ap.add_argument("--limit", type=int, default=MAX_CANDIDATES)
     ap.add_argument("--rewrite", action="store_true", help="(candidates) replace an existing table (only when nothing is labelled)")
     ap.add_argument("--devices", help="comma list (default: every device in kivi_devices.json)")
