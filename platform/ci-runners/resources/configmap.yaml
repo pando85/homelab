@@ -183,7 +183,9 @@ data:
       # Whether to use privileged mode or not when launching task containers (privileged mode is required for Docker-in-Docker).
       privileged: false
       # And other options to be used when the container is started (eg, --volume /etc/ssl/certs:/etc/ssl/certs:ro).
-      options:
+      # Mount /cache (sccache binary + slot sockets) and /sccache-credentials (S3 creds)
+      # into container jobs so sccache-setup works in DinD jobs (e.g. Calypso build-unix).
+      options: "--volume /cache:/cache --volume /sccache-credentials:/sccache-credentials:ro"
       # The parent directory of a job's working directory.
       # If it's empty, /workspace will be used.
       workdir_parent:

@@ -205,6 +205,9 @@ spec:
               subPath: cache
             - name: docker-run
               mountPath: /sock
+            - name: sccache-s3-credentials
+              mountPath: /sccache-credentials
+              readOnly: true
           resources:
             requests:
               memory: "256Mi"
