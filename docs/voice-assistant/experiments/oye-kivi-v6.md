@@ -332,3 +332,20 @@ before the cut, and they score 0.998 / 0.999 out of fold. The live positives of 
 (spk01 900, spk02 450, unknown 300 windows) and the same-clip negatives 810. The mis-cut hypothesis for v6's false
 wakes is void. The live clip c3-b 2026-11-08 07:54:59Z (spk01, wake) scores about 0.0002 out of fold although ASR finds
 the phrase: a coverage gap, not a label error; it is kept. Items 2-4 of 1b stand.
+
+### v6.2 amendment 5 (2026-11-12, about 00:30 Madrid; final data and weights, before v6.2 training)
+
+Final data-quality decisions applied (out-of-fold + ASR, coverage):
+- dropped as negatives that are really attempts: the room events of 2026-11-08 20:41:16Z (c3-a), 19:29:06Z (c3-b, miss
+  candidate mc001), 2026-11-06 12:25:50Z (c3-b) and the c3-b event near 2026-11-08 22:33:11Z (window +-2 s, room windows
+  and hard negatives), and the 5 live_hard clips of 1b;
+- synthetic voices: vctk_tr, siwis and upmc dropped (isolated and context sets), riccardo dropped (context); davefx and
+  ona at half weight (both sets), north_m and alba at half weight (context);
+- confusers "oye kiri", "oye kili", "oye Kibo", "oye Gibi", "oye chivi" doubled in the synthetic near-phrase and
+  confuser-in-sentence negatives (5,114 and 1,724 extra windows);
+- kept: neg_kivi and neg_near (genuine confusers), the low-scoring real takes and live clip 07:54:59Z (coverage gaps);
+- coverage weights per step: real TV-mic session takes 96 (was 64), live spk01 24 (16), spk02 16, unknown 8, pc 48,
+  webcam 16, synthetic isolated 192, synthetic context positives 32 (was 64; a regulariser).
+Final counts: synthetic isolated 35,878; context positives 6,790; near_train 64,428; context confusers 10,821; same-clip
+synthetic negatives 4,949; real takes TV 9,000 / pc 9,480 / webcam 8,880; live positives 900 / 450 / 300; live hard
+2,700; live same-clip negatives 810; hard negatives v6 99 (day 64, evening 35), v5 3,312; room windows 247,640.

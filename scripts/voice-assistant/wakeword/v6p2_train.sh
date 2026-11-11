@@ -14,9 +14,11 @@ BASE="$PY $H/train_simple.py --work $PWD --pos-train $Q/pos_train.npy --neg-trai
 NEG="--extra-neg v2/feat/hard_r1.npy:128 --extra-neg $Q/room_train_w8.npy:128 --extra-neg v4/feat/mls_hard4.npy:128 \
  --extra-neg v6/real/neg_kivi.npy:64:6 --extra-neg v6/real/neg_near.npy:32:6 --extra-neg v6/real/neg_bg.npy:32 \
  --extra-neg $Q/live_hard.npy:32:6 --extra-neg $Q/live_negpart.npy:16:3"
-POS="--extra-pos $RQ/real_tv_train.npy:64 --extra-pos $RQ/real_pc_train.npy:48 --extra-pos $RQ/real_webcam_train.npy:16 \
- --extra-pos $F/live_pos_spk01.npy:16 --extra-pos $F/live_pos_spk02.npy:16 --extra-pos $F/live_pos_unk.npy:8"
-CTX="--extra-pos $Q/ctxp_syn_pos_tr.npy:64 --extra-neg $Q/ctxp_syn_negpart.npy:32:3 --extra-neg $Q/ctxn_syn_conf.npy:64:6"
+# coverage check (2026-11-12): real TV-mic positives up (session 96, live spk01 24), spk02 not over-weighted
+POS="--extra-pos $RQ/real_tv_train.npy:96 --extra-pos $RQ/real_pc_train.npy:48 --extra-pos $RQ/real_webcam_train.npy:16 \
+ --extra-pos $Q/live_pos_spk01.npy:24 --extra-pos $Q/live_pos_spk02.npy:16 --extra-pos $Q/live_pos_unk.npy:8"
+# synthetic context positives capped at 32/step (a regulariser, not coverage); confuser negatives kept
+CTX="--extra-pos $Q/ctxp_syn_pos_tr.npy:32 --extra-neg $Q/ctxp_syn_negpart.npy:32:3 --extra-neg $Q/ctxn_syn_conf.npy:64:6"
 HNA="--extra-neg $Q/hard_v6_day.npy:32:6 --extra-neg $Q/hard_v6_evening.npy:32:12 --extra-neg $Q/hard_v5.npy:128:3"
 HNB="--extra-neg $Q/hard_v6_day.npy:48:12 --extra-neg $Q/hard_v6_evening.npy:32:24 --extra-neg $Q/hard_v5.npy:128:6"
 V6=v6/runs/v6m/kivi.onnx

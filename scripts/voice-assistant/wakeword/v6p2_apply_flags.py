@@ -25,10 +25,11 @@ W = Path("/work/workspaces/kivi-wakeword")
 DROP_LIVE_POS = set()   # 1b correction 2026-11-12: the two stt-path clips are correct and kept
 DROP_LIVE_HARD = {"c3-b/20261108T082445.653Z", "c3-a/20261108T091213.284Z", "c3-b/20261108T100623.078Z",
                   "c3-b/20261108T082553.920Z", "c3-b/20261108T082635.313Z"}
-DROP_VOICES_ISO = {"vctk_tr", "ona"}
-HALF_VOICES_ISO = {"davefx"}
-DROP_VOICES_CTX = {"vctk_tr", "north_m", "alba", "riccardo"}
-HALF_VOICES_CTX = {"davefx", "siwis", "ona"}
+DROP_VOICES_ISO = {"vctk_tr", "siwis", "upmc"}            # final 1b + OOF decision (2026-11-12)
+HALF_VOICES_ISO = {"davefx", "ona"}
+DROP_VOICES_CTX = {"vctk_tr", "siwis", "upmc", "riccardo"}
+HALF_VOICES_CTX = {"davefx", "ona", "north_m", "alba"}
+UPWEIGHT_CONFUSERS = ("kiri", "kili", "kibo", "gibi", "chivi")   # OOF: often at or above t_pos; windows doubled
 DROP_TAKES = [("20261108T092940Z", 1, 9, None), ("20261108T092940Z", 4, 10, "webcam-mic")]
 
 
@@ -124,11 +125,20 @@ def cmd_oof():
                                             Q / "ctxp_syn_pos_tr.npy")
     files = (W / "v6/feat/near_train.npy.files.txt").read_text().split()
     X = np.load(W / "v6/feat/near_train.npy")
+    text = {r["file"]: r["text"].lower() for r in csv.DictReader(open(W / "vnext/clips/negative_train.manifest.csv", encoding="utf-8"))}
     m = np.array([("near_train", f) not in neg for f in files])
-    save(Q / "near_train.npy", X[m])
+    up = np.array([k and any(c in text.get(f, "") for c in UPWEIGHT_CONFUSERS) for f, k in zip(files, m)])
+    save(Q / "near_train.npy", np.concatenate([X[m], X[up]]))
     n["near_train"] = int((~m).sum())
+    n["near_train_doubled"] = int(up.sum())
+    var = {r["file"]: r["variant"].lower() for r in csv.DictReader(open(W / "v6/clips_ctx/ctx_neg_train.manifest.csv", encoding="utf-8"))}
     n["ctxn_syn_conf"] = filter_by_source(W / "v6/feat/ctxn_syn_conf.npy", lambda s: ("ctxn_syn_conf", s) not in neg,
                                           Q / "ctxn_syn_conf.npy")
+    Xc = np.load(Q / "ctxn_syn_conf.npy")
+    sc = (Q / "ctxn_syn_conf.npy.sources.txt").read_text().split()
+    upc = np.array([any(c in var.get(s, "") for c in UPWEIGHT_CONFUSERS) for s in sc])
+    save(Q / "ctxn_syn_conf.npy", np.concatenate([Xc, Xc[upc]]), sc + [s for s, u in zip(sc, upc) if u])
+    n["ctxn_syn_conf_doubled"] = int(upc.sum())
     n["ctxp_syn_negpart"] = filter_by_source(W / "v6/feat/ctxp_syn_negpart.npy", lambda s: ("ctxp_syn_negpart", s) not in neg,
                                              Q / "ctxp_syn_negpart.npy")
     print(n, "windows dropped by the OOF rule")
