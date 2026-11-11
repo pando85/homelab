@@ -46,7 +46,7 @@ openWakeWord models).
 | `kivi_score.py` | Scores models (uncalibrated TFLite, `--model NAME=path`) and alexa on a session by streaming each raw file through pyopen-wakeword (the server's library). Reports the model path, sha256 and label; the server-0.5 raw threshold is a parameter (`--calibration v1=0.98`, `v2=0.95`) or a `<model>.calibration.json` sidecar, never assumed; recall with no-audio cues as misses and over full-audio cues only; `--exclude-cue B4c5`; `--button-takes SESSION_DIR` scores a button-take session (raw file streamed once, a take's score is the maximum inside the extractor's own window, no-speech takes are misses, `--exclude-take N` adds a figure without them); `--negatives DIR` scores the room-audio negatives (false accepts per hour per TV, Poisson 95 % intervals); markdown and JSON aggregates only |
 | `kivi_import_phone.py` | Imports a phone voice memo as `phone` takes (`--consent-confirmed` and `--split` are required, no defaults) |
 | `kivi_negatives.py` | **Owner-triggered:** copies about 30 h of closed wake files as real negatives, minus cues, presses, detection boundaries, the whole window of every recorded session and (`--exclude-after DEVICE=ISO`) everything of a device from a time on |
-| `kivi_live_wakes.py` | **Owner-run:** `list` (read only), `extract` (copies the last 6 s of each live detection's wake file and its request audio to `datasets/real/live/`, plus `live_wakes.csv`), `review` (you listen and label true / false / unclear and the speaker; plays audio, agents never run it), `split` (train / test by Europe/Madrid day, counts only). Tests: `test_kivi_live_wakes.py` |
+| `kivi_live_wakes.py` | **Owner-run:** `list` (read only), `extract` (copies the last 6 s of each live detection's wake file and its request audio to `datasets/real/live/`, plus `live_wakes.csv`), `review` (you listen and label true / false / not-a-wake / unclear and the speaker; plays audio, agents never run it; `--only-uncertain` offers only the rows the auto-labeller was unsure of), `autolabel` (local auto-labeller, `kivi_autolabel.py`: fills EMPTY label, speaker and trigger cells; never overwrites an owner cell; transcripts live in memory only), `split` (alternate-day rule by default: odd Europe/Madrid day of the month = test, even = train; `--rule recent-days` is the older proposal; counts only). Tests: `test_kivi_live_wakes.py`, `test_kivi_autolabel.py` |
 | `kivi_dataset_marks.py` | **Owner-run:** append-only marks for the permanent dataset: a later split per session (`splits.jsonl`, also for button-take sessions) and superseded extraction revisions (`superseded.jsonl`); `read_manifest` applies them and `training_rows` and the scorers skip superseded rows |
 | `kivi_real_common.py`, `kivi_devices.json` | Shared helpers (WAV, GCC-PHAT alignment, energy takes, manifest schema, split policy); satellite name to HA device-id prefix |
 | `wake_release.py` | **Release driver** (owner-run steps, idempotent, state in `$WORK/releases/<version>/`): `init`, `record-check`, `extract`, `pick-threshold` (room selection part only), `calibrate`, `score`, `gate` (recall ≥ 80 % TV silent, ≥ 60 % TV on, ≤ 0.25 false wakes/h, per speaker and pooled, with intervals), `package` (kivi-models version directory, model card, `models.lock`), `release`, `enable` and `promote` (owner gate: `--yes-owner-approved`; `promote` makes the model the household pipeline's wake word), `deploy`, `rollback`, `demote`, `status`. Calls the tools above. Runbook: `docs/runbook/wake-word-release.md` in the private `agil/kivi-models` |
@@ -164,13 +164,25 @@ Live wake clips (owner-approved 2026-11-11, data register dataset 19). Runbook, 
 PY="systemd-run --user --scope -p MemoryMax=6G -p CPUQuota=400% -- $WORK/.venv/bin/python"
 $PY kivi_live_wakes.py list        # read only: detection runs per device / model / bucket, closed wake files without a detection
 $PY kivi_live_wakes.py extract     # idempotent; never changes a label; clips land in datasets/real/live/
-$PY kivi_live_wakes.py review      # owner only: plays wake tail, then request audio; keys t / f / u, r replay, s skip, q quit; resumable
-$PY kivi_live_wakes.py split       # counts only; --apply writes the proposal into the split column
+$PY kivi_live_wakes.py review      # owner only: plays wake tail, then request audio; keys t / f / n (not a wake) / u, r replay, s skip, q quit; resumable
+$PY kivi_live_wakes.py autolabel   # local, fills empty cells only (label_source auto-v1); --dry-run prints counts; waits while a review runs; backs the CSV up first
+$PY kivi_live_wakes.py review --only-uncertain   # owner: just the unclear / low-confidence / unknown-speaker rows
+$PY kivi_live_wakes.py split       # alternate-day rule; counts only; --apply writes the proposal into the split column
 ```
 
 A detection is a wake file with a `01_stt` file in its run directory (or an stt-only run within 3 s of its end); the buckets
 (`suspect-false`: request audio under 1.5 s or at the 15 s cap) only set the review order. `review` uses `pw-play`, else `aplay -q`
-(`--player 'cmd'` overrides). `split` proposes the most recent Europe/Madrid days holding at least 30 % of each speaker's true wakes as `test`.
+(`--player 'cmd'` overrides). `split` (default `--rule alternate-day`, owner decision 2026-11-11) gives rows labelled true or false `test` on an odd Europe/Madrid day of the month and `train` on an even one; `--rule recent-days` proposes the most recent days holding at least 30 % of each speaker's true wakes as `test`.
+
+The remote's mic button also closes a wake file and starts a request run, so some "detections" are not wake-word detections: the
+`trigger` column (`wake`, `button`, `unknown`) is set by replaying the live model (`model` column; raw threshold 0.9437 for v4, 0.9754 for
+v5) on the wake tail with the server's streaming features (it must score in the last 2 s; `extract` and `autolabel` do it the same way).
+`button` rows get the label `not-a-wake` (not positives, not false wakes); an owner label on such a row is kept and flagged `conflict` in
+`auto_evidence`. `autolabel` needs `faster-whisper` (installed with `uv pip install --no-deps faster-whisper ctranslate2 av tokenizers`) and
+the cached public weights `mobiuslabsgmbh/faster-whisper-large-v3-turbo` and `speechbrain/spkrec-ecapa-voxceleb`; the rules, thresholds and
+privacy limits are in the header of `kivi_autolabel.py`. The cluster Whisper is not used: it logs transcripts to Loki. Review and writes by
+other tools must not overlap: `autolabel` and `split --apply` wait up to 15 min while a `review` runs, back the CSV up, re-read it right
+before writing and fill only empty cells; `review` saves each answer into a fresh read of the table.
 The files are household audio: never commit them, never paste their content anywhere; delete `datasets/real/live/` to stop.
 
 Split policy (decided 2026-11-07, changed later the same day by the owner): the phone memo of spk02 is `train` for the production model (`kivi_import_phone.py --split train`); her c3-b button takes were `test`, and are now `train` (splits.jsonl mark; takes flagged `needs_review` stay out of training); the unseen-speaker check is an ablation that excludes ALL spk02 data from training (`training_rows(exclude_speakers=["spk02"])`). Details in the experiment note.

@@ -3,7 +3,6 @@
     cd scripts/voice-assistant/wakeword && OMP_NUM_THREADS=4 \
         /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_kivi_live_wakes.py -q
 """
-import csv
 import os
 import stat
 import sys
@@ -25,6 +24,12 @@ RATE = C.RATE
 BOOT = L.epoch(L.BOOT_UTC)
 T0 = L.epoch("2026-11-09T10:00:00Z")      # in the oye_kivi_next era on both devices
 NOW = T0 + 100_000
+
+
+@pytest.fixture(autouse=True)
+def no_trigger_scorer(monkeypatch):
+    """extract replays the wake models on every tail: not in these tests (see test_extract_trigger_column)."""
+    monkeypatch.setattr(L, "make_trigger_scorer", lambda a: None)
 
 
 def ramp(sec, off=0):
@@ -100,7 +105,7 @@ def make_ns(tmp_path, rec):
         "device": "c3-a", "t0_utc": X.utc_str(T0 + 3990), "end_utc": X.utc_str(T0 + 4010)}))
     return Namespace(dataset_root=str(ds), devices=None, devices_file=None, from_dir=str(rec), scope_start=L.SCOPE_START,
                      now=NOW, context="x", namespace="x", pod="x", container=None, recordings_root="/x", player=None,
-                     again=False, apply=False, test_share=0.30)
+                     again=False, apply=False, test_share=0.30, rule="recent-days", pgrep=lambda: False)
 
 
 def test_list_buckets_pairing_and_counts(tmp_path):
@@ -269,3 +274,82 @@ def test_split_command_apply(tmp_path):
     ns.apply = True
     L.cmd_split(ns, out=out.append)
     assert [r["split"] for r in L.read_table(table)] == ["train", "train", "test"]
+
+
+def test_extract_trigger_column(tmp_path):
+    """The trigger of a new row comes from the live model's score on the tail and from where its request audio sits."""
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+
+    class Scorer:
+        def peaks(self, pcm):
+            hi = int(pcm[-1]) % 2 == 0
+            v = 0.99 if hi else 0.0
+            return {"oye_kivi_next": (v, v, v, 5.5), "oye_kivi": (v, v, v, 5.5)}
+
+    L.cmd_extract(ns, X.LocalFetcher(rec), out=lambda *_: None, scorer=Scorer())
+    live = Path(ns.dataset_root) / "live"
+    rows = L.read_table(live / "live_wakes.csv")
+    assert {r["trigger"] for r in rows} <= {"wake", "button"} and all(r["trigger"] for r in rows)
+    sep = [r for r in rows if r["stt_run"]]
+    assert len(sep) == 1
+    # a re-run with a different scorer never changes an existing trigger
+    before = [r["trigger"] for r in rows]
+    L.cmd_extract(ns, X.LocalFetcher(rec), out=lambda *_: None, scorer=Scorer())
+    assert [r["trigger"] for r in L.read_table(live / "live_wakes.csv")] == before
+
+
+def test_list_reports_separate_stt_runs(tmp_path):
+    rec = make_tree(tmp_path)
+    out = []
+    L.cmd_list(make_ns(tmp_path, rec), X.LocalFetcher(rec), out=out.append)
+    assert any("separate stt-only run: 1" in o for o in out)
+
+
+def test_review_only_uncertain_and_owner_source(tmp_path):
+    ns, table = labelled_table(tmp_path)
+    rows = L.read_table(table)
+    rows[0].update(label="true", label_source="auto-v1", label_conf="0.98", speaker="spk01", speaker_conf="0.9")
+    rows[1].update(label="unclear", label_source="auto-v1", label_conf="0.50", speaker="unknown")
+    rows[2].update(label="true", label_source="owner", label_conf="1.00", speaker="spk01")
+    L.write_table(table, rows)
+    todo = L.review_order(L.read_table(table), only_uncertain=True)
+    assert [r["run_id"] for r in todo] == [rows[1]["run_id"]]
+    ns.only_uncertain = True
+    L.cmd_review(ns, player=lambda p: None, input_fn=lambda _p, it=iter(["n", "4"]): next(it), out=lambda *_: None)
+    got = {r["run_id"]: r for r in L.read_table(table)}
+    assert got[rows[1]["run_id"]]["label"] == "not-a-wake" and got[rows[1]["run_id"]]["label_source"] == "owner"
+    assert got[rows[0]["run_id"]]["label_source"] == "auto-v1"                        # confident auto label untouched
+
+
+def test_review_saves_into_a_fresh_read(tmp_path):
+    ns, table = labelled_table(tmp_path)
+
+    def player(_p):
+        rows = L.read_table(table)                      # another tool writes a label while the owner listens
+        for r in rows:
+            if not r["label"]:
+                r["label"], r["label_source"] = "false", "auto-v1"
+                break
+        L.write_table(table, rows)
+
+    L.cmd_review(ns, player=player, input_fn=lambda _p, it=iter(["t", "1", "q"]): next(it), out=lambda *_: None)
+    rows = L.read_table(table)
+    assert sum(1 for r in rows if r["label_source"] == "auto-v1") >= 1                # the other tool's write survived
+    assert sum(1 for r in rows if r["label_source"] == "owner") == 1
+
+
+def test_split_alternate_day_rule(tmp_path):
+    ns, table = labelled_table(tmp_path)
+    rows = L.read_table(table)
+    utcs = ["20261108T100000.000Z", "20261109T100000.000Z", "20261109T233000.000Z"]   # 11-08, 11-09, 11-10 (Madrid)
+    for r, u, lab in zip(rows, utcs, ("true", "false", "not-a-wake")):
+        r["utc"], r["label"], r["speaker"] = u, lab, "spk01"
+    rows[2]["label"] = "true"
+    L.write_table(table, rows)
+    assign = L.propose_split_alternate(L.read_table(table))
+    assert [assign[r["run_id"]] for r in rows] == ["train", "test", "train"]
+    assert L.propose_split_alternate([dict(rows[0], label="unclear"), dict(rows[1], label="not-a-wake")]) == {}
+    ns.rule, ns.apply = "alternate-day", True
+    L.cmd_split(ns, out=lambda *_: None)
+    assert [r["split"] for r in L.read_table(table)] == ["train", "test", "train"]

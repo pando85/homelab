@@ -5,6 +5,7 @@ debug recordings so the owner can label them by listening.
     kivi_live_wakes.py list                 # detection runs in scope, counts per device / model / bucket (read only)
     kivi_live_wakes.py extract              # copy the clips and write live_wakes.csv
     kivi_live_wakes.py review               # YOU listen and label (plays audio; nobody else runs this)
+    kivi_live_wakes.py autolabel [--dry-run] # local auto-labeller (kivi_autolabel.py): fills EMPTY label/speaker cells
     kivi_live_wakes.py split [--apply]      # after labelling: train / test by local day, counts only
 
 What a detection is. The satellite's wake file (`00_wake-*.wav`) is the continuous stream from the start
@@ -22,6 +23,9 @@ Output, under `<dataset>/live/` (mode 700/600, never in git):
     <device>/<run_start_utc>/stt.wav         the whole 01_stt file of the run
     live_wakes.csv                           one row per run; label, speaker and split are yours
 `extract` is idempotent: existing files are kept, and a row that already exists (with its label) is never changed.
+The `trigger` column (wake | button | unknown) says whether the run was started by a wake-word detection or by something
+else, in practice the remote's mic button: the live model is replayed on the wake tail and must reach its live
+threshold in the last 2 s (kivi_autolabel.trigger_of). Button runs pair with an stt-only run, like a detection.
 The tool never prints audio content: counts, durations, times and levels only.
 """
 import argparse
@@ -34,8 +38,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections import Counter, defaultdict
-from datetime import datetime, timedelta, timezone
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -54,7 +58,7 @@ SHORT_STT_S = 1.5                          # shorter: nothing was said, suspect 
 CAP_STT_S = 14.5                           # the speech-to-text stage stops at about 15 s: a run that hit it is suspect
 SESSION_MARGIN_S = 120.0
 TZ = "Europe/Madrid"
-LABELS = ("true", "false", "unclear")
+LABELS = ("true", "false", "unclear", "not-a-wake")
 SPEAKERS = ("spk01", "spk02", "spk-other", "unknown")
 BUCKETS = ("suspect-false", "suspect-true")
 TEST_SHARE = 0.30
@@ -69,7 +73,9 @@ ERAS = (
 )
 
 FIELDS = ("run_id", "device", "model", "utc", "wake_len", "stt_len", "bucket", "label", "speaker", "split",
-          "sha256", "sha256_stt", "pipeline", "stt_run")
+          "sha256", "sha256_stt", "pipeline", "stt_run", "trigger", "label_source", "label_conf", "speaker_conf",
+          "auto_evidence", "phrase_end_s", "continuous_command", "phrase_in_stt", "stt_phrase_start_s",
+          "stt_phrase_end_s")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -277,6 +283,9 @@ def cmd_list(a, fetcher=None, out=print):
     for (d, m, b), n in sorted(cnt.items(), key=lambda kv: tuple(map(str, kv[0]))):
         out(f"  {d} {m} {b}: {n}")
     out(f"  total: {len(runs)}")
+    sep = sum(1 for r in runs if r["stt_run"])
+    out(f"request audio in the wake run's own directory: {len(runs) - sep}; from a separate stt-only run: {sep} "
+        "(button-suspect; the decisive check, the live model's score on the tail, runs in `extract`)")
     out("closed wake files without a detection (not extracted), per device / model:")
     for (d, m), n in sorted(res["no_detection"].items(), key=lambda kv: tuple(map(str, kv[0]))):
         out(f"  {d} {m}: {n}")
@@ -311,8 +320,28 @@ def copy_wav(fetcher, path, first_sample, last_sample, dst):
     return True
 
 
-def cmd_extract(a, fetcher=None, out=print):
+def make_trigger_scorer(a):
+    """The server-exact model scorer, or None when its libraries or model files are missing (trigger stays unknown)."""
+    try:
+        import kivi_autolabel as A
+        return A.ModelScorer(getattr(a, "work", None) or os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
+    except Exception as e:                                       # noqa: BLE001
+        print(f"warning: trigger classification unavailable ({type(e).__name__}); trigger stays empty")
+        return None
+
+
+def trigger_for(row, tail_path, scorer):
+    import kivi_autolabel as A
+    if scorer is None:
+        return "unknown"
+    pcm = C.read_pcm16(tail_path)
+    return A.trigger_of(row["model"], row["stt_run"], scorer.peaks(pcm), len(pcm) / RATE)[0]
+
+
+def cmd_extract(a, fetcher=None, out=print, scorer=False):
     fetcher = fetcher or get_fetcher(a)
+    if scorer is False:
+        scorer = make_trigger_scorer(a)
     res = scan(a, fetcher)
     root = Path(a.dataset_root).expanduser()
     live = C.private_mkdir(root / "live", root)
@@ -332,6 +361,7 @@ def cmd_extract(a, fetcher=None, out=print):
         cur = have.get(row["run_id"])
         if cur is None:
             row["sha256"], row["sha256_stt"] = sha256_file(d / "wake_tail.wav"), sha256_file(d / "stt.wav")
+            row["trigger"] = trigger_for(row, d / "wake_tail.wav", scorer) if scorer is not None else ""
             rows.append({k: row.get(k, "") for k in FIELDS})
             have[row["run_id"]] = rows[-1]
         else:                                    # never touches label, speaker, split
@@ -341,6 +371,8 @@ def cmd_extract(a, fetcher=None, out=print):
             for k, name in (("sha256", "wake_tail.wav"), ("sha256_stt", "stt.wav")):
                 if not cur[k]:
                     cur[k] = sha256_file(d / name)
+            if not cur["trigger"] and scorer is not None:
+                cur["trigger"] = trigger_for(cur, d / "wake_tail.wav", scorer)
     rows.sort(key=lambda x: (x["utc"], x["device"]))
     write_table(table_path, rows)
     out(f"{len(res['runs'])} detection run(s) in scope; {copied} file(s) copied, {kept} already there; table {table_path} "
@@ -370,10 +402,26 @@ def make_player(spec=None):
     return play
 
 
-def review_order(rows):
-    """Unlabelled rows, suspect-false first, then by time."""
-    todo = [r for r in rows if not r["label"]]
+def review_order(rows, only_uncertain=False):
+    """Unlabelled rows, suspect-false first, then by time. With `only_uncertain` also the auto-labelled rows the
+    labeller was unsure of (unclear, confidence below kivi_autolabel.UNCERTAIN_CONF, true with unknown speaker); a row
+    the owner labelled is never offered again."""
+    if only_uncertain:
+        import kivi_autolabel as A
+        todo = [r for r in rows if A.is_uncertain(r)]
+    else:
+        todo = [r for r in rows if not r["label"]]
     return sorted(todo, key=lambda r: (r["bucket"] != "suspect-false", r["utc"], r["device"]))
+
+
+def save_owner_label(table_path, run_id, label, speaker):
+    """Write one owner decision into a FRESH read of the table (another tool may have written it meanwhile)."""
+    fresh = read_table(table_path)
+    for r in fresh:
+        if r["run_id"] == run_id:
+            r["label"], r["speaker"] = label, speaker
+            r["label_source"], r["label_conf"], r["speaker_conf"] = "owner", "1.00", "1.00"
+    write_table(table_path, fresh)
 
 
 def ask(prompt, valid, input_fn):
@@ -391,12 +439,13 @@ def cmd_review(a, player=None, input_fn=input, out=print):
     if not rows:
         raise SystemExit(f"no table at {table_path}: run extract first")
     play = player or make_player(a.player)
-    todo = review_order(rows)
+    todo = review_order(rows, getattr(a, "only_uncertain", False))
     if a.again:
         todo = sorted(rows, key=lambda r: (r["bucket"] != "suspect-false", r["utc"], r["device"]))
     out(f"{len(todo)} clip(s) to label, {len(rows) - len([r for r in rows if not r['label']])} already labelled. "
         "For each clip you hear the wake tail, then the request audio.")
-    out("keys: t = true wake, f = false wake, u = unclear, r = replay, s = skip, q = quit (progress is saved after every clip)")
+    out("keys: t = true wake, f = false wake, n = not a wake (button press), u = unclear, r = replay, s = skip, "
+        "q = quit (progress is saved after every clip)")
     done = 0
     try:
         for i, r in enumerate(todo, 1):
@@ -405,18 +454,18 @@ def cmd_review(a, player=None, input_fn=input, out=print):
             while True:
                 play(d / "wake_tail.wav")
                 play(d / "stt.wav")
-                k = ask("label [t/f/u], r = replay, s = skip, q = quit: ", ("t", "f", "u", "r", "s", "q"), input_fn)
+                k = ask("label [t/f/n/u], r = replay, s = skip, q = quit: ", ("t", "f", "n", "u", "r", "s", "q"), input_fn)
                 if k != "r":
                     break
             if k == "q":
                 break
             if k == "s":
                 continue
-            label = {"t": "true", "f": "false", "u": "unclear"}[k]
+            label = {"t": "true", "f": "false", "n": "not-a-wake", "u": "unclear"}[k]
             keys = {"1": "spk01", "2": "spk02", "3": "spk-other", "4": "unknown"}
             sp = ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(keys), input_fn)
             r["label"], r["speaker"] = label, keys[sp]
-            write_table(table_path, rows)
+            save_owner_label(table_path, r["run_id"], label, keys[sp])
             done += 1
     except (KeyboardInterrupt, EOFError):
         out("\ninterrupted")
@@ -468,6 +517,13 @@ def propose_split(rows, share=TEST_SHARE):
     return assign, info
 
 
+def propose_split_alternate(rows):
+    """Alternate-day rule (owner decision 2026-11-11): the Europe/Madrid day of the month is odd -> test, even -> train.
+    Only rows labelled true or false are assigned (unclear and not-a-wake rows are not training or test material)."""
+    return {r["run_id"]: ("test" if int(local_day(r["utc"])[-2:]) % 2 else "train")
+            for r in rows if r["label"] in ("true", "false")}
+
+
 def cmd_split(a, out=print):
     root = Path(a.dataset_root).expanduser()
     table_path = root / "live" / "live_wakes.csv"
@@ -479,19 +535,33 @@ def cmd_split(a, out=print):
     if not lab.get("true"):
         out("no true wakes labelled yet: nothing to split")
         return {}
-    assign, info = propose_split(rows, a.test_share)
+    if getattr(a, "rule", "alternate-day") == "alternate-day":
+        assign = propose_split_alternate(rows)
+        cnt = Counter((r["label"], r["speaker"] or "unknown", r["device"], assign[r["run_id"]])
+                      for r in rows if r["run_id"] in assign)
+        out(f"rule: alternate-day ({TZ} day of month odd = test, even = train); rows: label / speaker / device / split")
+        for k, n in sorted(cnt.items()):
+            out("  " + " / ".join(k) + f": {n}")
+        info = {}
+    else:
+        assign, info = propose_split(rows, a.test_share)
     for sp, i in info.items():
         out(f"  {sp}: {i['true']} true wake(s) on {i['days']} local day(s) ({TZ}); "
             + (f"test = {len(i['test_days'])} most recent day(s), {i['test']} true wake(s) "
                f"({i['test'] / i['true']:.0%}); train {i['train']}" if i["test_days"] else i["note"]))
     fcnt = Counter(assign[r["run_id"]] for r in rows if r["label"] == "false" and r["run_id"] in assign)
+    out("  split totals: " + (", ".join(f"{k} {n}" for k, n in sorted(Counter(assign.values()).items())) or "none"))
     out("  rows labelled false: " + (", ".join(f"{s} {n}" for s, n in sorted(fcnt.items())) or "none"))
     out(f"proposal covers {len(assign)} of {len(rows)} row(s)")
     if a.apply:
-        for r in rows:
+        import kivi_autolabel as A
+        if not A.wait_for_review(getattr(a, "pgrep", None), out=out, **getattr(a, "wait_kw", {})):
+            raise SystemExit("a review process is still running: split not applied (owner labels would be at risk)")
+        fresh = read_table(table_path)                       # fresh read: another tool may have written meanwhile
+        for r in fresh:
             if r["run_id"] in assign:
                 r["split"] = assign[r["run_id"]]
-        write_table(table_path, rows)
+        write_table(table_path, fresh)
         out("applied to the split column")
     else:
         out("proposal only; --apply writes it into the table")
@@ -499,11 +569,73 @@ def cmd_split(a, out=print):
 
 
 # ---------------------------------------------------------------------------------------------
+# autolabel (local; no transcripts leave memory, see kivi_autolabel.py)
+# ---------------------------------------------------------------------------------------------
+
+
+def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
+    import kivi_autolabel as A
+    root = Path(a.dataset_root).expanduser()
+    live = root / "live"
+    table_path = live / "live_wakes.csv"
+    rows = read_table(table_path)
+    if not rows:
+        raise SystemExit(f"no table at {table_path}: run extract first")
+    work = getattr(a, "work", None) or os.environ.get("WORK", "/work/workspaces/kivi-wakeword")
+    own_models = []
+    if transcriber is None:
+        transcriber = A.FasterWhisperTranscriber()
+    if embedder is None:
+        embedder = A.EcapaEmbedder()
+        own_models.append(embedder)
+    if scorer is None:
+        scorer = A.ModelScorer(work)
+    try:
+        clips = A.enrolment_clips(root) if not getattr(a, "enrol", None) else a.enrol
+        items, groups = A.enrol(clips, embedder)
+        thr, rep = A.calibrate(items, groups)
+        centr = A.centroids(items)
+        out(f"enrolment: {Counter(s for s, _ in items)}; leave-one-take-out {rep['correct']}/{rep['n']} correct, "
+            f"{rep['unknown']} unknown, {rep['wrong']} wrong; per speaker {rep['per_speaker']}")
+        if "leave_group_out" in rep:
+            out(f"leave-one-session-out: {rep['leave_group_out']}")
+        out("thresholds: " + ", ".join(f"{k} {v:.3f}" for k, v in thr.items()))
+        results = {}
+        for r in rows:
+            results[r["run_id"]] = A.analyse_clip(r, live / r["device"] / r["utc"], transcriber, embedder, scorer, centr,
+                                                  thr)
+    finally:
+        for m in own_models:
+            m.close()
+    ag = A.agreement(rows, results)
+    xt = Counter((res["cross"][0], res["cross"][1]) for res in results.values())
+    out("trigger check (a = request audio in the wake run `same` / separate stt-only run `sep`; c = live model score "
+        "in the last 2 s `cross` / `near` / `none`): " + ", ".join(f"{k[0]}x{k[1]} {n}" for k, n in sorted(xt.items())))
+    out("auto labels: " + ", ".join(f"{k} {n}" for k, n in sorted(Counter(r["label"] for r in results.values()).items())))
+    out("agreement with owner cells present at the start: " + (", ".join(f"{k} {n}" for k, n in sorted(ag.items())) or
+                                                               "no owner cells"))
+    if getattr(a, "dry_run", False):
+        out("dry run: table not written")
+        return results
+    if not A.wait_for_review(getattr(a, "pgrep", None), out=out, **getattr(a, "wait_kw", {})):
+        raise SystemExit("a review process is still running after 15 min: table not written")
+    backup = table_path.with_name(table_path.name + ".bak-" + A.utc_stamp())
+    shutil.copy2(table_path, backup)
+    os.chmod(backup, 0o600)
+    fresh = read_table(table_path)                           # fresh read right before the write: owner labels win
+    owner_before = sum(1 for r in fresh if r["label"] and not r["label_source"].startswith("auto"))
+    n = A.merge_results(fresh, results, redo=getattr(a, "redo", False))
+    write_table(table_path, fresh)
+    out(f"owner labels present at write time: {owner_before}; written: {dict(n)}; backup {backup.name}")
+    return results
+
+
+# ---------------------------------------------------------------------------------------------
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("what", choices=["list", "extract", "review", "split"])
+    ap.add_argument("what", choices=["list", "extract", "review", "split", "autolabel"])
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
     ap.add_argument("--devices", help="comma list (default: every device in kivi_devices.json)")
     ap.add_argument("--devices-file")
@@ -519,8 +651,17 @@ def main(argv=None):
     ap.add_argument("--again", action="store_true", help="(review) go through labelled clips too")
     ap.add_argument("--apply", action="store_true", help="(split) write the proposal into the split column")
     ap.add_argument("--test-share", type=float, default=TEST_SHARE, help="(split) share of true wakes in test, default 0.30")
+    ap.add_argument("--only-uncertain", action="store_true",
+                    help="(review) only unlabelled rows and auto labels that are unclear, low confidence or true with unknown speaker")
+    ap.add_argument("--rule", choices=["alternate-day", "recent-days"], default="alternate-day",
+                    help="(split) alternate-day: odd Madrid day of month = test, even = train (default); "
+                         "recent-days: the older share-per-speaker proposal")
+    ap.add_argument("--dry-run", action="store_true", help="(autolabel) analyse and print counts, write nothing")
+    ap.add_argument("--redo", action="store_true", help="(autolabel) recompute cells that an earlier autolabel run wrote")
+    ap.add_argument("--work", help="(autolabel, extract) workspace holding the model files, default $WORK")
     a = ap.parse_args(argv)
-    {"list": cmd_list, "extract": cmd_extract, "review": cmd_review, "split": cmd_split}[a.what](a)
+    {"list": cmd_list, "extract": cmd_extract, "review": cmd_review, "split": cmd_split,
+     "autolabel": cmd_autolabel}[a.what](a)
 
 
 if __name__ == "__main__":
