@@ -146,3 +146,48 @@
       The grid export counter rose by {{ $value | humanize }} kWh in 15 minutes (over 40 W average).
       Check the Battery dashboard, actuation.discharge_margin_w in the service config and, if the
       export continues, turn input_boolean.battery_optimizer_live off to hand control back.
+- alert: BatteryMarginCanBeLowered
+  # Suggestion, never an action: seven clean days at the current actuation.discharge_margin_w, so
+  # lower it by 25 W by hand in files/service-overrides.yaml (plan: docs/planning/
+  # discharge-margin-tuning.md in the app repository, sections 2.2 and 2.5). changes() == 0 over a
+  # 5 m subquery restarts the 7-day clock after every margin change, and the count_over_time term
+  # keeps the rule silent until the margin series covers the whole window. Every operand is a
+  # single-element vector, so a missing series (the metrics do not exist before the release that
+  # adds them, nor in shadow) leaves the result empty. The first operand makes $value the
+  # suggested margin (current minus 25 W). severity warning, not info: Alertmanager routes info to
+  # the null receiver, so only a warning reaches Telegram.
+  expr: |
+    (max(battery_optimizer_actuator_discharge_margin_watts) - 25)
+    and on()
+    (changes(max(battery_optimizer_actuator_discharge_margin_watts)[7d:5m]) == 0)
+    and on()
+    (count_over_time(max(battery_optimizer_actuator_discharge_margin_watts)[7d:5m]) > 1900)
+    and on()
+    (max(battery_optimizer_actuator_discharge_margin_watts) > 75)
+    and on()
+    (
+      increase(
+        (max by (entity) (hass_sensor_energy_kwh{entity="sensor.shellyem_main_channel_1_energy_returned"}))[7d:1m]
+      ) <= 0.007
+    )
+    and on()
+    (
+      histogram_quantile(
+        0.001,
+        sum by (le) (increase(battery_optimizer_actuator_discharge_grid_watts_bucket[7d]))
+      ) >= 25
+    )
+    and on()
+    (sum(increase(battery_optimizer_actuator_discharge_grid_watts_count[7d])) > 50000)
+  for: 1h
+  labels:
+    severity: warning
+  annotations:
+    summary: the battery discharge margin can be lowered by 25 W
+    description: |
+      Seven days at the current margin: at most 7 Wh exported, the lowest 0.1% of discharge-time
+      grid samples at 25 W or more of import, and more than 50000 samples. Lower
+      actuation.discharge_margin_w by 25 W (to {{ $value | printf "%.0f" }} W) in
+      apps/battery-optimizer/files/service-overrides.yaml, record it in the app repo's regime log
+      and check the utility meter's hourly export by hand a week later. The 7-day clock restarts
+      at the change and this alert resolves by itself.

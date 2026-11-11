@@ -584,6 +584,7 @@ and `live`; the HA-side rules read `hass_*` and only fire while the kill switch 
 | `BatteryOptimizerKillSwitchOnNotLive` | the kill switch has been on for 15 m while the service is not `live` or `dry_run` (or is down) |
 | `BatteryOptimizerChargePowerHigh` | measured battery charge above 2600 W for 2 m (the go-live caps are 2500 W): a cap or `battery_ac_power_sign` is wrong |
 | `BatteryOptimizerChargeClamped` | `battery_optimizer_actuator_clamped_watts > 1000` for 30 m (sized for the 2500 W caps). **Unconfirmed metric name** from the unreleased optimizer change; check it against the released `/metrics` |
+| `BatteryMarginCanBeLowered` | a suggestion, never an action: 7 days at the current `actuation.discharge_margin_w`, at most 7 Wh exported, the lowest 0.1% of discharge-time grid samples at 25 W or more of import and over 50000 samples (needs the optimizer release that adds `actuator_discharge_grid_watts`; silent before it). `severity: warning` so it reaches Telegram. Lower the margin by 25 W in `files/service-overrides.yaml` by hand; the 7-day clock restarts. Plan: `docs/planning/discharge-margin-tuning.md` in the app repo |
 
 ### Omnibattery backup cooldown workaround
 
