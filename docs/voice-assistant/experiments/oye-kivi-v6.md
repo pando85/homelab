@@ -308,7 +308,7 @@ The owner rolled back to v5 at about 22:40Z (v6 felt like more false wakes). Cha
   positives are kept, amendment 4), 1c (room-negative ASR flags, all non-`none` flags), the retry filter on room windows and on the hard
   negatives (live wake / stt-only within 30 s, miss candidate within 6 s), all mined only on 2026-11-05/-06/-08.
 
-### v6.2 amendment 3 (2026-11-12, about 00:05 Madrid; before v6.2 training, no 2026-11-12 audio read)
+### v6.2 amendment 3 (2026-11-11, about 23:35 Madrid; before v6.2 training, no 2026-11-12 audio read)
 
 Grouped 5-fold out-of-fold flags (`quality/oof_flags_*.csv`), applied as "OOF + ASR" where an ASR check exists:
 - real positives: the 7 OOF-flagged real items (pc-mic 4, webcam 2, one live clip) are KEPT, because the ASR check
@@ -322,9 +322,9 @@ Resulting v6.2 inputs: isolated synthetic positives 36,151; context positives 6,
 confusers 9,097; live positives 900 / 450 / 300 (spk01 / spk02 / unknown, amendment 4); live hard 2,700; live same-clip negatives 810;
 real takes rebuilt from 228 of 232 takes (120 copies); hard negatives v6 99, v5 3,319; room windows 247,647.
 
-(Paragraph on mis-cut live positives withdrawn 2026-11-12: see amendment 4.)
+(Paragraph on mis-cut live positives withdrawn 2026-11-11: see amendment 4.)
 
-### v6.2 amendment 4 (2026-11-12, about 00:15 Madrid; before v6.2 training, no 2026-11-12 audio read)
+### v6.2 amendment 4 (2026-11-11, about 23:45 Madrid; before v6.2 training, no 2026-11-12 audio read)
 
 Correction to 1b: the two stt-path live positives (c3-b 2026-11-07 23:58:40Z and 23:59:06Z) are KEPT. The data-quality
 check had compared them with the wake tail; `v6_cuts.py` cuts them inside stt.wav, where the phrase ends about 0.3-0.4 s
@@ -333,7 +333,7 @@ before the cut, and they score 0.998 / 0.999 out of fold. The live positives of 
 wakes is void. The live clip c3-b 2026-11-08 07:54:59Z (spk01, wake) scores about 0.0002 out of fold although ASR finds
 the phrase: a coverage gap, not a label error; it is kept. Items 2-4 of 1b stand.
 
-### v6.2 amendment 5 (2026-11-12, about 00:30 Madrid; final data and weights, before v6.2 training)
+### v6.2 amendment 5 (2026-11-11, about 23:52 Madrid; final data and weights, before v6.2 training)
 
 Final data-quality decisions applied (out-of-fold + ASR, coverage):
 - dropped as negatives that are really attempts: the room events of 2026-11-08 20:41:16Z (c3-a), 19:29:06Z (c3-b, miss
@@ -349,3 +349,14 @@ Final data-quality decisions applied (out-of-fold + ASR, coverage):
 Final counts: synthetic isolated 35,878; context positives 6,790; near_train 64,428; context confusers 10,821; same-clip
 synthetic negatives 4,949; real takes TV 9,000 / pc 9,480 / webcam 8,880; live positives 900 / 450 / 300; live hard
 2,700; live same-clip negatives 810; hard negatives v6 99 (day 64, evening 35), v5 3,312; room windows 247,640.
+
+### v6.2 trained and selected (2026-11-11, 23:58 Madrid; pre-registered rule, 2026-11-10 room audio only)
+
+Arms p2a and p2b trained (about 30 s each, warm start v6, amendment-5 data). Selection (`v6p1_select.py --rule
+fewest-events`, 2026-11-10, 47.8 h, 2.0 device-evenings): v5 at 0.9754 has E5 = 2 events. p2a: raw 0.985, 2 events
+(1 in the evening, c3-a); p2b: raw **0.9825**, 2 events (1 in the evening, c3-a). Tie on events, so R decides:
+p2b 34.4 % (isolated validation 39.5 %, context validation 29.4 %) against p2a 33.6 %. **Chosen: p2b at raw 0.9825.**
+Near-phrase validation accepts 0.47 % for both (v5 at 0.9754: 0.03 %). Calibrated file
+`v6p2/final/oye_kivi_ctx2.tflite` (server 0.5 = raw 0.9825; 0 of 9,378 steps disagree; pyopen-wakeword 1.1.0),
+sha256 95846976146978b6b7b9ee4a6caf9bd4233a6d315318802fe8b90bf81abe77f5; uncalibrated 55594bd78b7e... Nothing
+packaged. The morning comparison against v5 (`v6p2_compare.sh`) runs next.
