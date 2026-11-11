@@ -3,6 +3,9 @@
 
     kivi_negatives.py --dry-run                         # what it would copy (counts and hours only)
     kivi_negatives.py --hours 30                        # about 30 h split over the devices in kivi_devices.json
+    kivi_negatives.py --hours 1000 --since 2026-11-08T13:30:00Z --until 2026-11-11T16:30:00Z \
+        --exclude-pipeline "Kiwi Test" --out-name negatives-v5era --part test2-v5era
+                                                        # a fresh set of every closed file of a period, in its own directory
 
 NOT run by the tools that build the dataset: the owner (or the orchestrator, on the owner's word)
 starts it. It reads the pod with `kubectl exec ... stat/dd` only (byte ranges of the pieces it keeps). This is household audio, the
@@ -21,6 +24,12 @@ What is kept: closed files only (not written for `--min-age-s`), minus
 - everything from `--exclude-after DEVICE=ISO_TIME` onward (repeatable; e.g. while a new session is
   being recorded on that device) and everything of a device between two times
   (`--exclude-between DEVICE=START,END`, repeatable; closes such a window once the session is over),
+- with `--since/--until` only files that started at or after SINCE and were last written at or before
+  UNTIL (a run that began before SINCE ran with the earlier wake word and is not part of the period),
+  and with `--exclude-pipeline NAME` (repeatable) no file of that pipeline directory at all.
+`--out-name` puts the pieces in `<dataset>/<out-name>/` with its own manifest (default `negatives`, so
+the set the training tools read is untouched) and `--part` is the `split` value written in the rows
+(default `unassigned`; `test2-v5era` for the held-out set of the v5 era).
 Pieces shorter than `--min-seg-s` are dropped. Files are picked at random (seeded) per device until the
 hours are reached. Nothing is deleted or overwritten; re-running skips what is already there.
 """
@@ -28,6 +37,7 @@ import argparse
 import json
 import os
 import random
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -134,6 +144,14 @@ def plan_file(f, prev_end, marks, a, windows=(), after=None):
     return [(x, y) for x, y in subtract([(lo, hi)], cuts) if y - x >= a.min_seg_s]
 
 
+def period_filter(files, since=None, until=None, exclude_pipelines=()):
+    """Files that started at or after `since`, were last written at or before `until` and are not in an
+    excluded pipeline directory (exact name). The follow-up trim of a file still uses its real predecessor."""
+    return [f for f in files
+            if (since is None or f["start"] >= since) and (until is None or f["mtime"] <= until)
+            and f["pipeline"] not in set(exclude_pipelines or ())]
+
+
 def run(a, fetcher=None, presses=None):
     root = Path(a.dataset_root).expanduser()
     devs = [d.strip() for d in a.devices.split(",")] if a.devices else list(C.load_devices(a.devices_file))
@@ -158,13 +176,20 @@ def run(a, fetcher=None, presses=None):
         swin[d] = list(swin.get(d, [])) + w
     rng = random.Random(a.seed)
     target = a.hours * 3600 / max(1, len(devs))
-    manifest = root / "negatives" / "manifest.jsonl"
+    out_name = getattr(a, "out_name", None) or "negatives"
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", out_name):
+        raise SystemExit(f"bad --out-name {out_name!r}")
+    part = getattr(a, "part", None) or "unassigned"
+    since = X.parse_when(a.since) if getattr(a, "since", None) else None
+    until = X.parse_when(a.until) if getattr(a, "until", None) else None
+    excl_pipes = list(getattr(a, "exclude_pipeline", None) or [])
+    manifest = root / out_name / "manifest.jsonl"
     done = {(r["device"], r["source_run"], r["start_utc"]) for r in C.read_jsonl(manifest)}
     summary = {}
     for d in devs:
         files = all_files[d]
         prev_end = {id(f): (files[i - 1]["mtime"] if i else None) for i, f in enumerate(files)}
-        closed = [f for f in files if now - f["mtime"] >= a.min_age_s]
+        closed = period_filter([f for f in files if now - f["mtime"] >= a.min_age_s], since, until, excl_pipes)
         order = closed[:]
         rng.shuffle(order)
         picked, total = [], 0.0
@@ -185,17 +210,17 @@ def run(a, fetcher=None, presses=None):
         print(f"  {d}: {s['files_listed']} files, {s['closed']} closed, picked {s['files_picked']} ({s['pieces']} pieces, {s['hours']} h)")
     if a.dry_run:
         return summary
-    C.private_mkdir(root / "negatives", root)
+    C.private_mkdir(root / out_name, root)
     rows = []
     for d, picked in plans.items():
-        ddir = C.private_mkdir(root / "negatives" / d, root)
+        ddir = C.private_mkdir(root / out_name / d, root)
         src = C.source_label(d)
         for f, segs in picked:
             run_id = f"{f['pipeline']}/{f['run']}"
             todo = []
             for k, (t0, t1) in enumerate(segs, 1):
                 key = (d, run_id, X.utc_str(t0))
-                rel = f"negatives/{d}/{f['run']}-{k:02d}.wav"
+                rel = f"{out_name}/{d}/{f['run']}-{k:02d}.wav"
                 if key in done or (root / rel).exists():
                     continue
                 s0 = max(0, int(round((t0 - f["start"]) * RATE)))
@@ -223,7 +248,7 @@ def run(a, fetcher=None, presses=None):
             for s0, s1, w, rel, t0, t1 in todo:
                 row = C.make_row(
                     origin="negatives", session="negatives", source=src, device=d, session_device=d, speaker="",
-                    split="unassigned", eval_channel=True, condition="household", label="negative", kind="negative",
+                    split=part, eval_channel=True, condition="household", label="negative", kind="negative",
                     clip=rel, start_utc=X.utc_str(t0), end_utc=X.utc_str(t1), source_run=run_id, revision="")
                 C.append_jsonl(manifest, [row])
                 rows.append(row)
@@ -253,6 +278,12 @@ def main(argv=None):
                     help="keep nothing of DEVICE from this time on (repeatable), e.g. c3-a=2026-11-07T11:50:00Z")
     ap.add_argument("--exclude-between", action="append", metavar="DEVICE=START,END",
                     help="keep nothing of DEVICE between two ISO times (repeatable), e.g. c3-a=2026-11-07T11:50:00Z,2026-11-07T12:24:40Z")
+    ap.add_argument("--since", help="only files that started at or after this ISO time (UTC with Z, else local time)")
+    ap.add_argument("--until", help="only files last written at or before this ISO time")
+    ap.add_argument("--exclude-pipeline", action="append", metavar="NAME",
+                    help="skip every file of this pipeline directory (exact name, repeatable), e.g. 'Kiwi Test'")
+    ap.add_argument("--out-name", default="negatives", help="directory under the dataset root for the pieces and their manifest")
+    ap.add_argument("--part", default="unassigned", help="the `split` value written in the manifest rows, e.g. test2-v5era")
     ap.add_argument("--min-age-s", type=float, default=600.0, help="a file is closed when not written for this long")
     ap.add_argument("--trim-start-s", type=float, default=0.3)
     ap.add_argument("--boundary-s", type=float, default=7.0)

@@ -1562,3 +1562,38 @@ def test_score_button_takes_uses_the_extraction_windows(tmp_path, monkeypatch):
     assert (r["0.9"]["all_takes"]["k"], r["0.9"]["all_takes"]["n"]) == (1, 3)           # take 1 hits, take 2 peaks at 0.6
     assert (r["0.5"]["all_takes"]["k"], r["0.5"]["without_excluded"]["n"]) == (2, 2)     # at 0.5 take 2 hits; take 3 left out
     assert "button takes" in K.button_takes_markdown(rep)
+
+
+def test_negatives_period_pipeline_filter_out_name_and_part(tmp_path):
+    """--since/--until keep whole files of the period, --exclude-pipeline drops a pipeline directory, --out-name and
+    --part decide where the pieces and their manifest land; the default set is untouched."""
+    fl = [{"start": T0 + s, "mtime": T0 + e, "pipeline": p} for s, e, p in
+          [(0, 100, "Kiwi"), (200, 300, "Kiwi"), (400, 500, "Kiwi"), (250, 350, "Kiwi Test")]]
+    assert N.period_filter(fl) == fl
+    assert N.period_filter(fl, since=T0 + 150, until=T0 + 450) == [fl[1], fl[3]]            # file 3 ends after until
+    assert N.period_filter(fl, since=T0 + 1) == fl[1:]                                    # file 1 started before since
+    assert [f["pipeline"] for f in N.period_filter(fl, exclude_pipelines=["Kiwi Test"])] == ["Kiwi"] * 3
+    ramp = (np.arange(200 * RATE) % 30000).astype(np.int16)
+    rec = tmp_path / "rec"
+    make_wake_tree(rec, "bd8256", 1, T0, ramp)                          # before since
+    make_wake_tree(rec, "bd8256", 2, T0 + 1000, ramp)                   # in the period
+    make_wake_tree(rec, "bd8256", 3, T0 + 1000, ramp, pipeline="Kiwi Test")   # a pipeline name with a space, excluded
+    make_wake_tree(rec, "bd8256", 4, T0 + 3000, ramp)                   # after until
+    ds = tmp_path / "ds"
+    ns = Namespace(dataset_root=str(ds), hours=100.0, devices="c3-a", devices_file=None, context="x", namespace="x", pod="x",
+                   container=None, recordings_root="/x", presses_file=None, no_presses=True, pg_pod="x", pg_container="x",
+                   pg_user="x", pg_db="x", min_age_s=600.0, trim_start_s=0.3, boundary_s=7.0, followup_s=60.0, exclude_s=10.0,
+                   min_seg_s=10.0, seed=1, now=T0 + 99999, dry_run=True, since=X.utc_str(T0 + 500), until=X.utc_str(T0 + 2000),
+                   exclude_pipeline=["Kiwi Test"], out_name="negatives-v5era", part="test2-v5era")
+    s = N.run(ns, X.LocalFetcher(rec))
+    assert s["c3-a"]["files_listed"] == 4 and s["c3-a"]["closed"] == 1 and s["c3-a"]["files_picked"] == 1
+    assert not (ds / "negatives-v5era").exists()                        # dry run writes nothing
+    ns.dry_run = False
+    N.run(ns, X.LocalFetcher(rec))
+    rows = C.read_jsonl(ds / "negatives-v5era" / "manifest.jsonl")
+    assert len(rows) == 1 and rows[0]["split"] == "test2-v5era" and rows[0]["source_run"] == "Kiwi/2"
+    assert rows[0]["clip"].startswith("negatives-v5era/c3-a/") and (ds / rows[0]["clip"]).exists()
+    assert not (ds / "negatives").exists()
+    ns.out_name = "../x"
+    with pytest.raises(SystemExit):
+        N.run(ns, X.LocalFetcher(rec))
