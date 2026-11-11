@@ -394,20 +394,32 @@ def cmd_mine(a):
 def cmd_windows(a):
     """Every `--stride`-th window (16, 96) of the parts as one float16 npy (room negatives for training)."""
     pieces = load_index(a)
+    excl = json.loads(Path(a.exclude_json).read_text()) if a.exclude_json else {}
     tot = sum(max(0, (p["steps"] - FIRST_STEP) // a.stride + 1) for p in pieces if p["steps"] > FIRST_STEP)
-    X = np.lib.format.open_memmap(a.out, mode="w+", dtype=np.float16, shape=(tot, 16, 96))
-    k = 0
+    X = np.lib.format.open_memmap(a.out + ".tmp.npy", mode="w+", dtype=np.float16, shape=(tot, 16, 96))
+    k = dropped = 0
     for pc in pieces:
         if pc["steps"] <= FIRST_STEP:
             continue
         e = np.load(pc["emb"], mmap_mode="r")
         v = window_view(e)
         idx = np.arange(FIRST_STEP - 15, len(v), a.stride)
+        iv = excl.get(pc["device"], [])
+        if iv:
+            t = _utc(pc["start_utc"]).timestamp() + step_time(idx + 15)
+            keep = np.ones(len(idx), bool)
+            for t0, t1 in iv:
+                keep &= ~((t >= t0) & (t <= t1))
+            dropped += int((~keep).sum())
+            idx = idx[keep]
         X[k:k + len(idx)] = v[idx]
         k += len(idx)
     X.flush()
+    np.save(a.out, X[:k])
+    del X
+    os.remove(a.out + ".tmp.npy")
     os.chmod(a.out, 0o600)
-    print(a.out, (k, 16, 96), "of", tot)
+    print(a.out, (k, 16, 96), "of", tot, "dropped by --exclude-json", dropped)
 
 
 def main():
@@ -423,6 +435,7 @@ def main():
     p.add_argument("--part", required=True)
     p.add_argument("--local-date")
     p.add_argument("--stride", type=int, default=8)
+    p.add_argument("--exclude-json", help="{device: [[epoch0, epoch1], ...]}: windows whose step falls inside are left out")
     p.add_argument("--out", required=True)
     for name in ("score", "curve", "mine"):
         p = sp.add_parser(name)

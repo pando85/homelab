@@ -274,3 +274,17 @@ Morning comparison, v6.2 (chosen arm) against v6 (`oye_kivi_ctx`, raw 0.9595), o
 - C4: test-day live clips (2026-11-09 and -11, exact replay): `true` detected >= v6's;
 - C5: held-out-voice synthetic clean / TV 10 dB / quiet within 5 points of v6 (not lower by more than 5).
 No deploy by this agent; the coordinator runs any deploy.
+
+### v6.2 amendment 1 (2026-11-11, about 23:25 Madrid; before v6.2 training, no 2026-11-12 audio)
+
+After the data-quality ASR check of the mined hard negatives (`quality/hardneg_phrase_flags.csv`: the phrase is
+supported in only 5 of the events the amendment-1 retry filter dropped), the v6.2 hard-negative drop rule is: an event is
+dropped when it has strong retry evidence (a live wake or an stt-only run within 30 s, or a miss candidate within 6 s)
+or an ASR phrase flag (`phrase`, `kivi_word`, or `hotword_only` with confidence >= 0.5). "Another model event 5-30 s
+away" alone no longer drops (TV content clusters; ASR does not support a phrase there). Mined on 2026-11-06 and -08
+only: v6 raw >= 0.5: 32 events, 1 dropped, 99 windows kept (day 64, evening 35); v5 raw >= 0.3: 889 events, 67 dropped,
+3,478 windows kept. Reasons: asr-phrase 50, live 15, miss-candidate 11, stt-only 5. Room negative windows (stride 8,
+2026-11-05, -06, -08): 247,987 kept, 851 dropped (within 30 s of a live wake or stt-only run, or 6 s of a miss
+candidate). Per-step counts follow the smaller sets: `p2a` v6 day 32 w6, evening 32 w12; `p2b` v6 day 48 w12, evening 32
+w24; v5 hard 128 per step (w3 / w6). The 3 even-day live clips labelled false whose tail holds a kivi-like word (data
+quality 1b) are dropped from live_hard and live_negpart. Everything else in the v6.2 pre-registration stands.

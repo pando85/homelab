@@ -8,7 +8,9 @@ event is FLAGGED and its windows DROPPED (never relabelled as positives) when, o
 - an stt-only run (mic button / push to talk / continued conversation; listing of the HA recordings, read only) starting
   within 30 s before or after;
 - another event of v4, v5 or v6 (raw >= 0.5, 2 s refractory) 5 to 30 s before or after;
-- a missed-wake candidate (`live-misses/miss_candidates.csv`, 6 s windows) within 6 s.
+- a missed-wake candidate (`live-misses/miss_candidates.csv`, 6 s windows) within 6 s;
+- (v6.2, `--phrase-flags`) a data-quality ASR phrase flag of the event (`hardneg_phrase_flags.csv`, matched by TV and
+  time within 1.5 s): flag `phrase` or `kivi_word`, or `hotword_only` with confidence >= 0.5.
 Windows are the hit steps +-1 step, each assigned to its event. Output: the kept windows under the names the training
 script reads (the unfiltered arrays are kept with suffix `_unfiltered`) and counts per model, day and evening.
 
@@ -42,8 +44,22 @@ def utc_epoch(s):
     return datetime.strptime(s, "%Y%m%dT%H%M%S.%fZ").replace(tzinfo=timezone.utc).timestamp()
 
 
-def flags_for(t, dev, live, stt, others, cands):
+def phrase_flagged(path):
+    """{device: [epoch]} of the events the data-quality ASR flags as holding the phrase (v6.2 rule)."""
+    out = {}
+    for r in csv.DictReader(open(path, encoding="utf-8")):
+        f = r["flag"]
+        conf = float(r["confidence"] or 0)
+        if f in ("phrase", "kivi_word") or (f == "hotword_only" and conf >= 0.5):
+            dev = r["device"].replace("tv-c3", "c3-")
+            out.setdefault(dev, []).append(utc_epoch(r["event_id"].split("-", 3)[3]))
+    return out
+
+
+def flags_for(t, dev, live, stt, others, cands, phrase=None):
     out = []
+    if phrase and any(abs(x - t) <= 1.5 for x in phrase.get(dev, ())):
+        out.append("asr-phrase")
     if any(abs(x - t) <= RETRY_S for x in live.get(dev, ())):
         out.append("live")
     if any(abs(x - t) <= RETRY_S for x in stt.get(dev, ())):
@@ -70,6 +86,9 @@ def main():
     ap.add_argument("--devices")
     ap.add_argument("--devices-file")
     ap.add_argument("--from-dir")
+    ap.add_argument("--phrase-flags", help="data-quality hardneg_phrase_flags.csv (v6.2)")
+    ap.add_argument("--drop-on", default="live,stt-only,other-event,miss-candidate,asr-phrase",
+                    help="reasons that drop an event (v6.2: live,stt-only,miss-candidate,asr-phrase)")
     a = ap.parse_args()
     import kivi_live_wakes as L
     import kivi_replay_mine as K
@@ -84,6 +103,8 @@ def main():
     cands = {}
     for r in csv.DictReader(open(root / "live-misses/miss_candidates.csv", encoding="utf-8")):
         cands.setdefault(r["device"], []).append(utc_epoch(r["utc"]))
+    phrase = phrase_flagged(a.phrase_flags) if a.phrase_flags else None
+    drop_on = set(a.drop_on.split(","))
     pieces = R.load_index(argparse.Namespace(index=a.index, part=a.parts, local_date=None))
     heads = {n: R.Head(p) for n, p in HEADS.items()}
     # pass 1: every model's events (floor 0.5) per device, absolute times
@@ -118,7 +139,8 @@ def main():
             for k, ti in enumerate(ev_t):
                 tab = t0 + float(ti)
                 fl = flags_for(tab, pc["device"], live, stt,
-                               {pc["device"]: [x for x in others.get(pc["device"], []) if abs(x - tab) > 2.0]}, cands)
+                               {pc["device"]: [x for x in others.get(pc["device"], []) if abs(x - tab) > 2.0]}, cands, phrase)
+                fl = [f for f in fl if f in drop_on]
                 evening, day = R.is_evening(pc["start_utc"], float(ti))
                 evflags.append((fl, evening, day))
                 key = f"{n}|{day}|{'evening' if evening else 'day'}"
