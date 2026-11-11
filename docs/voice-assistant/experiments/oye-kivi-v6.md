@@ -360,3 +360,11 @@ Near-phrase validation accepts 0.47 % for both (v5 at 0.9754: 0.03 %). Calibrate
 `v6p2/final/oye_kivi_ctx2.tflite` (server 0.5 = raw 0.9825; 0 of 9,378 steps disagree; pyopen-wakeword 1.1.0),
 sha256 95846976146978b6b7b9ee4a6caf9bd4233a6d315318802fe8b90bf81abe77f5; uncalibrated 55594bd78b7e... Nothing
 packaged. The morning comparison against v5 (`v6p2_compare.sh`) runs next.
+
+### C3 review table built (2026-11-12, about 00:50 Madrid)
+
+The like-for-like TFLite replay of test2-v5era (`v6_replay.py`, same as the mining pass) reproduces v4 26, v5 5, v6 13
+and the ablation 21 events. Their union for v5, v6 and the ablation, merged within +-2 s per TV, gives **29 windows**
+(c3-a 8, c3-b 21): v6 or the ablation only 24, v5 only 4, all three 1. `datasets/real/live-misses/c3_events.csv`
+(shuffled, no model or score), mapping in `/work/workspaces/kivi-wakeword/v6/all/c3_events_mapping.json`
+(`v6_c3_review_table.py`). Owner review: `kivi_live_wakes.py review --table c3_events.csv` (first in the queue above).
