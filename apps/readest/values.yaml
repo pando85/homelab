@@ -10,7 +10,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=postgres
             repository: postgres
-            tag: 17-alpine
+            tag: 18-alpine
           env:
             DB_PASSWORD:
               valueFrom:
