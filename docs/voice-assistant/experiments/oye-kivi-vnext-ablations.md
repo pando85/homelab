@@ -232,7 +232,10 @@ Old manifest rows are not rewritten: `eval_channel` is derived from (source, spl
 Session `20261111T171918Z-spk01-tv-c3a` (spk01, c3-a, split test, 9 blocks, 101 cues, 9.2 min, cues every
 3.5 +-0.5 s, later day than every training and selection input of v4 and v5). **The TV channel is missing**:
 c3-a was on the "Kiwi Test" pipeline to keep the live wake word out of the session, and HA wrote no wake audio
-for that pipeline (empty run directories); HA also restarted twice around the session. Extracted from the PC
+for that pipeline (empty run directories: the pipeline pointed at the unavailable `conversation.chatgpt` (the OpenAI
+integration returned 403) and the non-served wake word id `alexa_v0.1`, so every run ended run-start, error
+`intent-not-supported`, run-end; the old run check counted any run, errored or another satellite's, as a new run);
+HA also restarted twice around the session (a homelab push touching the HA config: Argo plus Reloader). Extracted from the PC
 sources only (`extract -- --no-tv`, `tv_channel: missing` in the session record and the release state; no
 `tv-c3a` rows, so the satellite gate has no new input). The webcam aligned (28/29 windows, drift +132 ppm); all
 101 cues have full audio on both sources. v5 was not trained on this session: it is held out.
@@ -273,6 +276,21 @@ channel. The release gate stays INCOMPLETE (satellite rows only; the PC and webc
 "other devices, informational"). A cue-timing check found no cue without a speech burst on the desk mic; two cues
 are worth the owner's confirmation as possible flubs or cut words: block 4 (1.5 m TV on) cue 10 (burst 0.36 s, shorter than
 the usual 0.7 to 1.0 s) and cue 6 (burst starts 1.7 s after the cue).
+
+### Session procedure after the pipeline fix (2026-11-11)
+
+With the owner's approval "Kiwi Test" was edited: `conversation_engine` `conversation.fast` (was
+`conversation.chatgpt`) and `wake_word_id` `alexa` (was `alexa_v0.1`); every other field is unchanged. Put c3-a on it
+with `wake_release.py rollback --version V --tv c3-a --to "Kiwi Test"`: the tool refuses an unavailable engine or an
+unserved wake word id, then checks the newest run of that satellite (`wake_word-start`, no `error`, 30 s) and prints
+`FAILED: <code>` otherwise. Don't say "alexa" during sessions. Rules: (a) the run check must pass and `00_wake` must
+grow (about 32 kB/s) before the first take; (b) no homelab push touching `apps/home-assistant` config during a
+session. Verified on c3-a the same day: check OK; the newest `00_wake` file under "Kiwi Test" went from 113644 to
+433964 bytes in 10 s (32.0 kB/s); back on `preferred` (oye_kivi_next) with a passing check.
+
+Naming note: the owner briefly renamed the household pipeline to "Kivi" on 2026-11-11 and then back. Runs of that
+window sit under `/voice-recordings/<device>/Kivi/` (one run directory per TV, created about 17:41 UTC). The tooling
+finds the household pipeline by the preferred flag or id, never by its name.
 
 ## What this does not prove
 
