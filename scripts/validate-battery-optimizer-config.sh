@@ -49,6 +49,44 @@ if ! grep -q "^mode: live" "$CONFIG_FILE"; then
     ERRORS=$((ERRORS + 1))
 fi
 
+# Check the values the 0.16.0 re-vendor silently reset (restored 2026-11-11).  Parsed as YAML,
+# so comments and layout do not matter.  full_charge.mode is deliberately not pinned.
+PARSE_OUT=$(python3 - "$CONFIG_FILE" <<'PY'
+import sys
+
+import yaml
+
+with open(sys.argv[1]) as f:
+    cfg = yaml.safe_load(f)
+
+# dotted path -> (required value, template default)
+checks = {
+    "planning.high_soc_cost_eur_per_kwh_h": (0.01, 0.0),
+    "planning.charge_soft_cap_eur_per_kwh": (0.005, 0.0),
+    "planning.discharge_margin_bound": (True, False),
+    "planning.thermal.mode": ("shadow", "off"),
+    "actuation.load_following.enabled": (True, False),
+    "actuation.load_following.max_w": (2500, None),
+    "full_charge.enabled": (True, False),
+}
+for path, (want, template) in checks.items():
+    node = cfg
+    for key in path.split("."):
+        node = node.get(key) if isinstance(node, dict) else None
+    # type(): True == 1 and 0.01 == 1e-2, but a bool must not match an int or the string "on"
+    if node != want or type(node) is not type(want):
+        print(f"{path} is {node!r}, expected {want!r} (template default {template!r})")
+PY
+) || { echo "ERROR: could not parse $CONFIG_FILE (python3 with PyYAML required)"; exit 1; }
+
+if [[ -n "$PARSE_OUT" ]]; then
+    while IFS= read -r line; do
+        echo "ERROR: $line"
+        ERRORS=$((ERRORS + 1))
+    done <<< "$PARSE_OUT"
+    echo "       Production values reverted by the 0.16.0 re-vendor; see docs/deployment/battery-optimizer.md"
+fi
+
 if [[ $ERRORS -gt 0 ]]; then
     echo ""
     echo "Found $ERRORS production override violation(s)."

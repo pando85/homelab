@@ -932,6 +932,20 @@ homelab deployment has **production overrides** that must be preserved:
 | `climate_shadow.enabled` | `false` | `true` | Climate tracking |
 | `climate_shadow.prior` | `null` | `"2311c010392f"` | Site-specific prior ID |
 | `climate_shadow.optimizer_mode` | `"off"` | `"shadow"` | Advisory climate plan |
+| `planning.high_soc_cost_eur_per_kwh_h` | `0.0` | `0.01` | High-SOC dwell cost |
+| `planning.charge_soft_cap_eur_per_kwh` | `0.0` | `0.005` | Thermal soft cap on charge power |
+| `planning.discharge_margin_bound` | `false` | `true` | Bound planned discharge by load minus margin |
+| `planning.thermal.mode` | `"off"` | `shadow` | Read-only thermal state |
+| `actuation.load_following.enabled` / `max_w` | `false` / `null` | `true` / `2500` | Load-following discharge |
+| `full_charge.enabled` | `false` | `true` | Periodic full charge (`mode` stays `shadow`) |
+
+`scripts/validate-battery-optimizer-config.sh` (pre-commit) fails if any value in this table regresses.
+
+**Config change log:**
+
+| Date | Change |
+|------|--------|
+| 2026-11-11 | The `planning.*`, `thermal.mode`, `load_following` and `full_charge.enabled` values above were reverted to template defaults by the 0.16.0 re-vendor (2026-11-08 to 2026-11-11); restored on 2026-11-11 (owner request). `climate_shadow` was restored earlier. |
 
 **Re-vendoring checklist:**
 
