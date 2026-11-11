@@ -46,7 +46,7 @@ head on them; it matches the pyopen-wakeword TFLite runtime to 0.001 on room aud
 | --- | --- | --- | --- | --- |
 | C1 | 2026-11-11 session, pc-desk / webcam, 66 cues each | 55 / 53 | **60 / 62**, no cell lower | PASS |
 | C2 | near-phrase false accepts (35 cues) | 0 / 1 | 0 / 2 | PASS |
-| C3 | room false wakes, odd days 2026-11-09 and -11 (79.5 h) | 4 (0.050/h); 0 in evening hours | **12 (0.151/h [0.078, 0.264]); 4 in the evening = 2.2 per evening [0.6, 5.6]** | **FAIL** |
+| C3 | room false wakes, odd days 2026-11-09 and -11 (79.5 h), TFLite replay | 5 (0.063/h [0.020, 0.147]); 0 in evening hours | **13 (0.164/h [0.087, 0.280]); 4 in the evening = 2.2 per evening [0.6, 5.6]** | **FAIL** |
 | C4 | live test-day wakes (3 true, all spk02) / false wakes (4) | 3 / 4 fired | 3 / 0 fired | PASS (set selected by v5) |
 | C5 | synthetic held-out voices clean / TV 10 dB / quiet | 51 / 30 / 40 % | 60 / 40 / 54 % | PASS |
 | C6 | no test-day data in training or selection; calibration; runtime 1.1.0 | | checked | PASS |
@@ -57,7 +57,7 @@ accepts more near-phrases (1 / 4) and more room events (20): the context data bu
 ## What this means
 
 - v6 is a better listener on the PC microphones of one held-out session, but at the threshold its rule gave it fires
-  three times as often as v5 on two odd days of room audio, and its evening events score high (3 above raw 0.975, where
+  more than twice as often as v5 on two odd days of room audio, and its evening events score high (3 above raw 0.975, where
   v5 has none): some evening (TV) content now looks like the phrase.
 - Selection on 2 evening-equivalents of room audio cannot pin a threshold (v6 had 4 events there and 12 on the test
   part, both within Poisson noise of each other). The next selection needs more even-day evenings and a rule tied to
