@@ -27,7 +27,7 @@ deployment.
 | Failure handling | `backoffLimit: 2`, `activeDeadlineSeconds: 3600`, `startingDeadlineSeconds: 21600`, history 3/3 |
 | Node | pinned to `prusik` (node-local `openebs-zfspv`) |
 | Secret | ExternalSecret `battery-optimizer-home-assistant` <- Vault KV `secret/battery-optimizer/home-assistant`, property `token` (read-only HA token, env only, never on disk). Only with `global.liveHomeAssistantToken: true`: ExternalSecret `battery-optimizer-home-assistant-live` <- `secret/battery-optimizer/home-assistant-live` (service only, see [Live battery control](#live-battery-control)) |
-| Config | ConfigMap `battery-optimizer-config` rendered from `apps/battery-optimizer/files/` (`tariff.yaml`, `service.yaml`, and the climate shadow's `climate.yaml`, `climate-mpc.yaml`) |
+| Config | The image ships the base configs under `/app/config` (`service.yaml`, `tariff.yaml`, `climate.yaml`, `climate-mpc.yaml`). ConfigMap `battery-optimizer-config` holds only `service-overrides.yaml` (from `apps/battery-optimizer/files/`), mounted at `/config` and deep-merged over the base (`BATTERY_OPTIMIZER_SERVICE_CONFIG_OVERRIDES`) |
 | Storage | PVC `battery-optimizer-data`, 5 Gi, `openebs-zfspv`, mounted at `/data` (`BATTERY_OPTIMIZER_DATA_DIR`) |
 | Backup | labels `backup: battery-optimizer-zfs`, `backup/retain: quaterly`; SnapshotSchedule `battery-optimizer-zfs-backups` (daily 06:00 UTC, keep 20) |
 | Alerts | `PrometheusRule/battery-optimizer` (label `release: monitoring`) for the CronJob, `PrometheusRule/battery-optimizer-service` (long-term) for the service |
@@ -101,11 +101,11 @@ deployment.
   the 2026-10-27 03:30Z run saw 4420 of ~4526 expected over 3 days and still reported `violations=0`.
   Watch for it if the coverage check below ever starts failing: the fix is to move the counters to MQTT
   too, which has so far not been worth the recorder cost.
-- **`tariff.yaml` and `service.yaml` are vendored copies** of `config/` in the app repository (the
-  image carries no config). Update both together; the tariff config hash is part of every dataset id.
-  The CronJob mounts the same ConfigMap at `/config` and sets `BATTERY_OPTIMIZER_SERVICE_CONFIG=/config/service.yaml`,
-  so `build` and `extract` read `battery.commissioned_at` and the battery counters from the same
-  `service.yaml` as the service; set them there on installation day and nothing else needs changing.
+- **The base configs ship in the image, only `service-overrides.yaml` is ours.** Both controllers set
+  `BATTERY_OPTIMIZER_CONFIG=/app/config/tariff.yaml`, `BATTERY_OPTIMIZER_SERVICE_CONFIG=/app/config/service.yaml`
+  and `BATTERY_OPTIMIZER_SERVICE_CONFIG_OVERRIDES=/config/service-overrides.yaml`, so `build` and `extract`
+  read `battery.commissioned_at` and the battery counters from the same effective config as the service.
+  The tariff config hash is part of every dataset id and comes from the image now.
 - **Coverage gaps fail the Job.** From 0.2.1 `extract` exits 3 when the run's manifest records a
   coverage gap (HA: `empty_chunk`, `empty_chunk_after_window_filter`, `chunk_accounting_mismatch`,
   `no_rows_for_entity`, `no_rows_extracted:all`; Prometheus: `no_samples_extracted`,
@@ -120,7 +120,7 @@ deployment.
 |---|---|
 | Workload | Deployment `battery-optimizer-service`, 1 replica, `strategy: Recreate`, same image anchor as the CronJob |
 | Command | `battery-optimizer serve`, port 8080: `/health/live`, `/health/ready`, `/status`, `/plan`, `/metrics` |
-| Config | `files/tariff.yaml` + `files/service.yaml` (vendored from the app repo `config/`) in ConfigMap `battery-optimizer-config`, mounted at `/config`. `service.yaml` uses `soc_source: simulated` because Home Assistant has no battery entities yet |
+| Config | Base `/app/config/service.yaml` + `/app/config/tariff.yaml` from the image, `files/service-overrides.yaml` in ConfigMap `battery-optimizer-config` mounted at `/config` ([Deploying a new version](#deploying-a-new-version)) |
 | HA token | the same ExternalSecret as the pipeline, **mounted as a file** (`BATTERY_OPTIMIZER_HA_TOKEN_FILE`). Read-only, non-admin. With `global.liveHomeAssistantToken: true` the live user's token is mounted at the same path instead ([Live battery control](#live-battery-control)) |
 | Storage | the same PVC `battery-optimizer-data` at `/data` (RWO on prusik, `Recreate` avoids two pods). The service writes only `/data/service/v1/`; the pipeline uses `raw/`, `manifests/` and `analysis/`, so the paths never collide |
 | Resources | requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS) |
@@ -212,7 +212,7 @@ kubectl --context=grigri -n battery-optimizer exec deploy/battery-optimizer-serv
 
 ## Climate shadow (track B2)
 
-From 0.4.0 the service also runs the climate shadow (`climate_shadow:` in `files/service.yaml`): the
+From 0.4.0 the service also runs the climate shadow (`climate_shadow:` in the service config): the
 thermal model and the price-blind comfort MPC of the app repository on live data. Every hour at HH:10
 UTC, on its own worker thread, it reads, predicts, plans, records and scores. **It is read-only and
 actuates nothing**: the plan is written to the PVC and never sent anywhere, it uses no new credential,
@@ -235,7 +235,7 @@ the battery planner, which keeps solving every 15 minutes. A healthy job logs no
 
 | Path | In git? | Content |
 |---|---|---|
-| `/config/climate.yaml`, `/config/climate-mpc.yaml` | yes, `files/` (public in the app repo too) | Comfort rooms, filters, MPC horizon and schedule. Keep them **byte-identical** to the app repository: their sha256 is part of every climate record's lineage |
+| `/app/config/climate.yaml`, `/app/config/climate-mpc.yaml` | yes, shipped in the image | Comfort rooms, filters, MPC horizon and schedule. They come from the image, so they are the app repository's files: their sha256 is part of every climate record's lineage |
 | `/data/analysis/v1/climate-shadow/priors/<prior>/prior.json` | **no**, PVC only | The season prior (model parameters fitted on household data), content-addressed and write-once; `climate_shadow.prior` names it |
 | `/data/climate/site.yaml` | **no**, PVC only | Private site file (coordinates, reference station). Never commit it or paste it anywhere |
 | `/data/service/v1/climate_{decisions,scores,days,models}/` | no | The shadow's records, written by the service; covered by the PVC snapshots and `just pull-store` |
@@ -264,11 +264,11 @@ tar -C "$SRC" -cf - "analysis/v1/climate-shadow/priors/$PRIOR/prior.json" climat
       tar -xf - -C /data --no-same-owner
 ```
 
-then set `climate_shadow.prior: "<id>"` in `files/service.yaml` and merge. A prior directory can stay on
+then set `climate_shadow.prior: "<id>"` in `files/service-overrides.yaml` and merge. A prior directory can stay on
 the PVC after it is replaced: only the configured one is loaded.
 
 **Go-live of the comfort controller.** On the day the comfort controller takes over, set
-`climate_shadow.go_live: "YYYY-MM-DD"` (local date) in `files/service.yaml` and merge. Without it there is
+`climate_shadow.go_live: "YYYY-MM-DD"` (local date) in `files/service-overrides.yaml` and merge (the key exists in the base, so the override is accepted). Without it there is
 no new-window verdict (the first `comfort` record is only reported as a provisional date); the new
 window starts 7 days after `go_live`. Do not change the prior, the comfort rooms or `climate-mpc.yaml`
 around go-live: any of them starts a new lineage, which the gates evaluate apart.
@@ -291,7 +291,7 @@ last run, scoring queue, error, go-live and the two verdicts.
 fixed through both preregistered windows. Fit a new one for the next heating season, or earlier only
 when a model input changes: the outdoor sensor or the heat measurement, the comfort rooms or their
 thermostats. A change of the schedule, the water curve or the machine limits is an edit of
-`climate-mpc.yaml` (vendor it from the app repository), not a refit. Record either in the app
+`climate-mpc.yaml` in the app repository (a new release), not a refit. Record either in the app
 repository's regime log.
 
 **Expected after a deploy.** The first run happens at the next HH:10 (or at once if the pod starts after
@@ -310,7 +310,7 @@ valid weeks, gates, regime).
 ## Live battery control
 
 ADR-0007 in the app repository (`docs/adr/0007-live-battery-control.md`, operations in
-`docs/service.md#live-control-dry_run-and-live`) adds `mode: dry_run | live` to `files/service.yaml`.
+`docs/service.md#live-control-dry_run-and-live`) adds `mode: dry_run | live` to the service config, set in `files/service-overrides.yaml`.
 The service then sets Omnibattery's direction switches, PD grid target and discharge cap through a
 narrow write allowlist; Omnibattery stays the only Modbus writer. The deployed mode is `shadow`
 until the owner changes it. The battery and its Omnibattery setup are in
@@ -328,7 +328,7 @@ until the owner changes it. The battery and its Omnibattery setup are in
 **Tokens.** `shadow` and `dry_run` use the read-only `battery-optimizer` HA user. `live` uses the
 separate non-admin user `battery-optimizer-live` (group `system-users`, local only), whose long-lived
 token the owner keeps in `pass`. Home Assistant cannot restrict a token to entities, so the service's
-`ha_guard` allowlist is the restriction. Rendering fails when `files/service.yaml` says `mode: live`
+`ha_guard` allowlist is the restriction. Rendering fails when `files/service-overrides.yaml` says `mode: live` (or has no `mode` key)
 while `global.liveHomeAssistantToken` is `false` (ArgoCD then shows a `ComparisonError` and syncs
 nothing), so `live` never runs on the read-only token.
 
@@ -508,9 +508,9 @@ Preconditions (owner):
 
 **dry_run (1-2 days):**
 
-1. Update the image to the optimizer release with live control (Renovate PR, or by hand) and vendor
-   its `config/service.yaml` changes (the `actuation:` section). Set `mode: dry_run` in
-   `files/service.yaml`. Merge; ArgoCD rolls the pod.
+1. Update the image to the optimizer release with live control (Renovate PR, or by hand; the base
+   config comes with the image). Set `mode: dry_run` in
+   `files/service-overrides.yaml`. Merge; ArgoCD rolls the pod.
 2. Check `/status` (`mode: dry_run`, an `actuator` block) and `battery_optimizer_build_info{mode="dry_run"}`.
 3. Turn the kill switch **on**. Nothing is sent; the watchdog keeps the switches off (see above).
 4. Review `/data/service/v1/actuation/` and the `battery_optimizer_actuator_*` metrics: guard reasons,
@@ -534,7 +534,7 @@ Then:
 
 3. Put the live token in Vault ([above](#live-token-in-vault)).
 4. Turn the kill switch **off**.
-5. In one commit: `mode: live` in `files/service.yaml` (the app also requires
+5. In one commit: `mode: live` in `files/service-overrides.yaml` (the app also requires
    `planning.soc_source: entity` for `live`) and `global.liveHomeAssistantToken: true` in `values.yaml`.
    Merge.
 6. Check `kubectl --context=grigri -n battery-optimizer get externalsecret` (both `SecretSynced`), the
@@ -559,7 +559,7 @@ failsafe is the layer that does not depend on HA.
 1. Turn `input_boolean.battery_optimizer_live` **off**. This is immediate: the service sets safe idle
    once and stops writing, and the watchdog repeats the safe idle in HA. In an emergency, also turn the
    *Allow* switches off on the Battery dashboard, or the battery's AC plug.
-2. In one commit: `mode: shadow` (or `dry_run`) in `files/service.yaml` and
+2. In one commit: `mode: shadow` (or `dry_run`) in `files/service-overrides.yaml` and
    `global.liveHomeAssistantToken: false`. Merge. ArgoCD prunes the live ExternalSecret and its Secret
    and the pod restarts on the read-only token. The flag cannot go off while the mode is still `live`
    (rendering fails).
@@ -598,7 +598,7 @@ Bypass. Side effects of the high threshold and the full procedure:
 
 The battery is a Marstek Venus E V3 driven by Omnibattery (v1.5.1b1 at the time of writing). Settings sit in
 three places: the device (Marstek app), Omnibattery's own entities in Home Assistant, and the optimizer's
-`files/service.yaml`. All reads below are read-only.
+`files/service-overrides.yaml` or the image's base `service.yaml`. All reads below are read-only.
 
 ### Entities
 
@@ -621,7 +621,7 @@ Owned by the owner and read-only for the optimizer:
 - The temperature limit: `switch.omnibattery_temp_charge_limit` and its numbers. The owner toggles it; the
   optimizer only reads it.
 
-Optimizer-side knobs live in the deployed `apps/battery-optimizer/files/service.yaml`, `actuation:` block:
+Optimizer-side knobs live in the `actuation:` block of the base `/app/config/service.yaml` in the image, with site values in `apps/battery-optimizer/files/service-overrides.yaml`:
 
 | Key | Value | Meaning |
 |---|---|---|
@@ -916,80 +916,34 @@ code version changes every dataset id, so expect one extra dataset on the next b
 Growing the volume: raise `spec.resources.requests.storage` in `templates/pvc.yaml`
 (`allowVolumeExpansion` is on). Never delete the PVC; `Prune=false` and `Retain` protect it.
 
-## Re-vendoring Config Files
+## Deploying a new version
 
-When deploying a new version that includes changes to `config/service.yaml` in the app repository
-(`~/home-energy-optimizer`), the config must be re-vendored into `apps/battery-optimizer/files/service.yaml`.
+The image ships the base configs (`/app/config`); this repository holds only the sparse
+`apps/battery-optimizer/files/service-overrides.yaml` (every leaf has a comment saying why it is
+site-specific). A version bump therefore changes one line and production values cannot be overwritten.
 
-**⚠️ Critical: Preserve site-specific overrides**
+- **Bump the image tag only** (`tag: X.Y.Z@sha256:...` in `values.yaml`). Never copy config files from
+  the app repository.
+- **A production value goes in `service-overrides.yaml`**, as the one leaf that differs from the base.
+  `scripts/validate-battery-optimizer-config.sh` (pre-commit) pins the current leaves and fails if a
+  `service.yaml` is vendored back into `files/`.
+- **Before merging a bump**, check the overrides against the new image:
 
-The app repository's `config/service.yaml` is a **development template** with safe defaults. The
-homelab deployment has **production overrides** that must be preserved:
+  ```bash
+  docker run --rm -v $PWD/apps/battery-optimizer/files/service-overrides.yaml:/o.yaml:ro \
+    ghcr.io/pando85/battery-optimizer:<tag> service-config --overrides /o.yaml
+  ```
 
-| Setting | Template default | Production value | Notes |
-|---------|------------------|------------------|-------|
-| `mode` | `shadow` | `live` | Battery control mode |
-| `climate_shadow.enabled` | `false` | `true` | Climate tracking |
-| `climate_shadow.prior` | `null` | `"2311c010392f"` | Site-specific prior ID |
-| `climate_shadow.optimizer_mode` | `"off"` | `"shadow"` | Advisory climate plan |
-| `planning.high_soc_cost_eur_per_kwh_h` | `0.0` | `0.01` | High-SOC dwell cost |
-| `planning.charge_soft_cap_eur_per_kwh` | `0.0` | `0.005` | Thermal soft cap on charge power |
-| `planning.discharge_margin_bound` | `false` | `true` | Bound planned discharge by load minus margin |
-| `planning.thermal.mode` | `"off"` | `shadow` | Read-only thermal state |
-| `actuation.load_following.enabled` / `max_w` | `false` / `null` | `true` / `2500` | Load-following discharge |
-| `full_charge.enabled` | `false` | `true` | Periodic full charge (`mode` stays `shadow`) |
-
-`scripts/validate-battery-optimizer-config.sh` (pre-commit) fails if any value in this table regresses.
+  It prints the applied overrides and the effective `config_hash`, and exits 1 on an error.
+- **The service refuses to start on an override key the new version renamed or removed.** Read the
+  release notes of every version you skip over.
 
 **Config change log:**
 
 | Date | Change |
 |------|--------|
-| 2026-11-11 | The `planning.*`, `thermal.mode`, `load_following` and `full_charge.enabled` values above were reverted to template defaults by the 0.16.0 re-vendor (2026-11-08 to 2026-11-11); restored on 2026-11-11 (owner request). `climate_shadow` was restored earlier. |
-
-**Re-vendoring checklist:**
-
-1. **Diff the template**: Compare `~/home-energy-optimizer/config/service.yaml` with the current
-   `apps/battery-optimizer/files/service.yaml` to identify new features or sections.
-
-2. **Merge, don't overwrite**: Copy only new features, comments, and structural changes. **Never
-   copy the entire file** — this overwrites production overrides.
-
-3. **Verify critical values**: After merging, confirm the production overrides above are intact:
-   ```bash
-   grep -A 5 "^climate_shadow:" apps/battery-optimizer/files/service.yaml
-   ```
-
-4. **Test locally**: Render the Helm chart and verify the ConfigMap:
-   ```bash
-   helm dependency build apps/battery-optimizer/
-   helm template --include-crds --namespace battery-optimizer battery-optimizer apps/battery-optimizer/ | \
-     grep -A 10 "climate_shadow:"
-   ```
-
-5. **Commit with explicit message**: Document which values were preserved vs. copied from the template.
-
-**Example of a correct re-vendor commit:**
-
-```
-feat(battery-optimizer): Deploy v0.17.0 with new feature
-
-- Update image to 0.17.0@sha256:...
-- Re-vendor config: add new_feature section from template
-- Preserve production overrides: mode=live, climate_shadow enabled with prior 2311c010392f
-- New feature configuration: ...
-```
-
-**Example of an incorrect re-vendor commit (what NOT to do):**
-
-```
-feat(battery-optimizer): Deploy v0.16.0 with reserve protection
-
-- Re-vendor config files from app repo (preserve mode: live)
-```
-
-This commit message says "preserve mode: live" but does not mention climate_shadow, which was
-accidentally reverted to template defaults, disabling climate tracking for 2 days.
+| 2026-11-11 | The `planning.*`, `thermal.mode`, `load_following` and `full_charge.enabled` values were reverted to template defaults by the 0.16.0 re-vendor (2026-11-08 to 2026-11-11); restored on 2026-11-11 (owner request). `climate_shadow` was restored earlier. |
+| 2026-11-11 | Moved to the overrides mechanism (0.17.0): `files/service.yaml`, `tariff.yaml`, `climate.yaml` and `climate-mpc.yaml` are gone, the image's copies are the base. Effective `config_hash` unchanged (`2dc9ff4b88f5`). |
 
 ## App Repository Notes
 

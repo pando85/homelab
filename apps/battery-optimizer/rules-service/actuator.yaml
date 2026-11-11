@@ -131,7 +131,7 @@
       discharge into the house without exporting. Likely causes: actuation.discharge_margin_w too
       small, Omnibattery PD loop oscillation, the battery holding a discharge while Home Assistant
       is down, a sudden load drop. First check the Battery dashboard, actuation.discharge_margin_w in
-      files/service.yaml and the input_boolean.battery_optimizer_live kill switch.
+      the service config and the input_boolean.battery_optimizer_live kill switch.
 - alert: BatteryGridExportSustained
   # More than 10 Wh in 15 minutes is about 40 W of average export: the control loop is not holding.
   expr: |
@@ -144,5 +144,5 @@
     summary: the battery is exporting to the grid, the control loop is not holding
     description: |
       The grid export counter rose by {{ $value | humanize }} kWh in 15 minutes (over 40 W average).
-      Check the Battery dashboard, actuation.discharge_margin_w in files/service.yaml and, if the
+      Check the Battery dashboard, actuation.discharge_margin_w in the service config and, if the
       export continues, turn input_boolean.battery_optimizer_live off to hand control back.

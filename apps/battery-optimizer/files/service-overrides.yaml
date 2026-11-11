@@ -1,0 +1,36 @@
+# Site-specific values only. The base is /app/config/service.yaml inside the image; the service
+# deep-merges this file over it (BATTERY_OPTIMIZER_SERVICE_CONFIG_OVERRIDES). Never copy the base
+# here: a version bump changes only the image tag. Every key path below must exist in the base.
+
+# Live battery control for this installation (the base default is shadow). Rendering requires
+# global.liveHomeAssistantToken: true, see templates/external-secret.yaml.
+mode: live
+
+planning:
+  # Owner-tuned dwell cost at high SOC (base default 0.0).
+  high_soc_cost_eur_per_kwh_h: 0.01
+  # Owner-tuned soft cap on charge power (base default 0.0).
+  charge_soft_cap_eur_per_kwh: 0.005
+  # Bound planned discharge by load minus margin (base default false).
+  discharge_margin_bound: true
+  thermal:
+    # Read-only thermal state for this house (base default "off").
+    mode: shadow
+
+actuation:
+  load_following:
+    # Load-following discharge, capped to this installation's inverter limit (base: false / null).
+    enabled: true
+    max_w: 2500
+
+full_charge:
+  # Periodic full charge for this battery; full_charge.mode stays at the base value.
+  enabled: true
+
+climate_shadow:
+  # Climate shadow runs for this house (base default false).
+  enabled: true
+  # Site-specific calibration prior of this house (base default null).
+  prior: "2311c010392f"
+  # Advisory climate plan (base default "off").
+  optimizer_mode: "shadow"
