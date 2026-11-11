@@ -307,3 +307,24 @@ The owner rolled back to v5 at about 22:40Z (v6 felt like more false wakes). Cha
 - Data fixes kept: 1a (hard-negative ASR flags), 1b (2 mis-cut live positives, 5 live_hard clips, 2 real takes, flagged
   TTS voices), 1c (room-negative ASR flags, all non-`none` flags), the retry filter on room windows and on the hard
   negatives (live wake / stt-only within 30 s, miss candidate within 6 s), all mined only on 2026-11-05/-06/-08.
+
+### v6.2 amendment 3 (2026-11-12, about 00:05 Madrid; before v6.2 training, no 2026-11-12 audio read)
+
+Grouped 5-fold out-of-fold flags (`quality/oof_flags_*.csv`), applied as "OOF + ASR" where an ASR check exists:
+- real positives: the 7 OOF-flagged real items (pc-mic 4, webcam 2, one live clip) are KEPT, because the ASR check
+  supports the phrase in every one of them (strict hotword match); their OOF failure is not a label error;
+- real negatives (prompted near-word takes, live false wakes) are KEPT: they are the confusers C2 rests on; room
+  negatives are covered by the 1c ASR flags (already dropped);
+- synthetic positives with an OOF median below 0.01 are dropped (2,435 isolated and 208 context windows, after the voice
+  filter); synthetic negatives that a held-out fold accepts at the v6-matched operating point (n_above_fold_thr >= 1)
+  are dropped (near_train 651, confusers-in-sentences 423, same-clip negatives 6 windows).
+Resulting v6.2 inputs: isolated synthetic positives 36,151; context positives 6,834; near_train 59,314; context
+confusers 9,097; live positives 600 / 450 / 300 (spk01 / spk02 / unknown); live hard 2,700; live same-clip negatives 750;
+real takes rebuilt from 228 of 232 takes (120 copies); hard negatives v6 99, v5 3,319; room windows 247,647.
+
+Mis-cut live positives (the two stt-path clips): their windows score a median raw 0.981 on v5, which never trained on
+them, and 0.997 on v6 (good windows: 0.930 / 0.996). The windows were cut in stt.wav at the replay peak next to the
+phrase's word timestamp, which matches the report that the phrase sits 1.0-1.6 s into the request, so they very likely
+do hold the phrase. At 300 of 424 x 4000 sampled positives (about 1.3 % of the positive stream) they are an unlikely
+explanation of v6's extra room false wakes; the lower threshold (0.9595 against v5's 0.9754) and the high-scoring
+evening events are the plain explanation. They are dropped anyway, as decided.

@@ -103,8 +103,41 @@ def cmd_filter_takes(src, out):
     print(out, int(keep.sum()), "of", n, "takes kept")
 
 
+def cmd_oof():
+    """Grouped 5-fold out-of-fold flags (quality/oof_flags_*.csv). Real positives and real negatives are kept: the ASR
+    check supports the phrase in every OOF-flagged real positive, and the real near-word takes are the confusers C2
+    needs. Synthetic positives with an OOF median below 0.01 and synthetic negatives that a held-out fold accepts at the
+    v6-matched operating point (n_above_fold_thr >= 1) are dropped (unintelligible or target-like renderings)."""
+    Q = W / "v6p2/feat"
+    pos = {(r["source"], r["item"]) for r in csv.DictReader(open(W / "quality/oof_flags_pos.csv", encoding="utf-8"))
+           if r["flag"] == "1" and float(r["oof_median"]) < 0.01}
+    neg = {(r["source"], r["item"]) for r in csv.DictReader(open(W / "quality/oof_flags_neg.csv", encoding="utf-8"))
+           if int(r["n_above_fold_thr"] or 0) >= 1}
+    n = {}
+    files = (Q / "pos_train.npy.files.txt").read_text().split()
+    X = np.load(Q / "pos_train.npy")
+    m = np.array([("pos_train", f) not in pos for f in files])
+    save(Q / "pos_train.npy", X[m])
+    (Q / "pos_train.npy.files.txt").write_text("\n".join(f for f, k in zip(files, m) if k) + "\n")
+    n["pos_train"] = int((~m).sum())
+    n["ctxp_syn_pos_tr"] = filter_by_source(Q / "ctxp_syn_pos_tr.npy", lambda s: ("ctxp_syn_pos", s) not in pos,
+                                            Q / "ctxp_syn_pos_tr.npy")
+    files = (W / "v6/feat/near_train.npy.files.txt").read_text().split()
+    X = np.load(W / "v6/feat/near_train.npy")
+    m = np.array([("near_train", f) not in neg for f in files])
+    save(Q / "near_train.npy", X[m])
+    n["near_train"] = int((~m).sum())
+    n["ctxn_syn_conf"] = filter_by_source(W / "v6/feat/ctxn_syn_conf.npy", lambda s: ("ctxn_syn_conf", s) not in neg,
+                                          Q / "ctxn_syn_conf.npy")
+    n["ctxp_syn_negpart"] = filter_by_source(W / "v6/feat/ctxp_syn_negpart.npy", lambda s: ("ctxp_syn_negpart", s) not in neg,
+                                             Q / "ctxp_syn_negpart.npy")
+    print(n, "windows dropped by the OOF rule")
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "arrays":
         cmd_arrays()
+    elif sys.argv[1] == "oof":
+        cmd_oof()
     elif sys.argv[1] == "filter-takes":
         cmd_filter_takes(sys.argv[3], sys.argv[5])
