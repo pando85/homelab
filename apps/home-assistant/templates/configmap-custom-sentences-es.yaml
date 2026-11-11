@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: home-assistant-config-custom-sentences-es
+data:
+# this removes subdirectories hiterarchy
+{{ (.Files.Glob "config/custom_sentences/es/*").AsConfig | indent 2 }}

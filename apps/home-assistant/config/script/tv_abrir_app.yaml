@@ -1,0 +1,164 @@
+tv_abrir_app:
+  alias: TV abrir app
+  icon: mdi:television-play
+  description: >-
+    Abre una aplicación (por ejemplo YouTube, Netflix o Prime Video) en una tele LG de la casa
+    (Open an app on an LG TV). Si no se indica la tele se usa la de la habitación del satélite de voz
+    que ha oído la orden. Devuelve un estado: ok (app abierta), ask_tv (falta saber en qué tele),
+    no_tv (no hay tele en esa habitación), tv_unavailable (la tele no responde), no_app (esa tele
+    no tiene esa app), tv_off (no se ha podido encender la tele). Si la tele está apagada, la enciende
+    primero.
+  # queued with max 1: a second command that arrives while the first one still waits for the TV to
+  # power on (up to 10 s) runs after it, in the order spoken, instead of being dropped (mode single
+  # would drop it and the caller would get no response). One waiting run at most; a third is dropped.
+  mode: queued
+  max: 1
+  fields:
+    app:
+      name: Aplicación
+      description: >-
+        Título de la aplicación a abrir, por ejemplo YouTube, Netflix, Prime Video, Disney+.
+        No distingue mayúsculas.
+      required: true
+      example: YouTube
+      selector:
+        select:
+          options:
+            - YouTube
+            - YouTube AdFree
+            - Netflix
+            - Prime Video
+            - Disney+
+            - Apple TV
+            - Movistar Plus+
+            - SkyShowtime
+            - Rakuten TV
+            - RTVE.es Play
+            - "Spotify – Música y podcasts"
+            - Twitch
+            - Jellyfin
+            - Moonlight
+            - RetroArch
+            - Navegador web
+            - Reproductor multimedia
+    tv:
+      name: Tele
+      description: >-
+        Nombre del área de la tele, como en Home Assistant (nombre o alias), por ejemplo salón o
+        oficina grande. Déjalo vacío para usar la habitación del satélite que ha oído la orden.
+      required: false
+      example: salón
+      selector:
+        text:
+    area_id:
+      name: Área del satélite (interno)
+      description: >-
+        Uso interno de la ruta de voz (identificador del área del satélite que ha oído la orden).
+        No lo rellenes a mano ni desde un asistente de IA; usa tv.
+      required: false
+      selector:
+        text:
+  sequence:
+    - alias: Resolve the TV and the app
+      variables:
+        app_in: "{{ app | default('', true) | string | trim }}"
+        app_l: "{{ app_in | lower }}"
+        # tv wins over the satellite's area. area_entities() takes an area id, name or alias.
+        ref: >-
+          {{ (tv | default('', true) | string | trim)
+             or (area_id | default('', true) | string | trim) }}
+        ents: "{{ area_entities(ref) | list if ref else [] }}"
+        sel: >-
+          {{ ents | select('match', '^select[.].+_tv_app$') | list | first | default('', true) }}
+        options: "{{ (state_attr(sel, 'options') or []) if sel else [] }}"
+        lower_options: "{{ options | map('lower') | list }}"
+        idx: "{{ lower_options.index(app_l) if app_l in lower_options else -1 }}"
+        exact: "{{ options[idx] if idx >= 0 and options[idx] != 'Other' else '' }}"
+        # Fallback: a unique option that starts with what was asked ("YouTube" -> "YouTube AdFree").
+        cands: >-
+          {%- set ns = namespace(c=[]) -%}
+          {%- for o in options if o != 'Other' and app_l | length >= 3 and (o | lower).startswith(app_l) -%}
+          {%- set ns.c = ns.c + [o] -%}
+          {%- endfor -%}
+          {{ ns.c }}
+        matched: "{{ exact or (cands[0] if cands | length == 1 else '') }}"
+        # The TV media player is a sibling entity of the same device (the satellite device also has a
+        # speaker media player that does not end in _tv).
+        mp: >-
+          {{ (device_entities(device_id(sel)) | select('match', '^media_player[.].+_tv$') | list
+              | first | default('', true)) if sel else '' }}
+        area_label: "{{ (area_name(sel) if sel else '') or ref }}"
+    - alias: No TV named and no satellite area
+      if: "{{ ref == '' }}"
+      then:
+        - variables:
+            result:
+              status: ask_tv
+              app: "{{ app_in }}"
+              area: ""
+        - stop: No TV named and the request has no satellite area
+          response_variable: result
+    - alias: No TV app select in that area
+      if: "{{ sel == '' }}"
+      then:
+        - variables:
+            result:
+              status: no_tv
+              app: "{{ app_in }}"
+              area: "{{ area_label }}"
+        - stop: No TV with a TV app select in that area
+          response_variable: result
+    - alias: The TV daemon is unavailable
+      if: "{{ is_state(sel, 'unavailable') }}"
+      then:
+        - variables:
+            result:
+              status: tv_unavailable
+              app: "{{ app_in }}"
+              area: "{{ area_label }}"
+        - stop: The TV app select is unavailable
+          response_variable: result
+    - alias: The TV has no such app (never "Other")
+      if: "{{ matched == '' }}"
+      then:
+        - variables:
+            result:
+              status: no_app
+              app: "{{ app_in }}"
+              area: "{{ area_label }}"
+        - stop: The TV does not list that app
+          response_variable: result
+    - alias: Turn the TV on if it is off
+      if: "{{ mp != '' and is_state(mp, 'off') }}"
+      then:
+        - action: media_player.turn_on
+          target:
+            entity_id: "{{ mp }}"
+        - wait_template: "{{ not is_state(mp, 'off') }}"
+          timeout: "00:00:10"
+          continue_on_timeout: true
+        - if: "{{ is_state(mp, 'off') }}"
+          then:
+            - variables:
+                result:
+                  status: tv_off
+                  app: "{{ matched }}"
+                  area: "{{ area_label }}"
+            - stop: The TV did not turn on within 10 s
+              response_variable: result
+        # UNVERIFIED guess: give a TV that just left standby a moment before the launch. Tune or
+        # remove after the first test on the real TVs.
+        - delay: "00:00:03"
+    - alias: Open the app (the satellite allows one launch per 2 s)
+      action: select.select_option
+      target:
+        entity_id: "{{ sel }}"
+      data:
+        option: "{{ matched }}"
+    - variables:
+        result:
+          status: ok
+          app: "{{ matched }}"
+          area: "{{ area_label }}"
+    - stop: App launch requested
+      response_variable: result

@@ -1,0 +1,65 @@
+# "Abre YouTube [en la tele del salón]": opens an app on an LG webOS TV through the voice
+# satellite's "TV app" select entity (script.tv_abrir_app, wired up by integrations/tv_open_app.yaml).
+#
+# THE {app} LIST IS A STARTING POINT. Tune it to the apps you really use and to the way Whisper
+# spells them (add "in" spellings, drop apps you never say). Keep it a CLOSED list: once any custom
+# sentence matches, Home Assistant discards every built-in match, so a wildcard here would hijack
+# "abre la persiana" or "pon música de Queen". "out" must be the exact option title of the select
+# (the script also accepts a unique prefix, e.g. "YouTube" for "YouTube AdFree"). Never list "Other".
+#
+# Not listed on purpose (system, launcher or technical entries, or common words): Apps, LG Channels,
+# LG Input Hook, Centro de hogar, Alertas de deportes, Galería de arte, Homebrew Channel, PicCap,
+# HyperHDR, Life's Good Without Spying, IHSplay, CCCBib, THE CHESS, Pinball, RetroArch 2,
+# Subsonic Player, Amazon Alexa, LG Movies & TV, LG Gaming Portal, LG Radio+, LG Sports Playbook,
+# Copilot, 8 Ball Pool.
+#
+# Area names come from Home Assistant's area registry (names and aliases). A spoken area that is not
+# an alias ("la oficina") does not match: add the alias in the area settings.
+language: es
+expansion_rules:
+  abrir: "(abre|abrir|pon|ponme|lanza|inicia)"
+  # "en la tele del salón", "en el salón", "en la tele", "salón": every part is optional.
+  donde: "[en [la|el] (tele|tv|televisión|televisor)] [[(en el|en la|en|del|de la|de)] {area}]"
+intents:
+  TvOpenApp:
+    data:
+      - sentences:
+          - "<abrir> {app} <donde> [por favor]"
+          - "quiero (ver|abrir|poner) {app} <donde> [por favor]"
+lists:
+  app:
+    values:
+      - in: "(youtube|you tube)"
+        out: "YouTube"
+      - in: "(youtube adfree|youtube ad free|youtube sin anuncios|youtube sin publicidad)"
+        out: "YouTube AdFree"
+      - in: "netflix"
+        out: "Netflix"
+      - in: "[amazon] prime [video]"
+        out: "Prime Video"
+      - in: "(disney|disney plus|disney+)"
+        out: "Disney+"
+      - in: "apple tv"
+        out: "Apple TV"
+      - in: "(movistar|movistar plus|movistar+)"
+        out: "Movistar Plus+"
+      - in: "(skyshowtime|sky showtime)"
+        out: "SkyShowtime"
+      - in: "rakuten [tv]"
+        out: "Rakuten TV"
+      - in: "rtve [play]"
+        out: "RTVE.es Play"
+      - in: "spotify"
+        out: "Spotify – Música y podcasts"
+      - in: "twitch"
+        out: "Twitch"
+      - in: "jellyfin"
+        out: "Jellyfin"
+      - in: "moonlight"
+        out: "Moonlight"
+      - in: "retroarch"
+        out: "RetroArch"
+      - in: "[el] navegador [web]"
+        out: "Navegador web"
+      - in: "[el] reproductor multimedia"
+        out: "Reproductor multimedia"

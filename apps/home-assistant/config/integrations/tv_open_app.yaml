@@ -1,0 +1,48 @@
+# Voice command "abre YouTube [en la tele del salón]" -> script.tv_abrir_app.
+# Sentences: config/custom_sentences/es/tv_open_app.yaml (mounted per file, see values.yaml).
+# The spoken area (slot "area") wins over the area of the satellite that heard the request
+# (preferred_area_id). The intent has no description on purpose: with one, Home Assistant also
+# offers it to LLM agents as a tool next to the script.
+intent_script:
+  TvOpenApp:
+    action:
+      - action: script.tv_abrir_app
+        data:
+          app: "{{ app }}"
+          tv: "{{ area | default('') }}"
+          area_id: "{{ preferred_area_id | default('') }}"
+        response_variable: res
+      - stop: Done
+        response_variable: res
+    speech:
+      text: >-
+        {%- set r = action_response | default({}) -%}
+        {%- set st = r.status | default('') -%}
+        {%- set a = (area | default('')) | trim -%}
+        {#- Article for the spoken area (heuristic): "salón" -> del / en el, "oficina grande" -> de la / en la,
+            a capitalised alias such as "Casa Norte" -> de / en. -#}
+        {%- set w = (a.split(' ')[0] | lower) if a else '' -%}
+        {%- if not a -%}
+          {%- set de = '' -%}{%- set en = '' -%}
+        {%- elif a[0] != a[0] | lower -%}
+          {%- set de = 'de ' ~ a -%}{%- set en = 'en ' ~ a -%}
+        {%- elif w.endswith('a') or w.endswith('ión') -%}
+          {%- set de = 'de la ' ~ a -%}{%- set en = 'en la ' ~ a -%}
+        {%- else -%}
+          {%- set de = 'del ' ~ a -%}{%- set en = 'en el ' ~ a -%}
+        {%- endif -%}
+        {%- if st == 'ok' -%}
+          Abriendo {{ app }}{{ ' en la tele ' ~ de if de else '' }}.
+        {%- elif st == 'no_app' -%}
+          No encuentro {{ app }} en esa tele.
+        {%- elif st == 'no_tv' -%}
+          No hay tele {{ en if en else 'en esa habitación' }}.
+        {%- elif st == 'ask_tv' -%}
+          ¿En qué tele? Por ejemplo: abre {{ app }} en la tele del salón.
+        {%- elif st == 'tv_off' -%}
+          No he podido encender la tele.
+        {%- elif st == 'tv_unavailable' -%}
+          La tele no está disponible.
+        {%- else -%}
+          No he podido abrir {{ app }}.
+        {%- endif -%}

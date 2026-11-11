@@ -512,6 +512,21 @@ app-template:
         hass:
           hass:
             - path: /config/gitops/script
+    # Custom sentences (templates/configmap-custom-sentences-es.yaml). Home Assistant reads
+    # /config/custom_sentences/<language>/*.yaml with rglob, and a whole-directory ConfigMap mount
+    # holds the kubelet's hidden ..data directory (every file would load twice), so each file is
+    # mounted by itself with subPath. A subPath mount does not live-update: the reloader restart on a
+    # ConfigMap change is what applies an edit. A new file needs a matching entry here.
+    custom-sentences-es-tv-open-app:
+      enabled: true
+      type: configMap
+      name: home-assistant-config-custom-sentences-es
+      advancedMounts:
+        hass:
+          hass:
+            - path: /config/custom_sentences/es/tv_open_app.yaml
+              subPath: tv_open_app.yaml
+              readOnly: true
     appdaemon:
       enabled: true
       type: configMap
