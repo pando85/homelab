@@ -1,19 +1,18 @@
 # sccache S3 observability plan
 
-**Status (2026-11-10): homelab parts implemented locally, pending push and ArgoCD sync; client-side
-stats pending a Calypso change.** Implemented in `platform/minio/`: `templates/probe-bucket.yaml`
-(job `minio-bucket`, 60s, 36 series after relabelling, `inflight` and TTFB dropped), alerts in
-`templates/prometheus-rules.yaml` + `rules/sccache.yaml` (`SccacheBucketUsageHigh`,
-`SccacheBucketUsageCritical`, `SccacheBucketFullIn24h`, `SccachePutRejections`,
-`SccacheLifecycleNotExpiring`; quota read from `minio_bucket_quota_total_bytes`, nothing hardcoded)
-and `dashboards/sccache.json` (dashboard "sccache S3", uid `sccache-s3`). Differences from the
-sketches below: alert names/severities as listed (PUT rejections is a warning on rate > 0 for 30m,
-lifecycle is `info`: lowest usage of the last 7d above the highest usage 8d ago, inert until 9 days
-of series history exist); the live quota already reads 214,748,364,800, so the quota caveat in
-section 1 no longer applies; TTFB panels use the cluster-wide `minio_s3_requests_ttfb_seconds_distribution`
-(per api), not a per-bucket one. Not verified until deployed: the new series themselves, `up{job="minio-bucket"}`,
-`promtool check rules` (not installed here; expressions were syntax-checked against live Prometheus
-with substituted metrics). Section 3 (client side) and dashboard panel 6 remain open.
+**Status (2026-11-11): fully deployed.** Homelab parts pushed and synced 2026-11-10 (ArgoCD minio
+Synced/Healthy). Client side shipped in Calypso commit c99a1901 (2026-11-10, PR #2877), verified
+live 2026-11-11 (10 job lines/24h, 0 write errors). Implemented in `platform/minio/`:
+`templates/probe-bucket.yaml` (job `minio-bucket`, 60s, 36 series after relabelling, `inflight` and
+TTFB dropped), alerts in `templates/prometheus-rules.yaml` + `rules/sccache.yaml`
+(`SccacheBucketUsageHigh`, `SccacheBucketUsageCritical`, `SccacheBucketFullIn24h`,
+`SccachePutRejections`, `SccacheLifecycleNotExpiring`; quota read from
+`minio_bucket_quota_total_bytes`, nothing hardcoded) and `dashboards/sccache.json` (dashboard
+"sccache S3", uid `sccache-s3`, panels 20–26 wired to live Loki SCCACHE_STATS). Differences from
+the sketches below: alert names/severities as listed (PUT rejections is a warning on rate > 0 for
+30m, lifecycle is `info`: lowest usage of the last 7d above the highest usage 8d ago, inert until 9
+days of series history exist); TTFB panels use the cluster-wide
+`minio_s3_requests_ttfb_seconds_distribution` (per api), not a per-bucket one.
 
 Original status: plan only. Prepared 2026-11-10 from read-only checks (kubectl
 get/exec-curl on the MinIO pod, Prometheus and Loki via Grafana). Background:
@@ -51,9 +50,8 @@ Verified on this build (`pgsty/silo:RELEASE.2026-10-26`), from inside the pod:
   distributions. Use `metricRelabelings` to `keep` only
   `minio_bucket_(usage_total_bytes|usage_object_total|quota_total_bytes|requests_total|requests_4xx_errors_total|requests_inflight_total|traffic_.*)`
   (about 25 series, all buckets) and, optionally, TTFB for `bucket="sccache"` only (~100 series).
-- Caveat: the live quota series reads 50 GiB (53,687,091,200) because commit 91bc10afb (100 GiB)
-  is not pushed or synced yet; usage is already 54.3 GB. Alerts below would fire immediately if
-  rolled out before that sync.
+- Quota is now 200 GiB, pushed and synced (commit 12ccf6cf9); live usage 62.3 GiB / 31% as of
+  2026-11-11.
 
 ## 2. Alerts
 
@@ -79,8 +77,8 @@ runbook text pointing at the troubleshooting doc in `annotations.description`.
 ## 3. Client-side stats (per-level hits, misses, L1 writes, errors)
 
 Job step output is not in Loki; runner container stdout is (labels `namespace="ci-runners"`,
-`container="runner"`, via Vector). All options need a Calypso change in
-`.forgejo/actions/sccache-setup/action.yml` (and a post step) to emit one line at job end:
+`container="runner"`, via Vector). Option A is implemented and live: Calypso commit c99a1901
+(PR #2877) emits one `SCCACHE_STATS {json}` line per job to the runner container stdout at job end:
 `SCCACHE_STATS {"job":...,"runner":...,"workflow":...,"l0_hits":...,"l1_hits":...,"misses":...,"l1_writes":...,"errors":...}`
 built from `sccache --show-stats --stats-format json`.
 
@@ -111,24 +109,55 @@ or use a second ConfigMap). Panels:
 
 ## 5. Rollout, validation, approvals
 
-1. After the 200 GiB quota commit is pushed and synced (owner approval), confirm
-   `minio_bucket_quota_total_bytes{bucket="sccache"}` reads 214,748,364,800.
-2. Commit the Probe, then the rules and dashboard in `platform/minio/` (one commit each, scope
-   `minio`). Push needs owner approval; ArgoCD does the apply. Validate: `helm template
-   --include-crds platform/minio`, `pre-commit run`, then target `up{job="minio-bucket"}`, series
-   count (about 25-125), usage vs `du -sb /export/sccache`, and a `promtool`-style dry check of rules.
-3. Test alert expressions against live data in Grafana Explore before enabling `for:` durations.
-4. Calypso change for `SCCACHE_STATS` (option A): owner-approved change in the Calypso repo,
-   verified on one Validation job (line appears in Loki with `{container="runner"}`), then panel 6.
-   If `/proc/1/fd/1` is not writable from jobs, fall back to option B.
+1. Quota is 200 GiB, pushed and synced. `minio_bucket_quota_total_bytes{bucket="sccache"}` reads
+   214,748,364,800.
+2. Probe, rules and dashboard in `platform/minio/` committed, pushed, ArgoCD-synced.
+3. Alert expressions tested against live data in Grafana Explore before enabling `for:` durations.
+4. Calypso change for `SCCACHE_STATS` (option A) shipped in commit c99a1901 (PR #2877, 2026-11-10),
+   verified live 2026-11-11 (10 jobs/24h, 0 write errors). Dashboard panels 20–26 wired to Loki.
 5. After the lifecycle value is chosen (separate work), re-check the lifecycle alert threshold.
 
 Owner approval needed: pushes, ArgoCD syncs, any Calypso change. Not needed: read-only checks.
 
 ## Unverified
 
-- Writing to the runner container stdout from host-mode job steps (option A).
 - JSON fields of `sccache --show-stats --stats-format json` per level on the pinned 0.19.0 build.
 - Forgejo job-log REST availability (option C), `minio_bucket_*` scrape load on MinIO (small by
   size, not measured), Probe `?target=` query param being ignored by the bucket endpoint (it is by
   the cluster endpoint today).
+
+## Remaining gaps (2026-11-11)
+
+1. **Container jobs not in Loki.** Container jobs (e.g. `forkline-cli-release.yml` `build-unix`)
+   emit SCCACHE_STATS to the job log but skip the Loki copy (`/.dockerenv` branch in the action).
+   A Calypso change is planned so ALL sccache jobs reach Loki (mechanism under evaluation: direct
+   Loki push vs pushgateway).
+2. **No client-side alerting yet.** No Loki ruler rules; deferred until the container-job coverage
+   mechanism is chosen.
+3. **`SccacheLifecycleNotExpiring` inert** until ~2026-11-19. The alert needs 8-day-offset history;
+   the series started 2026-11-10T13:07Z.
+
+## Verified LogQL pipeline
+
+The base pipeline for extracting JSON fields from `SCCACHE_STATS` lines in Loki:
+
+```logql
+{namespace="ci-runners",container="runner"} |= "SCCACHE_STATS"
+| regexp "SCCACHE_STATS (?P<payload>.+)"
+| regexp "\"job\":\"(?P<ci_job>[^\"]+)\""
+| line_format "{{.payload}}"
+| json
+```
+
+Two pitfalls that broke naive approaches:
+
+1. **Plain `| json` extracts nothing.** The line has the prefix `SCCACHE_STATS ` before the JSON
+   object, so the json parser sees invalid input. The first `regexp` strips the prefix into a
+   `payload` capture, then `line_format` replaces the line with just the JSON before `| json`.
+2. **The JSON field `job` collides with the Loki stream label `job`.** The json parser drops it
+   silently. Extract it via a second `regexp` as `ci_job` before the json stage.
+
+After the pipeline, available JSON fields: `v`, `repo`, `workflow`, `ci_job` (from regexp),
+`run_id`, `event`, `ref`, `runner`, `slot`, `mode`, `s3_write_mode`, `normalize_paths`,
+`compile_requests`, `l0_hits`, `l1_hits`, `hits_total`, `misses`, `l1_writes`,
+`cache_write_errors`, `cache_read_errors`. All numeric fields are integers; `null` means absent/N/A.

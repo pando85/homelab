@@ -49,9 +49,21 @@ Alerts (`platform/minio/rules/sccache.yaml`): `SccacheBucketUsageHigh`, `Sccache
 `SccacheBucketFullIn24h`, `SccachePutRejections`, `SccacheLifecycleNotExpiring`. Dashboard: Grafana
 "sccache S3". Design and open work: `planning/sccache-s3-observability.md`.
 
-In a CI job log, check the `L1 (s3) writes` line of the sccache stats: persistent 0 across jobs that
-compiled new crates means S3 writes are failing. Client-side per-level stats are not in Loki yet
-(needs a Calypso change, see the planning doc).
+In Loki, check per-job SCCACHE_STATS lines from the runner container. The verified pipeline is:
+
+```logql
+{namespace="ci-runners",container="runner"} |= "SCCACHE_STATS"
+| regexp "SCCACHE_STATS (?P<payload>.+)"
+| regexp "\"job\":\"(?P<ci_job>[^\"]+)\""
+| line_format "{{.payload}}"
+| json
+```
+
+Healthy: read-write jobs have `l1_writes > 0`, `cache_write_errors = 0`. If `l1_writes` is persistently
+0 across jobs that compiled new crates, S3 writes are failing — compare with the PUT 4xx metric above
+to confirm. See [planning/sccache-s3-observability.md](../../planning/sccache-s3-observability.md)
+for the full pipeline and dashboard queries. Container jobs (e.g. `forkline-cli-release.yml`
+`build-unix`) are not in Loki yet (see the planning doc, "Remaining gaps").
 
 ## Fix / Workaround
 

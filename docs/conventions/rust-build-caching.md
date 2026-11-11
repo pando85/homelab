@@ -128,6 +128,12 @@ UTC midnight after the age is reached), roughly 95 GiB at the average and 145 Gi
 Rule of thumb: quota >= 2 x busy-day GiB x (expiry days + 1). See
 [sccache S3 bucket full](../troubleshooting/sccache-s3-bucket-full-silent.md).
 
+**Live observability (since 2026-11-10):** dashboard `sccache-s3` in Grafana (panels 1–19 Prometheus,
+panels 20–26 Loki), per-job `SCCACHE_STATS` lines in Loki from Calypso commit c99a1901 (PR #2877),
+5 Prometheus alerts in `minio-sccache.rules`. 2026-11-11 spot check: 10 jobs/24h, 0 cache errors,
+per-job hit rates build-rust-binaries ~80%, validation ~38% dragged down by cold runs. See the
+[runbook](../troubleshooting/sccache-s3-bucket-full-silent.md) for the LogQL pipeline.
+
 ## What Cargo and sccache reuse
 
 Cargo and rustc make separate decisions:
