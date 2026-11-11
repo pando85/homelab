@@ -1,12 +1,19 @@
 # Recovery plan: unreliable "oye Kivi" wake word
 
-**Status (2026-11-08): P0-P3 executed; the new candidate is on a one-device trial.** [P0](oye-kivi-p0-baseline.md)
+**Status (2026-11-11): the owner promoted the new candidate to the household pipeline (see the update below); 2026-11-08: P0-P3 executed, the new candidate was on a one-device trial.** [P0](oye-kivi-p0-baseline.md)
 measured the deployed baseline, [P1/P2](oye-kivi-vnext-ablations.md) closed the filter replay and the
 ablations, and P3 ran the gate: **incomplete** — every number the gate can measure passes (room false
 wakes 0.12/h against a 0.25/h budget, 1/54 confuser takes against v4's 10/54, 75 % recall on the held-out
 session against v4's 25 %), and what it cannot measure is real data: one speaker and no `test`-split takes. Per this plan,
 that means **a trial on one device, not promotion**: `oye_kivi_next` `v5-oye-kivi-2026-11-08` is live on
-c3-a since 11:56 UTC, c3-b and the household "Kiwi" pipeline still run v4, and rollback is one command.
+c3-a since 11:56 UTC, c3-b and the household "Kiwi" pipeline still ran v4, and rollback was one command.
+
+**Update 2026-11-11 (owner decision):** `oye_kivi_next` is now the wake word of the preferred pipeline "Kiwi", so
+every satellite runs it; every satellite's pipeline select is `preferred` and the c3-a trial pipeline "oye Kivi"
+is deleted. The owner accepted the gate verdict **incomplete** (recorded as an owner override in the release
+state). This overrides the one-device rule below for this release; the data still missing is the same (a
+`test`-split session on a later day, spk02, ~15 h per device of fresh room exposure), and `demote --version
+v5-oye-kivi-2026-11-08` returns "Kiwi" to v4's `oye_kivi`.
 What is left is data, not modelling: a later-day `--split test` session, spk02, and ~15 h per device of
 fresh room exposure. Source of measured baselines: [v4 experiment](kivi-wake-word.md#v4-oye-kivi-2026-11-07-candidate-not-deployed), [promotion and rollback](kivi-wake-word.md#promotion-to-the-household-wake-word-2026-11-07-1959-utc), and [model registry](../model-registry.md).
 

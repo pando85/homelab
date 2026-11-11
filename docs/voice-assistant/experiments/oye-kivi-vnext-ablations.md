@@ -3,10 +3,10 @@
 Source: [recovery plan](oye-kivi-recovery.md) P1 (source attribution) and P2 (candidates), run ahead of
 schedule because the real recordings arrived the same morning, plus the first room evidence for P3.
 Follows the [P0 real-voice baseline](oye-kivi-p0-baseline.md). Everything ran offline on the workstation
-(`/work/workspaces/kivi-wakeword/vnext/`). The result of this note **is now deployed on one TV**: the
-chosen head is `h_c120_w64`, released as `oye_kivi_next` `v5-oye-kivi-2026-11-08` and trialling on c3-a
-([Deployment](#deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv)); the rest of the household is
-untouched.
+(`/work/workspaces/kivi-wakeword/vnext/`). The result of this note **is deployed**: the
+chosen head is `h_c120_w64`, released as `oye_kivi_next` `v5-oye-kivi-2026-11-08`, trialled on c3-a from
+2026-11-08 and, by the owner's decision of 2026-11-11, the wake word of the household pipeline "Kiwi" for
+every satellite ([Deployment](#deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv)).
 
 **Bottom line:** consented real positive takes move recall on *unseen* real takes from 25 % to 75 % on the
 satellite at a *lower* measured room false-wake rate (0.12/h against 0.96/h), and the real confuser takes
@@ -14,7 +14,7 @@ drop from 10/54 to 1/54 (0/54 for `rn_rp_h`, the head that got closest on synthe
 filter helps (the model was the problem), and more augmentation of the
 same 40 cues does nothing — the next improvement has to come from new recordings: a `test`-split session on
 a later day, spk02, and ~15 h per device of fresh room exposure. The head that shows this (`h_c120_w64`)
-is released as `oye_kivi_next` `v5-oye-kivi-2026-11-08` and trialling on one TV.
+is released as `oye_kivi_next` `v5-oye-kivi-2026-11-08`, the household wake word since 2026-11-11.
 
 ## Arms
 
@@ -203,9 +203,17 @@ run checked). The release state keeps the score and gate JSON:
 - **New id, not an overwrite.** v4's `oye_kivi` file is still served: the household pipeline "Kiwi" keeps
   `oye_kivi`, and the recovery plan's rule for a gate that does not pass — trial on one device — is only
   possible because the candidate has its own id. A trial pipeline "oye Kivi" (a copy of the preferred
-  one, wake word `oye_kivi_next`) is live on **c3-a only** since 2026-11-08 11:56 UTC; c3-b is unchanged.
-- **Rollback**: `wake_release.py rollback --version v5-oye-kivi-2026-11-08 --tv c3-a` (no approval needed).
-  Promotion to both TVs (`promote`) is deliberately not done; it needs the evidence in "Next".
+  one, wake word `oye_kivi_next`) ran on **c3-a only** from 2026-11-08 11:56 UTC.
+- **Household wake word since 2026-11-11 (owner decision).** The owner asked for the latest model on all
+  satellites through the global pipeline and no per-satellite overrides: "Kiwi" (preferred) uses
+  `oye_kivi_next`, both satellites' pipeline selects (both the first and the second select of each) are
+  `preferred`, and the trial pipeline "oye Kivi" no longer exists. The gate stays **incomplete**; the owner's
+  reason is in the release state's `promotion.owner_override`. The change was found live on 2026-11-11 and was
+  recorded afterwards by `promote --previous-wake-word oye_kivi` (no Home Assistant write by the driver). With
+  nothing pointing at a non-preferred pipeline, a Home Assistant restart can no longer restore a select to a
+  trial pipeline (it can only fall back to `preferred`, which is the intended state).
+- **Rollback**: `wake_release.py demote --version v5-oye-kivi-2026-11-08` (no approval needed): "Kiwi" goes
+  back to v4's `oye_kivi`, the previous household wake word. The evidence in "Next" is still missing.
 - **Model card** in kivi-models records the numbers, `notes.md` the caveats; licence notes were re-issued
   for this version because it is the first model here trained on a household member's **positives**.
 - The three dataset sessions were adopted into the release state
@@ -303,9 +311,9 @@ $R enable   --version v5-oye-kivi-2026-11-08 --tv c3-a --yes-owner-approved
    1/54 satellite for the shipped head against 10/54 deployed (0/54 for `rn_rp_h`). Still 2 to 4 takes per
    word per session: repeat the near-word block on a later day, and give "oye kili" more takes in the
    negative pool, since it is the one word that still reaches the trigger.
-5. **Watch the trial** (c3-a): daily glance at the satellite's wake events, and compare against c3-b, which
-   still runs v4 in the same room. If the new model mispredicts in a way the offline numbers did not show,
-   roll back — that is information, not a failure.
+5. **Watch the household deployment** (both satellites since 2026-11-11, so there is no v4 satellite to compare
+   with any more): a daily glance at the wake events of both. If the new model mispredicts in a way the offline
+   numbers did not show, `demote` — that is information, not a failure.
 6. If a *confirmed* false wake ever appears on c3-a, mine it into the real negative pool at confuser weight
    (`--extra-neg <npy>:64:6`) and re-run the head: that is the loop that actually reduces false wakes per
    hour, and it needs no new recordings.

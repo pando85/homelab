@@ -98,9 +98,11 @@ and room sets (`v4/select.sh`) and the real takes (`v3_select.py --real`) separa
 
 ## Live pipeline context
 
-`kivi_extract.py` pre-flight (2026-11-08) shows the preferred Assist pipeline's wake word is now
-`hey_jarvis` (`alexa_v0.1` also present): `oye_kivi` is no longer the household wake word, so
-there is no live false-wake pressure while the retrain runs. The v4 files remain served in the
+A `kivi_extract.py` pre-flight on 2026-11-08 was read as showing the preferred Assist pipeline on
+`hey_jarvis`. **That was not reproduced**: read from Home Assistant on 2026-11-11 (`wake_release.py status`),
+no pipeline uses `hey_jarvis` ("Kiwi", the preferred one, uses `oye_kivi_next` and "Kiwi Test" uses
+`alexa_v0.1`), and the 2026-11-08 trial records show "Kiwi" on `oye_kivi`. Treat the pre-flight line as an
+unverified reading, not as a state of the household pipeline. The v4 files remain served in the
 openwakeword pod (`v4-oye-kivi-2026-11-07`), loaded and available.
 
 ## Conclusions (feeds P1/P2)

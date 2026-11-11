@@ -39,7 +39,7 @@ config), `observed-on-cluster`, `hypothesis`.
 | | VAD filter | `--vad-filter` (Silero) **on since `5690fe717`** (2026-11-07); `--vad-clip` and `--vad-endpointing` off | verified |
 | | `no_speech_threshold`, `log_prob_threshold` | not exposed by the server; faster-whisper defaults 0.6 and -1.0 | documented |
 | openWakeWord (wyoming-openwakeword 2.1.0) | threshold, trigger level, refractory | 0.5, 1, 2 s, **global for every model** | documented, verified |
-| | models | stock `alexa`, plus `kivi` and `oye_kivi` from the private `agil/kivi-models` image; `oye_kivi` is the household wake word since 2026-11-07 | verified ([model registry](model-registry.md)) |
+| | models | stock `alexa`, plus `kivi` and `oye_kivi` from the private `agil/kivi-models` image; `oye_kivi_next` is the household wake word since 2026-11-11 (`oye_kivi` from 2026-11-07) | verified ([model registry](model-registry.md)) |
 | | per-model operating point | only by calibrating the model file so its chosen raw score maps to 0.5 | documented |
 
 ## 3. Verdicts (server side)
@@ -133,7 +133,7 @@ classes:
     satellites: [c3-a, c3-b]
     capture: {mics: 2, used: ch0, rate: 16000}
     on_device: [hpf-120, aec3-b, webrtc-ns, gain+24]   # owned by webos-voice-satellite
-    server: {pipeline: Kiwi, wake_word: oye_kivi, model_version: v4-oye-kivi-2026-11-07}
+    server: {pipeline: Kiwi, wake_word: oye_kivi_next, model_version: v5-oye-kivi-2026-11-08}
     emulation: v2_frontend            # chain used to train the variant
 ```
 
