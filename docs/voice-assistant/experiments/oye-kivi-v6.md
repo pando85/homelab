@@ -368,3 +368,19 @@ and the ablation 21 events. Their union for v5, v6 and the ablation, merged with
 (c3-a 8, c3-b 21): v6 or the ablation only 24, v5 only 4, all three 1. `datasets/real/live-misses/c3_events.csv`
 (shuffled, no model or score), mapping in `/work/workspaces/kivi-wakeword/v6/all/c3_events_mapping.json`
 (`v6_c3_review_table.py`). Owner review: `kivi_live_wakes.py review --table c3_events.csv` (first in the queue above).
+
+### C3 after the owner's blind labels (2026-11-12; pre-registered relabel rule applied)
+
+The owner labelled 24 of the 29 test2-v5era replay windows: attempt 2 (both spk01, c3-a, daytime), other speech 10,
+noise 8, TV / media 4; 5 were skipped and count as unclear, i.e. false wakes. Attempts leave every model's false-wake
+count and count as misses for the models that did not fire on them.
+
+| Model @ raw | events before | labels of its events | false wakes after | evening after (per TV c3-a / c3-b) | missed attempts | C3 (<= v5 + 1, per evening <= 1) |
+| --- | --- | --- | --- | --- | --- | --- |
+| v5 @ 0.9754 | 5 | attempt 1, other speech 2, noise 2 | **4** (c3-a 0, c3-b 4) | 0 (0 / 0) | 1 of 2 | reference |
+| v6 @ 0.9595 | 13 | attempt 2, TV / media 4, other speech 4, unlabelled 3 | **11** (c3-a 5, c3-b 6) | 4 = 2.18 per evening (1 / 3) | 0 of 2 | **FAIL** (11 > 5; evenings) |
+| ablation @ 0.9285 | 21 | attempt 2, other speech 6, noise 6, TV / media 2, unlabelled 5 | **19** (c3-a 5, c3-b 14) | 2 = 1.09 per evening (1 / 1) | 0 of 2 | **FAIL** |
+
+Most of v6's events are real false wakes (other speech, TV, noise), not missed calls: the owner's rollback stands
+justified. For the v6.2 comparison the same labels apply: a v6.2 event within +-2 s of an `attempt` window is not a
+false wake; every other v6.2 event stays one (also when it is not in the table). Reference after the relabel: v5 = 4.
