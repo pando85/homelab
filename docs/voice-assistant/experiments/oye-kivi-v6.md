@@ -196,3 +196,56 @@ or a missed-wake candidate within 6 s.
 
 Reasons (an event can have several): other-event 1,031, miss-candidate 33, live 20, stt-only 8. Nothing else changes: the
 stage-2 rule and the stage-3 gate above stand as written.
+
+### Amendment 2 (2026-11-11, about 23:20 Madrid; before any 2026-11-12 audio is read)
+
+Owner decisions of 23:10: v6 (`oye_kivi_ctx`) is deployed by a separate agent despite C3; a v6.2 is trained overnight
+(pre-registered below). Stages 2 and 3 stay and become the honest confirmation of **the best of v6.1 and v6.2 against
+whatever is live**:
+- Stage 2 applies the stage-2 rule unchanged (threshold per arm on 2026-11-12 against v5's 2026-11-12 count, then the
+  arm by R, same tie-break, with v6.2 arms placed after p1b in the final order) to the v6.1 arms p1a, p1b, p1c AND the
+  v6.2 arms. One candidate comes out.
+- Stage 3 runs the gate on that candidate with the live model as the reference instead of v5 wherever the criteria
+  compare against v5 (C1, C2, C3a, C3b, C4, C5); v5 is still reported. If the live model is v6, C3b's reference is
+  v6's test2-v5era count (13) and C3a's is v6's 2026-11-13 count.
+
+## v6.2 (owner decision 2026-11-11 23:10): PRE-REGISTERED before training and before any 2026-11-12 audio
+
+Recipe = v6.1 (stage 1, after amendment 1) plus the training-data quality fixes of the data-quality agent
+(`/work/workspaces/kivi-wakeword/quality/`, applied as they land; each applied flag set is listed in results.md with
+its counts):
+- hard and room negatives: drop windows with a phrase flag (ASR finds "oye Kivi" / "Kivi" in the window,
+  `hardneg_phrase_flags.csv`) or with retry evidence (amendment 1 rule; room windows within 30 s of a live wake or an
+  stt-only run, or within 6 s of a miss candidate, are dropped too);
+- real positives: drop takes flagged as mis-cut or flubbed; synthetic: drop the voices flagged as unintelligible;
+- drop the high-confidence errors of the grouped 5-fold out-of-fold check that ASR confirms;
+- keep the synthetic context data (it bought C2); the 500 held-out context clips stay held out.
+
+**Threshold data (fixed now): 2026-11-10** (even, both TVs, 47.8 h, 2.0 device-evenings). v6.2 does not train on it:
+its room negative windows and its mined hard negatives come only from 2026-11-05 (grandfathered), -06 and -08
+(the v6.1 arms did use 2026-11-10; v6.2 does not). No 2026-11-12 or 2026-11-13 audio is used.
+
+Threshold rule per arm (tied to v5, stricter than v6's): the lowest raw value t on the grid 0.9000, 0.9005, ..., 0.9995
+such that at t and every grid value above it, on 2026-11-10: (a) total events <= max(E5, 1), E5 = v5's events at raw
+0.9754 on the same audio and framing (embedding pass, `v6p1_select.py`), and (b) per TV, evening events <=
+max(1, round(evening hours / 6)). No such t: the arm is not eligible.
+
+Arms (two, both warm-started from v6 `oye_kivi_ctx`, v6.1 data weights otherwise):
+- `p2a`: v6 hard negatives day 32/step w6, evening 32/step w12, v5 hard negatives 128/step w3 (as p1a)
+- `p2b`: v6 hard negatives day 48/step w12, evening 48/step w24, v5 hard 128/step w6 (as p1c)
+
+Arm rule: the highest R = mean accept rate at its threshold on the isolated synthetic validation windows
+(`v6/feat/pos_test.npy`, minus any window the quality flags remove from evaluation) and the 1,000 held-out context
+validation windows; tie (within 1.0 point): fewer 2026-11-10 events at their thresholds, then lower near-phrase
+validation accepts (`v6/feat/near_test.npy`), then p2a.
+
+Morning comparison, v6.2 (chosen arm) against v6 (`oye_kivi_ctx`, raw 0.9595), odd-day honest sets only;
+**test2-v5era and the 2026-11-11 session are REUSED test sets (weaker evidence)**. v6.2 replaces v6 only if ALL hold:
+- C1: no cell of the 2026-11-11 session (3 m off pooled, 3 m on, 1.5 m on, 1.5 m off; pc-desk and webcam) more than
+  1 take below v6;
+- C2: near-phrase false accepts on that session <= v6's, per device;
+- C3: room false wakes (TFLite replay as the mining pass) <= v6's on test2-v5era AND <= v6's on the 2026-11-11
+  evening copy (`negatives-1111eve`);
+- C4: test-day live clips (2026-11-09 and -11, exact replay): `true` detected >= v6's;
+- C5: held-out-voice synthetic clean / TV 10 dB / quiet within 5 points of v6 (not lower by more than 5).
+No deploy by this agent; the coordinator runs any deploy.
