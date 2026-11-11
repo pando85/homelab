@@ -1,0 +1,126 @@
+# v6 "context" clip plan: "oye Kivi" (and confusers) inside real sentences, with NO pause before the command.
+# Synthetic speech only (Piper). Consumed by v6_gen_ctx.py, which reads the voices, oye/kivi phonemes, warp and
+# noise ranges from base_plan and overrides only what is listed here. Nothing here is household data.
+
+base_plan: vnext_oye_kivi.yaml
+
+# TRAIN voices left out (audit 2026-11, data-audit.md sections 0.4, 5, 6): slow, zero-heavy, unintelligible.
+# Held-out sets (ctx_*_eval) use only the held-out voices of base_plan and are not filtered by name.
+exclude_train_voices: [ald, antton, ryan, l2arctic_tr, semaine, thorsten_emo, kristin, cori, south_f, mihai, tugao]
+
+default_n: {ctx_pos_train: 5000, ctx_neg_train: 5000, ctx_pos_eval: 800, ctx_neg_eval: 800}
+
+# Target "oye Kivi" renderings: joiner space/together/comma only (never the two-rendering `gap`), ending "" or ",".
+joiners: {space: 0.5, comma: 0.2, together: 0.1}
+endings: {"": 0.7, ",": 0.3}
+length_scale: [0.75, 1.2]
+
+# Duration rules (seconds): a clip is dropped when its head utterance (prefix + target/confuser) is longer than
+# prefix_words * per_prefix_word_s + max_target_s (no prefix: the target alone, max_target_s).
+max_target_s: 1.5
+per_prefix_word_s: 0.6
+max_zero_share: 0.2
+trim_margin_s: 0.02      # re-trim of every rendered part, so "no pause" is not eaten by the 60 ms margin of gen_clips.trim
+
+# Pause between the head utterance and the command: mixture of [weight, lo, hi] uniform pieces (seconds).
+gap_mix: [[0.2, 0.0, 0.0], [0.5, 0.0, 0.06], [0.3, 0.06, 0.12]]
+cmd_rel_db: [-4.0, 2.0]  # command level against the head part before the final peak normalisation
+
+no_command_share: 0.15   # phrase at the end of the clip, always after a prefix
+prefix_share: 0.5        # of the clips that have a command
+
+# Neg mix: ctx_neg = confuser / kivi_sentence / plain
+neg_mix: {confuser: 0.6, kivi_sentence: 0.3, plain: 0.1}
+plain_prefix_share: 0.3
+
+# Prefixes (1-2 words). Never "oye", "oiga" or "kivi".
+prefixes:
+  bueno: 3
+  vale: 2
+  eh: 2
+  venga: 2
+  "a ver": 3
+  pues: 2
+  ah: 1
+  mira: 1
+  ya: 1
+  "bueno pues": 1
+  "bueno vale": 1
+  "vale entonces": 1
+  "eh bueno": 1
+  "pues nada": 1
+  "venga va": 1
+  "eh vale": 1
+
+confusers:
+  "oye kili": 3
+  "oye kiri": 2
+  "oye Fifi": 2
+  "oye tivi": 2
+  "oye mira": 2
+  "oye tú": 1
+  "oye Kiki": 1
+  "oye chivi": 1
+  "hoy vi": 1
+  "y Kivi": 1
+  "ve Kivi": 1
+  "que Kivi": 1
+
+# "Kivi" (or kiwi) in a sentence without a preceding "oye". `|` marks the split: head (ends at the word) | rest.
+kivi_sentences:
+  "Kivi,|enciende la luz": 1
+  "dile a Kivi|que apague la tele": 1
+  "el kiwi|está maduro": 1
+  "compra kivis|": 1
+  "Kivi|no contesta": 1
+  "Kivi,|apaga la tele": 1
+  "Kivi,|qué hora es": 1
+  "le dije a Kivi|que no viene": 1
+  "ve a ver a Kivi|que está en el salón": 1
+  "me gusta el kiwi|con yogur": 1
+  "y Kivi|no contesta": 1
+  "dónde está Kivi|ahora mismo": 1
+  "a Kivi le gusta|la pelota": 1
+
+commands:
+  "enciende la luz del salón": 1
+  "apaga la luz del salón": 1
+  "enciende la luz de la cocina": 1
+  "apaga la luz del dormitorio": 1
+  "enciende todas las luces": 1
+  "apaga todo": 1
+  "pon la luz más tenue": 1
+  "pon la luz al cincuenta por ciento": 1
+  "enciende la tele": 1
+  "apaga la tele": 1
+  "pon la tele más baja": 1
+  "sube el volumen": 1
+  "baja el volumen": 1
+  "silencia la tele": 1
+  "quita el sonido": 1
+  "pon el canal dos": 1
+  "abre youtube": 1
+  "abre netflix": 1
+  "cambia a la entrada hdmi": 1
+  "pon música": 1
+  "pon algo de jazz": 1
+  "para la música": 1
+  "siguiente canción": 1
+  "pausa": 1
+  "sigue": 1
+  "pon la lista de reproducción de ayer": 1
+  "qué tiempo hace mañana": 1
+  "qué hora es": 1
+  "qué día es hoy": 1
+  "dime las noticias": 1
+  "cuéntame un chiste": 1
+  "pon un temporizador de diez minutos": 1
+  "avísame en cinco minutos": 1
+  "cuánto falta para las ocho": 1
+  "sube la calefacción": 1
+  "sube la persiana": 1
+  "baja la persiana": 1
+  "enciende el ventilador": 1
+  "apaga el ventilador": 1
+  "cierra la puerta del garaje": 1
+  "dónde está mi teléfono": 1

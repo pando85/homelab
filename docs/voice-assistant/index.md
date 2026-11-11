@@ -58,6 +58,9 @@ services.
 - [vnext ablations](experiments/oye-kivi-vnext-ablations.md) (2026-11-08): real positive takes lift
   unseen-take recall from 25 % to 70 % on the satellite at the same false-wake budget; confuser
   negatives without them collapse it to 1 %. TV on meets the gate, TV off at 3 m does not.
+- [oye Kivi v6](experiments/oye-kivi-v6.md) (2026-11-11): context-trained candidate `oye_kivi_ctx`. Better
+  recall on the held-out PC session (TV on included) and fewer near-phrase accepts than v4, but more room false
+  wakes than v5 on the odd-day room audio: not deployable (criterion C3 fails). Replay framing fixed.
 - [Custom wake word "kivi"](experiments/kivi-wake-word.md): openWakeWord model for the lone word
   "kivi", trained on synthetic Spanish voices, measured against `alexa` with the server's exact
   features (recall, false accepts per hour, near-words), deployment notes (`--custom-model-dir`,
