@@ -288,3 +288,18 @@ only: v6 raw >= 0.5: 32 events, 1 dropped, 99 windows kept (day 64, evening 35);
 candidate). Per-step counts follow the smaller sets: `p2a` v6 day 32 w6, evening 32 w12; `p2b` v6 day 48 w12, evening 32
 w24; v5 hard 128 per step (w3 / w6). The 3 even-day live clips labelled false whose tail holds a kivi-like word (data
 quality 1b) are dropped from live_hard and live_negpart. Everything else in the v6.2 pre-registration stands.
+
+### v6.2 amendment 2 (2026-11-11, about 23:55 Madrid; before v6.2 training, no 2026-11-12 audio)
+
+The owner rolled back to v5 at about 22:40Z (v6 felt like more false wakes). Changes, everything else stands:
+- **Reference = v5** (`oye_kivi_next`, raw 0.9754), the live model, with the ORIGINAL C1-C6 (C1 >= v5 on pc-desk and
+  webcam and no cell more than 1 take below v5; C2 <= v5 + 1 per device; C4 true detected >= v5 and false fired <= v5;
+  C5 within 5 points of v5; C6 sanity). **C3 strict, both**: test2-v5era (REUSED) total <= v5 + 1 = 6 and per evening
+  <= 1 (per TV evening events <= max(1, round(evening hours / 6)) and pooled per evening <= 1); the fresh 2026-11-11
+  evening copy (`negatives-1111eve`) total <= v5's count there + 1. v6 is reported alongside as information only.
+- **Arm rule (false wakes first):** among eligible arms, the one with the fewest 2026-11-10 room events at its
+  threshold; tie: higher R (validation recall), then fewer near-phrase validation accepts, then p2a. The threshold rule
+  already aims at v5's 2026-11-10 count (total <= max(E5, 1)), never above it.
+- Data fixes kept: 1a (hard-negative ASR flags), 1b (2 mis-cut live positives, 5 live_hard clips, 2 real takes, flagged
+  TTS voices), 1c (room-negative ASR flags, all non-`none` flags), the retry filter on room windows and on the hard
+  negatives (live wake / stt-only within 30 s, miss candidate within 6 s), all mined only on 2026-11-05/-06/-08.

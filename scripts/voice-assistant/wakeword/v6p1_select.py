@@ -35,7 +35,7 @@ import v6_room as R  # noqa: E402
 WORK = Path(os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
 V5 = ("v5", WORK / "releases/v5-oye-kivi-2026-11-08/model/oye_kivi_next_uncalibrated", 0.9754)
 GRID = np.round(np.arange(0.9, 0.99951, 0.0005), 4)
-ORDER = ["p1a", "p1c", "p1b"]
+ORDER = ["p1a", "p1c", "p1b", "p2a", "p2b"]
 TZ = ZoneInfo("Europe/Madrid")
 
 
@@ -122,6 +122,8 @@ def main():
     ap.add_argument("--pos-val", default=str(WORK / "v6/feat/pos_test.npy"))
     ap.add_argument("--ctx-val", default=str(WORK / "v6p1/feat/ctxp_syn_pos_val.npy"))
     ap.add_argument("--near-val", default=str(WORK / "v6/feat/near_test.npy"))
+    ap.add_argument("--rule", choices=["recall", "fewest-events"], default="recall",
+                    help="arm choice: v6.1 stage 2 (R first) or v6.2 amendment 2 (fewest selection events first)")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     a_ns = argparse.Namespace(index=a.index, part=a.part, local_date=a.local_date)
@@ -160,6 +162,14 @@ def main():
     if not elig:
         res["chosen"] = None
     else:
+        if a.rule == "fewest-events":
+            # v6.2 amendment 2: false wakes first, then recall
+            elig.sort(key=lambda n: (res["arms"][n]["room_total"], -res["arms"][n]["R"], res["arms"][n]["near_val"],
+                                     ORDER.index(n) if n in ORDER else 99))
+            res["chosen"] = {"arm": elig[0], "threshold": res["arms"][elig[0]]["threshold"], "rule": a.rule}
+            Path(a.out).write_text(json.dumps(res, indent=1))
+            print(json.dumps({"v5_total": e5, "chosen": res["chosen"]}))
+            return
         elig.sort(key=lambda n: -res["arms"][n]["R"])
         best = elig[0]
         if len(elig) > 1 and res["arms"][elig[0]]["R"] - res["arms"][elig[1]]["R"] <= 0.01:

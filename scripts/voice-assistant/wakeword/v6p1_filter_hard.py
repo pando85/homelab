@@ -44,15 +44,19 @@ def utc_epoch(s):
     return datetime.strptime(s, "%Y%m%dT%H%M%S.%fZ").replace(tzinfo=timezone.utc).timestamp()
 
 
-def phrase_flagged(path):
-    """{device: [epoch]} of the events the data-quality ASR flags as holding the phrase (v6.2 rule)."""
+def phrase_flagged(paths):
+    """{device: [epoch]} of the events the data-quality ASR flags as holding the phrase (v6.2 rule). Hard-negative flags
+    (`hn-` ids): `phrase`, `kivi_word`, or `hotword_only` with confidence >= 0.5; room-negative flags (`rn-` ids, 1c): every
+    flag other than `none` (the conservative choice of the data-quality report)."""
     out = {}
-    for r in csv.DictReader(open(path, encoding="utf-8")):
-        f = r["flag"]
-        conf = float(r["confidence"] or 0)
-        if f in ("phrase", "kivi_word") or (f == "hotword_only" and conf >= 0.5):
-            dev = r["device"].replace("tv-c3", "c3-")
-            out.setdefault(dev, []).append(utc_epoch(r["event_id"].split("-", 3)[3]))
+    for path in paths.split(","):
+        for r in csv.DictReader(open(path, encoding="utf-8")):
+            f = r["flag"]
+            conf = float(r.get("confidence") or 0)
+            rn = r["event_id"].startswith("rn-")
+            if f in ("phrase", "kivi_word") or (f == "hotword_only" and (rn or conf >= 0.5)):
+                dev = r["device"].replace("tv-c3", "c3-")
+                out.setdefault(dev, []).append(utc_epoch(r["event_id"].split("-", 3)[3]))
     return out
 
 
@@ -86,7 +90,7 @@ def main():
     ap.add_argument("--devices")
     ap.add_argument("--devices-file")
     ap.add_argument("--from-dir")
-    ap.add_argument("--phrase-flags", help="data-quality hardneg_phrase_flags.csv (v6.2)")
+    ap.add_argument("--phrase-flags", help="comma list: data-quality hardneg_phrase_flags.csv, roomneg_phrase_flags.csv (v6.2)")
     ap.add_argument("--drop-on", default="live,stt-only,other-event,miss-candidate,asr-phrase",
                     help="reasons that drop an event (v6.2: live,stt-only,miss-candidate,asr-phrase)")
     a = ap.parse_args()
