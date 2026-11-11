@@ -1,7 +1,7 @@
 # "oye Kivi" v6: context-trained candidate (2026-11-11)
 
 Plan and owner decisions: kivi-models `docs/plan/2026-11-v6-plan.md` (private). Follows the
-[vnext ablations](oye-kivi-vnext-ablations.md) (v5). Offline only: **not deployed**, no image, no Home Assistant change.
+[vnext ablations](oye-kivi-vnext-ablations.md) (v5). **Deployed 2026-11-11 by owner decision despite the C3 FAIL** (see [Deployment](#deployment-2026-11-11-by-owner-decision-despite-c3-fail)); the first training and measurement was offline.
 Numbers only; speakers are spk01 and spk02. Work directory `/work/workspaces/kivi-wakeword/v6/` (`results.md` there has
 every table; data in [data register](../data-register.md) row 22).
 
@@ -10,8 +10,33 @@ every table; data in [data register](../data-register.md) row 22).
 than spk01 without raising false wakes per evening.
 
 **Result:** recall up, confusers down, but **room false wakes up** at the pre-registered threshold. The candidate
-`oye_kivi_ctx` (`v6-oye-kivi-2026-11-11`, raw 0.9595 = server 0.5) fails the auto-deploy criterion C3 and is not
-deployed. The other-speaker and TV-microphone parts of the hypothesis cannot be tested yet (no odd-day data).
+`oye_kivi_ctx` (`v6-oye-kivi-2026-11-11`, raw 0.9595 = server 0.5) fails the auto-deploy criterion C3. **It was deployed anyway on 2026-11-11 by owner decision**
+(see [Deployment](#deployment-2026-11-11-by-owner-decision-despite-c3-fail)). The other-speaker and TV-microphone parts of the hypothesis cannot be tested yet (no odd-day data).
+
+## Deployment (2026-11-11, by owner decision despite the C3 FAIL)
+
+The owner ordered "Deploy V6 now" on the evening of 2026-11-11, knowing that C3 failed (13 replay events against v5's 5
+over 79.5 h; some of the extra events may be real missed calls of the household that v5 did not wake on). This is an
+owner override of the pre-registered auto-deploy rule for this one release; v6.1 and v6.2 below are still pre-registered
+and may replace it.
+
+- Release `v6-oye-kivi-2026-11-11` (kivi-models commit `8e989e5`, annotated tag of the same name), image
+  `git.grigri.cloud/agil/kivi-models:v6-oye-kivi-2026-11-11@sha256:6448161ad63e` (CI run 7; anonymous pull refused).
+  It carries `kivi` v1, `oye_kivi` v4, `oye_kivi_next` v5 and `oye_kivi_ctx` v6, so a `demote` needs no image rollback.
+- Homelab pin commit `fe539af67`; Argo CD rolled the `openwakeword` pod; every `/custom/*.tflite` sha256 equals
+  `models.lock` (`oye_kivi_ctx.tflite` `78dc9477851f747a80ec60d12c89185b707a8076577d17f3be87463467535686`); Wyoming
+  ids served: `alexa hey_jarvis hey_mycroft hey_rhasspy kivi okay_nabu oye_kivi oye_kivi_ctx oye_kivi_next`.
+  (`wake_release.py deploy` timed out waiting for an Argo revision equal to its own commit because another commit landed
+  first; the rollout itself was verified by hand and by `status`.)
+- `wake_release.py promote --owner-override` at 22:11 UTC: pipeline "Kiwi" (preferred) `wake_word_id`
+  `oye_kivi_next` -> `oye_kivi_ctx`, nothing else changed; no per-satellite override; "Kiwi Test" untouched. Run check:
+  c3-a OK, c3-b OK (newest run on "Kiwi" with `wake_word-start` and no error). Wake files of both TVs grew about
+  32 kB/s over 30 s.
+- Gate: not run; recorded as an owner override. Threshold raw 0.9595 = server 0.5 (not interchangeable with v5's 0.9754).
+- **Rollback:** `python3 wake_release.py demote --version v6-oye-kivi-2026-11-11` (from
+  `scripts/voice-assistant/wakeword/`); "Kiwi" goes back to `oye_kivi_next` and both TVs follow within about 15 s.
+- What to watch: false wakes in the evening (v6: 2.2 per evening on the replay, v5: 0) and real missed calls. Every
+  live wake and its outcome from now on counts as evidence for v6.1/v6.2 labelling.
 
 ## Step 0: the replay bug
 
