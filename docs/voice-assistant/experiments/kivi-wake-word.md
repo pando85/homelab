@@ -208,7 +208,7 @@ Tools in [`scripts/voice-assistant/wakeword/`](../../../scripts/voice-assistant/
 
 | Tool | Who runs it | What it does |
 | --- | --- | --- |
-| `kivi_session.py` | the speaker | text-only cues ("say KIVI now", about every 5 s) while recording the desk mic and the webcam mic; writes `session.json` |
+| `kivi_session.py` | the speaker | text-only cues ("say KIVI now", about every 3.5 s, 3.0 to 4.0 s apart) while recording the desk mic and the webcam mic; writes `session.json` |
 | `kivi_extract.py` | the owner | copies the satellite's wake files for the session out of the HA pod (`kubectl exec ... cat`), aligns them to the desk mic by GCC-PHAT, cuts clips of the three sources, appends to `manifest.jsonl`. `--button-takes` cuts takes marked by `input_button.kivi_take` presses instead |
 | `kivi_score.py` | the owner | kivi (uncalibrated head, raw thresholds) and alexa through the server-exact path over the aligned satellite audio: recall per block and threshold, near-word false accepts, false accepts per hour on the non-cue time; aggregates only |
 | `kivi_import_phone.py` | the owner | imports a phone voice memo (takes found by energy, source `phone`) |

@@ -18,7 +18,7 @@ near-words are the list for that phrase (`NEAR_WORDS_BY_PHRASE`; "oye kivi": kiv
 oye mira, oye tú, hoy vi, oye Fifi, o sea, 2 each) and `session.json` records `phrase`.
 
 Default protocol for "kivi" (one session, about 12 min): at 1.5 m and at 3 m, each with the TV silent (on, with nothing
-playing: the satellite runs on the TV, so it must stay on) and with the TV playing, 10 x "kivi" (a cue about every 5 s, +-1 s); then the near-words kiwi, tivi, kili, kiri,
+playing: the satellite runs on the TV, so it must stay on) and with the TV playing, 10 x "kivi" (a cue about every 3.5 s, +-0.5 s, so 3.0 to 4.0 s apart); then the near-words kiwi, tivi, kili, kiri,
 Pipi and "aquí vi", 2 each; then 60 s of silence with you present. "Enter when ready" separates
 the blocks; the recording runs through the pauses (they are logged and never used as negatives).
 Use `--repeat N`, `--only NAME`, `--tag volume=loud` and a `--blocks` file for the 4-6 training
@@ -71,10 +71,10 @@ def default_blocks(phrase=C.DEFAULT_PHRASE):
     blocks = []
     for pos in (1.5, 3):
         for tv in ("off", "on"):
-            blocks.append({"name": f"{slug}-{pos}m-tv{tv}", "kind": "kivi", "n": 10, "interval_s": 5.0,
-                           "jitter_s": 1.0, "conditions": {"position_m": pos, "tv": tv}})
-    blocks.append({"name": "near-words", "kind": "near", "words": NEAR_WORDS_BY_PHRASE[phrase], "each": 2, "interval_s": 5.0,
-                   "jitter_s": 1.0, "conditions": {"position_m": 1.5, "tv": "off"}})
+            blocks.append({"name": f"{slug}-{pos}m-tv{tv}", "kind": "kivi", "n": 10, "interval_s": 3.5,
+                           "jitter_s": 0.5, "conditions": {"position_m": pos, "tv": tv}})
+    blocks.append({"name": "near-words", "kind": "near", "words": NEAR_WORDS_BY_PHRASE[phrase], "each": 2, "interval_s": 3.5,
+                   "jitter_s": 0.5, "conditions": {"position_m": 1.5, "tv": "off"}})
     blocks.append({"name": "silence", "kind": "silence", "seconds": 60,
                    "conditions": {"position_m": 1.5, "tv": "off"}})
     return blocks
@@ -97,7 +97,7 @@ def validate_blocks(blocks):
             if float(b.get("seconds", 0)) <= 0:
                 raise SystemExit(f"block {b['name']!r}: seconds must be > 0")
             continue
-        if float(b.get("interval_s", 5)) - float(b.get("jitter_s", 1)) < MIN_GAP_S:
+        if float(b.get("interval_s", 3.5)) - float(b.get("jitter_s", 0.5)) < MIN_GAP_S:
             raise SystemExit(f"block {b['name']!r}: interval_s - jitter_s must be >= {MIN_GAP_S} s "
                              "(clips of consecutive cues must not overlap)")
         if b["kind"] == "near" and not b.get("words"):
@@ -129,7 +129,7 @@ def instruction(b, phrase=C.DEFAULT_PHRASE):
           "on": "TV ON at normal volume (content of your choice)"}.get(c.get("tv"), "")
     extra = ", ".join(f"{k}={v}" for k, v in c.items() if k not in ("position_m", "tv"))
     if b["kind"] == "kivi":
-        what = f"say {phrase.upper()} {b['n']} times, a cue about every {b.get('interval_s', 5):g} s"
+        what = f"say {phrase.upper()} {b['n']} times, a cue about every {b.get('interval_s', 3.5):g} s"
     elif b["kind"] == "near":
         what = (f"say each word {b.get('each', 2)} times in the order shown ("
                 + ", ".join(b["words"]) + ")")
@@ -369,7 +369,7 @@ def run_block(b, clock, rng, say, rec, on_update=lambda: None, phrase=C.DEFAULT_
         else:
             items = [(f"near:{w.lower()}", w) for w in b["words"] for _ in range(int(b.get("each", 2)))]
             rng.shuffle(items)
-        interval, jitter = float(b.get("interval_s", 5)), float(b.get("jitter_s", 1))
+        interval, jitter = float(b.get("interval_s", 3.5)), float(b.get("jitter_s", 0.5))
         t = rec["start_offset_s"] + LEAD_IN_S
         for i, (label, word) in enumerate(items, 1):
             clock.sleep_until(t)
