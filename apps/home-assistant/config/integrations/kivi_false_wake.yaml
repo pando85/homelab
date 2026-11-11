@@ -1,0 +1,43 @@
+# False-wake labels. Press the button of the TV that just woke by mistake (no "oye Kivi" said), within
+# 60 s of the wake. One button per satellite so the label names the device without a guess.
+# A press is stored twice:
+#   1. as the button's state (recorder database, only the recorder's retention: 10 days, the
+#      recorder has no purge_keep_days override and its volume is 6 Gi), and
+#   2. as one line "<UTC ISO time> <device>" appended to /config/false_wake_labels.log (small,
+#      on the backed-up config volume, outside the recorder), which outlives the 90 days of the
+#      voice recordings that the labels are scored against.
+# Nothing else is stored: no audio, no text. Scoring rule and data rules:
+# docs/voice-assistant/audio-pipeline-plan.md (MT-2), docs/voice-assistant/data-register.md.
+input_button:
+  kivi_false_wake_c3_a:
+    name: False wake c3-a
+    icon: mdi:ear-hearing-off
+  kivi_false_wake_c3_b:
+    name: False wake c3-b
+    icon: mdi:ear-hearing-off
+
+shell_command:
+  kivi_false_wake_label: >-
+    printf '%s %s\n' '{{ stamp }}' '{{ device }}' >> /config/false_wake_labels.log
+
+automation:
+  - alias: Kivi false wake label
+    id: kivi_false_wake_label
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id:
+          - input_button.kivi_false_wake_c3_a
+          - input_button.kivi_false_wake_c3_b
+    condition:
+      # A real press sets the state to "now". A state restored after a restart is old and is skipped.
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state is not none
+             and trigger.to_state.state not in ['unknown', 'unavailable']
+             and (now() - as_datetime(trigger.to_state.state)).total_seconds() < 10 }}
+    action:
+      - service: shell_command.kivi_false_wake_label
+        data:
+          stamp: "{{ as_datetime(trigger.to_state.state).astimezone(utcnow().tzinfo).strftime('%Y-%m-%dT%H:%M:%S.%fZ') }}"
+          device: "{{ trigger.entity_id.split('false_wake_')[1] }}"

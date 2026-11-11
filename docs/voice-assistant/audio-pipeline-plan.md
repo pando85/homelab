@@ -79,7 +79,7 @@ Order and IDs as in the satellite plan; effort in agent-days (d).
 
 - **Problem:** real false wakes per hour are known only from memory.
 - **Change:**
-  - An `input_button.kivi_false_wake` helper in `apps/home-assistant/config/integrations/` (as `kivi_take.yaml`) with a button on the voice dashboard; a press means "the last wake on this TV was false".
+  - Two `input_button` helpers, `kivi_false_wake_c3_a` and `kivi_false_wake_c3_b` (one per TV, so a label names its device without a guess), in `apps/home-assistant/config/integrations/kivi_false_wake.yaml` (as `kivi_take.yaml`), with buttons on the voice dashboard; a press means "the last wake on that TV was false". An automation also appends each press as `<UTC time> <device>` to `/config/false_wake_labels.log`, because the recorder keeps only 10 days (see [False-wake labels](experiments/kivi-wake-word.md#false-wake-labels-mt-2)).
   - A committed script `scripts/voice-assistant/wake_counts.py` (to write; the count was done once by an ad hoc script): lists run directory names on the `home-assistant-voice-recordings` PVC through `kubectl exec ... find` (names only, no file opened), counts runs that have both `00_wake-*` and `01_stt-*` (a detection; continued-conversation and push-to-talk runs have no wake file, `hypothesis` to check against HA's history on one day) per device per hour, and joins button presses to the nearest earlier detection within 60 s.
 - **Measure:** ≥ 95 % of test presses joined to the right run; one day of counts equal to HA's state history.
 - **Rollback:** remove the helper; the script only reads names.

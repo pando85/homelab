@@ -38,6 +38,47 @@ views:
               Press right after saying the wake phrase ("Kivi" or "oye Kivi") during a test session.
 
               Last pressed: **{% set s = states('input_button.kivi_take') %}{% if s in ['unknown', 'unavailable'] %}never{% else %}{{ as_datetime(s) | relative_time }} ago ({{ as_local(as_datetime(s)).strftime('%Y-%m-%d %H:%M:%S') }}){% endif %}**
+          - type: heading
+            heading: False wakes
+            heading_style: subtitle
+            icon: mdi:ear-hearing-off
+          - type: button
+            entity: input_button.kivi_false_wake_c3_a
+            name: False wake c3-a
+            icon: mdi:ear-hearing-off
+            show_name: true
+            show_icon: true
+            show_state: false
+            icon_height: 56px
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.kivi_false_wake_c3_a
+            grid_options:
+              columns: 6
+              rows: 2
+          - type: button
+            entity: input_button.kivi_false_wake_c3_b
+            name: False wake c3-b
+            icon: mdi:ear-hearing-off
+            show_name: true
+            show_icon: true
+            show_state: false
+            icon_height: 56px
+            tap_action:
+              action: perform-action
+              perform_action: input_button.press
+              target:
+                entity_id: input_button.kivi_false_wake_c3_b
+            grid_options:
+              columns: 6
+              rows: 2
+          - type: markdown
+            content: |
+              Press the button of the TV that woke by mistake (nobody said "oye Kivi"), within 60 s of the wake. Only the press time is stored.
+
+              c3-a: **{% set s = states('input_button.kivi_false_wake_c3_a') %}{% if s in ['unknown', 'unavailable'] %}never{% else %}{{ as_datetime(s) | relative_time }} ago{% endif %}**; c3-b: **{% set s = states('input_button.kivi_false_wake_c3_b') %}{% if s in ['unknown', 'unavailable'] %}never{% else %}{{ as_datetime(s) | relative_time }} ago{% endif %}**
           # Household wake word "oye Kivi" (oye_kivi) since 2026-11-07: the preferred pipeline "Kiwi".
           - type: markdown
             content: |
@@ -360,5 +401,7 @@ views:
                 - select.lg_c3_c3_a_voice_satellite_assistant
                 - select.lg_c3_c3_b_voice_satellite_assistant
                 - input_button.kivi_take
+                - input_button.kivi_false_wake_c3_a
+                - input_button.kivi_false_wake_c3_b
             grid_options:
               columns: 12
