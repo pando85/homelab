@@ -220,6 +220,60 @@ run checked). The release state keeps the score and gate JSON:
   (`extract --adopt-session <session>`) instead of re-extracting already-aligned audio, which would have
   made a new revision and superseded the marks the training data refers to.
 
+## Result 8: the first clean held-out session (2026-11-11, odd date, PC and webcam channels only)
+
+Rule change, **owner decision 2026-11-11**: the model must work on any device, so on a test-split
+(odd Europe/Madrid date) session the desk mic, the webcam and later phone or other devices are **evaluation**
+channels too, reported per device class (`tv`, `pc-desk`, `pc-webcam`, `phone`) and **never pooled with the TV
+gate**. The TV mic stays the gate for the deployed TV path. Day split unchanged: odd dates test, even dates train.
+Old manifest rows are not rewritten: `eval_channel` is derived from (source, split) everywhere
+(`kivi_real_common.is_eval_channel`).
+
+Session `20261111T171918Z-spk01-tv-c3a` (spk01, c3-a, split test, 9 blocks, 101 cues, 9.2 min, cues every
+3.5 +-0.5 s, later day than every training and selection input of v4 and v5). **The TV channel is missing**:
+c3-a was on the "Kiwi Test" pipeline to keep the live wake word out of the session, and HA wrote no wake audio
+for that pipeline (empty run directories); HA also restarted twice around the session. Extracted from the PC
+sources only (`extract -- --no-tv`, `tv_channel: missing` in the session record and the release state; no
+`tv-c3a` rows, so the satellite gate has no new input). The webcam aligned (28/29 windows, drift +132 ppm); all
+101 cues have full audio on both sources. v5 was not trained on this session: it is held out.
+
+Recall on "oye kivi", each model at its own raw threshold (v4 0.9437, v5 0.9754), Wilson 95 % intervals,
+`cue_hits` (every cue is full audio, so no cue counts as lost):
+
+| Cell (10 cues; 3 m TV off = 36 pooled over 3 blocks) | pc-mic v4 | pc-mic v5 | webcam v4 | webcam v5 |
+| --- | --- | --- | --- | --- |
+| 3 m TV off | 24/36 = 67 % [50, 80] | 33/36 = 92 % [78, 97] | 22/36 = 61 % [45, 75] | 32/36 = 89 % [75, 96] |
+| 3 m TV on | 1/10 [2, 40] | 6/10 [31, 83] | 1/10 [2, 40] | 5/10 [24, 76] |
+| 1.5 m TV on | 4/10 [17, 69] | 6/10 [31, 83] | 1/10 [2, 40] | 8/10 [49, 94] |
+| 1.5 m TV off | 8/10 [49, 94] | 10/10 [72, 100] | 9/10 [60, 98] | 8/10 [49, 94] |
+| all 66 | 37/66 = 56 % [44, 67] | 55/66 = 83 % [73, 90] | 33/66 = 50 % [38, 62] | 53/66 = 80 % [69, 88] |
+
+Near-phrase false accepts (35 near cues, 0 or 1 of 3 to 5 per word): v4 pc-mic 7/35 (oye kili 3/5, oye kiri
+4/5), v4 webcam 13/35 (kili 4/5, kiri 5/5, Fifi 2/5, tivi 2/5); **v5 pc-mic 0/35, v5 webcam 1/35** (oye kili 1/5).
+"kivi" alone, oye mira, oye tu, hoy vi, o sea: 0 for both models. v4's near-word problem on real speech reproduces
+on a later day; v5 fixes it. False accepts in the time outside the cue windows: 0 for both models, but that time is
+only 53 s per source (the 3.5 s cue rhythm leaves almost no gap; 1 event per model and source at most with narrower
+windows), so it says nothing about a rate per hour.
+
+Operating-point view (pc-mic / webcam, all 66 "oye kivi" cues; near-phrase false accepts of 35 in brackets):
+
+| Model, raw threshold | pc-mic | webcam |
+| --- | --- | --- |
+| v4 0.9 | 44/66 = 67 % (10/35) | 43/66 = 65 % (17/35) |
+| v4 0.9437 | 37/66 = 56 % (7/35) | 33/66 = 50 % (13/35) |
+| v5 0.95 | 58/66 = 88 % (0/35) | 60/66 = 91 % (2/35) |
+| v5 0.9754 | 55/66 = 83 % (0/35) | 53/66 = 80 % (1/35) |
+| v5 0.98 | 55/66 = 83 % (0/35) | 52/66 = 79 % (1/35) |
+
+What it means: v5 beats v4 on a day neither saw, at every condition except webcam at 1.5 m with the TV off (8/10
+against 9/10, within noise); TV-on cells stay the weak ones (3 m 5-6/10 for v5). Caveats: one speaker, one session,
+PC mics (not what the satellite hears; the desk mic and the TV mic differ), 10 cues per TV-on cell, and no
+`tv-c3a` figure at all: the TV-path number and the gate still need a re-recorded session with the satellite
+channel. The release gate stays INCOMPLETE (satellite rows only; the PC and webcam figures are listed apart as
+"other devices, informational"). A cue-timing check found no cue without a speech burst on the desk mic; two cues
+are worth the owner's confirmation as possible flubs or cut words: block 4 (1.5 m TV on) cue 10 (burst 0.36 s, shorter than
+the usual 0.7 to 1.0 s) and cue 6 (burst starts 1.7 s after the cue).
+
 ## What this does not prove
 
 - **One speaker, one day.** Sessions 1 and 2 are 14 minutes apart, so the holdout measures continuity
@@ -297,6 +351,8 @@ $R enable   --version v5-oye-kivi-2026-11-08 --tv c3-a --yes-owner-approved
 
 ## Next
 
+0. **Re-record the satellite channel** (Result 8 has PC and webcam only): a `--split test` session on c3-a on a
+   pipeline that records wake audio, so the TV-path gate gets its first held-out rows.
 1. **More real positives, more days** — recipe tuning is exhausted (Result 4), the 3 m TV-off cell (5/10)
    and the 80 % gate need data: a `--split test` session on a later day is what turns this into a gate run.
    Record it with `--split test` at recording time and adopt the older sessions with
