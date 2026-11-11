@@ -23,6 +23,39 @@ RATE = 16000
 HERE = Path(__file__).resolve().parent
 DEFAULT_DEVICES_FILE = HERE / "kivi_devices.json"
 DEFAULT_DATASET_ROOT = "/work/workspaces/kivi-wakeword/datasets/real"
+DAY_TZ = "Europe/Madrid"
+DAY_ANCHOR_TEST = "2026-11-09"   # a test day; the days alternate from here (odd dates in Nov 2026 are test days)
+
+
+def day_role(local_date):
+    """Day split of the real-audio work (owner decision 2026-11-11): by Europe/Madrid local date, alternating days,
+    `test` on 2026-11-09, 2026-11-11, ... and `mine` (train / mining) on 2026-11-08, 2026-11-10, ... `local_date` is a
+    `datetime.date`. Strict alternation by day count, which equals "odd day of the month = test" in November 2026."""
+    from datetime import date
+    return "test" if (local_date.toordinal() - date.fromisoformat(DAY_ANCHOR_TEST).toordinal()) % 2 == 0 else "mine"
+
+
+def epoch_day_role(t):
+    """`day_role` of the Europe/Madrid local date of the epoch time `t`."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return day_role(datetime.fromtimestamp(t, ZoneInfo(DAY_TZ)).date())
+
+
+def split_at_local_midnight(intervals, tz=DAY_TZ):
+    """Cut each (t0, t1) epoch interval at every local midnight of `tz`."""
+    from datetime import datetime, time as dtime, timedelta
+    from zoneinfo import ZoneInfo
+    z = ZoneInfo(tz)
+    out = []
+    for a, b in intervals:
+        cur = a
+        while cur < b:
+            d = datetime.fromtimestamp(cur, z).date() + timedelta(days=1)
+            nxt = datetime.combine(d, dtime(0, 0), z).timestamp()
+            out.append((cur, min(b, nxt)))
+            cur = nxt
+    return out
 PC_SOURCES = ("pc-mic", "webcam-mic")
 SPLITS = ("unassigned", "train", "dev", "test", "train-only")
 # Split policy (docs/voice-assistant/experiments/kivi-wake-word.md): the split belongs to the session,

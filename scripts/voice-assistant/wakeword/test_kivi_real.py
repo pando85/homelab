@@ -1652,3 +1652,35 @@ def test_negatives_period_pipeline_filter_out_name_and_part(tmp_path):
     ns.out_name = "../x"
     with pytest.raises(SystemExit):
         N.run(ns, X.LocalFetcher(rec))
+
+
+def test_negatives_alternating_day_parts_cut_at_local_midnight(tmp_path):
+    """--part-test-day/--part-mine-day: pieces are cut at Europe/Madrid midnight and carry the part of their day
+    (odd dates test, even dates mine in November 2026; strict alternation)."""
+    from datetime import date
+    assert [C.day_role(date(2026, 11, d)) for d in (8, 9, 10, 11, 12)] == ["mine", "test", "mine", "test", "mine"]
+    assert C.day_role(date(2026, 11, 30)) == "mine" and C.day_role(date(2026, 12, 1)) == "test"
+    midnight = 1794265200.0                                   # 2026-11-10T00:00 CET = 2026-11-09T23:00Z
+    assert C.split_at_local_midnight([(midnight - 100, midnight + 50)]) == [(midnight - 100, midnight), (midnight, midnight + 50)]
+    assert C.split_at_local_midnight([(midnight + 5, midnight + 9)]) == [(midnight + 5, midnight + 9)]
+    assert len(C.split_at_local_midnight([(midnight - 10, midnight + 2 * 86400 + 10)])) == 4
+    assert C.epoch_day_role(midnight - 1) == "test" and C.epoch_day_role(midnight) == "mine"
+    ramp = (np.arange(400 * RATE) % 30000).astype(np.int16)
+    rec = tmp_path / "rec"
+    t_start = midnight - 200
+    make_wake_tree(rec, "bd8256", 1, t_start, ramp)           # 400 s file: 200 s on the 9th (test), 200 s on the 10th (mine)
+    ds = tmp_path / "ds"
+    ns = Namespace(dataset_root=str(ds), hours=100.0, devices="c3-a", devices_file=None, context="x", namespace="x", pod="x",
+                   container=None, recordings_root="/x", presses_file=None, no_presses=True, pg_pod="x", pg_container="x",
+                   pg_user="x", pg_db="x", min_age_s=600.0, trim_start_s=0.3, boundary_s=7.0, followup_s=60.0, exclude_s=10.0,
+                   min_seg_s=10.0, seed=1, now=t_start + 99999, dry_run=False, since=None, until=None, exclude_pipeline=[],
+                   out_name="neg-days", part="unassigned", part_test_day="test2-v5era", part_mine_day="mine-v5era")
+    s = N.run(ns, X.LocalFetcher(rec))
+    assert s["c3-a"]["hours_by_day_part"] == {"2026-11-09 test2-v5era": round((200 - 0.3) / 3600, 2),
+                                              "2026-11-10 mine-v5era": round((200 - 7) / 3600, 2)}
+    rows = C.read_jsonl(ds / "neg-days" / "manifest.jsonl")
+    assert sorted((r["split"], r["start_utc"] < X.utc_str(midnight), r["end_utc"] <= X.utc_str(midnight) or r["start_utc"] >= X.utc_str(midnight))
+                  for r in rows) == [("mine-v5era", False, True), ("test2-v5era", True, True)]
+    ns.part_mine_day = None
+    with pytest.raises(SystemExit):
+        N.run(ns, X.LocalFetcher(rec))

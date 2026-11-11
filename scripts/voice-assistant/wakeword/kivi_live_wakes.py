@@ -5,6 +5,7 @@ debug recordings so the owner can label them by listening.
     kivi_live_wakes.py list                 # detection runs in scope, counts per device / model / bucket (read only)
     kivi_live_wakes.py extract              # copy the clips and write live_wakes.csv
     kivi_live_wakes.py review               # YOU listen and label (plays audio; nobody else runs this)
+    kivi_live_wakes.py review --table miss_candidates.csv   # the same for the missed-wake candidates (see below)
     kivi_live_wakes.py autolabel [--dry-run] # local auto-labeller (kivi_autolabel.py): fills EMPTY label/speaker cells
     kivi_live_wakes.py split [--apply]      # after labelling: train / test by local day, counts only
 
@@ -27,6 +28,13 @@ The `trigger` column (wake | button | unknown) says whether the run was started 
 else, in practice the remote's mic button: the live model is replayed on the wake tail and must reach its live
 threshold in the last 2 s (kivi_autolabel.trigger_of). Button runs pair with an stt-only run, like a detection.
 The tool never prints audio content: counts, durations, times and levels only.
+
+Missed-wake candidates: `kivi_replay_mine.py candidates` cuts 6 s windows (`<dataset>/live-misses/<part>/<device>/<utc>/
+window.wav`) around replay peaks of the v5-era room audio where the wake word model did not fire, and writes
+`<dataset>/live-misses/miss_candidates.csv`. `review --table miss_candidates.csv` (a bare name is looked up in
+`live-misses/`) plays each window, best rank first, without showing the scores, and stores your label
+(attempt = someone said oye Kivi / Kivi to it, other-speech, tv-media, noise, unclear) and, for attempt and other-speech,
+the speaker. The live-wake review above is unchanged.
 """
 import argparse
 import csv
@@ -71,6 +79,10 @@ ERAS = (
     ("oye_kivi_next", "2026-11-08T13:28:10Z", None, None),
     ("oye_kivi", SCOPE_START, "2026-11-08T13:28:10Z", None),
 )
+
+MISS_LABELS = {"a": "attempt", "o": "other-speech", "t": "tv-media", "n": "noise", "u": "unclear"}   # miss-candidate review
+MISS_FIELDS = ("id", "device", "part", "utc", "peak_v1", "peak_v4", "peak_v5", "retry", "retry_detail", "rank",
+               "label", "speaker", "level_dbfs", "peak_dbfs", "clip")
 
 FIELDS = ("run_id", "device", "model", "utc", "wake_len", "stt_len", "bucket", "label", "speaker", "split",
           "sha256", "sha256_stt", "pipeline", "stt_run", "trigger", "label_source", "label_conf", "speaker_conf",
@@ -431,7 +443,82 @@ def ask(prompt, valid, input_fn):
             return s
 
 
+def miss_table_path(a):
+    """`--table` as given, else a bare name under `<dataset>/live-misses/`."""
+    p = Path(a.table).expanduser()
+    return p if (p.exists() or p.parent != Path(".")) else Path(a.dataset_root).expanduser() / "live-misses" / p.name
+
+
+def read_miss_table(path):
+    p = Path(path)
+    if not p.exists():
+        return []
+    with open(p, newline="", encoding="utf-8") as f:
+        return [{k: (row.get(k) or "") for k in MISS_FIELDS} for row in csv.DictReader(f)]
+
+
+def write_miss_table(path, rows):
+    """Atomic rewrite like `write_table`, mode 600."""
+    p = Path(path)
+    fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=p.name + ".", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=MISS_FIELDS, lineterminator="\n")
+            w.writeheader()
+            w.writerows(rows)
+            f.flush()
+            os.fsync(f.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, p)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def cmd_review_misses(a, player=None, input_fn=input, out=print):
+    table_path = miss_table_path(a)
+    rows = read_miss_table(table_path)
+    if not rows:
+        raise SystemExit(f"no table at {table_path}: run kivi_replay_mine.py candidates first")
+    base = table_path.parent
+    play = player or make_player(a.player)
+    key = lambda r: (float(r["rank"] or 0) * -1, r["id"])      # noqa: E731
+    todo = sorted(rows if a.again else [r for r in rows if not r["label"]], key=key)
+    out(f"{len(todo)} window(s) to label, {sum(1 for r in rows if r['label'])} already labelled. Each is 6 s; the wake word, "
+        "if any, is around the middle (3 s).")
+    out("keys: a = attempt (someone said oye Kivi / Kivi to it), o = other speech, t = tv / media, n = noise, u = unclear, "
+        "r = replay, s = skip, q = quit (progress is saved after every window)")
+    speakers = {"1": "spk01", "2": "spk02", "3": "spk-other", "4": "unknown"}
+    done = 0
+    try:
+        for i, r in enumerate(todo, 1):
+            out(f"\n[{i}/{len(todo)}] {r['id']} {r['device']} {r['utc']} ({r['part']})")
+            while True:
+                play(base / r["clip"])
+                k = ask("label [a/o/t/n/u], r = replay, s = skip, q = quit: ", tuple(MISS_LABELS) + ("r", "s", "q"), input_fn)
+                if k != "r":
+                    break
+            if k == "q":
+                break
+            if k == "s":
+                continue
+            r["label"] = MISS_LABELS[k]
+            if r["label"] in ("attempt", "other-speech"):
+                r["speaker"] = speakers[ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(speakers), input_fn)]
+            else:
+                r["speaker"] = ""
+            write_miss_table(table_path, rows)
+            done += 1
+    except (KeyboardInterrupt, EOFError):
+        out("\ninterrupted")
+    out(f"labelled {done} window(s) in this run; table saved ({table_path})")
+    return done
+
+
 def cmd_review(a, player=None, input_fn=input, out=print):
+    if getattr(a, "table", None):
+        return cmd_review_misses(a, player, input_fn, out)
     root = Path(a.dataset_root).expanduser()
     live = root / "live"
     table_path = live / "live_wakes.csv"
@@ -649,6 +736,7 @@ def main(argv=None):
     ap.add_argument("--now", type=float, help=argparse.SUPPRESS)
     ap.add_argument("--player", help="(review) player command, the file is appended; default pw-play, else aplay -q")
     ap.add_argument("--again", action="store_true", help="(review) go through labelled clips too")
+    ap.add_argument("--table", help="(review) label the missed-wake candidates of this table (miss_candidates.csv) instead of the live wakes")
     ap.add_argument("--apply", action="store_true", help="(split) write the proposal into the split column")
     ap.add_argument("--test-share", type=float, default=TEST_SHARE, help="(split) share of true wakes in test, default 0.30")
     ap.add_argument("--only-uncertain", action="store_true",

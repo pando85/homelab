@@ -29,7 +29,9 @@ What is kept: closed files only (not written for `--min-age-s`), minus
   and with `--exclude-pipeline NAME` (repeatable) no file of that pipeline directory at all.
 `--out-name` puts the pieces in `<dataset>/<out-name>/` with its own manifest (default `negatives`, so
 the set the training tools read is untouched) and `--part` is the `split` value written in the rows
-(default `unassigned`; `test2-v5era` for the held-out set of the v5 era).
+(default `unassigned`; `test2-v5era` for the held-out set of the v5 era). `--part-test-day X --part-mine-day Y` instead
+cut every piece at local midnight (Europe/Madrid) and give each piece the part of its day: alternating days, X on
+2026-11-09, -11, ... (test; never used to choose models or thresholds) and Y on 2026-11-08, -10, ... (mining / train).
 Pieces shorter than `--min-seg-s` are dropped. Files are picked at random (seeded) per device until the
 hours are reached. Nothing is deleted or overwritten; re-running skips what is already there.
 """
@@ -42,6 +44,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kivi_extract as X  # noqa: E402
@@ -183,6 +186,13 @@ def run(a, fetcher=None, presses=None):
     since = X.parse_when(a.since) if getattr(a, "since", None) else None
     until = X.parse_when(a.until) if getattr(a, "until", None) else None
     excl_pipes = list(getattr(a, "exclude_pipeline", None) or [])
+    day_parts = {"test": getattr(a, "part_test_day", None), "mine": getattr(a, "part_mine_day", None)}
+    by_day = any(day_parts.values())
+    if by_day and not all(day_parts.values()):
+        raise SystemExit("--part-test-day and --part-mine-day go together")
+    for v in day_parts.values():
+        if v and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", v):
+            raise SystemExit(f"bad part name {v!r}")
     manifest = root / out_name / "manifest.jsonl"
     done = {(r["device"], r["source_run"], r["start_utc"]) for r in C.read_jsonl(manifest)}
     summary = {}
@@ -197,17 +207,28 @@ def run(a, fetcher=None, presses=None):
             if total >= target:
                 break
             segs = plan_file(f, prev_end[id(f)], marks, a, swin.get(d, ()), after.get(d))
+            if by_day:
+                segs = [(x, y) for x, y in C.split_at_local_midnight(segs) if y - x >= a.min_seg_s]
             if segs:
                 picked.append((f, segs))
                 total += sum(y - x for x, y in segs)
         plans[d] = picked
         summary[d] = {"files_listed": len(files), "closed": len(closed), "files_picked": len(picked),
                       "pieces": sum(len(s) for _, s in picked), "hours": round(total / 3600, 2)}
+        if by_day:
+            ph = {}
+            for _, segs in picked:
+                for x, y in segs:
+                    key = (datetime.fromtimestamp(x, ZoneInfo(C.DAY_TZ)).date().isoformat(), day_parts[C.epoch_day_role(x)])
+                    ph[key] = ph.get(key, 0.0) + (y - x) / 3600
+            summary[d]["hours_by_day_part"] = {f"{k[0]} {k[1]}": round(v, 2) for k, v in sorted(ph.items())}
     print(f"press and cue marks excluded: {len(marks)}; session windows excluded: "
           f"{ {d: len(w) for d, w in swin.items()} }; excluded from a time on: "
           f"{ {d: X.utc_str(t) for d, t in after.items()} }")
     for d, s in summary.items():
         print(f"  {d}: {s['files_listed']} files, {s['closed']} closed, picked {s['files_picked']} ({s['pieces']} pieces, {s['hours']} h)")
+        for k, v in s.get("hours_by_day_part", {}).items():
+            print(f"      {k}: {v} h")
     if a.dry_run:
         return summary
     C.private_mkdir(root / out_name, root)
@@ -248,7 +269,7 @@ def run(a, fetcher=None, presses=None):
             for s0, s1, w, rel, t0, t1 in todo:
                 row = C.make_row(
                     origin="negatives", session="negatives", source=src, device=d, session_device=d, speaker="",
-                    split=part, eval_channel=True, condition="household", label="negative", kind="negative",
+                    split=(day_parts[C.epoch_day_role(t0)] if by_day else part), eval_channel=True, condition="household", label="negative", kind="negative",
                     clip=rel, start_utc=X.utc_str(t0), end_utc=X.utc_str(t1), source_run=run_id, revision="")
                 C.append_jsonl(manifest, [row])
                 rows.append(row)
@@ -284,6 +305,9 @@ def main(argv=None):
                     help="skip every file of this pipeline directory (exact name, repeatable), e.g. 'Kiwi Test'")
     ap.add_argument("--out-name", default="negatives", help="directory under the dataset root for the pieces and their manifest")
     ap.add_argument("--part", default="unassigned", help="the `split` value written in the manifest rows, e.g. test2-v5era")
+    ap.add_argument("--part-test-day", help="with --part-mine-day: split every piece at local (Europe/Madrid) midnight and "
+                    "write this `split` value for the test days (2026-11-09, -11, ..., alternating), e.g. test2-v5era")
+    ap.add_argument("--part-mine-day", help="the `split` value for the mining / train days (2026-11-08, -10, ...), e.g. mine-v5era")
     ap.add_argument("--min-age-s", type=float, default=600.0, help="a file is closed when not written for this long")
     ap.add_argument("--trim-start-s", type=float, default=0.3)
     ap.add_argument("--boundary-s", type=float, default=7.0)

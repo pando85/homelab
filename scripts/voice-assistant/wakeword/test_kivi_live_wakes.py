@@ -353,3 +353,40 @@ def test_split_alternate_day_rule(tmp_path):
     ns.rule, ns.apply = "alternate-day", True
     L.cmd_split(ns, out=lambda *_: None)
     assert [r["split"] for r in L.read_table(table)] == ["train", "test", "train"]
+
+
+def test_review_miss_candidates_table(tmp_path):
+    ds = tmp_path / "ds"
+    misses = ds / "live-misses"
+    rows = []
+    for i, (rank, part) in enumerate([(0.9, "mine-v5era"), (1.4, "test2-v5era"), (1.1, "mine-v5era"), (0.5, "mine-v5era")], 1):
+        d = misses / part / "c3-a" / f"2026111{i}T100000.000Z"
+        d.mkdir(parents=True)
+        (d / "window.wav").write_bytes(C.wav_header(0))
+        rows.append({k: "" for k in L.MISS_FIELDS} | {"id": f"mc{i:03d}", "device": "c3-a", "part": part, "utc": d.name,
+                                                      "rank": str(rank), "clip": f"{part}/c3-a/{d.name}/window.wav"})
+    table = misses / "miss_candidates.csv"
+    L.write_miss_table(table, rows)
+    assert stat.S_IMODE(table.stat().st_mode) == 0o600
+    ns = Namespace(dataset_root=str(ds), table="miss_candidates.csv", player=None, again=False)       # bare name: found under live-misses/
+    played, out = [], []
+    answers = iter(["x", "a", "5", "2",       # best rank (mc002): invalid keys asked again, attempt, speaker 2
+                    "r", "o", "3",            # mc003: replay, other-speech, spk-other
+                    "s",                      # mc001: skip
+                    "t"])                     # mc004: tv-media, no speaker asked
+    n = L.cmd_review(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: next(answers), out=out.append)
+    assert n == 3 and [p.parent.parent.parent.name for p in played[:1]] == ["test2-v5era"]
+    assert [p.name for p in played] == ["window.wav"] * 5                                              # one file per clip, plus the replay
+    got = {r["id"]: (r["label"], r["speaker"]) for r in L.read_miss_table(table)}
+    assert got == {"mc002": ("attempt", "spk02"), "mc003": ("other-speech", "spk-other"), "mc001": ("", ""), "mc004": ("tv-media", "")}
+    assert not any("0.9" in o or "rank" in o for o in out)                                           # scores are not shown
+    # a labelled window is never offered again; --again goes through them all; quit saves what was done
+    played.clear()
+    L.cmd_review(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: "q", out=lambda *_: None)
+    assert len(played) == 1 and played[0].parent.name == "20261111T100000.000Z"
+    ns.again = True
+    played.clear()
+    L.cmd_review(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: "q", out=lambda *_: None)
+    assert played[0].parent.name == "20261112T100000.000Z"                                            # best rank first (mc002)
+    # the live-wake review is unchanged without --table
+    assert getattr(Namespace(), "table", None) is None
