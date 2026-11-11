@@ -420,7 +420,8 @@ commissioning test passed with the TV (max ping gap 0.22 s).
 
 Preconditions:
 
-- SOC above 30 %, battery in Bypass, Omnibattery `balanced`, backup-port load below the 500 W threshold.
+- SOC above 30 %, battery in Bypass, Omnibattery `balanced`, backup-port load (the servers, about 240 W) with the 50 W backup threshold
+  (workaround removed 2026-11-11), so the status must be `balanced` in Bypass.
 - Kill switch `input_boolean.battery_optimizer_live` **off** (both direction switches off), so the
   optimizer does not chase the battery while it is islanded. Note the time; turn it back on at the end.
 - A second way to reach the plug if HA misbehaves: the relay button, and the ESPHome logs from a
@@ -500,8 +501,8 @@ Preconditions (owner):
 - Omnibattery: competing strategies off
   ([configuration](#device-facts-and-omnibattery-configuration)); the PD controller stays on `balanced`
   (`number.omnibattery_pd_controller_max_power_change` 800 W; an earlier version of this page asked
-  for 2000 W, but the PD log shows 800 W since 2026-11-03 and it never bound). Note the backup threshold
-  [workaround](../troubleshooting/home-assistant-omnibattery.md#workaround-active-since-2026-11-03).
+  for 2000 W, but the PD log shows 800 W since 2026-11-03 and it never bound). The backup threshold is back at 50 W
+  (the [workaround](../troubleshooting/home-assistant-omnibattery.md#workaround-removed-2026-11-11) was removed on 2026-11-11).
 - At the time (2026-11-03) the system caps were 1000 W charge / 800 W discharge until go-live (steps 1-2
   of the live phase), so in `dry_run` the charge clamping reflected the 1000 W cap minus the house
   load. Current values: 2500 W / 2500 W since go-live, see [Entities](#entities).
@@ -586,18 +587,19 @@ and `live`; the HA-side rules read `hass_*` and only fire while the kill switch 
 | `BatteryOptimizerChargeClamped` | `battery_optimizer_actuator_clamped_watts > 1000` for 30 m (sized for the 2500 W caps). **Unconfirmed metric name** from the unreleased optimizer change; check it against the released `/metrics` |
 | `BatteryMarginCanBeLowered` | a suggestion, never an action: 7 days at the current `actuation.discharge_margin_w`, at most 7 Wh exported, the lowest 0.1% of discharge-time grid samples at 25 W or more of import and over 50000 samples (needs the optimizer release that adds `actuator_discharge_grid_watts`; silent before it). `severity: warning` so it reaches Telegram. Lower the margin by 25 W in `files/service-overrides.yaml` by hand; the 7-day clock restarts. Plan: `docs/planning/discharge-margin-tuning.md` in the app repo |
 
-### Omnibattery backup cooldown workaround
+### Omnibattery backup cooldown workaround (removed 2026-11-11)
 
-`number.venus_backup_offgrid_threshold` is **500 W** (default 50 W) because of upstream bug
+`number.venus_backup_offgrid_threshold` was **500 W** from 2026-11-03 because of upstream bug
 ffunes/Omnibattery#660 (`backup_mode` latched after the grid returns while the backup port has a load).
-The fix is ffunes/Omnibattery#723. Once a release with #723 is installed, set the threshold back to
-50 W and check that the status returns to `balanced` within 5 minutes with a load on the backup port in
-Bypass. Side effects of the high threshold and the full procedure:
+The fix, ffunes/Omnibattery#723, is in Omnibattery v1.6.0 (installed 2026-11-10), and the owner set the
+threshold back to the default **50 W** on 2026-11-11 23:17 local; the passive check passed (`balanced` for
+20 minutes in Bypass with 237 to 251 W on the backup port). The supervised grid-loss test is pending.
+If the latch returns, put 500 W back and reopen the upstream issue. Details and the rollback:
 [`home-assistant-omnibattery.md`](../troubleshooting/home-assistant-omnibattery.md).
 
 ## Battery settings: where they are and how to read them
 
-The battery is a Marstek Venus E V3 driven by Omnibattery (v1.5.1b1 at the time of writing). Settings sit in
+The battery is a Marstek Venus E V3 driven by Omnibattery (v1.6.0 at the time of writing, since 2026-11-10). Settings sit in
 three places: the device (Marstek app), Omnibattery's own entities in Home Assistant, and the optimizer's
 `files/service-overrides.yaml` or the image's base `service.yaml`. All reads below are read-only.
 

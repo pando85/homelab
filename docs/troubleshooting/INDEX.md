@@ -449,12 +449,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `hass_*` history older than 10 days is only in `prometheus-long-term`. See
   `docs/troubleshooting/home-assistant-dashboards.md`
 
-- Omnibattery v1.5.0 (and the v1.5.1b1 beta, which lacks #723) can latch
+- Omnibattery v1.5.0 and the v1.5.1b1 beta could latch
   `sensor.omnibattery_integration_status` at `backup_mode` after the grid returns while the battery's
   backup port has a load above `number.venus_backup_offgrid_threshold` (upstream ffunes/Omnibattery#660, fix #723): the 5-minute cooldown re-arms every poll, and the
-  battery optimizer holds safe idle. Workaround: the threshold at 500 W instead of 50 W, which hides
-  small-load outages from Omnibattery and skips its post-backup cooldown. Set it back to 50 W once
-  #723 is released. See `docs/troubleshooting/home-assistant-omnibattery.md`
+  battery optimizer holds safe idle. Fixed in v1.6.0 (installed 2026-11-10); the 500 W threshold workaround
+  was removed on 2026-11-11 (back to 50 W). The supervised grid-loss test is pending; if the latch ever
+  returns, set the threshold to 500 W again and reopen the upstream issue. See
+  `docs/troubleshooting/home-assistant-omnibattery.md`
 
 ## Applications
 
