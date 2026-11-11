@@ -121,9 +121,10 @@ def test_is_uncertain():
 
 def test_trigger_of():
     thr = A.MODEL_SPECS["oye_kivi"][1]
-    pk = lambda v: {"oye_kivi": (v, v, v, 5.9)}                                        # noqa: E731
+    pk = lambda v: {"oye_kivi": (v, v, v, 5.9, v)}                                        # noqa: E731
     assert A.trigger_of("oye_kivi", "", pk(thr + 0.01), 6.0) == ("wake", "same", "cross")
-    assert A.trigger_of("oye_kivi", "", pk(thr - 0.05), 6.0) == ("wake", "same", "near")
+    assert A.trigger_of("oye_kivi", "", pk(thr - 0.001), 6.0) == ("unknown", "same", "weak")   # no near-miss class: exact replay
+    assert A.trigger_of("oye_kivi", "", pk(thr - 0.05), 6.0) == ("unknown", "same", "weak")
     assert A.trigger_of("oye_kivi", "", pk(0.7), 6.0) == ("unknown", "same", "weak")
     assert A.trigger_of("oye_kivi", "Kiwi/12", pk(0.01), 6.0) == ("button", "sep", "none")
     assert A.trigger_of("oye_kivi", "", pk(0.01), 0.5)[0] == "unknown"                 # tail too short
@@ -275,9 +276,10 @@ class FakeScorer:
     def __init__(self, by_marker):
         self.by = by_marker
 
-    def peaks(self, pcm):
+    def peaks(self, pcm, n_total=None):
+        self.n_total = n_total
         v = self.by.get(int(pcm[0]), 0.0)
-        return {"oye_kivi": (v, v, v, 5.5), "oye_kivi_next": (v, v, v, 5.5)}
+        return {"oye_kivi": (v, v, v, 5.5, v), "oye_kivi_next": (v, v, v, 5.5, v)}
 
 
 def write_clip(live, dev, utc, marker, spk_level, dur=6.0):
@@ -358,3 +360,109 @@ def test_autolabel_refuses_to_write_while_review_runs(tmp_path, monkeypatch):
         L.cmd_autolabel(a, out=lambda *_: None, transcriber=FakeTranscriber({}), embedder=FakeEmbedder(),
                         scorer=FakeScorer({}))
     assert table.read_text() == before and not list(table.parent.glob("*.bak-*"))
+
+
+# ---------------------------------------------------------------------------------------------
+# exact replay: tail length from wake_len, trigger-only pass
+# ---------------------------------------------------------------------------------------------
+
+
+def test_wake_total_from_wake_len():
+    assert A.wake_total({"wake_len": "13.12"}, 96000) == 209920
+    assert A.wake_total({"wake_len": "6.00"}, 96000) == 96000
+    assert A.wake_total({"wake_len": "3.5"}, 96000) == 96000          # shorter than the tail: the tail itself
+    assert A.wake_total({"wake_len": ""}, 96000) == 96000 and A.wake_total({}, 5) == 5
+    assert A.wake_total({"wake_len": "abc"}, 5) == 5
+
+
+def test_evidence_set_keeps_everything_else():
+    ev = "ph=1;v4=0.1;own2=0.2;pe_src=model;pe_ok=;trig=wake/same/cross;sp3=1.0;conflict=owner-label-vs-button"
+    out = A.evidence_set(ev, {"v4": "0.9", "trig": "button/sep/none", "new": "1"}, drop=("conflict",))
+    assert out == "ph=1;v4=0.9;own2=0.2;pe_src=model;pe_ok=;trig=button/sep/none;sp3=1.0;new=1"
+    assert A.evidence_get(ev, "pe_src") == "model" and A.evidence_get(ev, "pe_ok") == "" and A.evidence_get(ev, "zz") is None
+    assert A.evidence_set("", {"a": 1}) == "a=1"
+
+
+def trow(run, ev="ph=0;v4=0.0;v5=0.0;own2=0.0;pe_src=;pe_ok=;trig=button/sep/none;sp3=0.0", **kw):
+    return blank(run, model="oye_kivi_next", auto_evidence=ev, **kw)
+
+
+def tres(trig="wake", **kw):
+    return {"trigger": trig, "cross": ("same", "cross" if trig == "wake" else "none"), "trig": f"{trig}/same/x", "t_model": 5.5,
+            "peak_t_s": "5.50", "peak_raw": "0.9900", "v4": "0.5", "v5": "0.99", "own2": "0.99", "phrase_end_s": "5.50",
+            "continuous_command": "true"} | kw
+
+
+def test_merge_trigger_only_changes_model_parts_only():
+    rows = [
+        trow("auto_btn", label="not-a-wake", label_source="auto-v1", label_conf="0.90", speaker="unknown", trigger="button",
+             phrase_end_s="", continuous_command=""),                                         # relabel: button no more
+        trow("owner_btn", label="false", speaker="spk01", trigger="wake"),                    # owner row, now button: conflict
+        trow("owner_ok", ev="ph=1;trig=wake/same/cross;conflict=owner-label-vs-button", label="true", speaker="spk01",
+             trigger="button"),                                                               # stale conflict dropped
+        trow("model_pe", ev="ph=0;v4=0.1;v5=0.2;own2=0.3;pe_src=model;pe_ok=;trig=wake/same/near", label="true", label_source="auto-v1",
+             label_conf="0.92", speaker="spk01", trigger="wake", phrase_end_s="4.00", continuous_command="false"),
+        trow("words_pe", ev="ph=1;pe_src=words;pe_ok=1;trig=wake/same/near", label="true", label_source="auto-v1", label_conf="0.92",
+             speaker="spk01", trigger="wake", phrase_end_s="4.00", continuous_command="false"),
+        trow("noev", ev="", trigger=""),
+        trow("untouched"),
+    ]
+    before = {r["run_id"]: dict(r) for r in rows}
+    results = {"auto_btn": tres("wake"), "owner_btn": tres("button"), "owner_ok": tres("wake"), "model_pe": tres("wake"),
+               "words_pe": tres("wake"), "noev": tres("wake")}
+    n = A.merge_trigger_only(rows, results)
+    by = {r["run_id"]: r for r in rows}
+    for r in rows:                                                                         # labels and speakers never change
+        b = before[r["run_id"]]
+        assert all(r[k] == b[k] for k in ("label", "label_source", "label_conf", "speaker", "split", "stt_run", "sha256"))
+    a = by["auto_btn"]
+    assert a["trigger"] == "wake" and a["peak_t_s"] == "5.50" and a["peak_raw"] == "0.9900"
+    assert a["auto_evidence"].endswith(";relabel=trigger-changed") and "trig=wake/same/x" in a["auto_evidence"]
+    assert a["phrase_end_s"] == ""                                                         # pe_src was empty: untouched
+    o = by["owner_btn"]
+    assert o["trigger"] == "button" and "conflict=owner-label-vs-button" in o["auto_evidence"] and "relabel" not in o["auto_evidence"]
+    assert "conflict" not in by["owner_ok"]["auto_evidence"] and by["owner_ok"]["trigger"] == "wake"
+    m = by["model_pe"]
+    assert m["phrase_end_s"] == "5.50" and m["continuous_command"] == "true"
+    assert m["auto_evidence"] == "ph=0;v4=0.5;v5=0.99;own2=0.99;pe_src=model;pe_ok=;trig=wake/same/x"
+    w = by["words_pe"]
+    assert w["phrase_end_s"] == "4.00" and w["continuous_command"] == "false" and "pe_ok=1" in w["auto_evidence"]
+    assert by["noev"]["auto_evidence"] == "" and by["noev"]["trigger"] == "wake" and by["noev"]["peak_raw"] == "0.9900"
+    assert by["untouched"] == before["untouched"]
+    assert n["relabel"] == 1 and n["owner_conflicts"] == 1 and n["conflict_added"] == 1 and n["conflict_dropped"] == 1
+    again = [dict(r) for r in rows]
+    n2 = A.merge_trigger_only(rows, results)                                               # idempotent
+    assert rows == again and n2["relabel"] == 0 and n2["relabel_total"] == 1
+
+
+def test_trigger_only_on_a_clip_with_a_fake_scorer(tmp_path):
+    x = burst(6.0, 1.0, 5.0)
+    x[0] = 11
+    C.write_wav_new(tmp_path / "wake_tail.wav", x)
+    C.write_wav_new(tmp_path / "stt.wav", burst(3.0, 0.2, 2.5, seed=2))
+    row = blank("a", model="oye_kivi_next", wake_len="13.12", stt_run="")
+    sc = FakeScorer({11: 0.99})
+    res = A.trigger_only(row, tmp_path, sc)
+    assert sc.n_total == 209920 and res["trigger"] == "wake" and res["cross"] == ("same", "cross")
+    assert res["peak_t_s"] == "5.50" and res["peak_raw"] == "0.9900" and res["phrase_end_s"] == "5.50" and res["v5"] == "0.99"
+    assert A.trigger_only(row, tmp_path / "nope", sc) is None
+
+
+def test_cmd_trigger_only_never_loads_the_text_models(tmp_path):
+    root = make_dataset(tmp_path)
+    table = root / "live" / "live_wakes.csv"
+    rows = L.read_table(table)
+    for r in rows:
+        r["auto_evidence"] = "ph=0;v4=0.0;v5=0.0;own2=0.0;pe_src=;pe_ok=;trig=wake/same/cross;sp3=0.0"
+        r["trigger"] = "wake"
+    L.write_table(table, rows)
+    owner_before = {r["run_id"]: (r["label"], r["speaker"]) for r in rows}
+    a = Namespace(dataset_root=str(root), dry_run=False, trigger_only=True, work="/nonexistent", pgrep=lambda: False, wait_kw={})
+    out = []
+    L.cmd_autolabel(a, out=out.append, scorer=FakeScorer({11: 0.99, 12: 0.0, 13: 0.0, 14: 0.99, 15: 0.0}))
+    new = {r["run_id"]: r for r in L.read_table(table)}
+    assert [new[f"Kiwi/{m}"]["trigger"] for m in (11, 12, 13, 14, 15)] == ["wake", "button", "button", "wake", "button"]
+    assert all(new[k]["label"] == v[0] and new[k]["speaker"] == v[1] for k, v in owner_before.items())
+    assert "conflict=owner-label-vs-button" in new["Kiwi/15"]["auto_evidence"]               # owner label true, button now
+    assert new["Kiwi/11"]["peak_t_s"] == "5.50" and list(table.parent.glob("live_wakes.csv.bak-*"))
+    assert any("trigger after" in o for o in out)

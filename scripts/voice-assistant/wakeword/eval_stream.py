@@ -45,20 +45,54 @@ def load_models(specs):
     return feats, models
 
 
-def stream(feats, models, pcm16):
-    """Feed int16 audio; returns {name: probs array} and step times (end of the 80 ms step, s)."""
+FRAME = 160          # the remainder after the last whole chunk is fed in frames of this size (10 ms)
+
+
+def wake_samples(wake_len_s):
+    """Length in samples of a full HA wake file from its `wake_len` (seconds, printed with 0.01 s resolution). The file
+    length is a multiple of 160 samples, so the rounding is exact."""
+    return int(round(float(wake_len_s) * RATE / FRAME)) * FRAME
+
+
+def grid_skip(n_audio, n_total=None):
+    """Samples to drop from the start of audio that is the last `n_audio` samples of a stream of `n_total` samples, so that
+    the rest starts on the server's 1280-sample grid (anchored at sample 0 of the stream). 0 when `n_total` is None."""
+    if n_total is None:
+        return 0
+    return (-(int(n_total) - int(n_audio))) % CHUNK
+
+
+def stream(feats, models, pcm16, n_total=None):
+    """Feed int16 audio the way the Wyoming server does; returns {name: probs array} and step times (s from the start of
+    `pcm16`: the end of the audio consumed when the step was formed).
+
+    `n_total`: length in samples of the full stream `pcm16` is the tail of (None: `pcm16` is the stream from sample 0).
+    The server's 1280-sample grid is anchored at sample 0 of the stream, so the first `grid_skip` samples of a tail are
+    dropped (they belong to a step formed before the tail) and the rest is fed from the grid. Whole 1280-sample chunks
+    first, then the remainder in 160-sample frames including the final partial frame: the last step of a file is formed in
+    the remainder (HA stops recording 10-20 ms after the detection step), so dropping it loses the live detection."""
     feats.reset()
     for m in models.values():
         m.reset()
     out = {n: [] for n in models}
     times = []
-    for k in range(0, len(pcm16) - CHUNK + 1, CHUNK):
+    skip = min(grid_skip(len(pcm16), n_total), len(pcm16))
+    n_chunks = (len(pcm16) - skip) // CHUNK
+    for i in range(n_chunks):
+        k = skip + i * CHUNK
         for emb in feats.process_streaming(pcm16[k:k + CHUNK].tobytes()):
             for n, m in models.items():
                 out[n].extend(m.process_streaming(emb))
         times.append((k + CHUNK) / RATE)
-    # The feature extractor starts with 8 s of zeros ("autofill"), so the first outputs belong to no
-    # input chunk; align the newest output with the newest chunk and drop the surplus at the start.
+    pos = skip + n_chunks * CHUNK
+    for k in range(pos, len(pcm16), FRAME):
+        end = min(k + FRAME, len(pcm16))
+        for emb in feats.process_streaming(pcm16[k:end].tobytes()):
+            for n, m in models.items():
+                out[n].extend(m.process_streaming(emb))
+            times.append(end / RATE)
+    # The feature extractor starts with 8 s of zeros ("autofill"), so the first outputs belong to no input chunk; align
+    # the newest output with the newest step and drop the surplus at the start.
     n_steps = min([len(times)] + [len(v) for v in out.values()])
     return {n: np.asarray(v[len(v) - n_steps:], dtype=np.float32) for n, v in out.items()}, \
         np.asarray(times[len(times) - n_steps:])

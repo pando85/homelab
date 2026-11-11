@@ -7,6 +7,7 @@ debug recordings so the owner can label them by listening.
     kivi_live_wakes.py review               # YOU listen and label (plays audio; nobody else runs this)
     kivi_live_wakes.py review --table miss_candidates.csv   # the same for the missed-wake candidates (see below)
     kivi_live_wakes.py autolabel [--dry-run] # local auto-labeller (kivi_autolabel.py): fills EMPTY label/speaker cells
+    kivi_live_wakes.py autolabel --trigger-only [--dry-run]   # only trigger / peak_t_s / peak_raw / model evidence (exact replay)
     kivi_live_wakes.py split [--apply]      # after labelling: train / test by local day, counts only
 
 What a detection is. The satellite's wake file (`00_wake-*.wav`) is the continuous stream from the start
@@ -87,7 +88,7 @@ MISS_FIELDS = ("id", "device", "part", "utc", "peak_v1", "peak_v4", "peak_v5", "
 FIELDS = ("run_id", "device", "model", "utc", "wake_len", "stt_len", "bucket", "label", "speaker", "split",
           "sha256", "sha256_stt", "pipeline", "stt_run", "trigger", "label_source", "label_conf", "speaker_conf",
           "auto_evidence", "phrase_end_s", "continuous_command", "phrase_in_stt", "stt_phrase_start_s",
-          "stt_phrase_end_s")
+          "stt_phrase_end_s", "peak_t_s", "peak_raw")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -347,7 +348,7 @@ def trigger_for(row, tail_path, scorer):
     if scorer is None:
         return "unknown"
     pcm = C.read_pcm16(tail_path)
-    return A.trigger_of(row["model"], row["stt_run"], scorer.peaks(pcm), len(pcm) / RATE)[0]
+    return A.trigger_of(row["model"], row["stt_run"], scorer.peaks(pcm, A.wake_total(row, len(pcm))), len(pcm) / RATE)[0]
 
 
 def cmd_extract(a, fetcher=None, out=print, scorer=False):
@@ -660,7 +661,57 @@ def cmd_split(a, out=print):
 # ---------------------------------------------------------------------------------------------
 
 
+def cmd_trigger_only(a, out=print, scorer=None):
+    """Recompute only the model-derived cells (trigger, peak_t_s, peak_raw, the model parts of auto_evidence) with the
+    exact replay of the live model; no transcription, no speaker embedding (faster-whisper and ECAPA are not loaded).
+    Labels and speakers are never changed (see kivi_autolabel.merge_trigger_only)."""
+    import kivi_autolabel as A
+    root = Path(a.dataset_root).expanduser()
+    live = root / "live"
+    table_path = live / "live_wakes.csv"
+    rows = read_table(table_path)
+    if not rows:
+        raise SystemExit(f"no table at {table_path}: run extract first")
+    if scorer is None:
+        scorer = A.ModelScorer(getattr(a, "work", None) or os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
+    results, missing = {}, 0
+    for r in rows:
+        res = A.trigger_only(r, live / r["device"] / r["utc"], scorer)
+        if res is None:
+            missing += 1
+        else:
+            results[r["run_id"]] = res
+    before = Counter(r["trigger"] or "empty" for r in rows)
+    xt = Counter((res["cross"][0], res["cross"][1]) for res in results.values())
+    out(f"trigger-only: {len(results)} row(s) replayed, {missing} without a tail; trigger before: "
+        + ", ".join(f"{k} {n}" for k, n in sorted(before.items())))
+    out("crossing (a x c): " + ", ".join(f"{k[0]}x{k[1]} {n}" for k, n in sorted(xt.items())))
+    if getattr(a, "dry_run", False):
+        fresh = read_table(table_path)
+        n = A.merge_trigger_only(fresh, results)
+        out("trigger after: " + ", ".join(f"{k} {c}" for k, c in sorted(Counter(r["trigger"] or "empty" for r in fresh).items()))
+            + f"; {dict(n)}; dry run: table not written")
+        return results
+    if not A.wait_for_review(getattr(a, "pgrep", None), out=out, **getattr(a, "wait_kw", {})):
+        raise SystemExit("a review process is still running after 15 min: table not written")
+    backup = table_path.with_name(table_path.name + ".bak-" + A.utc_stamp())
+    shutil.copy2(table_path, backup)
+    os.chmod(backup, 0o600)
+    fresh = read_table(table_path)                           # fresh read right before the write: owner labels win
+    owner_before = [(r["run_id"], r["label"], r["label_source"], r["speaker"]) for r in fresh if r["label"] and not r["label_source"].startswith("auto")]
+    n = A.merge_trigger_only(fresh, results)
+    owner_after = [(r["run_id"], r["label"], r["label_source"], r["speaker"]) for r in fresh if r["label"] and not r["label_source"].startswith("auto")]
+    if owner_before != owner_after:
+        raise SystemExit("owner cells changed: table not written (bug)")
+    write_table(table_path, fresh)
+    out("trigger after: " + ", ".join(f"{k} {c}" for k, c in sorted(Counter(r["trigger"] or "empty" for r in fresh).items()))
+        + f"; written: {dict(n)}; backup {backup.name}")
+    return results
+
+
 def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
+    if getattr(a, "trigger_only", False):
+        return cmd_trigger_only(a, out=out, scorer=scorer)
     import kivi_autolabel as A
     root = Path(a.dataset_root).expanduser()
     live = root / "live"
@@ -697,7 +748,7 @@ def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
     ag = A.agreement(rows, results)
     xt = Counter((res["cross"][0], res["cross"][1]) for res in results.values())
     out("trigger check (a = request audio in the wake run `same` / separate stt-only run `sep`; c = live model score "
-        "in the last 2 s `cross` / `near` / `none`): " + ", ".join(f"{k[0]}x{k[1]} {n}" for k, n in sorted(xt.items())))
+        "in the last 2 s `cross` / `weak` / `none`): " + ", ".join(f"{k[0]}x{k[1]} {n}" for k, n in sorted(xt.items())))
     out("auto labels: " + ", ".join(f"{k} {n}" for k, n in sorted(Counter(r["label"] for r in results.values()).items())))
     out("agreement with owner cells present at the start: " + (", ".join(f"{k} {n}" for k, n in sorted(ag.items())) or
                                                                "no owner cells"))
@@ -746,6 +797,9 @@ def main(argv=None):
                          "recent-days: the older share-per-speaker proposal")
     ap.add_argument("--dry-run", action="store_true", help="(autolabel) analyse and print counts, write nothing")
     ap.add_argument("--redo", action="store_true", help="(autolabel) recompute cells that an earlier autolabel run wrote")
+    ap.add_argument("--trigger-only", action="store_true",
+                    help="(autolabel) recompute only trigger, peak_t_s, peak_raw and the model parts of auto_evidence "
+                         "(exact replay); no transcription or speaker embedding; labels and speakers untouched")
     ap.add_argument("--work", help="(autolabel, extract) workspace holding the model files, default $WORK")
     a = ap.parse_args(argv)
     {"list": cmd_list, "extract": cmd_extract, "review": cmd_review, "split": cmd_split,

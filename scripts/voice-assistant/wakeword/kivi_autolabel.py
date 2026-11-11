@@ -16,9 +16,11 @@ Privacy (rules of the owner, 2026-11-11):
 
 Trigger (column `trigger`, wake | button | unknown): the remote's mic button (push to talk) also closes a wake file and
 starts a speech-to-text run, so some "wakes" are not detections. The model that was live (column `model`) is replayed
-on the wake tail with the server's streaming features; if its raw score never reaches the live threshold in the last
-TRIGGER_LAST_S seconds it was not a wake detection. c = `cross` (>= threshold), `near` (within NEAR_MISS below it; the
-replay of a tail runs a little below the live score, so these count as wake), `weak` (BUTTON_MAX to there: unknown) or
+on the wake tail with the server's exact framing (`eval_stream.stream(..., n_total=)`: the 1280-sample grid anchored at
+sample 0 of the full wake file, whose length comes from the `wake_len` column, 160-sample frames, final partial piece
+included); if its raw score never reaches the live threshold in the last TRIGGER_LAST_S seconds it was not a wake
+detection. With this replay a real detection crosses exactly, at the last embedding step (data audit 2026-11-11, 51 of 52
+same-run tails), so there is no tolerance. c = `cross` (>= threshold: wake), `weak` (BUTTON_MAX to there: unknown) or
 `none` (below BUTTON_MAX: `button`, or another trigger). A tail shorter than MIN_TAIL_S is `unknown`. Evidence (a): the request audio in the same run directory
 (`same`) or from a separate stt-only run (`sep`, the `stt_run` column). Rows with trigger=button get the label
 `not-a-wake` (0.9; 0.6 when the text says "oye Kivi" anyway, so the owner looks); an owner label on such a row is
@@ -72,7 +74,6 @@ RATE = C.RATE
 SOURCE = "auto-v1"
 SHORT_STT_S = 1.5
 TRIGGER_LAST_S = 2.0
-NEAR_MISS = 0.10                     # replay scores of real detections run up to ~0.1 below the live threshold
 BUTTON_MAX = 0.5                     # below this raw score in the last TRIGGER_LAST_S nothing like a detection happened
 MIN_TAIL_S = 1.0
 TAIL_LAST_S = 3.0
@@ -447,32 +448,47 @@ class EcapaEmbedder:
 
 
 class ModelScorer:
-    """peaks(pcm16) -> {model: (peak over the tail, over the last 3 s, over the last TRIGGER_LAST_S)} with the server's
-    streaming features (raw, uncalibrated probabilities); the 4th value is the time (s from the tail start) of the first step in the last
-    TRIGGER_LAST_S at or above the live threshold, else of the highest step there."""
+    """peaks(pcm16, n_total) -> {model: (peak over the tail, over the last 3 s, over the last TRIGGER_LAST_S, t, raw)} with
+    the server's exact framing (raw, uncalibrated probabilities; `n_total` = samples of the full wake file the tail ends,
+    see eval_stream.stream); t is the time (s from the tail start) of the first step in the last TRIGGER_LAST_S at or
+    above the live threshold, else of the highest step there, and raw is the score of that step."""
 
     def __init__(self, work):
         from eval_stream import load_models
         self.specs = [f"{n}={Path(work) / rel}" for n, (rel, _) in MODEL_SPECS.items()]
         self.feats, self.models = load_models(self.specs)
 
-    def peaks(self, pcm):
+    def peaks(self, pcm, n_total=None):
         from eval_stream import stream
-        probs, times = stream(self.feats, self.models, pcm)
+        probs, times = stream(self.feats, self.models, pcm, n_total=n_total)
+        t_end = len(pcm) / RATE
         out = {}
         for n, p in probs.items():
             def top(sec):
-                q = p[times >= times[-1] - sec] if len(times) else p
+                q = p[times >= t_end - sec] if len(times) else p
                 return float(q.max()) if len(q) else 0.0
             thr = MODEL_SPECS.get(n, (None, 2.0))[1]
-            tc = None
+            tc = raw = None
             if len(times):
-                idx = np.flatnonzero(times >= times[-1] - TRIGGER_LAST_S)
-                q = p[idx]
-                hit = np.flatnonzero(q >= thr)
-                tc = float(times[idx[hit[0]]]) if len(hit) else float(times[idx[int(np.argmax(q))]])
-            out[n] = (float(p.max()) if len(p) else 0.0, top(TAIL_LAST_S), top(TRIGGER_LAST_S), tc)
+                idx = np.flatnonzero(times >= t_end - TRIGGER_LAST_S)
+                if len(idx):
+                    q = p[idx]
+                    hit = np.flatnonzero(q >= thr)
+                    j = idx[hit[0]] if len(hit) else idx[int(np.argmax(q))]
+                    tc, raw = float(times[j]), float(p[j])
+            out[n] = (float(p.max()) if len(p) else 0.0, top(TAIL_LAST_S), top(TRIGGER_LAST_S), tc, raw)
         return out
+
+
+def wake_total(row, tail_len):
+    """Samples of the full wake file the tail is the end of (from the `wake_len` column, exact: the length is a multiple
+    of 160 samples); the tail's own length when the column is empty, unreadable or shorter than the tail."""
+    from eval_stream import wake_samples
+    try:
+        n = wake_samples(row.get("wake_len") or 0)
+    except (TypeError, ValueError):
+        n = 0
+    return max(n, tail_len)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -516,17 +532,14 @@ def enrol(clips, embedder, max_len_s=4.0):
 
 def trigger_of(model, stt_run, peaks, tail_s):
     """(trigger, a, c): a = `same` (request audio in the wake run's directory) or `sep` (separate stt-only run);
-    c = `cross` (the live model's raw score reached its live threshold in the last TRIGGER_LAST_S), `near` (within
-    NEAR_MISS below it), `weak` (at least BUTTON_MAX), `none`, or `n/a`. trigger = wake for cross and near, button for
-    none, else unknown."""
+    c = `cross` (the live model's raw score reached its live threshold in the last TRIGGER_LAST_S, exact replay),
+    `weak` (at least BUTTON_MAX), `none`, or `n/a`. trigger = wake for cross, button for none, else unknown."""
     a = "sep" if stt_run else "same"
     if model not in MODEL_SPECS or model not in peaks or tail_s < MIN_TAIL_S:
         return "unknown", a, "n/a"
     thr, p2 = MODEL_SPECS[model][1], peaks[model][2]
     if p2 >= thr:
         return "wake", a, "cross"
-    if p2 >= thr - NEAR_MISS:
-        return "wake", a, "near"
     if p2 >= BUTTON_MAX:
         return "unknown", a, "weak"
     return "button", a, "none"
@@ -547,7 +560,7 @@ def analyse_clip(row, clip_dir, transcriber, embedder, scorer, centr, thr):
     m_full = match_words(transcriber.transcribe(tail))
     m_last = match_words(transcriber.transcribe(last)) if len(tail) > len(last) else None
     m = combine_matches(m_full, m_last)
-    pk = scorer.peaks(tail) if scorer else {}
+    pk = scorer.peaks(tail, wake_total(row, len(tail))) if scorer else {}
     own = pk.get(row["model"], (0.0, 0.0, 0.0))
     trig, ta, tc = trigger_of(row["model"], row.get("stt_run", ""), pk, len(tail) / RATE)
     span = None                               # the matched phrase in the tail, seconds from the tail start
@@ -683,6 +696,113 @@ def agreement(rows, results):
             out["speaker_agree"] += res["speaker"] == r["speaker"]
             out["speaker_auto_unknown"] += res["speaker"] == "unknown"
     return out
+
+
+# ---------------------------------------------------------------------------------------------
+# trigger-only pass (no transcription, no speaker embedding): the exact replay of the live model on the tail
+# ---------------------------------------------------------------------------------------------
+
+def evidence_get(evidence, key):
+    for part in str(evidence or "").split(";"):
+        k, _, v = part.partition("=")
+        if k == key:
+            return v
+    return None
+
+
+def evidence_set(evidence, updates, drop=()):
+    """auto_evidence is `k=v;k=v;...`: replace the value of the keys in `updates` where present (appended when missing),
+    remove the keys in `drop`; every other part keeps its place and text."""
+    parts = [p for p in str(evidence or "").split(";") if p]
+    seen = set()
+    out = []
+    for p in parts:
+        k = p.partition("=")[0]
+        if k in drop:
+            continue
+        if k in updates:
+            out.append(f"{k}={updates[k]}")
+            seen.add(k)
+        else:
+            out.append(p)
+    out += [f"{k}={v}" for k, v in updates.items() if k not in seen]
+    return ";".join(out)
+
+
+def trigger_only(row, clip_dir, scorer):
+    """The model-derived cells of one row from the exact replay of its tail; None when the row has no tail file."""
+    tp = Path(clip_dir) / "wake_tail.wav"
+    if not tp.exists():
+        return None
+    tail = C.read_pcm16(tp)
+    pk = scorer.peaks(tail, wake_total(row, len(tail)))
+    trig, ta, tc = trigger_of(row["model"], row.get("stt_run", ""), pk, len(tail) / RATE)
+    own = pk.get(row["model"])
+    res = {"trigger": trig, "cross": (ta, tc), "trig": f"{trig}/{ta}/{tc}", "t_model": None, "peak_t_s": "",
+           "peak_raw": ""}
+    for k, n in (("v4", "oye_kivi"), ("v5", "oye_kivi_next")):
+        if n in pk:
+            res[k] = f"{round(pk[n][0], 3)}"
+    if own is not None:
+        res["own2"] = f"{round(own[2], 3)}"
+        if len(own) > 4 and own[3] is not None:
+            res["t_model"] = own[3]
+            res["peak_t_s"], res["peak_raw"] = f"{own[3]:.2f}", f"{own[4]:.4f}"
+    if res["t_model"] is not None:                 # phrase end from the model, for rows that had no word timestamps
+        res["phrase_end_s"] = f"{res['t_model']:.2f}"
+        stt_path = Path(clip_dir) / "stt.wav"
+        stt = C.read_pcm16(stt_path) if stt_path.exists() else np.zeros(0, dtype=np.int16)
+        audio = tail if ta == "sep" else np.concatenate([tail, stt[:int(3 * RATE)]])
+        c = continuous_after(audio, res["t_model"])
+        res["continuous_command"] = "" if c is None else str(c).lower()
+    return res
+
+
+def merge_trigger_only(rows, results):
+    """Update `rows` (fresh from disk) from trigger_only results {run_id: dict}. Changes only: trigger, peak_t_s, peak_raw,
+    the model-derived keys of auto_evidence (v4, v5, own2, trig), phrase_end_s and continuous_command where pe_src is
+    `model`, and the flags `conflict=` (an owner label on a button row; the stale flag is dropped when the row is not
+    button any more) and `relabel=trigger-changed` (an auto label that rested on the old trigger). Labels, speakers and
+    every other cell stay. Returns counts."""
+    n = Counter()
+    for r in rows:
+        res = results.get(r["run_id"])
+        if not res:
+            continue
+        n["rows"] += 1
+        old = r.get("trigger", "")
+        r["trigger"] = res["trigger"]
+        n["trigger_changed"] += old != res["trigger"]
+        r["peak_t_s"], r["peak_raw"] = res["peak_t_s"], res["peak_raw"]
+        ev = r.get("auto_evidence", "")
+        auto = str(r.get("label_source", "")).startswith("auto")
+        if ev:
+            upd = {k: res[k] for k in ("v4", "v5", "own2", "trig") if k in res}
+            if evidence_get(ev, "pe_src") == "model" and "phrase_end_s" in res:
+                r["phrase_end_s"] = res["phrase_end_s"]
+                r["continuous_command"] = res["continuous_command"]
+                n["phrase_end_from_model"] += 1
+            ev = evidence_set(ev, upd)
+            owner_conflict = bool(r.get("label")) and not auto and r["label"] != "not-a-wake" and res["trigger"] == "button"
+            if owner_conflict:
+                if evidence_get(ev, "conflict") is None:
+                    ev = evidence_set(ev, {"conflict": "owner-label-vs-button"})
+                    n["conflict_added"] += 1
+            elif evidence_get(ev, "conflict") is not None and res["trigger"] != "button":
+                ev = evidence_set(ev, {}, drop=("conflict",))
+                n["conflict_dropped"] += 1
+            lab = r.get("label", "")
+            if auto and lab and ((lab == "not-a-wake" and res["trigger"] != "button")
+                                 or (lab != "not-a-wake" and res["trigger"] == "button")):
+                if evidence_get(ev, "relabel") is None:
+                    ev = evidence_set(ev, {"relabel": "trigger-changed"})
+                    n["relabel"] += 1
+            r["auto_evidence"] = ev
+        if bool(r.get("label")) and not auto and r["label"] != "not-a-wake" and res["trigger"] == "button":
+            n["owner_conflicts"] += 1
+        if evidence_get(r.get("auto_evidence"), "relabel") is not None:
+            n["relabel_total"] += 1
+    return n
 
 
 def utc_stamp():

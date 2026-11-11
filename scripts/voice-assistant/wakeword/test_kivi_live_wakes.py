@@ -282,7 +282,7 @@ def test_extract_trigger_column(tmp_path):
     ns = make_ns(tmp_path, rec)
 
     class Scorer:
-        def peaks(self, pcm):
+        def peaks(self, pcm, n_total=None):
             hi = int(pcm[-1]) % 2 == 0
             v = 0.99 if hi else 0.0
             return {"oye_kivi_next": (v, v, v, 5.5), "oye_kivi": (v, v, v, 5.5)}
