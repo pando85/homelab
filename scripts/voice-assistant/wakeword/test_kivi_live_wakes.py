@@ -1,0 +1,271 @@
+"""Tests of kivi_live_wakes.py. Synthetic signals only, a fake fetcher and a fake player: nothing is played.
+
+    cd scripts/voice-assistant/wakeword && OMP_NUM_THREADS=4 \
+        /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_kivi_live_wakes.py -q
+"""
+import csv
+import os
+import stat
+import sys
+from argparse import Namespace
+from pathlib import Path
+
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_v, "4")
+
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import kivi_extract as X  # noqa: E402
+import kivi_live_wakes as L  # noqa: E402
+import kivi_real_common as C  # noqa: E402
+
+RATE = C.RATE
+BOOT = L.epoch(L.BOOT_UTC)
+T0 = L.epoch("2026-11-09T10:00:00Z")      # in the oye_kivi_next era on both devices
+NOW = T0 + 100_000
+
+
+def ramp(sec, off=0):
+    return ((np.arange(int(sec * RATE)) + off) % 30000).astype(np.int16)
+
+
+def put(path, x, end):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    hdr = C.wav_header(0)
+    path.write_bytes(hdr[:4] + b"\xff\xff\xff\xff" + hdr[8:40] + b"\xff\xff\xff\xff" + x.astype("<i2").tobytes())
+    os.utime(path, (end, end))
+
+
+def run_dir(root, prefix, pipeline, start):
+    return root / (prefix + "0000aaaa") / pipeline / str(int(round((start - BOOT) * 1e9)))
+
+
+class CountingFetcher(X.LocalFetcher):
+    def __init__(self, root):
+        super().__init__(root)
+        self.ranges = []
+
+    def fetch_range(self, path, lo, hi):
+        self.ranges.append((path, lo, hi))
+        return super().fetch_range(path, lo, hi)
+
+
+def make_tree(tmp_path):
+    rec = tmp_path / "rec"
+    wake = lambda d, x, start: put(d / "00_wake-wake_word.openwakeword.wav", x, start + len(x) / RATE)   # noqa: E731
+    stt = lambda d, x, start: put(d / "01_stt-stt.faster_whisper.wav", x, start + len(x) / RATE)         # noqa: E731
+    # c3-a run 1: 20 s wake file, 3 s stt in the same directory
+    s = T0
+    d = run_dir(rec, "bd8256", "Kiwi", s)
+    wake(d, ramp(20), s)
+    stt(d, ramp(3, 7), s + 20)
+    # c3-a run 2: closed wake file, no stt: only counted
+    s = T0 + 1000
+    wake(run_dir(rec, "bd8256", "Kiwi", s), ramp(30), s)
+    # c3-b run 3: 4 s wake file (shorter than the tail), the stt run is its own directory 1.5 s later, 1.0 s long
+    s = T0 + 2000
+    wake(run_dir(rec, "fda18f", "Kiwi", s), ramp(4), s)
+    stt(run_dir(rec, "fda18f", "Kiwi", s + 5.5), ramp(1.0), s + 5.5)
+    # c3-b run 4: stt hit the cap
+    s = T0 + 3000
+    d = run_dir(rec, "fda18f", "Kiwi", s)
+    wake(d, ramp(10), s)
+    stt(d, ramp(15.01), s + 10)
+    # c3-b stt-only run far from any wake file: continued conversation
+    stt(run_dir(rec, "fda18f", "Kiwi", T0 + 3100), ramp(2), T0 + 3100)
+    # c3-a run 5: inside a recorded session window
+    s = T0 + 4000
+    d = run_dir(rec, "bd8256", "Kiwi", s)
+    wake(d, ramp(20), s)
+    stt(d, ramp(3), s + 20)
+    # c3-a run 6: before the scope start
+    s = L.epoch("2026-11-05T10:00:00Z")
+    d = run_dir(rec, "bd8256", "Kiwi", s)
+    wake(d, ramp(20), s)
+    stt(d, ramp(3), s + 20)
+    # c3-a run 7: still open (written 10 s before now)
+    s = NOW - 40
+    d = run_dir(rec, "bd8256", "Kiwi", s)
+    wake(d, ramp(20), s)
+    stt(d, ramp(3), s + 20)
+    return rec
+
+
+def make_ns(tmp_path, rec):
+    ds = tmp_path / "ds"
+    (ds / "sess").mkdir(parents=True)
+    (ds / "sess" / "session.json").write_text(__import__("json").dumps({
+        "device": "c3-a", "t0_utc": X.utc_str(T0 + 3990), "end_utc": X.utc_str(T0 + 4010)}))
+    return Namespace(dataset_root=str(ds), devices=None, devices_file=None, from_dir=str(rec), scope_start=L.SCOPE_START,
+                     now=NOW, context="x", namespace="x", pod="x", container=None, recordings_root="/x", player=None,
+                     again=False, apply=False, test_share=0.30)
+
+
+def test_list_buckets_pairing_and_counts(tmp_path):
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+    lines = []
+    res = L.cmd_list(ns, X.LocalFetcher(rec), out=lines.append)
+    runs = res["runs"]
+    assert [(r["device"], r["model"]) for r in runs] == [("c3-a", "oye_kivi_next"), ("c3-b", "oye_kivi_next"), ("c3-b", "oye_kivi_next")]
+    rows = [L.run_row(r) for r in runs]
+    assert [r["bucket"] for r in rows] == ["suspect-true", "suspect-false", "suspect-false"]
+    assert rows[1]["stt_run"] and not rows[0]["stt_run"]                # run 3: the stt run is its own directory
+    assert rows[1]["wake_len"] == "4.00" and rows[0]["stt_len"] == "3.00"
+    assert res["no_detection"] == {("c3-a", "oye_kivi_next"): 1}
+    assert res["in_session"] == 1 and res["open"] == 1 and res["stt_only"] == 1
+    assert not res["warnings"]
+    assert rows[0]["utc"] == L.dir_stamp(T0)
+    assert any("total: 3" in ln for ln in lines)
+
+
+def test_eras():
+    t = L.epoch
+    assert L.model_of("c3-b", t("2026-11-07T20:00:00Z")) == "oye_kivi"
+    assert L.model_of("c3-a", t("2026-11-08T12:00:00Z")) == "oye_kivi_next"       # the c3-a trial
+    assert L.model_of("c3-b", t("2026-11-08T12:00:00Z")) == "oye_kivi"
+    assert L.model_of("c3-b", t("2026-11-08T13:30:00Z")) == "oye_kivi_next"
+    assert L.model_of("c3-b", t("2026-11-07T19:00:00Z")) is None
+
+
+def test_extract_clips_table_idempotent_and_labels_kept(tmp_path):
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+    f = CountingFetcher(rec)
+    L.cmd_extract(ns, f, out=lambda *_: None)
+    live = Path(ns.dataset_root) / "live"
+    rows = L.read_table(live / "live_wakes.csv")
+    assert len(rows) == 3
+    r1 = rows[0]
+    d1 = live / "c3-a" / r1["utc"]
+    tail = C.read_pcm16(d1 / "wake_tail.wav")
+    assert len(tail) == 6 * RATE and (tail == ramp(20)[-6 * RATE:]).all()         # the last 6 s, sample exact
+    assert (C.read_pcm16(d1 / "stt.wav") == ramp(3, 7)).all()
+    short = [r for r in rows if r["device"] == "c3-b" and r["bucket"] == "suspect-false"]
+    assert len(C.read_pcm16(live / "c3-b" / short[0]["utc"] / "wake_tail.wav")) == int(4 * RATE)   # shorter than the tail: whole file
+    assert r1["sha256"] == L.sha256_file(d1 / "wake_tail.wav") and len(r1["sha256_stt"]) == 64
+    assert (r1["label"], r1["speaker"], r1["split"]) == ("", "", "")
+    assert stat.S_IMODE((live / "c3-a").stat().st_mode) == 0o700
+    assert stat.S_IMODE((d1 / "stt.wav").stat().st_mode) == 0o600
+    assert stat.S_IMODE((live / "live_wakes.csv").stat().st_mode) == 0o600
+    # the owner labels one row; a re-run changes nothing and reads nothing again
+    rows[0]["label"], rows[0]["speaker"], rows[0]["split"] = "true", "spk01", "train"
+    L.write_table(live / "live_wakes.csv", rows)
+    f2 = CountingFetcher(rec)
+    L.cmd_extract(ns, f2, out=lambda *_: None)
+    assert f2.ranges == []
+    again = L.read_table(live / "live_wakes.csv")
+    assert again == rows and again[0]["label"] == "true"
+    # a deleted clip is fetched again, the label stays
+    (d1 / "stt.wav").unlink()
+    f3 = CountingFetcher(rec)
+    L.cmd_extract(ns, f3, out=lambda *_: None)
+    assert len(f3.ranges) == 1 and (d1 / "stt.wav").exists()
+    assert L.read_table(live / "live_wakes.csv")[0]["label"] == "true"
+    assert not list(live.rglob("*.part"))
+
+
+def test_short_copy_fails_without_final_file(tmp_path):
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+
+    class Short(X.LocalFetcher):
+        def fetch_range(self, path, lo, hi):
+            yield from super().fetch_range(path, lo, hi - 2)
+
+    with pytest.raises(SystemExit):
+        L.cmd_extract(ns, Short(rec), out=lambda *_: None)
+    live = Path(ns.dataset_root) / "live"
+    assert not list(live.rglob("*.wav"))
+
+
+def labelled_table(tmp_path, n=3):
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+    L.cmd_extract(ns, X.LocalFetcher(rec), out=lambda *_: None)
+    return ns, Path(ns.dataset_root) / "live" / "live_wakes.csv"
+
+
+def test_review_order_replay_skip_quit_resume(tmp_path):
+    ns, table = labelled_table(tmp_path)
+    played = []
+    answers = iter(["r", "t", "1",            # first (a suspect-false one): replay, then true + spk01
+                    "s",                      # second: skip
+                    "f", "4",                 # the third (suspect-true after the two suspect-false ones): false, unknown
+                    ])
+    out = []
+    n = L.cmd_review(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: next(answers), out=out.append)
+    assert n == 2
+    assert [p.name for p in played[:4]] == ["wake_tail.wav", "stt.wav", "wake_tail.wav", "stt.wav"]     # replay played both again
+    rows = {r["run_id"]: r for r in L.read_table(table)}
+    first = [r for r in L.read_table(table) if r["label"] == "true"]
+    assert len(first) == 1 and first[0]["bucket"] == "suspect-false" and first[0]["speaker"] == "spk01"
+    skipped = [r for r in rows.values() if not r["label"]]
+    assert len(skipped) == 1                                                   # the skipped one is still open
+    # resume: only the open one is offered, then quit
+    played.clear()
+    L.cmd_review(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: "q", out=lambda *_: None)
+    assert len(played) == 2 and played[0].parent.name == skipped[0]["utc"]
+    # invalid keys are asked again
+    answers = iter(["x", "u", "9", "3"])
+    L.cmd_review(ns, player=lambda p: None, input_fn=lambda _p: next(answers), out=lambda *_: None)
+    done = {r["run_id"]: r for r in L.read_table(table)}[skipped[0]["run_id"]]
+    assert (done["label"], done["speaker"]) == ("unclear", "spk-other")
+
+
+def test_review_ctrl_c_saves(tmp_path):
+    ns, table = labelled_table(tmp_path)
+    answers = iter(["t", "2"])
+
+    def inp(_p):
+        try:
+            return next(answers)
+        except StopIteration:
+            raise KeyboardInterrupt
+
+    assert L.cmd_review(ns, player=lambda p: None, input_fn=inp, out=lambda *_: None) == 1
+    assert sum(1 for r in L.read_table(table) if r["label"] == "true") == 1
+
+
+def row(run, utc, label, speaker):
+    return {k: "" for k in L.FIELDS} | {"run_id": run, "utc": utc, "label": label, "speaker": speaker, "device": "c3-a"}
+
+
+def test_split_by_madrid_day_per_speaker():
+    rows = []
+    # spk01: 10 true wakes on 4 local days; a wake at 23:30Z on 11-09 is already 11-10 in Madrid (CET)
+    for i, utc in enumerate(["20261108T100000.000Z"] * 3 + ["20261109T100000.000Z"] * 3 + ["20261109T233000.000Z"] * 2
+                            + ["20261110T120000.000Z"] * 2):
+        rows.append(row(f"a{i}", utc, "true", "spk01"))
+    # spk02: all on one day, stays unassigned
+    for i in range(3):
+        rows.append(row(f"b{i}", "20261109T100000.000Z", "true", "spk02"))
+    rows.append(row("f1", "20261108T100000.000Z", "false", "unknown"))
+    rows.append(row("f2", "20261110T150000.000Z", "false", "unknown"))
+    rows.append(row("u1", "20261110T150000.000Z", "unclear", "unknown"))
+    assert L.local_day("20261109T233000.000Z") == "2026-11-10"
+    assign, info = L.propose_split(rows)
+    # the most recent local day (11-10: 4 wakes) already holds 40 % >= 30 %: test; the other days train
+    assert info["spk01"]["test_days"] == ["2026-11-10"] and info["spk01"]["test"] == 4 and info["spk01"]["train"] == 6
+    assert {assign[f"a{i}"] for i in (0, 1, 2, 3, 4, 5)} == {"train"} and {assign["a6"], assign["a7"], assign["a8"], assign["a9"]} == {"test"}
+    assert "b0" not in assign and "left unassigned" in info["spk02"]["note"]
+    assert assign["f1"] == "train" and assign["f2"] == "test" and "u1" not in assign
+
+
+def test_split_command_apply(tmp_path):
+    ns, table = labelled_table(tmp_path)
+    rows = L.read_table(table)
+    assert L.cmd_split(ns, out=lambda *_: None) == {}                       # nothing labelled
+    for i, r in enumerate(rows):
+        r["label"], r["speaker"] = "true", "spk01"
+        r["utc"] = ["20261108T100000.000Z", "20261109T100000.000Z", "20261110T100000.000Z"][i]
+    L.write_table(table, rows)
+    out = []
+    ns.apply = False
+    L.cmd_split(ns, out=out.append)
+    assert all(r["split"] == "" for r in L.read_table(table)) and any("proposal only" in o for o in out)
+    ns.apply = True
+    L.cmd_split(ns, out=out.append)
+    assert [r["split"] for r in L.read_table(table)] == ["train", "train", "test"]
