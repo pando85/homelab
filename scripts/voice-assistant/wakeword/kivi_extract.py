@@ -539,6 +539,15 @@ def extract(a, fetcher=None):
             if f["n"] > 0:
                 fetch_samples(fetcher, f, 0, f["n"], sdirs, tag=f["run"])
 
+    # a session without any satellite audio (the PC-only path): say so in the session record and the report
+    tv_channel = None
+    if tv not in streams:
+        why = ("--no-tv" if a.no_tv else "no wake file or request-audio run of the satellite overlaps the session")
+        tv_channel = {"source": tv, "status": "missing", "reason": why}
+        session = {**session, "tv_channel": tv_channel}
+        print(f"NOTE: no satellite ({tv}) channel for this session ({why}): only the PC sources are extracted; "
+              "the session is recorded with tv_channel=missing and carries no TV rows (no gate input).")
+
     # alignment records (the scorer reads these)
     report_streams = {}
     for label, recs in records.items():
@@ -591,8 +600,9 @@ def extract(a, fetcher=None):
             row = C.make_row(
                 origin="session", session=sid, source=label, device=device if label == tv else label,
                 session_device=device, speaker=session.get("speaker", ""),
-                split=C.channel_split(session.get("split", "unassigned"), label), eval_channel=C.is_eval_channel(label),
-                condition=C.condition_string(b), conditions=b.get("conditions", {}), tags=session.get("tags", {}),
+                split=C.channel_split(session.get("split", "unassigned"), label),
+                eval_channel=C.is_eval_channel(label, C.channel_split(session.get("split", "unassigned"), label)),
+                device_class=C.device_class(label), condition=C.condition_string(b), conditions=b.get("conditions", {}), tags=session.get("tags", {}),
                 block=bi, block_name=b["name"], label=lab, word=word, kind="cue" if kind == "cue" else "segment",
                 clip=rel, start_s=round(t0_, 3), end_s=round(t0_ + (tau1 - tau0), 3),
                 start_utc=utc_str(t0_ + t0), end_utc=utc_str(t0_ + (tau1 - tau0) + t0),
@@ -615,7 +625,8 @@ def extract(a, fetcher=None):
     if not (sroot / "session.json").exists():
         C.write_json_new(sroot / "session.json", session)
     report = {"extract_id": exid, "session": sid, "device": device, "revision": rev, "alignment": summaries,
-              "preflight": pre, "rows_written": rows_written, "per_source": stats, "streams": report_streams}
+              "preflight": pre, "rows_written": rows_written, "per_source": stats, "streams": report_streams,
+              "tv_channel": tv_channel or {"source": tv, "status": "present"}}
     C.write_json_new(sroot / f"extract-{exid}.json", report)
 
     print(f"\nWrote {rows_written} manifest rows (clips) to {sroot}; manifest {manifest}")
@@ -798,7 +809,7 @@ def button_takes(a, fetcher=None, presses=None):
             stats["needs_review"] += 1
         row = C.make_row(
             origin="button", session=sid, source=tv, device=device, session_device=device, speaker=a.speaker,
-            split=split, split_requested=a.split, eval_channel=True, condition="button-take", conditions={}, tags={"button_order": order, "n_presses": n_pr},
+            split=split, split_requested=a.split, eval_channel=True, device_class="tv", condition="button-take", conditions={}, tags={"button_order": order, "n_presses": n_pr},
             block=1, block_name="button-takes", label=phrase, word=phrase, kind="cue", clip=clip, phrase=phrase,
             start_s=round(base + k0 - since, 3), end_s=round(base + k1 - since, 3),
             start_utc=utc_str(base + k0), end_utc=utc_str(base + k1), cue_index=n,

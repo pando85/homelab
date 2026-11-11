@@ -110,7 +110,7 @@ def import_memo(a):
         C.write_wav_new(root / rel, pcm[int(c0 * RATE):int(c1 * RATE)])
         row = C.make_row(
             origin="phone", session=sid, source="phone", device="phone", session_device="", speaker=a.speaker,
-            split=a.split, eval_channel=False, condition="phone-memo", conditions={}, tags={}, block=1,
+            split=a.split, eval_channel=C.is_eval_channel("phone", a.split), device_class="phone", condition="phone-memo", conditions={}, tags={}, block=1,
             block_name="phone-memo", label=lab, word=lab.split(":", 1)[1] if ":" in lab else phrase, kind="cue", phrase=phrase,
             clip=rel, start_s=round(c0, 3), end_s=round(c1, 3), cue_index=i, snr_db=t["snr_db"],
             extract_id=exid, consent_confirmed=True, revision="", needs_review=False)

@@ -219,6 +219,17 @@ def poisson_ci(k, alpha=0.05):
     return [lower, upper]
 
 
+def device_class_of(source):
+    """tv / pc-desk / pc-webcam / phone / other, derived from a dataset source label (old score summaries
+    have no device_class field). Same rule as kivi_real_common.device_class."""
+    s = source or ""
+    return "tv" if s.startswith("tv-") else {"pc-mic": "pc-desk", "webcam-mic": "pc-webcam", "phone": "phone"}.get(s, "other")
+
+
+def row_class(r):
+    return r.get("device_class") or device_class_of(r.get("source"))
+
+
 def condition_of(text):
     t = (text or "").lower()
     if "tv-off" in t or "tv_off" in t or "tvoff" in t:
@@ -364,9 +375,13 @@ class HA:
     def wake_words(self, entity="wake_word.openwakeword"):
         return [w["id"] for w in self.call("wake_word/info", entity_id=entity)["wake_words"]]
 
-    def run_times(self, pipeline_id):
-        runs = self.call("assist_pipeline/pipeline_debug/list", pipeline_id=pipeline_id)["pipeline_runs"]
-        return [dt.datetime.fromisoformat(r["timestamp"]) for r in runs]
+    def runs(self, pipeline_id):
+        """The debug run list of a pipeline: [{pipeline_run_id, timestamp}]."""
+        return self.call("assist_pipeline/pipeline_debug/list", pipeline_id=pipeline_id)["pipeline_runs"]
+
+    def run_events(self, pipeline_id, run_id):
+        return self.call("assist_pipeline/pipeline_debug/get", pipeline_id=pipeline_id,
+                         pipeline_run_id=run_id)["events"]
 
     def kick(self, pipeline):
         """A pipeline update with every field unchanged: Home Assistant invalidates the open runs of that
@@ -420,15 +435,79 @@ def tv_entities(registry, tv, devices=None):
         raise Refused(f"{tv}: expected one pipeline select, found {[e['entity_id'] for e in sel]}")
     mute = [e["entity_id"] for e in registry if e["entity_id"].startswith("binary_sensor.")
             and (e.get("device_id") or "") == sel[0]["device_id"] and e["entity_id"].endswith("microphone_muted")]
-    return {"select": sel[0]["entity_id"], "muted": mute[0] if mute else None, "device_id": sel[0]["device_id"]}
+    sat = [e["entity_id"] for e in registry if e["entity_id"].startswith("assist_satellite.")
+           and (e.get("device_id") or "") == sel[0]["device_id"]]
+    return {"select": sel[0]["entity_id"], "muted": mute[0] if mute else None, "device_id": sel[0]["device_id"],
+            "satellite": sat[0] if sat else None}
 
 
-def wait_new_run(ha, pipeline_id, since, timeout_s=90):
+def preflight_pipeline(pipeline, states, served, force=False):
+    """Refuse to point a satellite at a pipeline that cannot run: a conversation/stt/tts engine that is an
+    entity but `unavailable` (or missing), or a wake word id the wake word service does not serve.
+    `pipeline` is a pipeline dict (or the fields of one), `states` the HA states by entity id, `served` the
+    served wake word ids. --force skips the refusal, not the message."""
+    problems = []
+    for key in ("conversation_engine", "stt_engine", "tts_engine"):
+        eng = pipeline.get(key)
+        if not eng or "." not in eng:          # unset, or a legacy engine id that is not an entity
+            continue
+        state = (states.get(eng) or {}).get("state")
+        if state is None:
+            problems.append(f"{key} {eng} does not exist in Home Assistant")
+        elif state == "unavailable":
+            problems.append(f"{key} {eng} is unavailable")
+    ww = pipeline.get("wake_word_id")
+    if ww and ww not in served:
+        problems.append(f"wake_word_id {ww!r} is not served (served: {', '.join(served)})")
+    if problems:
+        msg = f"pipeline {pipeline.get('name')!r} cannot run: " + "; ".join(problems)
+        if not force:
+            raise Refused(msg + " (--force to switch anyway)")
+        say(f"WARNING {msg}; --force given")
+    return problems
+
+
+def check_run(ha, pipeline_id, satellite, since, timeout_s=30, poll_s=2):
+    """The newest run of `satellite` on the pipeline that started after `since`: ok only when it contains
+    wake_word-start and no error event. Retries for `timeout_s`. Returns (ok, detail); detail is the error
+    code when the run errored, else a short reason."""
     end = time.time() + timeout_s
-    while time.time() < end:
-        if any(t > since for t in ha.run_times(pipeline_id)):
-            return True
-        time.sleep(5)
+    detail = f"no run of {satellite or 'any satellite'} on the pipeline"
+    while True:
+        runs = [r for r in ha.runs(pipeline_id) if dt.datetime.fromisoformat(r["timestamp"]) > since]
+        for r in sorted(runs, key=lambda r: r["timestamp"], reverse=True):
+            events = ha.run_events(pipeline_id, r["pipeline_run_id"])
+            start = next((e for e in events if e.get("type") == "run-start"), None)
+            if satellite and (start or {}).get("data", {}).get("satellite_id") != satellite:
+                continue                     # another satellite's run
+            err = next((e for e in events if e.get("type") == "error"), None)
+            if err:
+                detail = (err.get("data") or {}).get("code") or "error"
+            elif any(e.get("type") == "wake_word-start" for e in events):
+                return True, "ok"
+            else:
+                detail = "newest run has no wake_word-start yet"
+            break                            # only the newest run of that satellite counts
+        if time.time() >= end:
+            return False, detail
+        time.sleep(poll_s)
+
+
+def served_for(ha, pipeline):
+    ent = pipeline.get("wake_word_entity")
+    return ha.wake_words(ent) if ent else ha.wake_words()
+
+
+def verify_run(ha, dest, tv, ent, t0, rollback_hint, timeout_s=30):
+    """check_run for one TV; prints the result. Returns True when the run is ok. On failure prints
+    `FAILED: <code>` and the command that puts the TV back (the select is left as it is)."""
+    ok, detail = check_run(ha, dest["id"], ent.get("satellite"), t0, timeout_s)
+    if ok:
+        say(f"check: {tv}: newest run on {dest['name']!r} has wake_word-start and no error: OK")
+        return True
+    say(f"FAILED: {detail}")
+    say(f"check: {tv}: no healthy run on {dest['name']!r} within {timeout_s} s; the select was left as it is")
+    say(f"Rollback: {rollback_hint}")
     return False
 
 
@@ -670,11 +749,22 @@ def cmd_adopt(a, st, cfg):
         if not rows:
             raise Refused(f"--adopt-session: {sid} has no rows for the phrase {cfg['phrase_norm']!r}")
         entry = {"id": sid, "kind": "session", "condition": None}
+        if session_tv_channel(sid):
+            entry["tv_channel"] = session_tv_channel(sid)
         st["sessions"] = [s for s in st["sessions"] if s["id"] != sid] + [entry]
         ids.append(sid)
         say(f"extract: adopted session {sid} ({len(rows)} rows of {cfg['phrase_norm']!r}, no re-extraction)")
     if will(f"record {len(ids)} already-extracted session(s): {', '.join(ids)}"):
         record(st, "extract", summary=f"adopted {', '.join(ids)}", sessions=ids)
+
+
+def session_tv_channel(sid):
+    """"missing" when the extraction found no satellite audio (the PC-only path), from the dataset session record."""
+    p = DATASET / sid / "session.json"
+    try:
+        return (json.loads(p.read_text()).get("tv_channel") or {}).get("status")
+    except (OSError, ValueError):
+        return None
 
 
 def cmd_extract(a):
@@ -709,8 +799,12 @@ def cmd_extract(a):
     for sid in new:
         kind = "button" if a.button_takes else "session"
         entry = {"id": sid, "kind": kind, "condition": a.condition if a.button_takes else None}
+        tvc = session_tv_channel(sid)
+        if tvc:
+            entry["tv_channel"] = tvc
         st["sessions"] = [s for s in st["sessions"] if s["id"] != sid] + [entry]
-        say(f"extract: recorded {kind} {sid}" + (f" ({a.condition})" if a.button_takes else ""))
+        say(f"extract: recorded {kind} {sid}" + (f" ({a.condition})" if a.button_takes else "")
+            + ("  [TV channel MISSING: PC sources only, no gate input]" if tvc == "missing" else ""))
     record(st, "extract", summary=", ".join(new), sessions=new)
 
 
@@ -843,8 +937,14 @@ def manifest_info(session_id):
         s = info.setdefault(r.get("source"), {"speakers": set(), "splits": set()})
         s["speakers"].add(r.get("speaker"))
         s["splits"].add(r.get("split"))
-    return {src: {"speaker": "/".join(sorted(x for x in v["speakers"] if x)), "split": "/".join(sorted(x for x in v["splits"] if x)),
-                  "eval_channel": C.is_eval_channel(src)} for src, v in info.items()}
+    out = {}
+    for src, v in info.items():
+        splits = sorted(x for x in v["splits"] if x)
+        # eval_channel is derived (a satellite always; any other source when its split is test), not read
+        # from the stored field: rows written before the 2026-11-11 rule change say False for PC sources
+        out[src] = {"speaker": "/".join(sorted(x for x in v["speakers"] if x)), "split": "/".join(splits),
+                    "device_class": C.device_class(src), "eval_channel": C.is_eval_channel(src, splits[0] if len(splits) == 1 else None)}
+    return out
 
 
 def summarize_session(js, threshold, info):
@@ -862,6 +962,7 @@ def summarize_session(js, threshold, info):
                 raise Refused(f"threshold {threshold} missing in the score of {e.get('session')}; run score again")
             rows.append({"session": e.get("session"), "source": src, "speaker": meta.get("speaker") or e.get("speaker"),
                          "split": meta.get("split") or e.get("split"), "eval_channel": meta.get("eval_channel", True),
+                         "device_class": meta.get("device_class") or device_class_of(src),
                          "condition": condition_of(cond), "condition_raw": cond,
                          "k": hits[k]["k"], "n": hits[k]["n"]})
     return rows
@@ -874,7 +975,8 @@ def summarize_button(js, threshold, info, condition):
         raise Refused(f"threshold {threshold} missing in the score of {js.get('session')}; run score again")
     src, meta = next(iter(info.items())) if info else (None, {})
     return [{"session": js["session"], "source": src, "speaker": meta.get("speaker"), "split": meta.get("split"),
-             "eval_channel": meta.get("eval_channel", True), "condition": condition or "other",
+             "eval_channel": meta.get("eval_channel", True), "device_class": meta.get("device_class") or device_class_of(src),
+             "condition": condition or "other",
              "condition_raw": condition, "k": rec[k]["all_takes"]["k"], "n": rec[k]["all_takes"]["n"]}]
 
 
@@ -933,15 +1035,41 @@ def cmd_score(a):
         return
     summary = {"threshold": t, "model": str(tfl), "model_sha256": sha256_file(tfl), "recall": rows, "room_test": room}
     (release_dir(a.version) / "score_summary.json").write_text(json.dumps(summary, indent=1) + "\n")
-    say(f"\nRecall at raw {t} (satellite channel = eval; aggregates only):")
+    say(f"\nRecall at raw {t} (per source and device class, never pooled across classes; the gate reads the satellite "
+        "rows only; a PC, webcam or phone source is an evaluation channel in a test-split session; aggregates only):")
     for r in rows:
-        say(f"  {r['session']:<45} {r['source'] or '?':<11} {r['speaker'] or '?':<6} {r['split'] or '?':<10} "
+        say(f"  {r['session']:<45} {r['source'] or '?':<11} {row_class(r):<10} {r['speaker'] or '?':<6} {r['split'] or '?':<10} "
             f"{r['condition']:<7} {r['k']}/{r['n']}{'' if r['eval_channel'] else '  (not an eval channel)'}")
     if room:
         for scope, v in room.items():
             say(f"  room test {scope:<7} {v['k']} in {v['hours']} h = {v['per_hour']}/h {v['ci95']}")
     record(st, "score", threshold=t, sessions=[s["id"] for s in sessions], room=bool(room),
            summary=f"{len(rows)} recall rows, room {'yes' if room else 'no'}")
+
+
+def row_is_eval(r, split="test"):
+    """Is a score row an evaluation channel: a satellite (tv) row by its stored flag; any other device class
+    (PC desk, webcam, phone) when its split is test (owner decision 2026-11-11), whatever the stored flag of
+    an older summary says."""
+    if row_class(r) == "tv":
+        return bool(r.get("eval_channel"))
+    return r.get("split") == split
+
+
+def other_devices(summary, split="test"):
+    """INFORMATIONAL (no gate yet): held-out recall of the non-satellite sources (PC desk mic, webcam, phone)
+    per device class, source, speaker and TV condition, with Wilson 95 % intervals. Never pooled with the
+    satellite rows that the gate reads."""
+    groups = {}
+    for r in summary["recall"]:
+        if row_class(r) == "tv" or not row_is_eval(r, split) or r.get("split") != split:
+            continue
+        g = groups.setdefault((row_class(r), r.get("source"), r.get("speaker") or "?", r["condition"]), [0, 0])
+        g[0] += r["k"]
+        g[1] += r["n"]
+    return [{"device_class": c, "source": src, "speaker": spk, "condition": cond, "k": k, "n": n,
+             "value": round(k / n, 4) if n else None, "ci95": wilson(k, n)}
+            for (c, src, spk, cond), (k, n) in sorted(groups.items())]
 
 
 def gate_eval(summary, targets=GATE, split="test"):
@@ -951,8 +1079,8 @@ def gate_eval(summary, targets=GATE, split="test"):
     noisy device. This gate checks point estimates; its 'confident' field separately records whether
     the whole 95% interval meets every target. Owner overrides are handled by the release driver.
     """
-    rows = [r for r in summary["recall"] if r["eval_channel"] and r.get("split") == split
-            and r["condition"] in ("tv-off", "tv-on")]
+    rows = [r for r in summary["recall"] if r["eval_channel"] and row_class(r) == "tv" and r.get("split") == split
+            and r["condition"] in ("tv-off", "tv-on")]          # satellite rows only: other devices never enter the gate
     speakers = sorted({r["speaker"] for r in rows if r.get("speaker")})
     checks, missing = [], []
     min_takes = targets.get("min_takes_per_condition", 10)
@@ -998,7 +1126,8 @@ def gate_eval(summary, targets=GATE, split="test"):
                            "confident": v["ci95"][1] <= targets["fa_per_h"]})
     verdict = "incomplete" if missing else ("pass" if all(c["pass"] for c in checks) else "fail")
     return {"verdict": verdict, "confident": verdict == "pass" and all(c["confident"] for c in checks),
-            "missing": missing, "checks": checks, "threshold": summary["threshold"], "targets": targets}
+            "missing": missing, "checks": checks, "threshold": summary["threshold"], "targets": targets,
+            "other_devices": other_devices(summary, split)}
 
 def gate_text(g):
     lines = [f"| Check | Measured | 95 % interval | Target | Result |", "| --- | --- | --- | --- | --- |"]
@@ -1017,7 +1146,16 @@ def gate_text(g):
         lines.append(f"| {m} | not measured | | | MISSING |")
     lines.append("")
     lines.append(f"Verdict at raw {g['threshold']}: **{g['verdict'].upper()}**"
-                 + (" (every interval inside the target)" if g["confident"] else ""))
+                 + (" (every interval inside the target)" if g["confident"] else "")
+                 + " (satellite rows only)")
+    other = g.get("other_devices") or []
+    if other:
+        lines += ["", "Other devices, test split (informational, not part of the verdict; no gate yet):", "",
+                  "| Device class | Source | Speaker | Condition | Recall | 95 % interval |", "| --- | --- | --- | --- | --- | --- |"]
+        for o in other:
+            v = "n/a" if not o["n"] else f"{o['k']}/{o['n']} = {o['value'] * 100:.1f} %"
+            lines.append(f"| {o['device_class']} | {o['source']} | {o['speaker']} | {o['condition']} | {v} | "
+                         f"[{o['ci95'][0] * 100:.1f}, {o['ci95'][1] * 100:.1f}] % |")
     return "\n".join(lines)
 
 
@@ -1327,6 +1465,7 @@ def cmd_enable(a):
     cfg = st["config"]
     require_owner(a, st, f"enable on {a.tv} (it changes which phrase wakes that TV)")
     mid, name = cfg["model_id"], cfg["pipeline_name"]
+    failed = False
     with HA(a.ha_token_file) as ha:
         if mid not in ha.wake_words():
             raise Refused(f"{mid} is not served (wake_word/info): deploy first")
@@ -1356,6 +1495,7 @@ def cmd_enable(a):
             say(f"enable: {a.tv} already on {name!r}")
         else:
             on = resolve_option(plist, cur)
+            preflight_pipeline(trial, states, served_for(ha, trial), a.force)
             if will(f"{ent['select']}: {cur!r} -> {name!r}, then restart the open run of {on['name']!r} (no-op update)"):
                 t0 = dt.datetime.now(dt.timezone.utc)
                 ha.call("call_service", domain="select", service="select_option",
@@ -1365,13 +1505,16 @@ def cmd_enable(a):
                 st["tvs"][a.tv] = prev_entry
                 save_state(st)
                 muted = states.get(ent["muted"], {}).get("state") if ent["muted"] else None
-                if wait_new_run(ha, trial["id"], t0):
-                    say(f"enable: {a.tv} started a {name!r} run")
-                else:
-                    say(f"enable: WARNING no {name!r} run seen within 90 s (microphone muted: {muted})")
+                back = f"python3 wake_release.py rollback --version {a.version} --tv {a.tv}"
+                if not verify_run(ha, trial, a.tv, ent, t0, back):
+                    failed = True
+                    say(f"enable: {a.tv} did not start a healthy {name!r} run (microphone muted: {muted})")
         record(st, f"enable-{a.tv}", pipeline=name, pipeline_id=trial["id"], previous=prev_entry.get("previous", "preferred"),
-               select=ent["select"], summary=f"{a.tv} on {name!r} ({mid}); rollback to {prev_entry.get('previous', 'preferred')!r}")
+               select=ent["select"], summary=f"{a.tv} on {name!r} ({mid}); rollback to {prev_entry.get('previous', 'preferred')!r}"
+               + ("; RUN CHECK FAILED" if failed else ""))
     say(f"\nRollback: python3 wake_release.py rollback --version {a.version} --tv {a.tv}")
+    if failed:
+        raise Refused("enable: the run check FAILED (see above)")
 
 
 def cmd_rollback(a):
@@ -1379,6 +1522,7 @@ def cmd_rollback(a):
     cfg = st["config"]
     name = cfg["pipeline_name"]
     target = a.to or st.get("tvs", {}).get(a.tv, {}).get("previous") or "preferred"
+    failed = False
     with HA(a.ha_token_file) as ha:
         plist = ha.pipelines()
         ent = tv_entities(ha.call("config/entity_registry/list"), a.tv)
@@ -1389,17 +1533,20 @@ def cmd_rollback(a):
             raise Refused(f"rollback target {target!r} is not a pipeline")
         if cur == target:
             say(f"rollback: {a.tv} already on {target!r}")
-        elif will(f"{ent['select']}: {cur!r} -> {target!r}, then restart the open run of {cur!r} (no-op update)"):
-            on = resolve_option(plist, cur)
-            t0 = dt.datetime.now(dt.timezone.utc)
-            ha.call("call_service", domain="select", service="select_option",
-                    service_data={"option": target}, target={"entity_id": ent["select"]})
-            if on:
-                ha.kick(on)
-            muted = states.get(ent["muted"], {}).get("state") if ent["muted"] else None
-            seen = wait_new_run(ha, dest["id"], t0)
-            say(f"rollback: {a.tv} on {target!r} ({dest['name']}, wake word {dest['wake_word_id']}); new run seen: {seen}"
-                + ("" if seen else f" (microphone muted: {muted})"))
+        else:
+            preflight_pipeline(dest, states, served_for(ha, dest), a.force)
+            if will(f"{ent['select']}: {cur!r} -> {target!r}, then restart the open run of {cur!r} (no-op update)"):
+                on = resolve_option(plist, cur)
+                t0 = dt.datetime.now(dt.timezone.utc)
+                ha.call("call_service", domain="select", service="select_option",
+                        service_data={"option": target}, target={"entity_id": ent["select"]})
+                if on:
+                    ha.kick(on)
+                muted = states.get(ent["muted"], {}).get("state") if ent["muted"] else None
+                say(f"rollback: {a.tv} on {target!r} ({dest['name']}, wake word {dest['wake_word_id']}; "
+                    f"microphone muted: {muted})")
+                back = f"python3 wake_release.py rollback --version {a.version} --tv {a.tv} --to {shlex.quote(cur)} --force"
+                failed = not verify_run(ha, dest, a.tv, ent, t0, back)
         if a.delete_pipeline:
             trial = find_pipeline(ha.pipelines(), name)
             users = [s for s, v in ha.states().items() if s.startswith("select.") and v.get("state") == name]
@@ -1409,7 +1556,10 @@ def cmd_rollback(a):
                 ha.call("assist_pipeline/pipeline/delete", pipeline_id=trial["id"])
         if not PLAN:
             st.setdefault("tvs", {}).pop(a.tv, None)
-            record(st, f"rollback-{a.tv}", to=target, summary=f"{a.tv} back on {target!r}")
+            record(st, f"rollback-{a.tv}", to=target,
+                   summary=f"{a.tv} back on {target!r}" + ("; RUN CHECK FAILED" if failed else ""))
+    if failed:
+        raise Refused("rollback: the run check FAILED (see above)")
 
 
 def promoted_fields(pipeline, wake_word_id):
@@ -1450,6 +1600,7 @@ def cmd_promote(a):
         ents = {tv: tv_entities(reg, tv) for tv in devices_map()}
         selects = {tv: states.get(e["select"], {}).get("state") for tv, e in ents.items()}
         muted = {tv: states.get(e["muted"], {}).get("state") if e["muted"] else None for tv, e in ents.items()}
+        preflight_pipeline(dict(target, wake_word_id=mid), states, served_for(ha, target), a.force)
         t0 = dt.datetime.now(dt.timezone.utc)
         prev = a.previous_wake_word or st.get("promotion", {}).get("previous_wake_word") or (
             target["wake_word_id"] if target["wake_word_id"] != mid else "alexa")
@@ -1493,19 +1644,27 @@ def cmd_promote(a):
             save_state(st)
         if PLAN:
             return
-        seen = wait_new_run(ha, target["id"], t0) if changed else None
         states = ha.states()
         plist = ha.pipelines()
         live = {}
+        on_target = []
         for tv, e in ents.items():
             p = resolve_option(plist, states.get(e["select"], {}).get("state"))
             live[tv] = {"select": states.get(e["select"], {}).get("state"), "wake_word": p and p["wake_word_id"],
                         "muted": muted[tv]}
+            if p and p["id"] == target["id"]:
+                on_target.append(tv)
             say(f"promote: {tv}: select {live[tv]['select']!r} -> {live[tv]['wake_word']} (microphone muted: {muted[tv]})")
-        say(f"promote: new {target['name']!r} run seen: {seen}")
+        back = f"python3 wake_release.py demote --version {a.version}"
+        seen = None
+        if changed:
+            seen = all([verify_run(ha, target, tv, ents[tv], t0, back) for tv in on_target]) if on_target else None
+        say(f"promote: healthy new {target['name']!r} run seen on every TV using it: {seen}")
         record(st, "promote", pipeline=target["name"], previous_wake_word=prev, live=live, new_run_seen=seen,
                summary=f"{target['name']!r} on {mid} (was {prev}); TVs {live}")
-    say(f"\nRollback: python3 wake_release.py demote --version {a.version}   (wake word back to {prev})")
+    say(f"\nRollback: {back}   (wake word back to {prev})")
+    if seen is False:
+        raise Refused("promote: the run check FAILED (see above)")
 
 
 def cmd_demote(a):
@@ -1513,6 +1672,7 @@ def cmd_demote(a):
     st = load_state(a.version)
     promo = st.get("promotion") or {}
     to = a.to or promo.get("previous_wake_word") or "alexa"
+    failed = False
     with HA(a.ha_token_file) as ha:
         if to not in ha.wake_words():
             raise Refused(f"{to} is not served (wake_word/info)")
@@ -1525,10 +1685,20 @@ def cmd_demote(a):
         elif will(f"pipeline {target['name']!r}: wake_word_id {target['wake_word_id']} -> {to} (all else unchanged)"):
             t0 = dt.datetime.now(dt.timezone.utc)
             ha.call("assist_pipeline/pipeline/update", pipeline_id=target["id"], **promoted_fields(target, to))
-            say(f"demote: new {target['name']!r} run seen: {wait_new_run(ha, target['id'], t0)}")
+            plist, states = ha.pipelines(), ha.states()
+            reg = ha.call("config/entity_registry/list")
+            for tv in devices_map():
+                e = tv_entities(reg, tv)
+                p = resolve_option(plist, states.get(e["select"], {}).get("state"))
+                if p and p["id"] == target["id"]:
+                    ok = verify_run(ha, target, tv, e, t0, f"python3 wake_release.py demote --version {a.version} --to {to}")
+                    failed = failed or not ok
         if not PLAN:
             st.pop("promotion", None)
-            record(st, "demote", pipeline=target["name"], to=to, summary=f"{target['name']!r} back on {to}")
+            record(st, "demote", pipeline=target["name"], to=to,
+                   summary=f"{target['name']!r} back on {to}" + ("; RUN CHECK FAILED" if failed else ""))
+    if failed:
+        raise Refused("demote: the run check FAILED (see above)")
 
 
 def cmd_status(a):
@@ -1664,15 +1834,18 @@ def build_parser():
     p.add_argument("--timeout", type=int, default=900)
 
     p = sub("enable", cmd_enable, ha=True, owner=True)
+    p.add_argument("--force", action="store_true", help="switch even if the pipeline preflight refuses")
     p.add_argument("--tv", required=True)
     p.add_argument("--base-pipeline")
 
     p = sub("rollback", cmd_rollback, ha=True)
+    p.add_argument("--force", action="store_true", help="switch even if the pipeline preflight refuses")
     p.add_argument("--tv", required=True)
     p.add_argument("--to", help="select option to go back to (default: the one recorded by enable, else preferred)")
     p.add_argument("--delete-pipeline", action="store_true", help="also delete the trial pipeline if nothing selects it")
 
     p = sub("promote", cmd_promote, ha=True, owner=True)
+    p.add_argument("--force", action="store_true", help="promote even if the pipeline preflight refuses")
     p.add_argument("--pipeline", default="preferred", help="household pipeline to switch (default: the preferred one)")
     p.add_argument("--previous-wake-word", help="the wake word id demote goes back to (default: the pipeline's current one; "
                    "needed when the pipeline already uses the model, e.g. changed outside the driver)")

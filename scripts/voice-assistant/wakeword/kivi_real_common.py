@@ -27,9 +27,13 @@ PC_SOURCES = ("pc-mic", "webcam-mic")
 SPLITS = ("unassigned", "train", "dev", "test", "train-only")
 # Split policy (docs/voice-assistant/experiments/kivi-wake-word.md): the split belongs to the session,
 # so every channel of one utterance and every take of a session share it. Hold out by speaker and by
-# device. PC and webcam audio is never an evaluation channel; in a train or unassigned session those
-# channels are tagged `train-only`, in a dev or test session they carry that split (so they can never
-# leak into training) and `eval_channel` is false. A phone memo carries the split given at import.
+# device. Rule change (owner decision 2026-11-11): on a test-split (odd Europe/Madrid date) session every
+# source is an EVALUATION channel, reported per device class (tv, pc-desk, pc-webcam, phone) and never pooled
+# with the TV gate; the TV mic stays the gate for the deployed TV path. In a train or unassigned session the
+# PC and webcam channels are tagged `train-only` (never evaluation); in a dev session they carry `dev` and are
+# not evaluation; in a test session they carry `test` (so they can never leak into training) and are evaluation.
+# A phone memo carries the split given at import. `eval_channel` is DERIVED from (source, split) by
+# `is_eval_channel`, also for manifest rows written before the rule change (their stored field says False).
 
 # ---------------------------------------------------------------------------------------------
 # naming
@@ -425,7 +429,7 @@ MANIFEST_FIELDS = (
     "start_utc", "end_utc", "cue_index", "cue_offset_s", "align_offset_s", "align_conf", "align_ok",
     "drift_ppm", "source_run", "revision", "extract_id", "dry_run_session", "press_utc",
     "onset_after_press_s", "snr_db", "n_candidates", "consent_confirmed", "needs_review", "split_requested", "run_end_in_window",
-    "stage", "phrase")        # "wake" or "stt": which Assist stage the satellite audio was recorded at (None for desk sources)
+    "stage", "phrase", "device_class")        # "wake" or "stt": which Assist stage the satellite audio was recorded at (None for desk sources)
 
 
 def make_row(**kw):
@@ -444,8 +448,31 @@ def channel_split(session_split, source):
     return session_split
 
 
-def is_eval_channel(source):
-    return source not in PC_SOURCES and source != "phone"
+DEVICE_CLASSES = ("tv", "pc-desk", "pc-webcam", "phone", "other")
+
+
+def device_class(source):
+    """The class of a dataset source: tv (a satellite, `tv-<name>`), pc-desk (pc-mic), pc-webcam (webcam-mic),
+    phone, else other. Derived from `source`, so rows written before the `device_class` field have one."""
+    s = source or ""
+    if s.startswith("tv-"):
+        return "tv"
+    return {"pc-mic": "pc-desk", "webcam-mic": "pc-webcam", "phone": "phone"}.get(s, "other")
+
+
+def is_eval_channel(source, split=None):
+    """A satellite (tv) channel is always an evaluation channel (the gate reads its test rows). Any other
+    source (PC desk mic, webcam, phone) is one when its split is `test` (owner decision 2026-11-11); with
+    no split given it is not."""
+    if device_class(source) == "tv":
+        return True
+    return split == "test"
+
+
+def row_eval_channel(row):
+    """eval_channel of a manifest row: derived from its source and split (the stored field of rows written
+    before 2026-11-11 is not trusted for PC and phone sources, which were stored as False)."""
+    return is_eval_channel(row.get("source"), row.get("split"))
 
 
 def energy_segments(pcm, t_offset=0.0, *, frame_s=0.02, margin_db=10.0, min_len_s=0.15, max_len_s=3.0,

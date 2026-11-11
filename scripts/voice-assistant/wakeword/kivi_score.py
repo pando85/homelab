@@ -278,7 +278,9 @@ def to_markdown(rep):
     thr = rep["thresholds"]
     head = "| " + " | ".join(["", "model"] + [f"> {t}" for t in thr]) + " |\n|" + " --- |" * (len(thr) + 2) + "\n"
     L = [f"## {rep['source']} - session {rep['session']} (speaker {rep.get('speaker') or '?'}, "
-         f"device {rep.get('device')}, split {rep.get('split')})", ""]
+         f"device {rep.get('device')}, split {rep.get('split')}"
+         + (f", device class {rep['device_class']}, {'evaluation' if rep.get('eval_channel') else 'not evaluation'} channel"
+            if rep.get("device_class") else "") + ")", ""]
     for m, p in rep["models"].items():
         if isinstance(p, dict):
             op = p.get("server_0_5_raw")
@@ -514,17 +516,29 @@ def score_session(a, feats=None, models=None):
     excl = parse_cue_ids(getattr(a, "exclude_cue", None))
     if feats is None:
         feats, models = load_models(specs)
-    sources = [a.source or session.get("tv_source") or C.source_label(session["device"])]
-    if a.also_pc:
+    tv = a.source or session.get("tv_source") or C.source_label(session["device"])
+    tv_missing = (session.get("tv_channel") or {}).get("status") == "missing" or not (sdir / tv / "raw").is_dir()
+    sources = [] if tv_missing else [tv]
+    if a.also_pc or tv_missing:                   # a PC-only session (no satellite audio) has nothing else to score
         sources += list(C.PC_SOURCES)
+    if tv_missing:
+        print(f"NOTE: no {tv} channel in this session (tv_channel=missing): scoring the PC sources only; "
+              "there is no TV result and no gate input.", file=sys.stderr)
     spans = ref_word_spans(sdir, session, a)
     reports = []
     for label in sources:
+        if label != tv and not (sdir / label / "raw").is_dir():
+            print(f"NOTE: no {label} channel in this session; skipped", file=sys.stderr)
+            continue
         probs, times, cov, ends, status, meta = load_source(sdir, label, feats, models, a.include_unaligned)
         rep = analyze(session, probs, times, cov, thr, a.pad_before, a.pad_after, a.refractory, ends,
                       exclude_cues=excl, word_spans=spans)
+        split = C.session_split(sdir.parent, session)
+        ch_split = C.channel_split(split, label)
         rep.update(session=session["session_id"], speaker=session.get("speaker", ""), device=session["device"],
-                   split=C.session_split(sdir.parent, session), source=label, alignment_files=status, models=infos,
+                   split=split, source=label, device_class=C.device_class(label),
+                   eval_channel=C.is_eval_channel(label, ch_split), tv_channel_missing=bool(tv_missing),
+                   alignment_files=status, models=infos,
                    scored_from=meta,
                    run_label=getattr(a, "label", None) or "-".join(i["label"] for i in infos.values()),
                    audio_hours=round(sum(c[1] - c[0] for c in cov) / 3600, 4))

@@ -145,6 +145,28 @@ def test_gate_pass_fail_incomplete():
     assert "MISSING" in W.gate_text(g)
 
 
+def test_other_devices_are_reported_apart_and_never_gated():
+    tv = [row("spk01", "tv-off", 18, 20), row("spk01", "tv-on", 15, 20),
+          row("spk02", "tv-off", 10, 10), row("spk02", "tv-on", 8, 10)]
+    # PC rows of a test session (new rows say eval True, old rows said False: both count as evaluation, informational)
+    pc = [{**row("spk01", "tv-off", 3, 36, eval_channel=False), "device_class": "pc-desk"},
+          {**row("spk01", "tv-off", 0, 36, eval_channel=True), "source": "webcam-mic", "device_class": "pc-webcam"},
+          {**row("spk01", "tv-on", 1, 20, eval_channel=False), "split": "train-only"}]
+    base = W.gate_eval(summary(tv))
+    g = W.gate_eval(summary(tv + pc))
+    assert g["verdict"] == base["verdict"] == "pass" and g["checks"] == base["checks"]    # the TV verdict is unchanged
+    assert [(o["device_class"], o["source"], o["k"], o["n"]) for o in g["other_devices"]] == [
+        ("pc-desk", "pc-mic", 3, 36), ("pc-webcam", "webcam-mic", 0, 36)]               # the train-only row is left out
+    assert g["other_devices"][0]["ci95"] == W.wilson(3, 36)
+    txt = W.gate_text(g)
+    assert "informational" in txt and "pc-desk" in txt and "satellite rows only" in txt
+    assert W.gate_eval(summary(pc))["other_devices"] and W.gate_eval(summary(pc))["verdict"] == "incomplete"
+    # an old summary without device_class: derived from the source label
+    old = {k: v for k, v in pc[0].items() if k != "device_class"}
+    assert W.row_class(old) == "pc-desk" and W.row_is_eval(old) and not W.row_is_eval({**old, "split": "train-only"})
+    assert W.row_class({"source": "tv-c3b"}) == "tv" and W.row_class({"source": "phone"}) == "phone"
+
+
 def test_gate_does_not_hide_missing_speaker_or_condition():
     complete = [row("spk01", "tv-off", 18, 20), row("spk01", "tv-on", 15, 20),
                 row("spk02", "tv-off", 10, 10), row("spk02", "tv-on", 8, 10)]
@@ -216,7 +238,8 @@ def test_trial_pipeline_and_entities():
            {"entity_id": "binary_sensor.tv_a_microphone_muted", "platform": "esphome", "device_id": "bd8256e9", "unique_id": "q"},
            {"entity_id": "select.tv_b_assistant", "platform": "esphome", "device_id": "fda18f73", "unique_id": "n-pipeline"}]
     e = W.tv_entities(reg, "c3-a", {"c3-a": "bd8256", "c3-b": "fda18f"})
-    assert e == {"select": "select.tv_a_assistant", "muted": "binary_sensor.tv_a_microphone_muted", "device_id": "bd8256e9"}
+    assert e == {"select": "select.tv_a_assistant", "muted": "binary_sensor.tv_a_microphone_muted", "device_id": "bd8256e9",
+                 "satellite": None}
     with pytest.raises(W.Refused):
         W.tv_entities(reg, "c3-z", {"c3-a": "bd8256"})
 
@@ -341,7 +364,7 @@ class FakeHA:
     def __exit__(self, *e):
         pass
 
-    def wake_words(self):
+    def wake_words(self, entity="x"):
         return ["alexa", "oye_kivi"]
 
     def pipelines(self):
@@ -373,3 +396,198 @@ def test_promote_records_a_change_made_outside_the_driver(releases, tmp_path, mo
     assert "tvs" not in st
     assert st["log"][-1]["step"] == "promote"
     assert W.main(["promote", "--version", V, "--yes-owner-approved", "--previous-wake-word", "oye_kivi"]) == 2  # the model itself
+
+
+# ----------------------------------------------------------------------- run check and pipeline preflight
+
+SAT_A = "assist_satellite.lg_c3_c3_a_voice_satellite_assist_satellite"
+SAT_B = "assist_satellite.lg_c3_c3_b_voice_satellite_assist_satellite"
+T0 = W.dt.datetime(2026, 11, 11, 18, 0, 0, tzinfo=W.dt.timezone.utc)
+
+
+def run(rid, ts, sat, *types, code=None):
+    ev = [{"type": "run-start", "data": {"pipeline": "p", "satellite_id": sat}}]
+    ev += [{"type": t, "data": {"code": code} if t == "error" else None} for t in types]
+    return {"pipeline_run_id": rid, "timestamp": ts, "events": ev}
+
+
+class RunsHA:
+    def __init__(self, runs):
+        self._runs = runs
+
+    def runs(self, pipeline_id):
+        return [{k: r[k] for k in ("pipeline_run_id", "timestamp")} for r in self._runs]
+
+    def run_events(self, pipeline_id, run_id):
+        return next(r["events"] for r in self._runs if r["pipeline_run_id"] == run_id)
+
+
+@pytest.fixture
+def fast_clock(monkeypatch):
+    t = [0.0]
+    monkeypatch.setattr(W.time, "time", lambda: t[0])
+    monkeypatch.setattr(W.time, "sleep", lambda s: t.__setitem__(0, t[0] + s))
+
+
+def test_check_run_ok_run(fast_clock):
+    ha = RunsHA([run("1", "2026-11-11T18:00:05+00:00", SAT_A, "wake_word-start")])
+    assert W.check_run(ha, "p", SAT_A, T0) == (True, "ok")
+
+
+def test_check_run_errored_run_reports_the_code(fast_clock):
+    ha = RunsHA([run("1", "2026-11-11T18:00:05+00:00", SAT_A, "error", "run-end", code="intent-not-supported")])
+    assert W.check_run(ha, "p", SAT_A, T0, timeout_s=6) == (False, "intent-not-supported")
+
+
+def test_check_run_error_after_wake_word_start_is_not_ok(fast_clock):
+    ha = RunsHA([run("1", "2026-11-11T18:00:05+00:00", SAT_A, "wake_word-start", "error", code="wake-provider-timeout")])
+    assert W.check_run(ha, "p", SAT_A, T0, timeout_s=4) == (False, "wake-provider-timeout")
+
+
+def test_check_run_ignores_other_satellites_and_old_runs(fast_clock):
+    ha = RunsHA([run("1", "2026-11-11T18:00:05+00:00", SAT_B, "wake_word-start"),
+                 run("2", "2026-11-11T17:59:00+00:00", SAT_A, "wake_word-start")])
+    ok, detail = W.check_run(ha, "p", SAT_A, T0, timeout_s=4)
+    assert not ok and "no run of" in detail
+
+
+def test_check_run_only_the_newest_run_of_the_satellite_counts(fast_clock):
+    ha = RunsHA([run("1", "2026-11-11T18:00:05+00:00", SAT_A, "wake_word-start"),
+                 run("2", "2026-11-11T18:00:20+00:00", SAT_A, "error", code="stt-provider-unsupported-language")])
+    assert W.check_run(ha, "p", SAT_A, T0, timeout_s=2) == (False, "stt-provider-unsupported-language")
+
+
+def test_check_run_waits_for_the_run(fast_clock):
+    class Late(RunsHA):
+        n = 0
+
+        def runs(self, pid):
+            Late.n += 1
+            return super().runs(pid) if Late.n > 3 else []
+    ha = Late([run("1", "2026-11-11T18:00:05+00:00", SAT_A, "wake_word-start")])
+    assert W.check_run(ha, "p", SAT_A, T0) == (True, "ok")
+
+
+PIPE = {"name": "Kiwi Test", "conversation_engine": "conversation.fast", "stt_engine": "stt.faster_whisper",
+        "tts_engine": "tts.piper", "wake_word_id": "alexa"}
+STATES = {"conversation.fast": {"state": "2026-11-11T00:00:00"}, "stt.faster_whisper": {"state": "unknown"},
+          "tts.piper": {"state": "unknown"}}
+SERVED = ["alexa", "oye_kivi_next"]
+
+
+def test_preflight_passes_a_healthy_pipeline():
+    assert W.preflight_pipeline(PIPE, STATES, SERVED) == []
+
+
+def test_preflight_refuses_an_unavailable_engine_unless_forced(capsys):
+    states = dict(STATES, **{"conversation.fast": {"state": "unavailable"}})
+    with pytest.raises(W.Refused, match="conversation_engine conversation.fast is unavailable"):
+        W.preflight_pipeline(PIPE, states, SERVED)
+    assert W.preflight_pipeline(PIPE, states, SERVED, force=True)
+    assert "--force given" in capsys.readouterr().out
+    gone = {k: v for k, v in STATES.items() if k != "tts.piper"}
+    with pytest.raises(W.Refused, match="tts.piper does not exist"):
+        W.preflight_pipeline(PIPE, gone, SERVED)
+
+
+def test_preflight_refuses_an_unserved_wake_word():
+    with pytest.raises(W.Refused, match="alexa_v0.1' is not served"):
+        W.preflight_pipeline(dict(PIPE, wake_word_id="alexa_v0.1"), STATES, SERVED)
+
+
+def test_preflight_ignores_legacy_engine_ids_and_no_wake_word():
+    assert W.preflight_pipeline(dict(PIPE, conversation_engine="homeassistant", wake_word_id=None), STATES, SERVED) == []
+
+
+class RollbackHA(RunsHA):
+    """Home Assistant for `rollback --to Kiwi Test`: c3-a on the preferred pipeline."""
+    calls = []
+
+    def __init__(self, runs, states=STATES, served=SERVED):
+        super().__init__(runs)
+        self.st = dict(states, **{"select.lg_c3_c3_a_voice_satellite_assistant": {"state": "preferred"}})
+        self.served = served
+
+    def __call__(self, *a, **k):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *e):
+        pass
+
+    def wake_words(self, entity="x"):
+        return self.served
+
+    def pipelines(self):
+        return {"preferred_pipeline": "k", "pipelines": [
+            {"id": "k", "name": "Kivi", "wake_word_id": "oye_kivi_next", "wake_word_entity": "w"},
+            dict(PIPE, id="t", wake_word_entity="w")]}
+
+    def states(self):
+        return self.st
+
+    def kick(self, p):
+        RollbackHA.calls.append(("kick", p["id"]))
+
+    def call(self, t, **kw):
+        if t == "config/entity_registry/list":
+            return [{"entity_id": "select.lg_c3_c3_a_voice_satellite_assistant", "platform": "esphome", "device_id": "bd8256x",
+                     "unique_id": "m-pipeline"},
+                    {"entity_id": SAT_A, "platform": "esphome", "device_id": "bd8256x", "unique_id": "m-sat"}]
+        RollbackHA.calls.append((t, kw))
+        return {}
+
+
+def run_rollback(monkeypatch, releases, tmp_path, ha, capsys):
+    make_state(releases, tmp_path)
+    RollbackHA.calls = []
+    monkeypatch.setattr(W, "HA", ha)
+    monkeypatch.setattr(W, "devices_map", lambda: {"c3-a": "bd8256"})
+    code = W.main(["rollback", "--version", V, "--tv", "c3-a", "--to", "Kiwi Test"])
+    return code, capsys.readouterr()
+
+
+def test_rollback_ok_run_passes(releases, tmp_path, monkeypatch, capsys, fast_clock):
+    ts = (W.dt.datetime.now(W.dt.timezone.utc) + W.dt.timedelta(hours=1)).isoformat()
+    ha = RollbackHA([run("1", ts, SAT_A, "wake_word-start")])
+    code, out = run_rollback(monkeypatch, releases, tmp_path, ha, capsys)
+    assert code == 0 and ": OK" in out.out and "FAILED" not in out.out
+    assert any(c[0] == "call_service" for c in RollbackHA.calls)
+
+
+def test_rollback_errored_run_fails_and_prints_the_way_back(releases, tmp_path, monkeypatch, capsys, fast_clock):
+    ts = (W.dt.datetime.now(W.dt.timezone.utc) + W.dt.timedelta(hours=1)).isoformat()
+    ha = RollbackHA([run("1", ts, SAT_A, "error", "run-end", code="intent-not-supported")])
+    code, out = run_rollback(monkeypatch, releases, tmp_path, ha, capsys)
+    assert code == 2 and "FAILED: intent-not-supported" in out.out
+    assert "rollback --version" in out.out and "--to preferred --force" in out.out
+    assert [c for c in RollbackHA.calls if c[0] == "call_service"][0][1]["service_data"] == {"option": "Kiwi Test"}  # select left
+
+
+def test_rollback_other_satellites_run_does_not_count(releases, tmp_path, monkeypatch, capsys, fast_clock):
+    ts = (W.dt.datetime.now(W.dt.timezone.utc) + W.dt.timedelta(hours=1)).isoformat()
+    ha = RollbackHA([run("1", ts, SAT_B, "wake_word-start")])
+    code, out = run_rollback(monkeypatch, releases, tmp_path, ha, capsys)
+    assert code == 2 and "FAILED: no run of" in out.out
+
+
+def test_rollback_refuses_an_unavailable_engine_before_switching(releases, tmp_path, monkeypatch, capsys, fast_clock):
+    ha = RollbackHA([], states=dict(STATES, **{"conversation.fast": {"state": "unavailable"}}))
+    code, out = run_rollback(monkeypatch, releases, tmp_path, ha, capsys)
+    assert code == 2 and "unavailable" in out.err and "--force" in out.err
+    assert not RollbackHA.calls
+
+
+def test_rollback_refuses_an_unserved_wake_id_before_switching(releases, tmp_path, monkeypatch, capsys, fast_clock):
+    ha = RollbackHA([], served=["oye_kivi_next"])
+    code, out = run_rollback(monkeypatch, releases, tmp_path, ha, capsys)
+    assert code == 2 and "'alexa' is not served" in out.err and not RollbackHA.calls
+
+
+def test_household_pipeline_is_found_by_the_preferred_flag_not_its_name():
+    for household in ("Kiwi", "Kivi"):
+        plist = {"preferred_pipeline": "k", "pipelines": [{"id": "k", "name": household}, {"id": "t", "name": "Kiwi Test"}]}
+        assert W.resolve_option(plist, "preferred")["id"] == "k"
+        assert W.tvs_on_pipeline({"c3-a": "preferred", "c3-b": "Kiwi Test"}, plist, household) == ["c3-a"]

@@ -291,6 +291,15 @@ def test_split_policy():
     assert C.channel_split("dev", "tv-c3b") == "dev" and C.channel_split("train", "tv-c3a") == "train"
     assert C.channel_split("unassigned", "phone") == "train-only"
     assert not C.is_eval_channel("phone") and C.is_eval_channel("tv-c3b")
+    # owner decision 2026-11-11: every source of a test-split session is an evaluation channel; the class is derived
+    assert C.is_eval_channel("pc-mic", "test") and C.is_eval_channel("webcam-mic", "test") and C.is_eval_channel("phone", "test")
+    assert not C.is_eval_channel("pc-mic", "train-only") and not C.is_eval_channel("webcam-mic", "dev")
+    assert C.is_eval_channel("tv-c3a", "train")                       # unchanged: the satellite channel
+    assert [C.device_class(x) for x in ("tv-c3a", "tv-c3b", "pc-mic", "webcam-mic", "phone", "x")] == [
+        "tv", "tv", "pc-desk", "pc-webcam", "phone", "other"]
+    # an old row (written before the rule change, eval_channel stored False) is eval when its split is test
+    assert C.row_eval_channel({"source": "pc-mic", "split": "test", "eval_channel": False})
+    assert not C.row_eval_channel({"source": "pc-mic", "split": "train-only", "eval_channel": False})
     assert set(C.SPLITS) == {"unassigned", "train", "dev", "test", "train-only"}
     with pytest.raises(KeyError):
         C.make_row(nonsense=1)
@@ -592,6 +601,32 @@ def test_manifest_is_crash_safe_and_reconciled(tmp_path, capsys):
     assert sum(v["rows_reconciled"] for v in json.loads(rep.read_text())["per_source"].values()) == 3
     raw = man.read_bytes()
     assert raw.endswith(b"\n") and b'{"session": "trunc\n' in raw                  # repaired by a newline, nothing deleted
+
+
+def test_pc_only_session_on_a_test_day_is_evaluation_without_tv_rows(tmp_path, capsys):
+    """The TV channel is lost (no wake audio): extraction still works from the desk mic and the webcam, says
+    so in the session record and the report, and a test-split session's PC rows are evaluation channels."""
+    d, s, ref, rng, o_pc, t0 = prepared_session(tmp_path)
+    ds = tmp_path / "ds"
+    X.main(extract_args(tmp_path, d, ds, "--no-tv", "--split", "test"))
+    sid = s["session_id"]
+    rows = C.read_jsonl(ds / "manifest.jsonl")
+    assert {r["source"] for r in rows} == {"pc-mic", "webcam-mic"}
+    assert {r["split"] for r in rows} == {"test"} and all(r["eval_channel"] for r in rows)
+    assert {(r["source"], r["device_class"]) for r in rows} == {("pc-mic", "pc-desk"), ("webcam-mic", "pc-webcam")}
+    assert all(set(r) == set(C.MANIFEST_FIELDS) for r in rows)
+    rec = json.loads((ds / sid / "session.json").read_text())
+    assert rec["tv_channel"] == {"source": "tv-c3a", "status": "missing", "reason": "--no-tv"}
+    rep = json.loads(sorted(ds.glob(f"{sid}/extract-*.json"))[-1].read_text())
+    assert rep["tv_channel"]["status"] == "missing"
+    assert "no satellite (tv-c3a) channel" in capsys.readouterr().out
+    # a train-day PC-only session: the PC rows stay train-only and are not evaluation
+    (tmp_path / "b").mkdir()
+    d2, s2, *_ = prepared_session(tmp_path / "b", seed=4)
+    ds2 = tmp_path / "ds2"
+    X.main(extract_args(tmp_path / "b", d2, ds2, "--no-tv", "--split", "train"))
+    rows2 = C.read_jsonl(ds2 / "manifest.jsonl")
+    assert {r["split"] for r in rows2} == {"train-only"} and not any(r["eval_channel"] for r in rows2)
 
 
 def test_short_copy_fails_and_leaves_only_a_part_file(tmp_path):
@@ -1024,6 +1059,26 @@ def test_scorer_runs_the_server_runtime_on_raw_files(tmp_path):
     a.include_unaligned = True
     (rep3,) = K.score_session(a)
     assert rep3["blocks"][0]["cue_hits"]["kivi"]["0.5"]["k"] == kb["kivi"]["0.5"]["k"]
+
+
+@needs_work
+def test_scorer_scores_a_pc_only_session(tmp_path):
+    """No satellite channel (tv_channel=missing): the PC sources that exist are scored, as evaluation channels
+    of a test-split session, each with its device class; the missing ones are skipped, not an error."""
+    import kivi_score as K
+    sdir, n = synthetic_score_session(tmp_path)
+    (sdir / "tv-c3a").rename(sdir / "pc-mic")
+    sess = json.loads((sdir / "session.json").read_text())
+    sess.update(split="test", tv_channel={"source": "tv-c3a", "status": "missing", "reason": "--no-tv"})
+    (sdir / "session.json").write_text(json.dumps(sess))
+    a = Namespace(session=str(sdir), source=None, also_pc=False, model=None, thresholds="0.5,0.9",
+                  pad_before=0.5, pad_after=3.5, refractory=2.0, include_unaligned=False)
+    reps = K.score_session(a)
+    assert [r["source"] for r in reps] == ["pc-mic"]
+    r = reps[0]
+    assert (r["device_class"], r["eval_channel"], r["tv_channel_missing"], r["split"]) == ("pc-desk", True, True, "test")
+    assert r["blocks"][0]["cue_hits"]["kivi"]["0.5"]["n"] == n
+    assert "device class pc-desk, evaluation channel" in K.to_markdown(r)
 
 
 # ---------------------------------------------------------------------------------------------
