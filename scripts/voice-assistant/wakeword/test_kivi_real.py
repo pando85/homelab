@@ -635,6 +635,66 @@ def test_kubectl_fetcher_byte_ranges_with_a_stand_in_kubectl(tmp_path, monkeypat
         list(kf.fetch_range("/x; rm -rf /", 0, 10))                  # paths are validated
 
 
+def _stand_in_kubectl(tmp_path, monkeypatch):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    k = bindir / "kubectl"
+    k.write_text('#!/bin/sh\nwhile [ "$1" != "--" ]; do shift; done\nshift\nexec "$@"\n')
+    k.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+
+
+@pytest.mark.parametrize("pipeline", ["Kiwi Test", "oye Kivi"])
+def test_kubectl_fetcher_lists_and_reads_pipeline_names_with_spaces(tmp_path, monkeypatch, pipeline):
+    """A pipeline directory name with a space is listed (not skipped) and its bytes are read intact."""
+    _stand_in_kubectl(tmp_path, monkeypatch)
+    x = (np.arange(20000) % 30000).astype(np.int16)
+    f = make_wake_tree(tmp_path / "rec", "bd8256", 7, T0, x, pipeline=pipeline)
+    kf = X.KubectlFetcher("ctx", "ns", "pod", None, root=str(tmp_path / "rec"))
+    (item,) = kf.list_run_files("bd8256", "wake")
+    assert item["path"] == str(f) and pipeline in item["path"] and item["size"] == 44 + 40000
+    assert X.run_of(item["path"])["pipeline"] == pipeline
+    data = f.read_bytes()
+    assert b"".join(kf.fetch_range(item["path"], 5013, 17001)) == data[5013:17001]
+
+
+def test_safe_path_allows_only_a_literal_space_and_listing_parses_spaces():
+    ok = "/voice-recordings/bd82560000aaaa/Kiwi Test/7/00_wake-wake_word.openwakeword.wav"
+    assert X.SAFE_PATH.fullmatch(ok)
+    for bad in ("/x; rm -rf /", "/a/$(id)/b", "/a/`id`/b", "/a/b\tc", "/a/b\nc", "/a/b\n", "/a/'b'", '/a/"b"',
+                "/a/b|c", "/a/b&c", "/a/b>c", "/a/b\\c", "/a/b*c", "relative/Kiwi Test", ""):
+        assert not X.SAFE_PATH.fullmatch(bad), bad
+
+    class R:
+        returncode = 0
+        stderr = ""
+        stdout = "\n".join([f"{ok} 40044 1800000000",
+                            "/voice-recordings/bd8256x/oye Kivi/8/00_wake.wav 100 200",
+                            "/voice-recordings/bd8256x/plain/9/00_wake.wav 300 400",
+                            "/voice-recordings/bd8256x/Bad;Name/9/00_wake.wav 300 400",
+                            "/voice-recordings/bd8256x/tab\tname/9/00_wake.wav 300 400",
+                            "/voice-recordings/bd8256x/no numbers/9/00_wake.wav", ""])
+
+    orig = X.subprocess.run
+    X.subprocess.run = lambda *a, **k: R()
+    try:
+        got = X.KubectlFetcher("c", "n", "p").list_run_files("bd8256")
+    finally:
+        X.subprocess.run = orig
+    assert [(g["path"], g["size"], g["mtime"]) for g in got] == [
+        (ok, 40044, 1800000000.0),
+        ("/voice-recordings/bd8256x/oye Kivi/8/00_wake.wav", 100, 200.0),
+        ("/voice-recordings/bd8256x/plain/9/00_wake.wav", 300, 400.0)]
+
+
+def test_kubectl_fetcher_refuses_unsafe_paths_even_with_a_space(tmp_path, monkeypatch):
+    _stand_in_kubectl(tmp_path, monkeypatch)
+    kf = X.KubectlFetcher("ctx", "ns", "pod", None, root=str(tmp_path / "rec"))
+    for bad in ("/x/Kiwi Test; rm -rf /", "/x/Kiwi Test/$(id)", "/x/Kiwi\tTest/a.wav"):
+        with pytest.raises(SystemExit):
+            list(kf.fetch_range(bad, 0, 10))
+
+
 def test_pipeline_preflight_and_warning(tmp_path, capsys):
     kivi = json.dumps({"data": {"items": [{"id": "a", "name": "P1", "wake_word_id": "kivi"},
                                           {"id": "b", "name": "P2", "wake_word_id": "alexa_v0.1"}], "preferred_item": "a"}})

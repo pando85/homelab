@@ -63,7 +63,9 @@ import kivi_real_common as C  # noqa: E402
 RATE = C.RATE
 KINDS = {"wake": "00_wake*.wav", "stt": "01_stt*.wav"}
 CLOSED_AGE_S = 120.0     # a file not written for this long is closed (its run ended)
-SAFE_PATH = re.compile(r"^/[A-Za-z0-9_./@=+-]+$")
+# a literal space is allowed (HA pipeline names such as "Kiwi Test"), no other whitespace and no shell metacharacters;
+# paths only ever reach `sh` as "$1" / "$f" (quoted) or as kubectl argv items, never spliced into a command string.
+SAFE_PATH = re.compile(r"/[A-Za-z0-9_./@=+ -]+")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -115,8 +117,8 @@ class KubectlFetcher:
             raise SystemExit(f"kubectl exec failed ({r.returncode}): {r.stderr.strip()[:300]}")
         out = []
         for line in r.stdout.splitlines():
-            m = re.fullmatch(r"(\S+) (\d+) (\d+)", line.strip())
-            if m and SAFE_PATH.match(m.group(1)):
+            m = re.fullmatch(r"(.+) (\d+) (\d+)", line.rstrip("\r\n"))    # the path may contain spaces
+            if m and SAFE_PATH.fullmatch(m.group(1)):
                 out.append({"path": m.group(1), "size": int(m.group(2)), "mtime": float(m.group(3))})
         return out
 
@@ -137,7 +139,7 @@ class KubectlFetcher:
     def fetch_range(self, path, lo, hi):
         """Bytes [lo, hi) in blocks of `BLOCK` bytes, each its own exec and checked against its length
         (a short block is read again, up to `RETRIES` times, before the copy fails)."""
-        if not SAFE_PATH.match(path):
+        if not SAFE_PATH.fullmatch(path):
             raise SystemExit(f"refusing an unexpected path {path!r}")
         pos = lo
         while pos < hi:
