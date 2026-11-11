@@ -198,7 +198,11 @@ data:
       # If you want to allow any volume, please use the following configuration:
       # valid_volumes:
       #   - '**'
-      valid_volumes: []
+      # These two paths are the runner-controlled sccache mounts from container.options;
+      # the runner validates options volumes against this list too (verified 2026-11-11).
+      valid_volumes:
+        - /cache
+        - /sccache-credentials
       # Overrides the docker host set by the DOCKER_HOST environment variable, and mounts on the job container.
       # If "-" or "", no docker host will be mounted in the job container
       # If "automount", an available docker host will automatically be found and mounted in the job container (e.g. /var/run/docker.sock).
