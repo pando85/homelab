@@ -7,7 +7,7 @@ H=$HOME/homelab/scripts/voice-assistant/wakeword
 W=/work/workspaces/kivi-wakeword
 UNTIL=${UNTIL:?set UNTIL to an ISO UTC time about 15 min ago, e.g. 2026-11-14T07:00:00Z}
 read -r ARM THR < <(python3 -c "import json; c=json.load(open('$W/v6p1/selection.json'))['chosen']; print(c['arm'], c['threshold'])")
-CAND=$W/v6p1/runs/$ARM
+case $ARM in p2*) CAND=$W/v6p2/runs/$ARM ;; *) CAND=$W/v6p1/runs/$ARM ;; esac
 V5=$W/releases/v5-oye-kivi-2026-11-08/model/oye_kivi_next_uncalibrated
 cd $H
 # 1. the rest of the copy (same command: existing pieces are skipped); 11-13 pieces are test3-v6p1

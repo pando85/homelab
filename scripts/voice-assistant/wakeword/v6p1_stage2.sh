@@ -23,5 +23,6 @@ SCOPE="systemd-run --user --scope -p MemoryMax=12G -p CPUQuota=400% -- nice -n 1
 $SCOPE .venv/bin/python -I $H/v6_room.py embed --manifest datasets/real/negatives-v6p1/manifest.jsonl --out-dir v6/room_emb
 # 4. the pre-registered rule: threshold per arm and the arm (selection.json); nothing else is read
 $SCOPE .venv/bin/python -I $H/v6p1_select.py --index v6/room_emb/index.json --part sel-v6p1 --local-date 2026-11-12 \
-  --live-date 2026-11-12 --arm p1a=v6p1/runs/p1a --arm p1b=v6p1/runs/p1b --arm p1c=v6p1/runs/p1c --out v6p1/selection.json
+  --live-date 2026-11-12 --arm p1a=v6p1/runs/p1a --arm p1b=v6p1/runs/p1b --arm p1c=v6p1/runs/p1c \
+  --arm p2a=v6p2/runs/p2a --arm p2b=v6p2/runs/p2b --out v6p1/selection.json   # v6.1 amendment 2: v6.2 arms too
 echo STAGE2_DONE
