@@ -137,19 +137,19 @@ planning:
   # behaviour.  Applies on a full-charge day too, so the 100% checkpoint finishes close to the
   # discharge.  Value chosen by hack/high_soc_dwell_sweep.py, see docs/planning/high-soc-dwell-cost.md.
   high_soc_threshold_frac: 0.90
-  high_soc_cost_eur_per_kwh_h: 0.0
+  high_soc_cost_eur_per_kwh_h: 0.01  # PRODUCTION: do not revert to template default (0.0)
   # Thermal soft cap on charge power: EUR per AC kWh charged above charge_soft_cap_kw in a slot
   # (planning only, never in reported cost; the battery's internal temperature rises with charge
   # power and LFP ageing is worse hot).  0 = off, today's behaviour.  Composes with the dwell cost and
   # the full-charge checkpoint.  Value chosen by hack/charge_soft_cap_sweep.py, see
   # docs/planning/thermal-charge-soft-cap.md.
   charge_soft_cap_kw: 1.5
-  charge_soft_cap_eur_per_kwh: 0.0
+  charge_soft_cap_eur_per_kwh: 0.005  # PRODUCTION: do not revert to template default (0.0)
   # Bound each slot's planned discharge by forecast load - actuation.discharge_margin_w (floored
   # at 0), the most the live actuator can deliver because it keeps that much grid import.  false =
   # off, today's plan (discharge bounded by the load alone).  See docs/known-issues.md, "Planned
   # discharge is not delivered".
-  discharge_margin_bound: false
+  discharge_margin_bound: true  # PRODUCTION: do not revert to template default (false)
   # Read-only thermal state and derate prediction (docs/planning/thermal-derate-aware-planning.md,
   # docs/service.md "Thermal shadow").  off (default): nothing is read, recorded or exposed, today's
   # service byte for byte.  shadow: reads Omnibattery's Temperature Charge Limit entities and the
@@ -159,7 +159,7 @@ planning:
   # or actuation changes in either mode, and no entity here is ever written (nothing joins the
   # ha_guard allowlist).  Needs actuation.entities.battery_ac_power and its sign.
   thermal:
-    mode: "off"                  # off | shadow (quote it: bare YAML off is a boolean)
+    mode: shadow                 # off | shadow (quote "off": bare YAML off is a boolean)  # PRODUCTION: do not revert to template default ("off")
     entities:
       # Shared with battery_health.entities.temperature (they must agree; either may be omitted).
       temperature: sensor.venus_internal_temperature
@@ -263,8 +263,8 @@ actuation:
   # soc_hysteresis_pct and releases below the plan SOC.  max_w: null = max_discharge_cap_w; it
   # must lie in [min_discharge_cap_w, max_discharge_cap_w], the guard's bound on the cap.
   load_following:
-    enabled: false
-    max_w: null
+    enabled: true  # PRODUCTION: do not revert to template default (false)
+    max_w: 2500  # PRODUCTION: do not revert to template default (null)
     soc_hysteresis_pct: 1
   # Reserve protection (ADR-0007 amendment 2026-11-08).  While the MEASURED SOC sits at or below
   # the tariff's floor, a tick the plan maps to idle or discharge becomes a bounded recovery charge
@@ -308,7 +308,7 @@ actuation:
 # `entities.day_select`: Omnibattery's own weekly full charge is the self-limiting enabler
 # (ADR-0007 amendment 2026-11-04).  Needs planning.soc_source: entity.
 full_charge:
-  enabled: false
+  enabled: true  # PRODUCTION: do not revert to template default (false); mode stays shadow
   # The feature's own switch.  shadow (default): decides and records with the simulated writer and a
   # simulated state file; beside a live service nothing about the real control path changes (the
   # regular plan stays the plan of record, the actuator hears nothing, the two weekly entities stay
