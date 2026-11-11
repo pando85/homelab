@@ -22,6 +22,10 @@ actuation:
     # Load-following discharge, capped to this installation's inverter limit (base: false / null).
     enabled: true
     max_w: 2500
+    # Value-based floor (owner decision 2026-11-11, live directly): cover the real load in a
+    # discharge slot while price - wear >= the plan's value of stored energy + margin
+    # (base default plan_soc). Roll back with plan_soc.
+    floor: storage_value
 
 full_charge:
   # Periodic full charge for this battery; full_charge.mode stays at the base value.
