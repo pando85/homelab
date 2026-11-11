@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 
 W = Path("/work/workspaces/kivi-wakeword")
-DROP_LIVE_POS = {"c3-b/20261107T235840.830Z", "c3-b/20261107T235906.770Z"}
+DROP_LIVE_POS = set()   # 1b correction 2026-11-12: the two stt-path clips are correct and kept
 DROP_LIVE_HARD = {"c3-b/20261108T082445.653Z", "c3-a/20261108T091213.284Z", "c3-b/20261108T100623.078Z",
                   "c3-b/20261108T082553.920Z", "c3-b/20261108T082635.313Z"}
 DROP_VOICES_ISO = {"vctk_tr", "ona"}

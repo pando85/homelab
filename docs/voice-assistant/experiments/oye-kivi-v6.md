@@ -304,8 +304,8 @@ The owner rolled back to v5 at about 22:40Z (v6 felt like more false wakes). Cha
 - **Arm rule (false wakes first):** among eligible arms, the one with the fewest 2026-11-10 room events at its
   threshold; tie: higher R (validation recall), then fewer near-phrase validation accepts, then p2a. The threshold rule
   already aims at v5's 2026-11-10 count (total <= max(E5, 1)), never above it.
-- Data fixes kept: 1a (hard-negative ASR flags), 1b (2 mis-cut live positives, 5 live_hard clips, 2 real takes, flagged
-  TTS voices), 1c (room-negative ASR flags, all non-`none` flags), the retry filter on room windows and on the hard
+- Data fixes kept: 1a (hard-negative ASR flags), 1b (5 live_hard clips, 2 real takes, flagged TTS voices; the 2 stt-path live
+  positives are kept, amendment 4), 1c (room-negative ASR flags, all non-`none` flags), the retry filter on room windows and on the hard
   negatives (live wake / stt-only within 30 s, miss candidate within 6 s), all mined only on 2026-11-05/-06/-08.
 
 ### v6.2 amendment 3 (2026-11-12, about 00:05 Madrid; before v6.2 training, no 2026-11-12 audio read)
@@ -319,12 +319,16 @@ Grouped 5-fold out-of-fold flags (`quality/oof_flags_*.csv`), applied as "OOF + 
   filter); synthetic negatives that a held-out fold accepts at the v6-matched operating point (n_above_fold_thr >= 1)
   are dropped (near_train 651, confusers-in-sentences 423, same-clip negatives 6 windows).
 Resulting v6.2 inputs: isolated synthetic positives 36,151; context positives 6,834; near_train 59,314; context
-confusers 9,097; live positives 600 / 450 / 300 (spk01 / spk02 / unknown); live hard 2,700; live same-clip negatives 750;
+confusers 9,097; live positives 900 / 450 / 300 (spk01 / spk02 / unknown, amendment 4); live hard 2,700; live same-clip negatives 810;
 real takes rebuilt from 228 of 232 takes (120 copies); hard negatives v6 99, v5 3,319; room windows 247,647.
 
-Mis-cut live positives (the two stt-path clips): their windows score a median raw 0.981 on v5, which never trained on
-them, and 0.997 on v6 (good windows: 0.930 / 0.996). The windows were cut in stt.wav at the replay peak next to the
-phrase's word timestamp, which matches the report that the phrase sits 1.0-1.6 s into the request, so they very likely
-do hold the phrase. At 300 of 424 x 4000 sampled positives (about 1.3 % of the positive stream) they are an unlikely
-explanation of v6's extra room false wakes; the lower threshold (0.9595 against v5's 0.9754) and the high-scoring
-evening events are the plain explanation. They are dropped anyway, as decided.
+(Paragraph on mis-cut live positives withdrawn 2026-11-12: see amendment 4.)
+
+### v6.2 amendment 4 (2026-11-12, about 00:15 Madrid; before v6.2 training, no 2026-11-12 audio read)
+
+Correction to 1b: the two stt-path live positives (c3-b 2026-11-07 23:58:40Z and 23:59:06Z) are KEPT. The data-quality
+check had compared them with the wake tail; `v6_cuts.py` cuts them inside stt.wav, where the phrase ends about 0.3-0.4 s
+before the cut, and they score 0.998 / 0.999 out of fold. The live positives of v6.2 are therefore the v6 ones
+(spk01 900, spk02 450, unknown 300 windows) and the same-clip negatives 810. The mis-cut hypothesis for v6's false
+wakes is void. The live clip c3-b 2026-11-08 07:54:59Z (spk01, wake) scores about 0.0002 out of fold although ASR finds
+the phrase: a coverage gap, not a label error; it is kept. Items 2-4 of 1b stand.
