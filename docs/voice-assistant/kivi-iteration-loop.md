@@ -100,4 +100,4 @@ in Home Assistant are deleted by Home Assistant after 90 days (data register row
 | Queue tables | `~/kivi-models/data/datasets/real/live-misses/` (`daily_false_wakes.csv`, `daily_miss_candidates.csv`, ...) and `live/live_wakes.csv` |
 | Release driver | `scripts/voice-assistant/wakeword/wake_release.py` |
 
-Learnings and the living next-steps list: kivi-models `docs/LEARNINGS.md` and `docs/NEXT-STEPS.md`.
+Agents: kivi-models `AGENTS.md` loads the knowledge base `docs/knowledge/INDEX.md` and `docs/NEXT-STEPS.md`.
