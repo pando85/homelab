@@ -474,3 +474,12 @@ The same relabel rule applies (attempt = not a false wake, every other label sta
   context positives as a regulariser (32 per step) and keep the confuser-in-sentence negatives (C2).
 - Test only on fresh odd days (the 2026-11-12/-13 stages, then later odd days); test2-v5era and the 2026-11-11 session
   are spent.
+
+## Correction note (2026-11-12)
+
+The C3 room counts above (v6 and v6.2 against v5, on test2-v5era and the 11-11 evening copy) were replayed on each piece's
+own grid, not the server's (`kivi_replay_mine.grid_phase`), and compared with a v5 count that is zero by construction (v5
+was live, its detections are cut out of the room audio). The verdicts stay as recorded. The fair recount (server grid, live
+false clips added for every model, `kivi_fair_fa.py`) is in kivi-models `docs/plan/2026-11-false-wake-plan.md` section 8:
+on the test days v5, v6 and v6.2 are not distinguishable on false wakes (3.94, 3.66, 3.66 per evening; paired p 0.85, 0.57).
+Stage 3 C3 should be computed the same way.
