@@ -39,10 +39,14 @@ window.wav`) around replay peaks of the v5-era room audio where the wake word mo
 the speaker. The live-wake review above is unchanged.
 
 Labelling queue (`queue`): one command that walks every pending item of every review table, scores hidden, in this order:
+(0) the blind autolabel validation sample (`live/autolabel_validation.csv`, built by `kivi_false_wake_audit.py sample`:
+about 40 live clips, the auto label never shown; the label is t true / f false + cause o other speech, m tv / media,
+n noise / n not a wake / u unclear, plus the speaker; it is carried into `live_wakes.csv` as an owner label, the auto
+label stays only in the frozen key that `kivi_false_wake_audit.py analyze` reads),
 (1) replay false wakes of the live model (`live-misses/daily_false_wakes.csv`, written by `kivi_collect.py`),
 (2) uncertain live clips (`live/live_wakes.csv`: unlabelled, or auto labels that are unclear / low confidence / true with an
-unknown speaker; an owner label is never offered again), (3) missed-wake candidates (every other `live-misses/*.csv`, best
-rank first). Each label is saved at once (a fresh read of the table, so a collector writing meanwhile loses nothing); `q`
+unknown speaker; an owner label is never offered again; a clip waiting in the validation sample is not offered twice),
+(3) missed-wake candidates (every other `live-misses/*.csv`, best rank first). Each label is saved at once (a fresh read of the table, so a collector writing meanwhile loses nothing); `q`
 or Ctrl-C stops at any time, a skipped item comes back next time. It prints the items left per table at start and end.
 `--minutes N` and `--max-items N` end a session by themselves. `--day D` / `--device X` narrow the queue. Plays audio: run it
 in your own terminal, never from an agent.
@@ -261,13 +265,13 @@ def read_table(path):
         return [{k: (row.get(k) or "") for k in FIELDS} for row in csv.DictReader(f)]
 
 
-def write_table(path, rows):
+def write_csv_atomic(path, fields, rows):
     """Atomic rewrite (temp file, fsync, rename), mode 600: a crash leaves the old table whole."""
     p = Path(path)
     fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=p.name + ".", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=FIELDS, lineterminator="\n")
+            w = csv.DictWriter(f, fieldnames=fields, lineterminator="\n")
             w.writeheader()
             w.writerows(rows)
             f.flush()
@@ -278,6 +282,10 @@ def write_table(path, rows):
         if os.path.exists(tmp):
             os.unlink(tmp)
         raise
+
+
+def write_table(path, rows):
+    write_csv_atomic(path, FIELDS, rows)
 
 
 def sha256_file(path):
@@ -472,22 +480,7 @@ def read_miss_table(path):
 
 
 def write_miss_table(path, rows):
-    """Atomic rewrite like `write_table`, mode 600."""
-    p = Path(path)
-    fd, tmp = tempfile.mkstemp(dir=str(p.parent), prefix=p.name + ".", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
-            w = csv.DictWriter(f, fieldnames=MISS_FIELDS, lineterminator="\n")
-            w.writeheader()
-            w.writerows(rows)
-            f.flush()
-            os.fsync(f.fileno())
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, p)
-    except BaseException:
-        if os.path.exists(tmp):
-            os.unlink(tmp)
-        raise
+    write_csv_atomic(path, MISS_FIELDS, rows)
 
 
 SPEAKER_KEYS = {"1": "spk01", "2": "spk02", "3": "spk-other", "4": "unknown"}
@@ -532,6 +525,27 @@ def review_live_item(r, live, play, input_fn):
         return k
     sp = ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(SPEAKER_KEYS), input_fn)
     return LIVE_KEYS[k], SPEAKER_KEYS[sp]
+
+
+def review_validation_item(r, live, play, input_fn):
+    """Blind validation clip: play it and ask. Returns "q", "s" or (label, cause, speaker). Nothing about the clip but
+    its position is shown."""
+    d = live / r["device"] / r["utc"]
+    while True:
+        play(d / "wake_tail.wav")
+        play(d / "stt.wav")
+        k = ask("label [t/f/n/u], r = replay, s = skip, q = quit: ", ("t", "f", "n", "u", "r", "s", "q"), input_fn)
+        if k != "r":
+            break
+    if k in ("q", "s"):
+        return k
+    cause = ""
+    if k == "f":
+        cause = CAUSE_KEYS[ask("cause [o = other speech, m = tv / media, n = noise]: ", tuple(CAUSE_KEYS), input_fn)]
+    speaker = ""
+    if k in ("t", "u") or cause == "other-speech":
+        speaker = SPEAKER_KEYS[ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(SPEAKER_KEYS), input_fn)]
+    return LIVE_KEYS[k], cause, speaker
 
 
 def cmd_review_misses(a, player=None, input_fn=input, out=print):
@@ -605,7 +619,13 @@ def cmd_review(a, player=None, input_fn=input, out=print):
 # ---------------------------------------------------------------------------------------------
 
 FALSE_WAKE_TABLE = "daily_false_wakes.csv"
-QUEUE_GROUPS = ("replay false wakes of the live model", "uncertain live clips", "missed-wake candidates")
+VALIDATION_TABLE = "autolabel_validation.csv"      # in live/; built by kivi_false_wake_audit.py sample, never by hand
+VALIDATION_KEY = "autolabel_validation_key.csv"    # in live/; the frozen auto labels, never shown and never read here
+VALIDATION_FIELDS = ("sample_id", "run_id", "device", "utc", "label", "cause", "speaker")
+CAUSE_KEYS = {"o": "other-speech", "m": "tv-media", "n": "noise"}
+QUEUE_GROUPS = ("autolabel validation sample (blind)", "replay false wakes of the live model", "uncertain live clips",
+                "missed-wake candidates")
+G_VALIDATION, G_FALSE_WAKES, G_UNCERTAIN, G_MISSES = range(4)
 
 
 def window_tables(root):
@@ -621,20 +641,55 @@ def window_tables(root):
     return out
 
 
+def read_validation(path):
+    p = Path(path)
+    if not p.exists():
+        return []
+    with open(p, newline="", encoding="utf-8") as f:
+        return [{k: (row.get(k) or "") for k in VALIDATION_FIELDS} for row in csv.DictReader(f)]
+
+
+def save_validation_label(root, sample_id, label, cause, speaker):
+    """Write one blind-sample decision (fresh read) and carry it into live_wakes.csv as an owner label, so the clip is
+    not asked for again in the uncertain-clips group. The auto label stays only in the frozen key, which the analysis
+    reads."""
+    root = Path(root)
+    table = root / "live" / VALIDATION_TABLE
+    fresh = read_validation(table)
+    run_id = ""
+    for r in fresh:
+        if r["sample_id"] == sample_id:
+            r["label"], r["cause"], r["speaker"] = label, cause, speaker
+            run_id = r["run_id"]
+    write_csv_atomic(table, VALIDATION_FIELDS, fresh)
+    live_path = root / "live" / "live_wakes.csv"
+    if run_id and live_path.exists():
+        save_owner_label(live_path, run_id, label, speaker or "unknown")
+
+
 def queue_items(root, day=None, device=None):
-    """Pending items, in the order the owner meets them: [{"group": 0..2, "kind": "live"|"window", "table", "row"}].
-    Group 0 = the replay false-wake table, 1 = uncertain live clips, 2 = every other window table (best rank first)."""
+    """Pending items, in the order the owner meets them: [{"group": 0..3, "kind": "validation"|"live"|"window",
+    "table", "row"}]. Group 0 = the blind autolabel validation sample, 1 = the replay false-wake table, 2 = uncertain
+    live clips, 3 = every other window table (best rank first). A clip that waits in the validation sample is not
+    offered again in group 2 (the validation label is carried into live_wakes.csv as an owner label)."""
     root = Path(root)
     items = []
     keep = lambda r: (device is None or r["device"] == device) and (day is None or local_day(r["utc"]) == day)   # noqa: E731
+    val_path = root / "live" / VALIDATION_TABLE
+    val_rows = read_validation(val_path)
+    pending_val = {r["run_id"] for r in val_rows if not r["label"]}
+    items += [{"group": G_VALIDATION, "kind": "validation", "table": val_path, "row": r}
+              for r in sorted(val_rows, key=lambda r: r["sample_id"]) if not r["label"] and keep(r)]
     for p in window_tables(root):
-        group = 0 if p.name == FALSE_WAKE_TABLE else 2
+        group = G_FALSE_WAKES if p.name == FALSE_WAKE_TABLE else G_MISSES
         rows = [r for r in read_miss_table(p) if not r["label"] and keep(r)]
-        rows.sort(key=(lambda r: (r["utc"], r["device"])) if group == 0 else (lambda r: (-float(r["rank"] or 0), r["id"])))
+        rows.sort(key=(lambda r: (r["utc"], r["device"])) if group == G_FALSE_WAKES
+                  else (lambda r: (-float(r["rank"] or 0), r["id"])))
         items += [{"group": group, "kind": "window", "table": p, "row": r} for r in rows]
     live_table = root / "live" / "live_wakes.csv"
-    items += [{"group": 1, "kind": "live", "table": live_table, "row": r}
-              for r in review_order(read_table(live_table), only_uncertain=True) if keep(r)]
+    items += [{"group": G_UNCERTAIN, "kind": "live", "table": live_table, "row": r}
+              for r in review_order(read_table(live_table), only_uncertain=True)
+              if keep(r) and r["run_id"] not in pending_val]
     items.sort(key=lambda it: it["group"])           # stable: the order inside a group is kept
     return items
 
@@ -672,7 +727,11 @@ def cmd_queue(a, player=None, input_fn=input, out=print, clock=None):
                 out("session limit reached")
                 break
             r = it["row"]
-            if it["kind"] == "live":
+            if it["kind"] == "validation":
+                out(f"\n[{i}/{len(items)}] validation clip {r['sample_id']} (blind; label what you hear: t = true "
+                    "oye Kivi attempt, f = false wake (then why), n = not a wake / button, u = unclear)")
+                res = review_validation_item(r, live, play, input_fn)
+            elif it["kind"] == "live":
                 out(f"\n[{i}/{len(items)}] live clip: {r['device']} {r['utc']}  wake {r['wake_len']} s, stt {r['stt_len']} s "
                     "(t = true wake, f = false wake, n = not a wake / button, u = unclear)")
                 res = review_live_item(r, live, play, input_fn)
@@ -684,7 +743,9 @@ def cmd_queue(a, player=None, input_fn=input, out=print, clock=None):
                 break
             if res == "s":
                 continue
-            if it["kind"] == "live":
+            if it["kind"] == "validation":
+                save_validation_label(root, r["sample_id"], *res)
+            elif it["kind"] == "live":
                 save_owner_label(it["table"], r["run_id"], *res)
             else:
                 save_miss_label(it["table"], r["id"], *res)

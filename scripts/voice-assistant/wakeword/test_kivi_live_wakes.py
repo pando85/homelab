@@ -421,15 +421,15 @@ def test_queue_order_false_wakes_then_uncertain_live_then_misses(tmp_path):
     items = L.queue_items(ns.dataset_root)
     kinds = [(it["group"], it["table"].name) for it in items]
     assert [g for g, _ in kinds] == sorted(g for g, _ in kinds)                    # groups never interleave
-    assert kinds[0] == (0, "daily_false_wakes.csv") and kinds[1] == (0, "daily_false_wakes.csv")
+    assert kinds[0] == (1, "daily_false_wakes.csv") and kinds[1] == (1, "daily_false_wakes.csv")
     assert [it["row"]["id"] for it in items[:2]] == ["x005", "x004"]               # false wakes by time, not by score
     live = [it for it in items if it["kind"] == "live"]
-    assert len(live) == 3 and all(it["group"] == 1 for it in live)
-    misses = [it for it in items if it["group"] == 2]
+    assert len(live) == 3 and all(it["group"] == 2 for it in live)
+    misses = [it for it in items if it["group"] == 3]
     assert [it["row"]["id"] for it in misses if it["table"].name == "miss_candidates.csv"] == ["x002", "x001"]   # rank order, labelled gone
     assert items[-1]["table"].name in ("miss_candidates.csv", "c3_events.csv")
-    assert L.queue_counts(items) == {(0, "daily_false_wakes.csv"): 2, (1, "live_wakes.csv"): 3,
-                                     (2, "c3_events.csv"): 1, (2, "miss_candidates.csv"): 2}
+    assert L.queue_counts(items) == {(1, "daily_false_wakes.csv"): 2, (2, "live_wakes.csv"): 3,
+                                     (3, "c3_events.csv"): 1, (3, "miss_candidates.csv"): 2}
 
 
 def test_queue_walk_labels_saves_each_and_resumes(tmp_path):
@@ -441,7 +441,7 @@ def test_queue_walk_labels_saves_each_and_resumes(tmp_path):
     assert n == 1
     assert out[0].startswith("pending at start: 8 item(s)") and any("daily_false_wakes.csv: 2" in x for x in out)
     assert "labelled 1 item(s) in this session" in out and "pending at end: 7 item(s)" in out
-    assert out[out.index("pending at end: 7 item(s)") + 1] == "  1. replay false wakes of the live model: daily_false_wakes.csv: 1"
+    assert out[out.index("pending at end: 7 item(s)") + 1] == "  2. replay false wakes of the live model: daily_false_wakes.csv: 1"
     first = {r["id"]: r for r in L.read_miss_table(mis / "daily_false_wakes.csv")}
     assert (first["x005"]["label"], first["x005"]["speaker"]) == ("attempt", "spk02") and first["x004"]["label"] == ""
     assert played[0].name == "window.wav"
@@ -480,6 +480,57 @@ def test_queue_limits_empty_and_ctrl_c(tmp_path):
     out = []
     assert L.cmd_queue(ns, player=lambda p: None, input_fn=lambda _p: "q", out=out.append) == 0
     assert out == ["pending at start: 0 item(s) (queue empty)"]
+
+
+def validation_setup(tmp_path):
+    """queue_setup plus a blind validation sample of two clips that are also uncertain live clips."""
+    ns, table, mis = queue_setup(tmp_path)
+    root = Path(ns.dataset_root)
+    rows = L.read_table(table)
+    unc = [r for r in rows if not r["label_source"] == "owner"][:2]
+    val = [{"sample_id": f"v{i:02d}", "run_id": r["run_id"], "device": r["device"], "utc": r["utc"], "label": "",
+            "cause": "", "speaker": ""} for i, r in enumerate(unc, 1)]
+    L.write_csv_atomic(root / "live" / L.VALIDATION_TABLE, L.VALIDATION_FIELDS, val)
+    return ns, table, mis, val
+
+
+def test_queue_validation_group_first_blind_and_not_asked_twice(tmp_path):
+    ns, table, mis, val = validation_setup(tmp_path)
+    before = L.queue_items(ns.dataset_root)
+    assert [it["group"] for it in before[:2]] == [0, 0] and [it["row"]["sample_id"] for it in before[:2]] == ["v01", "v02"]
+    pending_live = {it["row"]["run_id"] for it in before if it["kind"] == "live"}
+    assert not pending_live & {v["run_id"] for v in val}                       # a pending sample clip is not asked twice
+    out, played = [], []
+    # v01: false, tv-media (no speaker asked); v02: true, spk02; then quit
+    answers = iter(["f", "m", "t", "2", "q"])
+    n = L.cmd_queue(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: next(answers), out=out.append)
+    assert n == 2
+    text = "\n".join(out)
+    shown = [x for x in out if "validation clip v01" in x][0]
+    assert "validation clip v01 (blind" in shown
+    for hidden in (val[0]["device"], val[0]["utc"], val[0]["run_id"]):         # nothing about the clip but its id
+        assert hidden not in shown
+    assert "1. autolabel validation sample (blind): autolabel_validation.csv: 2" in text
+    got = {r["sample_id"]: r for r in L.read_validation(Path(ns.dataset_root) / "live" / L.VALIDATION_TABLE)}
+    assert (got["v01"]["label"], got["v01"]["cause"], got["v01"]["speaker"]) == ("false", "tv-media", "")
+    assert (got["v02"]["label"], got["v02"]["cause"], got["v02"]["speaker"]) == ("true", "", "spk02")
+    live = {r["run_id"]: r for r in L.read_table(table)}
+    assert (live[val[0]["run_id"]]["label"], live[val[0]["run_id"]]["label_source"], live[val[0]["run_id"]]["speaker"]) \
+        == ("false", "owner", "unknown")
+    assert (live[val[1]["run_id"]]["label"], live[val[1]["run_id"]]["speaker"]) == ("true", "spk02")
+    after = L.queue_items(ns.dataset_root)
+    assert not [it for it in after if it["group"] == 0]
+    assert not [it for it in after if it["kind"] == "live" and it["row"]["run_id"] in {v["run_id"] for v in val}]
+
+
+def test_queue_validation_other_speech_asks_speaker_and_skip_comes_back(tmp_path):
+    ns, table, mis, val = validation_setup(tmp_path)
+    answers = iter(["f", "o", "1", "s", "q"])
+    assert L.cmd_queue(ns, player=lambda p: None, input_fn=lambda _p: next(answers), out=lambda *_: None) == 1
+    got = {r["sample_id"]: r for r in L.read_validation(Path(ns.dataset_root) / "live" / L.VALIDATION_TABLE)}
+    assert (got["v01"]["label"], got["v01"]["cause"], got["v01"]["speaker"]) == ("false", "other-speech", "spk01")
+    assert got["v02"]["label"] == ""
+    assert [it["row"]["sample_id"] for it in L.queue_items(ns.dataset_root) if it["group"] == 0] == ["v02"]
 
 
 def test_queue_save_is_a_fresh_read_of_the_window_table(tmp_path):

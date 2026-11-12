@@ -50,6 +50,13 @@ second path or symlink is needed. `disable-model-invocation: true` keeps Claude 
    in `models.lock`. **Rollback** is `demote` (always allowed). After a promote the next `collect` replays with the new live
    model automatically.
 
+**Truth audit of the false-wake labels (2026-11-12).** Almost every live false wake counted so far carries an
+autolabel (`auto-v1`) whose accuracy was never measured. `kivi_false_wake_audit.py table | sample | analyze` builds the
+per-clip audit table, a blind validation sample of about 40 live clips (offered first by `queue`, auto label hidden) and,
+once labelled, the confusion matrix, the precision and recall of auto-false and the corrected false wakes per TV and
+evening with 95 % intervals. Measurement only: no choice is made from the sample. The plan that uses it (Phase 0 truth,
+cheap fixes, v6.3) is `docs/plan/2026-11-false-wake-plan.md` in the kivi-models checkout (private).
+
 Each step is owner-triggered, one at a time. The method sections of the [release runbook](https://git.grigri.cloud/agil/kivi-models)
 (`docs/runbook/wake-word-release.md`) hold the exact commands.
 
@@ -86,6 +93,7 @@ in Home Assistant are deleted by Home Assistant after 90 days (data register row
 | Skill (steps and hard rules) | `~/kivi-models/.claude/skills/kivi-wakeword-loop/SKILL.md` |
 | Collector | `scripts/voice-assistant/wakeword/kivi_collect.py` (tests `test_kivi_collect.py`) |
 | Labelling queue | `kivi_live_wakes.py queue` (tests in `test_kivi_live_wakes.py`) |
+| False-wake truth audit, blind autolabel validation sample, analysis | `kivi_false_wake_audit.py` (tests `test_kivi_false_wake_audit.py`); sample and frozen key in `live/autolabel_validation*.csv` |
 | Per-day room copy | `kivi_negatives.py --local-date D --part d-YYYYMMDD --out-name negatives-daily` |
 | Daily counts | `~/kivi-models/data/daily/` (`state.json`, `YYYY-MM-DD.json`, `summary.md`, `protect.json`, `pruned.jsonl`) |
 | Raw room audio | `/datasets/kivi-room-audio/` (second pool), reached through the `negatives*` symlinks in `datasets/real/` |
