@@ -102,10 +102,14 @@ TEST_SHARE = 0.30
 # oye_kivi_ctx (v6) 2026-11-11 22:11Z (promote) to about 22:40Z (owner rollback in HA; the driver recorded the demote at
 # 22:42:27Z); oye_kivi_next again until the v6.2 promote wrote the household pipeline at 07:40:55Z on 2026-11-12
 # (`promotion.promoted_at` of the release state; HA ends open runs on that update; the promote step itself finished at
-# 07:43:05Z after its run checks); oye_kivi_ctx2 (v6.2) since. Both TVs use the household pipeline "Kiwi".
+# 07:43:05Z after its run checks); oye_kivi_ctx2 (v6.2) until the owner switched back to oye_kivi_ctx (v6): the promote
+# wrote the pipeline at 14:44:05Z on 2026-11-12 (`promotion.promoted_at` of the v6 release state), v6 since.
+# Both TVs use the household pipeline "Kiwi".
 V6_PROMOTE, V6_ROLLBACK, V62_PROMOTE = "2026-11-11T22:11:00Z", "2026-11-11T22:40:00Z", "2026-11-12T07:40:55Z"
+V6_REPROMOTE = "2026-11-12T14:44:05Z"
 ERAS = (
-    ("oye_kivi_ctx2", V62_PROMOTE, None, None),
+    ("oye_kivi_ctx", V6_REPROMOTE, None, None),
+    ("oye_kivi_ctx2", V62_PROMOTE, V6_REPROMOTE, None),
     ("oye_kivi_ctx", V6_PROMOTE, V6_ROLLBACK, None),
     ("oye_kivi_next", "2026-11-08T11:56:45Z", V62_PROMOTE, ("c3-a",)),
     ("oye_kivi_next", "2026-11-08T13:28:10Z", V62_PROMOTE, None),
