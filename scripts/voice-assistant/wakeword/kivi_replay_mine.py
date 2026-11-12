@@ -14,8 +14,11 @@ Day split (owner decision 2026-11-11): alternating Europe/Madrid local days, `te
 `mine` on 2026-11-08, -10, ... (`kivi_real_common.day_role`). Test-day audio may be scored and labelled for
 evaluation but is never used to choose models or thresholds. The pieces carry the part in the manifest `split`.
 
-The pass is server-exact: each piece is streamed from its sample 0 with pyopen-wakeword in 1280-sample chunks
-(`eval_stream.stream` semantics, never batched). A long piece is cut into time ranges that run in parallel, each
+The pass is server-exact: each piece is streamed on the server's grid with pyopen-wakeword in 1280-sample chunks
+(`eval_stream.stream` semantics, never batched). The server cuts a wake file in 1280-sample steps from the file's sample 0,
+and a piece starts 0.3 s, 7 s or elsewhere into its file, so the first step starts at piece sample (-src_sample0) % 1280
+(`grid_phase`; `src_sample0` from the manifest since 2026-11-12, else `<set>/grid.jsonl` from `kivi_room_grid.py
+derive`). Replaying a piece from its own sample 0 changes near-threshold events (Phase 0 audit, 2026-11-12). A long piece is cut into time ranges that run in parallel, each
 started `--warm-s` earlier on a chunk boundary and its warm-up outputs dropped; the state of the runtime is a few
 seconds of audio, so the scores equal the continuous pass (tested). Per range only the steps where some model
 scores above 0.3 are kept (`scores/v5era-replay/chunks/*.npz`: times and three scores, no audio); `report` and
@@ -44,6 +47,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import kivi_extract as X  # noqa: E402
 import kivi_live_wakes as L  # noqa: E402
 import kivi_real_common as C  # noqa: E402
+from eval_stream import wake_samples  # noqa: E402
 
 RATE = C.RATE
 CHUNK = 1280
@@ -88,13 +92,22 @@ def piece_samples(path):
     return max(0, (os.path.getsize(path) - 44) // 2)
 
 
-def stream_range(feats, models, path, s0, s1, warm_s=60.0, block_s=60):
-    """Scores of the steps whose end time lies in (s0, s1] samples of the piece, started warm_s earlier on a chunk
-    boundary: (times in s since the piece start, float32 array [steps, models]). Audio is read one block at a time."""
-    s0 = (s0 // CHUNK) * CHUNK
-    sw = max(0, s0 - (int(warm_s * RATE) // CHUNK) * CHUNK)
+def grid_phase(src0):
+    """Piece sample where the server's 1280-sample grid starts: the server cuts the stream of a wake file in 1280-sample
+    steps from sample 0 of that file, and a piece that starts at sample `src0` of the file has its first whole step at
+    (-src0) % 1280. 0 when `src0` is None (the old behaviour: grid unknown, steps from the piece's own sample 0)."""
+    return (-int(src0)) % CHUNK if src0 is not None else 0
+
+
+def stream_range(feats, models, path, s0, s1, warm_s=60.0, block_s=60, src0=0):
+    """Scores of the steps whose end time lies in (s0, s1] samples of the piece, started at least warm_s earlier on the
+    server grid (`grid_phase(src0)`, `src0` = the piece's first sample in its wake file): (times in s since the piece
+    start, float32 array [steps, models]). Audio is read one block at a time. A step is formed only from whole 1280-sample
+    chunks on the grid; the samples before the first grid point belong to a step formed before the piece."""
+    g = grid_phase(src0)
     s1 = min(s1, piece_samples(path))
-    n_chunks = (s1 - sw) // CHUNK
+    sw = max(g, g + ((s0 - int(warm_s * RATE) - g) // CHUNK) * CHUNK)
+    n_chunks = (s1 - sw) // CHUNK if s1 > sw else 0
     if n_chunks <= 0:
         return np.zeros(0), np.zeros((0, len(NAMES)), np.float32)
     feats.reset()
@@ -128,12 +141,14 @@ def _init_worker():
 
 
 def _task(args):
-    """(clip_key, path, s0, s1, warm_s, dst or None) -> (clip_key, s0, n_steps, seconds)."""
-    key, path, s0, s1, warm_s, dst = args
+    """(clip_key, path, s0, s1, warm_s, dst or None[, src0]) -> (clip_key, s0, n_steps, seconds). `src0`: the piece's first
+    sample in its wake file (server grid, see `grid_phase`); missing or None = grid unknown (steps from sample 0)."""
+    key, path, s0, s1, warm_s, dst = args[:6]
+    src0 = args[6] if len(args) > 6 else None
     if "rt" not in _W:
         _init_worker()
     t = time.time()
-    times, probs = stream_range(*_W["rt"], path, s0, s1, warm_s)
+    times, probs = stream_range(*_W["rt"], path, s0, s1, warm_s, src0=src0)
     if dst:
         sel = (probs > KEEP_ABOVE).any(axis=1)
         tmp = str(dst) + ".part"
@@ -148,16 +163,41 @@ def _task(args):
 # ---------------------------------------------------------------------------------------------
 
 
-def read_pieces(root, out_name="negatives-v5era"):
-    """[{clip, path, device, part, start (epoch), n}] of the copied set."""
+GRID_FILE = "grid.jsonl"          # per set: src_sample0 derived for pieces copied before the manifest recorded it
+
+
+def read_grid(set_dir):
+    """{clip: row} of `<set>/grid.jsonl` (`kivi_room_grid.py derive`): src_sample0 (exact) or lo/hi (bracketed)."""
+    return {r["clip"]: r for r in C.read_jsonl(Path(set_dir) / GRID_FILE)}
+
+
+def piece_grid(manifest_row, grid_row=None, bracket=None):
+    """(src0, kind) of one piece: the manifest's `src_sample0` (kind `exact`), else the derived exact value (`exact`), else
+    for a bracketed piece one end or the middle of its range when `bracket` is lo / mid / hi (`bracketed`), else
+    (None, `unknown`: replayed on the piece's own grid, as before 2026-11-12)."""
+    if manifest_row.get("src_sample0") is not None:
+        return int(manifest_row["src_sample0"]), "exact"
+    g = grid_row or {}
+    if g.get("src_sample0") is not None:
+        return int(g["src_sample0"]), "exact"
+    if bracket and g.get("lo") is not None:
+        lo, hi = int(g["lo"]), int(g["hi"])
+        return {"lo": lo, "hi": hi, "mid": (lo + hi) // 2}[bracket], "bracketed"
+    return None, ("bracketed" if g.get("lo") is not None else "unknown")
+
+
+def read_pieces(root, out_name="negatives-v5era", bracket=None):
+    """[{clip, path, device, part, start (epoch), n, src0, grid}] of the copied set; `src0`/`grid` from `piece_grid`."""
     root = Path(root)
+    grid = read_grid(root / out_name)
     rows = []
     for r in C.read_jsonl(root / out_name / "manifest.jsonl"):
         p = root / r["clip"]
         if not p.exists():
             continue
+        src0, kind = piece_grid(r, grid.get(r["clip"]), bracket)
         rows.append({"clip": r["clip"], "path": p, "device": r["device"], "part": r["split"],
-                     "start": X.parse_utc(r["start_utc"]).timestamp(), "n": piece_samples(p)})
+                     "start": X.parse_utc(r["start_utc"]).timestamp(), "n": piece_samples(p), "src0": src0, "grid": kind})
     rows.sort(key=lambda r: (r["device"], r["start"]))
     return rows
 
@@ -168,15 +208,19 @@ def plan_tasks(pieces, chunk_s=1200.0):
     return [(pc["clip"], str(pc["path"]), s0, min(pc["n"], s0 + step)) for pc in pieces for s0 in range(0, pc["n"], step)]
 
 
-def chunk_name(clip, s0):
-    return hashlib.sha1(f"{clip}|{s0}".encode()).hexdigest()[:20] + ".npz"
+def chunk_name(clip, s0, src0=None):
+    """Range file name; a piece on a non-zero grid phase gets its own names, so ranges scored on the piece's own grid
+    (before 2026-11-12) are never reused for it."""
+    g = grid_phase(src0)
+    key = f"{clip}|{s0}" if g == 0 else f"{clip}|{s0}|g{g}"
+    return hashlib.sha1(key.encode()).hexdigest()[:20] + ".npz"
 
 
-def load_piece_steps(chunks_dir, clip, tasks_of_clip):
+def load_piece_steps(chunks_dir, clip, tasks_of_clip, src0=None):
     """Steps above KEEP_ABOVE of a piece: (times, probs[steps, models]) sorted by time, plus the step count."""
     ts, ps, steps = [], [], 0
     for _, _, s0, _ in tasks_of_clip:
-        z = np.load(Path(chunks_dir) / chunk_name(clip, s0))
+        z = np.load(Path(chunks_dir) / chunk_name(clip, s0, src0))
         ts.append(z["t"])
         ps.append(z["p"])
         steps += int(z["steps"])
@@ -291,7 +335,12 @@ def cmd_score(a, out=print):
         if not d.exists():
             C.private_mkdir(d, root)
     chunks = sdir / "chunks"
-    todo = [(c, p, s0, s1, a.warm_s, str(chunks / chunk_name(c, s0))) for c, p, s0, s1 in tasks if not (chunks / chunk_name(c, s0)).exists()]
+    src0 = {p["clip"]: p["src0"] for p in pieces}
+    todo = [(c, p, s0, s1, a.warm_s, str(chunks / chunk_name(c, s0, src0[c])), src0[c]) for c, p, s0, s1 in tasks
+            if not (chunks / chunk_name(c, s0, src0[c])).exists()]
+    grid_n = Counter(p["grid"] for p in pieces)
+    out(f"server grid: {grid_n['exact']} piece(s) exact, {grid_n['bracketed']} bracketed, {grid_n['unknown']} unknown "
+        "(bracketed and unknown are replayed on their own grid; see kivi_room_grid.py)")
     out(f"{len(tasks) - len(todo)} range(s) already scored, {len(todo)} to do")
     t0, done, audio_done = time.time(), 0, 0.0
     with mp.get_context("spawn").Pool(a.jobs, initializer=_init_worker) as pool:
@@ -325,12 +374,13 @@ def collect(root, set_name="negatives-v5era", out_dir=DEFAULT_OUT, chunk_s=1200.
     for t in tasks:
         by_clip[t[0]].append(t)
     chunks = root / out_dir / "chunks"
-    missing = [t for t in tasks if not (chunks / chunk_name(t[0], t[2])).exists()]
+    src0 = {p["clip"]: p["src0"] for p in pieces}
+    missing = [t for t in tasks if not (chunks / chunk_name(t[0], t[2], src0[t[0]])).exists()]
     if missing:
         raise SystemExit(f"{len(missing)} range(s) not scored yet: run `score` first")
     res = []
     for pc in pieces:
-        t, p, steps = load_piece_steps(chunks, pc["clip"], by_clip[pc["clip"]])
+        t, p, steps = load_piece_steps(chunks, pc["clip"], by_clip[pc["clip"]], pc["src0"])
         dets = {f"{SHORT[n]}@{thr}": [pc["start"] + x for x in detections_of(t, p[:, k], thr)]
                 for k, n in enumerate(NAMES) for thr in THRESHOLDS}
         evs = cluster_events(t, p)
@@ -463,7 +513,12 @@ def cmd_selfcheck(a, out=print):
         wav = root / "live" / r["device"] / r["utc"] / "wake_tail.wav"
         if not wav.exists() or r["model"] not in NAMES:
             continue
-        t, p = stream_range(feats, models, wav, 0, piece_samples(wav), warm_s=0)
+        n_tail = piece_samples(wav)
+        try:                                    # the tail is the end of a wake file of wake_len: anchor the server grid
+            src0 = max(0, wake_samples(r.get("wake_len") or 0) - n_tail)
+        except (TypeError, ValueError):
+            src0 = None
+        t, p = stream_range(feats, models, wav, 0, n_tail, warm_s=0, src0=src0)
         k = NAMES.index(r["model"])
         last = t > t[-1] - 2.5
         pk = float(p[last, k].max()) if last.any() else float("nan")

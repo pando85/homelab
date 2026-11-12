@@ -152,3 +152,108 @@ def test_score_collect_report_and_candidates_end_to_end(tmp_path, monkeypatch, c
     assert oct((ds / "live-misses").stat().st_mode & 0o777) == "0o700"
     with pytest.raises(SystemExit):                                                       # labels are never overwritten
         R.cmd_candidates(a, fetcher=object(), out=lambda *_: None)
+
+
+# ---------------------------------------------------------------------------------------------
+# server grid (2026-11-12): a piece starts at sample src_sample0 of its wake file; the server's steps start at file sample 0
+# ---------------------------------------------------------------------------------------------
+
+MARK = 1000
+
+
+class _GridFeats:
+    """Fake feature extractor: one 'embedding' (the samples themselves) per call, i.e. per chunk fed."""
+
+    def reset(self):
+        pass
+
+    def process_streaming(self, raw):
+        yield np.frombuffer(raw, dtype=np.int16)
+
+
+class _GridModel:
+    """Fake model: 1.0 when a whole step is the marker block, so it fires only when the step grid lines up with it."""
+
+    def reset(self):
+        pass
+
+    def process_streaming(self, emb):
+        return [float(len(emb) == R.CHUNK and bool((emb == MARK).all()))]
+
+
+def _marked_piece(src0, n=40 * R.CHUNK, step_index=17):
+    """Piece samples [0, n) of a wake file, starting at file sample src0; the marker fills exactly one server step."""
+    g = (-src0) % R.CHUNK
+    b = g + step_index * R.CHUNK                     # piece sample where server step `step_index` (of the piece) starts
+    x = np.zeros(n, np.int16)
+    x[b:b + R.CHUNK] = MARK
+    return x, b
+
+
+@pytest.mark.parametrize("src0", [4800, 112000, 384321, 0])
+def test_detection_only_on_the_server_grid(tmp_path, monkeypatch, src0):
+    monkeypatch.setattr(R, "NAMES", ("m",))
+    rt = (_GridFeats(), {"m": _GridModel()})
+    x, b = _marked_piece(src0)
+    p = tmp_path / "piece.wav"
+    C.write_wav_new(p, x)
+    t, pr = R.stream_range(*rt, p, 0, len(x), warm_s=0, src0=src0)
+    hits = t[pr[:, 0] > 0.5]
+    assert len(hits) == 1 and hits[0] == pytest.approx((b + R.CHUNK) / RATE)     # the step that ends with the block
+    # the same through eval_stream.stream with the full-stream length (the live-tail anchoring) agrees
+    from eval_stream import stream
+    probs, times = stream(rt[0], rt[1], x, n_total=src0 + len(x))
+    assert list(times[probs["m"] > 0.5]) == pytest.approx([(b + R.CHUNK) / RATE])
+    # every other phase (160-sample steps) misses it: the bias of replaying a piece from its own sample 0
+    for k in range(1, 8):
+        t2, p2 = R.stream_range(*rt, p, 0, len(x), warm_s=0, src0=src0 + k * 160)
+        assert not (p2[:, 0] > 0.5).any()
+    if src0 % R.CHUNK:
+        t3, p3 = R.stream_range(*rt, p, 0, len(x), warm_s=0)            # no src0: the old, unanchored replay
+        assert not (p3[:, 0] > 0.5).any()
+
+
+def test_ranges_on_a_shifted_grid_tile_the_continuous_pass(tmp_path, monkeypatch):
+    monkeypatch.setattr(R, "NAMES", ("m",))
+    rt = (_GridFeats(), {"m": _GridModel()})
+    src0 = 112000
+    x, b = _marked_piece(src0, n=300 * R.CHUNK + 77, step_index=123)
+    p = tmp_path / "piece.wav"
+    C.write_wav_new(p, x)
+    full_t, full_p = R.stream_range(*rt, p, 0, len(x), warm_s=0, src0=src0)
+    assert ((np.round(full_t * RATE).astype(int) - (-src0) % R.CHUNK) % R.CHUNK == 0).all()     # steps end on the grid
+    pc = {"clip": "c", "path": p, "n": len(x)}
+    parts = [R.stream_range(*rt, p, s0, s1, warm_s=1.0, src0=src0) for _, _, s0, s1 in R.plan_tasks([pc], 50 * R.CHUNK / RATE)]
+    ct = np.concatenate([a for a, _ in parts])
+    cp = np.concatenate([q for _, q in parts])
+    assert np.allclose(ct, full_t) and np.array_equal(cp, full_p)
+    assert list(ct[cp[:, 0] > 0.5]) == pytest.approx([(b + R.CHUNK) / RATE])
+
+
+def test_piece_grid_from_manifest_or_grid_file(tmp_path):
+    ds = tmp_path / "ds"
+    make_piece(ds, "c3-a", "1-01", T0, noise(5, 1), "test2-v5era")              # old row: no src_sample0
+    make_piece(ds, "c3-a", "2-01", T0 + 100, noise(5, 2), "test2-v5era")
+    make_piece(ds, "c3-b", "3-01", T0 + 200, noise(5, 3), "test2-v5era")
+    rel = "negatives-v5era/c3-b/4-01.wav"                                      # new row: src_sample0 in the manifest
+    C.write_wav_new(ds / rel, noise(5, 4))
+    C.append_jsonl(ds / "negatives-v5era" / "manifest.jsonl", [C.make_row(
+        device="c3-b", source=C.source_label("c3-b"), label="negative", kind="negative", clip=rel, split="test2-v5era",
+        start_utc=X.utc_str(T0 + 300), end_utc=X.utc_str(T0 + 305), src_sample0=4800)])
+    by = lambda ps: {p["clip"].split("/")[-1]: (p["src0"], p["grid"]) for p in ps}       # noqa: E731
+    assert by(R.read_pieces(ds, "negatives-v5era")) == {
+        "1-01.wav": (None, "unknown"), "2-01.wav": (None, "unknown"), "3-01.wav": (None, "unknown"), "4-01.wav": (4800, "exact")}
+    with open(ds / "negatives-v5era" / R.GRID_FILE, "w") as f:
+        for r in ({"clip": "negatives-v5era/c3-a/1-01.wav", "src_sample0": 112000, "lo": 112000, "hi": 112000, "method": "start-followup"},
+                  {"clip": "negatives-v5era/c3-a/2-01.wav", "src_sample0": None, "lo": 384303, "hi": 384321, "method": "bracketed"},
+                  {"clip": "negatives-v5era/c3-b/4-01.wav", "src_sample0": 999, "lo": 999, "hi": 999, "method": "start-trim"}):
+            f.write(__import__("json").dumps(r) + "\n")
+    got = by(R.read_pieces(ds, "negatives-v5era"))
+    assert got["1-01.wav"] == (112000, "exact") and got["2-01.wav"] == (None, "bracketed")
+    assert got["3-01.wav"] == (None, "unknown") and got["4-01.wav"] == (4800, "exact")          # the manifest wins
+    for end, want in (("lo", 384303), ("mid", 384312), ("hi", 384321)):
+        assert by(R.read_pieces(ds, "negatives-v5era", bracket=end))["2-01.wav"] == (want, "bracketed")
+    # grid phases and range names: phase 0 keeps the old names (cached ranges stay valid), other phases get new ones
+    assert R.grid_phase(4800) == 320 and R.grid_phase(112000) == 640 and R.grid_phase(None) == 0 and R.grid_phase(2560) == 0
+    assert R.chunk_name("c", 0) == R.chunk_name("c", 0, 2560) == R.chunk_name("c", 0, None)
+    assert R.chunk_name("c", 0, 4800) != R.chunk_name("c", 0) and R.chunk_name("c", 0, 4800) != R.chunk_name("c", 0, 112000)

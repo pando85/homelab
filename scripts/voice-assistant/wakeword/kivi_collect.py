@@ -403,9 +403,12 @@ def _score_day(day, part, models, jobs, out=print):
     if not (sdir / "chunks").exists():
         C.private_mkdir(sdir / "chunks", ROOT)
     tasks = K.plan_tasks(pieces, 1200.0)
-    todo = [(c, p, s0, s1, 60.0, str(sdir / "chunks" / K.chunk_name(c, s0))) for c, p, s0, s1 in tasks
-            if not (sdir / "chunks" / K.chunk_name(c, s0)).exists()]
-    out(f"replay {day}: {len(pieces)} piece(s), {sum(p['n'] for p in pieces) / 16000 / 3600:.2f} h, {len(todo)} range(s) to score")
+    src0 = {p["clip"]: p["src0"] for p in pieces}
+    todo = [(c, p, s0, s1, 60.0, str(sdir / "chunks" / K.chunk_name(c, s0, src0[c])), src0[c]) for c, p, s0, s1 in tasks
+            if not (sdir / "chunks" / K.chunk_name(c, s0, src0[c])).exists()]
+    off = sum(1 for p in pieces if p["grid"] != "exact")
+    out(f"replay {day}: {len(pieces)} piece(s), {sum(p['n'] for p in pieces) / 16000 / 3600:.2f} h, {len(todo)} range(s) to score"
+        + (f"; {off} piece(s) without an exact server grid (replayed on their own grid)" if off else ""))
     if todo:
         with mp.get_context("spawn").Pool(jobs, initializer=_worker_init, initargs=(models,)) as pool:
             for _ in pool.imap_unordered(K._task, todo):
@@ -433,7 +436,7 @@ def cmd_replay(a, out=print):
         by_clip[t[0]].append(t)
     info, fw_windows, pool = [], [], []
     for pc in pieces:
-        t, p, _steps = K.load_piece_steps(chunks, pc["clip"], by_clip[pc["clip"]])
+        t, p, _steps = K.load_piece_steps(chunks, pc["clip"], by_clip[pc["clip"]], pc["src0"])
         dets = [pc["start"] + x for x in K.detections_of(t, p[:, k_live], live["raw"])]
         info.append({"device": pc["device"], "hours": pc["n"] / 16000 / 3600,
                      "evening_h": K.local_overlap_hours(pc["start"], pc["start"] + pc["n"] / 16000), "live_dets": dets})

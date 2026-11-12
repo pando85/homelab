@@ -2,7 +2,8 @@
 """Room false wakes through the server's own runtime, like for like with the v5-era mining pass.
 
 Uses `kivi_replay_mine.stream_range` (pyopen-wakeword TFLite runtime, 1200 s ranges with 60 s warm-up, whole 1280-sample
-chunks) on the pieces of one copied set (`kivi_negatives.py --out-name`), filtered by part and local date, for any
+chunks on the server grid of each piece: `src_sample0` of the manifest or `grid.jsonl`, see `kivi_replay_mine.grid_phase`;
+before 2026-11-12 every piece was replayed on its own grid, which flips near-threshold events) on the pieces of one copied set (`kivi_negatives.py --out-name`), filtered by part and local date, for any
 models at their own raw thresholds. Detections: above the raw threshold, 2 s refractory, per piece; evening = 18-24
 Europe/Madrid. Output: events and evening events per device, hours and evening hours, per evening with exact Poisson
 95 % intervals, and the stage-3 C3 verdict (`c3_verdict`) when --gate is given. Numbers only, never audio.
@@ -48,10 +49,10 @@ if os.environ.get(SPECS_ENV):
 
 
 def _task(args):
-    clip, path, s0, s1 = args
+    clip, path, s0, s1, src0 = args
     if "rt" not in K._W:
         K._W["rt"] = K.load_runtime()
-    t, p = K.stream_range(*K._W["rt"], path, s0, s1, 60.0)
+    t, p = K.stream_range(*K._W["rt"], path, s0, s1, 60.0, src0=src0)
     keep = (p > 0.3).any(axis=1)
     return clip, t[keep], p[keep]
 
@@ -98,6 +99,11 @@ def main():
     ap.add_argument("--local-date", help="comma list of Europe/Madrid dates")
     ap.add_argument("--model", action="append", required=True, metavar="NAME=uncalibrated.tflite:RAW")
     ap.add_argument("--gate", metavar="CAND:REF", help="also print the C3 verdict of CAND against REF")
+    ap.add_argument("--bracket", choices=["lo", "mid", "hi"],
+                    help="pieces whose grid is only bracketed (grid.jsonl lo/hi): replay at this end of the range "
+                         "(default: on the piece's own grid, like a piece of unknown grid)")
+    ap.add_argument("--require-grid", action="store_true",
+                    help="refuse when a piece has no exact or bracketed server grid (kivi_room_grid.py derive first)")
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
@@ -108,11 +114,18 @@ def main():
     srcs = [tuple(x.split(":", 1)) for x in a.src] or [(a.set, a.part)]
     pieces = []
     for st, part in srcs:
-        for p in K.read_pieces(a.dataset_root, st):
+        for p in K.read_pieces(a.dataset_root, st, bracket=a.bracket):
             if (part in ("*", p["part"])) and \
                     (dates is None or datetime.fromtimestamp(p["start"], TZ).date().isoformat() in dates):
                 pieces.append({**p, "set": st})
-    tasks = K.plan_tasks(pieces, 1200.0)
+    unknown = [p["clip"] for p in pieces if p["grid"] == "unknown"]
+    if unknown and a.require_grid:
+        raise SystemExit(f"{len(unknown)} piece(s) without a server grid, e.g. {unknown[0]}: run kivi_room_grid.py derive")
+    grid_n = {k: sum(1 for p in pieces if p["grid"] == k) for k in ("exact", "bracketed", "unknown")}
+    print(f"server grid: {grid_n}" + (f", bracketed at {a.bracket}" if a.bracket else ""), file=sys.stderr)
+    src0 = {(p["set"], p["clip"]): p["src0"] for p in pieces}
+    tasks = [t + (src0[(st, t[0])],) for st in dict.fromkeys(p["set"] for p in pieces)
+             for t in K.plan_tasks([p for p in pieces if p["set"] == st], 1200.0)]
     res = {}
     with mp.get_context("spawn").Pool(a.jobs) as pool:
         for i, (clip, t, p) in enumerate(pool.imap_unordered(_task, tasks)):
@@ -130,7 +143,8 @@ def main():
         p = np.concatenate([x[1] for x in parts]) if parts else np.zeros((0, len(K.NAMES)))
         o = np.argsort(t, kind="stable")
         t, p = t[o], p[o]
-        row = {"set": pc["set"], "clip": pc["clip"], "device": d, "part": pc["part"],
+        row = {"set": pc["set"], "clip": pc["clip"], "device": d, "part": pc["part"], "grid": pc["grid"], "src0": pc["src0"],
+               "start": pc["start"],
                "hours_by_date": hours_by_date(pc["start"], pc["n"]),
                "evening_h_by_date": R.evening_hours(datetime.fromtimestamp(pc["start"], TZ).isoformat(), pc["n"]),
                "events": {}}
@@ -148,7 +162,8 @@ def main():
                 e[1] += ev
                 row.setdefault("times", {}).setdefault(n, []).append(round(float(x), 2))
         detail.append(row)
-    out = {"sources": [f"{x}:{y}" for x, y in srcs], "local_date": a.local_date, "thresholds": thr,
+    out = {"sources": [f"{x}:{y}" for x, y in srcs], "local_date": a.local_date, "thresholds": thr, "grid": grid_n,
+           "bracket": a.bracket,
            "pieces": len(pieces), "tasks": len(tasks), "models": {}, "pieces_detail": detail}
     for n, dd in dev.items():
         h = sum(v["hours"] for v in dd.values())
