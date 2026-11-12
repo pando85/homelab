@@ -8,3 +8,29 @@ substitutions:
 packages:
   connection: !include ./packages/connection.yaml
   mini-switch: !include ./packages/mini-switch.yaml
+
+# Record why the device reboots (see docs/troubleshooting/office-iot-wifi-flapping.md).
+# Only the cheap options: no `fragmentation` sensor, nothing that allocates on the heap.
+debug:
+  update_interval: 60s
+
+text_sensor:
+  - platform: debug
+    reset_reason:
+      name: "${friendly_name} Reset Reason"
+      entity_category: diagnostic
+    device:
+      name: "${friendly_name} Device Info"
+      entity_category: diagnostic
+
+sensor:
+  - platform: debug
+    free:
+      name: "${friendly_name} Heap Free"
+      entity_category: diagnostic
+    block:
+      name: "${friendly_name} Heap Max Block"
+      entity_category: diagnostic
+    loop_time:
+      name: "${friendly_name} Loop Time"
+      entity_category: diagnostic

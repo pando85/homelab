@@ -241,15 +241,24 @@ Everything an agent needs to flash, rename or debug a device without the dashboa
 examples: the 2026-11-03 renames (`smart-plug-v2-snapmaker` -> `smart-plug-v2-battery`, the old
 terrace plug -> `smart-plug-v2-snapmaker`).
 
-**Flash (compile + OTA).** Pin the ESPHome version the fleet runs (check the device's
-`sw_version` in Home Assistant, e.g. `1.1 (ESPHome 2026.10.1)`) instead of `make requirements`:
+**Flash (compile + OTA).** Use the Makefile target: it pins the ESPHome CLI in one place
+(`ESPHOME_VERSION` in `Makefile`, kept equal to the dashboard image tag in `../values.yaml`), pulls
+`secrets.yaml` with `umask 077` and always shreds it afterwards (also on Ctrl-C or failure):
+
+```bash
+cd apps/esphome/config
+make flash-device DEVICE=<device>   # esphome run <device>.yaml --no-logs --device <device>.iot.grigri
+make device-logs DEVICE=<device>    # tail the logs over the API afterwards
+```
+
+Manual equivalent:
 
 ```bash
 cd apps/esphome/config
 umask 077
 kubectl --context=grigri -n esphome get secret esphome-secrets \
   -o jsonpath='{ .data.secrets\.yaml }' | base64 -d > secrets.yaml
-uvx --from 'esphome==2026.10.1' --with pillow \
+uvx --from 'esphome==<ESPHOME_VERSION from Makefile>' --with pillow \
   esphome run <device>.yaml --no-logs --device <device>.iot.grigri
 shred -u secrets.yaml
 ```
@@ -265,9 +274,9 @@ shred -u secrets.yaml
 - Pushing a YAML change only updates the ConfigMap the ESPHome dashboard reads; the device keeps its
   firmware until flashed.
 
-**Logs.** `uvx --from 'esphome==2026.10.1' esphome logs <device>.yaml --device <device>.iot.grigri`
-(needs `secrets.yaml`). A log viewer is a log subscription, not a state subscriber: it does not count
-as Home Assistant for `api.connected: state_subscription_only: true`.
+**Logs.** `make device-logs DEVICE=<device>` (or `uvx --from 'esphome==<ESPHOME_VERSION>' esphome logs
+<device>.yaml --device <device>.iot.grigri` with `secrets.yaml`). A log viewer is a log subscription,
+not a state subscriber: it does not count as Home Assistant for `api.connected: state_subscription_only: true`.
 
 **Rename a device (hostname, YAML, Home Assistant).** Order matters, because Home Assistant reaches
 each ESPHome device by the hostname stored in its config entry (`/config/.storage/core.config_entries`,

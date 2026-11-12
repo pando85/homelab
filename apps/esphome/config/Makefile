@@ -1,3 +1,24 @@
+# Single place that pins the ESPHome CLI used by flash-device/device-logs. Keep it in step with the
+# dashboard image tag in ../values.yaml (Renovate bumps both in one PR, see .github/renovate.json5).
+# renovate: datasource=docker depName=ghcr.io/esphome/esphome
+ESPHOME_VERSION ?= 2026.10.2
+ESPHOME ?= uvx --from 'esphome==$(ESPHOME_VERSION)' --with pillow esphome
+DEVICE_DOMAIN ?= iot.grigri
+FLASH_KUBE_CONTEXT ?= $(or $(KUBE_CONTEXT),grigri)
+
+# Shell prologue: write secrets.yaml (mode 0600) and always shred it on exit, Ctrl-C included.
+define with_secrets
+set -eu; umask 077; \
+if [ -z "$(DEVICE)" ] || [ ! -f "$(DEVICE).yaml" ]; then \
+	echo "Usage: make $@ DEVICE=<name> (needs ./<name>.yaml)"; exit 1; \
+fi; \
+trap 'shred -u secrets.yaml 2>/dev/null || rm -f secrets.yaml' EXIT; \
+trap 'exit 130' INT TERM HUP; \
+kubectl --context=$(FLASH_KUBE_CONTEXT) -n esphome get secret esphome-secrets \
+	-o jsonpath='{ .data.secrets\.yaml }' | base64 -d > secrets.yaml; \
+[ -s secrets.yaml ] || { echo "Error: empty secrets.yaml"; exit 1; };
+endef
+
 .DEFAULT: help
 .PHONY: help
 help:	## Show this help menu.
@@ -34,6 +55,18 @@ logs:	requirements secrets
 		exit 1; \
 	fi
 	esphome logs "$(FILE)"
+
+.PHONY: flash-device
+flash-device:	## OTA-flash one device with the pinned ESPHome, then shred secrets. E.g.: make flash-device DEVICE=mini-switch-office-a
+flash-device:
+	@$(with_secrets) \
+	$(ESPHOME) run "$(DEVICE).yaml" --no-logs --device "$(DEVICE).$(DEVICE_DOMAIN)"
+
+.PHONY: device-logs
+device-logs:	## tail logs of one device over the API (non-interactive). E.g.: make device-logs DEVICE=mini-switch-office-a
+device-logs:
+	@$(with_secrets) \
+	$(ESPHOME) logs "$(DEVICE).yaml" --device "$(DEVICE).$(DEVICE_DOMAIN)"
 
 .PHONY: local-dashboard
 local-dashboard:	## run ESPHome dashboard in local

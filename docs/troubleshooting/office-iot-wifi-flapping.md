@@ -101,8 +101,7 @@ Then correlate the outage start with AP logs. **Collect AP logs within hours of 
 - AP config values (`min_rssi_enabled`, `min_rssi`) come from the controller's `stat/device` JSON.
   UniFi `min_rssi` -67 dBm = rssi 28 at noise -95; -75 dBm = rssi 20.
 - Timezones differ: UniFi events are UTC, AP logs CET, Home Assistant logs local.
-- Mini switch device logs: `uvx --from 'esphome==2026.10.1' esphome logs mini-switch-office-a.yaml
-  --device mini-switch-office-a.iot.grigri`, see the runbook in `apps/esphome/config/README.md`
+- Mini switch device logs: `make device-logs DEVICE=mini-switch-office-a`, see the runbook in `apps/esphome/config/README.md`
   (needs `secrets.yaml` from the `esphome-secrets` secret).
 - Prometheus has no UniFi/unpoller metrics, so signal and kick data come only from UniFi and the APs.
 
