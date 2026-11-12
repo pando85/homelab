@@ -2,7 +2,7 @@
 
 Plan and owner decisions: kivi-models `docs/plan/2026-11-v6-plan.md` (private). Follows the
 [vnext ablations](oye-kivi-vnext-ablations.md) (v5). **Live 2026-11-11 22:11 to about 22:40 UTC by owner decision despite the C3 FAIL, then rolled back by the owner ("more false positives")**; v5 is the household wake word again (see [Deployment](#deployment-2026-11-11-by-owner-decision-despite-c3-fail-rolled-back-the-same-evening)).
-Numbers only; speakers are spk01 and spk02. Work directory `/work/workspaces/kivi-wakeword/v6/` (`results.md` there has
+Numbers only; speakers are spk01 and spk02. Work directory `~/kivi-models/data/v6/` (`results.md` there has
 every table; data in [data register](../data-register.md) row 22).
 
 **Hypothesis:** adding real household positives in context, hard negatives and synthetic "...words... oye Kivi,
@@ -96,7 +96,7 @@ accepts more near-phrases (1 / 4) and more room events (20): the context data bu
 ## Reproduce
 
 ```sh
-cd /work/workspaces/kivi-wakeword
+cd ~/kivi-models/data
 H=$HOME/homelab/scripts/voice-assistant/wakeword
 .venv/bin/python -I $H/kivi_live_wakes.py autolabel --trigger-only          # step 0 (owner labels win)
 .venv/bin/python -I $H/v6_gen_ctx.py gen --voices-dir v4/voices --out v6/clips_ctx --set all --jobs 6
@@ -190,7 +190,7 @@ as a "false wake" for every model that catches it, so v6's 13 test2-v5era events
 
 ```
 cd ~/homelab/scripts/voice-assistant/wakeword
-P=/work/workspaces/kivi-wakeword/.venv/bin/python
+P=~/kivi-models/data/.venv/bin/python
 $P kivi_live_wakes.py review --table c3_events.csv        # 1. the C3 events: decides v6 now (blind, shuffled)
 $P kivi_live_wakes.py review --table miss_candidates.csv  # 2. missed-wake candidates of the v5-era room audio
 $P kivi_live_wakes.py review --only-uncertain             # 3. the uncertain live wake clips (auto-labeller)
@@ -241,7 +241,7 @@ whatever is live**:
 ## v6.2 (owner decision 2026-11-11 23:10): PRE-REGISTERED before training and before any 2026-11-12 audio
 
 Recipe = v6.1 (stage 1, after amendment 1) plus the training-data quality fixes of the data-quality agent
-(`/work/workspaces/kivi-wakeword/quality/`, applied as they land; each applied flag set is listed in results.md with
+(`~/kivi-models/data/quality/`, applied as they land; each applied flag set is listed in results.md with
 its counts):
 - hard and room negatives: drop windows with a phrase flag (ASR finds "oye Kivi" / "Kivi" in the window,
   `hardneg_phrase_flags.csv`) or with retry evidence (amendment 1 rule; room windows within 30 s of a live wake or an
@@ -366,7 +366,7 @@ packaged. The morning comparison against v5 (`v6p2_compare.sh`) runs next.
 The like-for-like TFLite replay of test2-v5era (`v6_replay.py`, same as the mining pass) reproduces v4 26, v5 5, v6 13
 and the ablation 21 events. Their union for v5, v6 and the ablation, merged within +-2 s per TV, gives **29 windows**
 (c3-a 8, c3-b 21): v6 or the ablation only 24, v5 only 4, all three 1. `datasets/real/live-misses/c3_events.csv`
-(shuffled, no model or score), mapping in `/work/workspaces/kivi-wakeword/v6/all/c3_events_mapping.json`
+(shuffled, no model or score), mapping in `~/kivi-models/data/v6/all/c3_events_mapping.json`
 (`v6_c3_review_table.py`). Owner review: `kivi_live_wakes.py review --table c3_events.csv` (first in the queue above).
 
 ### C3 after the owner's blind labels (2026-11-12; pre-registered relabel rule applied)

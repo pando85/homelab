@@ -3,9 +3,10 @@
 Source: owner approval of 2026-11-11 (copy and score once). Follows the
 [vnext ablations](oye-kivi-vnext-ablations.md) and its Next item 3 (fresh room exposure). Everything ran offline on
 the workstation; audio, scores and candidate windows stay in the private work directory
-(`/work/workspaces/kivi-wakeword/datasets/real/`, data register entries 20 and 21 in
+(`~/kivi-models/data/datasets/real/`, data register entries 20 and 21 in
 [the register](../data-register.md)). Nobody listened to, transcribed or printed any audio; this note holds
 counts, rates and scores only.
+Continued every day by the [iteration loop](../kivi-iteration-loop.md) (`kivi_collect.py`, from 2026-11-12).
 
 ## Day split (fixed by the owner, 2026-11-11)
 
@@ -95,7 +96,7 @@ listening, scores hidden:
 
 ```
 cd ~/homelab/scripts/voice-assistant/wakeword
-/work/workspaces/kivi-wakeword/.venv/bin/python kivi_live_wakes.py review --table miss_candidates.csv
+~/kivi-models/data/.venv/bin/python kivi_live_wakes.py review --table miss_candidates.csv
 ```
 
 Labels: attempt (someone said "oye Kivi" / "Kivi" to it), other-speech, tv-media, noise, unclear; speaker spk01, spk02,

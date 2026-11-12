@@ -3,7 +3,7 @@
 Source: [recovery plan](oye-kivi-recovery.md) P1 (source attribution) and P2 (candidates), run ahead of
 schedule because the real recordings arrived the same morning, plus the first room evidence for P3.
 Follows the [P0 real-voice baseline](oye-kivi-p0-baseline.md). Everything ran offline on the workstation
-(`/work/workspaces/kivi-wakeword/vnext/`). The result of this note **is deployed**: the
+(`~/kivi-models/data/vnext/`). The result of this note **is deployed**: the
 chosen head is `h_c120_w64`, released as `oye_kivi_next` `v5-oye-kivi-2026-11-08`, trialled on c3-a from
 2026-11-08 and, by the owner's decision of 2026-11-11, the wake word of the household pipeline "Kiwi" for
 every satellite ([Deployment](#deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv)).
@@ -194,7 +194,7 @@ audio (and `rn_rp_h` accepts 10): their score distributions sit above v4's. The 
 `oye_kivi_next.tflite` sha256 `3101e61eb8d55faa37623c8fe7eda30cc1b9f3982c37bf393c85bce49fac93ae`, image
 `git.grigri.cloud/agil/kivi-models:v5-oye-kivi-2026-11-08@sha256:3a198f7d4958` (anonymous pull refused, CI
 run checked). The release state keeps the score and gate JSON:
-`/work/workspaces/kivi-wakeword/releases/v5-oye-kivi-2026-11-08/`.
+`~/kivi-models/data/releases/v5-oye-kivi-2026-11-08/`.
 
 - **Gate: INCOMPLETE**, exactly as the data predicts — the room checks pass at the point estimate
   (0.12/h pooled, 0.0/h on c3-a, 0.238/h on c3-b) and the recall checks have no rows because all three
@@ -312,7 +312,7 @@ finds the household pipeline by the preferred flag or id, never by its name.
 ## Reproduce
 
 ```sh
-cd /work/workspaces/kivi-wakeword
+cd ~/kivi-models/data
 H=$HOME/homelab/scripts/voice-assistant/wakeword
 bash vnext/feats.sh && bash vnext/real.sh && bash vnext/runs.sh    # synthetic + real features, 5 arms, selection
 bash vnext/real3.sh && bash vnext/runs3.sh                         # session 2 held out, two seeds + report
@@ -354,9 +354,9 @@ bash vnext/cand3.sh        # kivi_score.py of the three real sessions for the sa
 cd $H
 R="python3 wake_release.py"
 $R init   --version v5-oye-kivi-2026-11-08 --model-id oye_kivi_next --phrase "oye Kivi" \
-  --candidate /work/workspaces/kivi-wakeword/vnext/runs/vn_h_c120_w64
+  --candidate ~/kivi-models/data/vnext/runs/vn_h_c120_w64
 $R pick-threshold --version v5-oye-kivi-2026-11-08 --max-fa 2          # raw 0.9754
-$R calibrate --version v5-oye-kivi-2026-11-08 --check-features /work/workspaces/kivi-wakeword/vnext/feat/pos_test.npy
+$R calibrate --version v5-oye-kivi-2026-11-08 --check-features ~/kivi-models/data/vnext/feat/pos_test.npy
 $R extract  --version v5-oye-kivi-2026-11-08 --adopt-session 20261108T092940Z-spk01-tv-c3a \
   --adopt-session 20261108T094310Z-spk01-tv-c3a --adopt-session 20261108T095130Z-spk01-tv-c3a
 $R score    --version v5-oye-kivi-2026-11-08 --jobs 4

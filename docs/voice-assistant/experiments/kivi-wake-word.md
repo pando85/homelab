@@ -204,7 +204,7 @@ Synthetic recall says nothing reliable about real voices. Before switching the "
 
 ## Real-voice measurement and dataset tools (built 2026-11-07, not yet run on a person)
 
-Tools in [`scripts/voice-assistant/wakeword/`](../../../scripts/voice-assistant/wakeword/README.md) measure `kivi` on real voices and keep every recording as a permanent, private dataset at `/work/workspaces/kivi-wakeword/datasets/real/` (outside git, mode 700, never deleted by the tools; see [data register](../data-register.md) rows 8-11). They were tested with synthetic signals only: no microphone was opened while writing them.
+Tools in [`scripts/voice-assistant/wakeword/`](../../../scripts/voice-assistant/wakeword/README.md) measure `kivi` on real voices and keep every recording as a permanent, private dataset at `~/kivi-models/data/datasets/real/` (outside git, mode 700, never deleted by the tools; see [data register](../data-register.md) rows 8-11). They were tested with synthetic signals only: no microphone was opened while writing them.
 
 | Tool | Who runs it | What it does |
 | --- | --- | --- |
@@ -221,7 +221,7 @@ Satellites are a parameter (`--device c3-a`, `--device c3-b`, mapped to the HA d
 
 ```sh
 cd ~/homelab/scripts/voice-assistant/wakeword
-PY=/work/workspaces/kivi-wakeword/.venv/bin/python
+PY=~/kivi-models/data/.venv/bin/python
 # 1. Unmute c3-a in Home Assistant (its mute switch), so the wake stage audio flows.
 python3 kivi_session.py --list-devices            # pick the hardware inputs (alsa_input.*), not monitors or Easy Effects
 # 2. The session. Cues are text only. Sit at 1.5 m, then 3 m; the TV is off, then on (normal volume, your content).
@@ -230,7 +230,7 @@ python3 kivi_session.py --device c3-a --speaker spk01 --desk-mic Samson --webcam
 $PY kivi_extract.py --session-dir ~/kivi-sessions/<session id> --dry-run
 $PY kivi_extract.py --session-dir ~/kivi-sessions/<session id>
 # 4. Scores (aggregates only; also saved in the dataset's scores/ directory).
-$PY kivi_score.py --session /work/workspaces/kivi-wakeword/datasets/real/<session id> --also-pc
+$PY kivi_score.py --session ~/kivi-models/data/datasets/real/<session id> --also-pc
 # 5. Mute c3-a again.
 ```
 
@@ -471,7 +471,7 @@ scores matched the ONNX path to 0.0005. The calibrated file at 0.5 decided like 
 
 ### Artifacts (private, not committed)
 
-In `/work/workspaces/kivi-wakeword/v2/`: `final/` (model files, `SHA256SUMS`, training history),
+In `~/kivi-models/data/v2/`: `final/` (model files, `SHA256SUMS`, training history),
 `results/` (`fast_report.py` JSON for v1, v2 and the other seeds on both evaluation sets, rankings,
 tables), `feat/` (server-exact front-end features), `runs/` (the 18 candidates) and the run scripts
 (`feats.sh`, `train*.sh`, `report.sh`, `export.sh`).
@@ -705,7 +705,7 @@ while `kivi` v1 was the live wake word (deployed about 2026-11-05 20:16Z).
 
 ### Artifacts (private, not committed)
 
-In `/work/workspaces/kivi-wakeword/v3/`: `final/` (model files, `SHA256SUMS`,
+In `~/kivi-models/data/v3/`: `final/` (model files, `SHA256SUMS`,
 `kivi_uncalibrated.calibration.json`, training history), `results/` (aggregates: selection JSON,
 session-2 and room-test reports, synthetic reports), `runs/` (the 19 candidates), `near/` (synthetic
 near-word clips), `feat/` and `real/` (mode 700, see [data register](../data-register.md) row 13),
@@ -934,7 +934,7 @@ of her speech takes are unseen (take 2 has no speech).
 ### Scoring the fresh spk02 test takes
 
 After `kivi_extract.py --button-takes --device c3-b --speaker spk02 --split test --since ... --until ...`
-(say, then press), one command from `/work/workspaces/kivi-wakeword` gives recall per model at its server-0.5
+(say, then press), one command from `~/kivi-models/data` gives recall per model at its server-0.5
 point and at the default thresholds. Add `--exclude-take N` for a take with no speech; the reports go into the
 session's `scores/` directory:
 
@@ -949,7 +949,7 @@ systemd-run --user --scope -p MemoryMax=12G -p CPUQuota=800% nice -n 10 .venv/bi
 
 ### Artifacts (private, not committed)
 
-In `/work/workspaces/kivi-wakeword/v5/`:
+In `~/kivi-models/data/v5/`:
 
 - `final/`: model files, `SHA256SUMS`, `kivi_uncalibrated.calibration.json`, training history.
 - `alt/soup_nox_sn1/` and `abl/nos2_s{1,2,3}/`: uncalibrated files with calibration sidecars; for scoring only,
@@ -1199,7 +1199,7 @@ checked 2026-11-07):
 
 ### Artifacts (private, not committed)
 
-In `/work/workspaces/kivi-wakeword/v4/`:
+In `~/kivi-models/data/v4/`:
 - `final/`: model files, `SHA256SUMS`, `oye_kivi_uncalibrated.calibration.json`, training history.
 - `results/`: selection JSON, rule, session-2, spk02, room-test and synthetic reports, `near_check.json`,
   `parity.txt`.
@@ -1283,7 +1283,7 @@ the HA pod):**
   call, `preferred` at 18:35:46 when the satellite reconnected). The trial stopped silently for 7 minutes, until
   `wake_release.py enable` set it again at 18:42:48 and saw a new "oye Kivi" run. Why the restored state was
   `preferred` is not known. Check `wake_release.py status` after any HA restart.
-- Snapshots before and after: `/work/workspaces/kivi-wakeword/releases/v4-oye-kivi-2026-11-07/` (pipeline
+- Snapshots before and after: `~/kivi-models/data/releases/v4-oye-kivi-2026-11-07/` (pipeline
   settings and select states only), and the driver's `state.json`.
 - Dashboard `/voice-assistant`: an "oye Kivi trial (c3-a pipeline)" select with its on/off state (commit
   `8252f8aa9`; it restarted Home Assistant through Reloader, about 10 s).
@@ -1370,7 +1370,7 @@ itself ends the open runs, so both TVs switch within about 15 s. `alexa` and `ki
 
 ## Artifacts (private, not committed)
 
-Work directory `/work/workspaces/kivi-wakeword/` (NVMe, outside git). Models are in `final/`:
+Work directory `~/kivi-models/data/` (NVMe, outside git). Models are in `final/`:
 
 | File | SHA-256 | Use |
 | --- | --- | --- |

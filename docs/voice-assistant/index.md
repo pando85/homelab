@@ -61,6 +61,9 @@ services.
 - [oye Kivi v6](experiments/oye-kivi-v6.md) (2026-11-11): context-trained candidate `oye_kivi_ctx`. Better
   recall on the held-out PC session (TV on included) and fewer near-phrase accepts than v4, but more room false
   wakes than v5 on the odd-day room audio: not deployable (criterion C3 fails). Replay framing fixed.
+- [Kivi iteration loop](kivi-iteration-loop.md) (2026-11-12): the owner-run cycle (collect new days, autolabel, replay with
+  the live model, label about 15 minutes a week, retrain, gate on fresh odd days, review, promote or demote), packaged as the
+  `kivi-wakeword-loop` skill in kivi-models; day rule, guards and a retention proposal for the room audio.
 - [oye Kivi data quality](experiments/oye-kivi-data-quality.md) (2026-11-11): ASR phrase check, grouped
   out-of-fold labels and coverage of real use for the v6 data. A handful of real attempts used as negatives and one
   weak synthetic voice; the larger gap is coverage (no real TV-on wake, synthetic context far from real use).

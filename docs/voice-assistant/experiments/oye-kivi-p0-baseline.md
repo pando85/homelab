@@ -2,7 +2,7 @@
 
 Source: [recovery plan](oye-kivi-recovery.md) P0. This is the first measured real recall for
 the household wake phrase. Trained and measured offline on the workstation; model files, audio
-and features stay in the private work directory (`/work/workspaces/kivi-wakeword/vnext/`).
+and features stay in the private work directory (`~/kivi-models/data/vnext/`).
 
 ## What was captured
 
@@ -128,13 +128,13 @@ openwakeword pod (`v4-oye-kivi-2026-11-07`), loaded and available.
 ```sh
 cd scripts/voice-assistant/wakeword
 python3 kivi_extract.py --session-dir ~/kivi-sessions/<id>
-/work/workspaces/kivi-wakeword/.venv/bin/python -I kivi_score.py \
-  --session /work/workspaces/kivi-wakeword/datasets/real/<id> \
-  --model oye_kivi=/work/workspaces/kivi-wakeword/v4/final/oye_kivi_uncalibrated.tflite \
+~/kivi-models/data/.venv/bin/python -I kivi_score.py \
+  --session ~/kivi-models/data/datasets/real/<id> \
+  --model oye_kivi=~/kivi-models/data/v4/final/oye_kivi_uncalibrated.tflite \
   --thresholds 0.9,0.9437,0.95,0.97 --also-pc --jobs 4 --json <out>.json
 
 # real takes into features (private work directory, nothing committed)
-/work/workspaces/kivi-wakeword/.venv/bin/python -I $H/v3_real.py takes --phrase "oye kivi" --only-positive \
+~/kivi-models/data/.venv/bin/python -I $H/v3_real.py takes --phrase "oye kivi" --only-positive \
   --session 20261108T092940Z-spk01-tv-c3a --session 20261108T094310Z-spk01-tv-c3a --out vnext/real/takes.npz
 bash vnext/real.sh   # real negative windows (v4_realneg.py) + augmented positive windows
 ```

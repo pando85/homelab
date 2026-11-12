@@ -1,9 +1,10 @@
 # "oye Kivi" training-data quality: phrase check, out-of-fold labels, coverage (2026-11-11)
 
 Analysis only: no training set, model or pre-registration was changed and nothing was deployed. Aggregates only;
-speakers are spk01 and spk02. Work directory `/work/workspaces/kivi-wakeword/quality/` (`report.md` there has every
+speakers are spk01 and spk02. Work directory `~/kivi-models/data/quality/` (`report.md` there has every
 table; ids and flag files are private, see [data register](../data-register.md) row 23). Follows the
 [v6 experiment](oye-kivi-v6.md) and its data audit.
+Continued every day by the [iteration loop](../kivi-iteration-loop.md) (`kivi_collect.py`, from 2026-11-12).
 
 **Question:** does the v6 training data (and the v6.1 stage-1 hard negatives) hold label errors (real "oye Kivi"
 attempts used as negatives, positives without the phrase), and which real-use conditions does it not cover?
