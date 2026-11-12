@@ -18,7 +18,9 @@ Modes:
   becomes the end of the last embedding's audio (LAST_AUDIO), so the window holds what the server has heard when it
   scores that moment. Raw synthetic clips (tv false) go through the full chain (RIR, interference, level, floor,
   satellite front end) with `x[:cut]`; real satellite clips (tv true, already through the front end) get a gain and,
-  with p `--p-bg-tv`, TV-like interference passed alone through the front end and added (v3_real.py's tv branch).
+  with p `--p-bg-tv`, TV-like interference passed alone through the front end and added (v3_real.py's tv branch);
+  with p `--p-tv-floor` (v6.3, default 0) stationary pink noise at U(`--tv-floor-db`) dBFS RMS is added after the gain
+  (a raised floor, as on c3-a, for clips from a very quiet capture such as c3-b's).
   Output: <prefix>_<group>.npy (n, 16, 96) float16 per group plus .sources.txt (clip id per window).
 
     v6_augment.py synth --clips-dir C --manifest M --out X.npy --max-dur 1.5 --drop-file zeros.txt ... (v4 flags)
@@ -115,7 +117,20 @@ def _tv_window(rng, x, cut, cfg):
         seg = np.pad(seg, (-lo, 0), mode="symmetric")
     if hi > len(x):
         seg = np.concatenate([seg, np.zeros(hi - len(x))])
-    return seg * 10 ** (rng.uniform(*cfg["tv_gain"]) / 20)
+    y = seg * 10 ** (rng.uniform(*cfg["tv_gain"]) / 20)
+    if cfg.get("p_tv_floor", 0.0) > 0 and rng.random() < cfg["p_tv_floor"]:
+        y = y + pink_noise(rng, len(y)) * 32768.0 * 10 ** (rng.uniform(*cfg["tv_floor"]) / 20)
+    return y
+
+
+def pink_noise(rng, n):
+    """Unit-RMS pink (1/f power) noise of n samples."""
+    w = rng.standard_normal(n + 1024)
+    f = np.fft.rfft(w)
+    k = np.arange(len(f), dtype=np.float64)
+    k[0] = 1.0
+    y = np.fft.irfft(f / np.sqrt(k), len(w))[512:512 + n]
+    return y / (np.sqrt(np.mean(y ** 2)) + 1e-12)
 
 
 def _ctx_chunk(args):
@@ -171,6 +186,8 @@ def cmd_ctx(argv):
     ap.add_argument("--level-db", default="-23,5")
     ap.add_argument("--floor-db", default="-62,-40")
     ap.add_argument("--tv-gain-db", default="-6,6")
+    ap.add_argument("--tv-floor-db", default="-66,-54")
+    ap.add_argument("--p-tv-floor", type=float, default=0.0)
     ap.add_argument("--frontend", required=True)
     ap.add_argument("--stream-onnx", required=True)
     ap.add_argument("--jobs", type=int, default=6)
@@ -186,7 +203,8 @@ def cmd_ctx(argv):
            "rirs": sorted(glob.glob(os.path.join(a.rir_dir, "*.wav"))) if a.rir_dir else [], "p_rir": a.p_rir,
            "level": tuple(float(v) for v in a.level_db.split(",")), "quiet": (0.0, -45.0, -30.0),
            "floor": tuple(float(v) for v in a.floor_db.split(",")), "frontend": a.frontend,
-           "tv_gain": tuple(float(v) for v in a.tv_gain_db.split(","))}
+           "tv_gain": tuple(float(v) for v in a.tv_gain_db.split(",")),
+           "tv_floor": tuple(float(v) for v in a.tv_floor_db.split(",")), "p_tv_floor": a.p_tv_floor}
     rng = np.random.default_rng(a.seed)
     groups = {}
     for line in open(a.table, encoding="utf-8"):

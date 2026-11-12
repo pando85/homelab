@@ -18,6 +18,13 @@ of the window tables (a detection within MATCH_S). Steps (numbers only; no audio
     kivi_fair_fa.py bracket              # the pieces whose grid is only bracketed: every offset of the bracket and 8 phases
     kivi_fair_fa.py live                 # the live clips (tail + request), every model; 2026-11-12 on: the live model only
     kivi_fair_fa.py report               # reads the label tables fresh, writes RESULTS.md and results.json (counts only)
+    kivi_fair_fa.py cut                  # (a) events with no labelled window within MATCH_S: 6 s windows appended to the
+                                         # owner's queue (daily_miss_candidates.csv, blind: no model name, no score)
+
+Every step takes `--config FILE` (JSON; v6.3 gate 2026-11-12): models {name: [release file under $KIVI_HOME, raw,
+live-wakes model id]}, days, reserved, since, room_runs [[tag, "set:part", "dates"]], out (dir under $KIVI_HOME), ref (the
+paired reference, first in the recall table), primary_device, gate {cand, ref, device} (adds the pre-registered gate block).
+Without --config the 2026-11-12 recount (v5 / v6 / v6.2 on 2026-11-08 to -11) is reproduced.
 
 Days (Europe/Madrid): DAYS below; odd = TEST (reported, nothing chosen), even = info. No model other than the live one is
 scored on 2026-11-12 or 2026-11-13 audio (reserved for the pre-registered v6.1 stages 2 and 3).
@@ -68,6 +75,26 @@ MATCH_S = 3.0                   # a detection within this of a labelled window's
 MERGE_S = 2.0                   # detections of different models this close (same TV) are one event
 RECALL_WIN = (-3.0, 1.0)        # a true live clip is detected when the model crosses in [tail end - 3 s, tail end + 1 s]
 FALSE_LIVE = ("false",)
+REF = "v5"                      # paired reference (config `ref`); the other models are candidates
+GATE = None                     # config `gate`: {"cand", "ref", "device"}
+CUT_TABLE = "daily_miss_candidates.csv"
+
+
+def apply_config(path):
+    """Override the module settings from a JSON config (see the module doc)."""
+    global MODELS, DAYS, RESERVED, SINCE, ROOM_RUNS, OUT, REF, GATE
+    cfg = json.loads(Path(path).read_text())
+    MODELS = {n: tuple(v) for n, v in cfg["models"].items()}
+    DAYS = tuple(cfg["days"])
+    RESERVED = tuple(cfg.get("reserved", ()))
+    SINCE = cfg.get("since", SINCE)
+    ROOM_RUNS = tuple(tuple(r) for r in cfg["room_runs"])
+    OUT = KH / cfg["out"]
+    REF = cfg.get("ref", next(iter(MODELS)))
+    GATE = cfg.get("gate")
+    if REF in MODELS:                 # the reference first: recall() pairs every model with names[0]
+        MODELS = {REF: MODELS[REF], **{n: v for n, v in MODELS.items() if n != REF}}
+    return cfg
 TRUSTED = ("owner", "owner-button", "auto-v1", "")     # label sources: owner, the false-wake button, trusted auto, no source
 
 
@@ -335,11 +362,15 @@ def cmd_report(a):
             for dev in devs + ["both"]:
                 res["pooled"][f"{n}|{role}|{dev}"] = cell(n, dev, days, events, clips, hours)
     for role, days in (("test", [d for d in DAYS if day_role(d) == "test"]), ("info", [d for d in DAYS if day_role(d) == "info"])):
-        for cand in ("v6", "v6.2"):
+        for cand in [n for n in names if n != REF]:
             for scope_ev in (False, True):
-                res["paired"][f"{cand}-vs-v5|{role}|{'evening' if scope_ev else 'day'}"] = paired(cand, "v5", days, events, clips, scope_ev)
+                for dev in [None] + devs:
+                    key = f"{cand}-vs-{REF}|{role}|{'evening' if scope_ev else 'day'}" + (f"|{dev}" if dev else "")
+                    res["paired"][key] = paired(cand, REF, days, events, clips, scope_ev, device=dev)
         res["recall"][role] = recall(names, days, clips, windows, events)
     res["reserved_live"] = reserved_live(clips)
+    if GATE:
+        res["gate"] = gate_block(res, GATE)
     write_unlabelled(events)
     res["bracket"] = bracket_summary()
     (OUT / "results.json").write_text(json.dumps(res, indent=1, default=list))
@@ -380,15 +411,17 @@ def cell(n, dev, days, events, clips, hours):
             "unlabelled_live_fired": sum(1 for c in sel_c if c["cls"] == "unlabelled" and n in c["fires"])}
 
 
-def paired(cand, ref, days, events, clips, evening_only):
+def paired(cand, ref, days, events, clips, evening_only, device=None):
     """Discordant false-wake units between two models on the same audio: room events (merged across models) and live false
-    clips. Exact two-sided sign test on the discordant units; Clopper-Pearson interval of the candidate's share of them."""
+    clips, optionally of one TV. Exact two-sided sign test on the discordant units (and the one-sided p of "the candidate
+    has fewer"); Clopper-Pearson interval of the candidate's share of them."""
     units = []
     for e in events:
-        if e["day"] in days and e["cls"] != "attempt" and (e["evening"] or not evening_only):
+        if e["day"] in days and e["cls"] != "attempt" and (e["evening"] or not evening_only) and device in (None, e["device"]):
             units.append((cand in e["models"], ref in e["models"]))
     for c in clips:
-        if c["day"] in days and c["cls"] == "false" and cand in c["scored"] and ref in c["scored"] and (c["evening"] or not evening_only):
+        if c["day"] in days and c["cls"] == "false" and cand in c["scored"] and ref in c["scored"] and \
+                (c["evening"] or not evening_only) and device in (None, c["device"]):
             units.append((cand in c["fires"], ref in c["fires"]))
     only_c = sum(1 for x, y in units if x and not y)
     only_r = sum(1 for x, y in units if y and not x)
@@ -398,6 +431,7 @@ def paired(cand, ref, days, events, clips, evening_only):
     ci = binomtest(only_c, n).proportion_ci() if n else None
     return {"cand": cand, "ref": ref, "both": both, "only_cand": only_c, "only_ref": only_r,
             "cand_total": both + only_c, "ref_total": both + only_r, "p_two_sided": round(binom_two_sided(only_c, n), 4),
+            "p_one_sided_fewer": round(float(binomtest(only_c, n, 0.5, alternative="less").pvalue), 4) if n else 1.0,
             "cand_share_ci95": [round(ci.low, 3), round(ci.high, 3)] if ci else None}
 
 
@@ -477,6 +511,69 @@ def label_state(live, windows):
             "windows_unclear": {t: wc[(t, "unclear")] for t in WINDOW_TABLES}}
 
 
+def gate_block(res, g):
+    """The pre-registered v6.3 gate (kivi-models docs/plan/2026-11-false-wake-plan.md section 9): primary = the candidate's
+    evening false wakes on the gate TV against the reference, paired (one-sided exact sign test, alpha 0.05); recall = all
+    known calls of the test days, the candidate detects no fewer than the reference (paired counts)."""
+    cand, ref, dev = g["cand"], g["ref"], g["device"]
+    pk = f"{cand}-vs-{ref}|test|evening|{dev}"
+    pr = res["paired"].get(pk, {})
+    c_ev = res["pooled"].get(f"{cand}|test|{dev}", {})
+    r_ev = res["pooled"].get(f"{ref}|test|{dev}", {})
+    rc = res["recall"].get("test", {})
+    calls_c, calls_r = rc.get(cand, {}).get("all_calls", [0, 0]), rc.get(ref, {}).get("all_calls", [0, 0])
+    both_tv_c = res["pooled"].get(f"{cand}|test|both", {}).get("total", 0)
+    both_tv_r = res["pooled"].get(f"{ref}|test|both", {}).get("total", 0)
+    out = {"cand": cand, "ref": ref, "device": dev, "evenings": c_ev.get("evenings"),
+           "cand_evening": c_ev.get("total_evening"), "ref_evening": r_ev.get("total_evening"),
+           "cand_unlabelled_a": c_ev.get("a_unlabelled"), "paired": pr,
+           "primary_shown": bool(pr) and pr.get("p_one_sided_fewer", 1.0) < 0.05,
+           "not_worse": bool(pr) and (c_ev.get("total_evening", 0) <= r_ev.get("total_evening", 0)),
+           "calls": {cand: calls_c, ref: calls_r}, "recall_ok": calls_c[0] >= calls_r[0],
+           "total_day_both_tv": {cand: both_tv_c, ref: both_tv_r}, "total_ok": both_tv_c <= both_tv_r}
+    return out
+
+
+def cmd_cut(a):
+    """Blind 6 s windows of the (a) events no labelled window covers, appended to the owner's queue table."""
+    import kivi_collect as KC
+    import kivi_replay_mine as K
+    names = list(MODELS)
+    room = [json.loads((OUT / f"room_{tag}.json").read_text()) for tag, _, _ in ROOM_RUNS]
+    windows = read_windows()
+    pieces = {}
+    for res in room:
+        for pc in res["pieces_detail"]:
+            pieces[(pc["device"], pc["clip"])] = pc
+    rows, misses = [], ROOT / "live-misses"
+    for res in room:
+        for pc in res["pieces_detail"]:
+            ts = sorted({x for n, xs in pc.get("times", {}).items() if n in names for x in xs})
+            last = None
+            for x in ts:
+                t = pc["start"] + x
+                if (last is not None and t - last <= MERGE_S) or madrid(t)[0] not in DAYS:
+                    last = t
+                    continue
+                last = t
+                if window_class(windows, pc["device"], t)[0] != "unlabelled":
+                    continue
+                path = ROOT / pc["clip"]
+                n = K.piece_samples(path)
+                first, lst = K.window_bounds(t, pc["start"], n)
+                utc = L.dir_stamp(t)
+                rel = f"gate/{OUT.name}/{pc['device']}/{utc}/window.wav"
+                if not (misses / rel).exists():
+                    C.private_mkdir((misses / rel).parent, ROOT)
+                    rms, pkd = K.cut_window(path, first, lst, misses / rel)
+                else:
+                    rms, pkd = K.wav_levels(np.fromfile(misses / rel, dtype="<i2", offset=44))
+                rows.append({k: "" for k in L.MISS_FIELDS} | {"id": f"g-{OUT.name}-{len(rows) + 1:03d}", "device": pc["device"],
+                             "part": f"gate-{OUT.name}", "utc": utc, "rank": "0", "level_dbfs": rms, "peak_dbfs": pkd, "clip": rel})
+    added = KC.append_window_rows(ROOT / "live-misses" / CUT_TABLE, rows)
+    print(f"{len(rows)} unlabelled (a) events, {added} new windows appended to {CUT_TABLE} (label them with the queue)")
+
+
 def render(res):
     f = lambda c: (f"{c['per_evening']:.2f} ({c['ci95_per_evening'][0]:.2f}-{c['ci95_per_evening'][1]:.2f})"   # noqa: E731
                    if c["per_evening"] is not None else "n/a")
@@ -503,13 +600,23 @@ def render(res):
         out.append(f"| {n} | {role} | {dev} | {c['a']} | {c['b']} | {c['total']} | {c['total_evening']} | {c['evenings']} | {f(c)} | "
                    f"{c['a_unlabelled']} | " + (", ".join(f"{k} {v}" for k, v in sorted(c["b_by_source"].items())) or "-")
                    + f" | {c['notawake_fired']} / {c['unclear_live_fired']} / {c['unlabelled_live_fired']} |")
-    out += ["", "## Paired comparison with v5 (same audio; discordant units, exact sign test)", "",
-            "| comparison | role | scope | both | only candidate | only v5 | candidate total | v5 total | p (two-sided) | candidate share of discordant (95 % CI) |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    out += ["", f"## Paired comparison with {REF} (same audio; discordant units, exact sign test)", "",
+            f"| comparison | role | scope | TV | both | only candidate | only {REF} | candidate total | {REF} total | p (two-sided) | p (one-sided, fewer) | candidate share of discordant (95 % CI) |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for k, p in res["paired"].items():
-        cmp_, role, sc = k.split("|")
-        out.append(f"| {cmp_} | {role} | {sc} | {p['both']} | {p['only_cand']} | {p['only_ref']} | {p['cand_total']} | "
-                   f"{p['ref_total']} | {p['p_two_sided']} | {p['cand_share_ci95']} |")
+        cmp_, role, sc, *dv = k.split("|")
+        out.append(f"| {cmp_} | {role} | {sc} | {dv[0] if dv else 'both'} | {p['both']} | {p['only_cand']} | {p['only_ref']} | "
+                   f"{p['cand_total']} | {p['ref_total']} | {p['p_two_sided']} | {p.get('p_one_sided_fewer', '')} | {p['cand_share_ci95']} |")
+    if res.get("gate"):
+        g = res["gate"]
+        out += ["", "## Gate (pre-registered; kivi-models plan section 9)", "",
+                f"- primary, {g['device']} evening false wakes on the test days ({g['evenings']} evening-equivalents): "
+                f"{g['cand']} {g['cand_evening']} against {g['ref']} {g['ref_evening']} ({g['cand_unlabelled_a']} unlabelled (a) "
+                f"events counted as false wakes); paired one-sided p = {g['paired'].get('p_one_sided_fewer')}: "
+                f"**improvement {'shown' if g['primary_shown'] else 'not shown'}**; not worse on the point count: {g['not_worse']}",
+                f"- recall, all known calls of the test days: {g['cand']} {g['calls'][g['cand']][0]}/{g['calls'][g['cand']][1]}, "
+                f"{g['ref']} {g['calls'][g['ref']][0]}/{g['calls'][g['ref']][1]}: {'ok' if g['recall_ok'] else '**FAIL**'}",
+                f"- whole-day false wakes, both TVs: {g['total_day_both_tv']}: {'ok' if g['total_ok'] else '**FAIL**'}"]
     out += ["", "## Recall", "", "Live true clips are the calls the live model (v5) caught; owner-labelled attempts are calls it "
             "missed (found by replays). Each favours one side; all known calls is their sum.", "",
             "| role | model | live true clips detected | by trigger | owner-labelled attempts detected (room, true grid) | all known calls |",
@@ -534,13 +641,16 @@ def render(res):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("what", choices=["room", "bracket", "live", "report"])
+    ap.add_argument("what", choices=["room", "bracket", "live", "report", "cut"])
+    ap.add_argument("--config", help="JSON settings (module doc); default: the 2026-11-12 recount")
     ap.add_argument("--jobs", type=int, default=6)
     ap.add_argument("--redo", action="store_true")
     a = ap.parse_args(argv)
+    if a.config:
+        apply_config(a.config)
     if not OUT.exists():
         C.private_mkdir(OUT, KH)
-    {"room": cmd_room, "bracket": cmd_bracket, "live": cmd_live, "report": cmd_report}[a.what](a)
+    {"room": cmd_room, "bracket": cmd_bracket, "live": cmd_live, "report": cmd_report, "cut": cmd_cut}[a.what](a)
 
 
 if __name__ == "__main__":
