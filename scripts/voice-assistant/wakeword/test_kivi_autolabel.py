@@ -111,7 +111,16 @@ def test_is_uncertain():
     assert A.is_uncertain(dict(auto, speaker="unknown")) and A.is_uncertain(dict(auto, label_conf="0.7"))
     assert A.is_uncertain(dict(auto, label="unclear", label_conf="0.5"))
     assert not A.is_uncertain(dict(auto, label="false", label_conf="0.95", speaker="unknown"))
-    assert not A.is_uncertain(dict(auto, label="not-a-wake", label_conf="0.9", speaker="unknown"))
+    # Phase 0 policy (2026-11-12): auto false is trusted at any confidence, auto not-a-wake never is
+    assert not A.is_uncertain(dict(auto, label="false", label_conf="0.75", speaker=""))
+    assert A.is_uncertain(dict(auto, label="not-a-wake", label_conf="0.9", speaker="unknown"))
+    assert A.is_uncertain(dict(auto, label="not-a-wake", label_conf="0.9", speaker="spk01"))
+    assert not A.is_uncertain(dict(auto, label="not-a-wake", label_source="owner"))
+
+
+def test_review_priority_unclear_then_not_a_wake_then_unlabelled_then_true_unknown_speaker():
+    pri = A.review_priority
+    assert pri({"label": "unclear"}) < pri({"label": "not-a-wake"}) < pri({"label": ""}) < pri({"label": "true"})
 
 
 # ---------------------------------------------------------------------------------------------

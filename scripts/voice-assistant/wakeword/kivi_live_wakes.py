@@ -45,8 +45,8 @@ about 40 live clips, the auto label never shown; the label is t true / f false +
 n noise / n not a wake / u unclear, plus the speaker; it is carried into `live_wakes.csv` as an owner label, the auto
 label stays only in the frozen key that `kivi_false_wake_audit.py analyze` reads),
 (1) replay false wakes of the live model (`live-misses/daily_false_wakes.csv`, written by `kivi_collect.py`),
-(2) uncertain live clips (`live/live_wakes.csv`: unlabelled, or auto labels that are unclear / low confidence / true with an
-unknown speaker; an owner label is never offered again; a clip waiting in the validation sample is not offered twice),
+(2) uncertain live clips (`live/live_wakes.csv`: unlabelled, auto unclear (first), auto not-a-wake (button clips), auto true
+with an unknown speaker or low confidence; auto true and false are trusted; an owner label is never offered again; a clip waiting in the validation sample is not offered twice),
 (3) missed-wake candidates (every other `live-misses/*.csv`, best rank first). Each label is saved at once (a fresh read of the table, so a collector writing meanwhile loses nothing); `q`
 or Ctrl-C stops at any time, a skipped item comes back next time. It prints the items left per table at start and end.
 `--minutes N` and `--max-items N` end a session by themselves. `--day D` / `--device X` narrow the queue. Plays audio: run it
@@ -555,6 +555,8 @@ def review_order(rows, only_uncertain=False):
         todo = [r for r in rows if A.is_uncertain(r)]
     else:
         todo = [r for r in rows if not r["label"]]
+    if only_uncertain:
+        return sorted(todo, key=lambda r: (A.review_priority(r), r["bucket"] != "suspect-false", r["utc"], r["device"]))
     return sorted(todo, key=lambda r: (r["bucket"] != "suspect-false", r["utc"], r["device"]))
 
 

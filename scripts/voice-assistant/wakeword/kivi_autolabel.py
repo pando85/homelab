@@ -46,8 +46,9 @@ Label rules (auto-v1; thresholds are constants below, tuned on the distribution 
       no words, speech energy present -> unclear 0.4
       words (unrelated) and the request was short (< SHORT_STT_S) -> false 0.8
       words (unrelated), mean word confidence >= 0.6 -> false 0.75, else unclear 0.45
-Rows that end `unclear` or with a label confidence below UNCERTAIN_CONF, or a `true` row whose speaker is
-unknown, are what `review --only-uncertain` shows to the owner.
+What `review --only-uncertain` and the queue show to the owner (`is_uncertain`, `review_priority`): no label, auto
+`unclear` and auto `not-a-wake` (always), an auto `true` whose speaker is unknown or whose confidence is below
+UNCERTAIN_CONF. Auto `false` is trusted at any confidence (Phase 0 audit, 2026-11-12), auto `true` too.
 
 Speaker: ECAPA-TDNN (speechbrain/spkrec-ecapa-voxceleb, Apache-2.0), cosine similarity against the centroid of each
 enrolled speaker (spk01: the owner's real takes of the dataset manifest from tv-c3a and pc sources; spk02: her c3-b
@@ -283,19 +284,35 @@ def decide_label(ev):
 
 
 def is_uncertain(row):
-    """A row the owner should still listen to: no label, or an auto label that is unclear / low confidence, or an auto
-    `true` whose speaker is unknown. Owner labels (label_source not auto-*) are never uncertain."""
+    """A row the owner should still listen to. Policy of 2026-11-12 (Phase 0 audit of the autolabel, 40-clip blind sample,
+    docs/plan/2026-11-false-wake-plan.md): auto `true` and auto `false` are trusted as labels (owner agreed with 10 of 10
+    and 13 of 13, none of the 13 auto-false a real attempt, 8 of them at confidence 0.75); auto `unclear` (the owner
+    found 5 true attempts and 4 false wakes in 10) and auto `not-a-wake` (3 of 4 were false wakes) are not, so they always
+    go to the owner. Also asked: no label, an auto `true` with an unknown speaker (the speaker is needed for per-speaker
+    training and counts) and an auto `true` with confidence below UNCERTAIN_CONF. Owner labels are never uncertain."""
     if not row.get("label"):
         return True
     if not str(row.get("label_source", "")).startswith("auto"):
+        return False
+    if row["label"] in ("unclear", "not-a-wake"):
+        return True
+    if row["label"] == "false":
         return False
     try:
         conf = float(row.get("label_conf") or 0)
     except ValueError:
         conf = 0.0
-    if row["label"] == "unclear" or conf < UNCERTAIN_CONF:
-        return True
-    return row["label"] == "true" and row.get("speaker", "") in ("", "unknown")
+    return conf < UNCERTAIN_CONF or row.get("speaker", "") in ("", "unknown")
+
+
+def review_priority(row):
+    """Order of the uncertain clips in the queue (0 first): auto unclear (about half are real attempts, so they decide
+    the true and false counts), auto not-a-wake (button clips, most were false wakes), unlabelled, then an auto true that
+    only lacks a speaker or confidence."""
+    lab = row.get("label", "")
+    if not lab:
+        return 2
+    return {"unclear": 0, "not-a-wake": 1}.get(lab, 3)
 
 
 # ---------------------------------------------------------------------------------------------

@@ -616,3 +616,17 @@ def test_import_button_labels_dry_run_ambiguous_and_presses_file(tmp_path):
     r = L.cmd_import_button_labels(ns, X.LocalFetcher(rec), out=out.append)
     # with a 5000 s window the press follows both c3-b detections: ambiguous, left alone; nothing is written
     assert len(r["ambiguous"]) == 1 and r["matched"] == [] and not (Path(ns.dataset_root) / "live" / "live_wakes.csv").exists()
+
+
+def test_review_order_only_uncertain_priority_and_trusted_auto_labels():
+    def row(i, label, conf, speaker, source="auto-v1"):
+        return {"run_id": f"r{i}", "device": "c3-a", "utc": f"2026110{i}T000000.000Z", "bucket": "suspect-true",
+                "label": label, "label_source": source, "label_conf": conf, "speaker": speaker}
+    rows = [row(1, "true", "0.95", "unknown"),            # asked, last (speaker missing)
+            row(2, "not-a-wake", "0.90", ""),             # asked, second
+            row(3, "unclear", "0.50", "unknown"),         # asked, first
+            row(4, "false", "0.75", ""),                  # trusted
+            row(5, "true", "0.98", "spk01"),              # trusted
+            row(6, "not-a-wake", "1.00", "", "owner")]    # owner label: never asked again
+    todo = [r["run_id"] for r in L.review_order(rows, only_uncertain=True)]
+    assert todo == ["r3", "r2", "r1"]
