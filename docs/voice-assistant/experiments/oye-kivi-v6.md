@@ -414,3 +414,34 @@ are not within +-2 s of a round-1 window, and the union of the v6 and v6.2 event
 (6 shared, 1 v6.2 only); c3-a 5, c3-b 12. Mapping `v6/all/c3_events_r2_mapping.json`. It is in the owner's queue
 (`kivi_live_wakes.py queue` reads every `live-misses/*.csv`), or alone: `kivi_live_wakes.py review --table c3_events_r2.csv`.
 The same relabel rule applies (attempt = not a false wake, every other label stays one).
+
+## Why the v6 family fails C3 (2026-11-12, numbers from `v6/all_numbers.md`; TFLite replay as the mining pass)
+
+1. **Thresholds picked on 2 device-evenings.** v6 (raw 0.9595) and v6.2 (0.9825) were both set on 2026-11-10 (47.8 h,
+   2.0 device-evenings): 4 and 2 selection events. On the reused odd days they fire 13 and 18 times in 79.5 h (v5: 5).
+   Two evenings cannot pin a rate of about one false wake per evening (4 events have a 95 % interval of 1.1-10).
+2. **The 2026-11-09 evening on c3-b.** 2026-11-09 pooled: v5 0 events, v6 9, ablation 14, v6.2 15. v6.2 puts 8 of its 9
+   test2 evening events there (c3-b); v6 3. Whatever was on that TV that evening (unlabelled for the 10 new v6.2 events,
+   round 2) looks like the phrase to the v6 family and not to v5.
+3. **Synthetic context positives are not the driver.** The ablation without them fires more at its own lower threshold
+   (21 vs 13), but at equal thresholds the two are alike (information-only curve, embedding pass: 0.9595 -> ablation 10 /
+   v6 12; 0.975 -> 5 / 3). v6.2 halved them (32 per step) and fired more, not less.
+4. **The warm start from v6 probably is.** On the only odd-day room audio the v6.1 arms may be scored on (the 2026-11-11
+   evening, 3.3 h): p1b (warm start v5) 6 events at both 0.9595 and 0.9754; p1a and p1c (warm start v6) 8-11; v6 6,
+   v6.2 7, v5 4. Every v6-family model is above v5; the v5-warm arm is the least bad. Small sample (c3-a 0.4 h).
+   v6.2 also raised the real TV-mic positive weight (64 -> 96 per step) and fired more on the TV-on evening; real TV-mic
+   positives of one speaker at owner level may teach "TV-mic speech" as much as the phrase.
+5. Recall is not the problem: v6, the ablation and v6.2 all reach 60-62/66 on the 2026-11-11 session (v5 55/53) and
+   all test-day live true wakes but one.
+
+**Recommendation for v6.3**
+- Warm start from v5 (`oye_kivi_next`), not from v6; keep the v6 data fixes (1a-1c, retry filter, voice and OOF drops).
+- Hard negatives and selection from more even-day evenings: the daily collect (`kivi_collect.py`) adds a copied,
+  replayed day each night; mine evening TV content with the candidate itself, with the attempt rule (live / stt-only /
+  miss candidate / ASR) applied before training.
+- No threshold pick before at least **6 device-evenings** of held-out even-day room audio (3 evenings x 2 TVs), with the
+  rule "total and per-evening false wakes <= v5's on the same audio"; otherwise no candidate.
+- Keep the real TV-mic positive weight at v6's level (64) until a second speaker's TV takes exist; treat the synthetic
+  context positives as a regulariser (32 per step) and keep the confuser-in-sentence negatives (C2).
+- Test only on fresh odd days (the 2026-11-12/-13 stages, then later odd days); test2-v5era and the 2026-11-11 session
+  are spent.
