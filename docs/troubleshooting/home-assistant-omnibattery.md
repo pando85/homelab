@@ -10,8 +10,8 @@ Omnibattery's entities in `live` mode; deployment, rollout and rollback are in
 Installed: **v1.6.0** (stable) since 2026-11-10, upgraded by the owner through HACS from the v1.5.1b1 beta
 (installed 2026-11-04), from <https://github.com/ffunes/omnibattery>. v1.6.0 contains:
 
-- The fix for the backup latch, #723 (for #660), so the 500 W workaround was removed on 2026-11-11, see
-  [Workaround (removed 2026-11-11)](#workaround-removed-2026-11-11).
+- The #723 fix for the backup latch. It did not remove the need for the 500 W backup threshold, see
+  [Backup-port threshold (500 W)](#backup-port-threshold-500-w).
 - The grid-target bound by the contracted power (max 5000 W) of #597/#598 (identical code to the beta
   installed for upstream issue #598, where v1.5.0 capped the PD grid target at 2500 W, so charging was at
   most 2500 W minus the house load).
@@ -21,7 +21,7 @@ Omnibattery (entity ids, bounds, the weekly full-charge switch and day select, `
 values) were re-verified against the v1.6.0 source on 2026-11-11 with no change needed in the optimizer;
 re-verify them on every upgrade, stable or beta (the checklist is in the optimizer repo,
 `docs/planning/periodic-full-charge.md`, section 2). Also check that the target bound by the contracted
-power and the #723 fix are still in the new release.
+power is still in the new release, and that the backup threshold is still 500 W after the upgrade.
 
 ## Modbus access
 
@@ -31,64 +31,46 @@ read-only Modbus probes while Omnibattery is connected.
 When Modbus fails, Omnibattery keeps the last SOC and AC values; the only visible change is
 `sensor.omnibattery_non_responsive_batteries` going from `None` to `venus`.
 
-## `integration_status` stuck in `backup_mode` after the grid returns
+## Backup-port threshold (500 W)
 
-Status: **fixed in Omnibattery v1.6.0** (installed 2026-11-10); workaround removed 2026-11-11; the supervised
-grid-loss test is pending. The sections below describe the problem as it was seen on v1.5.0 and v1.5.1b1.
+`number.venus_backup_offgrid_threshold` is **500 W**, permanently. It is a configuration knob, not a
+workaround for a bug. Never set it back to 50 W (the default). The servers on the backup port draw about
+220 to 280 W, so 500 W leaves margin. If the backup-port load grows, keep the threshold above it with
+margin (the maximum, 2500 W, is fine: the battery is then never excluded).
 
-### Problem
+### Why
 
-With the backup function on and a load on the battery's backup (EPS) port, Omnibattery can keep
-`sensor.omnibattery_integration_status` at `backup_mode` after AC is back and the inverter is in
-**Bypass**. While it does, Omnibattery excludes the battery from PD control, and battery-optimizer's
-guard holds safe idle (`integration_unhealthy`), so the battery does nothing.
+`backup_mode` (exclusion from Omnibattery's PD control) is designed for whole-house backup, where all
+battery output goes through the uncontrollable backup port. For a permanent small load on that port the
+maintainer's answer is to set the threshold above the load. This is by design, with no brand-specific fix
+([ffunes/Omnibattery#660](https://github.com/ffunes/Omnibattery/issues/660), maintainer clarification
+2026-11-12; our fix PR #861 was closed). v1.6.0 contains #723, but it did not change this.
 
-Seen in the commissioning test on 2026-11-03: a 57-85 W load on the backup port kept the status at
-`backup_mode` until the threshold below was raised.
+### Incident of 2026-11-11
 
-### Root cause
+The threshold was set from 500 to 50 W at 22:17 UTC. At 22:45 UTC a planned grid charge took the inverter
+out of Bypass; the servers' ~240 W exceeded 50 W, so Omnibattery went to `backup_mode` and its 5-minute
+cooldown was refreshed continuously. While excluded, Omnibattery skips all power writes, so the last
+command kept running even with the allow switches off: about 8 h of charging at a fixed 533 W (SOC 20 to
+100 %), then, after one healthy tick at 06:50 UTC, a fixed ~110 W discharge until the threshold went back
+to 500 W at 12:04 UTC. The status cleared about 12:10 UTC and the optimizer resumed.
+`BatteryOptimizerActuatorSafeIdle` fired.
 
-Upstream bug [ffunes/Omnibattery#660](https://github.com/ffunes/Omnibattery/issues/660), fixed by
-[ffunes/Omnibattery#723](https://github.com/ffunes/Omnibattery/pull/723). In Bypass the grid feeds the
-backup port, so Omnibattery should treat the port as idle, but only when the inverter state and
-`ac_offgrid_power` come from the same poll. The coordinator stamps the reading times in the middle of
-a poll and publishes the data later, so the same-poll check fails and the Bypass zeroing is skipped.
-The backup-port load then counts as off-grid load; above `number.venus_backup_offgrid_threshold`
-(default 50 W) it re-arms the 5-minute post-backup cooldown on every poll, and the cooldown never runs
-out.
+### How to diagnose
 
-### How to diagnose (if it comes back)
+`sensor.omnibattery_integration_status` is `backup_mode` with the grid present (inverter in Bypass or
+the AC plug on) for more than 5 minutes:
 
-- `sensor.omnibattery_integration_status` is `backup_mode` while the inverter reports Bypass (AC
-  present) for more than 5 minutes.
-- `sensor.venus_ac_offgrid_power` is above `number.venus_backup_offgrid_threshold`.
+- compare `sensor.venus_ac_offgrid_power` with `number.venus_backup_offgrid_threshold`; the load is above
+  the threshold, so raise the threshold above it with margin;
+- while excluded, Omnibattery leaves the last power command running even with the allow switches off, so
+  check the battery's real power, not the switches;
 - battery-optimizer: `battery_optimizer_actuator_guard_reason{reason="integration_unhealthy"} == 1`,
   and `BatteryOptimizerActuatorSafeIdle` after 30 minutes.
 
-### Workaround (removed 2026-11-11)
+### Outage behaviour (not verified)
 
-From 2026-11-03 to 2026-11-11 `number.venus_backup_offgrid_threshold` was **500 W** (set by the owner in
-Home Assistant; 200 W during the test, default 50 W): a backup-port load below the threshold never
-re-armed the cooldown, so the status returned to `balanced` within 5 minutes of AC coming back. The cost
-was that a real outage with a backup load of 500 W or less was not detected as backup, there was no
-post-backup cooldown, and the shutdown standby was not skipped while the battery fed a small backup load.
-
-Omnibattery v1.6.0 (installed 2026-11-10) contains #723, and the owner set the threshold back to **50 W**
-(the default) on 2026-11-11 at 23:17 local. With 50 W those side effects are gone: small-load outages are
-detected as backup again, the 5-minute post-backup cooldown is back, and the shutdown standby is skipped
-while the battery feeds the servers.
-
-Passive check, passed: in Bypass with 237 to 251 W on the backup port (the servers),
-`sensor.omnibattery_integration_status` stayed `balanced` and the optimizer's guard passed for 20
-minutes (23:17 to 23:37); before the fix the status latched within 5 minutes.
-
-**Pending: the supervised grid-loss test** (deferred by the owner to a later date). Briefly cut AC (the
-battery's AC plug off, then on; or the supervised HA-stop test in the optimizer deployment doc) with the
-servers on the backup port, and confirm Backup Mode on loss and `balanced` again after AC is back. Until it
-is done, 50 W is verified only by the passive check above. Record the result here and in the optimizer
-repo's regime log.
-
-**Rollback:** if `sensor.omnibattery_integration_status` ever stays at `backup_mode` with AC present for
-more than 5 minutes, set `number.venus_backup_offgrid_threshold` to **500 W** again (it must stay above
-the servers' backup-port load of about 225 to 255 W; the side effects above then apply again) and
-reopen the upstream issue.
+With the threshold above the backup load, a grid outage with only the servers on the backup port does not
+show as `backup_mode`. The optimizer's behaviour during an outage under this setting is not verified: the
+supervised grid-loss test (briefly cut AC with the servers on the backup port, owner's choice of date) is
+still open. Record its result here and in the optimizer repo's regime log.

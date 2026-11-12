@@ -449,12 +449,11 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `hass_*` history older than 10 days is only in `prometheus-long-term`. See
   `docs/troubleshooting/home-assistant-dashboards.md`
 
-- Omnibattery v1.5.0 and the v1.5.1b1 beta could latch
-  `sensor.omnibattery_integration_status` at `backup_mode` after the grid returns while the battery's
-  backup port has a load above `number.venus_backup_offgrid_threshold` (upstream ffunes/Omnibattery#660, fix #723): the 5-minute cooldown re-arms every poll, and the
-  battery optimizer holds safe idle. Fixed in v1.6.0 (installed 2026-11-10); the 500 W threshold workaround
-  was removed on 2026-11-11 (back to 50 W). The supervised grid-loss test is pending; if the latch ever
-  returns, set the threshold to 500 W again and reopen the upstream issue. See
+- Omnibattery `backup_mode` with the grid present means the battery's backup-port load is above
+  `number.venus_backup_offgrid_threshold`: Omnibattery excludes the battery from PD control and skips all
+  power writes, so the last command keeps running even with the allow switches off (2026-11-11: ~8 h of
+  charging, then discharging, at the 50 W setting). The threshold is a configuration knob and must stay
+  above the servers' load: **500 W, never 50 W** (upstream ffunes/Omnibattery#660, by design). See
   `docs/troubleshooting/home-assistant-omnibattery.md`
 
 ## Applications

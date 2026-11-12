@@ -28,7 +28,8 @@
     description: |
       The actuator owns the Omnibattery controls but its guard has refused the plan for 30 minutes.
       Check battery_optimizer_actuator_guard_reason == 1 (or `/status`). integration_unhealthy with
-      Omnibattery in backup_mode is the known Omnibattery#660 latch; see
+      Omnibattery in backup_mode while the grid is present means the backup-port load exceeds
+      number.venus_backup_offgrid_threshold (it must stay above the servers' load, 500 W); see
       docs/troubleshooting/home-assistant-omnibattery.md.
 - alert: BatteryOptimizerImportOverCap
   # The hard rule: measured import above import_cap_w + import_guard_margin_w (4700 W) while
