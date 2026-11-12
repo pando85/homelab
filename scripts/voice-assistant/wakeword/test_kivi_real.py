@@ -407,6 +407,7 @@ def test_negatives_selection_and_copy(tmp_path):
     r1 = [r for r in rows if r["source_run"] == "Kiwi/1"]
     assert len(r1) == 2
     got = C.read_pcm16(ds / r1[1]["clip"])
+    assert r1[1]["src_sample0"] == 110 * RATE      # the piece starts at this sample of the source file (replay grid anchor)
     assert len(got) == 70 * RATE   # 110 s .. 180 s: the cue at 190 s cuts 10 s before it and (got == xa[110 * RATE:110 * RATE + len(got)]).all()
     # nothing around the press (T0+100 +-10 s) or the session cue (T0+190 +-10 s) was copied
     for r in rows:

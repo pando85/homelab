@@ -481,7 +481,10 @@ MANIFEST_FIELDS = (
     "start_utc", "end_utc", "cue_index", "cue_offset_s", "align_offset_s", "align_conf", "align_ok",
     "drift_ppm", "source_run", "revision", "extract_id", "dry_run_session", "press_utc",
     "onset_after_press_s", "snr_db", "n_candidates", "consent_confirmed", "needs_review", "split_requested", "run_end_in_window",
-    "stage", "phrase", "device_class")        # "wake" or "stt": which Assist stage the satellite audio was recorded at (None for desk sources)
+    "stage", "phrase", "device_class",         # "wake" or "stt": which Assist stage the satellite audio was recorded at (None for desk sources)
+    "src_sample0")                            # room pieces: sample of the source wake file where the piece starts (None before 2026-11-12);
+                                              # the server's 1280-sample grid is anchored at sample 0 of the file, so a replay of the piece
+                                              # must start on (-src_sample0) % 1280 (Phase 0 audit: other grids flip near-threshold events)
 
 
 def make_row(**kw):

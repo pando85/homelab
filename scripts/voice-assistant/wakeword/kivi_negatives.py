@@ -293,7 +293,7 @@ def run(a, fetcher=None, presses=None):
                 row = C.make_row(
                     origin="negatives", session="negatives", source=src, device=d, session_device=d, speaker="",
                     split=(day_parts[C.epoch_day_role(t0)] if by_day else part), eval_channel=True, condition="household", label="negative", kind="negative",
-                    clip=rel, start_utc=X.utc_str(t0), end_utc=X.utc_str(t1), source_run=run_id, revision="")
+                    clip=rel, start_utc=X.utc_str(t0), end_utc=X.utc_str(t1), source_run=run_id, revision="", src_sample0=s0)
                 C.append_jsonl(manifest, [row])
                 rows.append(row)
     print(f"wrote {len(rows)} pieces; manifest {manifest}")
