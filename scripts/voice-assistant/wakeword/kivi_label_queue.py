@@ -89,7 +89,8 @@ SEED = 20261112
 SECONDS_PER_ITEM = 6.0
 PLAN_FIELDS = L.PLAN_FIELDS
 KEY_FIELDS = ("kind", "ref", "tier", "auto_label", "auto_conf", "auto_speaker", "audit", "why")
-TIERS = ("P1", "P2", "P3", "P4")
+TIERS = ("P0", "P1", "P2", "P3", "PC", "P4")   # P0 / PC: the cleaning items of kivi_clean.py queue (P0 first when they
+#                                                are few; PC right after the c3-b blocks of P3, before its c3-a days)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -608,6 +609,8 @@ def plan_key(it, score=0.0):
     """Order of the plan: tier; inside P3 the p3_order blocks (c3-b evenings, c3-a evenings, c3-b days, c3-a days; even
     days first; highest score first); P1, P2 and P4 by time."""
     tier = TIERS.index(it["tier"])
+    if it["tier"] == "PC":                       # after c3-b evenings (0), c3-a evenings (1), c3-b days (2) of P3
+        return (TIERS.index("P3"), 2.5, False, -score, it["utc"])
     if it["tier"] != "P3":
         return (tier, 0, False, 0.0, it["utc"])
     block = (0 if it["evening"] == "1" else 2) + (0 if it["device"] == "c3-b" else 1)
