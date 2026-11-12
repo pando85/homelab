@@ -248,10 +248,11 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   See `docs/troubleshooting/needrestart-k3s-restart-storm.md`
 
 - Office A Wi-Fi IoT devices (`fan-office-a`, `mini-switch-office-a`) flap and fire
-  `BlackboxProbeFailed`: `cerezo`'s 2.4 GHz min-RSSI (-67 dBm = rssi 28) kicks the fan with
-  `reason:Low RSSI`, and the hourly WPA group rekey (hh:01) deauths it on `limonero` when its weak
-  uplink goes unanswered. The mini switch (ESP radio hang + self-reboot) is unresolved. UniFi events
-  carry no disconnect reason: read the AP logs (`logread`) within hours, `limonero` keeps ~7 h.
+  `BlackboxProbeFailed`, unresolved: `cerezo`'s min-RSSI kick (`reason:Low RSSI`) and the hourly
+  WPA group rekey (hh:01) are only some causes; lowering min-RSSI to -75 dBm did not stop the fan
+  dropping, and both devices also go silent with no AP-side reason (mini: ESP radio hang or reboot,
+  `debug:` sensors flashed, power-cycle next). UniFi events carry no disconnect reason: collect AP
+  logs (SSH, RAM-only, `limonero` keeps ~7 h) BEFORE rebooting an AP.
   See `docs/troubleshooting/office-iot-wifi-flapping.md`
 
 ## Storage & Backup
