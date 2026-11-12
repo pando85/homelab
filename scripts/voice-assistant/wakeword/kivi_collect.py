@@ -29,7 +29,8 @@ Where the room audio lives: the raw room-audio sets (`negatives*`) are symlinks 
 `$KIVI_ROOM_DIR`, which `run` links to when `negatives-daily` does not exist). The 50 GB guard checks the pool that receives
 the copy. `prune` lists room-audio pieces older than 45 days (Madrid date of the piece) and deletes only with `--yes`;
 it never touches labels, scores, window clips, or pieces of a protected day or part (`daily/protect.json`, seeded with
-2026-11-12 and 2026-11-13 until the v6.1 stage 3 has run, and the part `test2-v5era`) or of a day with an open review item.
+2026-11-13, the first fresh odd test day after 2026-11-12 was released for training (owner decision 2026-11-12), and the
+part `test2-v5era`) or of a day with an open review item.
 
 Safety: one lock (`daily/collect.lock`); at most --max-heavy (default 2) heavy jobs in total, this one included (v6_replay,
 kivi_replay_mine, training, autolabel, another collect): it waits up to --wait-min minutes, else exits 4; refuses to copy
@@ -685,8 +686,9 @@ def cmd_run(a, runner=None, out=print, now=None):
 # ---------------------------------------------------------------------------------------------
 
 PRUNE_DAYS = 45
-PROTECT_SEED = {"days": ["2026-11-12", "2026-11-13"], "parts": ["test2-v5era"],
-                "note": "days stay until the v6.1 stage 3 (gate on 2026-11-13) has run; test2-v5era is the frozen C3 test set; "
+PROTECT_SEED = {"days": ["2026-11-13"], "parts": ["test2-v5era"],
+                "note": "2026-11-12 released for training and selection (owner decision 2026-11-12; the v6.1 reservation "
+                        "is void); 2026-11-13 stays a fresh odd TEST day; test2-v5era is the frozen C3 test set; "
                         "edit by hand"}
 
 

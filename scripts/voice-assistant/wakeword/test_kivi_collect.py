@@ -327,7 +327,7 @@ def test_prune_lists_first_and_deletes_only_with_yes_and_only_eligible_pieces(en
     again = []
     Q.cmd_prune(ns, out=again.append, today=today)                              # idempotent
     assert any(x.startswith("would delete 0 piece(s)") for x in again)
-    assert json.loads((Q.DAILY / "protect.json").read_text())["days"] == ["2026-11-12", "2026-11-13"]
+    assert json.loads((Q.DAILY / "protect.json").read_text())["days"] == ["2026-11-13"]
 
 
 def test_prune_never_follows_a_link_out_of_the_set(env, tmp_path):
