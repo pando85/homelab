@@ -210,7 +210,7 @@ app-template:
           image:
             # No renovate hint: Renovate cannot read the private registry; one tag per release.
             repository: git.grigri.cloud/agil/kivi-models
-            tag: v6-p2-oye-kivi-2026-11-12@sha256:c9a46e76038e240c70644974e7015f2c4d31b0bae67e705125e57137bfd7507f
+            tag: v6-p3-oye-kivi-2026-11-13@sha256:c7eff8d5985ac480aa048762c1e973b24eb3ba5b53240e86ddf6627989875041
           command:
             - sh
             - -ec
