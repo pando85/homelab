@@ -9,6 +9,7 @@ debug recordings so the owner can label them by listening.
     kivi_live_wakes.py queue                # YOU label every pending item of every table, in priority order (see below)
     kivi_live_wakes.py autolabel [--dry-run] # local auto-labeller (kivi_autolabel.py): fills EMPTY label/speaker cells
     kivi_live_wakes.py autolabel --trigger-only [--dry-run]   # only trigger / peak_t_s / peak_raw / model evidence (exact replay)
+    kivi_live_wakes.py fix-models [--dry-run]                 # model column from ERAS (detection time); then --trigger-only
     kivi_live_wakes.py split [--apply]      # after labelling: train / test by local day, counts only
     kivi_live_wakes.py import-button-labels [--dry-run]   # false-wake button presses become `false` labels (see below)
 
@@ -95,12 +96,19 @@ SPEAKERS = ("spk01", "spk02", "spk-other", "unknown")
 BUCKETS = ("suspect-false", "suspect-true")
 TEST_SHARE = 0.30
 
-# model id per era: (model, from, until, devices or None for all). The first matching entry wins; times are UTC.
-# oye_kivi (v4) from 2026-11-07 19:59:21Z; c3-a ran oye_kivi_next in its pipeline "oye Kivi" from 2026-11-08 11:56:45Z,
-# both TVs run oye_kivi_next since 2026-11-08 13:28:10Z.
+# model id per era: (model, from, until, devices or None for all). The first matching entry wins; times are UTC and are
+# compared with the detection time (the end of the wake file). oye_kivi (v4) from 2026-11-07 19:59:21Z; c3-a ran
+# oye_kivi_next in its pipeline "oye Kivi" from 2026-11-08 11:56:45Z, both TVs oye_kivi_next since 2026-11-08 13:28:10Z;
+# oye_kivi_ctx (v6) 2026-11-11 22:11Z (promote) to about 22:40Z (owner rollback in HA; the driver recorded the demote at
+# 22:42:27Z); oye_kivi_next again until the v6.2 promote wrote the household pipeline at 07:40:55Z on 2026-11-12
+# (`promotion.promoted_at` of the release state; HA ends open runs on that update; the promote step itself finished at
+# 07:43:05Z after its run checks); oye_kivi_ctx2 (v6.2) since. Both TVs use the household pipeline "Kiwi".
+V6_PROMOTE, V6_ROLLBACK, V62_PROMOTE = "2026-11-11T22:11:00Z", "2026-11-11T22:40:00Z", "2026-11-12T07:40:55Z"
 ERAS = (
-    ("oye_kivi_next", "2026-11-08T11:56:45Z", None, ("c3-a",)),
-    ("oye_kivi_next", "2026-11-08T13:28:10Z", None, None),
+    ("oye_kivi_ctx2", V62_PROMOTE, None, None),
+    ("oye_kivi_ctx", V6_PROMOTE, V6_ROLLBACK, None),
+    ("oye_kivi_next", "2026-11-08T11:56:45Z", V62_PROMOTE, ("c3-a",)),
+    ("oye_kivi_next", "2026-11-08T13:28:10Z", V62_PROMOTE, None),
     ("oye_kivi", SCOPE_START, "2026-11-08T13:28:10Z", None),
 )
 
@@ -1017,6 +1025,60 @@ def cmd_trigger_only(a, out=print, scorer=None):
     return results
 
 
+ERA_EDGE_S = 10.0          # a detection this close to an era edge is reported (the run start is boot + ns, +-5 s)
+
+
+def detection_epoch(row):
+    """Detection time of a row: run start (`utc`) plus the wake file length."""
+    t = datetime.strptime(row["utc"], "%Y%m%dT%H%M%S.%fZ").replace(tzinfo=timezone.utc).timestamp()
+    return t + float(row.get("wake_len") or 0)
+
+
+def era_fixes(rows):
+    """{run_id: (old, new)} for the rows whose `model` is not the model of their era (`model_of` at the detection time),
+    and the run ids within ERA_EDGE_S of an era edge (pure)."""
+    edges = [epoch(x) for _m, lo, hi, _d in ERAS for x in (lo, hi) if x]
+    fix, near = {}, []
+    for r in rows:
+        t = detection_epoch(r)
+        m = model_of(r["device"], t)
+        if m and m != r["model"]:
+            fix[r["run_id"]] = (r["model"], m)
+        if any(abs(t - e) < ERA_EDGE_S for e in edges):
+            near.append(r["run_id"])
+    return fix, near
+
+
+def cmd_fix_models(a, out=print):
+    """Set the `model` column to the model of each row's era (ERAS); only that column changes. Afterwards run
+    `autolabel --trigger-only` so the trigger and peak cells use the right model."""
+    import kivi_autolabel as A
+    table_path = Path(a.dataset_root).expanduser() / "live" / "live_wakes.csv"
+    rows = read_table(table_path)
+    fix, near = era_fixes(rows)
+    out(f"fix-models: {len(fix)} row(s) to change: "
+        + ", ".join(f"{o or 'empty'} -> {n} {c}" for (o, n), c in sorted(Counter(fix.values()).items()))
+        + (f"; {len(near)} row(s) within {ERA_EDGE_S:.0f} s of an era edge: {', '.join(near)}" if near else ""))
+    if getattr(a, "dry_run", False) or not fix:
+        return fix
+    if not A.wait_for_review(getattr(a, "pgrep", None), out=out, **getattr(a, "wait_kw", {})):
+        raise SystemExit("a review process is still running after 15 min: table not written")
+    backup = table_path.with_name(table_path.name + ".bak-" + A.utc_stamp() + "-pre-fix-models")
+    shutil.copy2(table_path, backup)
+    os.chmod(backup, 0o600)
+    fresh = read_table(table_path)                       # fresh read right before the write
+    keep = [{k: v for k, v in r.items() if k != "model"} for r in fresh]
+    fix, _ = era_fixes(fresh)
+    for r in fresh:
+        if r["run_id"] in fix:
+            r["model"] = fix[r["run_id"]][1]
+    if keep != [{k: v for k, v in r.items() if k != "model"} for r in fresh]:
+        raise SystemExit("cells other than model changed: table not written (bug)")
+    write_table(table_path, fresh)
+    out(f"written: {len(fix)} model cell(s); backup {backup.name}; next: autolabel --trigger-only")
+    return fix
+
+
 def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
     if getattr(a, "trigger_only", False):
         return cmd_trigger_only(a, out=out, scorer=scorer)
@@ -1083,7 +1145,8 @@ def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("what", choices=["list", "extract", "review", "queue", "split", "autolabel", "import-button-labels"])
+    ap.add_argument("what", choices=["list", "extract", "review", "queue", "split", "autolabel", "import-button-labels",
+                                     "fix-models"])
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
     ap.add_argument("--devices", help="comma list (default: every device in kivi_devices.json)")
     ap.add_argument("--devices-file")
@@ -1105,7 +1168,7 @@ def main(argv=None):
     ap.add_argument("--rule", choices=["alternate-day", "recent-days"], default="alternate-day",
                     help="(split) alternate-day: odd Madrid day of month = test, even = train (default); "
                          "recent-days: the older share-per-speaker proposal")
-    ap.add_argument("--dry-run", action="store_true", help="(autolabel) analyse and print counts, write nothing")
+    ap.add_argument("--dry-run", action="store_true", help="(autolabel, fix-models) analyse and print counts, write nothing")
     ap.add_argument("--redo", action="store_true", help="(autolabel) recompute cells that an earlier autolabel run wrote")
     ap.add_argument("--trigger-only", action="store_true",
                     help="(autolabel) recompute only trigger, peak_t_s, peak_raw and the model parts of auto_evidence "
@@ -1127,7 +1190,7 @@ def main(argv=None):
     ap.add_argument("--work", help="(autolabel, extract) workspace holding the model files, default $WORK")
     a = ap.parse_args(argv)
     {"list": cmd_list, "extract": cmd_extract, "review": cmd_review, "queue": cmd_queue, "split": cmd_split,
-     "autolabel": cmd_autolabel, "import-button-labels": cmd_import_button_labels}[a.what](a)
+     "autolabel": cmd_autolabel, "import-button-labels": cmd_import_button_labels, "fix-models": cmd_fix_models}[a.what](a)
 
 
 if __name__ == "__main__":

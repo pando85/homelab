@@ -89,6 +89,8 @@ ECAPA_MODEL = "speechbrain/spkrec-ecapa-voxceleb"
 MODEL_SPECS = {
     "oye_kivi": ("v4/final/oye_kivi_uncalibrated.tflite", 0.9437),
     "oye_kivi_next": ("releases/v5-oye-kivi-2026-11-08/model/oye_kivi_next_uncalibrated.tflite", 0.9754),
+    "oye_kivi_ctx": ("releases/v6-oye-kivi-2026-11-11/model/oye_kivi_ctx_uncalibrated.tflite", 0.9595),
+    "oye_kivi_ctx2": ("releases/v6-p2-oye-kivi-2026-11-12/model/oye_kivi_ctx2_uncalibrated.tflite", 0.9825),
 }
 
 

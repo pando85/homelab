@@ -133,6 +133,39 @@ def test_eras():
     assert L.model_of("c3-b", t("2026-11-08T12:00:00Z")) == "oye_kivi"
     assert L.model_of("c3-b", t("2026-11-08T13:30:00Z")) == "oye_kivi_next"
     assert L.model_of("c3-b", t("2026-11-07T19:00:00Z")) is None
+    for dev in ("c3-a", "c3-b"):                                                    # v6, v5 again, v6.2 (household pipeline)
+        assert L.model_of(dev, t("2026-11-11T22:10:59Z")) == "oye_kivi_next"
+        assert L.model_of(dev, t("2026-11-11T22:30:05Z")) == "oye_kivi_ctx"
+        assert L.model_of(dev, t("2026-11-11T22:40:00Z")) == "oye_kivi_next"
+        assert L.model_of(dev, t("2026-11-12T07:40:54Z")) == "oye_kivi_next"
+        assert L.model_of(dev, t("2026-11-12T07:40:55Z")) == "oye_kivi_ctx2"
+        assert L.model_of(dev, t("2026-11-20T00:00:00Z")) == "oye_kivi_ctx2"
+
+
+def test_fix_models_changes_only_the_model_column(tmp_path):
+    def r(run, utc, wake_len, model, label="", source=""):
+        return {k: "" for k in L.FIELDS} | {"run_id": run, "device": "c3-b", "utc": utc, "wake_len": wake_len, "model": model,
+                                           "label": label, "label_source": source, "trigger": "button", "speaker": "spk01"}
+    rows = [r("Kiwi/1", "20261111T220010.484Z", "35.24", "oye_kivi_next", "false", "auto-v1"),        # v5: unchanged
+            r("Kiwi/2", "20261111T221122.961Z", "1123.17", "oye_kivi_next", "false", "owner"),        # detection 22:30Z: v6
+            r("Kiwi/3", "20261112T084930.593Z", "3138.69", "oye_kivi_next", "false", "owner-button"),  # v6.2
+            r("Kiwi/4", "20261112T073000.000Z", "60.00", "oye_kivi_next")]                            # 07:31Z: still v5
+    fix, near = L.era_fixes(rows)
+    assert fix == {"Kiwi/2": ("oye_kivi_next", "oye_kivi_ctx"), "Kiwi/3": ("oye_kivi_next", "oye_kivi_ctx2")} and not near
+    live = tmp_path / "live"
+    live.mkdir()
+    L.write_table(live / "live_wakes.csv", rows)
+    a = Namespace(dataset_root=str(tmp_path), dry_run=True, pgrep=lambda: False)
+    L.cmd_fix_models(a, out=lambda *_: None)
+    assert [x["model"] for x in L.read_table(live / "live_wakes.csv")] == ["oye_kivi_next"] * 4     # dry run writes nothing
+    a.dry_run = False
+    L.cmd_fix_models(a, out=lambda *_: None)
+    got = L.read_table(live / "live_wakes.csv")
+    assert [x["model"] for x in got] == ["oye_kivi_next", "oye_kivi_ctx", "oye_kivi_ctx2", "oye_kivi_next"]
+    assert [{k: v for k, v in x.items() if k != "model"} for x in got] == \
+        [{k: v for k, v in x.items() if k != "model"} for x in rows]                              # labels and all else kept
+    assert len(list(live.glob("live_wakes.csv.bak-*-pre-fix-models"))) == 1
+    assert L.era_fixes(got) == ({}, [])                                                              # idempotent
 
 
 def test_extract_clips_table_idempotent_and_labels_kept(tmp_path):
