@@ -556,3 +556,63 @@ def test_extract_day_filter_and_autolabel_day_rows_without_label(tmp_path):
     n1 = len(L.read_table(Path(ns.dataset_root) / "live" / "live_wakes.csv"))
     L.cmd_extract(ns, X.LocalFetcher(rec), out=lambda *_: None)                           # idempotent
     assert n1 > 0 and len(L.read_table(Path(ns.dataset_root) / "live" / "live_wakes.csv")) == n1
+
+
+def test_button_entity_and_matching_by_detection_end():
+    assert L.button_entity("c3-a") == "input_button.kivi_false_wake_c3_a"
+    runs = [{"device": "c3-a", "wake_end": 1000.0, "start": 100.0}, {"device": "c3-a", "wake_end": 1030.0, "start": 1020.0},
+            {"device": "c3-b", "wake_end": 1000.0, "start": 990.0}]
+    m = L.match_presses(runs, {"c3-a": [1010.0, 1200.0, 1031.0, 900.0], "c3-b": [1005.0]})
+    got = {(d, t): len(c) for d, t, c in m}
+    # 1010: only the first run ended before it (the second ended at 1030, later); 1200: none (200 s);
+    # 1031: the second (1 s) and the first (31 s) are both inside 60 s; 900: before every detection (not matched)
+    assert got == {("c3-a", 1010.0): 1, ("c3-a", 1200.0): 0, ("c3-a", 1031.0): 2, ("c3-a", 900.0): 0, ("c3-b", 1005.0): 1}
+    assert [x[1] for x in m] == sorted(x[1] for x in m)
+
+
+def test_import_button_labels_matches_labels_and_keeps_owner(tmp_path):
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+    ns.since = X.utc_str(T0 - 10)
+    ns.until = X.utc_str(T0 + 10_000)
+    ns.dry_run = False
+    ns.window_s = None
+    f = X.LocalFetcher(rec)
+    # make_tree: c3-a run 1 detection ends at T0+20 (stt 3 s); c3-b run 3 ends at T0+2004 (4 s file); run 4 at T0+3010
+    presses = {"c3-a": [T0 + 35.0, T0 + 5000.0], "c3-b": [T0 + 2030.0, T0 + 3025.0]}
+    out = []
+    r = L.cmd_import_button_labels(ns, f, out=out.append, presses=presses)
+    assert len(r["matched"]) == 3 and len(r["unmatched"]) == 1 and not r["ambiguous"] and len(r["new"]) == 3
+    table = Path(ns.dataset_root) / "live" / "live_wakes.csv"
+    rows = L.read_table(table)
+    assert len(rows) == 3          # only the matched runs were extracted
+    assert {(x["label"], x["label_source"], x["label_conf"]) for x in rows} == {("false", "owner-button", "1.00")}
+    assert all(x["split"] == "" and x["speaker"] == "" for x in rows)
+    assert any("no run with a detection" in o for o in out)
+    # a second run is a no-op: the labels are owner labels now and stay
+    out2 = []
+    r2 = L.cmd_import_button_labels(ns, f, out=out2.append, presses=presses)
+    assert r2["new"] == [] and len(r2["kept"]) == 3 and r2["conflicts"] == []
+    # an owner label that disagrees is kept and reported; an auto label is replaced
+    rows = L.read_table(table)
+    rows[0].update(label="true", label_source="owner", speaker="spk01")
+    rows[1].update(label="true", label_source="auto-v1", label_conf="0.90")
+    L.write_table(table, rows)
+    r3 = L.cmd_import_button_labels(ns, f, out=lambda *_: None, presses=presses)
+    assert r3["conflicts"] == [rows[0]["run_id"]] or rows[0]["run_id"] in r3["conflicts"]
+    after = {x["run_id"]: x for x in L.read_table(table)}
+    assert (after[rows[0]["run_id"]]["label"], after[rows[0]["run_id"]]["label_source"]) == ("true", "owner")
+    assert (after[rows[1]["run_id"]]["label"], after[rows[1]["run_id"]]["label_source"]) == ("false", "owner-button")
+
+
+def test_import_button_labels_dry_run_ambiguous_and_presses_file(tmp_path):
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+    ns.since, ns.until, ns.dry_run, ns.window_s = X.utc_str(T0 - 10), X.utc_str(T0 + 10_000), True, 5000.0
+    pf = tmp_path / "presses.json"
+    pf.write_text('{"c3-b": ["%s"]}' % X.utc_str(T0 + 3025.0))
+    ns.presses_file = str(pf)
+    out = []
+    r = L.cmd_import_button_labels(ns, X.LocalFetcher(rec), out=out.append)
+    # with a 5000 s window the press follows both c3-b detections: ambiguous, left alone; nothing is written
+    assert len(r["ambiguous"]) == 1 and r["matched"] == [] and not (Path(ns.dataset_root) / "live" / "live_wakes.csv").exists()

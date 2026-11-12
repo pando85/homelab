@@ -10,6 +10,7 @@ debug recordings so the owner can label them by listening.
     kivi_live_wakes.py autolabel [--dry-run] # local auto-labeller (kivi_autolabel.py): fills EMPTY label/speaker cells
     kivi_live_wakes.py autolabel --trigger-only [--dry-run]   # only trigger / peak_t_s / peak_raw / model evidence (exact replay)
     kivi_live_wakes.py split [--apply]      # after labelling: train / test by local day, counts only
+    kivi_live_wakes.py import-button-labels [--dry-run]   # false-wake button presses become `false` labels (see below)
 
 What a detection is. The satellite's wake file (`00_wake-*.wav`) is the continuous stream from the start
 of a run to the detection; the wake word sits in its last 1-3 s. A wake file also closes on an idle gap,
@@ -50,6 +51,13 @@ unknown speaker; an owner label is never offered again; a clip waiting in the va
 or Ctrl-C stops at any time, a skipped item comes back next time. It prints the items left per table at start and end.
 `--minutes N` and `--max-items N` end a session by themselves. `--day D` / `--device X` narrow the queue. Plays audio: run it
 in your own terminal, never from an agent.
+False-wake button (`import-button-labels`): the owner presses `input_button.kivi_false_wake_<device>` after a wake that
+was a mistake. The press times are read like `kivi_extract.py --button-takes` reads `kivi_take` (one read-only SELECT of the
+recorder through `kubectl exec ... psql`, or `--presses-file` with `{"c3-a": [ISO times]}`). A press labels the run of the
+same TV whose DETECTION (the end of the wake file, not its start: a run can be open for hours before the wake) ended 0-60 s
+(`--window-s`) before it. The clip is extracted when missing and labelled `false` with label_source `owner-button`;
+an existing owner label is never changed (a conflict is reported), a press with no run or with several runs is only
+reported. Counts and times are printed, never audio.
 `extract` and `autolabel` take `--day YYYY-MM-DD` (one Europe/Madrid day, by run start) for the daily loop.
 """
 import argparse
@@ -370,11 +378,14 @@ def trigger_for(row, tail_path, scorer):
     return A.trigger_of(row["model"], row["stt_run"], scorer.peaks(pcm, A.wake_total(row, len(pcm))), len(pcm) / RATE)[0]
 
 
-def cmd_extract(a, fetcher=None, out=print, scorer=False):
+def cmd_extract(a, fetcher=None, out=print, scorer=False, only=None):
+    """`only`: a set of run ids; just those runs are extracted."""
     fetcher = fetcher or get_fetcher(a)
     if scorer is False:
         scorer = make_trigger_scorer(a)
     res = scan(a, fetcher)
+    if only is not None:
+        res = dict(res, runs=[r for r in res["runs"] if run_id(r) in only])
     if getattr(a, "day", None):                  # one Europe/Madrid day, by run start (the day of the row's `utc`)
         res = dict(res, runs=[r for r in res["runs"] if local_day(dir_stamp(r["start"])) == a.day])
     root = Path(a.dataset_root).expanduser()
@@ -412,6 +423,105 @@ def cmd_extract(a, fetcher=None, out=print, scorer=False):
     out(f"{len(res['runs'])} detection run(s) in scope; {copied} file(s) copied, {kept} already there; table {table_path} "
         f"({len(rows)} row(s))")
     return res
+
+
+# ---------------------------------------------------------------------------------------------
+# false-wake button presses -> owner labels
+# ---------------------------------------------------------------------------------------------
+
+BUTTON_SOURCE = "owner-button"
+BUTTON_SINCE = "2026-11-11T17:30:00Z"      # the helper was deployed
+BUTTON_WINDOW_S = 60.0                     # the press comes this long after the end of the wake file at most
+BUTTON_TOL_S = 2.0                         # ... and at most this much before it (clock rounding)
+
+
+def button_entity(device):
+    return "input_button.kivi_false_wake_" + device.replace("-", "_")
+
+
+def match_presses(runs, presses, window_s=BUTTON_WINDOW_S, tol_s=BUTTON_TOL_S):
+    """[(device, press_epoch, [runs])] for every press, in time order: the runs of that device whose detection
+    (end of the wake file) is `tol_s` after to `window_s` before the press. A run is not a candidate when it was
+    still open at the press (its detection came later)."""
+    out = []
+    for dev, times in presses.items():
+        for t in times:
+            cand = [r for r in runs if r["device"] == dev and -tol_s <= t - r["wake_end"] <= window_s]
+            out.append((dev, t, cand))
+    return sorted(out, key=lambda x: (x[1], x[0]))
+
+
+def apply_button_labels(table_path, run_ids):
+    """Write `false` / owner-button into a FRESH read of the table. An owner label (non-empty, label_source not
+    auto-*) is kept. Returns (set, kept_false, conflicts, missing) as lists of run ids."""
+    fresh = read_table(table_path)
+    by = {r["run_id"]: r for r in fresh}
+    new, kept, conflicts, missing = [], [], [], []
+    for rid in run_ids:
+        r = by.get(rid)
+        if r is None:
+            missing.append(rid)
+        elif r["label"] and not r["label_source"].startswith("auto"):
+            (kept if r["label"] == "false" else conflicts).append(rid)
+        else:
+            r["label"], r["label_source"], r["label_conf"] = "false", BUTTON_SOURCE, "1.00"
+            new.append(rid)
+    if new:
+        write_table(table_path, fresh)
+    return new, kept, conflicts, missing
+
+
+def read_button_presses(a, since, until):
+    """{device: [press epoch]} from --presses-file, else the recorder (read only SELECT, as kivi_extract does)."""
+    devs = [d.strip() for d in a.devices.split(",")] if a.devices else list(C.load_devices(a.devices_file))
+    if getattr(a, "presses_file", None):
+        raw = json.loads(Path(a.presses_file).read_text(encoding="utf-8"))
+        return {d: sorted(t for t in (X.parse_when(x) for x in raw.get(d, ())) if since <= t <= until) for d in devs}
+    return {d: X.PostgresPresses(a.context, a.namespace, a.pg_pod, a.pg_container, a.pg_user, a.pg_db,
+                                 entity=button_entity(d)).presses(since, until) for d in devs}
+
+
+def cmd_import_button_labels(a, fetcher=None, out=print, presses=None):
+    fetcher = fetcher or get_fetcher(a)
+    now = a.now if a.now is not None else datetime.now(timezone.utc).timestamp()
+    since = X.parse_when(getattr(a, "since", None) or BUTTON_SINCE)
+    until = X.parse_when(a.until) if getattr(a, "until", None) else now
+    presses = presses if presses is not None else read_button_presses(a, since, until)
+    window_s = getattr(a, "window_s", None) or BUTTON_WINDOW_S
+    res = scan(a, fetcher, now=now)
+    matches = match_presses(res["runs"], presses, window_s)
+    out(f"{sum(len(v) for v in presses.values())} press(es) between {dir_stamp(since)} and {dir_stamp(until)}: "
+        + ", ".join(f"{d} {len(v)}" for d, v in sorted(presses.items())))
+    wanted, unmatched, ambiguous = [], [], []
+    for dev, t, cand in matches:
+        stamp = dir_stamp(t)
+        if len(cand) == 1:
+            r = cand[0]
+            out(f"  {stamp} {dev}: run {dir_stamp(r['start'])} ({run_id(r)}), detection {t - r['wake_end']:.1f} s before the press")
+            wanted.append(run_id(r))
+        elif not cand:
+            out(f"  {stamp} {dev}: no run with a detection ended 0-{window_s:.0f} s before it; left alone")
+            unmatched.append((dev, t))
+        else:
+            out(f"  {stamp} {dev}: {len(cand)} runs match ({', '.join(dir_stamp(r['start']) for r in cand)}); left alone")
+            ambiguous.append((dev, t))
+    ids = sorted(set(wanted))
+    out(f"{len(wanted)} press(es) matched one run each ({len(ids)} distinct run(s)); {len(unmatched)} without a run, "
+        f"{len(ambiguous)} ambiguous")
+    dry = getattr(a, "dry_run", False)
+    if dry or not ids:
+        out("dry run: nothing written" if dry else "nothing to label")
+        return {"matched": ids, "unmatched": unmatched, "ambiguous": ambiguous, "new": [], "kept": [], "conflicts": []}
+    cmd_extract(a, fetcher, out=out, scorer=None, only=set(ids))      # trigger stays empty: the daily collect fills it
+    table = Path(a.dataset_root).expanduser() / "live" / "live_wakes.csv"
+    new, kept, conflicts, missing = apply_button_labels(table, ids)
+    out(f"labelled false (owner-button): {len(new)}; already an owner label false: {len(kept)}; "
+        f"owner label CONFLICTS kept: {len(conflicts)}; not in the table: {len(missing)}")
+    for rid in conflicts:
+        out(f"  conflict: {rid} is labelled {[r for r in read_table(table) if r['run_id'] == rid][0]['label']} by the owner; "
+            "kept, the press disagrees")
+    return {"matched": ids, "unmatched": unmatched, "ambiguous": ambiguous, "new": new, "kept": kept,
+            "conflicts": conflicts, "missing": missing}
 
 
 # ---------------------------------------------------------------------------------------------
@@ -971,7 +1081,7 @@ def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("what", choices=["list", "extract", "review", "queue", "split", "autolabel"])
+    ap.add_argument("what", choices=["list", "extract", "review", "queue", "split", "autolabel", "import-button-labels"])
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
     ap.add_argument("--devices", help="comma list (default: every device in kivi_devices.json)")
     ap.add_argument("--devices-file")
@@ -1003,10 +1113,19 @@ def main(argv=None):
     ap.add_argument("--device", help="(queue) only this device")
     ap.add_argument("--minutes", type=float, help="(queue) stop after this many minutes")
     ap.add_argument("--max-items", type=int, help="(queue) stop after this many labels")
+    ap.add_argument("--since", help="(import-button-labels) ISO time, default the helper's deployment 2026-11-11T17:30:00Z")
+    ap.add_argument("--until", help="(import-button-labels) ISO time, default now")
+    ap.add_argument("--window-s", type=float, help="(import-button-labels) a press labels a run whose detection ended this "
+                                                   "many seconds or fewer before it (default 60)")
+    ap.add_argument("--presses-file", help='(import-button-labels) JSON {"c3-a": [ISO times]} instead of the recorder')
+    ap.add_argument("--pg-pod", default="home-assistant-postgres-0")
+    ap.add_argument("--pg-container", default="postgres")
+    ap.add_argument("--pg-user", default="postgres")
+    ap.add_argument("--pg-db", default="home_assistant")
     ap.add_argument("--work", help="(autolabel, extract) workspace holding the model files, default $WORK")
     a = ap.parse_args(argv)
     {"list": cmd_list, "extract": cmd_extract, "review": cmd_review, "queue": cmd_queue, "split": cmd_split,
-     "autolabel": cmd_autolabel}[a.what](a)
+     "autolabel": cmd_autolabel, "import-button-labels": cmd_import_button_labels}[a.what](a)
 
 
 if __name__ == "__main__":
