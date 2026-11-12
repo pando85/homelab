@@ -22,6 +22,12 @@ A unifi-controller.grigri. 1h00m00s   192.168.193.2
 A unifi.grigri. 59m50s   192.168.193.2
 ```
 
+## Debugging
+
+A Wi-Fi client that drops: [Debugging Wi-Fi clients on the UniFi network](../troubleshooting/unifi-wifi-client-debugging.md)
+(evidence ladder, AP log lines, API prefix `/api/s/default`). Worked example:
+[Office A IoT Wi-Fi flapping](../troubleshooting/office-iot-wifi-flapping.md).
+
 ## Adopt devices
 
 - Factory reset. One of this:

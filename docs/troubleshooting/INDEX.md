@@ -11,7 +11,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Kubernetes & GitOps](#kubernetes--gitops) (16 entries)
 - [ArgoCD](#argocd) (7 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
-- [Networking](#networking) (11 entries)
+- [Networking](#networking) (12 entries)
 - [Storage & Backup](#storage--backup) (13 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
@@ -254,6 +254,14 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `debug:` sensors flashed, power-cycle next). UniFi events carry no disconnect reason: collect AP
   logs (SSH, RAM-only, `limonero` keeps ~7 h) BEFORE rebooting an AP.
   See `docs/troubleshooting/office-iot-wifi-flapping.md`
+
+- Debugging a Wi-Fi client on the UniFi network: start with the Prometheus blackbox view (sum
+  `changes(probe_success)` by `target`, 30 s sampling, ESPHome probes are TCP 6053 so a hung API looks
+  like lost Wi-Fi), then the controller (`/api/s/default/...`, no disconnect reason in events), then
+  the AP logs over `ssh <ap>` (kick reason, group-rekey failure, deauth codes 3/16/2; RAM-only, copy
+  them before an AP reboot; `cerezo` needs legacy SSH algorithms from `~/.ssh/config`). One change at
+  a time, no channel/TX-power change without a scan, verify dBm vs rssi. Prometheus has no AP metrics.
+  See `docs/troubleshooting/unifi-wifi-client-debugging.md`
 
 ## Storage & Backup
 

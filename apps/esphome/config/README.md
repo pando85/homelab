@@ -268,7 +268,7 @@ shred -u secrets.yaml
   client refuses to send it a plaintext image, so do its first flash with
   `make flash-device-migrate DEVICE=<device>` (throwaway overlay with the old `ota_password` and
   `allow_plaintext_upload: true`; never commit that option). Later flashes use `make flash-device`.
-  The key cannot be changed over OTA: use a serial flash or the captive-portal update page on the fallback AP. Plan and per-device firmware: `planning/esphome-security-hardening-todo.md`.
+  Anyone holding that key can flash the device, so treat it like a credential. The key cannot be changed over OTA: use a serial flash or the captive-portal update page on the fallback AP. Plan and per-device firmware: `planning/esphome-security-hardening-todo.md`.
 - `--device` is mandatory when not interactive (otherwise esphome prompts for the target). Use the
   device's IP when DNS does not resolve its new name yet; `esphome config <device>.yaml` validates
   without flashing, `esphome compile` builds only.
@@ -276,13 +276,38 @@ shred -u secrets.yaml
   suffix that `name_add_mac_suffix: true` adds to the mDNS/HA name (`...-9d9516`). The pfSense
   static mapping hostname must therefore equal `device_name`.
 - A flash reboots the device for a few seconds; the relay follows `relay_restore_mode`. Ask the owner
-  before flashing a device that powers something critical (the battery plug feeds the house battery).
+  before flashing a device that powers something critical. The battery plug (`smart-plug-v2-battery`)
+  feeds the battery's AC input and the battery's backup port carries the servers: flash it only with
+  the battery idle (direction switches off) and SOC above 30 %, and check the relay is back on
+  afterwards ([failsafe and flashing](../../../docs/deployment/battery-optimizer.md#esphome-ac-failsafe)).
 - Pushing a YAML change only updates the ConfigMap the ESPHome dashboard reads; the device keeps its
   firmware until flashed.
 
 **Logs.** `make device-logs DEVICE=<device>` (or `uvx --from 'esphome==<ESPHOME_VERSION>' esphome logs
 <device>.yaml --device <device>.iot.grigri` with `secrets.yaml`). A log viewer is a log subscription,
 not a state subscriber: it does not count as Home Assistant for `api.connected: state_subscription_only: true`.
+
+**Why did a device reboot?** Only devices with `debug:` sensors can tell (today
+`mini-switch-office-a`; add the same block, see that YAML, to others). Read `<name> Reset Reason`
+and `Device Info` in Home Assistant, or in `make device-logs`, and compare their last-changed times:
+
+- `External System` or `Power-on`: a power event or manual power-cycle (also the first boot after one).
+- `Software/System restart`: the firmware restarted itself, e.g. the `api` `reboot_timeout` (default
+  **15 min** with no API client, not overridden here) or an OTA. `wifi.reboot_timeout` is 24 h in
+  `packages/connection.yaml`, so it is not the usual trigger.
+- Watchdog / exception / fatal-exception reasons: a firmware hang or crash; check Heap Free and Heap
+  Max Block for a leak.
+- The reason is lost when the device is power-cycled, and the sensors are readable only while the
+  device is reachable.
+
+**Wi-Fi hangs on ESP8266/ESP8285.** Symptom: the device stays powered but goes silent for hours (the
+AP shows `keep-alive silent` / `tx continue fail`, 1 Mbps AP-to-device rate, high retries, no
+association afterwards), and the TCP 6053 blackbox probe cannot tell a hung API from lost Wi-Fi. Seen
+upstream and unresolved: esphome issues 16724 and 14999, ratgdo issue 541 (helped there by `wifi:
+phy_mode: 11G`, available since 2026.5.0; an optional experiment, not applied). Same firmware runs
+stable on other devices, so compare the fleet before blaming the firmware. Diagnosis from the AP side:
+[Debugging Wi-Fi clients on the UniFi network](../../../docs/troubleshooting/unifi-wifi-client-debugging.md);
+case study: [Office A Wi-Fi flapping](../../../docs/troubleshooting/office-iot-wifi-flapping.md).
 
 **Rename a device (hostname, YAML, Home Assistant).** Order matters, because Home Assistant reaches
 each ESPHome device by the hostname stored in its config entry (`/config/.storage/core.config_entries`,
@@ -331,7 +356,7 @@ Current network config:
 - WiFi SSID and password from secrets
 - Device domain: `.iot.grigri`
 - SNTP server: `pfsense.grigri`
-- Fallback AP mode: activates after 5 min if WiFi lost, reboots after 3h without connection
+- Fallback AP mode: activates after 5 min if WiFi lost, reboots after 24 h without connection (`wifi.reboot_timeout`)
 - Power save: disabled (`none`)
 
 ### Calibrate Lilygo Higrow Sensors

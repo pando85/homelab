@@ -122,7 +122,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (84 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (86 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -143,19 +143,21 @@ Full pitfall index (84 entries grouped by subsystem): `docs/troubleshooting/INDE
 - Never `kubectl config use-context`/`set-context` (rewrites the owner's kubeconfig default): always
   pass `--context`. The shell is zsh: unquoted variables do not word-split, put multi-step kubectl
   helpers in a bash script
+- UniFi AP logs are RAM-only: copy `/var/log/messages*` over `ssh <ap>` before rebooting an AP
+  (`docs/troubleshooting/unifi-wifi-client-debugging.md`)
 
 **Subsystem index** (top pitfalls per group — see `docs/troubleshooting/INDEX.md` for full entries):
 
 - **Kubernetes & GitOps** (16): node addition, app-template `tpl` evaluation, topology spread constraints, `eviction-hard` replaces k3s defaults, Forgejo runner `valid_volumes` silently drops container-job mounts
-- **ArgoCD** (6): repo-server probe death-spiral, kustomize OCI auth override, Helm-hook mixing and
+- **ArgoCD** (7): repo-server probe death-spiral, kustomize OCI auth override, Helm-hook mixing and
   hook-only edits that never converge (`docs/troubleshooting/argocd-helm-hook-provisioning.md`)
 - **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps
-- **Networking** (10): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP, pfSense alias change keeps old states (`pfsense-alias-change-keeps-old-states.md`), Envoy listener drain (`envoy-gateway-listener-drain.md`), Envoy debugging (`envoy-gateway-debugging.md`), Office A Wi-Fi IoT flapping: read AP logs for `Low RSSI` kicks (`office-iot-wifi-flapping.md`)
-- **Storage & Backup** (12): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
+- **Networking** (12): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP, pfSense alias change keeps old states (`pfsense-alias-change-keeps-old-states.md`), Envoy listener drain (`envoy-gateway-listener-drain.md`), Envoy debugging (`envoy-gateway-debugging.md`), Office A Wi-Fi IoT flapping: AP logs give the disconnect reasons (`office-iot-wifi-flapping.md`), UniFi Wi-Fi client debugging runbook (`unifi-wifi-client-debugging.md`)
+- **Storage & Backup** (13): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
 - **Desktop & Home** (12): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote), Omnibattery `backup_mode` latch (backup threshold 500 W workaround)
-- **Applications** (11): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema, Firecrawl
+- **Applications** (12): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema, Firecrawl
   egress NP probe-timeout rollback (root cause unknown, aggregate denied counters prove nothing)
 
 ## Subsystem Docs
