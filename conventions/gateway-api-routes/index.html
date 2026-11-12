@@ -1,0 +1,5105 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Exposing an App with Gateway API (Envoy Gateway) - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#exposing-an-app-with-gateway-api-envoy-gateway" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Exposing an App with Gateway API (Envoy Gateway)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/ingress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ingress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/pfsense/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense: cluster-relevant configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/webos-voice-satellite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    webOS voice satellite network requirement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-helm-hook-provisioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD Helm hooks: provisioning Jobs that never run, and hooks that silently stop running
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-ssa-stale-field-manager/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD server-side apply: a field removed from git persists live
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-amd64-disk-full/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ci-runner-amd64 fills the k8s-amd64-1 root disk
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/envoy-gateway-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/envoy-gateway-listener-drain/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway listener changes close long connections
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/envoy-oidc-id-token-cookie-size/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy OIDC session breaks: ID token cookie over 4096 B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/forgejo-runner-valid-volumes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Forgejo runner valid_volumes silently drops container-job mounts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-omnibattery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: Omnibattery and the house battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-no-dcr-mcp-client-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm has no dynamic client registration for MCP clients
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mcp-firecrawl-egress-regression/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl egress NetworkPolicies: applied, broke readiness, rolled back
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/office-iot-wifi-flapping/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pfsense-alias-change-keeps-old-states/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense alias change keeps old states
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sccache-s3-bucket-full-silent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    sccache S3 tier silently stops writing when the bucket is full
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stop-home-assistant-under-argocd/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stopping Home Assistant under ArgoCD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/unifi-wifi-client-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging Wi-Fi Clients on the UniFi Network
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-truncated-zfs-backups/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-gateway-api-with-envoy-gateway/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0005: Gateway API with Envoy Gateway instead of ingress-nginx
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Design
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Design
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/mcp-gateway-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MCP Gateway Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../voice-assistant/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Voice assistant
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Voice assistant
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/audio-pipeline-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant audio pipeline plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/conversation-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation agent: where small local models fit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/conversation-capabilities-roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation capabilities roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/data-register/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi data register
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/kiais-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kiais as the Kivi conversation agent in Home Assistant
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/kivi-iteration-loop/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi wake word: the iteration loop
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/lessons-learned/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lessons learned
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/model-registry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi model registry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/stt-hint-list-and-learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/whisper-image-build/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building the Kivi Whisper STT image on Forgejo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_13" id="__nav_8_13_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    experiments
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_13">
+            <span class="md-nav__icon md-icon"></span>
+            experiments
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/conversation-agent-eval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conversation agent evaluation for "Kivi": Kiais gateway metrics, a reusable dry-run harness, and what Home Assistant's built-in intents already cover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/decision-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decision models for Kivi: can a small classifier rescue the commands the built-in intents miss?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/kivi-decider-poc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/kivi-wake-word/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/oye-kivi-data-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" training-data quality: phrase check, out-of-fold labels, coverage (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/oye-kivi-p0-baseline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    P0 real-voice baseline: deployed v4 "oye Kivi" (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/oye-kivi-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recovery plan: unreliable "oye Kivi" wake word
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/oye-kivi-v5era-mining/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    v5-era room audio: replay false wakes and missed-wake mining (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/oye-kivi-v6/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" v6: context-trained candidate (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/oye-kivi-vnext-ablations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vnext ablations: real voice is what moves the needle (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/small-local-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../voice-assistant/experiments/whisper-gpu-benchmark/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Whisper decoding settings on the GTX 1060: compute type, beam size, VAD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#state" class="md-nav__link">
+    <span class="md-ellipsis">
+      State
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gateways-and-listeners" class="md-nav__link">
+    <span class="md-ellipsis">
+      Gateways and listeners
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-the-route" class="md-nav__link">
+    <span class="md-ellipsis">
+      Writing the route
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Writing the route">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#app-template-apps-route-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      app-template apps (route: block)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apps-rendered-by-kustomize-helmcharts-rsshub-kube-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      Apps rendered by kustomize helmCharts (rsshub, kube-system)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#raw-httproute-in-a-wrapper-chart-templates" class="md-nav__link">
+    <span class="md-ellipsis">
+      Raw HTTPRoute in a wrapper chart (templates/)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#upstream-chart-with-native-route-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      Upstream chart with native route support
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#operator-crs-that-create-the-ingress-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      Operator CRs that create the Ingress (vault)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#grpc-and-plain-http-on-one-hostname" class="md-nav__link">
+    <span class="md-ellipsis">
+      gRPC and plain HTTP on one hostname
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dns-external-dns" class="md-nav__link">
+    <span class="md-ellipsis">
+      DNS (external-dns)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nginx-annotation-to-gateway-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      nginx annotation to Gateway API
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nginx annotation to Gateway API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#backend-tls-with-a-ca-backendtlspolicy-vault" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backend TLS with a CA: BackendTLSPolicy (vault)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#backend-tls-without-a-ca-backend-unifi" class="md-nav__link">
+    <span class="md-ellipsis">
+      Backend TLS without a CA: Backend (unifi)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#lua-on-a-request-radarr" class="md-nav__link">
+    <span class="md-ellipsis">
+      Lua on a request (radarr)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timeouts" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timeouts
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Timeouts">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#translating-a-nginx-timeout-annotation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Translating a nginx timeout annotation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#networkpolicies" class="md-nav__link">
+    <span class="md-ellipsis">
+      NetworkPolicies
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#per-app-three-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Per app: three objects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mapping-from-nginx-oauth2-proxy-for-charts-and-docs-that-still-show-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      Mapping from nginx / oauth2-proxy (for charts and docs that still show it)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skip-paths-no-auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      Skip paths (no auth)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ext-auth-pathoverride-and-client-identity-headers" class="md-nav__link">
+    <span class="md-ellipsis">
+      Ext auth: pathOverride and client identity headers
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verification-no-browser-needed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification (no browser needed)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      Gotchas
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#denying-a-path-at-the-edge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Denying a path at the edge
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pods-that-must-reach-a-public-name-at-the-gateway-vip" class="md-nav__link">
+    <span class="md-ellipsis">
+      Pods that must reach a public name at the gateway VIP
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-per-route-before-the-next-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      Verification (per route, before the next commit)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-unknowns" class="md-nav__link">
+    <span class="md-ellipsis">
+      Known unknowns
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="exposing-an-app-with-gateway-api-envoy-gateway">Exposing an App with Gateway API (Envoy Gateway)</h1>
+<p>How an app gets an HTTP(S) route on the Envoy Gateways. Decision and consequences:
+<a href="../../adr/0005-gateway-api-with-envoy-gateway/">ADR-0005</a>. Migration history, the listener contract
+and the recipes for every behaviour ported from ingress-nginx:
+<code>planning/ingress-nginx-to-envoy-gateway.md</code>.</p>
+<h2 id="state">State</h2>
+<p>All traffic is served by the two Envoy Gateways: internal names resolve to <code>.13</code> and public traffic
+reaches <code>.14</code>. ingress-nginx and the shared oauth2-proxy are gone. An app gets <strong>only</strong> a route (plus a
+<code>SecurityPolicy</code> when it is protected): no <code>Ingress</code>, no nginx annotations, no <code>cert-manager.io/*</code>
+annotation. Health of the whole path, re-runnable and read-only: <code>scripts/gateway-check.sh</code>.</p>
+<h2 id="gateways-and-listeners">Gateways and listeners</h2>
+<p>Both Gateways live in namespace <code>envoy-gateway</code>. A route picks one with <code>parentRefs</code>
+(<code>namespace: envoy-gateway</code>, <code>sectionName</code> from the table). VIPs: <code>.13</code> internal, <code>.14</code> external.</p>
+<table>
+<thead>
+<tr>
+<th>Host pattern</th>
+<th>Gateway</th>
+<th><code>sectionName</code></th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;app&gt;.internal.grigri.cloud</code></td>
+<td><code>internal</code></td>
+<td><code>https-internal-grigri-cloud</code></td>
+<td>wildcard cert, LAN only</td>
+</tr>
+<tr>
+<td><code>&lt;app&gt;.grigri.cloud</code></td>
+<td><code>external</code></td>
+<td><code>https-grigri-cloud</code></td>
+<td>wildcard cert, public (behind pfSense NAT)</td>
+</tr>
+</tbody>
+</table>
+<p>Other listeners (forkline.dev, mintpsicologia, passthrough, TCP) are in the listener contract of
+the plan. All certificates live in <code>envoy-gateway</code>; an app never creates a Certificate or a TLS
+secret, and routes carry no <code>cert-manager.io/*</code> annotation. A route whose host contains <code>.internal.</code>
+must never reference the <code>external</code> Gateway (the host has no certificate there).</p>
+<p>A host with more than one label below <code>internal.grigri.cloud</code> (today only <code>m.rajoy.internal</code> and
+<code>api.m.rajoy.internal</code>) is not covered by the <code>*.internal.grigri.cloud</code> wildcard certificate: those
+routes use the listener <code>https-rajoy-internal-grigri-cloud</code> (own certificate). Ask before adding more.</p>
+<h2 id="writing-the-route">Writing the route</h2>
+<p>Hostnames follow the table above. The backend is the app's Service and port (a port number, not
+the port name).</p>
+<h3 id="app-template-apps-route-block">app-template apps (<code>route:</code> block)</h3>
+<div class="highlight"><pre><span></span><code><span class="nt">app-template</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">route</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">&lt;name&gt;</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTPRoute</span>
+<span class="w">      </span><span class="c1"># annotations: only on external routes, see &quot;DNS&quot; below</span>
+<span class="w">      </span><span class="nt">hostnames</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;.internal.grigri.cloud</span>
+<span class="w">      </span><span class="nt">parentRefs</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internal</span>
+<span class="w">          </span><span class="nt">namespace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">envoy-gateway</span>
+<span class="w">          </span><span class="nt">sectionName</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https-internal-grigri-cloud</span>
+<span class="w">      </span><span class="nt">rules</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">backendRefs</span><span class="p">:</span>
+<span class="w">            </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">identifier</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;service-identifier&gt;</span><span class="w">   </span><span class="c1"># key under `service:`</span>
+<span class="w">              </span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;port number&gt;</span><span class="w">                </span><span class="c1"># a number, not the port name</span>
+</code></pre></div>
+<p>Reference examples: <code>apps/http-echo/values.yaml</code> (internal and external), <code>apps/firecrawl/values.yaml</code>.
+app-template renders <code>gateway.networking.k8s.io/v1</code> only when the API is in the Helm capabilities:
+<code>scripts/deploy-dir.rh</code> passes it and Argo's own render gets it from the cluster. For a local
+check add <code>--api-versions gateway.networking.k8s.io/v1/HTTPRoute</code> to <code>helm template</code>.</p>
+<h3 id="apps-rendered-by-kustomize-helmcharts-rsshub-kube-system">Apps rendered by kustomize <code>helmCharts</code> (rsshub, kube-system)</h3>
+<p><code>kustomize build</code> has no cluster capabilities, so do not rely on the chart's <code>route:</code>. Add a raw
+<code>HTTPRoute</code> file to <code>resources:</code> (<code>apps/rsshub/resources/httproute.yaml</code>). The kustomization sets
+the namespace; leave <code>metadata.namespace</code> out. Check with <code>kustomize build --enable-helm .</code>.</p>
+<h3 id="raw-httproute-in-a-wrapper-chart-templates">Raw <code>HTTPRoute</code> in a wrapper chart (<code>templates/</code>)</h3>
+<p>Used by apps that need more than one object (<code>apps/unifi</code>, <code>apps/radarr</code>, <code>platform/vault</code>).
+Plain YAML under <code>templates/</code>, <code>apiVersion: gateway.networking.k8s.io/v1</code>, no namespace.</p>
+<h3 id="upstream-chart-with-native-route-support">Upstream chart with native route support</h3>
+<p>Use the chart's own key where it exists (argo-cd, forgejo, kube-prometheus-stack, grafana, ollama,
+open-webui, wordpress; table with gotchas in the plan) and keep the chart's <code>ingress</code> block disabled.
+Charts without route support (cilium hubble UI, minio, loki, vault) get a raw <code>HTTPRoute</code>:
+<code>system/kube-system/resources/cilium/hubble-ui-httproute.yaml</code>.</p>
+<h3 id="operator-crs-that-create-the-ingress-vault">Operator CRs that create the Ingress (vault)</h3>
+<p>The route is a standalone <code>HTTPRoute</code> next to the CR; keep <code>spec.ingress</code> off. An operator never
+deletes an Ingress it created, so turning the field off on a live object orphans the Ingress (Argo
+does not prune it): delete it by hand with the owner's yes.</p>
+<h3 id="grpc-and-plain-http-on-one-hostname">gRPC and plain HTTP on one hostname</h3>
+<p>Gateway API accepts only one of a <code>GRPCRoute</code> and an <code>HTTPRoute</code> that share a hostname on the same
+listener (the other conflicts and is not accepted). An app that serves both gRPC and plain HTTP
+paths on one hostname uses a single <code>HTTPRoute</code>, with an h2c backend for the gRPC paths: set
+<code>appProtocol: kubernetes.io/h2c</code> on the Service port.</p>
+<h2 id="dns-external-dns">DNS (external-dns)</h2>
+<p>How names resolve (pfSense host overrides, NAT reflection, hairpin, the two VIPs) is in
+<a href="../../network/ingress/"><code>docs/network/ingress.md</code></a>. This section is only the per-route how-to.</p>
+<p>external-dns publishes a route only when it carries the opt-in annotation
+<code>external-dns.kubernetes.io/enabled: "true"</code>. The record target is not set on routes: the
+<strong>external Gateway</strong> carries <code>external-dns.kubernetes.io/target: grigri.cloud</code> and the internal
+Gateway has none.</p>
+<ul>
+<li><strong>External route:</strong> annotation <code>external-dns.kubernetes.io/enabled: "true"</code> and nothing else (no
+  <code>target</code>). The record is a <strong>CNAME to <code>grigri.cloud</code></strong>. A route can never produce an A record on
+  the external Gateway.</li>
+<li><strong>Internal route:</strong> the same annotation; the record is an <strong>A record to <code>.13</code></strong> (the Gateway
+  address). Every internal route carries it.</li>
+<li><strong>An A record on an external name</strong> (for example a name that must resolve to a private IP, so it
+  works from the LAN and the cluster only): a <code>DNSEndpoint</code> (the <code>crd</code> source), because an annotated
+  external route would only produce the CNAME. Example: a tenant Keycloak host that publishes
+  <code>192.168.193.14</code>.</li>
+<li><strong>A wildcard owned by someone else</strong> (the tenant runner wildcard) is held by a <code>DNSEndpoint</code> of
+  its owner: do not annotate routes for names under it.</li>
+<li><strong>upsert-only:</strong> external-dns never deletes or reverts a record (records are created with
+  <code>ttl=1</code>, auto). Removing the annotation or rolling a change back leaves the record. Moving a
+  record back needs a manual Cloudflare edit <strong>and</strong> reverting the source, otherwise external-dns
+  re-asserts it within its 2 minute interval.</li>
+<li>Verify no record changed: <code>kubectl logs -n external-dns deploy/external-dns --since=15m | grep -v 'already up to date'</code>.</li>
+</ul>
+<h2 id="nginx-annotation-to-gateway-api">nginx annotation to Gateway API</h2>
+<p>The gateway-wide defaults match nginx (60 s idle timeouts and no total request limit, HSTS only,
+<code>Server</code> removed, h2 and HTTP/1.0, no body limit, no response buffering, websocket upgrade enabled on
+every route). An app only needs something extra when it relied on a non-default behaviour.</p>
+<table>
+<thead>
+<tr>
+<th>nginx</th>
+<th>Gateway API / Envoy Gateway</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>proxy-body-size</code>, <code>proxy-buffer-size</code>, <code>proxy-buffering off</code></td>
+<td>nothing (no body limit, streaming, larger header limits)</td>
+</tr>
+<tr>
+<td><code>proxy-read/send-timeout</code> (idle between reads or writes)</td>
+<td>only when longer than 60 s: route <code>BackendTrafficPolicy</code> <code>timeout.http.streamIdleTimeout</code> with <code>mergeType: StrategicMerge</code>; see "Timeouts"</td>
+</tr>
+<tr>
+<td><code>proxy-connect-timeout</code></td>
+<td>route <code>BackendTrafficPolicy</code> <code>timeout.tcp.connectTimeout</code>, only when it is not the 5 s default; see "Timeouts"</td>
+</tr>
+<tr>
+<td>long uploads, downloads, streams, SSE, websockets</td>
+<td>nothing while data keeps flowing (no total limit); <strong>never</strong> <code>timeouts.request</code> / <code>requestTimeout</code> (a total limit)</td>
+</tr>
+<tr>
+<td><code>backend-protocol: HTTPS</code>, backend CA available</td>
+<td><code>BackendTLSPolicy</code> (below)</td>
+</tr>
+<tr>
+<td><code>backend-protocol: HTTPS</code>, self-signed backend, nginx never verified</td>
+<td>Envoy Gateway <code>Backend</code> with <code>tls.insecureSkipVerify: true</code> (below)</td>
+</tr>
+<tr>
+<td><code>rewrite-target</code>, redirects</td>
+<td><code>URLRewrite</code> / <code>RequestRedirect</code> filters (a redirect rule cannot have <code>backendRefs</code>)</td>
+</tr>
+<tr>
+<td><code>configuration-snippet</code> / <code>server-snippet</code></td>
+<td>translate by behaviour (recipes in the plan); request-side query or header logic is an <code>EnvoyExtensionPolicy</code> with Lua (below)</td>
+</tr>
+<tr>
+<td>compression</td>
+<td><code>BackendTrafficPolicy</code> <code>compressor</code> per route, never on S3/MinIO hosts</td>
+</tr>
+<tr>
+<td><code>auth-url</code> / <code>auth-signin</code> / <code>auth-snippet</code> skips</td>
+<td>see "Authentication"</td>
+</tr>
+</tbody>
+</table>
+<p>Response headers: nginx sends only <code>Strict-Transport-Security: max-age=31536000; includeSubDomains</code>
+(https only, replacing an app's own value) and removes <code>Server</code>; the gateways do exactly that and
+nothing else, so an app's own <code>Referrer-Policy</code>, <code>Permissions-Policy</code> etc. pass through. Per-app
+hardening headers are added later on that app's route (filter), never gateway-wide.</p>
+<p>Never convert nginx snippets with a tool, and never guess: take the intended behaviour from the
+app's documentation or its previous manifests in git history, then prove it with <code>curl</code> on <code>.13</code> /
+<code>.14</code>.</p>
+<h3 id="backend-tls-with-a-ca-backendtlspolicy-vault">Backend TLS with a CA: <code>BackendTLSPolicy</code> (vault)</h3>
+<p><code>platform/vault/templates/httproute.yaml</code>. Reference the CA straight from the operator's Secret
+(<code>kind: Secret</code>, key <code>ca.crt</code>, same namespace as the policy), so rotation follows the operator:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.networking.k8s.io/v1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BackendTLSPolicy</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">targetRefs</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">Service</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault</span><span class="p p-Indicator">,</span><span class="nt"> sectionName</span><span class="p">:</span><span class="w"> </span><span class="nv">api-port</span><span class="p p-Indicator">}</span><span class="w">   </span><span class="c1"># port NAME of the Service</span>
+<span class="w">  </span><span class="nt">validation</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">vault.vault.svc.cluster.local</span><span class="w">     </span><span class="c1"># must match a SAN of the backend certificate</span>
+<span class="w">    </span><span class="nt">caCertificateRefs</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;&quot;</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">Secret</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">vault-tls</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>Check the SANs first (<code>kubectl get secret ... -o jsonpath='{.data.server\.crt}' | base64 -d | openssl x509 -noout -ext subjectAltName</code>)
+and never print the whole Secret (it can hold the CA key). A wrong hostname or CA shows as 503
+<code>UF</code> with the policy still <code>Accepted</code>.</p>
+<h3 id="backend-tls-without-a-ca-backend-unifi">Backend TLS without a CA: <code>Backend</code> (unifi)</h3>
+<p><code>apps/unifi/templates/httproute.yaml</code>. nginx never verified the self-signed certificate, so the same
+trust is an Envoy Gateway <code>Backend</code> (controller option <code>extensionApis.enableBackend</code>, on) referenced
+from the route:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.envoyproxy.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Backend</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">endpoints</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[{</span><span class="nt">fqdn</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">hostname</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;svc&gt;.&lt;ns&gt;.svc.cluster.local</span><span class="p p-Indicator">,</span><span class="nt"> port</span><span class="p">:</span><span class="w"> </span><span class="nv">8443</span><span class="p p-Indicator">}}]</span>
+<span class="w">  </span><span class="nt">tls</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">insecureSkipVerify</span><span class="p">:</span><span class="w"> </span><span class="nv">true</span><span class="p p-Indicator">}</span>
+<span class="nn">---</span>
+<span class="c1"># in the HTTPRoute rule</span>
+<span class="nt">backendRefs</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="nv">gateway.envoyproxy.io</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">Backend</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">unifi</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>A <code>Backend</code> has static endpoints only: the Service FQDN, not pod IPs. Do not tighten verification
+unasked.</p>
+<h3 id="lua-on-a-request-radarr">Lua on a request (radarr)</h3>
+<p><code>apps/radarr/templates/httproute.yaml</code> (Radarr#11557: append <code>excludeLocalCovers=true</code> to the movie
+list). The controller runs with <code>extensionApis.enableLua: true</code>. Pattern:</p>
+<ol>
+<li>a <strong>dedicated HTTPRoute</strong> for the narrowest path (it wins over the catch-all route of the same
+   host; Gateway API merges same-host routes and <code>Exact</code> / more specific paths take precedence;
+   <code>RegularExpression</code> paths such as <code>(?i)/api/v3/movie</code> also won over <code>PathPrefix /</code> live);</li>
+<li>an <code>EnvoyExtensionPolicy</code> targeting <strong>that</strong> HTTPRoute with <code>lua: [{type: Inline, inline: ...}]</code>
+   defining <code>envoy_on_request(handle)</code>; rewrite the path with
+   <code>handle:headers():replace(":path", ...)</code>.</li>
+</ol>
+<p>Reproduce the nginx regex semantics exactly (case-insensitive, query handling) and test the Lua
+with <code>lua5.4</code> offline against the edge cases before pushing. nginx path matches are
+case-insensitive when the regex says <code>~*</code>; Gateway API paths are case-sensitive unless a regex
+with <code>(?i)</code> is used. A regex path is a <strong>full</strong> match.</p>
+<h2 id="timeouts">Timeouts</h2>
+<p><strong>nginx timeouts are idle timeouts, Envoy's route timeout is a total limit.</strong> nginx
+<code>proxy-read-timeout</code> / <code>proxy-send-timeout</code> (default 60 s) only fire when nothing is read or
+written for that long. Envoy's <code>requestTimeout</code> (what <code>BackendTrafficPolicy.timeout.http.requestTimeout</code>
+and HTTPRoute <code>timeouts.request</code> / <code>backendRequest</code> set) runs from the end of the request until the
+response is complete, so 60 s total cut a 50 KB/s download of the Radarr movie list at 60.3 s where
+nginx delivered all of it in 158 s. Gateway-wide defaults (<code>system/envoy-gateway/resources/policies.yaml</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Envoy setting</th>
+<th>Value</th>
+<th>nginx equivalent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>BTP <code>timeout.http.requestTimeout</code></td>
+<td><code>0s</code></td>
+<td>none (nginx has no total limit)</td>
+</tr>
+<tr>
+<td>BTP <code>timeout.http.streamIdleTimeout</code> (route idle timeout)</td>
+<td><code>60s</code></td>
+<td><code>proxy_read_timeout</code> / <code>proxy_send_timeout</code> 60 s</td>
+</tr>
+<tr>
+<td>CTP <code>timeout.http.streamIdleTimeout</code> (listener)</td>
+<td><code>60s</code></td>
+<td>same, for requests no route matched</td>
+</tr>
+<tr>
+<td>BTP <code>timeout.tcp.connectTimeout</code></td>
+<td><code>5s</code></td>
+<td><code>proxy_connect_timeout</code> 5 s (Envoy default is 10 s)</td>
+</tr>
+<tr>
+<td>BTP <code>timeout.http.connectionIdleTimeout</code> (upstream)</td>
+<td><code>60s</code></td>
+<td>upstream <code>keepalive_timeout</code> 60 s</td>
+</tr>
+<tr>
+<td>CTP <code>timeout.http.idleTimeout</code> (client connection)</td>
+<td><code>75s</code></td>
+<td><code>keepalive_timeout</code> 75 s</td>
+</tr>
+<tr>
+<td>CTP <code>timeout.http.requestHeadersReceivedTimeout</code></td>
+<td><code>60s</code></td>
+<td><code>client_header_timeout</code> 60 s</td>
+</tr>
+</tbody>
+</table>
+<p><code>streamIdleTimeout</code> counts a stream as idle only when no bytes move in <strong>either direction</strong>, and it
+also bounds upgraded streams: a websocket or SSE stream with traffic (pings, events) is never cut
+by it, a silent one is cut after 60 s, exactly like nginx. A websocket is <strong>not</strong> subject to the
+route request timeout. Do not set <code>requestReceivedTimeout</code>: it is a total upload limit
+(nginx <code>client_body_timeout</code> is idle).</p>
+<h3 id="translating-a-nginx-timeout-annotation">Translating a nginx timeout annotation</h3>
+<table>
+<thead>
+<tr>
+<th>Annotation</th>
+<th>Gateway API</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>proxy-read-timeout</code>, <code>proxy-send-timeout</code> &lt;= 60</td>
+<td>nothing (gateway default)</td>
+</tr>
+<tr>
+<td><code>proxy-read-timeout</code>, <code>proxy-send-timeout</code> &gt; 60</td>
+<td><code>streamIdleTimeout</code> = the larger of the two (Envoy has one idle timeout), on the route BTP below</td>
+</tr>
+<tr>
+<td><code>proxy-connect-timeout</code> &lt;= 60 and != 5</td>
+<td><code>tcp.connectTimeout</code> = the value</td>
+</tr>
+<tr>
+<td><code>proxy-connect-timeout</code> &gt; 60</td>
+<td><code>tcp.connectTimeout: 60s</code>: 300/600/3600 are copy-paste values (a cluster Service connects in milliseconds or fails), say so in the PR</td>
+</tr>
+<tr>
+<td><code>proxy-body-size</code>, <code>proxy-buffer-size</code>, <code>proxy-buffering</code>, <code>proxy-request-buffering</code></td>
+<td>nothing (see above)</td>
+</tr>
+</tbody>
+</table>
+<p>Route override (mergeType is mandatory: without it this policy REPLACES the gateway one and
+<code>requestTimeout</code> goes back to Envoy's 15 s). Proven live on the rsshub pilot: the route kept
+<code>timeout: 0s</code>, got <code>idle_timeout: 3600s</code> and the cluster <code>connect_timeout: 60s</code>, the rest was inherited.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.envoyproxy.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">BackendTrafficPolicy</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-timeouts</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">targetRefs</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="nv">gateway.networking.k8s.io</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">HTTPRoute</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;route&gt;</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">mergeType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">StrategicMerge</span>
+<span class="w">  </span><span class="nt">timeout</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">tcp</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">connectTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60s</span>
+<span class="w">    </span><span class="nt">http</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">streamIdleTimeout</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600s</span>
+</code></pre></div>
+<p>Never use <code>timeouts.request</code> on the
+route to emulate a long nginx timeout, it would reintroduce the total limit.</p>
+<p>Per-route values the Ingresses need today (all other hosts keep the defaults):</p>
+<table>
+<thead>
+<tr>
+<th>App (Ingress host)</th>
+<th><code>streamIdleTimeout</code></th>
+<th><code>connectTimeout</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>forgejo (<code>git.grigri.cloud</code>)</td>
+<td>3600s</td>
+<td>60s</td>
+</tr>
+<tr>
+<td>gitlab (<code>gitlab.grigri.cloud</code>)</td>
+<td>3600s</td>
+<td>60s</td>
+</tr>
+<tr>
+<td>immich (<code>photos.internal</code>, <code>photos</code>)</td>
+<td>3600s</td>
+<td>60s</td>
+</tr>
+<tr>
+<td>nextcloud (<code>nextcloud.grigri.cloud</code>)</td>
+<td>3600s</td>
+<td>60s</td>
+</tr>
+<tr>
+<td>transcoder (<code>transcoder.internal</code>)</td>
+<td>3600s</td>
+<td>60s</td>
+</tr>
+<tr>
+<td>calypso runner Ingress (<code>*.app.staging.forkline.dev</code>)</td>
+<td>3600s</td>
+<td>60s</td>
+</tr>
+<tr>
+<td>minio (<code>s3.internal</code>), s3-public (<code>s3</code>), cross-backups</td>
+<td>3601s</td>
+<td>default</td>
+</tr>
+<tr>
+<td>isidoro (<code>isidoro.grigri.cloud</code>, tenant)</td>
+<td>1800s</td>
+<td>10s</td>
+</tr>
+<tr>
+<td>jellyseerr (<code>requests.grigri.cloud</code>)</td>
+<td>1800s (send was 600)</td>
+<td>60s</td>
+</tr>
+<tr>
+<td>prowlarr (<code>prowlarr.grigri.cloud</code>)</td>
+<td>300s</td>
+<td>60s (was 300)</td>
+</tr>
+</tbody>
+</table>
+<p>Re-read the live annotations before each app (<code>kubectl get ingress -n &lt;ns&gt; &lt;name&gt; -o yaml</code>); the
+table is the 2026-11-09 inventory.</p>
+<p><strong>Config changes that modify a listener drain connections.</strong> Adding or changing an HCM filter
+(OIDC, JWT, Lua, a new TLS hostname) modifies the listener and Envoy closes the old listener's
+connections after the drain time (60 s). A websocket or download open during such a sync is cut
+(seen once, a 121 s websocket on the pilots), nginx keeps old workers until their connections finish.
+Do not sync listener-affecting changes during a long transfer; the client reconnects. A new or
+removed <code>SecurityPolicy</code> or <code>EnvoyExtensionPolicy</code> counts as such a change (each becomes its own
+HTTP filter in the listener's filter chain), and so does a certificate change: mechanism, how to
+see it in the Envoy config and what to batch in
+<a href="../../troubleshooting/envoy-gateway-listener-drain/"><code>docs/troubleshooting/envoy-gateway-listener-drain.md</code></a>.</p>
+<p>Test a route like this (the Phase 2 reproduction): a rate-limited response longer than 60 s
+(<code>curl --limit-rate 50k ... -w '%{size_download} %{time_total}'</code> of a few MB), a websocket held
+more than 60 s with traffic, and a client that stops reading for 100 s (cut at about 60 s on both
+nginx and Envoy, resumed after 40 s on both).</p>
+<h2 id="networkpolicies">NetworkPolicies</h2>
+<p>Before verifying, check the app's namespace: <code>kubectl get netpol,cnp -n &lt;ns&gt;</code> and
+<code>grep -rn nginx apps/&lt;app&gt;</code>. If any policy admits only named namespaces or a leftover nginx
+selector, add the Envoy proxies <strong>in the same commit</strong> (an omission shows only on the Envoy path as 503 <code>UF</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">namespaceSelector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">kubernetes.io/metadata.name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">envoy-gateway</span>
+<span class="w">  </span><span class="nt">podSelector</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">matchLabels</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">envoy</span>
+<span class="w">      </span><span class="nt">app.kubernetes.io/component</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">proxy</span>
+<span class="w">      </span><span class="nt">gateway.envoyproxy.io/owning-gateway-name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">internal</span><span class="w">   </span><span class="c1"># or external</span>
+</code></pre></div>
+<p>Egress policies of pods that call hairpin names (which resolve to a gateway VIP) need the same
+rule, with one difference: the Envoy proxy pods listen on the <strong>container ports 10443 (https) and
+10080 (http)</strong>, the Service ports 443 and 80 map to them. Cilium evaluates the destination after
+the Service is translated to the pod, so an egress rule for <code>443</code>/<code>80</code> toward the Envoy pods never
+matches and the call times out:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">egress</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">toNamespaces</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">...</span><span class="p p-Indicator">]</span><span class="w">    </span><span class="c1"># or toEndpoints with the Envoy proxy labels shown above</span>
+<span class="w">    </span><span class="nt">toPorts</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ports</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10443&quot;</span><span class="p p-Indicator">,</span><span class="nt"> protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">}</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">port</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10080&quot;</span><span class="p p-Indicator">,</span><span class="nt"> protocol</span><span class="p">:</span><span class="w"> </span><span class="nv">TCP</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>The hairpin appears as soon as DNS points the public name at the VIP (pfSense overrides, see
+<a href="../../network/ingress/"><code>docs/network/ingress.md</code></a>): tenant runners and any pod that
+calls <code>https://&lt;public name&gt;</code> hits it. None of the first pilots had a policy in its namespace.</p>
+<h2 id="authentication">Authentication</h2>
+<p>Native Envoy Gateway OIDC against Kanidm plus a JWT check on a per-app claim (plan decision D3). It replaces
+the former nginx <code>auth-url</code> / <code>auth-signin</code> annotations (oauth2-proxy at <code>auth.grigri.cloud</code>) per app.
+Worked examples: <code>apps/http-echo</code> (identity headers), <code>apps/esphome</code> (internal only),
+<code>apps/navidrome</code> (skip paths, Lua body rewrite, 401 without redirect), <code>apps/radarr</code> (apiKey skip,
+raw routes).</p>
+<h3 id="per-app-three-objects">Per app: three objects</h3>
+<ol>
+<li><strong><code>KanidmOAuth2Client</code></strong> in the app namespace (<code>templates/kanidm-oauth2-client.yaml</code>), one per
+   app, never the shared <code>k8s-oauth2-proxy</code> client:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kaniop.rs/v1beta1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">KanidmOAuth2Client</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">kanidmRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">kanidm</span><span class="p p-Indicator">,</span><span class="nt"> namespace</span><span class="p">:</span><span class="w"> </span><span class="nv">kanidm</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">displayname</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="w">  </span><span class="nt">origin</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://&lt;host&gt;/</span>
+<span class="w">  </span><span class="nt">redirectUrl</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://&lt;host&gt;/oauth2/callback</span><span class="w"> </span><span class="c1"># one per host (internal and external)</span>
+<span class="w">  </span><span class="c1"># the group(s) allowed in; Kanidm issues no token to anyone else</span>
+<span class="w">  </span><span class="nt">scopeMap</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-users</span>
+<span class="w">      </span><span class="nt">scopes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">openid</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">profile</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">email</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># never `groups`: see &quot;ID token cookie size&quot; below</span>
+<span class="w">  </span><span class="c1"># per-app claim the SecurityPolicy authorizes on; value = this client&#39;s name</span>
+<span class="w">  </span><span class="nt">claimMap</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">access</span>
+<span class="w">      </span><span class="nt">joinStrategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">array</span><span class="w"> </span><span class="c1"># JSON array, matched by `valueType: StringArray`</span>
+<span class="w">      </span><span class="nt">valuesMap</span><span class="p">:</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-users</span>
+<span class="w">          </span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">&lt;app&gt;</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">preferShortUsername</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w"> </span><span class="c1"># short `preferred_username`</span>
+<span class="w">  </span><span class="nt">strictRedirectUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">secretKeyAliases</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">client-secret</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># Envoy Gateway reads this key</span>
+</code></pre></div>
+<p>The operator writes <code>&lt;app&gt;-kanidm-oauth2-credentials</code> (<code>CLIENT_ID</code>, <code>CLIENT_SECRET</code>,
+   <code>client-secret</code>) next to the policy: no <code>ReferenceGrant</code>. PKCE stays on (Envoy always sends
+   S256). The scope map group must exist in Kanidm (Kaniop reports <code>ScopeMapUpdated=False</code>
+   otherwise): declare a <code>KanidmGroup</code> <code>&lt;app&gt;-users</code> in the same chart (no <code>members</code>; people are
+   added by hand, see <code>docs/user-guide/kanidm.md</code>). Each app has only its own group: there is no
+   global group to also require.</p>
+<ol>
+<li><strong><code>SecurityPolicy</code></strong> per protected route (<code>templates/security-policy.yaml</code>); one policy may
+   target several routes of the same host (they then share the cookies):</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.envoyproxy.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">SecurityPolicy</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-&lt;gateway&gt;</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">targetRefs</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> group</span><span class="p">:</span><span class="w"> </span><span class="nv">gateway.networking.k8s.io</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">HTTPRoute</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;route&gt;</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">oidc</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">provider</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">issuer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://idm.grigri.cloud/oauth2/openid/&lt;app&gt;</span>
+<span class="w">      </span><span class="c1"># explicit endpoints: no OIDC discovery at translation time</span>
+<span class="w">      </span><span class="nt">authorizationEndpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://idm.grigri.cloud/ui/oauth2</span>
+<span class="w">      </span><span class="nt">tokenEndpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://idm.grigri.cloud/oauth2/token</span>
+<span class="w">    </span><span class="nt">clientID</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;</span>
+<span class="w">    </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;app&gt;-kanidm-oauth2-credentials</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="nt">redirectURL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://&lt;host&gt;/oauth2/callback</span>
+<span class="w">    </span><span class="nt">logoutPath</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/oauth2/logout</span><span class="w"> </span><span class="c1"># the default `/logout` shadows the app&#39;s own path</span>
+<span class="w">    </span><span class="nt">scopes</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">openid</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">profile</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">email</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># no `groups`: the ID token cookie must stay &lt; 4096 B</span>
+<span class="w">    </span><span class="nt">cookieNames</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> accessToken</span><span class="p">:</span><span class="w"> </span><span class="nv">oidc-access-token</span><span class="p p-Indicator">,</span><span class="nt"> idToken</span><span class="p">:</span><span class="w"> </span><span class="nv">oidc-id-token</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">jwt</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">providers</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kanidm</span>
+<span class="w">        </span><span class="nt">issuer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://idm.grigri.cloud/oauth2/openid/&lt;app&gt;</span>
+<span class="w">        </span><span class="nt">audiences</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">&lt;app&gt;</span><span class="p p-Indicator">]</span>
+<span class="w">        </span><span class="nt">extractFrom</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> cookies</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">oidc-id-token</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">        </span><span class="nt">remoteJWKS</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> uri</span><span class="p">:</span><span class="w"> </span><span class="nv">https</span><span class="p p-Indicator">:</span><span class="nv">//idm.grigri.cloud/oauth2/openid/&lt;app&gt;/public_key.jwk</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">        </span><span class="nt">claimToHeaders</span><span class="p">:</span><span class="w"> </span><span class="c1"># only the identity headers the app reads</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> header</span><span class="p">:</span><span class="w"> </span><span class="nv">X-Auth-Request-Preferred-Username</span><span class="p p-Indicator">,</span><span class="nt"> claim</span><span class="p">:</span><span class="w"> </span><span class="nv">preferred_username</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">authorization</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">defaultAction</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Deny</span>
+<span class="w">    </span><span class="nt">rules</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allowed-access</span>
+<span class="w">        </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Allow</span>
+<span class="w">        </span><span class="nt">principal</span><span class="p">:</span>
+<span class="w">          </span><span class="nt">jwt</span><span class="p">:</span>
+<span class="w">            </span><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">kanidm</span>
+<span class="w">            </span><span class="nt">claims</span><span class="p">:</span>
+<span class="w">              </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">access</span><span class="w"> </span><span class="c1"># claim map of the client, members of `&lt;app&gt;-users` only</span>
+<span class="w">                </span><span class="nt">valueType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">StringArray</span>
+<span class="w">                </span><span class="nt">values</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">&lt;app&gt;</span><span class="p p-Indicator">]</span><span class="w"> </span><span class="c1"># the client name: a token of another client never matches</span>
+</code></pre></div>
+<ol>
+<li><strong>The route</strong> with a stable name (<code>forceRename</code> in app-template when the release has a single
+   route: its default name changes when a second route is added, and the policy would then
+   target nothing).</li>
+</ol>
+<h3 id="mapping-from-nginx-oauth2-proxy-for-charts-and-docs-that-still-show-it">Mapping from nginx / oauth2-proxy (for charts and docs that still show it)</h3>
+<table>
+<thead>
+<tr>
+<th>nginx / oauth2-proxy</th>
+<th>Envoy Gateway</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>auth-url ...?allowed_groups=&lt;g&gt;@idm.grigri.cloud</code></td>
+<td>client <code>scopeMap</code> group <code>&lt;g&gt;</code> + <code>claimMap</code> <code>access</code> = <code>[&lt;app&gt;]</code> for <code>&lt;g&gt;</code> + <code>authorization</code> allow on <code>access</code> = <code>&lt;app&gt;</code></td>
+</tr>
+<tr>
+<td><code>auth-url</code> without <code>allowed_groups</code></td>
+<td>no global group: give the app its own <code>&lt;app&gt;-users</code> (scope map and claim map), as http-echo</td>
+</tr>
+<tr>
+<td><code>auth-response-headers: X-Auth-Request-Preferred-Username</code></td>
+<td><code>claimToHeaders</code> <code>preferred_username</code> (<code>X-Auth-Request-User</code> / <code>-Email</code>: <code>email</code>, oauth2-proxy's default user claim)</td>
+</tr>
+<tr>
+<td><code>X-Auth-Request-Groups</code></td>
+<td><code>claimToHeaders</code> cannot copy arrays: add a <code>claimMap</code> with <code>joinStrategy: csv</code> on the client and map that string claim</td>
+</tr>
+<tr>
+<td><code>auth-url</code> without <code>auth-signin</code> (401, no redirect)</td>
+<td><code>oidc.denyRedirect.headers: [{name: ":path", type: RegularExpression, value: "/api([/?].*)?"}]</code> (navidrome external <code>/api</code>)</td>
+</tr>
+<tr>
+<td><code>auth-snippet</code> <code>return 200</code> skips</td>
+<td>a second same-host route with the skip matches and <strong>no</strong> policy, plus a <code>RequestHeaderModifier</code> that removes <code>X-Auth-Request-*</code> (below)</td>
+</tr>
+<tr>
+<td><code>auth.grigri.cloud</code> cookie on <code>.grigri.cloud</code>, shared</td>
+<td>cookies per host (<code>oidc-id-token</code>, <code>oidc-access-token</code>, <code>OauthHMAC-*</code>, <code>OauthExpires-*</code>, <code>RefreshToken-*</code>); a new app is a silent Kanidm redirect</td>
+</tr>
+<tr>
+<td><code>/oauth2/sign_out</code></td>
+<td><code>/oauth2/logout</code> clears the Envoy cookies only (Kanidm has no end-session endpoint): the next request logs in again silently while Kanidm's session lives</td>
+</tr>
+</tbody>
+</table>
+<h3 id="skip-paths-no-auth">Skip paths (no auth)</h3>
+<p>Same-host routes merge; give the skip its own route without a <code>SecurityPolicy</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">matches</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> type</span><span class="p">:</span><span class="w"> </span><span class="nv">PathPrefix</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">/rest</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt"> type</span><span class="p">:</span><span class="w"> </span><span class="nv">PathPrefix</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">/share</span><span class="w"> </span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">filters</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">RequestHeaderModifier</span>
+<span class="w">      </span><span class="nt">requestHeaderModifier</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">remove</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">X-Auth-Request-User</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">X-Auth-Request-Email</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">X-Auth-Request-Preferred-Username</span><span class="p p-Indicator">,</span>
+<span class="w">                 </span><span class="nv">X-Auth-Request-Groups</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">X-Auth-Request-Access-Token</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<ul>
+<li>PWA manifests (<code>manifest.webmanifest</code>) are a standard skip path: browsers fetch them without credentials, so an OIDC redirect fails with a CORS error. Skip the exact manifest path only, not icons (<code>apps/bazarr</code>, <code>apps/navidrome</code>).</li>
+<li>Gateway API prefixes are segment-based: <code>^/(rest|share)</code> in nginx also skipped <code>/restx</code>; Envoy
+  does not (stricter, accepted).</li>
+<li>A query-based skip (radarr <code>apiKey</code>) is <code>path: RegularExpression</code> + <code>queryParams:
+  [{type: RegularExpression, name: apiKey, value: ".+"}]</code>. Envoy Gateway orders regex routes by
+  <strong>regex length, then query match count</strong>: a skip must not lose to a longer protected regex on
+  the same host (radarr uses <code>(?-i)/api/v3/movie</code> against the protected <code>(?i)/api/v3/movie</code>).
+  Compare every case (case, empty value, sub-paths) with nginx.</li>
+<li>Header removal on the <strong>protected</strong> route is not possible with a route filter: route header
+  changes run in the router, after <code>jwt_authn</code>, and would also remove the claim headers. There
+  <code>jwt_authn</code> itself removes every <code>claimToHeaders</code> header before it adds the claim (Envoy
+  <code>sanitizeHeaders</code>), so a client-sent copy never reaches the app.</li>
+</ul>
+<h3 id="ext-auth-pathoverride-and-client-identity-headers">Ext auth: <code>pathOverride</code> and client identity headers</h3>
+<p>For a backend that authenticates through its own service (an auth proxy, not Kanidm OIDC) the
+<code>SecurityPolicy</code> uses <code>extAuth.http</code>. Two settings decide who controls what the auth service sees:</p>
+<ul>
+<li><code>pathOverride</code> <strong>replaces the original path and query</strong> in the auth request with a fixed value:
+  the client has no influence on the path the auth service is asked about. Use it whenever the
+  auth service only needs the request's identity (cookies, <code>Authorization</code>), or when the path
+  carries a per-route identifier (<code>pathOverride: /auth/runner/&lt;id&gt;</code>).</li>
+<li>plain <code>path</code> <strong>appends the client's path</strong> to the auth service's path: the client chooses part of
+  the auth request, so the auth service must not trust it.</li>
+</ul>
+<p>Whatever the auth service answers in <code>headersToBackend</code> is copied to the app. Client-sent copies of
+those identity headers must be removed first, on the listener, before any filter or route sees
+them:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.envoyproxy.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ClientTrafficPolicy</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">targetRefs</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="nv">gateway.networking.k8s.io</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">Gateway</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">external</span><span class="p p-Indicator">,</span><span class="nt"> sectionName</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;listener&gt;</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="nt">headers</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">earlyRequestHeaders</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">removeOnMatch</span><span class="p">:</span><span class="w">                       </span><span class="c1"># names match case-insensitively</span>
+<span class="w">        </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="nv">Prefix</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">x-auth-request-</span><span class="p p-Indicator">}</span>
+</code></pre></div>
+<p>Caveat: a <code>ClientTrafficPolicy</code> scoped to a <strong>listener</strong> (<code>sectionName</code>) <strong>replaces</strong> the
+gateway-wide <code>ClientTrafficPolicy</code> for that listener entirely: the timeouts and limits of
+<code>system/envoy-gateway/resources/policies.yaml</code> do not merge in. Copy every setting the listener
+still needs into the listener-scoped policy (compare with <code>kubectl get clienttrafficpolicy -A</code>).
+The header strip is a listener change: it drains that listener's long connections once (see
+"Timeouts").</p>
+<h3 id="verification-no-browser-needed">Verification (no browser needed)</h3>
+<div class="highlight"><pre><span></span><code><span class="nv">H</span><span class="o">=</span>&lt;host&gt;<span class="p">;</span><span class="w"> </span><span class="nv">VIP</span><span class="o">=</span><span class="m">192</span>.168.193.14<span class="w">   </span><span class="c1"># .13 for internal hosts</span>
+<span class="c1"># 1. unauthenticated: 302 to /ui/oauth2 with client_id, redirect_uri, scope, S256 challenge, state</span>
+curl<span class="w"> </span>-sk<span class="w"> </span>--resolve<span class="w"> </span><span class="nv">$H</span>:443:<span class="nv">$VIP</span><span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39;%{http_code} %{redirect_url}\n&#39;</span><span class="w"> </span>https://<span class="nv">$H</span>/
+<span class="c1"># 2. forged cookies or bearer: still 302 (the OAuth2 filter checks its HMAC before jwt_authn)</span>
+curl<span class="w"> </span>-sk<span class="w"> </span>--resolve<span class="w"> </span><span class="nv">$H</span>:443:<span class="nv">$VIP</span><span class="w"> </span>-b<span class="w"> </span><span class="s1">&#39;oidc-id-token=x.y.z; OauthHMAC=x&#39;</span><span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39;%{http_code}\n&#39;</span><span class="w"> </span>https://<span class="nv">$H</span>/
+<span class="c1"># 3. logout clears the five cookies and redirects to /</span>
+curl<span class="w"> </span>-sk<span class="w"> </span>--resolve<span class="w"> </span><span class="nv">$H</span>:443:<span class="nv">$VIP</span><span class="w"> </span>-D-<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>https://<span class="nv">$H</span>/oauth2/logout<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>set-cookie
+<span class="c1"># 4. skip paths answer like nginx, also with a spoofed X-Auth-Request-Preferred-Username</span>
+</code></pre></div>
+<p>Prove the client secret and HMAC reached the proxy (SDS) without a login: start a flow (keep the
+cookies), call <code>/oauth2/callback?code=bogus&amp;state=&lt;state from step 1&gt;</code>: Envoy answers 401 and the
+Kanidm log shows <code>POST /oauth2/token</code> with <code>handle_oauth2_token_exchange</code> failing on <code>Failed to
+deserialise a valid JWE</code> (the code), which Kanidm only reaches after the client authenticated.</p>
+<p>Interactive check (owner, once per pattern change), with a throwaway browser profile that maps the
+hosts to the gateway VIPs (Kanidm itself resolves normally):</p>
+<div class="highlight"><pre><span></span><code>chromium<span class="w"> </span>--user-data-dir<span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>mktemp<span class="w"> </span>-d<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--host-resolver-rules<span class="o">=</span><span class="s2">&quot;MAP http-echo.grigri.cloud 192.168.193.14, MAP esphome.internal.grigri.cloud 192.168.193.13&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>https://http-echo.grigri.cloud/
+</code></pre></div>
+<p>Expect: Kanidm login and consent, then the http-echo JSON with <code>x-auth-request-preferred-username</code>
+(short name) and <code>x-auth-request-email</code>; <code>https://http-echo.grigri.cloud/oauth2/logout</code> clears the
+cookies; a person outside the scope map group is refused by Kanidm at <code>/ui/oauth2</code>; an Envoy 403
+(<code>RBAC: access denied</code>) needs a token whose <code>access</code> claim lacks the client name (see the plan,
+Gate 2).</p>
+<h3 id="gotchas">Gotchas</h3>
+<ul>
+<li>Policy <code>Accepted=False</code> (<code>secret ... does not exist</code>) for a few seconds after the first sync: the
+  operator creates the Secret after the policy. Envoy Gateway answers 500 on the route meanwhile
+  (fail closed) and recovers by itself; the proxies may log <code>initial fetch timed out for
+  ...tls.v3.Secret</code> once, harmless when the bogus-code check above passes afterwards.</li>
+<li>The proxies reach <code>idm.grigri.cloud</code> through cluster DNS, which resolves it to the external
+  gateway's own VIP (<code>.14</code>, pfSense override): token exchange and JWKS depend on that name
+  resolving in pods. Verified working since Phase 5 (the Envoy cluster <code>idm_grigri_cloud_443</code> has 0
+  connect failures; a Navidrome login proved the exchange).</li>
+<li>Envoy logs the raw cookie value when it cannot decrypt a token cookie (<code>failed to decrypt token:</code>
+  in the proxy log): only forged or stale cookies hit it, but treat the proxy log as sensitive.</li>
+<li><strong>ID token cookie size:</strong> Envoy stores the whole ID token, encrypted, in <code>oidc-id-token</code>. The
+  browser drops a cookie whose name and value exceed 4096 B, without an error. Envoy then finds no
+  ID token, refreshes on every request, parallel requests reuse the single-use refresh token and
+  Kanidm ends the session: assets get a 302 to <code>idm.grigri.cloud</code> and fail with CORS errors. The
+  <code>groups</code> scope (every group of the person) took the cookie to 5680 B; without it, and with the
+  <code>access</code> claim map instead, it is about 1000 B. Never request <code>groups</code> on an Envoy OIDC client;
+  add claims only through a small claim map. Symptom, cause and how to measure:
+  <code>docs/troubleshooting/envoy-oidc-id-token-cookie-size.md</code>.</li>
+<li>A web app manifest (<code>&lt;link rel="manifest"&gt;</code> without <code>crossorigin="use-credentials"</code>) is fetched
+  without cookies: it always gets the 302 to Kanidm and logs one CORS error per page load. Harmless
+  for the page; it is not the cookie size problem above (that one fails the app's own requests).</li>
+</ul>
+<h2 id="denying-a-path-at-the-edge">Denying a path at the edge</h2>
+<p>nginx <code>location = /metrics { deny all; }</code> or <code>if ($uri ~ "^/metrics(/|$)") { return 404; }</code> in a
+configuration snippet becomes a first route rule with an <code>HTTPRouteFilter</code> direct response (the
+repo example: <code>apps/home-assistant/templates/httproutefilter-prometheus-deny.yaml</code>, which answers
+403 for an Exact path; the 404 variant only changes <code>statusCode</code>):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">apiVersion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gateway.envoyproxy.io/v1alpha1</span>
+<span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">HTTPRouteFilter</span>
+<span class="nt">metadata</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">&lt;app&gt;-deny</span>
+<span class="nt">spec</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">directResponse</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">statusCode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">404</span>
+<span class="w">    </span><span class="nt">contentType</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text/plain</span>
+<span class="w">    </span><span class="nt">body</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="nv">Inline</span><span class="p p-Indicator">,</span><span class="nt"> inline</span><span class="p">:</span><span class="w"> </span><span class="nv">not found</span><span class="p p-Indicator">}</span>
+<span class="nn">---</span>
+<span class="c1"># in the HTTPRoute, FIRST rule, before the catch-all</span>
+<span class="nt">rules</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">matches</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="nv">PathPrefix</span><span class="p p-Indicator">,</span><span class="nt"> value</span><span class="p">:</span><span class="w"> </span><span class="nv">/metrics</span><span class="p p-Indicator">}</span><span class="w">      </span><span class="c1"># matches /metrics and /metrics/...</span>
+<span class="w">    </span><span class="nt">filters</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ExtensionRef</span>
+<span class="w">        </span><span class="nt">extensionRef</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{</span><span class="nt">group</span><span class="p">:</span><span class="w"> </span><span class="nv">gateway.envoyproxy.io</span><span class="p p-Indicator">,</span><span class="nt"> kind</span><span class="p">:</span><span class="w"> </span><span class="nv">HTTPRouteFilter</span><span class="p p-Indicator">,</span><span class="nt"> name</span><span class="p">:</span><span class="w"> </span><span class="nv">&lt;app&gt;-deny</span><span class="p p-Indicator">}</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">backendRefs</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">...</span><span class="p p-Indicator">]</span>
+</code></pre></div>
+<p>Why the rule must match the <strong>normalized</strong> path: Envoy merges duplicate slashes (<code>//metrics</code>) and
+decodes percent-encoded unreserved characters (<code>/%6detrics</code>) <strong>before</strong> route matching, like nginx
+<code>$uri</code>. So the rule only needs the clean path, and a request in disguise still hits it; but a
+deny written for the raw spelling would never match. Prove it with the three spellings
+(<code>/metrics</code>, <code>//metrics</code>, <code>/%6detrics</code>) plus <code>/metricsx</code> (a different path, must pass) on the
+Envoy VIP. <code>PathPrefix</code> is segment-based (<code>/metrics</code> and <code>/metrics/x</code>, not <code>/metricsx</code>); use
+<code>Exact</code> when only the one path is denied.</p>
+<p>The deny applies to the edge only: Prometheus scrapes the Service inside the cluster and is not
+affected.</p>
+<h2 id="pods-that-must-reach-a-public-name-at-the-gateway-vip">Pods that must reach a public name at the gateway VIP</h2>
+<p>A pod that calls a public hostname normally leaves the cluster, hits the WAN address and relies on
+NAT reflection. When it must reach the <strong>in-cluster gateway VIP</strong> directly (a name with no
+pfSense override, or a client that must not depend on the router), pin the name in the pod spec
+with <code>hostAliases</code>. Hermes does this for <code>mcp.grigri.cloud</code> -&gt; <code>192.168.193.14</code>
+(<code>apps/hermes/values.yaml</code>, <code>defaultPodOptions.hostAliases</code>; the regression test
+<code>apps/hermes/tests/test_hostaliases_mcp_dns.py</code> checks the IP against the external Gateway):</p>
+<div class="highlight"><pre><span></span><code><span class="nt">hostAliases</span><span class="p">:</span>
+<span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">ip</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;192.168.193.14&quot;</span><span class="w">          </span><span class="c1"># the external Gateway VIP</span>
+<span class="w">    </span><span class="nt">hostnames</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mcp.grigri.cloud</span>
+</code></pre></div>
+<p>An alias is an <code>/etc/hosts</code> line: it survives DNS changes, so when the VIP moves it must be edited
+in git too (the test fails when it drifts). The pod's egress NetworkPolicy must allow the Envoy
+container ports (see "NetworkPolicies"). Remove the alias once the name has a pfSense override.</p>
+<h2 id="verification-per-route-before-the-next-commit">Verification (per route, before the next commit)</h2>
+<ol>
+<li>Argo app <code>Synced Healthy</code>; <code>kubectl get httproute -n &lt;ns&gt; &lt;name&gt; -o jsonpath='{.status.parents}'</code>
+   shows <code>Accepted=True</code> and <code>ResolvedRefs=True</code> (also for <code>BackendTLSPolicy</code>, <code>Backend</code>,
+   <code>EnvoyExtensionPolicy</code>). A pre-existing unrelated OutOfSync resource in <code>kube-system</code> does not
+   count.</li>
+<li>Request the route on the VIP, same request as a client would send, <code>--resolve</code> so DNS is not
+   involved:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="nv">H</span><span class="o">=</span>&lt;host&gt;
+curl<span class="w"> </span>-sk<span class="w"> </span>--resolve<span class="w"> </span><span class="nv">$H</span>:443:192.168.193.13<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-D-<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39;code=%{http_code} h%{http_version}\n&#39;</span><span class="w"> </span>https://<span class="nv">$H</span>/&lt;path&gt;<span class="w">   </span><span class="c1"># internal; .14 for external</span>
+</code></pre></div>
+<p>Expect the status and body the app gives, h2, HSTS (once) and no <code>Server</code>, nothing else beyond
+   what the app itself sends. Differences from the former ingress-nginx behaviour that are
+   <strong>expected</strong> and not a defect (they matter when porting an app or reading old captures):</p>
+<table>
+<thead>
+<tr>
+<th>Observed</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>port 80 redirect <code>301</code> on Envoy, <code>308</code> on nginx</td>
+<td>the gateway <code>http</code> listener redirects with 301; both are permanent</td>
+</tr>
+<tr>
+<td>empty body on Envoy 404, 403 and redirects</td>
+<td>the status is what matters; Envoy adds no body</td>
+</tr>
+<tr>
+<td>request headers whose name contains an underscore are dropped</td>
+<td>Envoy drops them; nothing to fix unless an app needs one (then rename it)</td>
+</tr>
+<tr>
+<td>paths are case-sensitive on Envoy</td>
+<td>a path nginx matched case-insensitively (<code>~*</code>) needs a <code>(?i)</code> regex path</td>
+</tr>
+<tr>
+<td>OIDC apps ask for one more login when moving from oauth2-proxy to Envoy native OIDC</td>
+<td>new per-host cookies, the old ones are not understood</td>
+</tr>
+</tbody>
+</table>
+<p>Anything else is a defect until explained.
+3. Certificate: <code>openssl s_client -connect 192.168.193.13:443 -servername $H -alpn h2</code> shows the
+   wildcard certificate (<code>Verification: OK</code>, <code>ALPN protocol: h2</code>). A request without <code>-k</code> must verify.
+4. A functional request per app (an API call, a real page, for a body-size or long request the
+   actual long request), the special-case behaviour (a proof that distinguishes "filter applied"
+   from "not applied", e.g. a response that differs with and without the rewritten parameter),
+   <code>http://</code> redirects to <code>https://</code>, <code>/prefix</code> vs <code>/prefixfoo</code> boundaries.
+5. Envoy access log: no <code>response_flags</code> other than <code>-</code> and the real client address in
+   <code>client_address</code>:</p>
+<div class="highlight"><pre><span></span><code>kubectl<span class="w"> </span>logs<span class="w"> </span>-n<span class="w"> </span>envoy-gateway<span class="w"> </span>-l<span class="w"> </span>gateway.envoyproxy.io/owning-gateway-name<span class="o">=</span>internal<span class="w"> </span>-c<span class="w"> </span>envoy<span class="w"> </span>--since<span class="o">=</span>10m<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>&lt;host&gt;
+</code></pre></div>
+<ol>
+<li>For backend TLS: dump the proxy cluster to prove what is validated (read-only):
+   <code>kubectl port-forward -n envoy-gateway &lt;proxy pod&gt; 19000:19000</code>, then
+   <code>curl -s 'localhost:19000/config_dump?resource=dynamic_active_clusters'</code> and look at
+   <code>transport_socket_matches</code> of <code>httproute/&lt;ns&gt;/&lt;route&gt;/rule/&lt;n&gt;</code> (<code>sni</code>, <code>match_typed_subject_alt_names</code>,
+   the SDS secret <code>&lt;ns&gt;/&lt;name&gt;-ca</code>). With <code>insecureSkipVerify</code> there is no validation context.</li>
+<li>external-dns did not change a record for the app (see "DNS").</li>
+</ol>
+<p>Tips: in zsh <code>path</code> is tied to <code>PATH</code>, so never use it as a loop variable; a body larger than a few
+MB works through Envoy unchanged (Radarr movie list, 8 MB, identical size on both paths).</p>
+<h2 id="known-unknowns">Known unknowns</h2>
+<ul>
+<li>Websockets: verified over 60 s with traffic on the Radarr SignalR endpoint (160 s and 200 s held,
+  also under the old 60 s total limit). A websocket silent for more than 60 s is expected to be cut
+  (<code>streamIdleTimeout</code>, like nginx's <code>proxy_read_timeout</code>) but no pilot has a silent websocket to
+  prove it; check it on the first app that has one (Home Assistant, esphome logs, jellyfin).</li>
+<li>Hubble UI streams over gRPC-web (<code>/api</code>); the stream was not exercised (the probe paths answer 404
+  on both nginx and Envoy). Open the UI in a browser against <code>.13</code> before the switch.</li>
+<li>A backend that accepts a request and never answers is bounded by <code>streamIdleTimeout</code> (60 s), not
+  proven end to end: no pilot backend can be made silent without a mutation.</li>
+<li>Envoy streams request bodies to the backend (no request buffering, nginx buffers by default): a
+  client that uploads slowly reaches the app as a slow upload (Radarr's Kestrel aborts a stalled body
+  after 5 s). Apps that cannot take that need <code>proxy-request-buffering</code>-like behaviour, which Envoy
+  Gateway does not offer; test large slow uploads on immich/nextcloud/forgejo.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,5368 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../plan/">
+      
+      
+        <link rel="next" href="../whisper-image-build/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Kivi speech-to-text: a home vocabulary hint list and learning from usage - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#kivi-speech-to-text-a-home-vocabulary-hint-list-and-learning-from-usage" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Kivi speech-to-text: a home vocabulary hint list and learning from usage
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/ingress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ingress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/pfsense/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense: cluster-relevant configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../network/webos-voice-satellite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    webOS voice satellite network requirement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-helm-hook-provisioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD Helm hooks: provisioning Jobs that never run, and hooks that silently stop running
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/argocd-ssa-stale-field-manager/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD server-side apply: a field removed from git persists live
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-amd64-disk-full/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ci-runner-amd64 fills the k8s-amd64-1 root disk
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/envoy-gateway-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/envoy-gateway-listener-drain/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway listener changes close long connections
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/envoy-oidc-id-token-cookie-size/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy OIDC session breaks: ID token cookie over 4096 B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/forgejo-runner-valid-volumes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Forgejo runner valid_volumes silently drops container-job mounts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-omnibattery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: Omnibattery and the house battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-no-dcr-mcp-client-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm has no dynamic client registration for MCP clients
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mcp-firecrawl-egress-regression/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl egress NetworkPolicies: applied, broke readiness, rolled back
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/office-iot-wifi-flapping/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pfsense-alias-change-keeps-old-states/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense alias change keeps old states
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sccache-s3-bucket-full-silent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    sccache S3 tier silently stops writing when the bucket is full
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stop-home-assistant-under-argocd/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stopping Home Assistant under ArgoCD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/unifi-wifi-client-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging Wi-Fi Clients on the UniFi Network
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-truncated-zfs-backups/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adr/0005-gateway-api-with-envoy-gateway/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0005: Gateway API with Envoy Gateway instead of ingress-nginx
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Design
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Design
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../design/mcp-gateway-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MCP Gateway Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Voice assistant
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Voice assistant
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../audio-pipeline-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant audio pipeline plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversation-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation agent: where small local models fit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversation-capabilities-roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation capabilities roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data-register/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi data register
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kiais-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kiais as the Kivi conversation agent in Home Assistant
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kivi-iteration-loop/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi wake word: the iteration loop
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../lessons-learned/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lessons learned
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../model-registry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi model registry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-mechanics" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Mechanics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Mechanics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-what-is-deployed-observed" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.1 What is deployed (observed)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-what-the-server-supports" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.2 What the server supports
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-what-home-assistant-sends-per-request-documented-2026104" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.3 What Home Assistant sends per request (documented, 2026.10.4)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-initial_prompt-versus-hotwords-in-faster-whisper-documented-faster-whisper-110" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.4 initial_prompt versus hotwords in faster-whisper (documented, faster-whisper 1.1.0)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-home-assistant-matching-that-the-hint-list-feeds-documented-2026104" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.5 Home Assistant matching that the hint list feeds (documented, 2026.10.4)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-measured-effect-on-this-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.6 Measured effect on this setup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-making-the-hint-list-reloadable-without-a-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.7 Making the hint list reloadable without a restart
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-building-the-hint-list-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Building the hint list automatically
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Building the hint list automatically">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.1 Sources
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-ranking-and-trimming" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.2 Ranking and trimming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.3 Refresh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-where-it-runs-and-the-gitops-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.4 Where it runs and the GitOps shape
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-learning-from-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Learning from usage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Learning from usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-capture-points-documented-2026104-unless-stated" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Capture points (documented, 2026.10.4, unless stated)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-what-to-record-and-what-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.2 What to record and what not
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-signals-of-a-misrecognition" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.3 Signals of a misrecognition
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-from-signals-to-proposals" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.4 From signals to proposals
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-measuring-improvement" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.5 Measuring improvement
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-options-compared" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Options compared
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-recommended-phased-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Recommended phased plan
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-needs-from-the-owner" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Needs from the owner
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Needs from the owner">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-home-assistant-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Home Assistant token
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Open questions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-log-policy-voice-transcripts-in-loki-temporary-exception" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Log policy: voice transcripts in Loki (temporary exception)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../whisper-image-build/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building the Kivi Whisper STT image on Forgejo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_8_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_8_13" id="__nav_8_13_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    experiments
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8_13">
+            <span class="md-nav__icon md-icon"></span>
+            experiments
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/conversation-agent-eval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conversation agent evaluation for "Kivi": Kiais gateway metrics, a reusable dry-run harness, and what Home Assistant's built-in intents already cover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/decision-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decision models for Kivi: can a small classifier rescue the commands the built-in intents miss?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/kivi-decider-poc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/kivi-wake-word/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/oye-kivi-data-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" training-data quality: phrase check, out-of-fold labels, coverage (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/oye-kivi-p0-baseline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    P0 real-voice baseline: deployed v4 "oye Kivi" (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/oye-kivi-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recovery plan: unreliable "oye Kivi" wake word
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/oye-kivi-v5era-mining/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    v5-era room audio: replay false wakes and missed-wake mining (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/oye-kivi-v6/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" v6: context-trained candidate (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/oye-kivi-vnext-ablations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vnext ablations: real voice is what moves the needle (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/small-local-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../experiments/whisper-gpu-benchmark/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Whisper decoding settings on the GTX 1060: compute type, beam size, VAD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-mechanics" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Mechanics
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Mechanics">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-what-is-deployed-observed" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.1 What is deployed (observed)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-what-the-server-supports" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.2 What the server supports
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-what-home-assistant-sends-per-request-documented-2026104" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.3 What Home Assistant sends per request (documented, 2026.10.4)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-initial_prompt-versus-hotwords-in-faster-whisper-documented-faster-whisper-110" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.4 initial_prompt versus hotwords in faster-whisper (documented, faster-whisper 1.1.0)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-home-assistant-matching-that-the-hint-list-feeds-documented-2026104" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.5 Home Assistant matching that the hint list feeds (documented, 2026.10.4)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-measured-effect-on-this-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.6 Measured effect on this setup
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#17-making-the-hint-list-reloadable-without-a-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      1.7 Making the hint list reloadable without a restart
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-building-the-hint-list-automatically" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Building the hint list automatically
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Building the hint list automatically">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.1 Sources
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-ranking-and-trimming" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.2 Ranking and trimming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-refresh" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.3 Refresh
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-where-it-runs-and-the-gitops-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      2.4 Where it runs and the GitOps shape
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-learning-from-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Learning from usage
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Learning from usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-capture-points-documented-2026104-unless-stated" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.1 Capture points (documented, 2026.10.4, unless stated)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-what-to-record-and-what-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.2 What to record and what not
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-signals-of-a-misrecognition" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.3 Signals of a misrecognition
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-from-signals-to-proposals" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.4 From signals to proposals
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#35-measuring-improvement" class="md-nav__link">
+    <span class="md-ellipsis">
+      3.5 Measuring improvement
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-options-compared" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Options compared
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-recommended-phased-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Recommended phased plan
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-needs-from-the-owner" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Needs from the owner
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Needs from the owner">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-home-assistant-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Home Assistant token
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Open questions
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-log-policy-voice-transcripts-in-loki-temporary-exception" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Log policy: voice transcripts in Loki (temporary exception)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="kivi-speech-to-text-a-home-vocabulary-hint-list-and-learning-from-usage">Kivi speech-to-text: a home vocabulary hint list and learning from usage</h1>
+<p><strong>Status:</strong> design (no live change). Nothing in Home Assistant, the cluster or GitOps state was changed.
+<strong>Date:</strong> 2026-11-05
+<strong>Scope:</strong> the Spanish STT step of the Assist pipeline "Kiwi" (assistant "Kivi"): Wyoming
+faster-whisper in namespace <code>home-assistant</code>, Home Assistant 2026.10.4, pipeline language <code>es</code>.
+<strong>Related:</strong> <a href="../experiments/conversation-agent-eval/">conversation agent evaluation</a> (built-in
+intents coverage, <code>prefer_local_intents</code>); <a href="../experiments/small-local-models/#5-whisper-prompt-hotwords-beam-and-model-size">small local models study, section 5</a>
+(prompt and hotwords measurements, summarised in <a href="#16-measured-effect-on-this-setup">section 1.6</a>);
+<a href="../kiais-integration/">Kiais integration</a> (current conversation agent).</p>
+<p>Evidence labels: <strong>documented</strong> (read in source code, a changelog or a manifest, with the version
+named), <strong>observed</strong> (read from the cluster, Loki or the repository on the date above),
+<strong>inferred</strong> (derived from documented material, not run), <strong>hypothesis</strong> (to be tested).</p>
+<h2 id="summary">Summary</h2>
+<ol>
+<li><strong>Upstream already does phase 1.</strong> <code>wyoming-faster-whisper</code> 3.6.0 (2026-08) added
+   <code>--hass-token</code>: the server reads the conversation-exposed entity names, their aliases, and the
+   area and floor names from Home Assistant over the websocket API, ranks them in four tiers and
+   passes them to Whisper as <code>initial_prompt</code> within a 200-token budget, refreshed in the
+   background at the start of each utterance. 3.7.0 fixed alias ranking and added environment and
+   <code>_FILE</code> configuration. The deployed image is 2.4.0 (2024-12), which has only a static
+   <code>--initial-prompt</code>. The cheapest phase 1 is to rebuild the owner's image on 3.8.1 and set
+   <code>--hass-token</code> plus a fixed, generic Spanish command-verb <code>--initial-prompt</code> prefix. No home
+   names need to be committed, because they are fetched in the cluster.</li>
+<li><strong>Measured: names plus command verbs help, names alone barely do.</strong> On 145 clips per condition
+   with TV sound mixed in, built-in intent success went from 82/71/65/46 % (clean, +10, +5, 0 dB)
+   without a prompt to 85/79/75/57 % with area and device names plus a generic verb list
+   (48 clips fixed against 7 broken over the noisy conditions, p ≤ 0.007 each). Names alone gave
+   81/74/70/52 %. <code>hotwords</code> gave byte-identical output to <code>initial_prompt</code>. "Kivi" in the prompt
+   leaked into 3 of 1400 transcripts, so the wake name stays out (<a href="#16-measured-effect-on-this-setup">section 1.6</a>).</li>
+<li><strong><code>hotwords</code> is not a separate mechanism.</strong> In faster-whisper it is the same "previous text"
+   slot as <code>initial_prompt</code> (no logit bias). For commands of a single 30 s window the two behave
+   alike (confirmed by measurement), so <code>initial_prompt</code> is enough.</li>
+<li><strong>Home Assistant sends nothing usable per request.</strong> The Wyoming integration in 2026.10.4 sends
+   <code>Transcribe(language=...)</code> only. The protocol has <code>transcript_names</code> and <code>transcript_terms</code>
+   since Wyoming 1.10.0, but neither Home Assistant 2026.10.4 nor the server uses them.</li>
+<li><strong>Transcripts are already stored.</strong> The deployed server logs every transcript at INFO level and
+   Vector ships it to Loki, which keeps 180 days. Any learning loop should start by deciding this.</li>
+<li><strong>Learning loop:</strong> capture each run from Home Assistant's pipeline debug API (STT text, intent
+   result, <code>processed_locally</code>, timings) into a small in-cluster store with 30-day retention for
+   text, derive misrecognition signals, and turn them each week into ranked proposals (hint words,
+   entity aliases, a text correction map) that the owner approves. Measure with intent success
+   rate and repeat rate before and after.</li>
+</ol>
+<h2 id="1-mechanics">1. Mechanics</h2>
+<h3 id="11-what-is-deployed-observed">1.1 What is deployed (observed)</h3>
+<ul>
+<li><code>apps/home-assistant/values.yaml</code>, controller <code>whisper</code>: image <code>pando85/wyoming-whisper:2.4.0</code>
+  (built from <code>pando85/wyoming-addons</code>, <code>whisper/Dockerfile</code>: CTranslate2 4.5.0 on Ubuntu 20.04
+  with CUDA 12.2, <code>wyoming-faster-whisper</code> v2.4.0), args <code>--model large-v3-turbo --language es
+  --device cuda --compute-type int8</code>, runtime class <code>nvidia</code>, on <code>prusik</code>. No <code>--initial-prompt</code>,
+  no <code>--beam-size</code> (2.4.0 default <code>0</code> = auto). Service <code>home-assistant-whisper:10300</code>.</li>
+<li><code>wyoming-faster-whisper</code> 2.4.0 pins <code>faster-whisper==1.1.0</code> and <code>wyoming==1.5.3</code>
+  (documented, <code>requirements.txt</code> at tag <code>v2.4.0</code>).</li>
+<li>The handler logs each transcript with <code>_LOGGER.info(text)</code> (documented, <code>handler.py</code> at
+  <code>v2.4.0</code>; also <code>dispatch_handler.py</code> in 3.8.1). Observed: 157 <code>INFO:wyoming_faster_whisper.handler</code>
+  lines in the last 48 h of pod logs, and 707 Loki entries for <code>{namespace="home-assistant",
+  container="whisper"}</code> in the last 7 days (counts only, no text read). Loki
+  <code>retention_period: 180d</code> (<code>system/loki/values.yaml</code>).</li>
+<li>Measured by the owner: STT p50 0.86 s for about 3 s of audio (given, not re-measured here).</li>
+</ul>
+<h3 id="12-what-the-server-supports">1.2 What the server supports</h3>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>2.4.0 (deployed)</th>
+<th>3.8.1 (latest tag, 2026-09-14)</th>
+<th>Label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--initial-prompt</code> (static, startup only)</td>
+<td>yes</td>
+<td>yes, also <code>WYO_WHISPER_INITIAL_PROMPT[_FILE]</code></td>
+<td>documented</td>
+</tr>
+<tr>
+<td>Home Assistant names as prompt (<code>--hass-token</code>, <code>--hass-api</code>, <code>--hass-refresh-seconds</code>, <code>--hass-prompt-max-tokens</code> default 200, <code>--hass-prompt-timeout</code> default 1.0 s)</td>
+<td>no</td>
+<td>yes (3.6.0, alias tiering 3.7.0)</td>
+<td>documented</td>
+</tr>
+<tr>
+<td><code>hotwords</code></td>
+<td>no</td>
+<td>no (not passed to faster-whisper)</td>
+<td>documented</td>
+</tr>
+<tr>
+<td>Per-request prompt from the <code>transcribe</code> event</td>
+<td>no</td>
+<td>no (only <code>language</code> is read)</td>
+<td>documented</td>
+</tr>
+<tr>
+<td>Segment confidence (<code>avg_logprob</code>, <code>no_speech_prob</code>) returned or logged</td>
+<td>no</td>
+<td>no (segments joined to text, <code>info</code> discarded)</td>
+<td>documented</td>
+</tr>
+<tr>
+<td>Server-side VAD (<code>--vad-filter</code>, <code>--vad-clip</code>, <code>--vad-endpointing</code>)</td>
+<td>no</td>
+<td>yes</td>
+<td>documented</td>
+</tr>
+<tr>
+<td>Text post-processing / correction map</td>
+<td>no</td>
+<td>no</td>
+<td>documented</td>
+</tr>
+</tbody>
+</table>
+<p>Source: <code>rhasspy/wyoming-faster-whisper</code> (now <code>OHF-Voice</code>), <code>CHANGELOG.md</code>, <code>__main__.py</code>,
+<code>dispatch_handler.py</code>, <code>faster_whisper_handler.py</code>, <code>hass_api.py</code>, <code>name_cache.py</code>,
+<code>vocabulary.py</code> at <code>v3.8.1</code>/<code>HEAD</code>. <code>CHANGELOG.md</code> at <code>HEAD</code> lists an unreleased 3.9.0 (language
+reporting only).</p>
+<p>How the 3.6+ name biasing works (documented, <code>hass_api.py</code>, <code>vocabulary.py</code>, <code>name_cache.py</code>):</p>
+<ul>
+<li>Websocket calls: <code>homeassistant/expose_entity/list</code> (keeps entities exposed to <code>conversation</code>),
+  <code>get_states</code> (friendly names), <code>config/entity_registry/get_entries</code> (aliases, area, device),
+  <code>config/device_registry/list</code> (only when an entity's area comes from its device),
+  <code>config/area_registry/list</code>, <code>config/floor_registry/list</code>. Nothing is written.</li>
+<li>Tiers, filled in order until the budget is used: (1) areas and floors that contain an exposed
+  entity, (2) entity names in <code>light</code>, <code>switch</code>, <code>fan</code>, <code>media_player</code>, <code>climate</code>, <code>scene</code>, <code>todo</code>,
+  (3) other areas and floors, (4) other entity names. Each alias sits behind its entity. Names are
+  de-duplicated case-insensitively and joined with <code>,</code>, ending in <code>.</code>. The budget is counted with
+  the model's own tokenizer. <code>--initial-prompt</code> is always kept at the front.</li>
+<li>Refresh starts at <code>AudioStart</code> in the background; at <code>AudioStop</code> the server waits at most
+  <code>--hass-prompt-timeout</code> for an unfinished refresh, then uses the previous names. A failed fetch
+  never fails a transcript. Default <code>--hass-refresh-seconds 0</code> refreshes on every utterance.</li>
+<li><code>--debug</code> logs the exact prompt and how many names were dropped. Note that <code>--debug</code> also logs
+  each transcript (<code>models.py</code>), so it should only be enabled briefly.</li>
+<li><strong>The token must belong to an administrator</strong>: <code>homeassistant/expose_entity/list</code> is decorated
+  <code>@websocket_api.require_admin</code> in Home Assistant 2026.10.4 (documented,
+  <code>homeassistant/components/homeassistant/exposed_entities.py</code>). Home Assistant tokens have no
+  scopes, so this token can do anything an admin can.</li>
+</ul>
+<h3 id="13-what-home-assistant-sends-per-request-documented-2026104">1.3 What Home Assistant sends per request (documented, 2026.10.4)</h3>
+<ul>
+<li><code>homeassistant/components/wyoming/stt.py</code> writes <code>Transcribe(language=metadata.language)</code> and
+  then the audio. Manifest pins <code>wyoming==1.10.2</code>.</li>
+<li>Wyoming 1.10.0 added <code>vad_sensitivity</code>, <code>transcript_names</code> and <code>transcript_terms</code> to <code>transcribe</code>
+  (documented, <code>rhasspy/wyoming</code> <code>CHANGELOG.md</code>, <code>wyoming/asr.py</code>). Home Assistant 2026.10.4 does
+  not fill them, and the 3.8.1 server does not read them. So a per-request hint list from Home
+  Assistant is not available today; it must be configured on the server.</li>
+<li>The <code>Transcript</code> event can carry a <code>context</code> dict, but the Home Assistant integration reads only
+  <code>text</code> (documented). Confidence cannot travel back to Home Assistant this way.</li>
+</ul>
+<h3 id="14-initial_prompt-versus-hotwords-in-faster-whisper-documented-faster-whisper-110">1.4 <code>initial_prompt</code> versus <code>hotwords</code> in faster-whisper (documented, faster-whisper 1.1.0)</h3>
+<ul>
+<li><code>initial_prompt</code> is tokenised and placed in the decoder's previous-text slot
+  (<code>&lt;|startofprev|&gt;</code>) for the first window; with <code>condition_on_previous_text</code> later windows see
+  the previous output instead. It is reset when the decoding temperature rises above
+  <code>prompt_reset_on_temperature</code> (0.5).</li>
+<li><code>hotwords</code> (added in faster-whisper 1.0.2) goes into the <strong>same</strong> previous-text slot, before any
+  previous tokens, for every window, and is ignored when <code>prefix</code> is set. It is not a keyword
+  boost or logit bias. For voice commands, which fit in one 30 s window, the two are equivalent;
+  using both would only duplicate tokens.</li>
+<li>Length: the previous-text part is cut to <code>max_length // 2 - 1</code> = 223 tokens (Whisper's decoder
+  context is 448). Anything longer is silently truncated from the front.</li>
+</ul>
+<p>Known pitfalls:</p>
+<ul>
+<li><strong>Echo and hallucination</strong> (documented in the upstream <code>vocabulary.py</code> comment and changelog;
+  widely reported for Whisper prompting): long prompts make the model output prompt words that
+  were not spoken, especially on silence or non-speech. In this home the risky audio is not
+  silence (Home Assistant's VAD ends the stream) but TV sound and room noise captured after the
+  wake word. Hypothesis: a prompt that is a list of nouns is low risk, because an echoed noun list
+  does not match an intent; a prompt with full imperative sentences ("enciende la luz del
+  salón") could produce an actionable hallucination. Keep the prefix free of complete commands.</li>
+<li><strong>Style leakage:</strong> the model imitates the prompt's casing, punctuation and spelling. This helps
+  (names come back spelled, accented and capitalised as Home Assistant stores them) and can hurt
+  (a comma list prompt tends to add commas; an English prompt can pull Spanish output towards
+  English). The prefix should be Spanish and use the same punctuation as normal speech.</li>
+<li><strong>Model dependence:</strong> Distil-Whisper models degrade with prompts (documented, upstream 3.8.0
+  changelog: <code>distil-small.en</code> breaks from about 52 prompt tokens). <code>large-v3-turbo</code> is a pruned,
+  fine-tuned model, not a distilled one; in Spanish it benefits from a prompt of about 120
+  tokens (observed, 1.6). Whisper <code>small</code> and <code>medium</code> were significantly worse than turbo
+  without a prompt (clean 70 % and 76 % against 82 %), so the model stays.</li>
+<li><strong>Latency:</strong> prompt tokens add decoder prefill work per beam. Hypothesis: tens of milliseconds
+  on the GTX 1060 for about 200 tokens; being measured in section 9 of the
+  <a href="../experiments/small-local-models/">small local models study</a>, against the 0.86 s p50.</li>
+<li><strong>Wake word in the prompt:</strong> observed: with "Kivi" at the start of the prompt, "Kivi" appeared
+  in 3 of 1400 transcripts whose audio did not contain it. A leading "Kivi" can break strict
+  intent matching, so the wake name stays out of the prompt.</li>
+</ul>
+<h3 id="15-home-assistant-matching-that-the-hint-list-feeds-documented-2026104">1.5 Home Assistant matching that the hint list feeds (documented, 2026.10.4)</h3>
+<ul>
+<li>The default agent matches in stages: exposed entities only, then unexposed entities, then
+  unknown names (<code>IntentMatchingStage</code> in <code>conversation/default_agent.py</code>), with <code>hassil==3.12.1</code>
+  and <code>home-assistant-intents==2026.10.6</code>. Names and aliases must match the text.</li>
+<li>2026.10.4 adds a gazetteer fallback (<code>conversation/gazetteer.py</code>, <code>gazetteer-matcher==1.1.0</code>)
+  that reaches intents through near-miss names and unseen wordings, but <code>LANGUAGE = "en"</code>: it is
+  <strong>English only</strong> and does not run on the "prefer local intents" fast path. For Spanish there is
+  no fuzzy matching, so a single misheard letter or accent in a name means no match.</li>
+<li>Hypothesis (not checked in <code>hassil</code> source here): accent and case differences between the
+  transcript and the stored name can break a match. The hint list helps here because Whisper
+  copies the stored spelling. Test with <code>scripts/voice-assistant/agent_eval/builtin_intents.py</code>.</li>
+</ul>
+<h3 id="16-measured-effect-on-this-setup">1.6 Measured effect on this setup</h3>
+<p>Source: <a href="../experiments/small-local-models/#5-whisper-prompt-hotwords-beam-and-model-size">small local models study, section 5</a> (observed by that study, 2026-11-05). Setup:
+<code>faster-whisper</code> <code>large-v3-turbo</code> int8, beam 5, as deployed, run on <code>z800</code>; 5 Piper voices × 29
+control phrases that built-in intents can handle = 145 clips per condition; TV content mixed in
+at +10, +5 and 0 dB SNR. Metric: Home Assistant built-in intent success (<code>hassil</code> 3.12.1,
+<code>home-assistant-intents</code> 2026.10.6). The names are those of the study's test home, not the
+owner's.</p>
+<table>
+<thead>
+<tr>
+<th>Prompt (<code>initial_prompt</code>)</th>
+<th>Clean</th>
+<th>+10 dB</th>
+<th>+5 dB</th>
+<th>0 dB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>None</td>
+<td>82 %</td>
+<td>71 %</td>
+<td>65 %</td>
+<td>46 %</td>
+</tr>
+<tr>
+<td>Area and device names (about 80 tokens)</td>
+<td>81 %</td>
+<td>74 %</td>
+<td>70 %</td>
+<td>52 %</td>
+</tr>
+<tr>
+<td>Names plus generic Spanish command verbs (about 40 tokens more)</td>
+<td><strong>85 %</strong></td>
+<td><strong>79 %</strong></td>
+<td><strong>75 %</strong></td>
+<td><strong>57 %</strong></td>
+</tr>
+<tr>
+<td>Same text as <code>hotwords</code></td>
+<td>byte-identical output to <code>initial_prompt</code></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Names only against no prompt: 31 clips fixed and 9 broken over the noisy conditions; no gain on
+  clean audio.</li>
+<li>Names plus verbs against no prompt: 48 fixed and 7 broken over the noisy conditions
+  (p ≤ 0.007 in each noisy condition); against names only: 29 fixed and 4 broken.</li>
+<li>The verb list used: <code>Enciende, apaga, sube, baja, abre, cierra, para, pausa, reanuda, silencia,
+  quita el silencio, pon, temporizador, minutos, volumen, brillo, por ciento, grados.</code> Without it
+  the remaining errors were mostly the first verb of short commands (for example "Apaga la tele"
+  heard as "Hasta acá la tele", "Reanuda" as "Renuda").</li>
+<li>"Kivi" at the start of the prompt: 3 of 1400 transcripts contained "Kivi" not present in the
+  audio.</li>
+<li>STT latency with the prompt: being measured (section 9 of that study); 0.86 s p50 without a
+  prompt in real use.</li>
+</ul>
+<p>Conclusion (inferred from the above): the command verbs carry most of the gain, and they are
+generic, so they belong in the static <code>--initial-prompt</code> prefix; the names add a smaller gain on
+noisy audio and come from Home Assistant through <code>--hass-token</code>.</p>
+<p>How 3.8.1 composes the two (documented, <code>vocabulary.py</code> <code>_build_prompt</code> at <code>v3.8.1</code>, unchanged at
+<code>HEAD</code>): the <code>--initial-prompt</code> text comes first (a <code>.</code> is added if it does not end in
+punctuation), then the Home Assistant names joined by <code>,</code> and ending in <code>.</code>. The
+<code>--hass-prompt-max-tokens</code> budget (default 200) counts the <strong>whole</strong> prompt, prefix included,
+using the model's tokenizer, and the prefix is always kept. With the ~40-token verb prefix about
+160 tokens are left for names, in tier order. Two differences from the study's prompt are
+untested: the order (the study put names before verbs; upstream puts the prefix first) and the
+real home's name list, which may be longer than the study's ~80 tokens. Hypothesis: neither
+changes the result much; check with the study's harness by swapping the order once.</p>
+<h3 id="17-making-the-hint-list-reloadable-without-a-restart">1.7 Making the hint list reloadable without a restart</h3>
+<p>Three ways, smallest first:</p>
+<ol>
+<li><strong>Upstream 3.8.1 as is (recommended).</strong> Names from Home Assistant reload by themselves
+   (per utterance or every <code>--hass-refresh-seconds</code>). The static part (<code>--initial-prompt</code>) is
+   startup-only; put it in a ConfigMap read through <code>WYO_WHISPER_INITIAL_PROMPT_FILE</code> and let
+   Reloader restart the pod when it changes (the chart already uses
+   <code>reloader.stakater.com/auto</code>). A restart reloads the model; with a weekly cadence at most this
+   is acceptable. Inferred: the prefix is generic Spanish text, so it can live in git.</li>
+<li><strong>Small patch, file watched.</strong> Extend the image with a file <code>/config/stt-hints.txt</code> (extra
+   names) and <code>/config/stt-corrections.yaml</code> (see 3.4), checked by modification time at each
+   <code>AudioStart</code> like the name refresh, and appended as tier 0 after the prefix. About 60 lines in
+   <code>name_cache.py</code>/<code>dispatch_handler.py</code> plus a ConfigMap or Secret volume (a mounted ConfigMap
+   updates in place within about a minute; no restart). Needed for home-specific extra words and
+   for the correction map.</li>
+<li><strong>Small patch, fetched.</strong> Same, but the server fetches hints and corrections from the phase 2
+   service over HTTP. Avoids keeping home-specific words in a Kubernetes object that GitOps does
+   not manage. More moving parts; only worth it once phase 2 exists.</li>
+</ol>
+<p>Image work for option 1 (inferred, to verify in a build): in <code>pando85/wyoming-addons</code>
+<code>whisper/Dockerfile</code>, set <code>WYOMING_WHISPER_VERSION</code> to <code>3.8.1</code> and install
+<code>wyoming-faster-whisper[hass]</code> (extra <code>hass</code> = <code>aiohttp</code>). 3.x needs <code>faster-whisper&gt;=1.2.1</code>,
+<code>av&lt;19</code> and <code>pysilero-vad</code>; it does not need torch, so the CTranslate2 CUDA base still fits. The
+Ubuntu 20.04 base ships Python 3.8, the minimum 3.x supports; a newer CTranslate2 base is worth
+taking at the same time. <code>run.sh</code> in the image passes <code>--uri</code>, <code>--data-dir</code>, <code>--download-dir</code>;
+3.x reads environment variables too. Upstream's own <code>Dockerfile.gpu</code> is not published and is about
+10.7 GB because of CUDA torch. 3.0.0 changed <code>--model</code> and <code>--language</code> defaults to <code>auto</code>; the
+deployment passes both explicitly, so that change is harmless.</p>
+<h2 id="2-building-the-hint-list-automatically">2. Building the hint list automatically</h2>
+<h3 id="21-sources">2.1 Sources</h3>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>API (read-only)</th>
+<th>Admin needed</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Exposed entities</td>
+<td>ws <code>homeassistant/expose_entity/list</code></td>
+<td>yes</td>
+<td>only <code>conversation</code> exposure</td>
+</tr>
+<tr>
+<td>Friendly names</td>
+<td>ws <code>get_states</code></td>
+<td>no</td>
+<td>what the user sees and says</td>
+</tr>
+<tr>
+<td>Aliases, entity area</td>
+<td>ws <code>config/entity_registry/get_entries</code></td>
+<td>no</td>
+<td></td>
+</tr>
+<tr>
+<td>Device area</td>
+<td>ws <code>config/device_registry/list</code></td>
+<td>no</td>
+<td></td>
+</tr>
+<tr>
+<td>Areas and floors, with their aliases</td>
+<td>ws <code>config/area_registry/list</code>, <code>config/floor_registry/list</code></td>
+<td>no</td>
+<td>upstream 3.8.1 includes area and floor aliases next to their names (<code>_place_names</code>)</td>
+</tr>
+<tr>
+<td>Assistant name, Spanish command words</td>
+<td>static prefix in git</td>
+<td>n/a</td>
+<td>generic, not home-specific</td>
+</tr>
+<tr>
+<td>Media sources (playlists, radio names, artists)</td>
+<td>Music Assistant or <code>media_player/browse_media</code></td>
+<td>no</td>
+<td>only if music commands are common; long names cost many tokens</td>
+</tr>
+</tbody>
+</table>
+<p>Admin requirement documented for 2026.10.4 as above. All APIs are documented websocket commands of
+the frontend.</p>
+<h3 id="22-ranking-and-trimming">2.2 Ranking and trimming</h3>
+<p>Upstream's deterministic tiers (1.2) are a good default. Changes worth making only after phase 2
+data exists:</p>
+<ul>
+<li><strong>Usage-weighted ranking:</strong> within a tier, order names by how often they appear in successful
+  commands over the last 30 days, and promote names that appear in misrecognitions (3.3). This
+  needs the patch in 1.7 option 2 or 3.</li>
+<li><strong>Budget:</strong> keep <code>--hass-prompt-max-tokens</code> at the default 200. The measured prompt was about
+  120 tokens; a real home that fills the budget gives a longer prompt than was tested, so lower
+  the budget to about 130 if the phase 1 check shows echoed names. Spanish names with accents cost
+  more tokens per character than English ones (inferred from BPE behaviour; check with <code>--debug</code>).</li>
+<li><strong>Prefix (generic, in git):</strong> the measured verb list from 1.6, unchanged:
+  <code>Enciende, apaga, sube, baja, abre, cierra, para, pausa, reanuda, silencia, quita el silencio,
+  pon, temporizador, minutos, volumen, brillo, por ciento, grados.</code> (about 40 tokens, counted
+  inside the 200-token budget). Single words and short phrases only, no full commands (1.4), and
+  never "Kivi" (observed leak, 1.6). Changing the list means re-running the study's comparison.</li>
+</ul>
+<h3 id="23-refresh">2.3 Refresh</h3>
+<p>Set <code>--hass-refresh-seconds 300</code>. Every utterance otherwise opens a websocket and runs <code>get_states</code>
+for the whole house; with 300 s a rename takes at most five minutes to show and the at-most-1 s
+wait at <code>AudioStop</code> happens at most once per five minutes (inferred from <code>name_cache.py</code>).</p>
+<h3 id="24-where-it-runs-and-the-gitops-shape">2.4 Where it runs and the GitOps shape</h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effort</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A. Inside the STT service (upstream <code>--hass-token</code>)</td>
+<td>lowest</td>
+<td>no generator to maintain; names never leave the cluster or reach git</td>
+</tr>
+<tr>
+<td>B. CronJob generator writing a ConfigMap or Secret</td>
+<td>medium</td>
+<td>needs write RBAC in the namespace; fights ArgoCD if the object is in git; home names in a Kubernetes object</td>
+</tr>
+<tr>
+<td>C. Sidecar generator writing a shared file</td>
+<td>medium</td>
+<td>no RBAC; still needs the 1.7 option 2 patch</td>
+</tr>
+</tbody>
+</table>
+<p>Recommended A. GitOps changes (proposal, not applied): in <code>apps/home-assistant/values.yaml</code> under
+<code>controllers.whisper</code>: new image tag, args <code>--hass-api http://home-assistant-hass:8123/api
+--hass-refresh-seconds 300</code>, environment <code>WYO_WHISPER_HASS_TOKEN_FILE</code> pointing at a mounted
+Secret, and an <code>ExternalSecret</code> reading <code>secret/home-assistant/&lt;path&gt;</code> from Vault. Keep the
+Renovate hint above the image. The token is created by the owner in Home Assistant (a dedicated
+user is cleaner to revoke) and written to Vault by the owner.</p>
+<h2 id="3-learning-from-usage">3. Learning from usage</h2>
+<h3 id="31-capture-points-documented-2026104-unless-stated">3.1 Capture points (documented, 2026.10.4, unless stated)</h3>
+<table>
+<thead>
+<tr>
+<th>Point</th>
+<th>What it has</th>
+<th>Limits</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pipeline debug runs: ws <code>assist_pipeline/pipeline_debug/list</code> and <code>/get</code></td>
+<td>every event of a run: <code>run-start</code>, <code>stt-end</code> with <code>stt_output.text</code>, <code>intent-end</code> with <code>processed_locally</code> and <code>intent_output</code> (response type, error code, targets, <code>conversation_id</code>), TTS, timestamps</td>
+<td>admin only; in memory, <code>STORED_PIPELINE_RUNS = 10</code> per pipeline; lost on restart (the hass pod restarted 45 min before this check, observed)</td>
+</tr>
+<tr>
+<td>Whisper logs (Loki)</td>
+<td>transcript text and time</td>
+<td>no intent result, no agent, no confidence; currently 180 days in Loki</td>
+</tr>
+<tr>
+<td>Satellite logs (webos-voice-satellite)</td>
+<td><code>STT_END</code> text, <code>INTENT_END</code> speech and <code>conversation_id</code>, its own stage latencies</td>
+<td>only that satellite; no intent result code</td>
+</tr>
+<tr>
+<td><code>assist_pipeline</code> <code>debug_recording_dir</code> option</td>
+<td>audio files per run</td>
+<td>audio: off by default, opt-in only</td>
+</tr>
+<tr>
+<td>A custom Home Assistant integration hooking the pipeline</td>
+<td>everything, no loss</td>
+<td>couples to internal APIs that change between releases</td>
+</tr>
+</tbody>
+</table>
+<p>Most reliable without touching Home Assistant internals (inferred): <strong>poll the pipeline debug
+API every 10 to 15 s</strong> and store new runs. Ten runs per pipeline is far more than a household
+produces in 15 s. Cross-check completeness weekly against the whisper transcription count; a
+gap only happens across Home Assistant restarts.</p>
+<h3 id="32-what-to-record-and-what-not">3.2 What to record and what not</h3>
+<p>Per run (in the store, not in logs):</p>
+<ul>
+<li>time, pipeline, satellite device, language, conversation id;</li>
+<li>STT text (normalised: lower case, whitespace collapsed), STT duration, audio duration if known;</li>
+<li>confidence from a whisper patch that logs <code>avg_logprob</code>, <code>no_speech_prob</code> and prompt hash per
+  utterance <strong>without text</strong>, joined on time (the Transcript event cannot carry it, 1.3);</li>
+<li>intent stage result: <code>processed_locally</code>, response type (<code>action_done</code>, <code>query_answer</code>,
+  <code>error</code>), error code (<code>no_intent_match</code>, <code>no_valid_targets</code>, <code>failed_to_handle</code>), intent name
+  and target entity ids;</li>
+<li>which agent answered (local built-in or the LLM agent), stage latencies (STT, intent, TTS).</li>
+</ul>
+<p>Not recorded: audio (off; opt-in short sessions only, with consent of everyone recorded), TTS
+text of LLM answers (not needed for STT learning), anything from runs of other pipelines.</p>
+<p>Retention and access:</p>
+<ul>
+<li>raw run rows with text: <strong>30 days</strong>, then deleted; derived counts and n-gram statistics without
+  free text kept 1 year; approved corrections (pairs of short command texts) kept until removed.</li>
+<li>store: a new database and user in the existing Zalando cluster <code>home-assistant-postgres</code>,
+  declared in <code>apps/home-assistant/templates/postgresql.yaml</code>; credentials from the operator
+  Secret. Velero backups then hold up to 30 days of text too, which should be accepted
+  explicitly. A small SQLite file on its own PVC is the lighter alternative.</li>
+<li>access: only the collector and the owner; no ingress; the review page (3.5) behind an Envoy Gateway
+  <code>SecurityPolicy</code>. Prometheus metrics expose counts only.</li>
+<li>the whisper INFO transcript lines: either drop them in Vector for <code>container="whisper"</code> or
+  patch the server to log them at DEBUG; otherwise they stay in Loki for 180 days alongside the
+  store. Owner decision.</li>
+</ul>
+<h3 id="33-signals-of-a-misrecognition">3.3 Signals of a misrecognition</h3>
+<table>
+<thead>
+<tr>
+<th>Signal</th>
+<th>Definition (initial; calibrate on data)</th>
+<th>Strength</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>No local match</td>
+<td><code>intent-end</code> error <code>no_intent_match</code> or <code>no_valid_targets</code> from the built-in agent</td>
+<td>strong for home commands, but general questions also fail locally by design when they go to the LLM</td>
+</tr>
+<tr>
+<td>Quick repeat</td>
+<td>a second run from the same satellite within 20 s whose text is similar (normalised edit ratio at least 0.6)</td>
+<td>strong; the second text is often the correction</td>
+</tr>
+<tr>
+<td>Repeat that succeeds</td>
+<td>quick repeat where the first failed and the second gave <code>action_done</code></td>
+<td>strongest; gives a (wrong, right) pair</td>
+</tr>
+<tr>
+<td>LLM did a home action</td>
+<td><code>prefer_local_intents</code> is on and the agent is Kiais through core <code>llama_cpp</code> (<code>conversation.fast</code>) since 2026-11-05 (<a href="../kiais-integration/">Kiais integration</a>); so <code>processed_locally</code> false and the LLM run changed a device state (state change with the run's context id, from the recorder)</td>
+<td>medium; needs the context join, hypothesis that the context id carries through</td>
+</tr>
+<tr>
+<td>Low confidence</td>
+<td><code>avg_logprob</code> below about -0.8 or <code>no_speech_prob</code> above 0.5</td>
+<td>weak alone; thresholds are hypotheses</td>
+</tr>
+<tr>
+<td>User correction</td>
+<td>next run within 10 s is "no", "para", "cancela", "eso no"</td>
+<td>medium</td>
+</tr>
+<tr>
+<td>Empty or one-word transcript</td>
+<td>empty text or a lone area or entity name</td>
+<td>medium; also detects prompt echo</td>
+</tr>
+</tbody>
+</table>
+<h3 id="34-from-signals-to-proposals">3.4 From signals to proposals</h3>
+<p>A weekly job (CronJob in the same app) groups the week's flagged runs and produces ranked
+proposals, each with its count, examples (at most three, shown only in the review page, never in
+notifications) and the expected effect:</p>
+<ol>
+<li><strong>Hint words:</strong> words in the right side of (wrong, right) pairs that are names or domain words
+   and are not in the current prompt, or were dropped by the budget. Action: raise them (needs
+   the 1.7 option 2 or 3 patch) or rename or alias the entity so upstream picks it up.</li>
+<li><strong>Entity and area aliases:</strong> a wrong form that recurs (at least 3 times, from at least 2 days)
+   for the same target. Action: add it as an alias in Home Assistant. Guard: reject an alias that
+   equals or is close to another entity's name or alias in the same area. Aliases are registry
+   changes <strong>outside git</strong>, so each one needs the owner's explicit yes (<code>~/homelab/AGENTS.md</code>,
+   "Owner approval for live changes").</li>
+<li><strong>Correction map:</strong> word or phrase rewrites applied to the transcript before intent matching
+   (for example a systematic mis-spelling of an area). Home Assistant has no hook between STT and
+   the intent stage, so the place is the whisper server (1.7 option 2 or 3, about 30 more lines:
+   apply whole-word, case-insensitive rules after transcription). Each rule records its count and
+   the date approved, and is dropped if its hit count is zero for 90 days.</li>
+<li><strong>Evaluation and fine-tuning dataset:</strong> approved pairs become the text regression set; audio
+   only from opt-in sessions where the owner reads the approved phrases (or Piper-synthesised
+   clips as in the small local models study).</li>
+</ol>
+<p>Review and approval:</p>
+<ul>
+<li>weekly: a Home Assistant persistent notification with counts only ("12 proposals, local success
+  rate 81 % (+3)"), linking to the review page;</li>
+<li>review page: a small internal page (the collector's own, behind an Envoy Gateway <code>SecurityPolicy</code>) listing
+  proposals with approve or reject; approving an alias writes nothing to Home Assistant by itself,
+  it produces the exact change for the owner to make or confirm;</li>
+<li>generic changes (code, manifests, generic prefix words, metric and dashboard definitions) go
+  through a PR to <code>~/homelab</code>; home-specific words, aliases and correction rules never enter the
+  public repository (<code>~/homelab/AGENTS.md</code>, personal information).</li>
+</ul>
+<h3 id="35-measuring-improvement">3.5 Measuring improvement</h3>
+<ul>
+<li><strong>Primary:</strong> weekly local success rate = runs with <code>processed_locally</code> and <code>action_done</code> or
+  <code>query_answer</code>, divided by runs classified as home commands (local success, plus local failures
+  whose quick repeat succeeded or whose LLM run acted on a device).</li>
+<li><strong>Secondary:</strong> no-match rate, quick-repeat rate, LLM fallbacks for home actions, STT p50 and
+  p95, prompt echo rate (empty or name-only transcripts).</li>
+<li><strong>Regression set:</strong> approved (wrong, right) pairs. Text level, offline: the right side must
+  match locally and the wrong side, after the correction map, must too (run with
+  <code>builtin_intents.py</code> against an exported inventory, not against live Home Assistant, because
+  <code>conversation/process</code> executes actions). Audio level: WER and intent success on the opt-in or
+  synthetic clips, with and without the prompt and corrections.</li>
+<li><strong>Before and after:</strong> compare 2 weeks before a change with 2 weeks after; at household volumes
+  (about 80 runs a day observed from whisper logs) a few percentage points is noise, so report
+  counts with a confidence interval and treat small changes as unproven.</li>
+</ul>
+<h2 id="4-options-compared">4. Options compared</h2>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Effort</th>
+<th>Risk</th>
+<th>Latency cost</th>
+<th>Privacy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Static <code>--initial-prompt</code> with home names on 2.4.0</td>
+<td>very low</td>
+<td>names in git (public repo), stale</td>
+<td>prompt prefill (hypothesis: tens of ms)</td>
+<td>names exposed publicly: not acceptable</td>
+</tr>
+<tr>
+<td>Static verb-only <code>--initial-prompt</code> on 2.4.0 (interim)</td>
+<td>very low</td>
+<td>verbs alone not measured</td>
+<td>about 40 prompt tokens</td>
+<td>generic text only</td>
+</tr>
+<tr>
+<td>Upstream 3.8.1 <code>--hass-token</code></td>
+<td>low (image rebuild, Secret)</td>
+<td>admin token in the STT pod; image jump 2.4 → 3.8</td>
+<td>same prefill; refresh hidden in the utterance; at most 1 s once per refresh interval if Home Assistant is slow</td>
+<td>names stay in the cluster</td>
+</tr>
+<tr>
+<td>Generator CronJob plus ConfigMap</td>
+<td>medium</td>
+<td>write RBAC, drift with ArgoCD</td>
+<td>same</td>
+<td>names in a Kubernetes object</td>
+</tr>
+<tr>
+<td>Usage logging and weekly proposals</td>
+<td>medium (collector, store, review page)</td>
+<td>another admin token; text at rest 30 days</td>
+<td>none (off the request path)</td>
+<td>transcripts at rest; bounded retention</td>
+</tr>
+<tr>
+<td>Correction map in the STT server</td>
+<td>low on top of phase 2</td>
+<td>a bad rule rewrites good text; mitigated by approval and counts</td>
+<td>negligible</td>
+<td>rules hold home words, kept out of git</td>
+</tr>
+<tr>
+<td>Small local model as STT corrector or router</td>
+<td>medium to high</td>
+<td>added latency and new failure modes</td>
+<td>hundreds of ms (hypothesis; see the small local models study)</td>
+<td>stays local</td>
+</tr>
+<tr>
+<td>Fine-tuning Whisper on home data</td>
+<td>high</td>
+<td>overfitting, maintenance per model update</td>
+<td>none at inference</td>
+<td>needs consented audio</td>
+</tr>
+</tbody>
+</table>
+<h2 id="5-recommended-phased-plan">5. Recommended phased plan</h2>
+<p><strong>Phase 1: fixed verb prefix plus live Home Assistant names.</strong>
+Justified by 1.6: names plus verbs raised built-in intent success by 3 to 11 points (more in
+noise), with few regressions; the wake name stays out. Open gate: the prompt's latency cost
+(study section 9) must stay small against the 0.86 s p50.
+1. Rebuild <code>pando85/wyoming-whisper</code> on <code>wyoming-faster-whisper[hass]==3.8.1</code> (owner's repo).
+2. In GitOps: new tag, <code>--hass-api</code>, <code>--hass-refresh-seconds 300</code>, token via ExternalSecret and
+   <code>WYO_WHISPER_HASS_TOKEN_FILE</code>, and the measured verb list (2.2) as <code>--initial-prompt</code>, in a
+   ConfigMap read through <code>WYO_WHISPER_INITIAL_PROMPT_FILE</code>. No "Kivi".
+3. Verify: <code>--debug</code> for a few minutes to read the composed prompt (verbs first, then names) and
+   the dropped-name count (then off); STT p50 within 0.1 s of 0.86 s; owner's spot check on 20
+   home commands, including short ones that start with a verb ("Apaga la tele", "Reanuda").
+   Optional interim step before the image rebuild: the verb list alone as <code>--initial-prompt</code> on
+   the deployed 2.4.0 (one arg, generic text). Verbs alone were not measured (hypothesis: most of
+   the gain, because the remaining no-verb errors were leading verbs); check with the study's
+   harness first.
+4. Owner-side cleanups that help immediately: add Spanish aliases for entities whose names are
+   English or technical, and keep exposure to what is actually said.</p>
+<p><strong>Phase 2: usage logging and weekly proposals.</strong>
+Collector (polls pipeline debug), store (30-day text), signals (3.3), weekly proposals and review
+page (3.4), metrics and a Grafana dashboard with counts only, decision on whisper transcript lines
+in Loki. Patch the whisper server to log confidence without text and to read an extra-hints file
+and a correction map (1.7 option 2). Start the regression set.</p>
+<p><strong>Phase 3: correction model or fine-tune, only if justified.</strong>
+Trigger: after 8 weeks of phase 2, local success on home commands still below the target (owner to
+set, for example 95 %) and the residual errors are not fixable by aliases or rules. Candidates: a
+small local model as corrector or router (see the small local models study), or a LoRA or full
+fine-tune of the Whisper model on consented audio.</p>
+<h2 id="6-needs-from-the-owner">6. Needs from the owner</h2>
+<ul>
+<li>Approval to rebuild and push the whisper image in <code>pando85/wyoming-addons</code>.</li>
+<li>Done (2026-11-05): a Home Assistant long-lived token from an administrator account (required by
+  <code>expose_entity/list</code>), now in Vault (see "The Home Assistant token" below).</li>
+<li>Decision on the transcripts already in Loki (180 days): drop or keep.</li>
+<li>Phase 2: approval to keep transcripts for 30 days in the cluster, the store choice, and the
+  review flow; each proposed alias is approved one by one.</li>
+</ul>
+<h3 id="the-home-assistant-token">The Home Assistant token</h3>
+<p>Created on 2026-11-05 for <code>--hass-token</code> (not yet wired into the whisper deployment).</p>
+<ul>
+<li>Belongs to the owner's admin user. Home Assistant tokens have no scopes, so it can do anything
+  that admin can; treat it as a full-access secret.</li>
+<li>Name: <code>wyoming-whisper Kivi STT hint list</code>; lifespan 3650 days (to about 2036-11).</li>
+<li>Vault: <code>secret/home-assistant/wyoming-whisper</code>, key <code>hass_token</code> (KV v2 version 1). ExternalSecret
+  form: <code>remoteRef.key: /home-assistant/wyoming-whisper</code>, <code>property: hass_token</code>.</li>
+<li>Verified: the Vault value authenticates against <code>GET /api/</code> (HTTP 200) and matches the value
+  created, by hash.</li>
+<li>Revoke: Home Assistant profile, Security, Long-lived access tokens, delete the entry by name.
+  Anything using it then gets 401 and the hint list falls back to the static prefix.</li>
+<li>Rotate: create a new token with the same name pattern over the websocket
+  (<code>auth/long_lived_access_token</code>) or in the profile, <code>vault kv put</code> it from a <code>0600</code> file to the
+  same path (new KV version), let the ExternalSecret and Reloader roll the pod, then delete the old
+  token. See <a href="../../troubleshooting/home-assistant-api-hacs-deploy/">Home Assistant API access for agents</a>
+  for the headless login.</li>
+</ul>
+<h2 id="7-open-questions">7. Open questions</h2>
+<ul>
+<li>Latency cost of the ~120 to 200-token prompt on the GTX 1060 (small local models study,
+  section 9).</li>
+<li>Verbs-only prompt and prefix-first order, not measured (1.6).</li>
+<li>Does part of the wake word reach the STT audio, and does Home Assistant strip "Kivi" from the
+  transcript before matching? (Keeping "Kivi" out of the prompt is settled, 1.6.)</li>
+<li>Answered: <code>prefer_local_intents</code> is on and the agent is Kiais via core <code>llama_cpp</code>
+  (<code>conversation.fast</code>) since 2026-11-05 (<a href="../kiais-integration/">Kiais integration</a>).</li>
+<li>Does <code>hassil</code> 3.12.1 fold accents when matching Spanish names?</li>
+<li>Does the context id of an LLM tool call reach the recorder's state changes, so they can be joined
+  to the run?</li>
+</ul>
+<h2 id="8-log-policy-voice-transcripts-in-loki-temporary-exception">8. Log policy: voice transcripts in Loki (temporary exception)</h2>
+<p>Two owner decisions on 2026-11-05, in this order:</p>
+<ol>
+<li>Morning: what people say to the assistant must not be kept in logs or Loki. A Vector filter and a
+   Whisper image that logs transcripts only at DEBUG implemented it.</li>
+<li>Later the same day: a time-limited <strong>exception</strong>. To collect real usage for offline replay
+   against Home Assistant's built-in sentences (the decision-model idea in
+   <a href="../plan/">the plan</a>), transcripts are kept in Loki for <strong>180 days</strong>, on the owner's explicit
+   request ("we can get all the data that we need"). What is collected, why, and how to stop is in
+   the <a href="../data-register/">data register</a>.</li>
+</ol>
+<p><strong>Current state (from 2026-11-05, effective once the change is synced).</strong></p>
+<ul>
+<li><strong>Source.</strong> The Whisper container (<code>git.grigri.cloud/agil/wyoming-whisper:3.8.1.1</code>, namespace
+  <code>home-assistant</code>, container <code>whisper</code>) logs each transcript as
+  <code>DEBUG:wyoming_faster_whisper.dispatch_handler:&lt;text&gt;</code> (the 2.x image used
+  <code>INFO:wyoming_faster_whisper.handler:&lt;text&gt;</code>). The image patch moved that line from INFO to DEBUG.</li>
+<li><strong>How DEBUG is enabled for that one logger.</strong> Not with <code>--debug</code>: at DEBUG the server prints its
+  whole argument namespace, which includes the Home Assistant token read from
+  <code>WYO_WHISPER_HASS_TOKEN_FILE</code>, and it enables DEBUG for every library. Instead
+  <code>apps/home-assistant/config/whisper-logging/sitecustomize.py</code> (a ConfigMap mounted at
+  <code>/opt/whisper-logging</code>, loaded through <code>PYTHONPATH</code>) sets the root logger to INFO and only
+  <code>wyoming_faster_whisper.dispatch_handler</code> to DEBUG. Besides the transcript, that logger's other
+  DEBUG lines are now logged too: audio stopped, VAD end of voice command, completed request time,
+  and the <strong>initial prompt with the Home Assistant names</strong>. The names are accepted in logs; the
+  token is not logged.</li>
+<li><strong>Vector.</strong> The <code>drop_voice_transcripts</code> filter in <code>system/loki/vector-agent.yaml</code> is kept but not
+  wired in: the <code>truncate</code> transform reads <code>kubernetes_logs</code> directly. <code>vector validate</code> warns
+  "has no consumers", which is expected. Its regex now also matches <code>dispatch_handler</code> (the old one
+  matched only <code>handler</code>, which no longer matches the 3.8.1 logger name), and the tests cover both.</li>
+<li><strong>Loki.</strong> No per-stream rule. The global <code>retention_period: 180d</code> applies (the compactor has
+  <code>retention_enabled: true</code> and <code>delete_request_store: filesystem</code>), so the whisper stream is kept
+  180 days like everything else. If the global value is ever lowered, the transcript retention
+  changes with it. The stream labels are <code>namespace="home-assistant"</code>, <code>container="whisper"</code>.</li>
+<li><strong>False wakes are captured too.</strong> Wake word detection runs on the server (openWakeWord), so a false
+  wake streams whatever was being said to Whisper and its transcript lands in Loki like any
+  command. People in the room are recorded in text without having said the wake word.</li>
+<li><strong>How to turn it off.</strong> Revert the commit that made this exception (restores the Vector wiring and
+  removes the sitecustomize ConfigMap, <code>PYTHONPATH</code> and the mount). Whisper then logs no transcript
+  (DEBUG is off for that logger again). Transcripts already in Loki stay until they age out at 180
+  days; to remove them earlier, use Loki's delete API (see the data register).</li>
+</ul>
+<p><strong>Original policy, still valid outside the exception.</strong> The other places checked on 2026-11-05
+(counts and shapes only, no text read):</p>
+<ul>
+<li>Home Assistant (<code>hass</code>): default log level (no <code>logger:</code> config), so only warnings and errors
+  reach Loki. None of the 2,212 voice-related lines in 7 days carries input text (the common one is
+  an <code>ollama</code> "model not found" traceback). Do not enable debug for <code>conversation</code>,
+  <code>assist_pipeline</code> or <code>homeassistant.components.llama_cpp</code>: that would log request text.</li>
+<li>Home Assistant recorder (PostgreSQL): the <code>assist_satellite</code>, <code>conversation</code>, <code>stt</code>, <code>tts</code> and
+  <code>wake_word</code> entities only keep a state (idle, listening, processing, responding) and
+  <code>friendly_name</code>; no events carry speech text.</li>
+<li>Piper (<code>rhasspy/wyoming-piper:2.5.2</code>): only startup lines at INFO. It logs the synthesized text
+  only with <code>--debug</code>; never add that flag.</li>
+<li>openWakeWord: startup line only.</li>
+<li>Kiais gateway (namespace <code>isidoro</code>, <code>RUST_LOG=kiais=debug</code>): logs events and timings, no
+  request or response bodies seen. The <code>chat_messages</code> table in its database is empty. Re-check
+  after Kiais upgrades because it runs at debug level.</li>
+<li><strong>Old transcripts already in Loki.</strong> Not purged: the morning decision was to stop collecting them,
+  not to delete the history, and the exception now keeps new ones as well. They age out with the
+  180-day retention. Loki's deletion mode is the default (<code>filter-and-delete</code>), so a purge by log
+  selector and line filter through the delete API remains possible.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

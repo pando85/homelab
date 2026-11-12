@@ -1,0 +1,5682 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../oye-kivi-vnext-ablations/">
+      
+      
+        <link rel="next" href="../whisper-gpu-benchmark/">
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#small-local-models-for-kivi-gpu-budget-router-stt-corrector-local-agent-and-non-llm-fixes" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/ingress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ingress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/pfsense/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense: cluster-relevant configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/webos-voice-satellite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    webOS voice satellite network requirement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-helm-hook-provisioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD Helm hooks: provisioning Jobs that never run, and hooks that silently stop running
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-ssa-stale-field-manager/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD server-side apply: a field removed from git persists live
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ci-runner-amd64-disk-full/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ci-runner-amd64 fills the k8s-amd64-1 root disk
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-gateway-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-gateway-listener-drain/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway listener changes close long connections
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-oidc-id-token-cookie-size/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy OIDC session breaks: ID token cookie over 4096 B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/forgejo-runner-valid-volumes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Forgejo runner valid_volumes silently drops container-job mounts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-omnibattery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: Omnibattery and the house battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kanidm-no-dcr-mcp-client-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm has no dynamic client registration for MCP clients
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/mcp-firecrawl-egress-regression/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl egress NetworkPolicies: applied, broke readiness, rolled back
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/office-iot-wifi-flapping/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/pfsense-alias-change-keeps-old-states/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense alias change keeps old states
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/sccache-s3-bucket-full-silent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    sccache S3 tier silently stops writing when the bucket is full
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/stop-home-assistant-under-argocd/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stopping Home Assistant under ArgoCD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/unifi-wifi-client-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging Wi-Fi Clients on the UniFi Network
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-truncated-zfs-backups/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0005-gateway-api-with-envoy-gateway/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0005: Gateway API with Envoy Gateway instead of ingress-nginx
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Design
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Design
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/mcp-gateway-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MCP Gateway Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Voice assistant
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Voice assistant
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audio-pipeline-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant audio pipeline plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conversation-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation agent: where small local models fit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conversation-capabilities-roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation capabilities roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data-register/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi data register
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kiais-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kiais as the Kivi conversation agent in Home Assistant
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kivi-iteration-loop/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi wake word: the iteration loop
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../lessons-learned/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lessons learned
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-registry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi model registry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../stt-hint-list-and-learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whisper-image-build/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building the Kivi Whisper STT image on Forgejo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8_13" id="__nav_8_13_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    experiments
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8_13">
+            <span class="md-nav__icon md-icon"></span>
+            experiments
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversation-agent-eval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conversation agent evaluation for "Kivi": Kiais gateway metrics, a reusable dry-run harness, and what Home Assistant's built-in intents already cover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decision-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decision models for Kivi: can a small classifier rescue the commands the built-in intents miss?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kivi-decider-poc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kivi-wake-word/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-data-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" training-data quality: phrase check, out-of-fold labels, coverage (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-p0-baseline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    P0 real-voice baseline: deployed v4 "oye Kivi" (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recovery plan: unreliable "oye Kivi" wake word
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-v5era-mining/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    v5-era room audio: replay false wakes and missed-wake mining (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-v6/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" v6: context-trained candidate (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-vnext-ablations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vnext ablations: real voice is what moves the needle (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#question" class="md-nav__link">
+    <span class="md-ellipsis">
+      Question
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-gpu-budget-on-prusik-observed-2026-11-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. GPU budget on prusik (observed 2026-11-05)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. GPU budget on prusik (observed 2026-11-05)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cluster-nodes-observed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cluster nodes (observed)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-whisper-latency-on-the-1060-observed-from-the-whisper-pods-own-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Whisper latency on the 1060 (observed from the Whisper pod's own logs)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Method
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-candidate-models-and-fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Candidate models and fit
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-whisper-prompt-hotwords-beam-and-model-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Whisper: prompt, hotwords, beam and model size
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-router" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Router
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-stt-corrector" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. STT corrector
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-local-tool-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Local tool agent
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-speed-gpu-cpu-and-hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Speed: GPU, CPU and hybrid
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Speed: GPU, CPU and hybrid">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cpu-measured-on-the-workstation-inferred-for-prusik" class="md-nav__link">
+    <span class="md-ellipsis">
+      CPU (measured on the workstation, inferred for prusik)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whisper-prompt-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      Whisper prompt cost
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hybrid-cpu-and-1060-inferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hybrid CPU and 1060 (inferred)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-end-to-end-latency-budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. End-to-end latency budgets
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion-and-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion and confidence
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rollback-and-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rollback and cleanup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open questions
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../whisper-gpu-benchmark/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Whisper decoding settings on the GTX 1060: compute type, beam size, VAD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#question" class="md-nav__link">
+    <span class="md-ellipsis">
+      Question
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-gpu-budget-on-prusik-observed-2026-11-05" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. GPU budget on prusik (observed 2026-11-05)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. GPU budget on prusik (observed 2026-11-05)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cluster-nodes-observed" class="md-nav__link">
+    <span class="md-ellipsis">
+      Cluster nodes (observed)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-whisper-latency-on-the-1060-observed-from-the-whisper-pods-own-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Whisper latency on the 1060 (observed from the Whisper pod's own logs)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-method" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Method
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-candidate-models-and-fit" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Candidate models and fit
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-whisper-prompt-hotwords-beam-and-model-size" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Whisper: prompt, hotwords, beam and model size
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-router" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Router
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-stt-corrector" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. STT corrector
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-local-tool-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Local tool agent
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-speed-gpu-cpu-and-hybrid" class="md-nav__link">
+    <span class="md-ellipsis">
+      9. Speed: GPU, CPU and hybrid
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Speed: GPU, CPU and hybrid">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cpu-measured-on-the-workstation-inferred-for-prusik" class="md-nav__link">
+    <span class="md-ellipsis">
+      CPU (measured on the workstation, inferred for prusik)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      GPU
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#whisper-prompt-cost" class="md-nav__link">
+    <span class="md-ellipsis">
+      Whisper prompt cost
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hybrid-cpu-and-1060-inferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      Hybrid CPU and 1060 (inferred)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-end-to-end-latency-budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      10. End-to-end latency budgets
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion-and-confidence" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion and confidence
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rollback-and-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      Rollback and cleanup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Open questions
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="small-local-models-for-kivi-gpu-budget-router-stt-corrector-local-agent-and-non-llm-fixes">Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes</h1>
+<p><strong>Status:</strong> DONE for the PC-only measurements; the real GTX 1060 measurement needs the owner's
+approval (proposal in <a href="../../conversation-agent/#proposed-gitops-change-for-approval">the design note</a>)
+<strong>Date:</strong> 2026-11-05
+<strong>Systems:</strong> homelab node <code>prusik</code> (GTX 1060 3 GB, Pascal <code>sm_61</code>) read-only; measurements on the
+workstation <code>z800</code> (RTX 4060 Ti 16 GB, Ryzen 9 5950X 16 cores / 32 threads, DDR4)
+<strong>Related:</strong> <a href="../conversation-agent-eval/">conversation agent evaluation</a> (Kiais metrics and the
+harness reused here), <a href="../../stt-hint-list-and-learning/">STT hint list</a> (uses the prompt numbers of
+<a href="#5-whisper-prompt-hotwords-beam-and-model-size">section 5</a>), satellite-side
+<a href="https://github.com/pando85/webos-voice-satellite/blob/main/docs/project/backlog.md#12-conversation-agent-for-the-kiwi-pipeline">backlog section 12</a>
+(formerly EXP-019 of that repository)
+<strong>Risk:</strong> read-only on the cluster and Home Assistant; no TV, no sound, no microphone. Nothing was
+pulled into the cluster Ollama. Kiais received no requests from this study.
+<strong>Scripts:</strong> <code>scripts/voice-assistant/small_models/</code> (this study) on top of
+<code>scripts/voice-assistant/agent_eval/</code> (phrases, fake home, built-in intent matcher, chat harness)</p>
+<p>Evidence labels: <strong>documented</strong> (read in source, a manifest or a model card, version named),
+<strong>observed</strong> (read from the cluster, Prometheus or Loki on the date above), <strong>measured</strong> (run on
+<code>z800</code> in this study), <strong>inferred</strong> (computed from the above, not run on the target),
+<strong>hypothesis</strong>.</p>
+<h2 id="question">Question</h2>
+<p>Can a small model on the cluster's GTX 1060 (or on a node CPU) make the Spanish pipeline "Kiwi"
+better, as a router (home command or general question), as a corrector of Whisper transcripts, or
+as the home-control agent itself, and how does that compare with non-LLM fixes (Whisper prompt,
+model size, Home Assistant's built-in intents)? Owner's target: commands handled locally, fast and
+accurate; general and live questions routed to the Kiais gateway.</p>
+<h2 id="summary">Summary</h2>
+<ol>
+<li><strong>VRAM budget (observed):</strong> Whisper <code>large-v3-turbo</code> int8 holds 1140 MiB on the 1060 and peaks
+   at 1556 MiB while transcribing; Jellyfin may also use the GPU. The owner set the LLM budget to
+   <strong>1.0 GiB</strong>, guarded so it can never take Whisper's burst.</li>
+<li><strong>No model that fits 1.0 GiB is a usable Home Assistant agent (measured).</strong> Nine models of
+   270 M to 1.5 B parameters passed 0 to 16 % of the control phrases with Home Assistant's tool
+   schema; the first usable size is <code>qwen3:4b-instruct</code> (65 % of all control phrases, and 10 of 13
+   of the phrases the built-in intents miss, against 11 of 13 for Kiais <code>fast</code>). It needs about
+   2.5 GB plus cache, so on this cluster it would run on the <code>prusik</code> CPU or split CPU/GPU.</li>
+<li><strong>The router does not need an LLM.</strong> Home Assistant's own strict matching
+   (<code>prefer_local_intents</code>) already sends every general and live question away (21 of 21) and keeps
+   32 of 47 home phrases local. A multilingual sentence-embedding model (278 M) with 3 nearest
+   neighbours, behind the built-in match, reaches 66 of 68 (97 %) on the reference texts in tens of
+   milliseconds on a CPU. Small LLM routers were worse (section 6).</li>
+<li><strong>The Whisper prompt is the cheapest accuracy gain (measured):</strong> area and device names as
+   <code>initial_prompt</code> raised built-in intent success from 65 % to 70 % at +5 dB of TV content (no
+   gain on clean audio); the generic command verbs, <strong>with or without the names</strong>, raised it to
+   <strong>85 to 88 % clean, 74 to 75 % at +5 dB and 57 % at 0 dB</strong> (from 82, 65 and 46 %; verbs only:
+   52 phrases fixed and 3 broken over the four conditions). A static verbs-only prompt works on the
+   deployed image today. <code>hotwords</code> gave output identical to <code>initial_prompt</code>. Whisper <code>small</code> and
+   <code>medium</code> were significantly worse than the deployed <code>large-v3-turbo</code>, and <code>large-v3</code> was not
+   better.</li>
+<li><strong>LLM transcript correctors do not pay off (measured):</strong> every model that fits broke about as
+   many commands as it fixed, or more, and some rewrote a command to a different device; the only
+   clearly positive one (<code>qwen2.5:3b</code>, 1.9 GB) gained less than the Whisper prompt.</li>
+<li><strong>Latency on the 1060 (observed from its logs):</strong> Whisper takes 0.78 s plus 0.03 s per second of
+   audio (p50 0.86 s), almost independent of the command length, because the encoder always runs a
+   30 s window.</li>
+</ol>
+<h2 id="1-gpu-budget-on-prusik-observed-2026-11-05">1. GPU budget on <code>prusik</code> (observed 2026-11-05)</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GPU</td>
+<td>GTX 1060 3 GB, 3072 MiB, driver 580.159.03, Pascal <code>sm_61</code></td>
+<td>DCGM exporter, <code>nvidia-smi</code></td>
+</tr>
+<tr>
+<td>Sharing</td>
+<td>time-slicing, 8 replicas, no memory isolation (<code>failRequestsGreaterThanOne: false</code>)</td>
+<td><code>system/gpu-operator/time-slicing-config.yaml</code></td>
+</tr>
+<tr>
+<td>GPU pods</td>
+<td><code>home-assistant-whisper</code>, <code>jellyfin-0</code>, <code>ollama</code> (each <code>nvidia.com/gpu: 1</code>)</td>
+<td><code>kubectl get pods</code></td>
+</tr>
+<tr>
+<td>Resident now</td>
+<td>one process, 1138 MiB: Whisper. Ollama has no model loaded (<code>ollama list</code> empty, 0.40.13); Jellyfin idle</td>
+<td><code>nvidia-smi</code> in the DCGM pod</td>
+</tr>
+<tr>
+<td>Used, 7 and 30 days</td>
+<td>min 1118, p95 1140, max <strong>1556 MiB</strong></td>
+<td><code>DCGM_FI_DEV_FB_USED</code></td>
+</tr>
+<tr>
+<td>Peaks</td>
+<td>1556 MiB only during transcriptions; encoder and decoder utilisation of NVENC/NVDEC 0 for 30 days</td>
+<td><code>DCGM_FI_DEV_ENC_UTIL</code>, <code>DEC_UTIL</code></td>
+</tr>
+<tr>
+<td>Ollama chart</td>
+<td><code>ollama/ollama:0.40.13</code>, chart 1.94.0, <code>limits.memory: 2Gi</code>, <code>nvidia.com/gpu: 1</code>, <code>models.pull: []</code></td>
+<td><code>apps/ollama/values.yaml</code></td>
+</tr>
+<tr>
+<td>Whisper</td>
+<td><code>pando85/wyoming-whisper:2.4.0</code>, <code>--model large-v3-turbo --language es --device cuda --compute-type int8</code>; beam size default 5, no prompt, no VAD filter</td>
+<td><code>apps/home-assistant/values.yaml</code>; wyoming-faster-whisper 2.4.0 source</td>
+</tr>
+</tbody>
+</table>
+<p>Budget (inferred): 3072 MiB minus Whisper's peak (1556 MiB) leaves 1516 MiB. A Jellyfin transcode
+reserves roughly 250 to 300 MiB (hypothesis, not observed here), and a CUDA context of a second
+process costs roughly 100 to 150 MiB on Pascal (hypothesis), so <strong>about 1.0 GiB</strong> remains for an
+LLM's weights, KV cache and compute buffers. The owner confirmed 1.0 GiB with Jellyfin coexisting.</p>
+<p>Whisper <code>large-v3-turbo</code> is not the "small model": it is the second-largest Spanish-capable
+Whisper and already takes about half of the card. CTranslate2 runs int8 on <code>sm_61</code> as
+<code>int8_float32</code> (documented, CTranslate2 quantization table).</p>
+<p>A risk of the current setup (inferred): Ollama sizes its offload against the free VRAM when it
+loads a model. While Whisper is idle it sees about 1.86 GiB free and can take the 416 MiB that
+Whisper needs during a transcription, after which Whisper's CUDA allocation fails. The guard is
+<code>OLLAMA_GPU_OVERHEAD</code> plus a context cap (design note).</p>
+<h3 id="cluster-nodes-observed">Cluster nodes (observed)</h3>
+<table>
+<thead>
+<tr>
+<th>Node</th>
+<th>CPU</th>
+<th>RAM</th>
+<th>Load now</th>
+<th>Fit for CPU inference</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prusik</code></td>
+<td>AMD family 25 model 97 (Zen 4 "Raphael", 16 cores / 32 threads, AM5 board X670; inferred Ryzen 9 7950X class), DDR5</td>
+<td>62 GB, 73 % used</td>
+<td>about 1 core</td>
+<td>yes; hosts the GPU too</td>
+</tr>
+<tr>
+<td><code>k8s-amd64-1</code></td>
+<td>AMD family 23 model 104 (Zen 2 mobile, 6 cores / 12 threads, ASUS PN51)</td>
+<td>15 GB</td>
+<td>idle</td>
+<td>small models only</td>
+</tr>
+<tr>
+<td><code>grigri</code></td>
+<td>Intel family 6 model 77 (Atom C2000 class, 8 cores), Supermicro A1SAi</td>
+<td>32 GB</td>
+<td>2 cores</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>The workstation used for the CPU measurements is a Ryzen 9 5950X (Zen 3, 16 cores, DDR4); the
+owner considers it similar to the nodes. <code>prusik</code>'s Zen 4 with DDR5 and AVX-512 should be as fast
+or faster, so CPU figures here are labelled inferred for <code>prusik</code>.</p>
+<h2 id="2-whisper-latency-on-the-1060-observed-from-the-whisper-pods-own-logs">2. Whisper latency on the 1060 (observed from the Whisper pod's own logs)</h2>
+<p><code>wyoming-faster-whisper</code> logs <code>Processing audio with duration ...</code> before and the transcript after
+each request at INFO level (documented, <code>handler.py</code> of 2.4.0), so Loki holds a timing per request.
+Over 2026-10-16 to 2026-11-05, 445 requests (the transcripts themselves are private and were not
+copied into this repository):</p>
+<table>
+<thead>
+<tr>
+<th>Audio length</th>
+<th style="text-align: right;">n</th>
+<th>STT p50 / p90 (s)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>under 2 s</td>
+<td style="text-align: right;">132</td>
+<td>0.84 / 0.89</td>
+</tr>
+<tr>
+<td>2 to 3 s</td>
+<td style="text-align: right;">104</td>
+<td>0.85 / 0.90</td>
+</tr>
+<tr>
+<td>3 to 4 s</td>
+<td style="text-align: right;">74</td>
+<td>0.85 / 0.91</td>
+</tr>
+<tr>
+<td>4 to 6 s</td>
+<td style="text-align: right;">35</td>
+<td>0.88 / 0.96</td>
+</tr>
+<tr>
+<td>6 to 10 s</td>
+<td style="text-align: right;">73</td>
+<td>0.93 / 0.99</td>
+</tr>
+<tr>
+<td>over 10 s</td>
+<td style="text-align: right;">25</td>
+<td>0.89 / 1.06</td>
+</tr>
+</tbody>
+</table>
+<p>Least squares: STT = 0.78 s + 0.029 s per second of audio. The fixed part is the encoder over a
+30 s window. The same model and settings take 0.19 s per item on the 4060 Ti (measured), so the
+1060 is about <strong>4.5 times slower on this compute-bound work</strong>; this factor is used below for
+prefill estimates (inferred). Decoding of an LLM is memory-bound and scales with bandwidth
+(192 against 288 GB/s, about 1.5 times; inferred).</p>
+<h2 id="3-method">3. Method</h2>
+<ul>
+<li><strong>Phrases and fake home:</strong> <code>agent_eval/phrases_es.yaml</code> (44 home control, 15 general, 11 live
+  information, 6 two-turn follow-ups) and <code>agent_eval/inventory_es.yaml</code> (a fake Spanish home). No
+  real data.</li>
+<li><strong>Built-in intents:</strong> <code>agent_eval/builtin_intents.py</code> runs hassil 3.12.1 with
+  home-assistant-intents 2026.10.6 (the pins of HA 2026.10.4) with the default agent's slot lists
+  and the satellite area as context; inferred, not a run of Home Assistant. Of the 44 control
+  reference texts, 29 resolve to the expected call; 15 fall through (5 because Home Assistant hands
+  <code>HassMediaSearchAndPlay</code> to an LLM agent with control, 9 without a match, 1 with no tool twin).</li>
+<li><strong>Semi-synthetic audio</strong> (<code>small_models/stt_corpus.py</code>): the 70 single-turn phrases spoken by the
+  seven Spanish Piper voices of the satellite project's Phase 2 corpus, at -22 dBFS active speech,
+  clean and mixed with random excerpts of its TV content set (Spanish narration, English film
+  dialogue, songs with vocals) at +10, +5 and 0 dB speech-to-content ratio: 1960 clips. The two
+  <code>es_ES-mls_*-low</code> voices are unintelligible even digitally (also found in the satellite's Phase 2
+  session 2) and are excluded from every figure; 5 voices remain (2 ES male and female, 1 ES male,
+  2 MX), 350 clips per condition. No room acoustics or echo-canceller residue are modelled.</li>
+<li><strong>Transcription</strong> (<code>small_models/stt_eval.py</code>): faster-whisper 1.2.1 with the call of
+  wyoming-faster-whisper 2.4.0 (language <code>es</code>, beam 5, optional <code>initial_prompt</code>; no VAD, no
+  hotwords) on the 4060 Ti. Scored by WER (the satellite's Phase 2 normalisation v1.1 with numerals
+  spelled on both sides) and by <strong>built-in intent success</strong>: the share of the 29 handleable control
+  phrases whose transcript still resolves to the right call. Paired differences use the exact
+  McNemar test; items of the same phrase in different voices are not independent, so p-values are
+  indicative.</li>
+<li><strong>Router</strong> (<code>small_models/router_eval.py</code>), <strong>corrector</strong> (<code>small_models/corrector_eval.py</code>) and
+  <strong>agent</strong> (<code>agent_eval/run.py</code> against a private Ollama 0.35.1 bound to <code>127.0.0.1:11500</code>, models
+  from the Ollama library at their default quantisation, <code>num_ctx</code> 8192 as Home Assistant's Ollama
+  integration sets by default, thinking off).</li>
+<li><strong>Latency:</strong> every timing excludes the one-off model load (a warm-up request first; the model
+  store was on a hard disk). The workstation was shared with a wake-word training job (load average
+  25 to 98) and the GPU with the other runs of this study, so accuracy figures are clean but the
+  timing figures of the routers, corrector and agent runs are upper bounds; the dedicated speed
+  benchmarks are in <a href="#9-speed-gpu-cpu-and-hybrid">section 9</a>.</li>
+</ul>
+<h2 id="4-candidate-models-and-fit">4. Candidate models and fit</h2>
+<p>Ollama's own size estimate at load (weights, KV cache and compute graph) on the 4060 Ti, measured;
+licences from the model pages (documented).</p>
+<table>
+<thead>
+<tr>
+<th>Model (Ollama tag)</th>
+<th>Quant</th>
+<th style="text-align: right;">Download</th>
+<th>Loaded at 2k / 4k / 8k ctx</th>
+<th>Tools</th>
+<th>Licence</th>
+<th>Fits 1.0 GiB?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>functiongemma:270m</code></td>
+<td>Q8_0</td>
+<td style="text-align: right;">300 MB</td>
+<td>321 / 323 / 363 MB</td>
+<td>yes</td>
+<td>Gemma Terms of Use</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>gemma3:270m</code></td>
+<td>Q8_0</td>
+<td style="text-align: right;">291 MB</td>
+<td>not measured</td>
+<td>no</td>
+<td>Gemma Terms of Use</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>granite4:350m</code></td>
+<td>BF16</td>
+<td style="text-align: right;">708 MB</td>
+<td>784 / 845 / 994 MB</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>yes (to 8k)</td>
+</tr>
+<tr>
+<td><code>qwen2.5:0.5b</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">397 MB</td>
+<td>about 0.4 / 481 / 580 MB</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>qwen3:0.6b</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">522 MB</td>
+<td>693 / 930 MB / 1.4 GB</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>to 4k</td>
+</tr>
+<tr>
+<td><code>qwen3.5:0.8b</code></td>
+<td>Q8_0</td>
+<td style="text-align: right;">1.3 GB with vision and draft parts</td>
+<td>554 / 560 / 597 MB reported, but <strong>1536 / 1737 MiB</strong> measured at 1k / 4k</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>gemma3:1b</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">806 MB</td>
+<td>875 / 877 / 952 MB</td>
+<td>no</td>
+<td>Gemma Terms of Use</td>
+<td>yes, barely</td>
+</tr>
+<tr>
+<td><code>lfm2.5-thinking:1.2b</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">731 MB</td>
+<td>814 / 841 / 963 MB</td>
+<td>yes</td>
+<td>LFM Open License 1.0 (revenue cap, not OSI)</td>
+<td>yes, barely</td>
+</tr>
+<tr>
+<td><code>qwen2.5:1.5b</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">986 MB</td>
+<td>1.1 / 1.2 / 1.4 GB</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>qwen3:1.7b</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">1.4 GB</td>
+<td>1.5 / 1.7 / 2.2 GB</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>llama3.2:1b</code></td>
+<td>Q8_0</td>
+<td style="text-align: right;">1.3 GB</td>
+<td>1.4 / 1.5 / 1.7 GB</td>
+<td>yes</td>
+<td>Llama 3.2 Community Licence</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>qwen2.5:3b</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">1.9 GB</td>
+<td>(not loaded on the 1060)</td>
+<td>yes</td>
+<td>Qwen Research Licence (non-commercial)</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>qwen3:4b-instruct</code></td>
+<td>Q4_K_M</td>
+<td style="text-align: right;">2.5 GB</td>
+<td>(not loaded on the 1060)</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>granite-embedding:278m</code>, <code>paraphrase-multilingual</code></td>
+<td>F16</td>
+<td style="text-align: right;">562 MB each</td>
+<td>embedding only</td>
+<td>n/a</td>
+<td>Apache-2.0</td>
+<td>yes</td>
+</tr>
+</tbody>
+</table>
+<p>Measured VRAM deltas on an otherwise idle card (<code>nvidia-smi</code> before and after loading, so they
+include the runner's CUDA context): <code>granite-embedding:278m</code> 313 MiB, <code>gemma3:1b</code> 987 / 1003 MiB at
+1k / 4k context, <code>qwen2.5:1.5b</code> 1175 / 1261 MiB, <code>qwen3.5:0.8b</code> 1536 / 1737 MiB. Ollama's own
+estimate is low for <code>qwen3.5:0.8b</code> (its hybrid attention and extra parts), so check the real
+footprint before trusting an estimate on the 1060. Of the LLMs, only those up to about 0.6 B
+parameters at a short context clearly fit 1.0 GiB.</p>
+<p>The Home Assistant style system prompt plus the 26 tool definitions of the fake home is <strong>3633
+tokens</strong> (measured with <code>qwen2.5:1.5b</code>'s tokenizer), so a tool agent needs <code>num_ctx</code> of at least
+4096, and Home Assistant's Ollama integration uses 8192 by default (documented). A real home with
+more exposed entities needs more.</p>
+<p>Runtimes (documented unless marked): llama.cpp (the engine inside Ollama) supports <code>sm_61</code> with
+integer <code>dp4a</code> kernels and partial offload (<code>-ngl</code>) and AVX-512 on Zen 4; Ollama adds model
+management and the API Home Assistant's <code>ollama</code> integration speaks; Home Assistant 2026.10.4 also
+has a core <code>llama_cpp</code> integration (base URL of a <code>llama-server</code>) and a core <code>litellm</code> integration
+(URL plus key, OpenAI client) (documented, <code>config_flow.py</code> at tag 2026.10.4). CTranslate2 already
+runs Whisper; its LLM support is narrower (hypothesis that it brings nothing over llama.cpp here).
+ExLlamaV2, vLLM and TensorRT-LLM rely on FP16 tensor maths; Pascal consumer cards run FP16 at a
+small fraction of FP32 speed and lack tensor cores, so they are not realistic on the 1060
+(inferred). ONNX Runtime GenAI could run small models on CPU (hypothesis; not measured).</p>
+<h2 id="5-whisper-prompt-hotwords-beam-and-model-size">5. Whisper: prompt, hotwords, beam and model size</h2>
+<p>Built-in intent success on the 29 handleable control phrases (145 clips per condition) and WER
+over all 70 phrases (350 clips per condition), 4060 Ti, measured.</p>
+<table>
+<thead>
+<tr>
+<th>Configuration</th>
+<th>Clean</th>
+<th>+10 dB</th>
+<th>+5 dB</th>
+<th>0 dB</th>
+<th>WER clean / +5 / 0 dB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>large-v3-turbo</code> int8, beam 5 (as deployed)</td>
+<td>119/145 (82 %)</td>
+<td>103 (71 %)</td>
+<td>94 (65 %)</td>
+<td>67 (46 %)</td>
+<td>0.044 / 0.117 / 0.341</td>
+</tr>
+<tr>
+<td>same + <code>initial_prompt</code> (areas and device names)</td>
+<td>117 (81 %)</td>
+<td>108 (74 %)</td>
+<td>102 (70 %)</td>
+<td>76 (52 %)</td>
+<td>0.044 / 0.111 / 0.296</td>
+</tr>
+<tr>
+<td>same + <code>hotwords</code> (same text)</td>
+<td>identical to the prompt row</td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>same + <code>initial_prompt</code> names <strong>and command verbs</strong></td>
+<td><strong>123 (85 %)</strong></td>
+<td><strong>114 (79 %)</strong></td>
+<td><strong>109 (75 %)</strong></td>
+<td><strong>82 (57 %)</strong></td>
+<td>0.035 / 0.102 / 0.271</td>
+</tr>
+<tr>
+<td>same + <code>initial_prompt</code> <strong>command verbs only</strong> (no names)</td>
+<td><strong>128 (88 %)</strong></td>
+<td><strong>113 (78 %)</strong></td>
+<td><strong>108 (74 %)</strong></td>
+<td><strong>83 (57 %)</strong></td>
+<td>0.033 / 0.103 / 0.279</td>
+</tr>
+<tr>
+<td>same + verbs first, then names (the order of wyoming-faster-whisper 3.8.1: static prompt, then <code>--hass-token</code> names)</td>
+<td>122 (84 %)</td>
+<td>111 (77 %)</td>
+<td>107 (74 %)</td>
+<td>80 (55 %)</td>
+<td>0.035 / 0.097 / 0.284</td>
+</tr>
+<tr>
+<td><code>large-v3-turbo</code>, beam 1</td>
+<td>116 (80 %)</td>
+<td>104 (72 %)</td>
+<td>89 (61 %)</td>
+<td>59 (41 %)</td>
+<td>0.051 / 0.138 / 0.380</td>
+</tr>
+<tr>
+<td><code>small</code> int8, beam 5</td>
+<td>102 (70 %)</td>
+<td>80 (55 %)</td>
+<td>59 (41 %)</td>
+<td>42 (29 %)</td>
+<td>0.079 / 0.201 / 0.438</td>
+</tr>
+<tr>
+<td><code>small</code> + names prompt</td>
+<td>107 (74 %)</td>
+<td>83 (57 %)</td>
+<td>71 (49 %)</td>
+<td>48 (33 %)</td>
+<td>0.068 / 0.176 / 0.415</td>
+</tr>
+<tr>
+<td><code>medium</code> int8, beam 5</td>
+<td>110 (76 %)</td>
+<td>82 (57 %)</td>
+<td>71 (49 %)</td>
+<td>52 (36 %)</td>
+<td>0.050 / 0.149 / 0.406</td>
+</tr>
+<tr>
+<td><code>medium</code> + names prompt</td>
+<td>112 (77 %)</td>
+<td>96 (66 %)</td>
+<td>84 (58 %)</td>
+<td>63 (43 %)</td>
+<td>0.042 / 0.112 / 0.323</td>
+</tr>
+<tr>
+<td><code>large-v3</code> int8 + names prompt</td>
+<td>122 (84 %)</td>
+<td>109 (75 %)</td>
+<td>91 (63 %)</td>
+<td>76 (52 %)</td>
+<td>0.036 / 0.099 / 0.271</td>
+</tr>
+</tbody>
+</table>
+<p>Paired, prompt against no prompt (fixed / broken phrases, exact McNemar): clean 1 / 3 (p 0.63),
++10 dB 7 / 2 (p 0.18), +5 dB 12 / 4 (p 0.08), 0 dB 12 / 3 (p 0.035); pooled over the three noisy
+conditions <strong>31 / 9</strong>. Model size, paired against <code>large-v3-turbo</code> with the same prompt setting:
+<code>small</code> breaks 18 to 38 phrases per condition and fixes 1 to 7 (p &lt; 0.001 everywhere); <code>medium</code>
+breaks 14 to 31 and fixes 3 to 9 (p &lt; 0.07); <code>large-v3</code> (with the names prompt, against turbo with
+it) is level on clean, +10 and 0 dB and worse at +5 dB (6 fixed, 17 broken, p 0.035), and the
+largest new process during its run peaked at about 2.4 GiB on the 4060 Ti, so on the 1060 it would
+leave no room for anything else. Names and command verbs against no prompt: clean 4 / 0
+(p 0.13), +10 dB 13 / 2 (p 0.007), +5 dB 17 / 2 (p 0.001), 0 dB 18 / 3 (p 0.001), pooled noisy
+<strong>48 / 7</strong>; against names only: 29 fixed and 4 broken over the four conditions. Beam 1 against
+beam 5: pooled noisy 4 / 16 (worse). The names prompt was
+<code>"Kivi, asistente de casa. "</code> followed by the 32 distinct area and device names and aliases of the
+fake home (about 80 tokens); it made Whisper write "Kivi" into 3 of 1400 transcripts whose audio
+has no "Kivi" (keep the assistant's name out of the prompt). <code>hotwords</code> in faster-whisper fills the
+same prompt slot, which explains the identical output.</p>
+<p>What still fails with the prompt on clean audio is mostly the <strong>command verb at the start of a
+short utterance</strong> ("Reanuda la tele" heard as "Renuda la tele", "Apaga la tele" as "Hasta acá la
+tele", "Pausa la tele" as "Pops a la tele", "Apaga la luz" as "Para la luz") and words outside the
+names list ("temporizador" as "Tiempoizador", "toldo" as "tolo"). Names alone cannot fix verbs, so a
+third variant appends the generic command vocabulary of Home Assistant's Spanish intents
+(<code>"Enciende, apaga, sube, baja, abre, cierra, para, pausa, reanuda, silencia, quita el silencio, pon,
+temporizador, minutos, volumen, brillo, por ciento, grados."</code>, no test sentence, about 40 more
+tokens; <code>VERBS_ES</code> in <code>stt_eval.py</code>). The rows in bold, with and without the names, are the
+largest gain of the study. Caveat: the verbs are the same generic verbs the test phrases use, as real commands do; the
+gain on the owner's own phrasing is to be confirmed with real transcripts (hint-list phase 2).</p>
+<p>Verbs only against no prompt: clean 9 / 0 (p 0.004), +10 dB 11 / 1 (p 0.006), +5 dB 15 / 1
+(p 0.001), 0 dB 17 / 1 (p &lt; 0.001). Verbs first then names against no prompt: 4 / 1, 10 / 2, 14 / 1,
+16 / 3. Against names then verbs, neither variant differs significantly (p 0.06 to 1.0). So on this
+fake home <strong>the verbs carry the gain</strong>; the names add nothing measurable, probably because the fake
+home's names are common Spanish words that Whisper already knows (real names may differ). Neither
+verbs variant leaked "Kivi" (0 of 1400 each).</p>
+<p><strong>For the <a href="../../stt-hint-list-and-learning/">hint list</a>:</strong> put the command verbs in the prompt,
+not only names; a static verbs-only <code>--initial-prompt</code> already works on the deployed 2.4.0 image
+and needs no home data; the 3.8.1 order (verbs first, then the names) is as good. Keep "Kivi" out
+(it leaked into 3 of 1400 transcripts in every run whose prompt started with it); the prompt's
+latency cost is in <a href="#9-speed-gpu-cpu-and-hybrid">section 9</a>.</p>
+<h2 id="6-router">6. Router</h2>
+<p>Task: label a transcript "casa" (handled in the house: built-in intents or a local agent) or
+"kiais" (general knowledge, chat, open-world live information). Labels: all 44 control phrases plus
+"¿Qué tiempo hace fuera?", "¿Qué hora es?" and "¿Qué día es hoy?" are "casa" (47); the 15 general
+and the other live phrases are "kiais" (21); the two calendar phrases are not scored. Methods:</p>
+<ul>
+<li><strong>builtin:</strong> "casa" when Home Assistant's strict built-in matching resolves an intent (what
+  <code>prefer_local_intents</code> does; <code>HassMediaSearchAndPlay</code> and <code>HassGetState</code> count as not matched,
+  as Home Assistant hands them to an LLM agent with control).</li>
+<li><strong>embedding:</strong> <code>granite-embedding:278m</code> or <code>paraphrase-multilingual</code> (both multilingual,
+  Apache-2.0), nearest class centroid or 3 nearest neighbours over 80 synthetic training phrases
+  written for this study (40 per class, no sentence shared with the test set; in <code>router_eval.py</code>).</li>
+<li><strong>LLM:</strong> JSON-schema constrained <code>{"ruta": "casa" | "kiais"}</code> with a Spanish instruction, the
+  area and device names and four few-shot pairs; about 400 prompt tokens.</li>
+<li><strong>builtin + X:</strong> built-in match first, X only for the rest (how X would sit behind
+  <code>prefer_local_intents</code>).</li>
+</ul>
+<p>Reference texts (68 items), measured:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Accuracy</th>
+<th>Home kept local</th>
+<th>General/live to Kiais</th>
+<th>p50 ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>builtin</td>
+<td>53 (78 %)</td>
+<td>32/47</td>
+<td>21/21</td>
+<td>10</td>
+</tr>
+<tr>
+<td>granite-embedding, 3-NN (with or without builtin)</td>
+<td>66 (97 %)</td>
+<td>47/47</td>
+<td>19/21</td>
+<td>9 to 89</td>
+</tr>
+<tr>
+<td>builtin + granite-embedding, centroid</td>
+<td>66 (97 %)</td>
+<td>45/47</td>
+<td>21/21</td>
+<td></td>
+</tr>
+<tr>
+<td>paraphrase-multilingual, centroid, + builtin</td>
+<td>64 (94 %)</td>
+<td>45/47</td>
+<td>19/21</td>
+<td></td>
+</tr>
+<tr>
+<td><code>qwen3.5:0.8b</code> (with or without builtin; 1.5 GiB, does not fit)</td>
+<td>67 (99 %)</td>
+<td>47/47</td>
+<td>20/21</td>
+<td>153</td>
+</tr>
+<tr>
+<td>builtin + <code>qwen3:0.6b</code></td>
+<td>65 (96 %)</td>
+<td>44/47</td>
+<td>21/21</td>
+<td>77</td>
+</tr>
+<tr>
+<td><code>gemma3:1b</code></td>
+<td>63 (93 %)</td>
+<td>47/47</td>
+<td>16/21</td>
+<td>126</td>
+</tr>
+<tr>
+<td><code>qwen2.5:1.5b</code></td>
+<td>60 (88 %)</td>
+<td>47/47</td>
+<td>13/21</td>
+<td>100</td>
+</tr>
+<tr>
+<td><code>qwen2.5:0.5b</code></td>
+<td>56 (82 %)</td>
+<td>47/47</td>
+<td>9/21</td>
+<td>73</td>
+</tr>
+<tr>
+<td>builtin + <code>granite4:350m</code></td>
+<td>53 (78 %)</td>
+<td>44/47</td>
+<td>9/21</td>
+<td>74</td>
+</tr>
+</tbody>
+</table>
+<p>Without the few-shot pairs and without quoting the transcript, every small LLM answered the question
+instead of classifying it, and the constrained output fell to the first label for all 68 items: the
+prompt format matters more than the model at this size.</p>
+<p>Whisper transcripts of the same phrases (5 voices, 340 items per condition, <code>large-v3-turbo</code> as
+deployed, no prompt), measured:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Clean: acc. / home local / to Kiais</th>
+<th>+5 dB</th>
+<th>0 dB</th>
+<th>p50 ms</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>builtin</td>
+<td>69 % / 131 of 235 / 105 of 105</td>
+<td>61 % / 103 / 105</td>
+<td>54 % / 77 / 105</td>
+<td>2</td>
+</tr>
+<tr>
+<td>granite-embedding 3-NN</td>
+<td>93 % / 233 / 83</td>
+<td>92 % / 230 / 83</td>
+<td>83 % / 209 / 73</td>
+<td>9 to 13</td>
+</tr>
+<tr>
+<td>builtin + granite-embedding centroid</td>
+<td>94 % / 218 / 101</td>
+<td>89 % / 201 / 101</td>
+<td>79 % / 167 / 103</td>
+<td></td>
+</tr>
+<tr>
+<td>builtin + paraphrase-multilingual centroid</td>
+<td>92 % / 219 / 95</td>
+<td>90 % / 210 / 95</td>
+<td>84 % / 191 / 93</td>
+<td></td>
+</tr>
+<tr>
+<td><code>gemma3:1b</code></td>
+<td>92 % / 231 / 81</td>
+<td>91 % / 229 / 80</td>
+<td>83 % / 203 / 79</td>
+<td>73 to 147</td>
+</tr>
+<tr>
+<td><code>qwen2.5:1.5b</code></td>
+<td>86 % / 232 / 60</td>
+<td>84 % / 228 / 59</td>
+<td>76 % / 194 / 63</td>
+<td>53 to 108</td>
+</tr>
+<tr>
+<td><code>qwen2.5:0.5b</code></td>
+<td>84 % / 234 / 51</td>
+<td>83 % / 232 / 50</td>
+<td>78 % / 215 / 51</td>
+<td>30 to 73</td>
+</tr>
+</tbody>
+</table>
+<p>Reading: built-in matching is a perfect "send away" filter (it never claims a general question) but
+loses a third to two thirds of the home phrases under STT errors, which then go to the fallback
+agent. The embedding router keeps nearly all home phrases local and costs about 10 ms on the
+workstation GPU (the CPU figure is in section 9), with errors leaning towards "casa" for general
+questions. Which error is cheaper depends on the fallback (design note). Timings are from a shared
+GPU and include the HTTP round trip to Ollama.</p>
+<h2 id="7-stt-corrector">7. STT corrector</h2>
+<p>Task: rewrite a Whisper transcript into the intended command using only the area and device names
+of the home, and return anything that is not about the home unchanged. JSON-constrained output,
+Spanish instruction, the name lists, three few-shot pairs (one verb fix, one name fix, one question
+left alone). Input: the deployed Whisper's transcripts at +5 and 0 dB (700 items: 290 handleable
+control items, 260 general and live items, the other control phrases ignored). Scored by Home
+Assistant's built-in matching on the corrected text, measured:</p>
+<table>
+<thead>
+<tr>
+<th>Corrector</th>
+<th>Control pass raw -&gt; corrected</th>
+<th style="text-align: right;">Recovered</th>
+<th style="text-align: right;">Broken</th>
+<th>False commands on general/live</th>
+<th>General/live text changed</th>
+<th style="text-align: right;">p50 ms (4060 Ti, shared)</th>
+<th>Fits 1.0 GiB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>none</td>
+<td>161 -&gt; 161</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0</td>
+<td>0</td>
+<td>0</td>
+<td style="text-align: right;">0</td>
+<td></td>
+</tr>
+<tr>
+<td><code>granite4:350m</code></td>
+<td>161 -&gt; 165</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">0</td>
+<td>0</td>
+<td>28</td>
+<td style="text-align: right;">150</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>qwen2.5:0.5b</code></td>
+<td>161 -&gt; 115</td>
+<td style="text-align: right;">6</td>
+<td style="text-align: right;">52</td>
+<td>1</td>
+<td>29</td>
+<td style="text-align: right;">139</td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>qwen3:0.6b</code></td>
+<td>161 -&gt; 143</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: right;">32</td>
+<td>1</td>
+<td>73</td>
+<td style="text-align: right;">166</td>
+<td>to 4k</td>
+</tr>
+<tr>
+<td><code>qwen3.5:0.8b</code></td>
+<td>161 -&gt; 131</td>
+<td style="text-align: right;">13</td>
+<td style="text-align: right;">43</td>
+<td>2</td>
+<td>115</td>
+<td style="text-align: right;">310</td>
+<td>no (1.5 GiB)</td>
+</tr>
+<tr>
+<td><code>gemma3:1b</code></td>
+<td>161 -&gt; 145</td>
+<td style="text-align: right;">18</td>
+<td style="text-align: right;">34</td>
+<td>1</td>
+<td>158</td>
+<td style="text-align: right;">244</td>
+<td>barely</td>
+</tr>
+<tr>
+<td><code>qwen2.5:1.5b</code></td>
+<td>161 -&gt; 165</td>
+<td style="text-align: right;">11</td>
+<td style="text-align: right;">7</td>
+<td>1</td>
+<td>40</td>
+<td style="text-align: right;">232</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>qwen2.5:3b</code></td>
+<td>161 -&gt; 174</td>
+<td style="text-align: right;">17</td>
+<td style="text-align: right;">4</td>
+<td>1</td>
+<td>18</td>
+<td style="text-align: right;">162</td>
+<td>no</td>
+</tr>
+<tr>
+<td>for comparison: Whisper <code>initial_prompt</code>, names (section 5)</td>
+<td>161 -&gt; 178</td>
+<td style="text-align: right;">24</td>
+<td style="text-align: right;">7</td>
+<td></td>
+<td></td>
+<td style="text-align: right;">+0 (inside STT)</td>
+<td>no VRAM</td>
+</tr>
+<tr>
+<td>for comparison: Whisper <code>initial_prompt</code>, verbs only (section 5)</td>
+<td>161 -&gt; 191</td>
+<td style="text-align: right;">32</td>
+<td style="text-align: right;">2</td>
+<td></td>
+<td></td>
+<td style="text-align: right;">+0 (inside STT)</td>
+<td>no VRAM</td>
+</tr>
+</tbody>
+</table>
+<p>Observed behaviour: real fixes ("Apara todas las luces" to "Apaga todas las luces", "pesiana" to
+"persiana") come with <strong>wrong-target rewrites</strong> ("Pon la luz de la encimera al máximo" became
+"Pon la luz del techo al máximo", which would operate a different device) and with rewrites of
+ordinary requests ("Cuéntame un chiste corto" became "¿Te gustaría que te cuente un chiste
+corto?"). A corrector sits in front of every request, so its broken and wrong-target cases cost
+more than the misses it fixes. The only clearly positive model, <code>qwen2.5:3b</code> (+13 net), does not fit
+the budget and gains less than the Whisper prompt, which costs no VRAM.</p>
+<h2 id="8-local-tool-agent">8. Local tool agent</h2>
+<p>The <code>agent_eval</code> harness (26 Home Assistant style tools, dry run, fake home, automatic grading),
+every category once, against the private Ollama with <code>num_ctx</code> 8192 and thinking off, measured.
+Pass % excludes "review" phrases. Kiais <code>fast</code> from the
+<a href="../conversation-agent-eval/">conversation agent evaluation</a> for comparison (control twice there).</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Control</th>
+<th>Control, action</th>
+<th>Follow-ups</th>
+<th>General</th>
+<th>Live</th>
+<th>Fall-through 13</th>
+<th>Fits 1.0 GiB</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>functiongemma:270m</code></td>
+<td>0 %</td>
+<td>0 %</td>
+<td>0 %</td>
+<td>0 %</td>
+<td>0 %</td>
+<td></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>granite4:350m</code></td>
+<td>14 %</td>
+<td>6 %</td>
+<td>8 %</td>
+<td>8 %</td>
+<td>0 %</td>
+<td></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>qwen2.5:0.5b</code></td>
+<td>14 %</td>
+<td>10 %</td>
+<td>0 %</td>
+<td>15 %</td>
+<td>36 %</td>
+<td></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>qwen3:0.6b</code></td>
+<td>0 %</td>
+<td>0 %</td>
+<td>0 %</td>
+<td>46 %</td>
+<td>18 %</td>
+<td></td>
+<td>4k only</td>
+</tr>
+<tr>
+<td><code>qwen3.5:0.8b</code></td>
+<td>14 %</td>
+<td>3 %</td>
+<td>50 %</td>
+<td>38 %</td>
+<td>55 %</td>
+<td></td>
+<td>no (1.5 GiB)</td>
+</tr>
+<tr>
+<td><code>lfm2.5-thinking:1.2b</code></td>
+<td>7 %</td>
+<td>3 %</td>
+<td>25 %</td>
+<td>46 %</td>
+<td>36 %</td>
+<td></td>
+<td>barely</td>
+</tr>
+<tr>
+<td><code>qwen2.5:1.5b</code></td>
+<td>16 %</td>
+<td>13 %</td>
+<td>33 %</td>
+<td>85 %</td>
+<td>64 %</td>
+<td></td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>qwen2.5:3b</code></td>
+<td>37 %</td>
+<td>29 %</td>
+<td>50 %</td>
+<td>85 %</td>
+<td>64 %</td>
+<td>7 of 13</td>
+<td>no</td>
+</tr>
+<tr>
+<td><code>qwen3:4b-instruct</code></td>
+<td>65 %</td>
+<td>58 %</td>
+<td>83 %</td>
+<td>100 %</td>
+<td>64 %</td>
+<td><strong>10 of 13</strong></td>
+<td>no (2.5 GB)</td>
+</tr>
+<tr>
+<td>Kiais <code>fast</code></td>
+<td>93 %</td>
+<td>94 %</td>
+<td>100 %</td>
+<td>100 %</td>
+<td>100 %</td>
+<td>11 of 13</td>
+<td>cloud</td>
+</tr>
+</tbody>
+</table>
+<p>"Fall-through 13" are the control phrases Home Assistant's built-in intents do not handle and that
+are graded (c05, c13 to c16, c26, c36 to c41, c44): the phrases a fallback agent behind
+<code>prefer_local_intents</code> actually receives. <code>qwen3:4b-instruct</code> passed the colloquial ("Está muy
+oscuro aquí", "Quita la tele", "Ponme la tele más bajita", "Apágalo todo en la cocina"), state and
+missing-target phrases, and failed "Pon la luz del salón al cuarenta por ciento", "Para el toldo"
+and "Pon la siguiente canción en el altavoz de la cocina".</p>
+<p>Failure modes of the small models (measured, from the stored calls): they fill every optional slot
+(<code>floor</code>, <code>device_class: light</code>, colour, temperature), so the target no longer resolves, or they
+answer in text without calling a tool (<code>qwen2.5:1.5b</code> once answered in Chinese). This is not a
+prompt-format problem that a few-shot fix removes: the tool schema is Home Assistant's own and
+cannot be slimmed without a custom LLM API. Timings of these runs (TTFS p50 0.1 to 1.1 s on the
+4060 Ti) are not representative of the 1060 or a CPU; see section 9.</p>
+<h2 id="9-speed-gpu-cpu-and-hybrid">9. Speed: GPU, CPU and hybrid</h2>
+<h3 id="cpu-measured-on-the-workstation-inferred-for-prusik">CPU (measured on the workstation, inferred for <code>prusik</code>)</h3>
+<p><code>llama-bench</code> (llama.cpp CPU build) on the exact GGUF files Ollama downloaded, 2 repetitions, in a
+window when the wake-word training was paused (load average 7.6 to 9.5 from other sessions,
+recorded per run). Tokens per second; <code>pp</code> is prompt processing, <code>tg</code> generation.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>16 threads: pp64 / pp512 / tg</th>
+<th>8 threads: pp64 / pp512 / tg</th>
+<th>pp3600 (16 threads)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>granite-embedding:278m</code> (F16)</td>
+<td>pp16 1761, pp64 2533</td>
+<td>pp16 1390, pp64 1803</td>
+<td></td>
+</tr>
+<tr>
+<td><code>qwen2.5:0.5b</code></td>
+<td>685 / 742 / 96</td>
+<td>438 / 440 / 98</td>
+<td>581</td>
+</tr>
+<tr>
+<td><code>gemma3:1b</code></td>
+<td>376 / 402 / 46</td>
+<td>231 / 247 / 45</td>
+<td>352</td>
+</tr>
+<tr>
+<td><code>qwen2.5:1.5b</code></td>
+<td>397 / 356 / 36</td>
+<td>268 / 270 / 39</td>
+<td>189 (load 18 to 29)</td>
+</tr>
+<tr>
+<td><code>qwen2.5:3b</code></td>
+<td>200 / 204 / 20</td>
+<td>130 / 128 / 20</td>
+<td></td>
+</tr>
+<tr>
+<td><code>qwen3:4b-instruct</code></td>
+<td>152 / 156 / <strong>15.3</strong></td>
+<td>100 / 98 / 15.6</td>
+<td>77 ± 17 (load 18 to 29)</td>
+</tr>
+</tbody>
+</table>
+<p>The pp3600 column was measured after the training resumed (load in brackets): long prompts are
+also slower per token because attention grows with the context. Generation is memory-bound (8
+threads are as fast as 16); prompt processing scales with cores.
+<code>prusik</code>'s Zen 4 with DDR5 should generate about 1.4 to 1.6 times faster if its memory runs at
+4800 MT/s or more (bandwidth ratio; inferred, memory speed not read) and process prompts 1.3 to
+1.5 times faster (AVX-512, newer cores; inferred).</p>
+<p>Other CPU figures (measured, same window): Whisper <code>large-v3-turbo</code> int8 on 16 threads takes
+<strong>3.6 s</strong> p50 for 2.7 s of audio (40 clean clips; load 16), against 0.86 s on the 1060; Piper
+<code>es_ES-sharvard-medium</code> synthesises one sentence in 18 ms ("Hecho.") to 187 ms (76 characters), and
+the embedding of a 16-token sentence takes about 9 ms on 16 threads (11.5 ms on 8).</p>
+<h3 id="gpu">GPU</h3>
+<p>Ollama's own timing fields on the 4060 Ti (about 3600-token prompt with no cached prefix, 64
+generated tokens, median of 3), measured while the card was shared with the wake-word training
+and one Whisper run, so these are lower bounds; the 1060 columns divide prompt processing by the
+observed 4.5 (compute-bound) and generation by 1.5 (bandwidth ratio), inferred:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>4060 Ti pp / tg (tokens/s)</th>
+<th>1060 pp / tg (inferred)</th>
+<th>1060: 3600-token prompt / 35-token call (inferred)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>qwen2.5:0.5b</code></td>
+<td>28 700 / 291</td>
+<td>about 6 400 / 190</td>
+<td>0.6 s / 0.2 s</td>
+</tr>
+<tr>
+<td><code>gemma3:1b</code></td>
+<td>15 200 / 186</td>
+<td>about 3 400 / 124</td>
+<td>1.1 s / 0.3 s</td>
+</tr>
+<tr>
+<td><code>qwen3.5:0.8b</code></td>
+<td>9 300 / 170</td>
+<td>about 2 100 / 113</td>
+<td>1.7 s / 0.3 s</td>
+</tr>
+<tr>
+<td><code>qwen2.5:1.5b</code></td>
+<td>8 800 / 67 (contended)</td>
+<td>about 2 000 / 45 or more</td>
+<td>1.8 s / 0.8 s</td>
+</tr>
+<tr>
+<td><code>qwen3:4b-instruct</code></td>
+<td>3 400 / 37 (contended)</td>
+<td>does not fit</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><code>granite4:350m</code> stopped after one token in this test and is left out. A small router on the 1060
+(about 20 new tokens after a cached few-shot prefix and 8 generated) would take roughly 0.05 to
+0.1 s (inferred), against about 0.01 s for the embedding model on the CPU.</p>
+<h3 id="whisper-prompt-cost">Whisper prompt cost</h3>
+<p>Back to back on the 4060 Ti (100 clean clips each; the GPU was shared with the wake-word
+training at 100 % utilisation at the start, so absolute times are upper bounds): p50 / p90 0.192 /
+0.227 s without a prompt, 0.187 / 0.198 s with the names, 0.189 / 0.201 s with names and verbs.
+<strong>No measurable cost</strong>; on the 1060 the prompt adds well under 0.05 s (inferred: the 120 prompt
+tokens are processed once per beam in the decoder, which is small next to the 30 s encoder pass).
+The doubled times in the section 5 runs came from GPU contention, not from the prompt.</p>
+<h3 id="hybrid-cpu-and-1060-inferred">Hybrid CPU and 1060 (inferred)</h3>
+<p>With 1.0 GiB of the 1060, about 11 of the 36 layers of <code>qwen3:4b-instruct</code> Q4_K_M (2.3 GiB of
+weights) fit next to their share of the KV cache and the compute buffers. Generation time per
+token is roughly the sum over layers of bytes over bandwidth: about 70 % of the weights still come
+from system memory, so generation would be about 20 % faster than CPU-only, and prompt processing
+gains a little more. That does not justify the risk to Whisper's transcription peak.</p>
+<h2 id="10-end-to-end-latency-budgets">10. End-to-end latency budgets</h2>
+<p>From the end of speech to the first audio of the answer, p50, for the components that differ
+between options (end-of-speech detection, audio transport and playback are the same for all and
+excluded). Sources: Whisper on the 1060 0.86 s (observed); prompt +0 to 0.05 s (inferred);
+built-in match 2 to 10 ms (measured, hassil) plus the action (tens of ms, inferred); Piper 0.02 to
+0.19 s (measured, workstation); Kiais <code>fast</code> time to first speech 3.06 s with a tool call and
+1.20 s for a general question (observed by the conversation agent evaluation from the workstation;
+from the cluster it should be similar).</p>
+<p>Local <code>qwen3:4b-instruct</code> with a warm prompt cache (inferred from the CPU table): a tool round is
+about 30 new prompt tokens (0.2 s) and about 35 generated tokens for the call (2.3 s at 15 tokens
+per second), then about 60 tokens of tool result (0.4 s) and the first answer token; the first
+sentence (about 12 tokens, 0.8 s) can go to TTS while the rest streams. Workstation: about 3.7 s
+to the first sentence; <code>prusik</code>: about 2.7 s. <strong>Cold</strong> (first request after a model load or after
+the system prompt changed): add the full prompt, about 3600 tokens for the fake home: 23 s at the
+pp512 rate to 47 s at the measured pp3600 rate on the workstation, about 16 to 35 s on <code>prusik</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Path</th>
+<th>STT</th>
+<th>Routing</th>
+<th>Agent / intent</th>
+<th>TTS first audio</th>
+<th>Total p50</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Built-in intent matched</td>
+<td>0.86</td>
+<td>0.01</td>
+<td>0.05</td>
+<td>0.05</td>
+<td><strong>about 1.0 s</strong></td>
+</tr>
+<tr>
+<td>Command through Kiais <code>fast</code></td>
+<td>0.86</td>
+<td>0.01</td>
+<td>3.06 + first sentence 0.1</td>
+<td>0.1</td>
+<td>about 4.1 s</td>
+</tr>
+<tr>
+<td>General question through Kiais <code>fast</code></td>
+<td>0.86</td>
+<td>0.01</td>
+<td>1.20 + 0.1</td>
+<td>0.1</td>
+<td>about 2.3 s</td>
+</tr>
+<tr>
+<td>Command through local <code>qwen3:4b</code> on <code>prusik</code> CPU (warm)</td>
+<td>0.86</td>
+<td>0.02</td>
+<td>about 2.7</td>
+<td>0.1</td>
+<td>about 3.7 s (16 to 35 s cold)</td>
+</tr>
+<tr>
+<td>Any path with Whisper on CPU instead of the 1060</td>
+<td>3.6</td>
+<td></td>
+<td></td>
+<td></td>
+<td>+2.8 s on each row</td>
+</tr>
+<tr>
+<td>Small model (≤ 1.0 GiB) as agent on the 1060</td>
+<td>0.86</td>
+<td></td>
+<td>about 0.5 to 1.0 (inferred)</td>
+<td>0.1</td>
+<td>about 1.5 to 2 s, but 0 to 16 % correct</td>
+</tr>
+</tbody>
+</table>
+<h2 id="conclusion-and-confidence">Conclusion and confidence</h2>
+<ul>
+<li><strong>No small model on the 1060 earns its VRAM.</strong> As the home agent the models that fit fail (0 to
+  16 %); as a router an embedding model on the CPU is as good and faster; as an STT corrector they
+  break as much as they fix. Confidence high for this fake home and tool schema (the failure modes
+  are structural: slot over-filling and no tool call), medium for other homes.</li>
+<li><strong>The best accuracy gain is the Whisper prompt with the generic command verbs</strong> (names added
+  nothing measurable on this fake home; a static verbs-only prompt works on the deployed image).
+  Measured on synthetic voices and TV-content mixes: confidence medium that the size of the gain
+  carries over to real voices in the room, high that it does not cost latency.</li>
+<li><strong>A local agent needs at least about 4 B parameters</strong> (<code>qwen3:4b-instruct</code>), which on this
+  cluster means the <code>prusik</code> CPU: about as accurate and about as fast as Kiais <code>fast</code> for the
+  commands the built-in intents miss, with a cold-start cost of tens of seconds (inferred from the
+  workstation; the owner-approval experiment in the design note would measure it).</li>
+<li>The ranked options and the proposed GitOps change are in
+  <a href="../../conversation-agent/">the design note</a>.</li>
+</ul>
+<h2 id="rollback-and-cleanup">Rollback and cleanup</h2>
+<p>Nothing was changed in the cluster or Home Assistant. Read-only <code>kubectl exec</code> was used three times
+before the coordinator asked for none (<code>nvidia-smi</code> in the DCGM exporter pod, <code>ollama list</code> and
+<code>ollama --version</code> in the Ollama pod); no other command ran in the cluster. Local: the private
+Ollama on <code>127.0.0.1:11500</code> was stopped and its model store and the Python environment deleted;
+the generated audio, the per-item results and the private copy of the Whisper log lines stay
+outside this repository.</p>
+<h2 id="open-questions">Open questions</h2>
+<ul>
+<li>The fake home's names were chosen to be natural; the owner's real names, aliases and exposure
+  decide the real built-in hit rate. Recheck with the owner's phrases against Home Assistant's
+  read-only recognition endpoint.</li>
+<li>Real voices in the room (reverberation, echo-canceller residue, distance) are not modelled; the
+  satellite project's real-voice set would confirm the Whisper prompt gain.</li>
+<li><code>prusik</code>'s real CPU speed for <code>qwen3:4b-instruct</code> and the cold-start time (owner-approval
+  experiment in the design note).</li>
+<li>Whether a router should err towards the local agent or towards Kiais depends on whether a local
+  agent is added at all.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

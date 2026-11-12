@@ -1,0 +1,4868 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../decision-models/">
+      
+      
+        <link rel="next" href="../kivi-wake-word/">
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Kivi decider PoC: is there headroom behind the built-in intents? - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#kivi-decider-poc-is-there-headroom-behind-the-built-in-intents" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Kivi decider PoC: is there headroom behind the built-in intents?
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/ingress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ingress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/pfsense/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense: cluster-relevant configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/webos-voice-satellite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    webOS voice satellite network requirement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-helm-hook-provisioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD Helm hooks: provisioning Jobs that never run, and hooks that silently stop running
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-ssa-stale-field-manager/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD server-side apply: a field removed from git persists live
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ci-runner-amd64-disk-full/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ci-runner-amd64 fills the k8s-amd64-1 root disk
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-gateway-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-gateway-listener-drain/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway listener changes close long connections
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-oidc-id-token-cookie-size/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy OIDC session breaks: ID token cookie over 4096 B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/forgejo-runner-valid-volumes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Forgejo runner valid_volumes silently drops container-job mounts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-omnibattery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: Omnibattery and the house battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kanidm-no-dcr-mcp-client-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm has no dynamic client registration for MCP clients
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/mcp-firecrawl-egress-regression/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl egress NetworkPolicies: applied, broke readiness, rolled back
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/office-iot-wifi-flapping/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/pfsense-alias-change-keeps-old-states/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense alias change keeps old states
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/sccache-s3-bucket-full-silent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    sccache S3 tier silently stops writing when the bucket is full
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/stop-home-assistant-under-argocd/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stopping Home Assistant under ArgoCD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/unifi-wifi-client-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging Wi-Fi Clients on the UniFi Network
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-truncated-zfs-backups/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0005-gateway-api-with-envoy-gateway/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0005: Gateway API with Envoy Gateway instead of ingress-nginx
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Design
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Design
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/mcp-gateway-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MCP Gateway Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Voice assistant
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Voice assistant
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audio-pipeline-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant audio pipeline plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conversation-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation agent: where small local models fit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conversation-capabilities-roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation capabilities roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data-register/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi data register
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kiais-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kiais as the Kivi conversation agent in Home Assistant
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kivi-iteration-loop/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi wake word: the iteration loop
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../lessons-learned/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lessons learned
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-registry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi model registry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../stt-hint-list-and-learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whisper-image-build/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building the Kivi Whisper STT image on Forgejo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8_13" id="__nav_8_13_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    experiments
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8_13">
+            <span class="md-nav__icon md-icon"></span>
+            experiments
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversation-agent-eval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conversation agent evaluation for "Kivi": Kiais gateway metrics, a reusable dry-run harness, and what Home Assistant's built-in intents already cover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decision-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decision models for Kivi: can a small classifier rescue the commands the built-in intents miss?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#question" class="md-nav__link">
+    <span class="md-ellipsis">
+      Question
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-teacher-p0b-pplx-decider-v11-27b" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Teacher (P0b): pplx-decider-v1.1-27b
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-headroom-on-the-existing-transcript-corpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Headroom on the existing transcript corpus
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-dataset-kivi-fake-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Dataset kivi-fake-v1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-built-in-coverage-on-kivi-fake-v1-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Built-in coverage on kivi-fake-v1 (text)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-audio-subset-of-kivi-fake-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Audio subset of kivi-fake-v1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Limitations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-reproduce-data-and-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Reproduce, data and cleanup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-open-questions-for-the-owner" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Open questions for the owner
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kivi-wake-word/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-data-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" training-data quality: phrase check, out-of-fold labels, coverage (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-p0-baseline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    P0 real-voice baseline: deployed v4 "oye Kivi" (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recovery plan: unreliable "oye Kivi" wake word
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-v5era-mining/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    v5-era room audio: replay false wakes and missed-wake mining (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-v6/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" v6: context-trained candidate (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-vnext-ablations/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    vnext ablations: real voice is what moves the needle (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../small-local-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../whisper-gpu-benchmark/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Whisper decoding settings on the GTX 1060: compute type, beam size, VAD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#question" class="md-nav__link">
+    <span class="md-ellipsis">
+      Question
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-teacher-p0b-pplx-decider-v11-27b" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Teacher (P0b): pplx-decider-v1.1-27b
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-headroom-on-the-existing-transcript-corpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Headroom on the existing transcript corpus
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-dataset-kivi-fake-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Dataset kivi-fake-v1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-built-in-coverage-on-kivi-fake-v1-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Built-in coverage on kivi-fake-v1 (text)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-audio-subset-of-kivi-fake-v1" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Audio subset of kivi-fake-v1
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. Limitations
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-reproduce-data-and-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Reproduce, data and cleanup
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-open-questions-for-the-owner" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. Open questions for the owner
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="kivi-decider-poc-is-there-headroom-behind-the-built-in-intents">Kivi decider PoC: is there headroom behind the built-in intents?</h1>
+<p><strong>Status:</strong> P0 headroom analysis DONE (offline, synthetic); P1 to P3 (data at scale, fine-tuning,
+gates) NOT STARTED by owner decision, pending this analysis and the
+<a href="../decision-models/">zero-shot baselines</a>
+<strong>Date:</strong> 2026-11-05
+<strong>Systems:</strong> workstation <code>z800</code> (Ryzen 9 5950X, RTX 4060 Ti 16 GB, shared with the wake-word
+training); nothing ran on the cluster, Home Assistant or a TV
+<strong>Related:</strong> <a href="../../plan/">Kivi plan, workstream d</a>, <a href="../decision-models/">decision models (P0 zero-shot)</a>,
+<a href="../small-local-models/">small local models</a> (corpus, Whisper prompt, GPU budget),
+<a href="../conversation-agent-eval/">conversation agent evaluation</a> (phrases, fake home, grader)
+<strong>Risk:</strong> offline. No cloud request (a key was looked up by name, never used, and the file holding it
+was shredded), no Home Assistant access, no real names. All audio is synthetic (Piper voices, TV
+content mixes).
+<strong>Scripts:</strong> <code>scripts/voice-assistant/decider_poc/</code> on top of <code>agent_eval/</code> and <code>small_models/</code></p>
+<p>Evidence labels: <strong>documented</strong> (model card, package source), <strong>measured</strong> (run on <code>z800</code> here),
+<strong>inferred</strong> (computed from the above), <strong>hypothesis</strong>. Every built-in intent figure is an
+inference of Home Assistant's behaviour: hassil 3.12.1 with home-assistant-intents 2026.10.6 (the
+pins of HA 2026.10.4), the slot lists of a fake home and <code>prefer_local_intents</code> semantics, as in
+<code>agent_eval/builtin_intents.py</code>. It is not a run of Home Assistant.</p>
+<h2 id="question">Question</h2>
+<p>The planned "Kivi decider" is a small local model behind Home Assistant's built-in intents. When
+the built-in sentences miss, it decides "home command, which intent, which target" and executes;
+anything uncertain goes to Kiais. Before data, training or a teacher: <strong>how many commands do the
+built-in intents miss in a way such a decider could rescue, and how many of those a cheap fix
+(aliases, custom sentences) already covers?</strong></p>
+<h2 id="summary">Summary</h2>
+<ol>
+<li><strong>Teacher (P0b): not feasible locally (documented).</strong> <code>pplx-decider-v1.1-27b</code> needs about
+   49 GiB of bf16 weights on one CUDA GPU and its inference code has no quantised path. Cloud
+   access is ruled out by the owner. The teacher was dropped without downloading the weights. If
+   P2 ever runs, it trains on gold labels only (or Laya as a teacher).</li>
+<li><strong>The hand-written corpus (39 commands, 5 voices, verbs prompt):</strong> the built-in intents miss
+   <strong>34 % of commands on clean audio, 45 % at +5 dB and 57 % at 0 dB</strong> of TV content. Of all
+   commands, a decider could rescue at most <strong>20 % (b1 phrasing) + 3 % (b2 near-miss)</strong>. Another
+   12 % are misheard beyond recovery and 8 % lost only their verb. Upper bound of time saved:
+   <strong>0.7 s per command</strong> (b × 3 s / all commands). <strong>Custom sentences cover 8 of the 10 phrasing
+   misses</strong> and cut that bound to <strong>0.25 s</strong>.</li>
+<li><strong><code>kivi-fake-v1</code></strong> (new, shared with the zero-shot study): 2273 synthetic items over four fake
+   homes (39 to 116 entities) and 17 phrasing or negative styles. 673 items are paraphrases by a
+   local <code>qwen3:14b</code>, validated to keep their label; hand-checked label noise is about 2 % (5 %
+   counting marginal cases). 500 items also have audio (clean, +5, 0 dB; Whisper <code>large-v3-turbo</code>
+   with the verbs prompt).</li>
+<li><strong>On <code>kivi-fake-v1</code> text, the built-in intents get 22 % of commands right</strong> (44 % for the direct
+   and polite templates, 4 to 7 % for colloquial, LatAm, word-order and disfluent phrasing, 0 % for
+   "un poco más"). They take no wrong action on commands. On route-Kiais items they act only on
+   bare device names ("Aire": HA's own sentences turn a bare name on).</li>
+<li><strong>Cheap fix versus model:</strong> 92 custom sentences, written in about an hour from the template
+   families, lift built-in success on the <strong>templates from 21 % to 70 % (0 wrong actions)</strong> but on
+   the <strong>LLM paraphrases of the same commands only from 25 % to 33 %</strong>. They cover 62 % of
+   the misses whose phrasing they were written for and <strong>11 % of misses in unseen phrasing</strong>. Unseen phrasing
+   is the room left for a model. How large that room is depends on how varied the household's real
+   phrasing is, which only the real-usage replay (workstream c) can tell.</li>
+<li><strong>Audio (500 items, 302 commands):</strong> with the built-in sentences, misheard commands (a) are
+   8 / 16 / 29 % at clean / +5 / 0 dB and rescuable phrasing (b1 + b2) is 64 / 58 / 50 %. That bounds
+   the saving at <strong>1.9 / 1.8 / 1.5 s per command</strong>, or 1.2 / 1.2 / 1.0 s with the custom sentences.
+   On this deliberately varied mix, phrasing outweighs Whisper errors except at 0 dB.</li>
+</ol>
+<p>Verdict for the owner: there is real headroom on synthetic data, largest for phrasing nobody
+anticipated. Custom sentences remove most of it for phrasing someone did anticipate, at no runtime
+cost. Recommendation: <strong>ship the custom sentences first</strong> (after a review against the real names),
+then decide P1 to P3 on the real-usage replay and the zero-shot baselines. Build the decider only if
+real misses look like the "unseen phrasing" rows here, not like the misheard rows.</p>
+<h2 id="1-teacher-p0b-pplx-decider-v11-27b">1. Teacher (P0b): <code>pplx-decider-v1.1-27b</code></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Finding</th>
+<th>Label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Weights</td>
+<td>Apache-2.0, <code>Qwen3_5Model</code> backbone (Qwen3.8-27B) plus a BF16 <code>[255, 5120]</code> readout; the card asks for "a CUDA GPU with room for roughly 49 GiB of weights plus working memory"</td>
+<td>documented (model card)</td>
+</tr>
+<tr>
+<td>Inference code</td>
+<td><code>source/src/autojev/model.py</code> loads bf16 on CUDA and float32 on CPU (about 108 GB); no quantised loading; non-causal full-attention layers that a generic runtime does not reproduce</td>
+<td>documented (source, read without running)</td>
+</tr>
+<tr>
+<td>API</td>
+<td>Perplexity <code>/v1/decisions</code> needs a Perplexity key (none exists), the model is not listed on OpenRouter, and the owner ruled out cloud calls</td>
+<td>documented, observed</td>
+</tr>
+<tr>
+<td>This PC</td>
+<td>16 GB VRAM, of which about 8 GB in use by the wake-word training at the time; 62 GB RAM, about 27 GB available</td>
+<td>observed</td>
+</tr>
+</tbody>
+</table>
+<p>A 4-bit load would need a patched loader (bitsandbytes) and CPU offload of about half the layers.
+bitsandbytes cannot offload 4-bit weights (they would stay fp32 on the CPU, about 28 GB). It also
+risks breaking the non-causal attention setup. That is over the budget of about 1 h of setup and
+1 example/s, so the teacher was dropped (inferred). No weights were downloaded. If P2 runs, it
+uses gold labels from the generator, optionally with Laya soft labels.</p>
+<h2 id="2-headroom-on-the-existing-transcript-corpus">2. Headroom on the existing transcript corpus</h2>
+<p>Corpus of the <a href="../small-local-models/#3-method">small-models study</a>: the 39 control phrases of
+<code>agent_eval/phrases_es.yaml</code> with a tool expectation (state questions c35 to c37, c43 and the
+missing-target c44 are not commands), 5 intelligible Piper voices, clean and +10 / +5 / 0 dB of TV
+content. Transcripts: <code>large-v3-turbo</code> int8 with the static verbs-only <code>initial_prompt</code> (run
+<code>turbo_b5_vonly</code>).</p>
+<p>Rules (<code>decider_poc/headroom.py</code>), for each command the built-in intents miss (no match, a match HA
+ignores for an LLM agent, or an unresolved target):</p>
+<ul>
+<li><strong>Key words:</strong> the words of the reference text after the Phase 2 normalisation (numbers spelled
+  out), minus articles, prepositions and fillers. A key word survives if it occurs in the
+  transcript exactly, or fuzzily (rapidfuzz ratio ≥ 80 against a word or a two-word join). The
+  spoken number must be parsed back unchanged.</li>
+<li><strong>a (misheard):</strong> a key word or the number is lost; intent or target cannot be recovered from the
+  text. <strong>a-verb:</strong> only the leading verb is lost ("Con un temporizador de 10 minutos"); target and
+  value survive, so the intent is sometimes inferable (counted apart, not in the bound).</li>
+<li><strong>b1 (phrasing):</strong> all key words survive and the reference text itself is not handled by the
+  built-in sentences: a decider or a custom sentence can rescue it.</li>
+<li><strong>b2 (near-miss):</strong> all key words survive but some only fuzzily ("pesiana", "Apara"), and the
+  reference is handled: strict matching breaks on a small mishearing that a robust decider could
+  absorb.</li>
+<li><strong>c (other):</strong> all key words survive exactly and the reference is handled, yet the transcript
+  misses (extra words, number format).</li>
+</ul>
+<p>Built-in sentences only (measured; % of all commands of the condition):</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th style="text-align: right;">Commands</th>
+<th style="text-align: right;">Built-in correct</th>
+<th style="text-align: right;">Built-in wrong</th>
+<th style="text-align: right;">Miss</th>
+<th style="text-align: right;">a misheard</th>
+<th style="text-align: right;">a-verb</th>
+<th style="text-align: right;">b1 phrasing</th>
+<th style="text-align: right;">b2 near-miss</th>
+<th style="text-align: right;">c other</th>
+<th style="text-align: right;">Upper bound (b1+b2) × 3 s per command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>clean</td>
+<td style="text-align: right;">195</td>
+<td style="text-align: right;">128 (66 %)</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">67 (34 %)</td>
+<td style="text-align: right;">6 (3 %)</td>
+<td style="text-align: right;">10 (5 %)</td>
+<td style="text-align: right;">47 (24 %)</td>
+<td style="text-align: right;">4 (2 %)</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.78 s</td>
+</tr>
+<tr>
+<td>+10 dB</td>
+<td style="text-align: right;">195</td>
+<td style="text-align: right;">113 (58 %)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">81 (42 %)</td>
+<td style="text-align: right;">9 (5 %)</td>
+<td style="text-align: right;">19 (10 %)</td>
+<td style="text-align: right;">42 (22 %)</td>
+<td style="text-align: right;">9 (5 %)</td>
+<td style="text-align: right;">2 (1 %)</td>
+<td style="text-align: right;">0.78 s</td>
+</tr>
+<tr>
+<td>+5 dB</td>
+<td style="text-align: right;">195</td>
+<td style="text-align: right;">108 (55 %)</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">87 (45 %)</td>
+<td style="text-align: right;">22 (11 %)</td>
+<td style="text-align: right;">17 (9 %)</td>
+<td style="text-align: right;">41 (21 %)</td>
+<td style="text-align: right;">7 (4 %)</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">0.74 s</td>
+</tr>
+<tr>
+<td>0 dB</td>
+<td style="text-align: right;">195</td>
+<td style="text-align: right;">83 (43 %)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">111 (57 %)</td>
+<td style="text-align: right;">58 (30 %)</td>
+<td style="text-align: right;">16 (8 %)</td>
+<td style="text-align: right;">27 (14 %)</td>
+<td style="text-align: right;">5 (3 %)</td>
+<td style="text-align: right;">5 (3 %)</td>
+<td style="text-align: right;">0.49 s</td>
+</tr>
+<tr>
+<td>all</td>
+<td style="text-align: right;">780</td>
+<td style="text-align: right;">432 (55 %)</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">346 (44 %)</td>
+<td style="text-align: right;">95 (12 %)</td>
+<td style="text-align: right;">62 (8 %)</td>
+<td style="text-align: right;">157 (20 %)</td>
+<td style="text-align: right;">25 (3 %)</td>
+<td style="text-align: right;">7 (1 %)</td>
+<td style="text-align: right;">0.70 s</td>
+</tr>
+</tbody>
+</table>
+<p>Spot check (by hand, 6 to 8 per category): every sampled a-item had lost the device or verb
+("Pon al volumen del Atelier 30", "Mirá."); every b1 item was a correct transcript of a phrase
+the built-in sentences do not cover; b2 items were one-letter slips ("Abre el tolo de la terraza",
+"Renuda la tele"); c items had trailing TV words ("Silencia la tele. Jerk, Tom.").</p>
+<p>The b1 misses come from 10 phrases: c15 "Pon el aire del salón a 22 grados", c40 "Ponme la tele más
+bajita", c41 "Apágalo todo en la cocina", c38 "Está muy oscuro aquí", c26 "Pon la siguiente canción
+en el altavoz de la cocina", c05 "Pon la luz del salón al cuarenta por ciento", c13 "Pon la persiana
+del salón a la mitad", c14 "Para el toldo", c39 "Quita la tele", c16 "Pon la temperatura del
+dormitorio a veintiuno y medio". Several of them fall through because "pon ..." matches
+<code>HassMediaSearchAndPlay</code>, which <code>prefer_local_intents</code> ignores when the agent is an LLM.</p>
+<p><strong>Cheap fix (measured):</strong> with <code>decider_poc/custom_sentences_es.yaml</code> matched before the built-in
+sentences, as Home Assistant's default agent does, 37 of the 39 reference texts resolve (all but c16
+"veintiuno y medio" and the implicit c38). Built-in success rises to 83 / 74 / 71 / 52 % (clean,
++10, +5, 0 dB), b1 falls to 4 % of commands and the bound to <strong>0.25 s per command</strong>, with no new wrong
+action. Caveat: the sentences were written after reading these phrases, so on this corpus they are
+not a blind test (the paraphrase result in section 4 is).</p>
+<h2 id="3-dataset-kivi-fake-v1">3. Dataset <code>kivi-fake-v1</code></h2>
+<p>Location: <code>/work/workspaces/kivi-decider-poc/data/kivi-fake-v1/</code> on the workstation (not in git).
+Schema: <code>SCHEMA.md</code> next to the data. Generators: <code>decider_poc/fake_v1.py</code> (homes, templates,
+negatives) and <code>decider_poc/paraphrase.py</code> (local LLM paraphrases and validation). All names are
+invented; nothing comes from the owner's Home Assistant.</p>
+<table>
+<thead>
+<tr>
+<th>Home</th>
+<th>Naming style</th>
+<th style="text-align: right;">Entities exposed</th>
+<th style="text-align: right;">Target options</th>
+<th style="text-align: right;">Items</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>generica</code></td>
+<td>generic, the room repeated in the name ("Luz del salón", "Persiana de invitados")</td>
+<td style="text-align: right;">39</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">570</td>
+</tr>
+<tr>
+<td><code>coloquial</code></td>
+<td>colloquial and brand-like invented names with aliases ("Lámpara Arco", "Split", "Altavoz Lumo")</td>
+<td style="text-align: right;">56</td>
+<td style="text-align: right;">46</td>
+<td style="text-align: right;">577</td>
+</tr>
+<tr>
+<td><code>personas</code></td>
+<td>rooms named after invented people ("Cuarto de Candela"), the same device names in many rooms, two floors</td>
+<td style="text-align: right;">77</td>
+<td style="text-align: right;">67</td>
+<td style="text-align: right;">558</td>
+</tr>
+<tr>
+<td><code>latam</code></td>
+<td>Mexican Spanish ("recámara", "foco", "pantalla", "bocina", "clima"), many duplicates, two floors</td>
+<td style="text-align: right;">116</td>
+<td style="text-align: right;">92</td>
+<td style="text-align: right;">568</td>
+</tr>
+</tbody>
+</table>
+<p>Sensors fill the homes to a realistic count; only controllable domains are targets. Target options
+are the entities plus per-area groups (lights, covers, "everything") and "all lights", built from
+the inventory at request time (<code>schema.target_options</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Kind (route)</th>
+<th>Styles</th>
+<th style="text-align: right;">Items</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>command (execute)</td>
+<td>direct 301, polite 268, LatAm 259, word order 228, disfluent (fillers, repeats, self-corrections) 216, short ("Lámpara off") 203, Spain colloquial 189, relative volume ("Sube un poco el volumen") 112</td>
+<td style="text-align: right;">1776 (673 paraphrased)</td>
+</tr>
+<tr>
+<td>question (Kiais)</td>
+<td>general 40, live 32, chit-chat 35, TV dialogue with command verbs ("¡Apaga eso y vámonos!") 48, state of the home 65</td>
+<td style="text-align: right;">220</td>
+</tr>
+<tr>
+<td>other (Kiais)</td>
+<td>out of domain 29, devices or rooms the home does not have 60</td>
+<td style="text-align: right;">89</td>
+</tr>
+<tr>
+<td>unclear (Kiais)</td>
+<td>implicit ("No veo nada aquí", "Hace frío") 39, verb-less ("Luz salón") 26</td>
+<td style="text-align: right;">65</td>
+</tr>
+<tr>
+<td>multi (Kiais)</td>
+<td>two actions in one request</td>
+<td style="text-align: right;">63</td>
+</tr>
+<tr>
+<td>unsupported (Kiais)</td>
+<td>relative brightness, temperature or cover moves ("Sube dos grados el aire")</td>
+<td style="text-align: right;">60</td>
+</tr>
+</tbody>
+</table>
+<p>Gold labels come from structured actions (intent, target option, value), never from text. Implicit
+requests are labelled unclear, as the owner asked. Relative volume is a command (HA has
+<code>HassSetVolumeRelative</code>), while relative brightness, temperature and position are "unsupported"
+(no HA intent; Kiais).</p>
+<p><strong>Paraphrases.</strong> A private Ollama 0.35.1 on the loopback interface (store on <code>/datasets</code>) ran
+<code>qwen3:14b</code> with thinking off on the 4060 Ti. It rewrote 400 stratified template commands, two
+versions each, in a requested register (colloquial Spain, polite, word order, Mexican, telegraphic,
+filler, indirect). The validator (<code>paraphrase.validate</code>) keeps a paraphrase only if:</p>
+<ul>
+<li>the target name or alias is still there (and the area, if the source named it);</li>
+<li>it adds no other area of the home;</li>
+<li><code>numbers_es</code> parses the same value;</li>
+<li>an intent cue word is present and no cue of the opposite intent;</li>
+<li>it is a single request.</li>
+</ul>
+<p>Result: <strong>673 of 800 kept</strong>. Rejected: 101 for a lost intent cue, 12 identical, 4 two requests,
+3 opposite intent, 3 another area added, 2 lost target, 2 wrong value. Hand check:</p>
+<ul>
+<li><strong>60 kept paraphrases:</strong> 1 clear label error (an invented "de la habitación") and 2 marginal ones
+  ("Sigue activando la bocina" for resume), so label noise is about <strong>2 %, 5 % counting the marginal
+  ones</strong>. Two more errors of the same kind (an area added when the source had none) turned up among
+  the built-in "wrong" actions and led to the "other area" rule.</li>
+<li><strong>15 rejected paraphrases:</strong> 7 real label changes ("apaga" became "enciende", "para el toldo"
+  became "abre el toldo") and 8 false rejections ("aumenta", "disminuye", "reduce", "eleva" are not
+  cue words). The kept paraphrases are therefore biased towards common verbs, which makes them
+  slightly easier for the built-in sentences than free speech.</li>
+</ul>
+<p><strong>Audio subset.</strong> 500 items stratified over kind, style and source: 302 commands and 198 route-Kiais
+items. Each was spoken by one of the 5 intelligible Piper voices at -22 dBFS active speech, clean and
+mixed with the TV content set at +5 and 0 dB (1500 clips, 141 MB). Transcripts come from
+<code>large-v3-turbo</code> int8 on CUDA, beam 5, language <code>es</code> and the verbs-only prompt (<code>audio.py</code>).</p>
+<h2 id="4-built-in-coverage-on-kivi-fake-v1-text">4. Built-in coverage on <code>kivi-fake-v1</code> (text)</h2>
+<p>Commands, built-in sentences only, then with the custom sentences (measured):</p>
+<table>
+<thead>
+<tr>
+<th>Style</th>
+<th style="text-align: right;">Template n</th>
+<th style="text-align: right;">Built-in</th>
+<th style="text-align: right;">+ custom</th>
+<th style="text-align: right;">Paraphrase n</th>
+<th style="text-align: right;">Built-in</th>
+<th style="text-align: right;">+ custom</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>direct</td>
+<td style="text-align: right;">213</td>
+<td style="text-align: right;">44 %</td>
+<td style="text-align: right;">93 %</td>
+<td style="text-align: right;">88</td>
+<td style="text-align: right;">23 %</td>
+<td style="text-align: right;">26 %</td>
+</tr>
+<tr>
+<td>polite</td>
+<td style="text-align: right;">190</td>
+<td style="text-align: right;">43 %</td>
+<td style="text-align: right;">73 %</td>
+<td style="text-align: right;">78</td>
+<td style="text-align: right;">40 %</td>
+<td style="text-align: right;">49 %</td>
+</tr>
+<tr>
+<td>short</td>
+<td style="text-align: right;">113</td>
+<td style="text-align: right;">19 %</td>
+<td style="text-align: right;">39 %</td>
+<td style="text-align: right;">90</td>
+<td style="text-align: right;">20 %</td>
+<td style="text-align: right;">32 %</td>
+</tr>
+<tr>
+<td>word order</td>
+<td style="text-align: right;">132</td>
+<td style="text-align: right;">7 %</td>
+<td style="text-align: right;">75 %</td>
+<td style="text-align: right;">96</td>
+<td style="text-align: right;">28 %</td>
+<td style="text-align: right;">35 %</td>
+</tr>
+<tr>
+<td>disfluent</td>
+<td style="text-align: right;">124</td>
+<td style="text-align: right;">6 %</td>
+<td style="text-align: right;">15 %</td>
+<td style="text-align: right;">92</td>
+<td style="text-align: right;">30 %</td>
+<td style="text-align: right;">39 %</td>
+</tr>
+<tr>
+<td>LatAm</td>
+<td style="text-align: right;">164</td>
+<td style="text-align: right;">6 %</td>
+<td style="text-align: right;">71 %</td>
+<td style="text-align: right;">95</td>
+<td style="text-align: right;">23 %</td>
+<td style="text-align: right;">33 %</td>
+</tr>
+<tr>
+<td>Spain colloquial</td>
+<td style="text-align: right;">106</td>
+<td style="text-align: right;">4 %</td>
+<td style="text-align: right;">92 %</td>
+<td style="text-align: right;">83</td>
+<td style="text-align: right;">27 %</td>
+<td style="text-align: right;">35 %</td>
+</tr>
+<tr>
+<td>relative volume</td>
+<td style="text-align: right;">61</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">100 %</td>
+<td style="text-align: right;">51</td>
+<td style="text-align: right;">0 %</td>
+<td style="text-align: right;">10 %</td>
+</tr>
+<tr>
+<td><strong>all</strong></td>
+<td style="text-align: right;">1103</td>
+<td style="text-align: right;"><strong>21 %</strong></td>
+<td style="text-align: right;"><strong>70 %</strong></td>
+<td style="text-align: right;">673</td>
+<td style="text-align: right;"><strong>25 %</strong></td>
+<td style="text-align: right;"><strong>33 %</strong></td>
+</tr>
+</tbody>
+</table>
+<p>By home (all commands, built-in / + custom): <code>generica</code> 26 / 56 %, <code>coloquial</code> 27 / 59 %, <code>personas</code>
+19 / 56 %, <code>latam</code> 16 / 54 %. Duplicate names and LatAm vocabulary cost the most.</p>
+<ul>
+<li><strong>Wrong actions on commands:</strong> 0 of 1103 templates. 3 of 673 paraphrases, all label problems:
+  "Enciende todas las luces" is the whole house in the gold label but the satellite's area for HA,
+  and "la persiana de la habitación" names a room that does not exist.</li>
+<li><strong>Route-Kiais items (497):</strong> the built-in sentences (with or without the custom ones) act on 7,
+  all bare device names ("Aire", "Tele del salón"). HA's Spanish sentences turn a bare name on,
+  which is HA's design rather than a mistake. 33 more get a local answer (time, timer status), and
+  none of the 48 TV-dialogue lines, 60 missing-target commands or 63 multi requests triggers an
+  action.</li>
+<li><strong>Cheap fix versus model:</strong> of the 1381 built-in misses (78 % of commands), the custom sentences
+  rescue 603 (44 %). That is 62 % of template misses but only 11 % of paraphrase misses. A phrasing
+  someone wrote down is cheap to cover, and the rest is what a decider would have to learn.</li>
+</ul>
+<p>Upper bound of time saved on text (every miss of a command rescued, × 3 s, divided by all
+commands): <strong>2.3 s per command</strong> with the built-in sentences and <strong>1.3 s</strong> with the custom
+sentences. These are bounds on a deliberately varied synthetic mix, not on real usage frequencies.</p>
+<h2 id="5-audio-subset-of-kivi-fake-v1">5. Audio subset of <code>kivi-fake-v1</code></h2>
+<p>302 commands and 198 route-Kiais items, each spoken once and heard in three conditions (measured,
+synthetic voices). The subset is balanced over styles, so its built-in rate on clean audio (19 %) is
+below the text figure of the natural mix (22 %). Same categories as <a href="#2-headroom-on-the-existing-transcript-corpus">section 2</a>,
+with the item text as the reference; % of all commands of the condition.</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Sentences</th>
+<th style="text-align: right;">Correct</th>
+<th style="text-align: right;">Wrong</th>
+<th style="text-align: right;">Miss</th>
+<th style="text-align: right;">a misheard</th>
+<th style="text-align: right;">a-verb</th>
+<th style="text-align: right;">b1 phrasing</th>
+<th style="text-align: right;">b2 near-miss</th>
+<th style="text-align: right;">c other</th>
+<th style="text-align: right;">Upper bound (b1+b2) × 3 s per command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>clean</td>
+<td>built-in</td>
+<td style="text-align: right;">56 (19 %)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">245 (81 %)</td>
+<td style="text-align: right;">24 (8 %)</td>
+<td style="text-align: right;">27 (9 %)</td>
+<td style="text-align: right;">192 (64 %)</td>
+<td style="text-align: right;">1 (0 %)</td>
+<td style="text-align: right;">1 (0 %)</td>
+<td style="text-align: right;">1.92 s</td>
+</tr>
+<tr>
+<td>+5 dB</td>
+<td>built-in</td>
+<td style="text-align: right;">43 (14 %)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">258 (85 %)</td>
+<td style="text-align: right;">49 (16 %)</td>
+<td style="text-align: right;">32 (11 %)</td>
+<td style="text-align: right;">173 (57 %)</td>
+<td style="text-align: right;">3 (1 %)</td>
+<td style="text-align: right;">1 (0 %)</td>
+<td style="text-align: right;">1.75 s</td>
+</tr>
+<tr>
+<td>0 dB</td>
+<td>built-in</td>
+<td style="text-align: right;">34 (11 %)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">267 (88 %)</td>
+<td style="text-align: right;">89 (29 %)</td>
+<td style="text-align: right;">24 (8 %)</td>
+<td style="text-align: right;">143 (47 %)</td>
+<td style="text-align: right;">8 (3 %)</td>
+<td style="text-align: right;">3 (1 %)</td>
+<td style="text-align: right;">1.50 s</td>
+</tr>
+<tr>
+<td>clean</td>
+<td>+ custom</td>
+<td style="text-align: right;">126 (42 %)</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">174 (58 %)</td>
+<td style="text-align: right;">24 (8 %)</td>
+<td style="text-align: right;">24 (8 %)</td>
+<td style="text-align: right;">112 (37 %)</td>
+<td style="text-align: right;">9 (3 %)</td>
+<td style="text-align: right;">5 (2 %)</td>
+<td style="text-align: right;">1.20 s</td>
+</tr>
+<tr>
+<td>+5 dB</td>
+<td>+ custom</td>
+<td style="text-align: right;">99 (33 %)</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">202 (67 %)</td>
+<td style="text-align: right;">49 (16 %)</td>
+<td style="text-align: right;">31 (10 %)</td>
+<td style="text-align: right;">104 (34 %)</td>
+<td style="text-align: right;">13 (4 %)</td>
+<td style="text-align: right;">5 (2 %)</td>
+<td style="text-align: right;">1.16 s</td>
+</tr>
+<tr>
+<td>0 dB</td>
+<td>+ custom</td>
+<td style="text-align: right;">82 (27 %)</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">218 (72 %)</td>
+<td style="text-align: right;">88 (29 %)</td>
+<td style="text-align: right;">23 (8 %)</td>
+<td style="text-align: right;">79 (26 %)</td>
+<td style="text-align: right;">19 (6 %)</td>
+<td style="text-align: right;">9 (3 %)</td>
+<td style="text-align: right;">0.97 s</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Misheard grows with noise:</strong> 8 % of commands at clean, 16 % at +5 dB and 29 % at 0 dB. The 0 dB
+  transcripts of a are often TV lines ("Que no soportó el esfuerzo y cayó muerto." for "Por favor,
+  para el toldo"). No text model can rescue them.</li>
+<li><strong>Phrasing dominates the rescuable part</strong> on this varied mix: b1 is 47 to 64 % of commands with
+  the built-in sentences and 26 to 37 % with the custom ones. b2 (one-letter slips such as "Apara la
+  luz de la cochera", "pepsiana", "tolo") is 1 to 6 %. A decider would need fuzzy name matching to
+  rescue b2.</li>
+<li><strong>Wrong actions (measured):</strong></li>
+<li>Route-Kiais items: 5, 2 and 4 of 198 per condition, all bare device names ("Altavoz Lumo",
+    "Tele del salón") that HA's own sentences turn on.</li>
+<li>Commands: the one label-noise paraphrase ("la persiana de la habitación"). With the custom
+    sentences, "Detener persianas sala" was also heard as "Detener persiana sala" and stopped one
+    blind instead of the group (clean and 0 dB). Strict sentences are safe only as long as the
+    transcript is: a singular/plural slip already picks another target.</li>
+</ul>
+<h2 id="6-limitations">6. Limitations</h2>
+<ul>
+<li>Synthetic only: Piper voices, a mixed-in TV bed with no room acoustics or AEC residue, invented
+  homes. The style mix is chosen to be varied, so miss rates are not usage frequencies. The
+  real-usage replay (workstream c) decides how often each style really occurs.</li>
+<li>The built-in figures infer HA's behaviour with hassil and a fake resolver, not with a live Home
+  Assistant. The custom sentences were matched as HA's default agent orders them, but they were
+  not loaded into a real HA.</li>
+<li>The paraphrase validator is conservative (false rejections of "aumenta" or "reduce"), so the kept
+  paraphrases under-represent unusual verbs. Label noise is about 2 to 5 %.</li>
+<li>"a-verb" and "unclear" items might be partly rescuable with context; they are excluded from the
+  upper bound on purpose.</li>
+</ul>
+<h2 id="7-reproduce-data-and-cleanup">7. Reproduce, data and cleanup</h2>
+<div class="highlight"><pre><span></span><code><span class="nv">POC</span><span class="o">=</span>/work/workspaces/kivi-decider-poc<span class="p">;</span><span class="w"> </span><span class="nv">D</span><span class="o">=</span><span class="nv">$POC</span>/data/kivi-fake-v1
+<span class="nb">cd</span><span class="w"> </span>scripts/voice-assistant/decider_poc
+python<span class="w"> </span>headroom.py<span class="w"> </span><span class="o">[</span>--custom<span class="w"> </span>custom_sentences_es.yaml<span class="o">]</span><span class="w">        </span><span class="c1"># corpus, needs $KIVI_PRIVATE/stt-runs</span>
+python<span class="w"> </span>fake_v1.py<span class="w"> </span>--out<span class="w"> </span><span class="nv">$D</span><span class="w"> </span>--per-home<span class="w"> </span><span class="m">400</span><span class="w">                      </span><span class="c1"># template items and homes</span>
+<span class="nv">OLLAMA_HOST</span><span class="o">=</span><span class="m">127</span>.0.0.1:11510<span class="w"> </span>python<span class="w"> </span>paraphrase.py<span class="w"> </span>--data<span class="w"> </span><span class="nv">$D</span><span class="w"> </span>--n<span class="w"> </span><span class="m">400</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>python<span class="w"> </span>paraphrase.py<span class="w"> </span>--data<span class="w"> </span><span class="nv">$D</span><span class="w"> </span>--merge
+python<span class="w"> </span>audio.py<span class="w"> </span>synth<span class="w"> </span>--items<span class="w"> </span><span class="nv">$D</span>/items.jsonl<span class="w"> </span>--data<span class="w"> </span><span class="nv">$D</span><span class="w"> </span>--split<span class="w"> </span>fake<span class="w"> </span>--audio<span class="w"> </span><span class="nv">$D</span>/audio<span class="w"> </span>--conds<span class="w"> </span>clean<span class="w"> </span>snr+5<span class="w"> </span>snr+0
+python<span class="w"> </span>audio.py<span class="w"> </span>transcribe<span class="w"> </span>--data<span class="w"> </span><span class="nv">$D</span><span class="w"> </span>--split<span class="w"> </span>fake<span class="w"> </span>--audio<span class="w"> </span><span class="nv">$D</span>/audio
+python<span class="w"> </span>headroom_v1.py<span class="w"> </span>--data<span class="w"> </span><span class="nv">$D</span><span class="w"> </span><span class="o">[</span>--custom<span class="w"> </span>custom_sentences_es.yaml<span class="o">]</span><span class="w"> </span><span class="o">[</span>--audio<span class="o">]</span>
+python3<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>discover<span class="w"> </span>-s<span class="w"> </span>.<span class="w"> </span>-p<span class="w"> </span><span class="s1">&#39;test_decider_poc.py&#39;</span>
+</code></pre></div>
+<p>Dependencies: hassil 3.12.1, home-assistant-intents 2026.10.6, pyyaml, rapidfuzz, numpy,
+soundfile, piper-tts, and faster-whisper 1.2.1 with the CUDA 12 cuBLAS and cuDNN wheels
+(<code>nvidia-cublas-cu12</code>, <code>nvidia-cudnn-cu12</code>) on <code>LD_LIBRARY_PATH</code>. Kept on the workstation: the
+dataset and its audio under <code>/work/workspaces/kivi-decider-poc/data/</code>, the venv, and
+<code>env.sh</code>. Removed at the end: the Ollama model store on <code>/datasets/kivi-decider</code>, the Whisper model
+cache, uv cache, and an unused first generator output (<code>data/items_*.jsonl</code> of the training-split
+draft, see <code>gen_data.py</code>).</p>
+<p><code>gen_data.py</code> is the train/dev/test generator drafted for P1 before the scope change (held-out
+template families and name pools). It is kept for P1 but no audio or training was run with it.</p>
+<h2 id="8-open-questions-for-the-owner">8. Open questions for the owner</h2>
+<ol>
+<li>Ship the custom sentences (after checking them against the real names and aliases), and re-run
+   this analysis on the real-usage replay before any decider work?</li>
+<li>Go on to P1 to P3 only if the real misses are mostly "unseen phrasing" rather than "misheard"?</li>
+<li>Treat "todas las luces" as the whole house or the satellite's area (HA uses the area)?</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

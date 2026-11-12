@@ -1,0 +1,5044 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../oye-kivi-v6/">
+      
+      
+        <link rel="next" href="../small-local-models/">
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>vnext ablations: real voice is what moves the needle (2026-11-08) - Pando85's Homelab</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#vnext-ablations-real-voice-is-what-moves-the-needle-2026-11-08" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Pando85&#39;s Homelab" class="md-header__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Pando85's Homelab
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              vnext ablations: real voice is what moves the needle (2026-11-08)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+    
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7 0-.24-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91 1.61 0 2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08Z"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Pando85&#39;s Homelab" class="md-nav__button md-logo" aria-label="Pando85's Homelab" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    Pando85's Homelab
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/pando85/homelab" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.5.1 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2023 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81z"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Network
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Network
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/configuration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/ingress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ingress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/pfsense/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense: cluster-relevant configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../network/webos-voice-satellite/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    webOS voice satellite network requirement
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Deployment
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            Deployment
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/battery-optimizer/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    battery-optimizer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/cilium-bgp-control-plane/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium BGP Control Plane
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Deploy a New Hermes Agent Instance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/manual-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Manual setup <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/minio-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MinIO Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/readest/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Deployment
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/s3-public/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    s3-public (Public MinIO)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../deployment/unifi/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UniFi
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    User-guide
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            User-guide
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/add-or-remove-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Add or remove nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/clone-data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Clone data between volumes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/cpu-optimize-tuning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CPU optimize tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/expand-longhorn-volume/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Expand Longhorn volume
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/freshrss/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    FreshRSS
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/grigri/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    grigri
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/heat-pump-water-temperature/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Heat pump water temperature
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/install-pre-commit-hooks/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Install pre-commit hooks
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/kanidm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/kubernetes-upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kubernetes upgrade
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/ldap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    LDAP
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/migrate_controller_node/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrate controller node
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/move_data/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Move data
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/navidrome/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Navidrome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/nextcloud/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Nextcloud <!-- omit from toc -->
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/restore-backup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Restore backup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/run-commands-on-multiple-nodes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Run commands on multiple nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/upgrades/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/valetudo/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Valetudo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/vault/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Migration: File to Raft Storage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/vpn/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    VPN
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/wallabag/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Wallabag
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../user-guide/wan-phone-failover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    WAN phone failover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Troubleshooting
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Troubleshooting
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/INDEX/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Troubleshooting Pitfall Index
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ansible-limit-cross-host-facts/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Scoped Ansible Runs Break On Cross-Host Gathered Facts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ansible-ubuntu-2604-compat/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Ansible compatibility with Ubuntu 26.04 nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/app-template-values-tpl-evaluation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    app-template evaluates values as Go templates — literal {{ }} breaks rendering
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/appdaemon-pvpc-negative-prices/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-gitops-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD GitOps Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-helm-hook-provisioning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD Helm hooks: provisioning Jobs that never run, and hooks that silently stop running
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-kustomize-helm-oci-auth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Kustomize Helm OCI Charts Return 401
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-repo-server-probe-death-spiral/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ArgoCD Repo-Server Probe Death-Spiral
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/argocd-ssa-stale-field-manager/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Argo CD server-side apply: a field removed from git persists live
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/armbian-kernel-bpf-masquerade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Armbian Kernel 6.12 BPF Masquerade Regression (Odroid HC4)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/bandwidth-limiting/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pod Bandwidth Limiting
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ci-runner-amd64-disk-full/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ci-runner-amd64 fills the k8s-amd64-1 root disk
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/ci-runner-workspace-permission-denied/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    CI Runner: mkdir /workspace/&lt;hash&gt;: permission denied
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cilium-1.19-bgp-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium 1.19 Upgrade: BGP v1 API Removal
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cilium-stale-bpf-egress/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium Stale BPF Datapath Breaks Pod Egress
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/cluster-hygiene/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cluster Hygiene
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-gateway-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-gateway-listener-drain/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy Gateway listener changes close long connections
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/envoy-oidc-id-token-cookie-size/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Envoy OIDC session breaks: ID token cookie over 4096 B
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/firecrawl-selfhost-deployment/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl Self-Hosted Deployment Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/forgejo-runner-valid-volumes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Forgejo runner valid_volumes silently drops container-job mounts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/gotrue-callback-url-routing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue Callback URL Routing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/gotrue-ssrf-protection/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    GoTrue SSRF Protection Blocks Private IPs
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-13-derivedfields-url-stripped/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana 13 Loki derivedFields URL field stripped during provisioning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-datasource-sidecar-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana datasource sidecar ConfigMap collision
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-mcp-hermes/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana MCP Server Deployment with Kanidm Authentication
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-node-exporter-pod-churn-duplicates/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana dashboards draw duplicate lines after node-exporter pod restarts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/grafana-sidecar-folder-annotation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Grafana Dashboard Sidecar Folder Annotation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Agent
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-authentication-credential-issues/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Authentication and Credential Issues
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-config-overwrite-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Hermes Instance Config Overwrite Recovery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/hermes-persistent-cli-tools/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Persistent CLI Tools in Hermes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-aiohttp-incompatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant aiohttp WebSocket Incompatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-api-hacs-deploy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant API Access and HACS Deploys for Agents
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-dashboards/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Dashboards: Live Editing and Pitfalls
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-entity-id-handover/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: moving an entity ID to another platform without losing its history
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-localtuya/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant localtuya (pando85 fork)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-omnibattery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant: Omnibattery and the house battery
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-python-packages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Python Package Management
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/home-assistant-shelly-coiot-push/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant Shelly CoIoT push updates (Gen1 devices)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kanidm-no-dcr-mcp-client-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm has no dynamic client registration for MCP clients
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kanidm-restore-procedure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kanidm Backup Restore Procedure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kaniop-backup-system/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kaniop Backup System Gotchas
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/kata-containerd-dropin/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kata Containers: containerd Drop-in Directory
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/major-page-faults/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Major page faults
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/mcp-firecrawl-egress-regression/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Firecrawl egress NetworkPolicies: applied, broke readiness, rolled back
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/mqtt/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MQTT
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/needrestart-k3s-restart-storm/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    needrestart: k3s Restart Storm During Unattended Upgrades
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/nodelocaldns-cilium-lrp/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Cilium LRP Breaks NodeLocal DNS After Node Reboot
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/nvidia-driver-version-mismatch/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    NVIDIA Driver/Library Version Mismatch
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/office-iot-wifi-flapping/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/openebs-zfspv-slow-startup-fsgroup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    OpenEBS ZFS Local PV: Slow Pod Startup with fsGroup
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/pfsense-alias-change-keeps-old-states/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    pfSense alias change keeps old states
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/postgres-pvc-node-migration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Migrating Zalando Postgres PVC Across Nodes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/profiling-collector-rollback/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Staging Continuous Profiling: Collector Choice and Rollback
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/prusik-etcd-swap-thrash/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik: CI memory bursts swap-thrash the root NVMe and freeze the API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/prusik-l2arc-ineffective/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    prusik L2ARC is misconfigured, not useless
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/pvpc-updated-esios-api-zip-response/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    PVPC Updated: ESIOS API Returns ZIP Instead of JSON
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/qbittorrent-hdd-io-saturation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent HDD I/O Saturation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/qbittorrent-performance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    qBittorrent Performance Tuning
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/radarr-sqlite-to-postgres/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Radarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/readest-android-oauth/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest Android OAuth (Deep-Link Login)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/readest-ui-oauth-providers/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Readest UI Hardcoded OAuth Providers
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/sccache-s3-bucket-full-silent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    sccache S3 tier silently stops writing when the bucket is full
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/shelly-gen1-coiot-disabled-breaks-ha-setup/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Gen1 Shelly: disabling CoIoT breaks Home Assistant setup on the next restart
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/sonarr-sqlite-to-postgres-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Sonarr SQLite to PostgreSQL Migration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/stop-home-assistant-under-argocd/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stopping Home Assistant under ArgoCD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/stump-migration-failure/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Stump SQLite Migration Failure
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/temperature-alert-thresholds/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Temperature Alert Thresholds for k8s-amd64-1
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/tempo-metrics-generator-wal-collision/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Tempo: Metrics-Generator WAL Collides With the Trace Backend's Block Listing
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/unifi-wifi-client-debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging Wi-Fi Clients on the UniFi Network
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vault-operator-probe-timeout/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vault Operator Probe Timeouts
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vector-journal-node-label/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Journal node_name Label Derived from Wrong Field
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/vector-log-loss-and-starvation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Vector Log Loss and New-Pod Starvation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-2026-09-25-oom-etcd-outage/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Stalled — 2026-09-25 Memory Pressure / etcd Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-2026-09-26-stuck-backup-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Stuck Backup Recovery — 2026-09-26
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-backup-failures/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Backup Failures
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-truncated-zfs-backups/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero Truncated ZFS Backup Objects — Netcat Idle Timeout
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/velero-zfs-stream-pipeline-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Velero/OpenEBS ZFS Stream Pipeline Deadlock
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zalando-patroni-stale-dcs-deadlock/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando Patroni Stale DCS Deadlock After PVC Recreate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zalando-single-instance-updatefailed/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Zalando single-instance cluster stuck UpdateFailed after a resource change
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../troubleshooting/zfs-snapshot-filling-pvc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ZFS Snapshots Filling Up PVC
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_6" >
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../../adr/" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Architecture decisions
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_6" id="__nav_6_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            Architecture decisions
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adr/0005-gateway-api-with-envoy-gateway/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    ADR-0005: Gateway API with Envoy Gateway instead of ingress-nginx
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Design
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            Design
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../design/mcp-gateway-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    MCP Gateway Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../" class="md-nav__link ">
+              
+  
+  <span class="md-ellipsis">
+    Voice assistant
+  </span>
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_8" id="__nav_8_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            Voice assistant
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../audio-pipeline-plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Home Assistant audio pipeline plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conversation-agent/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation agent: where small local models fit
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../conversation-capabilities-roadmap/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi conversation capabilities roadmap
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../data-register/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi data register
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kiais-integration/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kiais as the Kivi conversation agent in Home Assistant
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kivi-iteration-loop/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi wake word: the iteration loop
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../lessons-learned/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Lessons learned
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../model-registry/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi model registry
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plan/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi plan
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../stt-hint-list-and-learning/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi speech-to-text: a home vocabulary hint list and learning from usage
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../whisper-image-build/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building the Kivi Whisper STT image on Forgejo
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8_13" id="__nav_8_13_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    experiments
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_8_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8_13">
+            <span class="md-nav__icon md-icon"></span>
+            experiments
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../conversation-agent-eval/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Conversation agent evaluation for "Kivi": Kiais gateway metrics, a reusable dry-run harness, and what Home Assistant's built-in intents already cover
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../decision-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Decision models for Kivi: can a small classifier rescue the commands the built-in intents miss?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kivi-decider-poc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Kivi decider PoC: is there headroom behind the built-in intents?
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kivi-wake-word/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Custom wake word "kivi": training an openWakeWord model and measuring recall and false accepts offline
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-data-quality/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" training-data quality: phrase check, out-of-fold labels, coverage (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-p0-baseline/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    P0 real-voice baseline: deployed v4 "oye Kivi" (2026-11-08)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-recovery/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Recovery plan: unreliable "oye Kivi" wake word
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-v5era-mining/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    v5-era room audio: replay false wakes and missed-wake mining (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oye-kivi-v6/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    "oye Kivi" v6: context-trained candidate (2026-11-11)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    vnext ablations: real voice is what moves the needle (2026-11-08)
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    vnext ablations: real voice is what moves the needle (2026-11-08)
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#arms" class="md-nav__link">
+    <span class="md-ellipsis">
+      Arms
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-1-confuser-negatives-without-real-positives-destroy-recall" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 1: confuser negatives without real positives destroy recall
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-2-generalisation-to-unseen-real-takes-the-honest-number" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 2: generalisation to unseen real takes (the honest number)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-3-the-mic-chain-is-not-the-bottleneck-p1-source-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 3: the mic chain is not the bottleneck (P1 source attribution)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-4-recipe-knobs-on-the-same-40-cues-do-not-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 4: recipe knobs on the same 40 cues do not help
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-5-the-confusers-are-fixed-on-real-speech" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 5: the confusers are fixed on real speech
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-6-the-same-candidate-on-the-untouched-room-test-part" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 6: the same candidate on the untouched room test part
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-7-the-three-heads-side-by-side-and-the-one-that-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 7: the three heads side by side, and the one that shipped
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deployment: oye_kivi_next v5-oye-kivi-2026-11-08, one TV
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-8-the-first-clean-held-out-session-2026-11-11-odd-date-pc-and-webcam-channels-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 8: the first clean held-out session (2026-11-11, odd date, PC and webcam channels only)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Result 8: the first clean held-out session (2026-11-11, odd date, PC and webcam channels only)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#session-procedure-after-the-pipeline-fix-2026-11-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      Session procedure after the pipeline fix (2026-11-11)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-does-not-prove" class="md-nav__link">
+    <span class="md-ellipsis">
+      What this does not prove
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reproduce" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reproduce
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-v6-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next: v6 plan
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../small-local-models/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Small local models for Kivi: GPU budget, router, STT corrector, local agent, and non-LLM fixes
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../whisper-gpu-benchmark/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Whisper decoding settings on the GTX 1060: compute type, beam size, VAD
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#arms" class="md-nav__link">
+    <span class="md-ellipsis">
+      Arms
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-1-confuser-negatives-without-real-positives-destroy-recall" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 1: confuser negatives without real positives destroy recall
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-2-generalisation-to-unseen-real-takes-the-honest-number" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 2: generalisation to unseen real takes (the honest number)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-3-the-mic-chain-is-not-the-bottleneck-p1-source-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 3: the mic chain is not the bottleneck (P1 source attribution)
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-4-recipe-knobs-on-the-same-40-cues-do-not-help" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 4: recipe knobs on the same 40 cues do not help
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-5-the-confusers-are-fixed-on-real-speech" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 5: the confusers are fixed on real speech
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-6-the-same-candidate-on-the-untouched-room-test-part" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 6: the same candidate on the untouched room test part
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-7-the-three-heads-side-by-side-and-the-one-that-shipped" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 7: the three heads side by side, and the one that shipped
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv" class="md-nav__link">
+    <span class="md-ellipsis">
+      Deployment: oye_kivi_next v5-oye-kivi-2026-11-08, one TV
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-8-the-first-clean-held-out-session-2026-11-11-odd-date-pc-and-webcam-channels-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      Result 8: the first clean held-out session (2026-11-11, odd date, PC and webcam channels only)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Result 8: the first clean held-out session (2026-11-11, odd date, PC and webcam channels only)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#session-procedure-after-the-pipeline-fix-2026-11-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      Session procedure after the pipeline fix (2026-11-11)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-does-not-prove" class="md-nav__link">
+    <span class="md-ellipsis">
+      What this does not prove
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reproduce" class="md-nav__link">
+    <span class="md-ellipsis">
+      Reproduce
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-v6-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      Next: v6 plan
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+  
+  
+
+
+<h1 id="vnext-ablations-real-voice-is-what-moves-the-needle-2026-11-08">vnext ablations: real voice is what moves the needle (2026-11-08)</h1>
+<p>Source: <a href="../oye-kivi-recovery/">recovery plan</a> P1 (source attribution) and P2 (candidates), run ahead of
+schedule because the real recordings arrived the same morning, plus the first room evidence for P3.
+Follows the <a href="../oye-kivi-p0-baseline/">P0 real-voice baseline</a>. Everything ran offline on the workstation
+(<code>~/kivi-models/data/vnext/</code>). The result of this note <strong>is deployed</strong>: the
+chosen head is <code>h_c120_w64</code>, released as <code>oye_kivi_next</code> <code>v5-oye-kivi-2026-11-08</code>, trialled on c3-a from
+2026-11-08 and, by the owner's decision of 2026-11-11, the wake word of the household pipeline "Kiwi" for
+every satellite (<a href="#deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv">Deployment</a>).</p>
+<p><strong>Bottom line:</strong> consented real positive takes move recall on <em>unseen</em> real takes from 25 % to 75 % on the
+satellite at a <em>lower</em> measured room false-wake rate (0.12/h against 0.96/h), and the real confuser takes
+drop from 10/54 to 1/54 (0/54 for <code>rn_rp_h</code>, the head that got closest on synthetic data). No front-end
+filter helps (the model was the problem), and more augmentation of the
+same 40 cues does nothing — the next improvement has to come from new recordings: a <code>test</code>-split session on
+a later day, spk02, and ~15 h per device of fresh room exposure. The head that shows this (<code>h_c120_w64</code>)
+is released as <code>oye_kivi_next</code> <code>v5-oye-kivi-2026-11-08</code>, the household wake word since 2026-11-11.</p>
+<h2 id="arms">Arms</h2>
+<p>All arms share the vnext synthetic set (59,973 positives, 59,976 negatives from
+<code>vnext_oye_kivi.yaml</code>, the strict-target recipe) and the same ACAV / MLS / hard-negative / room-negative
+mix as v4's selected arm. They differ <strong>only</strong> in the real inputs:</p>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>Real negatives</th>
+<th>Real positives</th>
+<th>Warm start</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vn_ws4k_v4real</code></td>
+<td>v4's set (predates the confuser session)</td>
+<td>none</td>
+<td>v2 head, 4k steps</td>
+</tr>
+<tr>
+<td><code>vn_ws4k_rn</code></td>
+<td>refreshed: 31 old-"kivi" + 66 near-word + 83 background rows per source</td>
+<td>none</td>
+<td>v2 head, 4k steps</td>
+</tr>
+<tr>
+<td><code>vn_ws4k_rn_rp</code></td>
+<td>refreshed</td>
+<td><strong>all 232 takes</strong> (leaks the evaluation session)</td>
+<td>v2 head, 4k steps</td>
+</tr>
+<tr>
+<td><code>vn_sc4k_rn</code></td>
+<td>refreshed</td>
+<td>none</td>
+<td>fresh head, 4k steps</td>
+</tr>
+<tr>
+<td><code>vn_ws6k_rn_rp</code></td>
+<td>refreshed</td>
+<td>all 232 takes</td>
+<td>v2 head, 6k steps</td>
+</tr>
+<tr>
+<td><code>vn_ws4k_rn_rp_h</code>, <code>_h3</code></td>
+<td>refreshed</td>
+<td>session 1 only, <strong>session 2 held out</strong></td>
+<td>v2 head, 4k steps, seeds 2 / 3</td>
+</tr>
+</tbody>
+</table>
+<p>Selection threshold per arm = the point that leaves 2 false activations on the 8.377 h of room
+<em>selection</em> audio (0.24/h); the room <strong>test</strong> parts were never used here.</p>
+<h2 id="result-1-confuser-negatives-without-real-positives-destroy-recall">Result 1: confuser negatives without real positives destroy recall</h2>
+<p>Real-take acceptance (all 232 take-sources, satellite + desk mics) at each arm's own threshold:</p>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>Real takes accepted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vn_ws4k_v4real</code> (no real positives)</td>
+<td>58/232 = 25 %</td>
+</tr>
+<tr>
+<td><code>vn_ws4k_rn</code> (+ 5.5x more real confuser negatives)</td>
+<td><strong>3/232 = 1 %</strong></td>
+</tr>
+<tr>
+<td><code>vn_ws4k_sc4k_rn</code> (fresh head)</td>
+<td>0/232 = 0 %</td>
+</tr>
+<tr>
+<td><code>vn_ws4k_rn_rp</code> (real positives, leaky)</td>
+<td>209/232 = 90 %</td>
+</tr>
+<tr>
+<td><code>vn_ws6k_rn_rp</code> (real positives, leaky, 6k steps)</td>
+<td>214/232 = 92 %</td>
+</tr>
+</tbody>
+</table>
+<p>The synthetic selection metrics hide this: <code>vn_ws4k_rn</code> scores <em>better</em> on the synthetic held-out set
+than the control (clean 0.678 vs 0.691 is a wash, val_pos 0.395 vs 0.343) while collapsing to 1 % on
+real speech, and its acceptance of the real confuser windows drops 50x (0.0051 -&gt; 0.0001). <strong>Pushing the
+confusers down with real negatives only works if the model also has real positives to tell them apart
+from; the recipe change is the pair, not the negatives.</strong></p>
+<h2 id="result-2-generalisation-to-unseen-real-takes-the-honest-number">Result 2: generalisation to unseen real takes (the honest number)</h2>
+<p><code>vn_ws4k_rn_rp</code> is leaky — session 2 is in its training set. So session 2 was held out entirely
+(<code>v3_real.py feats --holdout-session</code>, new: <code>(block, cue)</code> collides across sessions because every block
+numbers its cues from 1) and retrained at two seeds. Session 2 = 40 cues x 3 sources = 113 usable
+take-sources, never seen in training.</p>
+<p>Scored with <code>kivi_score.py</code> on the session's stored clips, satellite <code>tv-c3a</code> (what the server hears),
+each model at its own selection threshold:</p>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>v4 (deployed)</th>
+<th>control (no real pos)</th>
+<th><code>rn_rp_h</code></th>
+<th><code>rn_rp_h3</code></th>
+<th>Gate</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TV off (1.5 m + 3 m)</td>
+<td>7/20 = 35 %</td>
+<td>9/20 = 45 %</td>
+<td><strong>14/20 = 70 %</strong> [48, 85]</td>
+<td><strong>15/20 = 75 %</strong> [53, 89]</td>
+<td>&gt;= 80 %</td>
+</tr>
+<tr>
+<td>TV on (1.5 m + 3 m)</td>
+<td>3/20 = 15 %</td>
+<td>4/20 = 20 %</td>
+<td><strong>14/20 = 70 %</strong> [48, 85]</td>
+<td><strong>13/20 = 65 %</strong> [43, 82]</td>
+<td>&gt;= 60 %</td>
+</tr>
+<tr>
+<td>ALL</td>
+<td>10/40 = 25 %</td>
+<td>13/40 = 32 %</td>
+<td>28/40 = 70 % [55, 82]</td>
+<td>28/40 = 70 % [55, 82]</td>
+<td>—</td>
+</tr>
+<tr>
+<td>Desk mic, ALL</td>
+<td>11/40 = 28 %</td>
+<td>11/40 = 28 %</td>
+<td>27/40 = 68 %</td>
+<td>31/40 = 78 %</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Per cell (satellite, 10 takes each): <code>rn_rp_h</code> 1.5 m TV off 10/10, 1.5 m TV on 7/10, 3 m TV off 4/10,
+3 m TV on 7/10; <code>rn_rp_h3</code> 10/10, 5/10, 5/10, 8/10. (Wilson 95 % intervals on the pooled cells.)</p>
+<p><strong>Real positives take unseen real speech from 25 % to 70 % on the channel that matters</strong>, with the same
+room-false-wake budget as the selection gate. The TV-on gate (&gt;= 60 %) is met at both seeds; <strong>TV-off
+(&gt;= 80 %) is not</strong> — 1.5 m is saturated (10/10 both seeds) and the deficit is entirely at <strong>3 m with the
+TV off</strong> (4/10 and 5/10), which is the odd-cell-out and the thing to attack next.</p>
+<h2 id="result-3-the-mic-chain-is-not-the-bottleneck-p1-source-attribution">Result 3: the mic chain is not the bottleneck (P1 source attribution)</h2>
+<p>The same session-2 takes, scored on the satellite's own raw wake stream, and on filtered copies of that
+stream (<code>ha_filter_mirror.py</code>, the trees extended with today's sessions: 3 files written, 50 skipped):</p>
+<table>
+<thead>
+<tr>
+<th>Path (identical takes)</th>
+<th>v4 (deployed) at 0.9437</th>
+<th><code>rn_rp_h</code> at 0.97125</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>satellite, as recorded</td>
+<td>10/40 = 25 %</td>
+<td>28/40 = 70 %</td>
+</tr>
+<tr>
+<td>+ RNNoise</td>
+<td>12/40 = 30 %</td>
+<td>26/40 = 65 %</td>
+</tr>
+<tr>
+<td>+ second WebRTC NS pass</td>
+<td>7/40 = 18 %</td>
+<td>28/40 = 70 %</td>
+</tr>
+<tr>
+<td>desk mic (clean reference, no satellite)</td>
+<td>11/40 = 28 %</td>
+<td>27/40 = 68 %</td>
+</tr>
+</tbody>
+</table>
+<p>Every difference is inside the noise of 40 takes (+-2 to +-3 cues, intervals +-15 points wide), and the
+clean desk mic is no better than the satellite. <strong>No front-end profile change is indicated</strong>: the plan's
+"no signal-processing change without a matched-model replay result" holds — the matched replay shows the
+model explains the gap, the chain does not. Not re-run here: the <code>speex</code> mirror (its Nov 7 result stands);
+<code>pyspeex_noise</code> is not installed in either workstation venv anymore.</p>
+<h2 id="result-4-recipe-knobs-on-the-same-40-cues-do-not-help">Result 4: recipe knobs on the same 40 cues do not help</h2>
+<p>Both knobs were tried with session 2 still held out (4 arms, <code>vnext/runs4.sh</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Arm</th>
+<th>Real windows per take</th>
+<th>Real share of positives/step</th>
+<th>Holdout accepted</th>
+<th>Train accepted</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>vn_h_c40_w32</code> (= <code>rn_rp_h</code>, re-run)</td>
+<td>4,760</td>
+<td>64/256</td>
+<td>79/113</td>
+<td>114/119</td>
+</tr>
+<tr>
+<td><code>vn_h_c40_w64</code></td>
+<td>4,760</td>
+<td>128/256</td>
+<td>78/113</td>
+<td>116/119</td>
+</tr>
+<tr>
+<td><code>vn_h_c120_w32</code></td>
+<td>14,280</td>
+<td>64/256</td>
+<td>78/113</td>
+<td>105/119</td>
+</tr>
+<tr>
+<td><code>vn_h_c120_w64</code></td>
+<td>14,280</td>
+<td>128/256</td>
+<td>80/113</td>
+<td>117/119</td>
+</tr>
+</tbody>
+</table>
+<p>The re-run reproduced the original arm exactly (same threshold 0.97125, same 79/113), so the pipeline is
+deterministic — and tripling the augmentation variety or doubling the real sampling weight moves the
+holdout by one or two takes out of 113. <strong>The limit is the diversity of the 40 cues, not the recipe.</strong>
+More recordings, not more tuning.</p>
+<h2 id="result-5-the-confusers-are-fixed-on-real-speech">Result 5: the confusers are fixed on real speech</h2>
+<p>All 54 consented real near-word takes (sessions 1 and 3, satellite, each model at its own selection
+threshold):</p>
+<table>
+<thead>
+<tr>
+<th>Near-word</th>
+<th>v4 (deployed)</th>
+<th>control (v4's real negatives)</th>
+<th><code>rn_rp_h</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>oye Fifi</td>
+<td>4/6</td>
+<td>0/6</td>
+<td>0/6</td>
+</tr>
+<tr>
+<td>oye kiri</td>
+<td>3/6</td>
+<td>2/6</td>
+<td>0/6</td>
+</tr>
+<tr>
+<td>oye kili</td>
+<td>2/6</td>
+<td>1/6</td>
+<td>0/6</td>
+</tr>
+<tr>
+<td>oye tivi</td>
+<td>1/6</td>
+<td>1/6</td>
+<td>0/6</td>
+</tr>
+<tr>
+<td><strong>kivi (alone)</strong></td>
+<td>0/6</td>
+<td>0/6</td>
+<td><strong>0/6</strong></td>
+</tr>
+<tr>
+<td>oye mira / oye tú / o sea / hoy vi</td>
+<td>0/6 each</td>
+<td>0/6 each</td>
+<td>0/6 each</td>
+</tr>
+<tr>
+<td><strong>ALL</strong></td>
+<td><strong>10/54 = 18.5 %</strong></td>
+<td>4/54 = 7.4 %</td>
+<td><strong>0/54</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The core phrase goal still holds ("kivi" alone never triggers), and the candidate's confuser acceptance
+is zero in 54 trials — with 0 events the 95 % upper bound is still ~5.6 %, so this is not a room
+false-wake rate: that needs the room test replay (Next item 3), not 54 prompted takes.</p>
+<h2 id="result-6-the-same-candidate-on-the-untouched-room-test-part">Result 6: the same candidate on the untouched room test part</h2>
+<p><code>v3_room.py score --part test</code> (8.31 h: 4.11 h c3-a, 4.20 h c3-b; never used for selection, each model at
+its own threshold, 2 s refractory, exact Poisson intervals):</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>c3-a</th>
+<th>c3-b</th>
+<th>pooled</th>
+<th>per hour [95 % CI]</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v4 (deployed) at 0.9437</td>
+<td>2</td>
+<td>6</td>
+<td>8</td>
+<td><strong>0.96/h [0.42, 1.90]</strong></td>
+</tr>
+<tr>
+<td>control at 0.95435</td>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+<td>0.36/h [0.07, 1.06]</td>
+</tr>
+<tr>
+<td><code>rn_rp_h</code> at 0.97125</td>
+<td>1</td>
+<td>2</td>
+<td>3</td>
+<td><strong>0.36/h [0.07, 1.06]</strong></td>
+</tr>
+</tbody>
+</table>
+<p>The v4 row reproduces the published room figure exactly, which validates the replay chain. The candidate
+is 3x under it in point estimate (<strong>and 10 events at 0.9437, one event more than v4</strong>: its score
+distribution sits higher, so it is not a model you may leave at the old threshold — the threshold comes
+with the model).</p>
+<p><strong>This does not meet the gate yet.</strong> 0.36/h [0.07, 1.06] cannot exclude the 0.25/h budget, and per device
+c3-b is 0.48/h [0.06, 1.72]. Roughly 15 h per device with no events would be needed for the upper bound to
+fall under 0.25/h, so the room exposure has to be collected over the coming days, not squeezed out of the
+existing pieces.</p>
+<h2 id="result-7-the-three-heads-side-by-side-and-the-one-that-shipped">Result 7: the three heads side by side, and the one that shipped</h2>
+<p>Session 2 was held out of training for all three heads, so the satellite channel of that session is the
+honest generalisation number. Each head is scored at its own selection threshold (<code>v4_select.py</code>,
+&lt;= 2 false accepts in 8.377 h of room selection part):</p>
+<table>
+<thead>
+<tr>
+<th>Head</th>
+<th>raw thr</th>
+<th>TV off</th>
+<th>TV on</th>
+<th>ALL (40 takes)</th>
+<th>Confuser takes, satellite (54)</th>
+<th>Room test part (8.31 h)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v4 (deployed)</td>
+<td>0.9437</td>
+<td>7/20 = 35 %</td>
+<td>3/20 = 15 %</td>
+<td>10/40 = 25 %</td>
+<td>10/54 = 19 %</td>
+<td>8 = 0.96/h [0.42, 1.90]</td>
+</tr>
+<tr>
+<td><code>rn_rp_h</code></td>
+<td>0.97125</td>
+<td>14/20 = 70 %</td>
+<td>14/20 = 70 %</td>
+<td>28/40 = 70 %</td>
+<td>0/54</td>
+<td>3 = 0.36/h [0.07, 1.06]</td>
+</tr>
+<tr>
+<td><code>rn_rp_h3</code></td>
+<td>0.96408</td>
+<td>15/20 = 75 %</td>
+<td>13/20 = 65 %</td>
+<td>28/40 = 70 %</td>
+<td>1/54</td>
+<td>3 = 0.36/h [0.07, 1.06]</td>
+</tr>
+<tr>
+<td><strong><code>h_c120_w64</code></strong></td>
+<td><strong>0.9754</strong></td>
+<td><strong>15/20 = 75 %</strong></td>
+<td><strong>15/20 = 75 %</strong></td>
+<td><strong>30/40 = 75 %</strong></td>
+<td><strong>1/54</strong></td>
+<td><strong>1 = 0.12/h [0.003, 0.67]</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Per cell for the chosen head (10 takes each): 1.5 m TV off 10/10, 1.5 m TV on 7/10, <strong>3 m TV off 5/10</strong>,
+3 m TV on 8/10. On the session's other microphones it is 32/40 (pc-mic) and 31/40 (webcam-mic).</p>
+<p>The confuser column pools both near-word sessions on the satellite (session 1: 18 cues, session 3: 36), as
+Result 5 does. In the dedicated confuser session alone (session 3, 36 takes) the new heads are <strong>0/36</strong>
+against v4's 8/36; the single acceptance of <code>h_c120_w64</code> in the pooled 54 is <strong>"oye kili"</strong> once on session
+1's near block, which was in its own training data — a fitting gap rather than a generalisation failure.
+The same word also reaches the trigger once on each of the two PC reference microphones of session 3, so
+"oye kili" stays in the negative pool at confuser weight. The held-out session's own near block is 0/9 on
+every channel and every model.</p>
+<p><strong>Why this one.</strong> <code>rn_rp_h3</code> is marginally ahead on the window-level all-microphone measure (82/113
+against 80/113) while <code>h_c120_w64</code> is ahead on the deployment channel (30/40 against 28/40): two takes out
+of 40, which is noise. The tie-break was behaviour at the operating point that would actually be served —
+one room event in 8.31 h against three. The heads are inside the margin that Result 4 measured for these
+recipe knobs (one or two takes out of 113), so this is a choice among near-equals, not evidence that the
+knobs matter; and the room part had already been inspected for v4 and <code>rn_rp_h</code>, so using it as the
+tie-break costs a little of its independence.</p>
+<p><strong>The threshold is not transferable.</strong> At v4's raw 0.9437 this head accepts 8 events in the same room test
+audio (and <code>rn_rp_h</code> accepts 10): their score distributions sit above v4's. The artefact is the pair
+(model, threshold), which is why <code>calibrate</code> bakes 0.9754 into the final bias.</p>
+<h2 id="deployment-oye_kivi_next-v5-oye-kivi-2026-11-08-one-tv">Deployment: <code>oye_kivi_next</code> v5-oye-kivi-2026-11-08, one TV</h2>
+<p><code>wake_release.py</code> ran the full flow for <code>h_c120_w64</code> as model id <strong><code>oye_kivi_next</code></strong>, version
+<code>v5-oye-kivi-2026-11-08</code>, raw threshold <strong>0.9754</strong> = the server's default 0.5, served
+<code>oye_kivi_next.tflite</code> sha256 <code>3101e61eb8d55faa37623c8fe7eda30cc1b9f3982c37bf393c85bce49fac93ae</code>, image
+<code>git.grigri.cloud/agil/kivi-models:v5-oye-kivi-2026-11-08@sha256:3a198f7d4958</code> (anonymous pull refused, CI
+run checked). The release state keeps the score and gate JSON:
+<code>~/kivi-models/data/releases/v5-oye-kivi-2026-11-08/</code>.</p>
+<ul>
+<li><strong>Gate: INCOMPLETE</strong>, exactly as the data predicts — the room checks pass at the point estimate
+  (0.12/h pooled, 0.0/h on c3-a, 0.238/h on c3-b) and the recall checks have no rows because all three
+  real sessions are <code>train</code> split and there is only one speaker. Released with the owner's reason
+  (<code>--accept-gate-fail</code>), not as a pass.</li>
+<li><strong>New id, not an overwrite.</strong> v4's <code>oye_kivi</code> file is still served: the household pipeline "Kiwi" keeps
+  <code>oye_kivi</code>, and the recovery plan's rule for a gate that does not pass — trial on one device — is only
+  possible because the candidate has its own id. A trial pipeline "oye Kivi" (a copy of the preferred
+  one, wake word <code>oye_kivi_next</code>) ran on <strong>c3-a only</strong> from 2026-11-08 11:56 UTC.</li>
+<li><strong>Household wake word since 2026-11-11 (owner decision).</strong> The owner asked for the latest model on all
+  satellites through the global pipeline and no per-satellite overrides: "Kiwi" (preferred) uses
+  <code>oye_kivi_next</code>, both satellites' pipeline selects (both the first and the second select of each) are
+  <code>preferred</code>, and the trial pipeline "oye Kivi" no longer exists. The gate stays <strong>incomplete</strong>; the owner's
+  reason is in the release state's <code>promotion.owner_override</code>. The change was found live on 2026-11-11 and was
+  recorded afterwards by <code>promote --previous-wake-word oye_kivi</code> (no Home Assistant write by the driver). With
+  nothing pointing at a non-preferred pipeline, a Home Assistant restart can no longer restore a select to a
+  trial pipeline (it can only fall back to <code>preferred</code>, which is the intended state).</li>
+<li><strong>Rollback</strong>: <code>wake_release.py demote --version v5-oye-kivi-2026-11-08</code> (no approval needed): "Kiwi" goes
+  back to v4's <code>oye_kivi</code>, the previous household wake word. The evidence in "Next" is still missing.</li>
+<li><strong>Model card</strong> in kivi-models records the numbers, <code>notes.md</code> the caveats; licence notes were re-issued
+  for this version because it is the first model here trained on a household member's <strong>positives</strong>.</li>
+<li>The three dataset sessions were adopted into the release state
+  (<code>extract --adopt-session &lt;session&gt;</code>) instead of re-extracting already-aligned audio, which would have
+  made a new revision and superseded the marks the training data refers to.</li>
+</ul>
+<h2 id="result-8-the-first-clean-held-out-session-2026-11-11-odd-date-pc-and-webcam-channels-only">Result 8: the first clean held-out session (2026-11-11, odd date, PC and webcam channels only)</h2>
+<p>Rule change, <strong>owner decision 2026-11-11</strong>: the model must work on any device, so on a test-split
+(odd Europe/Madrid date) session the desk mic, the webcam and later phone or other devices are <strong>evaluation</strong>
+channels too, reported per device class (<code>tv</code>, <code>pc-desk</code>, <code>pc-webcam</code>, <code>phone</code>) and <strong>never pooled with the TV
+gate</strong>. The TV mic stays the gate for the deployed TV path. Day split unchanged: odd dates test, even dates train.
+Old manifest rows are not rewritten: <code>eval_channel</code> is derived from (source, split) everywhere
+(<code>kivi_real_common.is_eval_channel</code>).</p>
+<p>Session <code>20261111T171918Z-spk01-tv-c3a</code> (spk01, c3-a, split test, 9 blocks, 101 cues, 9.2 min, cues every
+3.5 +-0.5 s, later day than every training and selection input of v4 and v5). <strong>The TV channel is missing</strong>:
+c3-a was on the "Kiwi Test" pipeline to keep the live wake word out of the session, and HA wrote no wake audio
+for that pipeline (empty run directories: the pipeline pointed at the unavailable <code>conversation.chatgpt</code> (the OpenAI
+integration returned 403) and the non-served wake word id <code>alexa_v0.1</code>, so every run ended run-start, error
+<code>intent-not-supported</code>, run-end; the old run check counted any run, errored or another satellite's, as a new run);
+HA also restarted twice around the session (a homelab push touching the HA config: Argo plus Reloader). Extracted from the PC
+sources only (<code>extract -- --no-tv</code>, <code>tv_channel: missing</code> in the session record and the release state; no
+<code>tv-c3a</code> rows, so the satellite gate has no new input). The webcam aligned (28/29 windows, drift +132 ppm); all
+101 cues have full audio on both sources. v5 was not trained on this session: it is held out.</p>
+<p>Recall on "oye kivi", each model at its own raw threshold (v4 0.9437, v5 0.9754), Wilson 95 % intervals,
+<code>cue_hits</code> (every cue is full audio, so no cue counts as lost):</p>
+<table>
+<thead>
+<tr>
+<th>Cell (10 cues; 3 m TV off = 36 pooled over 3 blocks)</th>
+<th>pc-mic v4</th>
+<th>pc-mic v5</th>
+<th>webcam v4</th>
+<th>webcam v5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3 m TV off</td>
+<td>24/36 = 67 % [50, 80]</td>
+<td>33/36 = 92 % [78, 97]</td>
+<td>22/36 = 61 % [45, 75]</td>
+<td>32/36 = 89 % [75, 96]</td>
+</tr>
+<tr>
+<td>3 m TV on</td>
+<td>1/10 [2, 40]</td>
+<td>6/10 [31, 83]</td>
+<td>1/10 [2, 40]</td>
+<td>5/10 [24, 76]</td>
+</tr>
+<tr>
+<td>1.5 m TV on</td>
+<td>4/10 [17, 69]</td>
+<td>6/10 [31, 83]</td>
+<td>1/10 [2, 40]</td>
+<td>8/10 [49, 94]</td>
+</tr>
+<tr>
+<td>1.5 m TV off</td>
+<td>8/10 [49, 94]</td>
+<td>10/10 [72, 100]</td>
+<td>9/10 [60, 98]</td>
+<td>8/10 [49, 94]</td>
+</tr>
+<tr>
+<td>all 66</td>
+<td>37/66 = 56 % [44, 67]</td>
+<td>55/66 = 83 % [73, 90]</td>
+<td>33/66 = 50 % [38, 62]</td>
+<td>53/66 = 80 % [69, 88]</td>
+</tr>
+</tbody>
+</table>
+<p>Near-phrase false accepts (35 near cues, 0 or 1 of 3 to 5 per word): v4 pc-mic 7/35 (oye kili 3/5, oye kiri
+4/5), v4 webcam 13/35 (kili 4/5, kiri 5/5, Fifi 2/5, tivi 2/5); <strong>v5 pc-mic 0/35, v5 webcam 1/35</strong> (oye kili 1/5).
+"kivi" alone, oye mira, oye tu, hoy vi, o sea: 0 for both models. v4's near-word problem on real speech reproduces
+on a later day; v5 fixes it. False accepts in the time outside the cue windows: 0 for both models, but that time is
+only 53 s per source (the 3.5 s cue rhythm leaves almost no gap; 1 event per model and source at most with narrower
+windows), so it says nothing about a rate per hour.</p>
+<p>Operating-point view (pc-mic / webcam, all 66 "oye kivi" cues; near-phrase false accepts of 35 in brackets):</p>
+<table>
+<thead>
+<tr>
+<th>Model, raw threshold</th>
+<th>pc-mic</th>
+<th>webcam</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>v4 0.9</td>
+<td>44/66 = 67 % (10/35)</td>
+<td>43/66 = 65 % (17/35)</td>
+</tr>
+<tr>
+<td>v4 0.9437</td>
+<td>37/66 = 56 % (7/35)</td>
+<td>33/66 = 50 % (13/35)</td>
+</tr>
+<tr>
+<td>v5 0.95</td>
+<td>58/66 = 88 % (0/35)</td>
+<td>60/66 = 91 % (2/35)</td>
+</tr>
+<tr>
+<td>v5 0.9754</td>
+<td>55/66 = 83 % (0/35)</td>
+<td>53/66 = 80 % (1/35)</td>
+</tr>
+<tr>
+<td>v5 0.98</td>
+<td>55/66 = 83 % (0/35)</td>
+<td>52/66 = 79 % (1/35)</td>
+</tr>
+</tbody>
+</table>
+<p>What it means: v5 beats v4 on a day neither saw, at every condition except webcam at 1.5 m with the TV off (8/10
+against 9/10, within noise); TV-on cells stay the weak ones (3 m 5-6/10 for v5). Caveats: one speaker, one session,
+PC mics (not what the satellite hears; the desk mic and the TV mic differ), 10 cues per TV-on cell, and no
+<code>tv-c3a</code> figure at all: the TV-path number and the gate still need a re-recorded session with the satellite
+channel. The release gate stays INCOMPLETE (satellite rows only; the PC and webcam figures are listed apart as
+"other devices, informational"). A cue-timing check found no cue without a speech burst on the desk mic; two cues
+are worth the owner's confirmation as possible flubs or cut words: block 4 (1.5 m TV on) cue 10 (burst 0.36 s, shorter than
+the usual 0.7 to 1.0 s) and cue 6 (burst starts 1.7 s after the cue).</p>
+<h3 id="session-procedure-after-the-pipeline-fix-2026-11-11">Session procedure after the pipeline fix (2026-11-11)</h3>
+<p>With the owner's approval "Kiwi Test" was edited: <code>conversation_engine</code> <code>conversation.fast</code> (was
+<code>conversation.chatgpt</code>) and <code>wake_word_id</code> <code>alexa</code> (was <code>alexa_v0.1</code>); every other field is unchanged. Put c3-a on it
+with <code>wake_release.py rollback --version V --tv c3-a --to "Kiwi Test"</code>: the tool refuses an unavailable engine or an
+unserved wake word id, then checks the newest run of that satellite (<code>wake_word-start</code>, no <code>error</code>, 30 s) and prints
+<code>FAILED: &lt;code&gt;</code> otherwise. Don't say "alexa" during sessions. Rules: (a) the run check must pass and <code>00_wake</code> must
+grow (about 32 kB/s) before the first take; (b) no homelab push touching <code>apps/home-assistant</code> config during a
+session. Verified on c3-a the same day: check OK; the newest <code>00_wake</code> file under "Kiwi Test" went from 113644 to
+433964 bytes in 10 s (32.0 kB/s); back on <code>preferred</code> (oye_kivi_next) with a passing check.</p>
+<p>Naming note: the owner briefly renamed the household pipeline to "Kivi" on 2026-11-11 and then back. Runs of that
+window sit under <code>/voice-recordings/&lt;device&gt;/Kivi/</code> (one run directory per TV, created about 17:41 UTC). The tooling
+finds the household pipeline by the preferred flag or id, never by its name.</p>
+<h2 id="what-this-does-not-prove">What this does not prove</h2>
+<ul>
+<li><strong>One speaker, one day.</strong> Sessions 1 and 2 are 14 minutes apart, so the holdout measures continuity
+  within a morning, not across-day or across-speaker robustness. spk02 is absent from the real data
+  entirely (the gate needs &gt;= 2 speakers).</li>
+<li><strong>20 takes per held-out condition</strong> — intervals are +-19 points wide.</li>
+<li><strong>The confuser result (0-1/54) and the room replay are different evidence.</strong> 54 prompted takes say nothing
+  about rate per hour; 8.3 h of room audio cannot exclude 0.25/h (Result 6), and that part was already
+  inspected for v4, so it is not a fresh unbiased test either.</li>
+<li>The <code>--holdout-session</code> windows still let session 2's 6 background segments per source into the negative
+  pool (room noise, no speech); its takes and near-words do not (its near block is marked excluded).</li>
+<li>Selection thresholds come from the room <em>selection</em> parts at 2 events / 8.38 h. Session 2 has now
+  informed a pick (Result 7), so it is a <strong>holdout that has been looked at</strong>, not a fresh test set: it
+  estimates generalisation to an unseen session, but the <em>choice among</em> close heads used it, so the 75 %
+  is mildly optimistic as a promise about tomorrow. The <code>test</code>-split session on a later day is the number
+  that settles it.</li>
+</ul>
+<h2 id="reproduce">Reproduce</h2>
+<div class="highlight"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>~/kivi-models/data
+<span class="nv">H</span><span class="o">=</span><span class="nv">$HOME</span>/homelab/scripts/voice-assistant/wakeword
+bash<span class="w"> </span>vnext/feats.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>bash<span class="w"> </span>vnext/real.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>bash<span class="w"> </span>vnext/runs.sh<span class="w">    </span><span class="c1"># synthetic + real features, 5 arms, selection</span>
+bash<span class="w"> </span>vnext/real3.sh<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>bash<span class="w"> </span>vnext/runs3.sh<span class="w">                         </span><span class="c1"># session 2 held out, two seeds + report</span>
+bash<span class="w"> </span>vnext/runs4.sh<span class="w">                                               </span><span class="c1"># copies x weight ablation on the holdout</span>
+
+<span class="c1"># the candidate heads, exported for the server&#39;s own runtime</span>
+<span class="k">for</span><span class="w"> </span>n<span class="w"> </span><span class="k">in</span><span class="w"> </span>vn_ws4k_v4real<span class="w"> </span>vn_ws4k_rn_rp_h<span class="w"> </span>vn_ws4k_rn_rp_h3<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>.venv-tf/bin/python<span class="w"> </span><span class="nv">$H</span>/export_tflite.py<span class="w"> </span>vnext/runs/<span class="nv">$n</span>/kivi.onnx<span class="w"> </span>vnext/runs/<span class="nv">$n</span>/oye_kivi_uncalibrated.tflite<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--check-features<span class="w"> </span>vnext/feat/pos_test.npy
+<span class="k">done</span>
+<span class="nv">M</span><span class="o">=</span><span class="s2">&quot;--model oye_kivi=v4/final/oye_kivi_uncalibrated.tflite --model ctrl=vnext/runs/vn_ws4k_v4real/oye_kivi_uncalibrated.tflite --model h=vnext/runs/vn_ws4k_rn_rp_h/oye_kivi_uncalibrated.tflite&quot;</span>
+
+<span class="c1"># held-out positives (comparable to the P0 baseline) and the 54 real confuser takes</span>
+<span class="k">for</span><span class="w"> </span>s<span class="w"> </span><span class="k">in</span><span class="w"> </span>20261108T094310Z<span class="w"> </span>20261108T092940Z<span class="w"> </span>20261108T095130Z<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>.venv/bin/python<span class="w"> </span>-I<span class="w"> </span><span class="nv">$H</span>/kivi_score.py<span class="w"> </span>--session<span class="w"> </span>datasets/real/<span class="nv">$s</span>-spk01-tv-c3a<span class="w"> </span><span class="nv">$M</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--thresholds<span class="w"> </span><span class="m">0</span>.9437,0.95435,0.97125<span class="w"> </span>--also-pc<span class="w"> </span>--jobs<span class="w"> </span><span class="m">4</span><span class="w"> </span>--json<span class="w"> </span>vnext/score_<span class="nv">$s_cand</span>.json
+<span class="k">done</span>
+
+<span class="c1"># P1: extend the HA-side filter mirrors with the new sessions, then score the same session on each mirror</span>
+<span class="k">for</span><span class="w"> </span>f<span class="w"> </span><span class="k">in</span><span class="w"> </span>rnnoise<span class="w"> </span>webrtc-ns<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<span class="w">  </span>systemd-run<span class="w"> </span>--user<span class="w"> </span>--scope<span class="w"> </span>-p<span class="w"> </span><span class="nv">MemoryMax</span><span class="o">=</span>6G<span class="w"> </span>-p<span class="w"> </span><span class="nv">CPUQuota</span><span class="o">=</span><span class="m">400</span>%<span class="w"> </span>nice<span class="w"> </span>-n<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>.venv/bin/python<span class="w"> </span>-I<span class="w"> </span><span class="nv">$H</span>/ha_filter_mirror.py<span class="w"> </span>build<span class="w"> </span>--src<span class="w"> </span>datasets/real<span class="w"> </span>--dst<span class="w"> </span>datasets/derived/<span class="nv">$f</span><span class="w"> </span>--filter<span class="w"> </span><span class="nv">$f</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--tool<span class="w"> </span>v2/fe_build/release/examples/aec_offline
+<span class="w">  </span>.venv/bin/python<span class="w"> </span>-I<span class="w"> </span><span class="nv">$H</span>/kivi_score.py<span class="w"> </span>--session<span class="w"> </span>datasets/derived/<span class="nv">$f</span>/20261108T094310Z-spk01-tv-c3a<span class="w"> </span><span class="nv">$M</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>--thresholds<span class="w"> </span><span class="m">0</span>.9437,0.95435<span class="w"> </span>--jobs<span class="w"> </span><span class="m">3</span><span class="w"> </span>--json<span class="w"> </span>vnext/p1_mirror_<span class="nv">$f</span>.json
+<span class="k">done</span>
+
+<span class="c1"># the untouched room test part (Result 6)</span>
+<span class="nv">SO</span><span class="o">=</span>emb_s_melrow.onnx,src/openWakeWord/openwakeword/resources/models/embedding_model.onnx
+.venv/bin/python<span class="w"> </span>-I<span class="w"> </span><span class="nv">$H</span>/v3_room.py<span class="w"> </span>embed<span class="w"> </span>--split<span class="w"> </span>v3/room_split.json<span class="w"> </span>--parts<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--stream-onnx<span class="w"> </span><span class="nv">$SO</span><span class="w"> </span>--out-dir<span class="w"> </span>vnext/roomtest
+.venv/bin/python<span class="w"> </span>-I<span class="w"> </span><span class="nv">$H</span>/v3_room.py<span class="w"> </span>score<span class="w"> </span>--split<span class="w"> </span>v3/room_split.json<span class="w"> </span>--part<span class="w"> </span><span class="nb">test</span><span class="w"> </span><span class="nv">$M</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--thresholds<span class="w"> </span><span class="m">0</span>.9437,0.95435,0.97125<span class="w"> </span>--jobs<span class="w"> </span><span class="m">4</span><span class="w"> </span>--json<span class="w"> </span>vnext/room_test_cand.json
+
+<span class="c1"># Result 7: the other two heads on the same two measures (exports h_c120_w64; room replay ~20 min at 4 jobs)</span>
+bash<span class="w"> </span>vnext/cand2.sh<span class="w">        </span><span class="c1"># v3_room.py score --part test for v4 / h / h3 / c120 at their own thresholds</span>
+bash<span class="w"> </span>vnext/cand3.sh<span class="w">        </span><span class="c1"># kivi_score.py of the three real sessions for the same four models</span>
+
+<span class="c1"># the release flow for the chosen head (v5-oye-kivi-2026-11-08, model id oye_kivi_next)</span>
+<span class="nb">cd</span><span class="w"> </span><span class="nv">$H</span>
+<span class="nv">R</span><span class="o">=</span><span class="s2">&quot;python3 wake_release.py&quot;</span>
+<span class="nv">$R</span><span class="w"> </span>init<span class="w">   </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--model-id<span class="w"> </span>oye_kivi_next<span class="w"> </span>--phrase<span class="w"> </span><span class="s2">&quot;oye Kivi&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--candidate<span class="w"> </span>~/kivi-models/data/vnext/runs/vn_h_c120_w64
+<span class="nv">$R</span><span class="w"> </span>pick-threshold<span class="w"> </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--max-fa<span class="w"> </span><span class="m">2</span><span class="w">          </span><span class="c1"># raw 0.9754</span>
+<span class="nv">$R</span><span class="w"> </span>calibrate<span class="w"> </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--check-features<span class="w"> </span>~/kivi-models/data/vnext/feat/pos_test.npy
+<span class="nv">$R</span><span class="w"> </span>extract<span class="w">  </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--adopt-session<span class="w"> </span>20261108T092940Z-spk01-tv-c3a<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--adopt-session<span class="w"> </span>20261108T094310Z-spk01-tv-c3a<span class="w"> </span>--adopt-session<span class="w"> </span>20261108T095130Z-spk01-tv-c3a
+<span class="nv">$R</span><span class="w"> </span>score<span class="w">    </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--jobs<span class="w"> </span><span class="m">4</span>
+<span class="nv">$R</span><span class="w"> </span>gate<span class="w">     </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w">                            </span><span class="c1"># INCOMPLETE</span>
+<span class="nv">$R</span><span class="w"> </span>package<span class="w">  </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--license-notes<span class="w"> </span>&lt;LICENSE-NOTES.md<span class="w"> </span><span class="k">for</span><span class="w"> </span>this<span class="w"> </span>version&gt;
+<span class="nv">$R</span><span class="w"> </span>release<span class="w">  </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--yes-owner-approved<span class="w"> </span>--accept-gate-fail<span class="w"> </span><span class="s2">&quot;&lt;owner reason&gt;&quot;</span>
+<span class="nv">$R</span><span class="w"> </span>deploy<span class="w">   </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08
+<span class="nv">$R</span><span class="w"> </span><span class="nb">enable</span><span class="w">   </span>--version<span class="w"> </span>v5-oye-kivi-2026-11-08<span class="w"> </span>--tv<span class="w"> </span>c3-a<span class="w"> </span>--yes-owner-approved
+</code></pre></div>
+<h2 id="next">Next</h2>
+<ol>
+<li><strong>Re-record the satellite channel</strong> (Result 8 has PC and webcam only): a <code>--split test</code> session on c3-a on a
+   pipeline that records wake audio, so the TV-path gate gets its first held-out rows.</li>
+<li><strong>More real positives, more days</strong> — recipe tuning is exhausted (Result 4), the 3 m TV-off cell (5/10)
+   and the 80 % gate need data: a <code>--split test</code> session on a later day is what turns this into a gate run.
+   Record it with <code>--split test</code> at recording time and adopt the older sessions with
+   <code>extract --adopt-session</code> rather than re-extracting them.</li>
+<li><strong>spk02 on c3-b</strong> (gate needs &gt;= 2 speakers; today's real data is one speaker).</li>
+<li><strong>Fresh room exposure, as a new part.</strong> (First round done 2026-11-11 on 146 h with an alternating-day split:
+   <a href="../oye-kivi-v5era-mining/">v5-era replay and missed-wake mining</a>.) The chosen head is at 0.12/h [0.003, 0.67] on the 8.31 h test
+   part, but that part has now been inspected for v4, <code>rn_rp_h</code>, <code>rn_rp_h3</code> and <code>h_c120_w64</code> and was even
+   the tie-break in Result 7, so it cannot also carry the 0.25/h proof. Extend <code>v3/room_split.json</code> with
+   the days recorded <em>after</em> the trial started, keep the old test part as history, and require ~15 h per
+   device before claiming the budget. Count only confirmed false wakes from the live event log.</li>
+<li>~~Re-score session 3's real confuser takes against the candidates, per word~~ — done (Results 5 and 7):
+   1/54 satellite for the shipped head against 10/54 deployed (0/54 for <code>rn_rp_h</code>). Still 2 to 4 takes per
+   word per session: repeat the near-word block on a later day, and give "oye kili" more takes in the
+   negative pool, since it is the one word that still reaches the trigger.</li>
+<li><strong>Watch the household deployment</strong> (both satellites since 2026-11-11, so there is no v4 satellite to compare
+   with any more): a daily glance at the wake events of both. If the new model mispredicts in a way the offline
+   numbers did not show, <code>demote</code> — that is information, not a failure.</li>
+<li>If a <em>confirmed</em> false wake ever appears on c3-a, mine it into the real negative pool at confuser weight
+   (<code>--extra-neg &lt;npy&gt;:64:6</code>) and re-run the head: that is the loop that actually reduces false wakes per
+   hour, and it needs no new recordings.</li>
+</ol>
+<h2 id="next-v6-plan">Next: v6 plan</h2>
+<p>Next: v6 plan -&gt; kivi-models <code>docs/plan/2026-11-v6-plan.md</code> (private repository; owner decisions of
+2026-11-11 and the v6 training plan).</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["navigation.indexes", "navigation.expand", "search.highlight", "search.share"], "search": "../../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
