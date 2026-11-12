@@ -407,6 +407,35 @@ false wakes, conservative), and 8 fall in the 2026-11-09 evening on c3-b. The th
 and the evening TV content of 2026-11-09 behaves differently. Labels of the 10 new events would be needed before reading
 more into it; the 2026-11-12 / -13 stages remain the honest test.
 
+### v6.2 deployed 2026-11-12 by owner decision despite the C3 FAIL vs v5
+
+The owner ordered "Then switch to v6.2 now" on the morning of 2026-11-12, after the comparison above and after v6 had
+been rolled back to v5 the evening before (v6 section "Deployment"). Measured C3 at the time of the order, reused set
+test2-v5era, TFLite replay, owner labels applied: **at most 17 false wakes against v5's 4** (c3-a 4, c3-b 13; 9 in the
+evening); **10 of the 17 are new events not labelled yet** and count as false wakes (conservative), so the true number may be
+lower. 2026-11-11 evening copy: 7 against v5's 4. C4: 15/16 true detected (v5 16/16). Owner-override reason recorded in the
+release state: "owner decision 2026-11-12: deploy v6.2 despite C3 fail vs v5".
+
+- Release `v6-p2-oye-kivi-2026-11-12` (kivi-models commit `57de6ca7b14b`, annotated tag of the same name), model id `oye_kivi_ctx2` (file stem;
+  wyoming-openwakeword strips `_vX` only, so no clash), image
+  `git.grigri.cloud/agil/kivi-models:v6-p2-oye-kivi-2026-11-12@sha256:c9a46e76038e` (CI run 8; anonymous pull refused). It serves `kivi`,
+  `oye_kivi`, `oye_kivi_next`, `oye_kivi_ctx` and `oye_kivi_ctx2`, so a `demote` to v5 needs no image rollback.
+- The pre-made files were not retrained or re-picked: the release state records the selection's raw 0.9825
+  (`pick-threshold --threshold`), `calibrate` re-exported both TFLite files from the arm's ONNX and reproduced the
+  sha256 of the pre-made calibrated (`95846976146978b6b7b9ee4a6caf9bd4233a6d315318802fe8b90bf81abe77f5`) and uncalibrated
+  (`55594bd78b7e...`) files exactly.
+- Homelab pin commit `0b15f8449`; `wake_release.py deploy` completed this time (every `/custom/*.tflite` sha256 equals
+  `models.lock`; Wyoming ids `alexa hey_jarvis hey_mycroft hey_rhasspy kivi okay_nabu oye_kivi oye_kivi_ctx oye_kivi_ctx2
+  oye_kivi_next`).
+- `wake_release.py promote --owner-override` (2026-11-12, about 07:41 UTC): "Kiwi" (preferred) `wake_word_id`
+  `oye_kivi_next` -> `oye_kivi_ctx2`, nothing else changed; no per-satellite override. The tool's first 30 s run check
+  failed for c3-a (it was still reconnecting after the openwakeword pod swap) and passed for c3-b; nothing was reverted, and
+  a read-only re-check with the tool's `check_run` a minute later was OK on both TVs (newest run on "Kiwi" with
+  `wake_word-start`, no error). Wake files of both TVs grew about 32 kB/s over 30 s.
+- Threshold raw 0.9825 = server 0.5 (not interchangeable with v5's 0.9754 or v6's 0.9595). Gate: not run.
+- **Rollback:** `python3 wake_release.py demote --version v6-p2-oye-kivi-2026-11-12` (from `scripts/voice-assistant/wakeword/`) puts "Kiwi"
+  back on `oye_kivi_next` (v5).
+
 ### Labelling round 2 (2026-11-12, about 02:30 Madrid)
 
 `datasets/real/live-misses/c3_events_r2.csv`: **17 windows**, blind as round 1: the 10 v6.2 events on test2-v5era that
