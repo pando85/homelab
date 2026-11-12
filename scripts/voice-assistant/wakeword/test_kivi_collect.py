@@ -39,6 +39,16 @@ def test_heavy_jobs_count_process_trees_once_and_skip_ourselves():
     assert 900 in Q.heavy_jobs(lines, own_pid=555)
 
 
+def test_heavy_jobs_ignore_waiters_that_only_mention_a_job():
+    lines = ["  10  1 timeout 178 bash -c until ! pgrep -f v6_replay.py; do sleep 20; done",
+             "  11 10 bash -c until ! pgrep -f v6_replay.py; do sleep 20; done",
+             "  12  1 /usr/bin/zsh -c eval 'python v6_replay.py'",
+             "  13  1 pgrep -af v6_replay", "  14  1 tail -f /x/kivi_replay_mine.log", "  15  1 vim v6_replay.py",
+             "  20  1 bash /h/v6p2_compare.sh", "  21 20 .venv/bin/python -I /h/v6_replay.py --src a",
+             "  22  1 systemd-run --user --scope -- nice -n 10 python /h/kivi_replay_mine.py score"]
+    assert Q.heavy_jobs(lines, own_pid=999) == [20, 22]
+
+
 def test_day_role_is_parity_across_year_end():
     assert [Q.role_of(d) for d in ("2026-11-10", "2026-11-11", "2026-12-31", "2027-01-01", "2027-01-02")] == \
         ["mine", "test", "test", "test", "mine"]

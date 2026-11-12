@@ -138,6 +138,21 @@ def pending_days(state, today):
 # ---------------------------------------------------------------------------------------------
 
 
+WATCHER_CMDS = {"pgrep", "pkill", "ps", "grep", "egrep", "tail", "cat", "sleep", "timeout", "tmux", "screen", "watch", "less", "vim",
+                "nvim", "nano", "git", "rg", "ls", "head", "wc", "tee"}
+SHELLS = {"sh", "bash", "zsh", "dash", "fish"}
+
+
+def _watcher(args):
+    """True for a process that only mentions a heavy job's name: a `bash -c` / `zsh -c` line, a waiter loop, grep, tail, an
+    editor. A launcher script (`bash /path/job.sh`) and the python of a job are not watchers."""
+    toks = args.split()
+    first = os.path.basename(toks[0]) if toks else ""
+    if first in WATCHER_CMDS:
+        return True
+    return first in SHELLS and any(t == "-c" or (t.startswith("-") and not t.startswith("--") and "c" in t) for t in toks[1:3])
+
+
 def heavy_jobs(ps_lines=None, own_pid=None):
     """Number of heavy jobs running, as process trees: a launcher script and the python it started count once. Lines are
     `pid ppid args`. This process and its ancestors are not counted."""
@@ -152,8 +167,7 @@ def heavy_jobs(ps_lines=None, own_pid=None):
     while me in procs:                       # ourselves and our parents (the agent's shell mentions the script name)
         skip.add(me)
         me = procs[me][0]
-    heavy = {pid for pid, (_pp, args) in procs.items() if pid not in skip and HEAVY_RE.search(args)
-             and "pgrep" not in args and not args.startswith(("ps ", "grep ", "tail ", "cat ", "sleep "))}
+    heavy = {pid for pid, (_pp, args) in procs.items() if pid not in skip and HEAVY_RE.search(args) and not _watcher(args)}
     return sorted(pid for pid in heavy if procs[pid][0] not in heavy)
 
 
