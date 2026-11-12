@@ -150,7 +150,7 @@ Full pitfall index (84 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **ArgoCD** (6): repo-server probe death-spiral, kustomize OCI auth override, Helm-hook mixing and
   hook-only edits that never converge (`docs/troubleshooting/argocd-helm-hook-provisioning.md`)
 - **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps
-- **Networking** (9): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP, pfSense alias change keeps old states (`pfsense-alias-change-keeps-old-states.md`), Envoy listener drain (`envoy-gateway-listener-drain.md`), Envoy debugging (`envoy-gateway-debugging.md`)
+- **Networking** (10): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP, pfSense alias change keeps old states (`pfsense-alias-change-keeps-old-states.md`), Envoy listener drain (`envoy-gateway-listener-drain.md`), Envoy debugging (`envoy-gateway-debugging.md`), Office A Wi-Fi IoT flapping: read AP logs for `Low RSSI` kicks (`office-iot-wifi-flapping.md`)
 - **Storage & Backup** (12): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools

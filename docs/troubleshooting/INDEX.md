@@ -11,7 +11,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Kubernetes & GitOps](#kubernetes--gitops) (16 entries)
 - [ArgoCD](#argocd) (7 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
-- [Networking](#networking) (10 entries)
+- [Networking](#networking) (11 entries)
 - [Storage & Backup](#storage--backup) (13 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
@@ -246,6 +246,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   re-flags k3s after every package (restart storm), and a networkd restart flushes Cilium's
   native-routing routes. Both are deferred via `metal/` (`unattended-upgrades`/`networkd` tags).
   See `docs/troubleshooting/needrestart-k3s-restart-storm.md`
+
+- Office A Wi-Fi IoT devices (`fan-office-a`, `mini-switch-office-a`) flap and fire
+  `BlackboxProbeFailed`: `cerezo`'s 2.4 GHz min-RSSI (-67 dBm = rssi 28) kicks the fan with
+  `reason:Low RSSI`, and the hourly WPA group rekey (hh:01) deauths it on `limonero` when its weak
+  uplink goes unanswered. The mini switch (ESP radio hang + self-reboot) is unresolved. UniFi events
+  carry no disconnect reason: read the AP logs (`logread`) within hours, `limonero` keeps ~7 h.
+  See `docs/troubleshooting/office-iot-wifi-flapping.md`
 
 ## Storage & Backup
 
