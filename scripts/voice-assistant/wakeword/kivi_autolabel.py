@@ -623,10 +623,10 @@ def analyse_clip(row, clip_dir, transcriber, embedder, scorer, centr, thr):
 
 
 def review_running(pgrep=None):
-    """True when a `kivi_live_wakes.py review` process of this user is running."""
+    """True when a `kivi_live_wakes.py review` or `queue` process of this user is running."""
     if pgrep is not None:
         return bool(pgrep())
-    r = subprocess.run(["pgrep", "-f", r"kivi_live_wakes\.py review"], capture_output=True, text=True)
+    r = subprocess.run(["pgrep", "-f", r"kivi_live_wakes\.py (review|queue)"], capture_output=True, text=True)
     mine = [p for p in r.stdout.split() if p.isdigit() and int(p) != os.getpid()]
     return bool(mine)
 

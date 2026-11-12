@@ -6,6 +6,7 @@ debug recordings so the owner can label them by listening.
     kivi_live_wakes.py extract              # copy the clips and write live_wakes.csv
     kivi_live_wakes.py review               # YOU listen and label (plays audio; nobody else runs this)
     kivi_live_wakes.py review --table miss_candidates.csv   # the same for the missed-wake candidates (see below)
+    kivi_live_wakes.py queue                # YOU label every pending item of every table, in priority order (see below)
     kivi_live_wakes.py autolabel [--dry-run] # local auto-labeller (kivi_autolabel.py): fills EMPTY label/speaker cells
     kivi_live_wakes.py autolabel --trigger-only [--dry-run]   # only trigger / peak_t_s / peak_raw / model evidence (exact replay)
     kivi_live_wakes.py split [--apply]      # after labelling: train / test by local day, counts only
@@ -36,6 +37,16 @@ window.wav`) around replay peaks of the v5-era room audio where the wake word mo
 `live-misses/`) plays each window, best rank first, without showing the scores, and stores your label
 (attempt = someone said oye Kivi / Kivi to it, other-speech, tv-media, noise, unclear) and, for attempt and other-speech,
 the speaker. The live-wake review above is unchanged.
+
+Labelling queue (`queue`): one command that walks every pending item of every review table, scores hidden, in this order:
+(1) replay false wakes of the live model (`live-misses/daily_false_wakes.csv`, written by `kivi_collect.py`),
+(2) uncertain live clips (`live/live_wakes.csv`: unlabelled, or auto labels that are unclear / low confidence / true with an
+unknown speaker; an owner label is never offered again), (3) missed-wake candidates (every other `live-misses/*.csv`, best
+rank first). Each label is saved at once (a fresh read of the table, so a collector writing meanwhile loses nothing); `q`
+or Ctrl-C stops at any time, a skipped item comes back next time. It prints the items left per table at start and end.
+`--minutes N` and `--max-items N` end a session by themselves. `--day D` / `--device X` narrow the queue. Plays audio: run it
+in your own terminal, never from an agent.
+`extract` and `autolabel` take `--day YYYY-MM-DD` (one Europe/Madrid day, by run start) for the daily loop.
 """
 import argparse
 import csv
@@ -337,7 +348,7 @@ def make_trigger_scorer(a):
     """The server-exact model scorer, or None when its libraries or model files are missing (trigger stays unknown)."""
     try:
         import kivi_autolabel as A
-        return A.ModelScorer(getattr(a, "work", None) or os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
+        return A.ModelScorer(getattr(a, "work", None) or str(C.kivi_home()))
     except Exception as e:                                       # noqa: BLE001
         print(f"warning: trigger classification unavailable ({type(e).__name__}); trigger stays empty")
         return None
@@ -356,6 +367,8 @@ def cmd_extract(a, fetcher=None, out=print, scorer=False):
     if scorer is False:
         scorer = make_trigger_scorer(a)
     res = scan(a, fetcher)
+    if getattr(a, "day", None):                  # one Europe/Madrid day, by run start (the day of the row's `utc`)
+        res = dict(res, runs=[r for r in res["runs"] if local_day(dir_stamp(r["start"])) == a.day])
     root = Path(a.dataset_root).expanduser()
     live = C.private_mkdir(root / "live", root)
     table_path = live / "live_wakes.csv"
@@ -477,6 +490,50 @@ def write_miss_table(path, rows):
         raise
 
 
+SPEAKER_KEYS = {"1": "spk01", "2": "spk02", "3": "spk-other", "4": "unknown"}
+LIVE_KEYS = {"t": "true", "f": "false", "n": "not-a-wake", "u": "unclear"}
+
+
+def save_miss_label(table_path, item_id, label, speaker):
+    """Write one owner decision into a FRESH read of a window table (`save_owner_label` for the live table)."""
+    fresh = read_miss_table(table_path)
+    for r in fresh:
+        if r["id"] == item_id:
+            r["label"], r["speaker"] = label, speaker
+    write_miss_table(table_path, fresh)
+
+
+def review_window_item(r, base, play, input_fn):
+    """Play one 6 s window and ask. Returns "q", "s" or (label, speaker)."""
+    while True:
+        play(base / r["clip"])
+        k = ask("label [a/o/t/n/u], r = replay, s = skip, q = quit: ", tuple(MISS_LABELS) + ("r", "s", "q"), input_fn)
+        if k != "r":
+            break
+    if k in ("q", "s"):
+        return k
+    label = MISS_LABELS[k]
+    speaker = ""
+    if label in ("attempt", "other-speech"):
+        speaker = SPEAKER_KEYS[ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(SPEAKER_KEYS), input_fn)]
+    return label, speaker
+
+
+def review_live_item(r, live, play, input_fn):
+    """Play a live clip (wake tail, then the request) and ask. Returns "q", "s" or (label, speaker)."""
+    d = live / r["device"] / r["utc"]
+    while True:
+        play(d / "wake_tail.wav")
+        play(d / "stt.wav")
+        k = ask("label [t/f/n/u], r = replay, s = skip, q = quit: ", ("t", "f", "n", "u", "r", "s", "q"), input_fn)
+        if k != "r":
+            break
+    if k in ("q", "s"):
+        return k
+    sp = ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(SPEAKER_KEYS), input_fn)
+    return LIVE_KEYS[k], SPEAKER_KEYS[sp]
+
+
 def cmd_review_misses(a, player=None, input_fn=input, out=print):
     table_path = miss_table_path(a)
     rows = read_miss_table(table_path)
@@ -490,26 +547,17 @@ def cmd_review_misses(a, player=None, input_fn=input, out=print):
         "if any, is around the middle (3 s).")
     out("keys: a = attempt (someone said oye Kivi / Kivi to it), o = other speech, t = tv / media, n = noise, u = unclear, "
         "r = replay, s = skip, q = quit (progress is saved after every window)")
-    speakers = {"1": "spk01", "2": "spk02", "3": "spk-other", "4": "unknown"}
     done = 0
     try:
         for i, r in enumerate(todo, 1):
             out(f"\n[{i}/{len(todo)}] {r['id']} {r['device']} {r['utc']} ({r['part']})")
-            while True:
-                play(base / r["clip"])
-                k = ask("label [a/o/t/n/u], r = replay, s = skip, q = quit: ", tuple(MISS_LABELS) + ("r", "s", "q"), input_fn)
-                if k != "r":
-                    break
-            if k == "q":
+            res = review_window_item(r, base, play, input_fn)
+            if res == "q":
                 break
-            if k == "s":
+            if res == "s":
                 continue
-            r["label"] = MISS_LABELS[k]
-            if r["label"] in ("attempt", "other-speech"):
-                r["speaker"] = speakers[ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(speakers), input_fn)]
-            else:
-                r["speaker"] = ""
-            write_miss_table(table_path, rows)
+            r["label"], r["speaker"] = res
+            save_miss_label(table_path, r["id"], *res)
             done += 1
     except (KeyboardInterrupt, EOFError):
         out("\ninterrupted")
@@ -537,27 +585,114 @@ def cmd_review(a, player=None, input_fn=input, out=print):
     done = 0
     try:
         for i, r in enumerate(todo, 1):
-            d = live / r["device"] / r["utc"]
             out(f"\n[{i}/{len(todo)}] {r['device']} {r['model']} {r['utc']}  wake {r['wake_len']} s, stt {r['stt_len']} s, {r['bucket']}")
-            while True:
-                play(d / "wake_tail.wav")
-                play(d / "stt.wav")
-                k = ask("label [t/f/n/u], r = replay, s = skip, q = quit: ", ("t", "f", "n", "u", "r", "s", "q"), input_fn)
-                if k != "r":
-                    break
-            if k == "q":
+            res = review_live_item(r, live, play, input_fn)
+            if res == "q":
                 break
-            if k == "s":
+            if res == "s":
                 continue
-            label = {"t": "true", "f": "false", "n": "not-a-wake", "u": "unclear"}[k]
-            keys = {"1": "spk01", "2": "spk02", "3": "spk-other", "4": "unknown"}
-            sp = ask("speaker [1 = spk01, 2 = spk02, 3 = spk-other, 4 = unknown]: ", tuple(keys), input_fn)
-            r["label"], r["speaker"] = label, keys[sp]
-            save_owner_label(table_path, r["run_id"], label, keys[sp])
+            r["label"], r["speaker"] = res
+            save_owner_label(table_path, r["run_id"], *res)
             done += 1
     except (KeyboardInterrupt, EOFError):
         out("\ninterrupted")
     out(f"labelled {done} clip(s) in this run; table saved ({table_path})")
+    return done
+
+
+# ---------------------------------------------------------------------------------------------
+# queue (owner only): every pending item of every table, in priority order
+# ---------------------------------------------------------------------------------------------
+
+FALSE_WAKE_TABLE = "daily_false_wakes.csv"
+QUEUE_GROUPS = ("replay false wakes of the live model", "uncertain live clips", "missed-wake candidates")
+
+
+def window_tables(root):
+    """Every window review table of `<dataset>/live-misses/` (header has id and clip), sorted by name."""
+    out = []
+    for p in sorted((Path(root) / "live-misses").glob("*.csv")):
+        try:
+            head = p.open(newline="", encoding="utf-8").readline().strip().split(",")
+        except OSError:
+            continue
+        if "id" in head and "clip" in head and "label" in head:
+            out.append(p)
+    return out
+
+
+def queue_items(root, day=None, device=None):
+    """Pending items, in the order the owner meets them: [{"group": 0..2, "kind": "live"|"window", "table", "row"}].
+    Group 0 = the replay false-wake table, 1 = uncertain live clips, 2 = every other window table (best rank first)."""
+    root = Path(root)
+    items = []
+    keep = lambda r: (device is None or r["device"] == device) and (day is None or local_day(r["utc"]) == day)   # noqa: E731
+    for p in window_tables(root):
+        group = 0 if p.name == FALSE_WAKE_TABLE else 2
+        rows = [r for r in read_miss_table(p) if not r["label"] and keep(r)]
+        rows.sort(key=(lambda r: (r["utc"], r["device"])) if group == 0 else (lambda r: (-float(r["rank"] or 0), r["id"])))
+        items += [{"group": group, "kind": "window", "table": p, "row": r} for r in rows]
+    live_table = root / "live" / "live_wakes.csv"
+    items += [{"group": 1, "kind": "live", "table": live_table, "row": r}
+              for r in review_order(read_table(live_table), only_uncertain=True) if keep(r)]
+    items.sort(key=lambda it: it["group"])           # stable: the order inside a group is kept
+    return items
+
+
+def queue_counts(items):
+    """{(group, table name): pending}, in queue order."""
+    cnt = Counter((it["group"], it["table"].name) for it in items)
+    return dict(sorted(cnt.items()))
+
+
+def print_queue_counts(items, out, head):
+    cnt = queue_counts(items)
+    out(f"{head}: {len(items)} item(s)" + ("" if cnt else " (queue empty)"))
+    for (g, name), n in cnt.items():
+        out(f"  {g + 1}. {QUEUE_GROUPS[g]}: {name}: {n}")
+
+
+def cmd_queue(a, player=None, input_fn=input, out=print, clock=None):
+    import time as _time
+    clock = clock or _time.monotonic
+    root = Path(a.dataset_root).expanduser()
+    items = queue_items(root, getattr(a, "day", None), getattr(a, "device", None))
+    print_queue_counts(items, out, "pending at start")
+    if not items:
+        return 0
+    play = player or make_player(a.player)
+    live = root / "live"
+    out("keys per item (shown with it); r = replay, s = skip (comes back next time), q = quit; "
+        "every label is saved at once, so you can stop whenever you like")
+    t0, done, limit = clock(), 0, getattr(a, "max_items", None)
+    end_s = getattr(a, "minutes", None) * 60 if getattr(a, "minutes", None) else None
+    try:
+        for i, it in enumerate(items, 1):
+            if (limit is not None and done >= limit) or (end_s is not None and clock() - t0 >= end_s):
+                out("session limit reached")
+                break
+            r = it["row"]
+            if it["kind"] == "live":
+                out(f"\n[{i}/{len(items)}] live clip: {r['device']} {r['utc']}  wake {r['wake_len']} s, stt {r['stt_len']} s "
+                    "(t = true wake, f = false wake, n = not a wake / button, u = unclear)")
+                res = review_live_item(r, live, play, input_fn)
+            else:
+                out(f"\n[{i}/{len(items)}] {QUEUE_GROUPS[it['group']]}: {r['id']} {r['device']} {r['utc']} "
+                    "(6 s window; a = attempt, o = other speech, t = tv / media, n = noise, u = unclear)")
+                res = review_window_item(r, it["table"].parent, play, input_fn)
+            if res == "q":
+                break
+            if res == "s":
+                continue
+            if it["kind"] == "live":
+                save_owner_label(it["table"], r["run_id"], *res)
+            else:
+                save_miss_label(it["table"], r["id"], *res)
+            done += 1
+    except (KeyboardInterrupt, EOFError):
+        out("\ninterrupted")
+    out(f"labelled {done} item(s) in this session")
+    print_queue_counts(queue_items(root, getattr(a, "day", None), getattr(a, "device", None)), out, "pending at end")
     return done
 
 
@@ -673,7 +808,7 @@ def cmd_trigger_only(a, out=print, scorer=None):
     if not rows:
         raise SystemExit(f"no table at {table_path}: run extract first")
     if scorer is None:
-        scorer = A.ModelScorer(getattr(a, "work", None) or os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
+        scorer = A.ModelScorer(getattr(a, "work", None) or str(C.kivi_home()))
     results, missing = {}, 0
     for r in rows:
         res = A.trigger_only(r, live / r["device"] / r["utc"], scorer)
@@ -719,7 +854,7 @@ def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
     rows = read_table(table_path)
     if not rows:
         raise SystemExit(f"no table at {table_path}: run extract first")
-    work = getattr(a, "work", None) or os.environ.get("WORK", "/work/workspaces/kivi-wakeword")
+    work = getattr(a, "work", None) or str(C.kivi_home())
     own_models = []
     if transcriber is None:
         transcriber = A.FasterWhisperTranscriber()
@@ -740,6 +875,8 @@ def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
         out("thresholds: " + ", ".join(f"{k} {v:.3f}" for k, v in thr.items()))
         results = {}
         for r in rows:
+            if getattr(a, "day", None) and (local_day(r["utc"]) != a.day or r["label"]):
+                continue                         # daily loop: only that day's rows that have no label yet
             results[r["run_id"]] = A.analyse_clip(r, live / r["device"] / r["utc"], transcriber, embedder, scorer, centr,
                                                   thr)
     finally:
@@ -773,7 +910,7 @@ def cmd_autolabel(a, out=print, transcriber=None, embedder=None, scorer=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("what", choices=["list", "extract", "review", "split", "autolabel"])
+    ap.add_argument("what", choices=["list", "extract", "review", "queue", "split", "autolabel"])
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
     ap.add_argument("--devices", help="comma list (default: every device in kivi_devices.json)")
     ap.add_argument("--devices-file")
@@ -785,7 +922,7 @@ def main(argv=None):
     ap.add_argument("--from-dir", help="local copy laid out like /voice-recordings")
     ap.add_argument("--scope-start", default=SCOPE_START)
     ap.add_argument("--now", type=float, help=argparse.SUPPRESS)
-    ap.add_argument("--player", help="(review) player command, the file is appended; default pw-play, else aplay -q")
+    ap.add_argument("--player", help="(review, queue) player command, the file is appended; default pw-play, else aplay -q")
     ap.add_argument("--again", action="store_true", help="(review) go through labelled clips too")
     ap.add_argument("--table", help="(review) label the missed-wake candidates of this table (miss_candidates.csv) instead of the live wakes")
     ap.add_argument("--apply", action="store_true", help="(split) write the proposal into the split column")
@@ -800,9 +937,14 @@ def main(argv=None):
     ap.add_argument("--trigger-only", action="store_true",
                     help="(autolabel) recompute only trigger, peak_t_s, peak_raw and the model parts of auto_evidence "
                          "(exact replay); no transcription or speaker embedding; labels and speakers untouched")
+    ap.add_argument("--day", help="(extract, autolabel, queue) one Europe/Madrid day YYYY-MM-DD, by run start; "
+                                  "autolabel then analyses only that day's rows that have no label yet")
+    ap.add_argument("--device", help="(queue) only this device")
+    ap.add_argument("--minutes", type=float, help="(queue) stop after this many minutes")
+    ap.add_argument("--max-items", type=int, help="(queue) stop after this many labels")
     ap.add_argument("--work", help="(autolabel, extract) workspace holding the model files, default $WORK")
     a = ap.parse_args(argv)
-    {"list": cmd_list, "extract": cmd_extract, "review": cmd_review, "split": cmd_split,
+    {"list": cmd_list, "extract": cmd_extract, "review": cmd_review, "queue": cmd_queue, "split": cmd_split,
      "autolabel": cmd_autolabel}[a.what](a)
 
 

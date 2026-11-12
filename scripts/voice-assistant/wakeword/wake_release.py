@@ -4,7 +4,7 @@
     python3 wake_release.py <step> --version <version> [options]
 
 Steps (each idempotent; each prints what it will do and records its result in
-/work/workspaces/kivi-wakeword/releases/<version>/state.json; `--plan` prints and stops):
+$KIVI_HOME/releases/<version>/state.json (~/kivi-models/data); `--plan` prints and stops):
 
     init            create the release state: model id, phrase, candidate directory
     record-check    prerequisites, and the exact owner commands for a PC session and c3-b button takes
@@ -49,9 +49,27 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 HOMELAB = HERE.parents[2]
-WORK = Path(os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
+
+
+def _home():
+    """Workspace: $KIVI_HOME, else $WORK (older), else ~/kivi-models/data, else the legacy /work path (same rule as
+    kivi_real_common.kivi_home; this file runs on the system python, which has no numpy)."""
+    for c in (os.environ.get("KIVI_HOME"), os.environ.get("WORK"), "~/kivi-models/data", "/work/workspaces/kivi-wakeword"):
+        if c and os.path.isdir(os.path.expanduser(c)):
+            return Path(os.path.expanduser(c))
+    return Path("/work/workspaces/kivi-wakeword")
+
+
+def _models_repo(home):
+    for c in (os.environ.get("KIVI_MODELS"), "~/kivi-models", str(home / "repo/kivi-models")):
+        if c and (Path(c).expanduser() / "models.lock").exists():
+            return Path(c).expanduser()
+    return home / "repo/kivi-models"
+
+
+WORK = _home()
 RELEASES = Path(os.environ.get("WAKE_RELEASES", WORK / "releases"))
-KIVI_MODELS = Path(os.environ.get("KIVI_MODELS", WORK / "repo/kivi-models"))
+KIVI_MODELS = _models_repo(WORK)
 VALUES = HOMELAB / "apps/home-assistant/values.yaml"
 PY = os.environ.get("WAKE_PY", str(WORK / ".venv/bin/python"))
 PY_TF = os.environ.get("WAKE_PY_TF", str(WORK / ".venv-tf/bin/python"))

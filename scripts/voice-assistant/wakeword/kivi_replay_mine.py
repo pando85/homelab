@@ -47,8 +47,8 @@ import kivi_real_common as C  # noqa: E402
 
 RATE = C.RATE
 CHUNK = 1280
-WORK = Path(os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
-MODELS_DIR = WORK / "repo/kivi-models/wakeword"
+WORK = C.kivi_home()
+MODELS_DIR = C.kivi_models_repo() / "wakeword"
 MODEL_FILES = {
     "kivi": MODELS_DIR / "kivi/v1-2026-11-05/kivi_uncalibrated.tflite",
     "oye_kivi": MODELS_DIR / "oye_kivi/v4-oye-kivi-2026-11-07/oye_kivi_uncalibrated.tflite",

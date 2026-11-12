@@ -1,7 +1,7 @@
 """Tests of kivi_replay_mine.py. Synthetic audio only; the three real model files are used for the streaming parts.
 
     cd scripts/voice-assistant/wakeword && OMP_NUM_THREADS=1 \
-        /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_kivi_replay_mine.py -q
+        $KIVI_HOME/.venv/bin/python -m pytest test_kivi_replay_mine.py -q
 """
 import csv
 import os

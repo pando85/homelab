@@ -2,7 +2,7 @@
 household audio.
 
     cd scripts/voice-assistant/wakeword && OMP_NUM_THREADS=4 \
-        /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_eval_stream.py -q
+        $KIVI_HOME/.venv/bin/python -m pytest test_eval_stream.py -q
 """
 import os
 import sys

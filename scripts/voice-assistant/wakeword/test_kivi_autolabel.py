@@ -2,7 +2,7 @@
 fake transcriber / embedder / scorer: no model is loaded, no real clip is read.
 
     cd scripts/voice-assistant/wakeword && OMP_NUM_THREADS=4 \
-        /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_kivi_autolabel.py -q
+        $KIVI_HOME/.venv/bin/python -m pytest test_kivi_autolabel.py -q
 """
 import os
 import sys

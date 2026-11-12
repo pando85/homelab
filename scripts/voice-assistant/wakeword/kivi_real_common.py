@@ -22,17 +22,36 @@ import numpy as np
 RATE = 16000
 HERE = Path(__file__).resolve().parent
 DEFAULT_DEVICES_FILE = HERE / "kivi_devices.json"
-DEFAULT_DATASET_ROOT = "/work/workspaces/kivi-wakeword/datasets/real"
+LEGACY_HOME = "/work/workspaces/kivi-wakeword"      # before 2026-11-12; after the move it is a symlink to ~/kivi-models/data
+
+
+def kivi_home():
+    """The workspace of the wake word work (datasets, releases, scores, venv ...): `$KIVI_HOME`, else `$WORK` (the older
+    variable), else `~/kivi-models/data` (gitignored, inside the kivi-models checkout), else the legacy path."""
+    for c in (os.environ.get("KIVI_HOME"), os.environ.get("WORK"), "~/kivi-models/data", LEGACY_HOME):
+        if c and os.path.isdir(os.path.expanduser(c)):
+            return Path(os.path.expanduser(c))
+    return Path(LEGACY_HOME)
+
+
+def kivi_models_repo():
+    """The kivi-models checkout: `$KIVI_MODELS`, else `~/kivi-models`, else `<home>/repo/kivi-models` (legacy)."""
+    for c in (os.environ.get("KIVI_MODELS"), "~/kivi-models", str(kivi_home() / "repo/kivi-models")):
+        if c and (Path(c).expanduser() / "models.lock").exists():
+            return Path(c).expanduser()
+    return kivi_home() / "repo/kivi-models"
+
+
+DEFAULT_DATASET_ROOT = str(kivi_home() / "datasets/real")
 DAY_TZ = "Europe/Madrid"
-DAY_ANCHOR_TEST = "2026-11-09"   # a test day; the days alternate from here (odd dates in Nov 2026 are test days)
 
 
 def day_role(local_date):
-    """Day split of the real-audio work (owner decision 2026-11-11): by Europe/Madrid local date, alternating days,
-    `test` on 2026-11-09, 2026-11-11, ... and `mine` (train / mining) on 2026-11-08, 2026-11-10, ... `local_date` is a
-    `datetime.date`. Strict alternation by day count, which equals "odd day of the month = test" in November 2026."""
-    from datetime import date
-    return "test" if (local_date.toordinal() - date.fromisoformat(DAY_ANCHOR_TEST).toordinal()) % 2 == 0 else "mine"
+    """Day split of the real-audio work (owner decision 2026-11-11): by Europe/Madrid local date, the day of the
+    month decides: odd = `test` (never used for any choice), even = `mine` (train / mining / selection). `local_date`
+    is a `datetime.date`. Parity of the day of the month, not alternation by day count (which breaks at Dec 31 to
+    Jan 1, both odd), the same rule as `kivi_live_wakes.propose_split_alternate`."""
+    return "test" if local_date.day % 2 else "mine"
 
 
 def epoch_day_role(t):

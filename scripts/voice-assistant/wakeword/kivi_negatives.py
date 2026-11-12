@@ -32,7 +32,9 @@ the set the training tools read is untouched) and `--part` is the `split` value 
 (default `unassigned`; `test2-v5era` for the held-out set of the v5 era). `--part-test-day X --part-mine-day Y` instead
 cut every piece at local midnight (Europe/Madrid) and give each piece the part of its day: alternating days, X on
 2026-11-09, -11, ... (test; never used to choose models or thresholds) and Y on 2026-11-08, -10, ... (mining / train).
-Pieces shorter than `--min-seg-s` are dropped. Files are picked at random (seeded) per device until the
+`--local-date YYYY-MM-DD` (one Europe/Madrid day; with `--part`): every closed file that overlaps that day, cut at local
+midnight, only the pieces inside that day, all with `--part` (the daily copy of `kivi_collect.py`; `--since/--until`
+are not used with it, so a file that spans midnight contributes to both days). Pieces shorter than `--min-seg-s` are dropped. Files are picked at random (seeded) per device until the
 hours are reached. Nothing is deleted or overwritten; re-running skips what is already there.
 """
 import argparse
@@ -155,6 +157,19 @@ def period_filter(files, since=None, until=None, exclude_pipelines=()):
             and f["pipeline"] not in set(exclude_pipelines or ())]
 
 
+def day_bounds(local_date):
+    """(start, end) epoch of one Europe/Madrid calendar day given as YYYY-MM-DD."""
+    from datetime import date, datetime as dt, time as dtime, timedelta
+    d = date.fromisoformat(local_date)
+    z = ZoneInfo(C.DAY_TZ)
+    return dt.combine(d, dtime(0, 0), z).timestamp(), dt.combine(d + timedelta(days=1), dtime(0, 0), z).timestamp()
+
+
+def clip_to_day(segs, day):
+    """The pieces of `segs` (epoch intervals) that lie inside `day` = (start, end), cut at its edges."""
+    return [(max(x, day[0]), min(y, day[1])) for x, y in segs if y > day[0] and x < day[1]]
+
+
 def run(a, fetcher=None, presses=None):
     root = Path(a.dataset_root).expanduser()
     devs = [d.strip() for d in a.devices.split(",")] if a.devices else list(C.load_devices(a.devices_file))
@@ -186,6 +201,10 @@ def run(a, fetcher=None, presses=None):
     since = X.parse_when(a.since) if getattr(a, "since", None) else None
     until = X.parse_when(a.until) if getattr(a, "until", None) else None
     excl_pipes = list(getattr(a, "exclude_pipeline", None) or [])
+    local_date = getattr(a, "local_date", None)
+    day = day_bounds(local_date) if local_date else None
+    if day and (since is not None or until is not None):
+        raise SystemExit("--local-date replaces --since/--until")
     day_parts = {"test": getattr(a, "part_test_day", None), "mine": getattr(a, "part_mine_day", None)}
     by_day = any(day_parts.values())
     if by_day and not all(day_parts.values()):
@@ -199,7 +218,8 @@ def run(a, fetcher=None, presses=None):
     for d in devs:
         files = all_files[d]
         prev_end = {id(f): (files[i - 1]["mtime"] if i else None) for i, f in enumerate(files)}
-        closed = period_filter([f for f in files if now - f["mtime"] >= a.min_age_s], since, until, excl_pipes)
+        closed = period_filter([f for f in files if now - f["mtime"] >= a.min_age_s
+                                and (day is None or (f["mtime"] > day[0] and f["start"] < day[1]))], since, until, excl_pipes)
         order = closed[:]
         rng.shuffle(order)
         picked, total = [], 0.0
@@ -209,6 +229,8 @@ def run(a, fetcher=None, presses=None):
             segs = plan_file(f, prev_end[id(f)], marks, a, swin.get(d, ()), after.get(d))
             if by_day:
                 segs = [(x, y) for x, y in C.split_at_local_midnight(segs) if y - x >= a.min_seg_s]
+            if day:
+                segs = [(x, y) for x, y in clip_to_day(segs, day) if y - x >= a.min_seg_s]
             if segs:
                 picked.append((f, segs))
                 total += sum(y - x for x, y in segs)
@@ -241,7 +263,8 @@ def run(a, fetcher=None, presses=None):
             todo = []
             for k, (t0, t1) in enumerate(segs, 1):
                 key = (d, run_id, X.utc_str(t0))
-                rel = f"{out_name}/{d}/{f['run']}-{k:02d}.wav"
+                tag = f"-d{local_date.replace('-', '')}" if local_date else ""      # a file spanning midnight serves two days
+                rel = f"{out_name}/{d}/{f['run']}{tag}-{k:02d}.wav"
                 if key in done or (root / rel).exists():
                     continue
                 s0 = max(0, int(round((t0 - f["start"]) * RATE)))
@@ -308,6 +331,8 @@ def main(argv=None):
     ap.add_argument("--part-test-day", help="with --part-mine-day: split every piece at local (Europe/Madrid) midnight and "
                     "write this `split` value for the test days (2026-11-09, -11, ..., alternating), e.g. test2-v5era")
     ap.add_argument("--part-mine-day", help="the `split` value for the mining / train days (2026-11-08, -10, ...), e.g. mine-v5era")
+    ap.add_argument("--local-date", help="one Europe/Madrid day YYYY-MM-DD: files overlapping it, only the pieces inside it "
+                    "(instead of --since/--until)")
     ap.add_argument("--min-age-s", type=float, default=600.0, help="a file is closed when not written for this long")
     ap.add_argument("--trim-start-s", type=float, default=0.3)
     ap.add_argument("--boundary-s", type=float, default=7.0)

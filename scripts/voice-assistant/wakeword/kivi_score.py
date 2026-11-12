@@ -52,7 +52,7 @@ import kivi_real_common as C  # noqa: E402
 from eval_stream import detections, load_models, poisson_ci, stream, wilson  # noqa: E402
 
 RATE = C.RATE
-WORK = Path(os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
+WORK = C.kivi_home()
 DEFAULT_THRESHOLDS = "0.5,0.7,0.9,0.95,0.97,0.98,0.99"
 
 

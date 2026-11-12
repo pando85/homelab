@@ -1,7 +1,7 @@
 """Tests of the real-voice tools. Synthetic signals only: no microphone, no real recording.
 
     cd scripts/voice-assistant/wakeword && OMP_NUM_THREADS=4 \
-        /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_kivi_real.py -q
+        $KIVI_HOME/.venv/bin/python -m pytest test_kivi_real.py -q
 
 The scorer tests use the synthetic held-out Piper clips under /work/workspaces/kivi-wakeword and are
 skipped when that work directory is absent.
@@ -31,7 +31,7 @@ import kivi_real_common as C  # noqa: E402
 import kivi_session as S  # noqa: E402
 
 RATE = C.RATE
-WORK = Path(os.environ.get("WORK", "/work/workspaces/kivi-wakeword"))
+WORK = C.kivi_home()
 
 
 def speechlike(seconds, seed):
@@ -1660,6 +1660,10 @@ def test_negatives_alternating_day_parts_cut_at_local_midnight(tmp_path):
     from datetime import date
     assert [C.day_role(date(2026, 11, d)) for d in (8, 9, 10, 11, 12)] == ["mine", "test", "mine", "test", "mine"]
     assert C.day_role(date(2026, 11, 30)) == "mine" and C.day_role(date(2026, 12, 1)) == "test"
+    # parity of the day of the month, not alternation by day count: Dec 31 and Jan 1 are both odd -> both test
+    assert [C.day_role(date(y, m, d)) for y, m, d in ((2026, 12, 30), (2026, 12, 31), (2027, 1, 1), (2027, 1, 2))] == \
+        ["mine", "test", "test", "mine"]
+    assert C.day_role(date(2028, 2, 29)) == "test" and C.day_role(date(2028, 3, 1)) == "test"
     midnight = 1794265200.0                                   # 2026-11-10T00:00 CET = 2026-11-09T23:00Z
     assert C.split_at_local_midnight([(midnight - 100, midnight + 50)]) == [(midnight - 100, midnight), (midnight, midnight + 50)]
     assert C.split_at_local_midnight([(midnight + 5, midnight + 9)]) == [(midnight + 5, midnight + 9)]
@@ -1684,3 +1688,36 @@ def test_negatives_alternating_day_parts_cut_at_local_midnight(tmp_path):
     ns.part_mine_day = None
     with pytest.raises(SystemExit):
         N.run(ns, X.LocalFetcher(rec))
+
+
+def test_negatives_local_date_keeps_only_that_day_and_is_idempotent(tmp_path):
+    """--local-date D: files overlapping the Madrid day D, only the pieces inside D, all with --part; a file that spans
+    midnight gives pieces to both days; a second run copies nothing new."""
+    midnight = 1794265200.0                                   # 2026-11-10T00:00 CET
+    ramp = (np.arange(400 * RATE) % 30000).astype(np.int16)
+    rec = tmp_path / "rec"
+    t_start = midnight - 200
+    make_wake_tree(rec, "bd8256", 1, t_start, ramp)           # 200 s on 2026-11-09, 200 s on 2026-11-10
+    ds = tmp_path / "ds"
+
+    def ns(day, part, dry=False):
+        return Namespace(dataset_root=str(ds), hours=100.0, devices="c3-a", devices_file=None, context="x", namespace="x", pod="x",
+                         container=None, recordings_root="/x", presses_file=None, no_presses=True, pg_pod="x", pg_container="x",
+                         pg_user="x", pg_db="x", min_age_s=600.0, trim_start_s=0.3, boundary_s=7.0, followup_s=60.0,
+                         exclude_s=10.0, min_seg_s=10.0, seed=1, now=t_start + 99999, dry_run=dry, since=None, until=None,
+                         exclude_pipeline=[], out_name="negatives-daily", part=part, part_test_day=None, part_mine_day=None,
+                         local_date=day)
+    s = N.run(ns("2026-11-09", "d-20261109", dry=True), X.LocalFetcher(rec))
+    assert s["c3-a"]["hours"] == round((200 - 0.3) / 3600, 2) and not (ds / "negatives-daily").exists()
+    N.run(ns("2026-11-09", "d-20261109"), X.LocalFetcher(rec))
+    N.run(ns("2026-11-10", "d-20261110"), X.LocalFetcher(rec))
+    rows = C.read_jsonl(ds / "negatives-daily" / "manifest.jsonl")
+    by = {r["split"]: r for r in rows}
+    assert sorted(by) == ["d-20261109", "d-20261110"] and len(rows) == 2
+    assert by["d-20261109"]["end_utc"] <= X.utc_str(midnight) <= by["d-20261110"]["start_utc"]
+    N.run(ns("2026-11-09", "d-20261109"), X.LocalFetcher(rec))     # idempotent
+    assert len(C.read_jsonl(ds / "negatives-daily" / "manifest.jsonl")) == 2
+    with pytest.raises(SystemExit):
+        n = ns("2026-11-09", "x")
+        n.since = "2026-11-09T00:00:00Z"
+        N.run(n, X.LocalFetcher(rec))

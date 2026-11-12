@@ -1,6 +1,6 @@
 """Light tests of wake_release.py: no audio, no network, no cluster, no Home Assistant.
 
-    cd scripts/voice-assistant/wakeword && /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_wake_release.py -q
+    cd scripts/voice-assistant/wakeword && $KIVI_HOME/.venv/bin/python -m pytest test_wake_release.py -q
 """
 import json
 import os

@@ -1,7 +1,7 @@
 """Tests of kivi_live_wakes.py. Synthetic signals only, a fake fetcher and a fake player: nothing is played.
 
     cd scripts/voice-assistant/wakeword && OMP_NUM_THREADS=4 \
-        /work/workspaces/kivi-wakeword/.venv/bin/python -m pytest test_kivi_live_wakes.py -q
+        $KIVI_HOME/.venv/bin/python -m pytest test_kivi_live_wakes.py -q
 """
 import os
 import stat
@@ -390,3 +390,118 @@ def test_review_miss_candidates_table(tmp_path):
     assert played[0].parent.name == "20261112T100000.000Z"                                            # best rank first (mc002)
     # the live-wake review is unchanged without --table
     assert getattr(Namespace(), "table", None) is None
+
+
+# ---------------------------------------------------------------------------------------------
+# labelling queue
+# ---------------------------------------------------------------------------------------------
+
+
+def window_row(i, rank, part="d-20261109", device="c3-a", utc=None, label=""):
+    utc = utc or f"20261109T1{i % 10}0000.000Z"
+    return {k: "" for k in L.MISS_FIELDS} | {"id": f"x{i:03d}", "device": device, "part": part, "utc": utc, "rank": str(rank),
+                                             "peak_v5": "0.97", "label": label, "clip": f"{part}/{device}/{utc}/window.wav"}
+
+
+def queue_setup(tmp_path):
+    ns, table = labelled_table(tmp_path)
+    root = Path(ns.dataset_root)
+    mis = root / "live-misses"
+    mis.mkdir(exist_ok=True)
+    L.write_miss_table(mis / "miss_candidates.csv", [window_row(1, 0.5), window_row(2, 1.5), window_row(3, 0.9, label="noise")])
+    L.write_miss_table(mis / "daily_false_wakes.csv", [window_row(4, 0.1, utc="20261109T130000.000Z"),
+                                                       window_row(5, 0.9, utc="20261109T120000.000Z")])
+    L.write_miss_table(mis / "c3_events.csv", [window_row(6, 0.2)])
+    ns.minutes, ns.max_items, ns.day, ns.device = None, None, None, None
+    return ns, table, mis
+
+
+def test_queue_order_false_wakes_then_uncertain_live_then_misses(tmp_path):
+    ns, table, mis = queue_setup(tmp_path)
+    items = L.queue_items(ns.dataset_root)
+    kinds = [(it["group"], it["table"].name) for it in items]
+    assert [g for g, _ in kinds] == sorted(g for g, _ in kinds)                    # groups never interleave
+    assert kinds[0] == (0, "daily_false_wakes.csv") and kinds[1] == (0, "daily_false_wakes.csv")
+    assert [it["row"]["id"] for it in items[:2]] == ["x005", "x004"]               # false wakes by time, not by score
+    live = [it for it in items if it["kind"] == "live"]
+    assert len(live) == 3 and all(it["group"] == 1 for it in live)
+    misses = [it for it in items if it["group"] == 2]
+    assert [it["row"]["id"] for it in misses if it["table"].name == "miss_candidates.csv"] == ["x002", "x001"]   # rank order, labelled gone
+    assert items[-1]["table"].name in ("miss_candidates.csv", "c3_events.csv")
+    assert L.queue_counts(items) == {(0, "daily_false_wakes.csv"): 2, (1, "live_wakes.csv"): 3,
+                                     (2, "c3_events.csv"): 1, (2, "miss_candidates.csv"): 2}
+
+
+def test_queue_walk_labels_saves_each_and_resumes(tmp_path):
+    ns, table, mis = queue_setup(tmp_path)
+    played, out = [], []
+    # item 1 (false-wake window): attempt, spk02; item 2: skip; then quit
+    answers = iter(["a", "2", "s", "q"])
+    n = L.cmd_queue(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: next(answers), out=out.append)
+    assert n == 1
+    assert out[0].startswith("pending at start: 8 item(s)") and any("daily_false_wakes.csv: 2" in x for x in out)
+    assert "labelled 1 item(s) in this session" in out and "pending at end: 7 item(s)" in out
+    assert out[out.index("pending at end: 7 item(s)") + 1] == "  1. replay false wakes of the live model: daily_false_wakes.csv: 1"
+    first = {r["id"]: r for r in L.read_miss_table(mis / "daily_false_wakes.csv")}
+    assert (first["x005"]["label"], first["x005"]["speaker"]) == ("attempt", "spk02") and first["x004"]["label"] == ""
+    assert played[0].name == "window.wav"
+    # resume: the skipped x004 is offered first again; label it, then a live clip with true wake keys, then quit
+    played.clear()
+    answers = iter(["t", "t", "1", "q"])               # window: tv-media (no speaker asked); live clip: true + spk01
+    n = L.cmd_queue(ns, player=lambda p: played.append(Path(p)), input_fn=lambda _p: next(answers), out=lambda *_: None)
+    assert n == 2
+    assert {r["id"]: r["label"] for r in L.read_miss_table(mis / "daily_false_wakes.csv")} == {"x004": "tv-media", "x005": "attempt"}
+    assert [p.name for p in played[1:3]] == ["wake_tail.wav", "stt.wav"]
+    owner = [r for r in L.read_table(table) if r["label_source"] == "owner"]
+    assert len(owner) == 1 and owner[0]["label"] == "true" and owner[0]["speaker"] == "spk01"
+
+
+def test_queue_limits_empty_and_ctrl_c(tmp_path):
+    ns, table, mis = queue_setup(tmp_path)
+    ns.max_items = 1
+    out = []
+    assert L.cmd_queue(ns, player=lambda p: None, input_fn=lambda _p, it=iter(["n", "n"]): next(it), out=out.append) == 1
+    assert "session limit reached" in out
+    clock = iter([0.0, 0.0, 10_000.0])                          # second item: the 2-minute budget is spent
+    ns.max_items, ns.minutes = None, 2
+    out = []
+    assert L.cmd_queue(ns, player=lambda p: None, input_fn=lambda _p, it=iter(["n", "n"]): next(it), out=out.append,
+                       clock=lambda: next(clock)) == 1
+    assert "session limit reached" in out
+    ns.minutes = None
+
+    def inp(_p, it=iter(["u", "4"])):
+        try:
+            return next(it)
+        except StopIteration:
+            raise KeyboardInterrupt
+    assert L.cmd_queue(ns, player=lambda p: None, input_fn=inp, out=lambda *_: None) == 1       # Ctrl-C keeps the label
+    ns.day = "2020-01-01"
+    out = []
+    assert L.cmd_queue(ns, player=lambda p: None, input_fn=lambda _p: "q", out=out.append) == 0
+    assert out == ["pending at start: 0 item(s) (queue empty)"]
+
+
+def test_queue_save_is_a_fresh_read_of_the_window_table(tmp_path):
+    ns, table, mis = queue_setup(tmp_path)
+
+    def player(_p):                                              # a collector appends a row while the owner listens
+        rows = L.read_miss_table(mis / "daily_false_wakes.csv")
+        if len(rows) == 2:
+            L.write_miss_table(mis / "daily_false_wakes.csv", rows + [window_row(9, 0.3)])
+    L.cmd_queue(ns, player=player, input_fn=lambda _p, it=iter(["n", "q"]): next(it), out=lambda *_: None)
+    rows = L.read_miss_table(mis / "daily_false_wakes.csv")
+    assert len(rows) == 3 and [r["label"] for r in rows].count("noise") == 1
+
+
+def test_extract_day_filter_and_autolabel_day_rows_without_label(tmp_path):
+    rec = make_tree(tmp_path)
+    ns = make_ns(tmp_path, rec)
+    ns.day = "2020-01-01"
+    L.cmd_extract(ns, X.LocalFetcher(rec), out=lambda *_: None)
+    assert L.read_table(Path(ns.dataset_root) / "live" / "live_wakes.csv") == []
+    ns.day = L.local_day(L.dir_stamp(T0))
+    L.cmd_extract(ns, X.LocalFetcher(rec), out=lambda *_: None)
+    n1 = len(L.read_table(Path(ns.dataset_root) / "live" / "live_wakes.csv"))
+    L.cmd_extract(ns, X.LocalFetcher(rec), out=lambda *_: None)                           # idempotent
+    assert n1 > 0 and len(L.read_table(Path(ns.dataset_root) / "live" / "live_wakes.csv")) == n1
