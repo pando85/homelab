@@ -7,6 +7,10 @@ app-template:
         reloader.stakater.com/auto: "true"
       type: statefulset
       replicas: 1
+      # Give ongoing Assist/WebSocket sessions time to close cleanly.
+      # Other Home Assistant controllers retain their existing shutdown policy.
+      pod:
+        terminationGracePeriodSeconds: 45
       containers:
         hass:
           image:
