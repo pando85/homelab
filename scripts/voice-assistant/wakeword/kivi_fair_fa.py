@@ -340,6 +340,7 @@ def cmd_report(a):
                 res["paired"][f"{cand}-vs-v5|{role}|{'evening' if scope_ev else 'day'}"] = paired(cand, "v5", days, events, clips, scope_ev)
         res["recall"][role] = recall(names, days, clips, windows, events)
     res["reserved_live"] = reserved_live(clips)
+    write_unlabelled(events)
     res["bracket"] = bracket_summary()
     (OUT / "results.json").write_text(json.dumps(res, indent=1, default=list))
     os.chmod(OUT / "results.json", 0o600)
@@ -409,6 +410,15 @@ def recall(names, days, clips, windows, events):
             continue
         if not any(x["device"] == w["device"] and abs(x["t"] - w["t"]) <= MATCH_S for x in att):
             att.append(w)
+    units = [{n: any(n in e["models"] and e["device"] == w["device"] and abs(e["t"] - w["t"]) <= MATCH_S for e in events)
+              for n in names} for w in att] + \
+        [{n: n in c["recall"] for n in names} for c in tr if all(n in c["scored"] for n in names)]
+    from scipy.stats import binomtest
+    for cand in names[1:]:
+        a = sum(u[cand] and not u[names[0]] for u in units)
+        b = sum(u[names[0]] and not u[cand] for u in units)
+        out[f"{cand}-vs-{names[0]}"] = {"calls": len(units), "only_cand": a, "only_ref": b,
+                                        "p_two_sided": round(float(binomtest(a, a + b).pvalue), 4) if a + b else 1.0}
     for n in names:
         sel = [c for c in tr if n in c["scored"]]
         k = sum(1 for c in sel if n in c["recall"])
@@ -416,8 +426,22 @@ def recall(names, days, clips, windows, events):
                                          for e in events))
         out[n] = {"live_true": [k, len(sel)], "live_true_by_trigger": {
             tg: [sum(1 for c in sel if c["trigger"] == tg and n in c["recall"]), sum(1 for c in sel if c["trigger"] == tg)]
-            for tg in sorted({c["trigger"] for c in sel})}, "attempts": [hits, len(att)]}
+            for tg in sorted({c["trigger"] for c in sel})}, "attempts": [hits, len(att)],
+            "all_calls": [k + hits, len(sel) + len(att)]}     # live true clips favour the live model, attempts the others
     return out
+
+
+def write_unlabelled(events):
+    """Private list (times and models only) of the true-grid room events with no labelled window: to cut and label."""
+    path = OUT / "unlabelled_events.csv"
+    rows = [{"device": e["device"], "utc": L.dir_stamp(e["t"]), "madrid_day": e["day"], "role": day_role(e["day"]),
+             "evening": int(e["evening"]), "models": "+".join(sorted(e["models"]))}
+            for e in sorted(events, key=lambda e: e["t"]) if e["cls"] in ("unlabelled", "unclear")]
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, ["device", "utc", "madrid_day", "role", "evening", "models"])
+        w.writeheader()
+        w.writerows(rows)
+    os.chmod(path, 0o600)
 
 
 def reserved_live(clips):
@@ -462,18 +486,23 @@ def render(res):
            "even days are info. (a) room detections at the server grid minus owner-labelled attempts; (b) live clips labelled "
            "false on which the model crosses (tail + request). Per evening = evening (a + b) / (room evening hours / 6), "
            "exact Poisson 95 % interval.", "",
+           "Live model (its own detections are cut out of the room audio, so its (a) is empty by construction and its false "
+           "wakes are all in (b)): v5 `oye_kivi_next` on both TVs from 2026-11-08 13:28Z (room copy from 13:30Z) to 2026-11-11 "
+           "22:11Z; v6 `oye_kivi_ctx` 22:11Z to about 22:40Z; v5 again until 2026-11-12 07:40:55Z; v6.2 `oye_kivi_ctx2` since "
+           "(2026-11-12 is reserved: only v6.2's own clips are reported).", "",
            "| model | TV | day | role | (a) | (a) evening | (b) | (b) evening | total | evening total | room h / evenings | per evening (95 % CI) | (a): labelled false / unclear / unlabelled | attempts excluded |",
            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for c in res["cells"]:
         out.append(f"| {c['model']} | {c['device']} | {c['days'][0]} | {day_role(c['days'][0])} | {c['a']} | {c['a_evening']} | "
                    f"{c['b']} | {c['b_evening']} | {c['total']} | {c['total_evening']} | {c['hours']} / {c['evenings']} | {f(c)} | "
                    f"{c['a_false_labelled']} / {c['a_unclear']} / {c['a_unlabelled']} | {c['attempts_excluded']} |")
-    out += ["", "## Pooled", "", "| model | role | TV | (a) | (b) | total | evening total | evenings | per evening (95 % CI) | (a) unlabelled | live not-a-wake / unclear / unlabelled fired |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
+    out += ["", "## Pooled", "", "| model | role | TV | (a) | (b) | total | evening total | evenings | per evening (95 % CI) | (a) unlabelled | (b) by label source | live not-a-wake / unclear / unlabelled fired |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
     for k, c in res["pooled"].items():
         n, role, dev = k.split("|")
         out.append(f"| {n} | {role} | {dev} | {c['a']} | {c['b']} | {c['total']} | {c['total_evening']} | {c['evenings']} | {f(c)} | "
-                   f"{c['a_unlabelled']} | {c['notawake_fired']} / {c['unclear_live_fired']} / {c['unlabelled_live_fired']} |")
+                   f"{c['a_unlabelled']} | " + (", ".join(f"{k} {v}" for k, v in sorted(c["b_by_source"].items())) or "-")
+                   + f" | {c['notawake_fired']} / {c['unclear_live_fired']} / {c['unlabelled_live_fired']} |")
     out += ["", "## Paired comparison with v5 (same audio; discordant units, exact sign test)", "",
             "| comparison | role | scope | both | only candidate | only v5 | candidate total | v5 total | p (two-sided) | candidate share of discordant (95 % CI) |",
             "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"]
@@ -481,13 +510,21 @@ def render(res):
         cmp_, role, sc = k.split("|")
         out.append(f"| {cmp_} | {role} | {sc} | {p['both']} | {p['only_cand']} | {p['only_ref']} | {p['cand_total']} | "
                    f"{p['ref_total']} | {p['p_two_sided']} | {p['cand_share_ci95']} |")
-    out += ["", "## Recall", "", "| role | model | live true clips detected | by trigger | owner-labelled attempts detected (room, true grid) |",
-            "| --- | --- | --- | --- | --- |"]
+    out += ["", "## Recall", "", "Live true clips are the calls the live model (v5) caught; owner-labelled attempts are calls it "
+            "missed (found by replays). Each favours one side; all known calls is their sum.", "",
+            "| role | model | live true clips detected | by trigger | owner-labelled attempts detected (room, true grid) | all known calls |",
+            "| --- | --- | --- | --- | --- | --- |"]
     for role, rr in res["recall"].items():
         for n, r in rr.items():
+            if "-vs-" in n:
+                continue
             out.append(f"| {role} | {n} | {r['live_true'][0]}/{r['live_true'][1]} | "
                        + ", ".join(f"{t or 'empty'} {a}/{b}" for t, (a, b) in r["live_true_by_trigger"].items())
-                       + f" | {r['attempts'][0]}/{r['attempts'][1]} |")
+                       + f" | {r['attempts'][0]}/{r['attempts'][1]} | {r['all_calls'][0]}/{r['all_calls'][1]} |")
+    out += ["", "Paired on all known calls (sign test on the calls only one model detects; the attempts were found by "
+            "replays of the candidates, so this favours them): "
+            + "; ".join(f"{role} {k}: {v['only_cand']} only candidate, {v['only_ref']} only v5 of {v['calls']}, p {v['p_two_sided']}"
+                        for role, rr in res["recall"].items() for k, v in rr.items() if "-vs-" in k)]
     out += ["", "## Live-model data on the reserved days (the live model only; no candidate scored)", ""]
     out += [f"- {k}: {v}" for k, v in sorted(res["reserved_live"].items())] or ["- none"]
     out += ["", "## Bracketed pieces", "", f"`{json.dumps(res['bracket'])}`", "", "## Label state at the recount", "",
