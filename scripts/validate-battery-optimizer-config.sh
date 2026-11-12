@@ -40,6 +40,7 @@ expected = {
     "planning.charge_soft_cap_eur_per_kwh": 0.005,
     "planning.discharge_margin_bound": True,
     "planning.thermal.mode": "shadow",
+    "actuation.discharge_margin_w": 50,
     "actuation.load_following.enabled": True,
     "actuation.load_following.max_w": 2500,
     "full_charge.enabled": True,
