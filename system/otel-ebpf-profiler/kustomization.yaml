@@ -27,7 +27,7 @@ resources:
 helmCharts:
   - name: opentelemetry-collector
     repo: https://open-telemetry.github.io/opentelemetry-helm-charts
-    version: 0.178.2
+    version: 0.178.3
     releaseName: otel-ebpf-profiler
     namespace: otel-ebpf-profiler
     valuesFile: values.yaml
