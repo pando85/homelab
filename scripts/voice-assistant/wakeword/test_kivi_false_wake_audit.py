@@ -68,12 +68,13 @@ def test_poisson_ci_and_rate_format():
 # synthetic tables
 # ---------------------------------------------------------------------------------------------
 
-STRATA_SIZES = {"auto-false": {("c3-b", "test"): 16, ("c3-b", "mine"): 6, ("c3-a", "mine"): 3, ("c3-a", "test"): 1},
+STRATA_SIZES = {"auto-false-low": {("c3-b", "test"): 10, ("c3-b", "mine"): 3, ("c3-a", "mine"): 2, ("c3-a", "test"): 1},
+                "auto-false-high": {("c3-b", "test"): 6, ("c3-b", "mine"): 3, ("c3-a", "mine"): 1},
                 "auto-true": {("c3-b", "test"): 13, ("c3-b", "mine"): 2, ("c3-a", "mine"): 4, ("c3-a", "test"): 3},
                 "auto-unclear": {("c3-b", "test"): 9, ("c3-b", "mine"): 7, ("c3-a", "mine"): 2, ("c3-a", "test"): 6},
                 "auto-not-a-wake-wake": {("c3-b", "mine"): 2},
                 "auto-not-a-wake-button": {("c3-b", "mine"): 5, ("c3-b", "test"): 5}}
-LABEL_OF = {"auto-false": "false", "auto-true": "true", "auto-unclear": "unclear", "auto-not-a-wake-wake": "not-a-wake",
+LABEL_OF = {"auto-false-low": "false", "auto-false-high": "false", "auto-true": "true", "auto-unclear": "unclear", "auto-not-a-wake-wake": "not-a-wake",
             "auto-not-a-wake-button": "not-a-wake"}
 
 
@@ -82,7 +83,8 @@ def audit_row(i, stratum, dev, role):
     return {"kind": "live", "table": "live_wakes.csv", "id": f"Kiwi/{i:06d}", "device": dev,
             "madrid_date": "2026-11-11" if role == "test" else "2026-11-10", "day_role": role,
             "evening": "yes" if i % 2 else "no", "model_live": "v5", "trigger": "button" if stratum.endswith("button") else "wake",
-            "label": label, "label_source": "auto-v1", "label_conf": "0.8", "speaker": "unknown", "cause": "", "near_phrase": 0}
+            "label": label, "label_source": "auto-v1",
+            "label_conf": {"auto-false-low": "0.75", "auto-false-high": "0.95"}.get(stratum, "0.9"), "speaker": "unknown", "cause": "", "near_phrase": 0}
 
 
 def synthetic_rows():
@@ -93,9 +95,9 @@ def synthetic_rows():
                 i += 1
                 rows.append(audit_row(i, st, dev, role))
     # rows the sample never touches: an owner label, a no-source false label, an unknown trigger
-    rows.append({**audit_row(900, "auto-false", "c3-b", "test"), "label_source": "owner"})
-    rows.append({**audit_row(901, "auto-false", "c3-b", "test"), "label_source": "no-source"})
-    rows.append({**audit_row(902, "auto-false", "c3-b", "test"), "trigger": "unknown"})
+    rows.append({**audit_row(900, "auto-false-high", "c3-b", "test"), "label_source": "owner"})
+    rows.append({**audit_row(901, "auto-false-high", "c3-b", "test"), "label_source": "no-source"})
+    rows.append({**audit_row(902, "auto-false-high", "c3-b", "test"), "trigger": "unknown"})
     return rows
 
 
@@ -110,7 +112,8 @@ SIZES = {n: k for n, _l, _t, k in A.STRATA}
 
 def test_default_sample_sizes_are_40_with_5_not_a_wake():
     assert sum(SIZES.values()) == 40 and SIZES["auto-not-a-wake-wake"] + SIZES["auto-not-a-wake-button"] == 5
-    assert [SIZES[s] for s in ("auto-false", "auto-true", "auto-unclear")] == [15, 10, 10]
+    assert SIZES["auto-false-low"] + SIZES["auto-false-high"] == 15
+    assert [SIZES[s] for s in ("auto-true", "auto-unclear")] == [10, 10]
 
 
 def test_allocate_equal_share_with_caps():
@@ -128,9 +131,11 @@ def test_draw_sample_covers_both_devices_and_parities_and_is_deterministic():
     per = Counter(A.stratum_of(by_id[i]) for i in ids)
     assert dict(per) == SIZES
     assert sorted(ids.values()) == [f"v{i:02d}" for i in range(1, 41)]
-    for st in ("auto-false", "auto-true", "auto-unclear"):
+    for st in ("auto-true", "auto-unclear"):
         cells = Counter(A.cell_of(by_id[i]) for i in ids if A.stratum_of(by_id[i]) == st)
         assert set(cells) == {"c3-a/mine", "c3-a/test", "c3-b/mine", "c3-b/test"}, st
+    both = Counter(by_id[i]["device"] for i in ids if A.stratum_of(by_id[i]).startswith("auto-false"))
+    assert set(both) == {"c3-a", "c3-b"}
     assert not {r["id"] for r in rows if r["label_source"] != "auto-v1" or r["trigger"] == "unknown"} & set(ids)
     # the sample id says nothing about the stratum: ids do not sort by stratum
     order = [A.stratum_of(by_id[i]) for i, _ in sorted(ids.items(), key=lambda kv: kv[1])]
@@ -138,7 +143,7 @@ def test_draw_sample_covers_both_devices_and_parities_and_is_deterministic():
 
 
 def test_optional_nosource_stratum():
-    rows = synthetic_rows() + [{**audit_row(950 + k, "auto-false", "c3-b", "mine"), "label_source": "no-source"}
+    rows = synthetic_rows() + [{**audit_row(950 + k, "auto-false-high", "c3-b", "mine"), "label_source": "no-source"}
                                for k in range(4)]
     ids = A.draw_sample(rows, {**SIZES, A.NOSOURCE_STRATUM: 3}, seed=1)
     by_id = {r["id"]: r for r in rows}
@@ -164,7 +169,8 @@ def owner_labels(rows, ids, truth_rates, rng):
     return val
 
 
-PERFECT = {"auto-false": {"true": 0, "false": 1, "unclear": 0, "not-a-wake": 0},
+PERFECT = {"auto-false-low": {"true": 0, "false": 1, "unclear": 0, "not-a-wake": 0},
+           "auto-false-high": {"true": 0, "false": 1, "unclear": 0, "not-a-wake": 0},
            "auto-true": {"true": 1, "false": 0, "unclear": 0, "not-a-wake": 0},
            "auto-unclear": {"true": 0.3, "false": 0.5, "unclear": 0.2, "not-a-wake": 0},
            "auto-not-a-wake-wake": {"true": 0, "false": 0, "unclear": 0, "not-a-wake": 1},
@@ -188,7 +194,7 @@ def test_analyze_perfect_autolabel_confusion_and_precision():
     mean, lo, hi = res["precision_auto_false"]
     assert 0.9 < mean < 1.0 and lo > 0.75 and hi == pytest.approx(1.0)      # 15 of 15 sampled: the 11 others are drawn
     assert res["p_precision_ge_90"] > 0.5
-    assert res["auto_false_owner_true"][0] < 0.03
+    assert res["auto_false_owner_true"][0] < 0.05
     # recall: owner-false is also found in auto-unclear (about half of those clips), so auto-false misses part of them
     rec = res["recall_auto_false"]
     assert 0.5 < rec[0] < 0.95 and rec[1] < rec[0] < rec[2]
@@ -205,7 +211,7 @@ def test_analyze_recall_high_when_unclear_and_true_hold_no_false():
 
 def test_analyze_census_has_no_uncertainty():
     """Every auto-false clip sampled and labelled: precision is exact, the interval has zero width."""
-    rows = [r for r in synthetic_rows() if A.stratum_of(r) in ("auto-false", "auto-true")]
+    rows = [r for r in synthetic_rows() if A.stratum_of(r) in ("auto-false-low", "auto-false-high", "auto-true")]
     ids = {r["id"]: f"v{i:02d}" for i, r in enumerate(rows, 1)}
     val = owner_labels(rows, ids, PERFECT, random.Random(1))
     for v in val[:5]:
@@ -219,9 +225,10 @@ def test_analyze_census_has_no_uncertainty():
 
 def test_analyze_confidence_interval_covers_known_truth():
     rows = synthetic_rows()
-    truth = {"auto-false": {"true": 0.1, "false": 0.8, "unclear": 0.1, "not-a-wake": 0.0}}
+    one = {"true": 0.1, "false": 0.8, "unclear": 0.1, "not-a-wake": 0.0}
+    truth = {"auto-false-low": one, "auto-false-high": one}
     rates = {**PERFECT, **truth}
-    pop_false = [r for r in rows if A.stratum_of(r) == "auto-false"]
+    pop_false = [r for r in rows if (A.stratum_of(r) or "").startswith("auto-false")]
     covered, n_runs = 0, 40
     for seed in range(n_runs):
         rng = random.Random(100 + seed)
@@ -229,7 +236,7 @@ def test_analyze_confidence_interval_covers_known_truth():
         val = owner_labels(rows, ids, rates, rng)
         # the "true" precision of this synthetic world is the realised owner-false share of the 26 clips: draw the
         # unsampled clips with the same rates to get one world, then compare to the estimate from the sample
-        world = [rng.choices(A.CLASSES, weights=[truth["auto-false"][c] for c in A.CLASSES])[0] for _ in pop_false]
+        world = [rng.choices(A.CLASSES, weights=[one[c] for c in A.CLASSES])[0] for _ in pop_false]
         sampled = {r["id"]: v["label"] for r in pop_false for v in val if v["run_id"] == r["id"]}
         real = [sampled.get(r["id"], world[j]) for j, r in enumerate(pop_false)]
         true_prec = real.count("false") / len(real)

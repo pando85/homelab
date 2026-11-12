@@ -10,7 +10,7 @@ Counts only. This tool never plays, prints or saves audio, transcripts or speake
 
 Why. Nearly every live "false wake" count rests on `kivi_autolabel.py` (local faster-whisper + ECAPA), whose accuracy was
 never measured; most of the other false labels carry no `label_source`. The sample is a stratified, blind measurement of
-the autolabel: about 15 auto-false, 10 auto-true, 10 auto-unclear, 5 auto-not-a-wake clips, both TVs, both day parities.
+the autolabel: about 15 auto-false (9 low and 6 high autolabel confidence), 10 auto-true, 10 auto-unclear, 5 auto-not-a-wake clips, both TVs, both day parities.
 It is MEASUREMENT ONLY: no training, threshold or selection choice is made from it.
 
 The owner labels the sample as the first group of `kivi_live_wakes.py queue` (the auto label is never shown). The auto
@@ -24,9 +24,10 @@ Model live: v4 `oye_kivi`, v5 `oye_kivi_next`, v6 `oye_kivi_ctx` from V6_LIVE (2
 the eras of the other models are `kivi_live_wakes.ERAS`.
 
 Estimation. Each auto-labelled clip is in a stratum (its auto label and trigger) and a cell (stratum, TV, day parity).
-Sampled clips are known; the unsampled clips of a cell get the owner label of the cell's sampled clips with a
-Dirichlet(+0.5) posterior (Jeffreys). 4000 simulated populations give the mean and the 2.5 / 97.5 percentiles; the
-sampling is not proportional, the cell structure removes that bias. Rows an owner labelled are taken as labelled, rows
+Sampled clips are known; the unsampled clips of a cell get an owner label from a Dirichlet posterior: the cell's
+sampled labels + 0.5 per class (Jeffreys) + 2 pseudo-observations at the stratum's pooled label shares (thin cells
+borrow from their stratum). 4000 simulated populations give the mean and the 2.5 / 97.5 percentiles; the sampling is
+not proportional, the cell structure removes that bias. Rows an owner labelled are taken as labelled, rows
 with a label but no `label_source` (older labels, provenance not recorded) are taken as labelled and reported apart.
 Poisson variation of the exposure is not in the corrected intervals (the uncorrected rates have exact Poisson ones).
 """
@@ -60,11 +61,17 @@ KEY_FIELDS = ("sample_id", "stratum", "cell", "run_id", "device", "madrid_date",
 REPLAY_TABLES = ("c3_events.csv", "c3_events_r2.csv", "daily_false_wakes.csv")
 MAPPINGS = {"c3_events.csv": "c3_events_mapping.json", "c3_events_r2.csv": "c3_events_r2_mapping.json"}
 DRAWS = 4000
+PRIOR = 0.5            # Dirichlet prior per class (Jeffreys)
+POOL_WEIGHT = 2.0      # pseudo-observations at the stratum's pooled owner-label shares: thin cells borrow from the stratum
 CI = (2.5, 97.5)
 
-# (stratum, auto label, trigger, default sample size); the sum of the defaults is 40
+# (stratum, auto label, trigger, default sample size); the sum of the defaults is 40. auto-false is two strata by the
+# autolabel's own confidence: 0.95 (no words, almost no speech) and below UNCERTAIN_CONF (unrelated words heard, 0.75),
+# the second being the one where a mis-heard "oye Kivi" would hide.
+HIGH_CONF = 0.8
 STRATA = (
-    ("auto-false", "false", "wake", 15),
+    ("auto-false-low", "false", "wake", 9),
+    ("auto-false-high", "false", "wake", 6),
     ("auto-true", "true", "wake", 10),
     ("auto-unclear", "unclear", "wake", 10),
     ("auto-not-a-wake-wake", "not-a-wake", "wake", 2),
@@ -359,6 +366,8 @@ def stratum_of(row):
                                     and row["trigger"] == "wake") else None
     for name, label, trigger, _n in STRATA:
         if row["label"] == label and row["trigger"] == trigger:
+            if label == "false" and (float(row["label_conf"] or 0) >= HIGH_CONF) != name.endswith("high"):
+                continue
             return name
     return None
 
@@ -458,7 +467,7 @@ def simulate(key, owner, draws=DRAWS, seed=20261112):
     """Population class draws. key: rows of the key; owner: {sample_id: label}. Returns (units, cls) where cls is an
     int array [draws, len(units)] with the CLASSES index of each unit (the owner's truth), -1 for units that are not
     classified (a trigger outside the strata). Sampled units are fixed at the owner's label; owner / no-source labels
-    are taken as given; the other auto units come from a Dirichlet(+0.5) posterior of their cell."""
+    are taken as given; the other auto units come from the partly pooled Dirichlet posterior of their cell."""
     import numpy as np
     rng = np.random.default_rng(seed)
     idx = {c: i for i, c in enumerate(CLASSES)}
@@ -475,6 +484,10 @@ def simulate(key, owner, draws=DRAWS, seed=20261112):
             cells[(st, u["cell"])]["rest"].append(j)
         elif u["label"] in idx:
             cls[:, j] = idx[u["label"]]                        # an owner label, or a no-source label, taken as given
+    pooled = defaultdict(lambda: np.zeros(len(CLASSES)))
+    for (st, _cell), g in cells.items():
+        for j in g["sampled"]:
+            pooled[st][cls[0, j]] += 1
     for (st, _cell), g in cells.items():
         rest = g["rest"]
         if not rest:
@@ -482,7 +495,8 @@ def simulate(key, owner, draws=DRAWS, seed=20261112):
         counts = np.zeros(len(CLASSES))
         for j in g["sampled"]:
             counts[cls[0, j]] += 1
-        theta = rng.dirichlet(counts + 0.5, size=draws)          # [draws, 4]
+        prop = pooled[st] / pooled[st].sum() if pooled[st].sum() else np.full(len(CLASSES), 1 / len(CLASSES))
+        theta = rng.dirichlet(counts + PRIOR + POOL_WEIGHT * prop, size=draws)          # [draws, 4]
         for d in range(draws):
             cls[d, rest] = rng.choice(len(CLASSES), size=len(rest), p=theta[d])
     return units, cls
@@ -506,7 +520,7 @@ def analyze(key, validation, until, draws=DRAWS, seed=20261112):
     idx = {c: i for i, c in enumerate(CLASSES)}
     by = lambda f: np.array([bool(f(u)) for u in units])        # noqa: E731
     auto = by(lambda u: u["label_source"] == "auto-v1" and stratum_of(u) in {s[0] for s in STRATA})
-    auto_false = by(lambda u: u["label_source"] == "auto-v1" and stratum_of(u) == "auto-false")
+    auto_false = by(lambda u: u["label_source"] == "auto-v1" and (stratum_of(u) or "").startswith("auto-false"))
     res = {"labelled": len(owner), "sampled": sum(1 for u in units if u["sample_id"])}
     isf = cls == idx["false"]
     n_af = auto_false.sum()
