@@ -25,7 +25,7 @@ Material (labels read at run time; `kivi_clean.window_rows` = every window table
   (d) synthetic: C5 held-out-voice positive sets (clean, TV 10 dB, quiet; per clip maximum of the ONNX head, as
       v6_seq_eval.py) and the decoy evaluation clips (787, held-out voices; a clip fires when its maximum is above raw).
 Room items need a piece with a known server grid (`kivi_replay_mine.read_pieces`, src_sample0 exact or bracket middle);
-the others are counted as "no server-grid audio". Each item is replayed from 13 s before to 3.2 s after it (4 s warm-up,
+the others are counted apart and not scored. Each item is replayed from 13 s before to 3.2 s after it (4 s warm-up,
 which gives bit-identical scores to the 60 s of v6_replay.py), detections by the server rule from the range start.
 Day split: odd Madrid days from 2026-11-09 on are TEST (honest for every model); even days and the grandfathered
 2026-11-05 to -08 are TRAIN, shown per day group with the in-sample cells marked (T = trained on, S = threshold or
@@ -667,9 +667,10 @@ def cmd_report(a):
         L.append(f"| {n} | {fmt(*s['clean'])} | {fmt(*s['tv10'])} | {fmt(*s['quiet'])} | {fmt(*s['decoy'])} | " +
                  " | ".join(fmt(*s[k], ci=False) for k in sorted(s) if k.startswith("decoy:")) + " |")
     L += ["", "## Coverage", "",
-          f"Window clusters (all tables, unique per TV within 3 s) by current label: {dict(ccls)}. Items without "
-          f"server-grid room audio (pieces of 2026-11-05/-06 have no derived grid; 2026-11-08 before 13:30Z has no copy): "
-          f"{dict(sorted(nogrid.items()))}.", ""]
+          f"Window clusters (all tables, unique per TV within 3 s) by current label: {dict(ccls)} (waiting = not yet "
+          f"labelled by the owner, or an auto attempt / audit item). Room items without a piece on a known server grid "
+          f"(not scored): {dict(sorted(nogrid.items())) or 'none'}. Room pieces by set and grid: "
+          f"{dict(Counter((p['set'], p['grid']) for p in room_pieces()))}.", ""]
     (OUT / "BENCH.md").write_text("\n".join(L))
     (OUT / "bench.json").write_text(json.dumps(js, indent=1))
     for p in (OUT / "BENCH.md", OUT / "bench.json"):
