@@ -5,7 +5,8 @@ api:
 
 ota:
   - platform: esphome
-    password: !secret ota_password
+    # Reuses the api encryption key (no separate OTA key or password). Requires encrypted uploads.
+    encryption:
 
 safe_mode:
 

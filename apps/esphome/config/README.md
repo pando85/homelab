@@ -62,7 +62,7 @@ and a list of packages. All logic lives in the packages.
 
 | Package | File | Used by | Controls |
 |---------|------|---------|----------|
-| connection | `packages/connection.yaml` | All devices | WiFi (with fallback AP), OTA, API encryption, mDNS, SNTP, captive portal |
+| connection | `packages/connection.yaml` | All devices | WiFi (with fallback AP), encrypted OTA (reuses the API key), API encryption, mDNS, SNTP, captive portal |
 | irrigation-controller | `packages/irrigation-controller.yaml` | irrigation-controller-{corner,mid} | ESP32 board, relays, sprinkler logic, scheduling, web server |
 | lilygo-higrow | `packages/lilygo-higrow.yaml` | lilygo-higrow-{1,2} | ESP32 board, DHT11, soil moisture ADC, conductivity ADC, BH1750 lux, water pump |
 | mini-switch | `packages/mini-switch.yaml` | mini-switch-{1..4,office-a} | ESP8285 board, relay, status LED, wired switch, power button, multi-click |
@@ -231,8 +231,8 @@ To change actual secret values, update them in Vault at these paths:
 | Vault Path | Key | Used for |
 |---|---|---|
 | `/esphome/wifi` | `ssid`, `password`, `fallback_ap_password` | WiFi credentials (all devices) |
-| `/esphome/ota` | `password` | OTA flash authentication |
-| `/esphome/home-assistant` | `api_key` | ESPHome ↔ Home Assistant API encryption |
+| `/esphome/ota` | `password` | Legacy OTA password: only used by `make flash-device-migrate` (first flash of a device that cannot encrypt OTA yet); remove after the migration |
+| `/esphome/home-assistant` | `api_key` | ESPHome ↔ Home Assistant API encryption, also the OTA encryption key (`ota: encryption:` reuses it) |
 | `/esphome/web-server` | `username`, `password` | Device web server auth |
 
 ### Agent Runbook (non-interactive)
@@ -263,6 +263,12 @@ uvx --from 'esphome==<ESPHOME_VERSION from Makefile>' --with pillow \
 shred -u secrets.yaml
 ```
 
+- **OTA is encrypted** with the api key (`ota: platform: esphome` + `encryption:` in `packages/connection.yaml`,
+  no OTA password). A device whose running firmware is older than 2026.9.0 cannot encrypt yet: the
+  client refuses to send it a plaintext image, so do its first flash with
+  `make flash-device-migrate DEVICE=<device>` (throwaway overlay with the old `ota_password` and
+  `allow_plaintext_upload: true`; never commit that option). Later flashes use `make flash-device`.
+  The key cannot be changed over OTA: use a serial flash or the captive-portal update page on the fallback AP. Plan and per-device firmware: `planning/esphome-security-hardening-todo.md`.
 - `--device` is mandatory when not interactive (otherwise esphome prompts for the target). Use the
   device's IP when DNS does not resolve its new name yet; `esphome config <device>.yaml` validates
   without flashing, `esphome compile` builds only.
@@ -313,8 +319,8 @@ each ESPHome device by the hostname stored in its config entry (`/config/.storag
 - Shelly devices (e.g. `shellypmmini-z800`) run stock Shelly firmware, not ESPHome: their name is
   set over RPC (`/rpc/Sys.SetConfig?config={"device":{"name":"..."}}`, digest auth with the password
   stored in their HA config entry).
-- Warnings seen with 2026.10.1 that need action before the next major versions:
-  `planning/esphome-security-hardening-todo.md`.
+- The device `web_server` uses `auth: type: digest` and `ota: false` (no plaintext `/update`); `curl`
+  needs `--digest -u`. Deprecation background: `planning/esphome-security-hardening-todo.md`.
 
 ### Change WiFi or Network Settings
 

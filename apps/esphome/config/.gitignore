@@ -5,3 +5,4 @@
 /secrets.yaml
 .envrc
 .direnv
+/.ota-migrate.yaml

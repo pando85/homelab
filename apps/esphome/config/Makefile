@@ -6,13 +6,16 @@ ESPHOME ?= uvx --from 'esphome==$(ESPHOME_VERSION)' --with pillow esphome
 DEVICE_DOMAIN ?= iot.grigri
 FLASH_KUBE_CONTEXT ?= $(or $(KUBE_CONTEXT),grigri)
 
+# Extra files a target creates and with_secrets removes on exit (set per target).
+CLEANUP ?=
+
 # Shell prologue: write secrets.yaml (mode 0600) and always shred it on exit, Ctrl-C included.
 define with_secrets
 set -eu; umask 077; \
 if [ -z "$(DEVICE)" ] || [ ! -f "$(DEVICE).yaml" ]; then \
 	echo "Usage: make $@ DEVICE=<name> (needs ./<name>.yaml)"; exit 1; \
 fi; \
-trap 'shred -u secrets.yaml 2>/dev/null || rm -f secrets.yaml' EXIT; \
+trap 'shred -u secrets.yaml 2>/dev/null || rm -f secrets.yaml; rm -f $(CLEANUP)' EXIT; \
 trap 'exit 130' INT TERM HUP; \
 kubectl --context=$(FLASH_KUBE_CONTEXT) -n esphome get secret esphome-secrets \
 	-o jsonpath='{ .data.secrets\.yaml }' | base64 -d > secrets.yaml; \
@@ -67,6 +70,14 @@ device-logs:	## tail logs of one device over the API (non-interactive). E.g.: ma
 device-logs:
 	@$(with_secrets) \
 	$(ESPHOME) logs "$(DEVICE).yaml" --device "$(DEVICE).$(DEVICE_DOMAIN)"
+
+.PHONY: flash-device-migrate
+flash-device-migrate: CLEANUP := .ota-migrate.yaml
+flash-device-migrate:	## first OTA of a device whose running firmware cannot encrypt OTA yet (before 2026.9.0), see planning/esphome-security-hardening-todo.md. E.g.: make flash-device-migrate DEVICE=rack-controller
+	@$(with_secrets) \
+	printf '%s\n' 'packages:' '  device: !include $(DEVICE).yaml' '' 'ota:' '  - platform: esphome' \
+		'    password: !secret ota_password' '    encryption:' '      allow_plaintext_upload: true' > .ota-migrate.yaml; \
+	$(ESPHOME) run .ota-migrate.yaml --no-logs --device "$(DEVICE).$(DEVICE_DOMAIN)"
 
 .PHONY: local-dashboard
 local-dashboard:	## run ESPHome dashboard in local

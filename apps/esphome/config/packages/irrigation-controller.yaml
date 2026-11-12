@@ -18,7 +18,10 @@ logger:
 
 web_server:
   port: 80
+  # Firmware goes in over ota: esphome (encrypted); the plaintext /update endpoint stays off
+  ota: false
   auth:
+    type: digest
     username: !secret web_server_username
     password: !secret web_server_password
 
