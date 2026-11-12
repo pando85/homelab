@@ -59,6 +59,7 @@ MODEL_FILES = {
     "oye_kivi_next": MODELS_DIR / "oye_kivi_next/v5-oye-kivi-2026-11-08/oye_kivi_next_uncalibrated.tflite",
 }
 NAMES = tuple(MODEL_FILES)                                 # column order of every score array
+DEFAULT_MODEL_FILES = dict(MODEL_FILES)                    # kivi_collect installs other sets; this one stays the default
 SHORT = {"kivi": "v1", "oye_kivi": "v4", "oye_kivi_next": "v5"}
 SERVER_RAW = {"kivi": 0.98, "oye_kivi": 0.9437, "oye_kivi_next": 0.9754}   # raw point where the served file is 0.5
 THRESHOLDS = (0.9, 0.9437, 0.95, 0.9754, 0.98, 0.99)

@@ -393,19 +393,29 @@ def _worker_init(models):
     K._W["rt"] = K.load_runtime()
 
 
+def chunk_dir(models):
+    """Range files of one model set: `chunks` for the v1 / v4 / v5 set (the files before 2026-11-12), `chunks-<extra>` when
+    the live model adds a column (a range file holds one column per model, so two sets never share a directory)."""
+    import kivi_replay_mine as K
+    names = list(models)
+    base = list(K.DEFAULT_MODEL_FILES)
+    extra = [n for n in names if n not in base]
+    return ROOT / SCORES / ("chunks" if names == base else "chunks-" + "+".join(extra or names))
+
+
 def _score_day(day, part, models, jobs, out=print):
     """Score the day's pieces (resumable range files under scores/daily-replay/chunks); returns (pieces, ranges done now)."""
     import multiprocessing as mp
     import kivi_real_common as C
     import kivi_replay_mine as K
     pieces = [p for p in K.read_pieces(ROOT, SET) if p["part"] == part]
-    sdir = ROOT / SCORES
-    if not (sdir / "chunks").exists():
-        C.private_mkdir(sdir / "chunks", ROOT)
+    cdir = chunk_dir(models)
+    if not cdir.exists():
+        C.private_mkdir(cdir, ROOT)
     tasks = K.plan_tasks(pieces, 1200.0)
     src0 = {p["clip"]: p["src0"] for p in pieces}
-    todo = [(c, p, s0, s1, 60.0, str(sdir / "chunks" / K.chunk_name(c, s0, src0[c])), src0[c]) for c, p, s0, s1 in tasks
-            if not (sdir / "chunks" / K.chunk_name(c, s0, src0[c])).exists()]
+    todo = [(c, p, s0, s1, 60.0, str(cdir / K.chunk_name(c, s0, src0[c])), src0[c]) for c, p, s0, s1 in tasks
+            if not (cdir / K.chunk_name(c, s0, src0[c])).exists()]
     off = sum(1 for p in pieces if p["grid"] != "exact")
     out(f"replay {day}: {len(pieces)} piece(s), {sum(p['n'] for p in pieces) / 16000 / 3600:.2f} h, {len(todo)} range(s) to score"
         + (f"; {off} piece(s) without an exact server grid (replayed on their own grid)" if off else ""))
@@ -430,7 +440,7 @@ def cmd_replay(a, out=print):
     k_live, k_v1, k_v4 = names.index(live["id"]), names.index("kivi"), names.index("oye_kivi")
     part = f"d-{a.day.replace('-', '')}"
     pieces, scored = _score_day(a.day, part, models, a.jobs, out)
-    chunks = ROOT / SCORES / "chunks"
+    chunks = chunk_dir(models)
     by_clip = defaultdict(list)
     for t in K.plan_tasks(pieces, 1200.0):
         by_clip[t[0]].append(t)
@@ -579,7 +589,7 @@ def collect_day(day, a, live, runner=None, out=print):
     if not ok:
         return False, rec, "replay"
     rec["replay"] = result_of(so)
-    rec["queue_pending_for_day"] = {f"{g + 1}. {n}": c for (g, n), c in L.queue_counts(L.queue_items(ROOT, day=day)).items()}
+    rec["queue_pending_for_day"] = {f"{L.group_number(g)}. {n}": c for (g, n), c in L.queue_counts(L.queue_items(ROOT, day=day)).items()}
     rec["disk_free_gb"] = round(room_free_gb(), 1)
     return True, rec, ""
 
@@ -601,7 +611,7 @@ def cmd_status(a, out=print):
     items = L.queue_items(ROOT)
     out(f"labelling queue: {len(items)} item(s)")
     for (g, name), n in L.queue_counts(items).items():
-        out(f"  {g + 1}. {L.QUEUE_GROUPS[g]}: {name}: {n}")
+        out(f"  {L.group_number(g)}. {L.QUEUE_GROUPS[g]}: {name}: {n}")
     out(f"free disk {free_gb():.0f} GB on the work pool, {room_free_gb():.0f} GB where the room audio goes "
         f"(refuse to copy below {MIN_FREE_GB:.0f}); heavy jobs running: {len(heavy_jobs())}; "
         f"free VRAM {vram_free_gb():.1f} GB")
