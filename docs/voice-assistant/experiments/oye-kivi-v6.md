@@ -483,3 +483,39 @@ was live, its detections are cut out of the room audio). The verdicts stay as re
 false clips added for every model, `kivi_fair_fa.py`) is in kivi-models `docs/plan/2026-11-false-wake-plan.md` section 8:
 on the test days v5, v6 and v6.2 are not distinguishable on false wakes (3.94, 3.66, 3.66 per evening; paired p 0.85, 0.57).
 Stage 3 C3 should be computed the same way.
+
+## v6.3 deployed 2026-11-13 by owner override
+
+**Owner override of the pre-registered gate.** The pre-registered v6.3r rule (kivi-models
+`docs/plan/2026-11-false-wake-plan.md` section 11.2) chose arm r1 at raw 0.9665, and r1 fails its C5 criterion (synthetic
+"quiet" recall 6.7 points below v6; section 11.4). On 2026-11-13 the owner released **arm r3** instead and made it the
+household wake word: "let's release it as v6.3 and change the voice assistant to v6.3". r1 was never released (its local
+package was withdrawn). Gate: **not run, owner override**; the odd-day gate from 2026-11-13 continues offline as information
+only (v6.3 against v6, configs `v6p3r/gate/gate_*_v63.json` under `$KIVI_HOME`; v6 is no longer live on those days, so live
+clips are v6.3's own).
+
+- Model: arm r3 of v6.3r: v5 warm start, household negative windows (owner and trusted autolabel labels) weighted x2 per
+  step and in the loss, 2026-11-12 live clips and room windows, synthetic "oye ..." decoys. Raw threshold **0.9450**, r3's
+  recall-matched value (2026-11-10 selection: c3-b 1, c3-a 1; `v6p3r/selection.json`).
+- Offline benchmark (plan section 12, server-grid replay, test days 2026-11-09 and -11; not a paired test): calls 38/42
+  (v6 37/42); false fires 13/854 (v6 21; the label-queue windows were picked by v5/v6-family scores, which favours the
+  v6.3r arms); c3-b evening 10/330 (v6 12); c3-b live false clips 10/24 (v6 9). Synthetic C5 clean / TV 10 dB / quiet
+  58.3 / 39.9 / 50.4 % (v6 59.8 / 39.8 / 53.5 %), within 5 points of v6. Held-out decoy clips fired 12 of 787 (v6 16).
+- Release `v6-p3-oye-kivi-2026-11-13` (kivi-models commit `1170c6f1be9c`, annotated tag of the same name), model id
+  `oye_kivi_ctx3`, calibrated sha256 `25238f85c1ded3390a395a4ae8885c258b57d7baca04339007bedac50a90cad8`, uncalibrated
+  `66b6e1ae72c0831b58df8540216fba2841576dcfac9213a822662ba48732ced1` (byte-identical to the arm's file). Calibration:
+  0 of 9,378 steps disagree (pyopen-wakeword 1.1.0, synthetic clips). Image
+  `git.grigri.cloud/agil/kivi-models:v6-p3-oye-kivi-2026-11-13@sha256:c7eff8d5985a` (CI run 9; anonymous pull refused). It
+  serves `kivi`, `oye_kivi`, `oye_kivi_next`, `oye_kivi_ctx`, `oye_kivi_ctx2` and `oye_kivi_ctx3`, so every older model stays
+  available for rollback without an image change.
+- Homelab pin commit `d0753dfdd`; `wake_release.py deploy` completed (every `/custom/*.tflite` sha256 equals `models.lock`;
+  Wyoming ids include `oye_kivi_ctx3`). Only the openwakeword pod rolled; Home Assistant was not restarted.
+- `wake_release.py promote --owner-override` at 23:18:18 UTC on 2026-11-12 (00:18 on 2026-11-13 Madrid): "Kiwi" (preferred)
+  `wake_word_id` `oye_kivi_ctx` -> `oye_kivi_ctx3`, nothing else changed; no per-satellite override. The first two attempts
+  were refused because Home Assistant's `wake_word/info` did not list `oye_kivi_ctx3` yet (seconds after the pod swap); the
+  third went through. Run checks OK on c3-a and c3-b, and a read-only re-check two minutes later was OK on both (newest run on
+  "Kiwi" with `wake_word-start`, no error).
+- Live-wake era: `kivi_live_wakes.py` ERAS has `oye_kivi_ctx3` from 2026-11-12T23:18:18Z; `kivi_autolabel.py` MODEL_SPECS,
+  `kivi_bench.py` (v6.3 replaces the identical r3 arm row), `kivi_usage.py` and `kivi_false_wake_audit.py` know v6.3.
+- **Rollback:** `python3 wake_release.py demote --version v6-p3-oye-kivi-2026-11-13` (from `scripts/voice-assistant/wakeword/`)
+  puts "Kiwi" back on `oye_kivi_ctx` (v6).

@@ -141,7 +141,9 @@ def test_eras():
         assert L.model_of(dev, t("2026-11-12T07:40:55Z")) == "oye_kivi_ctx2"
         assert L.model_of(dev, t("2026-11-12T14:44:04Z")) == "oye_kivi_ctx2"
         assert L.model_of(dev, t("2026-11-12T14:44:05Z")) == "oye_kivi_ctx"      # owner switched back to v6
-        assert L.model_of(dev, t("2026-11-20T00:00:00Z")) == "oye_kivi_ctx"
+        assert L.model_of(dev, t("2026-11-12T23:18:17Z")) == "oye_kivi_ctx"
+        assert L.model_of(dev, t("2026-11-12T23:18:18Z")) == "oye_kivi_ctx3"     # v6.3, owner override
+        assert L.model_of(dev, t("2026-11-20T00:00:00Z")) == "oye_kivi_ctx3"
 
 
 def test_fix_models_changes_only_the_model_column(tmp_path):

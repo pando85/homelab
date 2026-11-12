@@ -46,7 +46,7 @@ KH = C.kivi_home()
 MISS_S = 10.0              # an attempt with a wake-triggered live run this close on the same TV was caught
 DEDUP_S = 3.0              # attempt windows of one TV this close are one attempt (as section 8.1 of the plan)
 STEP_S = 30.0              # exposure resolution (era edges are known to the second; error <= 30 s per edge)
-MODEL_NAMES = {"oye_kivi": "v4", "oye_kivi_next": "v5", "oye_kivi_ctx": "v6", "oye_kivi_ctx2": "v6.2"}
+MODEL_NAMES = {"oye_kivi": "v4", "oye_kivi_next": "v5", "oye_kivi_ctx": "v6", "oye_kivi_ctx2": "v6.2", "oye_kivi_ctx3": "v6.3"}
 SPEAKERS = ("spk01", "spk02", "other", "unknown")
 OWNER = ("owner", "owner-button")
 SCAN_INDEXES = ("v6/room_emb/index.json", "labelq/room_emb/index.json")

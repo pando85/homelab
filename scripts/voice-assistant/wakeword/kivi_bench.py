@@ -6,7 +6,7 @@ model, an arm or a threshold. Counts and scores only; no audio is played, printe
     kivi_bench.py run [--jobs 7] [--model NAME=FILE_STEM:RAW ...]   # embed + score + report
     kivi_bench.py embed | score | report                             # the steps one by one
 
-Models: v5, v6, v6.2 (release files), the v6.3 arms p3a / p3b / p3c (`v6p3/runs`, at their recall-matched raw value of
+Models: v5, v6, v6.2, v6.3 (release files; v6.3 is the v6.3r arm r3 file, so that arm is listed once, as v6.3), the v6.3 arms p3a / p3b / p3c (`v6p3/runs`, at their recall-matched raw value of
 plan 9.5) and the v6.3r arms (`v6p3r/runs`, from `v6p3r/selection.json` when it exists: the selected threshold of an
 eligible arm, else its recall-matched value), each at its own raw threshold, through the server's runtime
 (pyopen-wakeword TFLite) on the server grid.
@@ -76,6 +76,9 @@ BASE_MODELS = {
     "v6": ("releases/v6-oye-kivi-2026-11-11/model/oye_kivi_ctx_uncalibrated", 0.9595, {"<=11-08": "T", "11-10": "T+S"}),
     "v6.2": ("releases/v6-p2-oye-kivi-2026-11-12/model/oye_kivi_ctx2_uncalibrated", 0.9825,
              {"<=11-08": "T", "11-10": "T+S"}),
+    # v6.3 = v6.3r arm r3 (same file), released and live from 2026-11-12T23:18:18Z by owner override
+    "v6.3": ("releases/v6-p3-oye-kivi-2026-11-13/model/oye_kivi_ctx3_uncalibrated", 0.945,
+             {"<=11-08": "T", "11-10": "S", "11-12": "T"}),
 }
 P3_SEEN = {"<=11-08": "T", "11-10": "T+S"}          # v6p3: room 11-05/-06/-08, live and windows 11-08/-10; selection 11-10
 P3R_SEEN = {"<=11-08": "T", "11-10": "S", "11-12": "T"}   # v6p3r: 11-05 to -08 and 11-12; selection 11-10
@@ -160,6 +163,11 @@ def models(extra=()):
     out = {n: m for n, m in out.items() if m["tflite"].exists()}
     for m in out.values():
         m["key"] = f"{file_sha(m['tflite'])}@{m['raw']:.4f}"
+    base = {m["key"]: n for n, m in out.items() if n in BASE_MODELS}
+    for n in [n for n in out if n not in BASE_MODELS and out[n]["key"] in base]:   # a released arm: one row, the release
+        b = out[base[out[n]["key"]]]
+        b["note"] = f"= {n}" + (f" ({out[n]['note']})" if out[n].get("note") else "")
+        del out[n]
     return out
 
 

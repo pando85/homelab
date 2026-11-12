@@ -91,6 +91,7 @@ MODEL_SPECS = {
     "oye_kivi_next": ("releases/v5-oye-kivi-2026-11-08/model/oye_kivi_next_uncalibrated.tflite", 0.9754),
     "oye_kivi_ctx": ("releases/v6-oye-kivi-2026-11-11/model/oye_kivi_ctx_uncalibrated.tflite", 0.9595),
     "oye_kivi_ctx2": ("releases/v6-p2-oye-kivi-2026-11-12/model/oye_kivi_ctx2_uncalibrated.tflite", 0.9825),
+    "oye_kivi_ctx3": ("releases/v6-p3-oye-kivi-2026-11-13/model/oye_kivi_ctx3_uncalibrated.tflite", 0.945),
 }
 
 

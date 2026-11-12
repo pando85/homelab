@@ -110,8 +110,10 @@ TEST_SHARE = 0.30
 # Both TVs use the household pipeline "Kiwi".
 V6_PROMOTE, V6_ROLLBACK, V62_PROMOTE = "2026-11-11T22:11:00Z", "2026-11-11T22:40:00Z", "2026-11-12T07:40:55Z"
 V6_REPROMOTE = "2026-11-12T14:44:05Z"
+V63_PROMOTE = "2026-11-12T23:18:18Z"     # v6.3 (arm r3 of v6.3r), owner override
 ERAS = (
-    ("oye_kivi_ctx", V6_REPROMOTE, None, None),
+    ("oye_kivi_ctx3", V63_PROMOTE, None, None),
+    ("oye_kivi_ctx", V6_REPROMOTE, V63_PROMOTE, None),
     ("oye_kivi_ctx2", V62_PROMOTE, V6_REPROMOTE, None),
     ("oye_kivi_ctx", V6_PROMOTE, V6_ROLLBACK, None),
     ("oye_kivi_next", "2026-11-08T11:56:45Z", V62_PROMOTE, ("c3-a",)),

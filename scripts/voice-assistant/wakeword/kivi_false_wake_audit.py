@@ -49,7 +49,7 @@ import kivi_real_common as C  # noqa: E402
 TZ = ZoneInfo(L.TZ)
 UTC = timezone.utc
 V6_LIVE = (L.V6_PROMOTE, L.V6_ROLLBACK)                          # promote 22:11Z, owner rollback about 22:40Z
-MODEL_NAMES = {"oye_kivi": "v4", "oye_kivi_next": "v5", "oye_kivi_ctx": "v6", "oye_kivi_ctx2": "v6.2"}
+MODEL_NAMES = {"oye_kivi": "v4", "oye_kivi_next": "v5", "oye_kivi_ctx": "v6", "oye_kivi_ctx2": "v6.2", "oye_kivi_ctx3": "v6.3"}
 MODELS = ("v4", "v5", "v6", "v6.2")
 EVENING_H = (18, 24)
 CLASSES = ("true", "false", "unclear", "not-a-wake")          # the owner's and the autolabel's live labels
