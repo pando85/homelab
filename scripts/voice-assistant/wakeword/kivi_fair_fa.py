@@ -70,7 +70,8 @@ SINCE = "2026-11-08T13:30:00Z"                  # the room copy starts here (v5-
 ROOM_RUNS = (("v5era", "negatives-v5era:*", "2026-11-08,2026-11-09,2026-11-10"),
              ("d1111", "negatives-daily:d-20261111", "2026-11-11"))
 WINDOW_TABLES = ("daily_false_wakes.csv", "daily_miss_candidates.csv", "c3_events.csv", "c3_events_r2.csv",
-                 "miss_candidates.csv")
+                 "miss_candidates.csv", "labelq_v6p3r.csv")   # the last: kivi_label_queue.py (owner + trusted auto labels;
+                                                              # an `attempt` there is always the owner's)
 MATCH_S = 3.0                   # a detection within this of a labelled window's time is that window
 MERGE_S = 2.0                   # detections of different models this close (same TV) are one event
 RECALL_WIN = (-3.0, 1.0)        # a true live clip is detected when the model crosses in [tail end - 3 s, tail end + 1 s]

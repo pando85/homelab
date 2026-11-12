@@ -41,6 +41,9 @@ window.wav`) around replay peaks of the v5-era room audio where the wake word mo
 the speaker. The live-wake review above is unchanged.
 
 Labelling queue (`queue`): one command that walks every pending item of every review table, scores hidden, in this order:
+(plan) when `<dataset>/labelq/plan.csv` exists (`kivi_label_queue.py build`), its pending items first, in plan order (live
+clips and windows; an item is pending until it carries an owner label; no label or score is shown), and they are not
+offered again in the groups below;
 (0) the blind autolabel validation sample (`live/autolabel_validation.csv`, built by `kivi_false_wake_audit.py sample`:
 about 40 live clips, the auto label never shown; the label is t true / f false + cause o other speech, m tv / media,
 n noise / n not a wake / u unclear, plus the speaker; it is carried into `live_wakes.csv` as an owner label, the auto
@@ -596,15 +599,21 @@ def miss_table_path(a):
 
 
 def read_miss_table(path):
+    """Rows of a window table; columns beyond MISS_FIELDS (label_source, split, ... of kivi_label_queue.py) are kept."""
     p = Path(path)
     if not p.exists():
         return []
     with open(p, newline="", encoding="utf-8") as f:
-        return [{k: (row.get(k) or "") for k in MISS_FIELDS} for row in csv.DictReader(f)]
+        rd = csv.DictReader(f)
+        keys = MISS_FIELDS + tuple(k for k in (rd.fieldnames or ()) if k not in MISS_FIELDS)
+        return [{k: (row.get(k) or "") for k in keys} for row in rd]
 
 
 def write_miss_table(path, rows):
-    write_csv_atomic(path, MISS_FIELDS, rows)
+    extra = []
+    for r in rows:
+        extra += [k for k in r if k not in MISS_FIELDS and k not in extra]
+    write_csv_atomic(path, MISS_FIELDS + tuple(extra), rows)
 
 
 SPEAKER_KEYS = {"1": "spk01", "2": "spk02", "3": "spk-other", "4": "unknown"}
@@ -617,6 +626,10 @@ def save_miss_label(table_path, item_id, label, speaker):
     for r in fresh:
         if r["id"] == item_id:
             r["label"], r["speaker"] = label, speaker
+            if "label_source" in r:                  # tables with an autolabel (kivi_label_queue.py): mark the owner
+                r["label_source"], r["label_conf"] = "owner", "1.00"
+                if "speaker_conf" in r:
+                    r["speaker_conf"] = "1.00" if speaker else ""
     write_miss_table(table_path, fresh)
 
 
@@ -748,8 +761,12 @@ VALIDATION_KEY = "autolabel_validation_key.csv"    # in live/; the frozen auto l
 VALIDATION_FIELDS = ("sample_id", "run_id", "device", "utc", "label", "cause", "speaker")
 CAUSE_KEYS = {"o": "other-speech", "m": "tv-media", "n": "noise"}
 QUEUE_GROUPS = ("autolabel validation sample (blind)", "replay false wakes of the live model", "uncertain live clips",
-                "missed-wake candidates")
-G_VALIDATION, G_FALSE_WAKES, G_UNCERTAIN, G_MISSES = range(4)
+                "missed-wake candidates", "labelling plan (prioritised, kivi_label_queue.py)")
+G_VALIDATION, G_FALSE_WAKES, G_UNCERTAIN, G_MISSES, G_PLAN = range(5)
+GROUP_ORDER = (G_PLAN, G_VALIDATION, G_FALSE_WAKES, G_UNCERTAIN, G_MISSES)   # the plan, when one exists, comes first
+PLAN = Path("labelq") / "plan.csv"                 # under the dataset root; written by kivi_label_queue.py build
+PLAN_FIELDS = ("order", "kind", "table", "ref", "tier", "device", "utc", "split", "evening")
+OWNER_SOURCES = ("owner", "owner-button")
 
 
 def window_tables(root):
@@ -804,31 +821,81 @@ def queue_items(root, day=None, device=None):
     pending_val = {r["run_id"] for r in val_rows if not r["label"]}
     items += [{"group": G_VALIDATION, "kind": "validation", "table": val_path, "row": r}
               for r in sorted(val_rows, key=lambda r: r["sample_id"]) if not r["label"] and keep(r)]
+    plan_items, planned = plan_queue_items(root, keep, pending_val)
+    items += plan_items
     for p in window_tables(root):
         group = G_FALSE_WAKES if p.name == FALSE_WAKE_TABLE else G_MISSES
-        rows = [r for r in read_miss_table(p) if not r["label"] and keep(r)]
+        rows = [r for r in read_miss_table(p) if not r["label"] and keep(r) and ("window", p.name, r["id"]) not in planned]
         rows.sort(key=(lambda r: (r["utc"], r["device"])) if group == G_FALSE_WAKES
                   else (lambda r: (-float(r["rank"] or 0), r["id"])))
         items += [{"group": group, "kind": "window", "table": p, "row": r} for r in rows]
     live_table = root / "live" / "live_wakes.csv"
     items += [{"group": G_UNCERTAIN, "kind": "live", "table": live_table, "row": r}
               for r in review_order(read_table(live_table), only_uncertain=True)
-              if keep(r) and r["run_id"] not in pending_val]
-    items.sort(key=lambda it: it["group"])           # stable: the order inside a group is kept
+              if keep(r) and r["run_id"] not in pending_val and ("live", "live_wakes.csv", r["run_id"]) not in planned]
+    items.sort(key=lambda it: GROUP_ORDER.index(it["group"]))      # stable: the order inside a group is kept
     return items
+
+
+def plan_pending(root, p, win_rows, live_rows):
+    """Whether a plan item still waits for the owner: its row exists and carries no owner label."""
+    if p["kind"] == "live":
+        r = live_rows.get(p["ref"])
+        return r is not None and r["label_source"] not in OWNER_SOURCES
+    r = win_rows.get(p["ref"])
+    if r is None:
+        return False
+    return r.get("label_source", "") not in OWNER_SOURCES if "label_source" in r else not r["label"]
+
+
+def plan_queue_items(root, keep, pending_val):
+    """The pending items of the labelling plan (`<dataset>/labelq/plan.csv`), in plan order, and the set of every planned
+    (kind, table, ref) so the other groups do not offer them twice. A clip waiting in the blind validation sample is left
+    to that group. The plan never shows a label or a score (the auto labels are in a separate key file)."""
+    path = Path(root) / PLAN
+    if not path.exists():
+        return [], set()
+    with open(path, newline="", encoding="utf-8") as f:
+        plan = [{k: (r.get(k) or "") for k in PLAN_FIELDS} for r in csv.DictReader(f)]
+    plan.sort(key=lambda p: int(p["order"] or 0))
+    planned = {("live" if p["kind"] == "live" else "window", p["table"], p["ref"]) for p in plan}
+    tables = {}
+    live_table = Path(root) / "live" / "live_wakes.csv"
+    live_rows = {r["run_id"]: r for r in read_table(live_table)}
+    items = []
+    for p in plan:
+        if p["kind"] == "live":
+            r = live_rows.get(p["ref"])
+            if r is None or p["ref"] in pending_val or not keep(r) or not plan_pending(root, p, {}, live_rows):
+                continue
+            items.append({"group": G_PLAN, "kind": "live", "table": live_table, "row": r, "tier": p["tier"]})
+        else:
+            tp = Path(root) / "live-misses" / p["table"]
+            if tp not in tables:
+                tables[tp] = {r["id"]: r for r in read_miss_table(tp)}
+            r = tables[tp].get(p["ref"])
+            if r is None or not keep(r) or not plan_pending(root, p, tables[tp], {}):
+                continue
+            items.append({"group": G_PLAN, "kind": "window", "table": tp, "row": r, "tier": p["tier"]})
+    return items, planned
+
+
+def group_number(g):
+    """The number printed for a group: 0 for the plan (it comes first), 1-4 for the others as before."""
+    return 0 if g == G_PLAN else g + 1
 
 
 def queue_counts(items):
     """{(group, table name): pending}, in queue order."""
     cnt = Counter((it["group"], it["table"].name) for it in items)
-    return dict(sorted(cnt.items()))
+    return dict(sorted(cnt.items(), key=lambda kv: (GROUP_ORDER.index(kv[0][0]), kv[0][1])))
 
 
 def print_queue_counts(items, out, head):
     cnt = queue_counts(items)
     out(f"{head}: {len(items)} item(s)" + ("" if cnt else " (queue empty)"))
     for (g, name), n in cnt.items():
-        out(f"  {g + 1}. {QUEUE_GROUPS[g]}: {name}: {n}")
+        out(f"  {group_number(g)}. {QUEUE_GROUPS[g]}: {name}: {n}")
 
 
 def cmd_queue(a, player=None, input_fn=input, out=print, clock=None):
@@ -856,11 +923,13 @@ def cmd_queue(a, player=None, input_fn=input, out=print, clock=None):
                     "oye Kivi attempt, f = false wake (then why), n = not a wake / button, u = unclear)")
                 res = review_validation_item(r, live, play, input_fn)
             elif it["kind"] == "live":
-                out(f"\n[{i}/{len(items)}] live clip: {r['device']} {r['utc']}  wake {r['wake_len']} s, stt {r['stt_len']} s "
+                tag = f"plan {it['tier']} " if it["group"] == G_PLAN else ""
+                out(f"\n[{i}/{len(items)}] {tag}live clip: {r['device']} {r['utc']}  wake {r['wake_len']} s, stt {r['stt_len']} s "
                     "(t = true wake, f = false wake, n = not a wake / button, u = unclear)")
                 res = review_live_item(r, live, play, input_fn)
             else:
-                out(f"\n[{i}/{len(items)}] {QUEUE_GROUPS[it['group']]}: {r['id']} {r['device']} {r['utc']} "
+                name = f"plan {it['tier']}" if it["group"] == G_PLAN else QUEUE_GROUPS[it["group"]]
+                out(f"\n[{i}/{len(items)}] {name}: {r['id']} {r['device']} {r['utc']} "
                     "(6 s window; a = attempt, o = other speech, t = tv / media, n = noise, u = unclear)")
                 res = review_window_item(r, it["table"].parent, play, input_fn)
             if res == "q":
