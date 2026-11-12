@@ -36,7 +36,6 @@ import json
 import os
 import sys
 from collections import Counter, defaultdict
-from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
