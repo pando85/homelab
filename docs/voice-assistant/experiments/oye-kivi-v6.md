@@ -406,3 +406,11 @@ false wakes, conservative), and 8 fall in the 2026-11-09 evening on c3-b. The th
 (2 events each) but did not transfer to other evenings: 2.0 device-evenings of selection audio again proved too few,
 and the evening TV content of 2026-11-09 behaves differently. Labels of the 10 new events would be needed before reading
 more into it; the 2026-11-12 / -13 stages remain the honest test.
+
+### Labelling round 2 (2026-11-12, about 02:30 Madrid)
+
+`datasets/real/live-misses/c3_events_r2.csv`: **17 windows**, blind as round 1: the 10 v6.2 events on test2-v5era that
+are not within +-2 s of a round-1 window, and the union of the v6 and v6.2 events on the 2026-11-11 evening copy
+(6 shared, 1 v6.2 only); c3-a 5, c3-b 12. Mapping `v6/all/c3_events_r2_mapping.json`. It is in the owner's queue
+(`kivi_live_wakes.py queue` reads every `live-misses/*.csv`), or alone: `kivi_live_wakes.py review --table c3_events_r2.csv`.
+The same relabel rule applies (attempt = not a false wake, every other label stays one).
