@@ -53,6 +53,17 @@
       ],
       versioningTemplate: '{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}',
     },
+    {
+      customType: 'regex',
+      description: 'Makefile variables pinned with a renovate hint on the line above',
+      managerFilePatterns: [
+        '/(^|\\/)Makefile$/',
+      ],
+      matchStrings: [
+        '#\\srenovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)( versioning=(?<versioning>\\S+))?\\n[A-Za-z_]+\\s*\\??=\\s*(?<currentValue>\\S+)\\n',
+      ],
+      versioningTemplate: '{{#if versioning}}{{{versioning}}}{{else}}docker{{/if}}',
+    },
   ],
   packageRules: [
     {
@@ -317,6 +328,22 @@
         'renovate/forgejo-runner',
       ],
       commitMessagePrefix: 'ci-runners: ',
+    },
+    {
+      description: 'Group the ESPHome dashboard image and the Makefile CLI pin in one PR',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'ghcr.io/esphome/esphome',
+      ],
+      groupName: 'esphome',
+      groupSlug: 'esphome',
+      additionalBranchPrefix: 'esphome-',
+      addLabels: [
+        'renovate/esphome',
+      ],
+      commitMessagePrefix: 'esphome: ',
     },
     {
       description: 'Group Immich updates in one PR',
