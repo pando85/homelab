@@ -118,7 +118,7 @@
 - alert: BatteryGridExport
   # The Shelly's own export counter integrates sub-second, so it catches spikes the 1-minute scrape
   # of the power sensor misses. max by (entity) collapses the duplicate series the HA exporter
-  # leaves after a pod IP change. Expected at discharge_margin_w 100: about 1 Wh/day.
+  # leaves after a pod IP change. Brief export transients are expected at a small discharge_margin_w.
   expr: |
     increase(
       (max by (entity) (hass_sensor_energy_kwh{entity="sensor.shellyem_main_channel_1_energy_returned"}))[24h:1m]

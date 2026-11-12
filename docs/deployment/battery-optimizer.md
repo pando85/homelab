@@ -632,7 +632,7 @@ Optimizer-side knobs live in the `actuation:` block of the base `/app/config/ser
 |---|---|---|
 | `import_cap_w` | 4500 | Upper bound of the PD grid-import target (the meter trips at 5 kW) |
 | `import_guard_margin_w` | 200 | Margin the guard keeps below the import cap |
-| `discharge_margin_w` | 100 | Import kept while discharging, never export. 100 W since 2026-11-05 (owner decision, optimizer 0.14.0, with `planning.discharge_margin_bound: true`). Steady-state error is about +-40 W (the PD deadband); export comes from 1-4 s transients when a large load stops while the battery is cap-pinned. 50 W gave brief exports |
+| `discharge_margin_w` | 50 | Import kept while discharging, never export. 50 W again from 2026-11-12 (owner decision, set in `files/service-overrides.yaml`; the image base is 100), after 100 W since 2026-11-05 (optimizer 0.14.0, with `planning.discharge_margin_bound: true`) and 200 W before. Steady-state error is about +-40 W (the PD deadband); export comes from 1-4 s transients when a large load stops while the battery is cap-pinned. 50 W gave brief exports (-10..-94 W) on 2026-11-03. Roll back to 100 by removing the override |
 | `min_discharge_cap_w` | 100 | Smallest per-slot discharge cap written |
 | `max_discharge_cap_w` | 2500 | Largest per-slot discharge cap written |
 | `neutral_pd_target_w` | 0 | PD grid target in a planned idle |

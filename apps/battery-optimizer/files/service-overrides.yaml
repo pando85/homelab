@@ -18,6 +18,10 @@ planning:
     mode: shadow
 
 actuation:
+  # Import kept while discharging (base default 100). 50 W again from 2026-11-12 (owner decision),
+  # after 100 W since 2026-11-05 and 200 W before; 50 W gave brief exports (-10..-94 W) on
+  # 2026-11-03. Roll back by deleting this key (back to the base 100) or setting 100.
+  discharge_margin_w: 50
   load_following:
     # Load-following discharge, capped to this installation's inverter limit (base: false / null).
     enabled: true
