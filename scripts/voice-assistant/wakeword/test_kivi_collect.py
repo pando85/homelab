@@ -263,3 +263,80 @@ def test_dry_run_only_plans_the_room_copy(env):
 def test_scope_wrapper_caps_resources():
     assert Q.SCOPE[:4] == ["systemd-run", "--user", "--scope", "-q"] and "MemoryMax=12G" in Q.SCOPE
     assert "CPUQuota=800%" in Q.SCOPE and Q.SCOPE[-3:] == ["nice", "-n", "10"]
+
+
+# ---------------------------------------------------------------------------------------------
+# room audio location and prune
+# ---------------------------------------------------------------------------------------------
+
+
+def make_set(root, name, pieces, part="x"):
+    """pieces: [(clip_name, start_utc, bytes, split)] under root/name, with a manifest."""
+    d = root / name
+    d.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for clip, start, n, split in pieces:
+        (d / clip).write_bytes(b"\0" * n)
+        rows.append({"clip": f"{name}/{clip}", "start_utc": start, "split": split, "device": "c3-a"})
+    (d / "manifest.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+
+
+def test_room_dir_links_to_room_dir_env_and_guard_uses_that_pool(env, monkeypatch, tmp_path):
+    seen = []
+    monkeypatch.setattr(Q, "free_gb", lambda path=None: seen.append(Path(path)) or 123.0)
+    monkeypatch.setenv("KIVI_ROOM_DIR", str(tmp_path / "pool2"))
+    p = Q.room_dir()
+    assert p == Q.ROOT / "negatives-daily" and p.is_symlink() and p.resolve() == (tmp_path / "pool2" / "negatives-daily").resolve()
+    assert Q.room_free_gb() == 123.0 and seen[-1] == p                     # asked for the path that follows the link
+    # a refusal comes from the receiving pool, not from the work pool
+    monkeypatch.setattr(Q, "free_gb", lambda path=None: 10.0 if Path(path) == p else 500.0)
+    r = FakeRunner()
+    assert Q.cmd_run(args(day="2026-11-11"), runner=r, out=lambda *_: None, now=NOW) == 5 and r.calls == []
+
+
+def test_prune_lists_first_and_deletes_only_with_yes_and_only_eligible_pieces(env, monkeypatch):
+    from datetime import date as D
+    root = Q.ROOT
+    make_set(root, "negatives-daily", [("old-even.wav", "2026-12-02T10:00:00.000Z", 1000, "d-20261202"),     # old
+                                       ("old-odd.wav", "2026-12-03T10:00:00.000Z", 2000, "d-20261203"),
+                                       ("fresh.wav", "2027-01-10T10:00:00.000Z", 4000, "d-20270110"),
+                                       ("prot-day.wav", "2026-11-13T10:00:00.000Z", 8000, "d-20261113"),
+                                       ("open-item.wav", "2026-12-04T10:00:00.000Z", 16000, "d-20261204")])
+    make_set(root, "negatives-v5era", [("test2.wav", "2026-11-09T10:00:00.000Z", 32000, "test2-v5era"),
+                                       ("mine.wav", "2026-11-10T10:00:00.000Z", 64000, "mine-v5era")])
+    L = __import__("kivi_live_wakes")
+    (root / "live-misses").mkdir(exist_ok=True)
+    L.write_miss_table(root / "live-misses" / "daily_false_wakes.csv",
+                       [window(1, "20261204T100000.000Z")])                    # an open item on 2026-12-04
+    today = D(2027, 2, 1)                                                       # cutoff 2026-12-18
+    out = []
+    ns = Namespace(older_than_days=45, yes=False)
+    assert Q.cmd_prune(ns, out=out.append, today=today) == 0
+    assert (root / "negatives-daily" / "old-even.wav").exists()                 # list only
+    assert any("2026-12-02 (mine): 1 piece(s)" in x for x in out) and any("2026-12-03 (test): 1 piece(s)" in x for x in out)
+    assert any(x.startswith("would delete 3 piece(s)") for x in out)            # old-even, old-odd, mine.wav
+    assert any("protected day 1" in x and "protected part 1" in x and "open review item that day 1" in x for x in out)
+    ns.yes = True
+    Q.cmd_prune(ns, out=lambda *_: None, today=today)
+    left = sorted(p.name for p in (root / "negatives-daily").iterdir())
+    assert left == ["fresh.wav", "manifest.jsonl", "open-item.wav", "prot-day.wav"]
+    assert (root / "negatives-v5era" / "test2.wav").exists() and not (root / "negatives-v5era" / "mine.wav").exists()
+    log = [json.loads(x) for x in (Q.DAILY / "pruned.jsonl").read_text().splitlines()]
+    assert sorted(x["clip"] for x in log) == ["negatives-daily/old-even.wav", "negatives-daily/old-odd.wav", "negatives-v5era/mine.wav"]
+    assert (root / "live-misses" / "daily_false_wakes.csv").exists()            # tables are never touched
+    again = []
+    Q.cmd_prune(ns, out=again.append, today=today)                              # idempotent
+    assert any(x.startswith("would delete 0 piece(s)") for x in again)
+    assert json.loads((Q.DAILY / "protect.json").read_text())["days"] == ["2026-11-12", "2026-11-13"]
+
+
+def test_prune_never_follows_a_link_out_of_the_set(env, tmp_path):
+    from datetime import date as D
+    root = Q.ROOT
+    outside = tmp_path / "keep.wav"
+    outside.write_bytes(b"\0" * 10)
+    make_set(root, "negatives-daily", [("a.wav", "2026-12-02T10:00:00.000Z", 100, "d-20261202")])
+    (root / "negatives-daily" / "a.wav").unlink()
+    (root / "negatives-daily" / "a.wav").symlink_to(outside)
+    Q.cmd_prune(Namespace(older_than_days=45, yes=True), out=lambda *_: None, today=D(2027, 2, 1))
+    assert outside.exists()

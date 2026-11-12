@@ -6,6 +6,8 @@
     kivi_collect.py run --day 2026-11-11 [--redo]  # one day (idempotent; --redo runs a processed day again)
     kivi_collect.py run --dry-run                # plan only: pending days, what the room copy would take, disk
     kivi_collect.py run --from 2026-11-12        # first run only: the first day of the loop (default: yesterday)
+    kivi_collect.py prune [--older-than-days 45] # LIST the raw room audio that is old enough to delete (nothing is deleted)
+    kivi_collect.py prune --yes                  # delete exactly that list (owner decision, never automatic)
 
 There is no timer: nothing runs unless the owner (or an agent the owner asked, see the kivi-wakeword-loop skill) starts it.
 
@@ -21,6 +23,13 @@ Per day D (Madrid calendar day; odd day of the month = TEST, even = train / sele
   4. counts only: `daily/YYYY-MM-DD.json` and one row in `daily/summary.md`.
 A day is marked done in `daily/state.json` only when every step succeeded. A day collected less than 6 h after its midnight
 is marked `early` and runs again later (a recording file that spans midnight is copied once it is closed).
+
+Where the room audio lives: the raw room-audio sets (`negatives*`) are symlinks in `datasets/real/` to `/datasets/kivi-room-audio/`
+(the second ZFS pool, owner decision 2026-11-12); new daily copies land there through the `negatives-daily` symlink (or
+`$KIVI_ROOM_DIR`, which `run` links to when `negatives-daily` does not exist). The 50 GB guard checks the pool that receives
+the copy. `prune` lists room-audio pieces older than 45 days (Madrid date of the piece) and deletes only with `--yes`;
+it never touches labels, scores, window clips, or pieces of a protected day or part (`daily/protect.json`, seeded with
+2026-11-12 and 2026-11-13 until the v6.1 stage 3 has run, and the part `test2-v5era`) or of a day with an open review item.
 
 Safety: one lock (`daily/collect.lock`); at most --max-heavy (default 2) heavy jobs in total, this one included (v6_replay,
 kivi_replay_mine, training, autolabel, another collect): it waits up to --wait-min minutes, else exits 4; refuses to copy
@@ -173,6 +182,25 @@ def heavy_jobs(ps_lines=None, own_pid=None):
 
 def free_gb(path=None):
     return shutil.disk_usage(str(path or WORK)).free / 1e9
+
+
+def room_dir():
+    """Where the daily room audio is written: `datasets/real/negatives-daily` (a symlink to /datasets/kivi-room-audio).
+    With $KIVI_ROOM_DIR and no such path yet, link it to `$KIVI_ROOM_DIR/negatives-daily`."""
+    p = ROOT / SET
+    env = os.environ.get("KIVI_ROOM_DIR")
+    if env and not os.path.lexists(p):
+        target = Path(env).expanduser() / SET
+        target.mkdir(mode=0o700, parents=True, exist_ok=True)
+        ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.symlink(target, p)
+    return p
+
+
+def room_free_gb():
+    """Free GB of the pool that receives the room copy (the target of the `negatives-daily` link, else of its parent)."""
+    p = room_dir()
+    return free_gb(p if p.exists() else p.parent)
 
 
 def vram_free_gb():
@@ -534,7 +562,7 @@ def collect_day(day, a, live, runner=None, out=print):
     if not ok:
         return False, rec, "split"
     rec["live_wakes"] = result_of(so).get("live", {})
-    if free_gb() < MIN_FREE_GB:
+    if room_free_gb() < MIN_FREE_GB:
         rec["steps"]["room copy"] = "refused(disk)"
         return False, rec, f"room copy (less than {MIN_FREE_GB:.0f} GB free)"
     ok, so = step("room copy", py("kivi_negatives.py", "--local-date", day, "--part", part, "--out-name", SET, "--hours", "1000",
@@ -549,7 +577,7 @@ def collect_day(day, a, live, runner=None, out=print):
         return False, rec, "replay"
     rec["replay"] = result_of(so)
     rec["queue_pending_for_day"] = {f"{g + 1}. {n}": c for (g, n), c in L.queue_counts(L.queue_items(ROOT, day=day)).items()}
-    rec["disk_free_gb"] = round(free_gb(), 1)
+    rec["disk_free_gb"] = round(room_free_gb(), 1)
     return True, rec, ""
 
 
@@ -571,7 +599,8 @@ def cmd_status(a, out=print):
     out(f"labelling queue: {len(items)} item(s)")
     for (g, name), n in L.queue_counts(items).items():
         out(f"  {g + 1}. {L.QUEUE_GROUPS[g]}: {name}: {n}")
-    out(f"free disk {free_gb():.0f} GB (refuse below {MIN_FREE_GB:.0f}); heavy jobs running: {len(heavy_jobs())}; "
+    out(f"free disk {free_gb():.0f} GB on the work pool, {room_free_gb():.0f} GB where the room audio goes "
+        f"(refuse to copy below {MIN_FREE_GB:.0f}); heavy jobs running: {len(heavy_jobs())}; "
         f"free VRAM {vram_free_gb():.1f} GB")
     return {"pending": pend, "queue": len(items)}
 
@@ -607,8 +636,8 @@ def cmd_run(a, runner=None, out=print, now=None):
             if time.time() >= deadline:
                 return 4
             time.sleep(min(300, max(1, deadline - time.time())))
-        if free_gb() < MIN_FREE_GB:
-            out(f"only {free_gb():.0f} GB free (less than {MIN_FREE_GB:.0f}): refusing to copy")
+        if room_free_gb() < MIN_FREE_GB:
+            out(f"only {room_free_gb():.0f} GB free where the room audio goes (less than {MIN_FREE_GB:.0f}): refusing to copy")
             return 5
         live = live_model(read_live_id(a.context))
         out(f"live model {live['id']} {live['version']} raw {live['raw']}")
@@ -638,12 +667,107 @@ def cmd_run(a, runner=None, out=print, now=None):
         return 0
 
 
+# ---------------------------------------------------------------------------------------------
+# prune (owner decision: raw room audio older than 45 days; lists first, deletes only with --yes)
+# ---------------------------------------------------------------------------------------------
+
+PRUNE_DAYS = 45
+PROTECT_SEED = {"days": ["2026-11-12", "2026-11-13"], "parts": ["test2-v5era"],
+                "note": "days stay until the v6.1 stage 3 (gate on 2026-11-13) has run; test2-v5era is the frozen C3 test set; "
+                        "edit by hand"}
+
+
+def load_protect(daily=None):
+    """`daily/protect.json`: days and parts that prune never touches (an active pre-registration). Seeded once."""
+    p = Path(daily or DAILY) / "protect.json"
+    if not p.exists():
+        atomic_write(p, json.dumps(PROTECT_SEED, indent=1) + "\n")
+    return json.loads(p.read_text())
+
+
+def open_item_days(root):
+    """Madrid days that have an open review item (window tables and uncertain live clips)."""
+    import kivi_live_wakes as L
+    return {L.local_day(it["row"]["utc"]) for it in L.queue_items(root)}
+
+
+def prune_plan(root, today, older_days, protect, open_days):
+    """Room-audio pieces of every `negatives*` set that is older than `older_days` (Madrid date of the piece start) and not
+    protected. Returns (candidates, skipped Counter by reason). Candidate: {set, clip, path, day, bytes}."""
+    import kivi_extract as X
+    import kivi_real_common as C
+    root = Path(root)
+    cutoff = today - timedelta(days=older_days)
+    cands, skipped = [], Counter()
+    for man in sorted(root.glob("negatives*/manifest.jsonl")):
+        for r in C.read_jsonl(man):
+            path = root / r["clip"]
+            if not path.is_file():
+                continue
+            day = datetime.fromtimestamp(X.parse_utc(r["start_utc"]).timestamp(), ZoneInfo(TZ)).date()
+            if day > cutoff:
+                skipped["newer than the cutoff"] += 1
+            elif r.get("split") in protect.get("parts", ()):
+                skipped["protected part"] += 1
+            elif day.isoformat() in protect.get("days", ()):
+                skipped["protected day"] += 1
+            elif day.isoformat() in open_days:
+                skipped["open review item that day"] += 1
+            else:
+                cands.append({"set": man.parent.name, "clip": r["clip"], "path": path, "day": day.isoformat(),
+                              "bytes": path.stat().st_size})
+    return cands, skipped
+
+
+def cmd_prune(a, out=print, today=None):
+    today = today or madrid_today()
+    protect = load_protect()
+    cands, skipped = prune_plan(ROOT, today, a.older_than_days, protect, open_item_days(ROOT))
+    per_day = defaultdict(lambda: [0, 0])
+    for c in cands:
+        per_day[(c["day"], role_of(c["day"]))][0] += 1
+        per_day[(c["day"], role_of(c["day"]))][1] += c["bytes"]
+    out(f"raw room audio older than {a.older_than_days} days (before {today - timedelta(days=a.older_than_days)}), "
+        f"protected days {protect.get('days')}, parts {protect.get('parts')}")
+    for (d, role), (n, b) in sorted(per_day.items()):
+        out(f"  {d} ({role}): {n} piece(s), {b / 1e9:.2f} GB")
+    total = sum(c["bytes"] for c in cands)
+    out(f"would delete {len(cands)} piece(s), {total / 1e9:.2f} GB; kept: " + (", ".join(f"{k} {v}" for k, v in skipped.items()) or "nothing"))
+    out("labels, scores, queue tables, window clips and manifests are never deleted")
+    if not a.yes:
+        out("nothing deleted (list only); run again with --yes to delete exactly this list")
+        return 0
+    allowed = [Path(os.path.realpath(ROOT / c["set"])) for c in cands]
+    done = freed = 0
+    log = []
+    for c, base in zip(cands, allowed):
+        real = Path(os.path.realpath(c["path"]))
+        if base not in real.parents:                       # never follow a link out of the set directory
+            out(f"skipped (outside its set): {c['clip']}")
+            continue
+        os.unlink(c["path"])
+        done += 1
+        freed += c["bytes"]
+        log.append({"clip": c["clip"], "day": c["day"], "bytes": c["bytes"],
+                    "pruned_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    if log:
+        DAILY.mkdir(mode=0o700, parents=True, exist_ok=True)
+        with open(DAILY / "pruned.jsonl", "a", encoding="utf-8") as f:
+            f.write("".join(json.dumps(x) + "\n" for x in log))
+        os.chmod(DAILY / "pruned.jsonl", 0o600)
+    out(f"deleted {done} piece(s), {freed / 1e9:.2f} GB; manifests keep their rows (pieces that are gone are skipped by the tools); "
+        f"log {DAILY / 'pruned.jsonl'}")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("what", choices=["status", "run", "_split", "_replay"])
+    ap.add_argument("what", choices=["status", "run", "prune", "_split", "_replay"])
     ap.add_argument("--day", help="one Europe/Madrid day YYYY-MM-DD")
     ap.add_argument("--from", dest="from_day", help="(run, first time) first day of the loop")
     ap.add_argument("--redo", action="store_true", help="(run --day) run a done day again")
+    ap.add_argument("--older-than-days", type=int, default=PRUNE_DAYS, help="(prune) default 45")
+    ap.add_argument("--yes", action="store_true", help="(prune) delete the listed pieces; without it nothing is deleted")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--max-heavy", type=int, default=2, help="heavy jobs allowed in total, this one included")
     ap.add_argument("--wait-min", type=float, default=0.0, help="wait this long for heavy jobs to end (poll 5 min), else exit 4")
@@ -666,6 +790,8 @@ def main(argv=None):
         cmd_status(a)
     elif a.what == "run":
         sys.exit(cmd_run(a))
+    elif a.what == "prune":
+        cmd_prune(a)
     elif a.what == "_split":
         cmd_split(a)
     else:

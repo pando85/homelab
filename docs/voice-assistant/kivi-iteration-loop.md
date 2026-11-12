@@ -59,25 +59,25 @@ By Europe/Madrid date and the **day of the month**: odd = TEST, even = train / s
 single definition (the older day-count alternation went wrong after Dec 31 to Jan 1, both odd; fixed 2026-11-12, tested).
 The role of each collected day is in its `daily/YYYY-MM-DD.json` and in `daily/summary.md`.
 
-## Disk and retention proposal (the owner decides; nothing is deleted automatically)
+## Disk and retention (owner decision 2026-11-12)
 
-The room audio is the big item: about 31 hours a day for both TVs, roughly 3.5 GB a day (the v5-era copy is 14 GB for 146 h;
-the old sets `negatives`, `negatives-v5era`, `negatives-1111eve` hold about 17.5 GB). The pool had about 83 GB free when this
-loop was built; the collector refuses to copy below 50 GB free.
+The raw room audio is the big item: about 31 hours a day for both TVs, roughly 4 GB a day. `/home` (the work pool) is 85 %
+full, so the raw room audio lives on the second ZFS pool, `datasets`, in the plain directory `/datasets/kivi-room-audio/`
+(mode 700; about 204 GB free when it was set up; no zfs datasets, nothing else under `/datasets` is touched). The old
+paths keep working: `datasets/real/negatives`, `negatives-v5era`, `negatives-1111eve`, `negatives-daily` and the filtered room
+copies `datasets/derived/*/negatives` are symlinks into it. New daily copies land there through the `negatives-daily` symlink
+(or `$KIVI_ROOM_DIR`), and the 50 GB guard checks the pool that receives the copy. Scores, queue tables, window clips, labels
+and manifests stay in `~/kivi-models/data` (small). `data/negatives/scores` travelled with its directory (it mixes the two).
 
-Proposal for `negatives-daily` and its replay chunks:
-
-- Keep the **score chunks** (`scores/daily-replay/chunks`, a few MB a day: times and scores, no audio), the **queue tables**,
-  the **window clips of false wakes and candidates** (6 s each, about 200 KB) and everything labelled: indefinitely.
-- Keep the raw room audio of a day **14 days**, then delete it once the day is collected, replayed and its queue items are
-  labelled. If a retrain needs room negatives from older even days, build the embeddings (96 floats per step, no audio)
-  first, as v6 did.
-- Odd (TEST) days: keep **60 days** raw (a frozen test needs re-scoring when a new candidate appears; the score chunks are
-  not enough for a new model), then delete; the tables and windows stay.
-- Source recordings in Home Assistant are deleted after 90 days by Home Assistant itself (data register row 5).
-- At 3.5 GB a day this is about 50 GB at steady state plus the old sets; if that is too much, shorten the odd-day period
-  before the even one.
-This is a proposal: delete nothing until the owner agrees, and do it by hand per directory.
+Retention: raw room audio is kept about **45 days** (even and odd days alike), which at 4 GB a day is about 180 GB at steady
+state on the 204 GB pool, with headroom. Nothing is deleted automatically. The owner triggers
+`kivi_collect.py prune` (skill step `prune`): it LISTS the days and GB it would delete and deletes only with `--yes`. It never
+deletes labels, scores, queue tables, window clips or manifests, nor pieces of a day or part in `daily/protect.json` (an active
+pre-registration: 2026-11-12 and 2026-11-13 until the v6.1 stage 3 has run, and `test2-v5era`; edit by hand), nor pieces of a
+day that still has an open review item. Deleted pieces are logged in `daily/pruned.jsonl`; manifests keep their rows (the tools
+skip pieces that are gone). Kept indefinitely: score chunks, queue tables, window clips of false wakes and candidates, labelled
+items, and the odd-day test windows. The filtered copies under `datasets/derived` are not pruned by the tool. Source recordings
+in Home Assistant are deleted by Home Assistant after 90 days (data register row 5).
 
 ## Where each part lives
 
@@ -87,6 +87,7 @@ This is a proposal: delete nothing until the owner agrees, and do it by hand per
 | Collector | `scripts/voice-assistant/wakeword/kivi_collect.py` (tests `test_kivi_collect.py`) |
 | Labelling queue | `kivi_live_wakes.py queue` (tests in `test_kivi_live_wakes.py`) |
 | Per-day room copy | `kivi_negatives.py --local-date D --part d-YYYYMMDD --out-name negatives-daily` |
-| Daily counts | `~/kivi-models/data/daily/` (`state.json`, `YYYY-MM-DD.json`, `summary.md`) |
+| Daily counts | `~/kivi-models/data/daily/` (`state.json`, `YYYY-MM-DD.json`, `summary.md`, `protect.json`, `pruned.jsonl`) |
+| Raw room audio | `/datasets/kivi-room-audio/` (second pool), reached through the `negatives*` symlinks in `datasets/real/` |
 | Queue tables | `~/kivi-models/data/datasets/real/live-misses/` (`daily_false_wakes.csv`, `daily_miss_candidates.csv`, ...) and `live/live_wakes.csv` |
 | Release driver | `scripts/voice-assistant/wakeword/wake_release.py` |
