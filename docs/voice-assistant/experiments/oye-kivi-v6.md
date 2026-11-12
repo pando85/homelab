@@ -384,3 +384,25 @@ count and count as misses for the models that did not fire on them.
 Most of v6's events are real false wakes (other speech, TV, noise), not missed calls: the owner's rollback stands
 justified. For the v6.2 comparison the same labels apply: a v6.2 event within +-2 s of an `attempt` window is not a
 false wake; every other v6.2 event stays one (also when it is not in the table). Reference after the relabel: v5 = 4.
+
+### v6.2 morning comparison against v5: FAIL (2026-11-12, about 02:20 Madrid)
+
+Pre-registered criteria (amendment 2), odd-day sets only; test2-v5era and the 2026-11-11 session are REUSED test sets.
+v6.2 = p2b at raw 0.9825 (`oye_kivi_ctx2`); v5 at 0.9754; v6 at 0.9595 for information. TFLite replay as the mining pass.
+
+| # | v5 | v6.2 | v6 (info) | Result |
+| --- | --- | --- | --- | --- |
+| C1 2026-11-11 session pc / webcam (66 each; cells 3 m off / 3 m on / 1.5 m on / 1.5 m off) | 55 / 53 (pc 33/6/6/10, webcam 32/5/8/8) | 60 / 62 (pc 35/8/7/10, webcam 35/9/9/9) | 60 / 62 | PASS |
+| C2 near-phrases pc / webcam (35) | 0 / 1 | 0 / 1 | 0 / 2 | PASS |
+| C3 test2-v5era, owner labels applied (<= v5 + 1, evenings) | 4 (c3-a 0, c3-b 4); 0 in the evening | **17** (c3-a 4, c3-b 13); **9 in the evening** (c3-b 8, all 2026-11-09) | 11; 4 | **FAIL** |
+| C3 2026-11-11 evening copy (3.3 h; <= v5 + 1) | 4 (c3-a 3 in 0.4 h, c3-b 1) | **7** (c3-a 4, c3-b 3) | 6 | **FAIL** |
+| C4 test-day live clips: true detected / false fired | 16/16 / 15/16 | **15/16** / 7/16 | 16/16 / 6/16 | **FAIL** (one true wake fewer) |
+| C5 held-out synthetic clean / TV 10 dB / quiet | 51.2 / 30.1 / 39.5 % | 59.1 / 41.7 / 52.3 % | 59.8 / 39.8 / 53.5 % | PASS |
+| C6 calibration (0 of 9,378 steps disagree), runtime 1.1.0, no odd-day data in training or selection | | checked | | PASS |
+
+Verdict: **v6.2 does not replace v5.** Its recall equals v6's, but on the reused odd-day room audio it fires more often
+than v6 even at the stricter threshold: 10 of its 17 test2 events are not in the labelled table (new events, counted as
+false wakes, conservative), and 8 fall in the 2026-11-09 evening on c3-b. The threshold matched v5's rate on 2026-11-10
+(2 events each) but did not transfer to other evenings: 2.0 device-evenings of selection audio again proved too few,
+and the evening TV content of 2026-11-09 behaves differently. Labels of the 10 new events would be needed before reading
+more into it; the 2026-11-12 / -13 stages remain the honest test.
