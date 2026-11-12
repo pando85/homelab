@@ -99,3 +99,5 @@ in Home Assistant are deleted by Home Assistant after 90 days (data register row
 | Raw room audio | `/datasets/kivi-room-audio/` (second pool), reached through the `negatives*` symlinks in `datasets/real/` |
 | Queue tables | `~/kivi-models/data/datasets/real/live-misses/` (`daily_false_wakes.csv`, `daily_miss_candidates.csv`, ...) and `live/live_wakes.csv` |
 | Release driver | `scripts/voice-assistant/wakeword/wake_release.py` |
+
+Learnings and the living next-steps list: kivi-models `docs/LEARNINGS.md` and `docs/NEXT-STEPS.md`.
