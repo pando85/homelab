@@ -8,12 +8,18 @@ on:
       - master
     paths:
       - 'apps/home-assistant/appdaemon/**'
+      - 'apps/home-assistant/config/integrations/appdaemon_comfort.yaml'
+      - 'apps/home-assistant/config/integrations/heishamon.yaml'
+      - 'apps/home-assistant/lovelace/**'
       - '.github/workflows/appdaemon-tests.yaml'
   pull_request:
     branches:
       - master
     paths:
       - 'apps/home-assistant/appdaemon/**'
+      - 'apps/home-assistant/config/integrations/appdaemon_comfort.yaml'
+      - 'apps/home-assistant/config/integrations/heishamon.yaml'
+      - 'apps/home-assistant/lovelace/**'
       - '.github/workflows/appdaemon-tests.yaml'
 
 jobs:

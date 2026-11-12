@@ -71,12 +71,12 @@ target and `SetZ1HeatRequestTemperature` does not set it. The fork does not publ
 | Read Z1 curve points | `sensor.aquarea_z1_heat_curve_{target_high,target_low,outside_high,outside_low}_temperature` | `main/Z1_Heat_Curve_*` | Read only (`:679-700`) |
 | Z2 equivalents | `input_number.heishamon_heatshift_z2`, `sensor.aquarea_z2_*` | `commands/SetZ2HeatRequestTemperature` | Zone 2 is not active (`Zones_State` = 0) |
 | Cooling request | `input_number.heishamon_coolshift_z{1,2}` | `commands/SetZ{1,2}CoolRequestTemperature` | Same range |
-| Operating mode | `input_select.heishamon_heatmode`, `sensor.aquarea_mode`, `sensor.aquarea_mode_code` | `commands/SetOperationMode`, `main/Operating_Mode_State` | Driven by AppDaemon climate control (`Heat+DHW` / `DHW`) |
+| Operating mode | `input_select.heishamon_heatmode`, `sensor.aquarea_mode`, `sensor.aquarea_mode_code` | `commands/SetOperationMode`, `main/Operating_Mode_State` | Driven by the AppDaemon [comfort controller](heat-pump-comfort-controller.md) (`Heat+DHW` / `DHW`) |
 | Quiet mode | `input_select.heishamon_quietmode`, `sensor.aquarea_quiet_mode` | `commands/SetQuietMode`, `main/Quiet_Mode_Level` | `Off`, 1, 2, 3 |
 | Powerful mode | `input_select.heishamon_powermode`, `sensor.aquarea_powerful_mode` | `commands/SetPowerfulMode`, `main/Powerful_Mode_Time` | `Off`, 30, 60, 90 min |
 | Holiday mode | `switch.aquarea_holiday_mode` | `commands/SetHolidayMode`, `main/Holiday_Mode_State` | |
 | Heat pump power | `switch.aquarea_main_power` | `commands/SetHeatpump`, `main/Heatpump_State` | |
-| Force DHW | `switch.aquarea_force_dhw_mode` | `commands/SetForceDHW`, `main/Force_DHW_State` | Used by AppDaemon `dhw_control` |
+| Force DHW | `switch.aquarea_force_dhw_mode` | `commands/SetForceDHW`, `main/Force_DHW_State` | Used by the AppDaemon comfort controller's DHW window |
 | Tank target | `input_number.heishamon_tank_temp` | `commands/SetDHWTemp` | 40 to 75 |
 | Heating mode (read) | `sensor.aquarea_heating_mode` | `main/Heating_Mode` | `0` curve, `1` direct. Read only; any water-temperature write must check it first |
 | Sterilization (read) | `binary_sensor.aquarea_sterilization_state`, `sensor.aquarea_sterilization_temperature`, `sensor.aquarea_sterilization_max_time` | `main/Sterilization_State`, `main/Sterilization_Temp`, `main/Sterilization_Max_Time` | State `0`/`1`, target in degC, maximum time in min |
@@ -304,7 +304,7 @@ Neither the fork nor the HA helper (range -5 to 40) prevents either case. Before
   but it means every device-side change is re-written once.
 - Writes are persistent in the unit; there is no automatic fallback if Home Assistant or the
   optimizer stops. A control loop needs a watchdog that restores a safe request (the existing
-  AppDaemon watchdog does this for the operating mode only, see `appdaemon_climate.yaml`).
+  AppDaemon watchdog does this for the operating mode only, see `appdaemon_comfort.yaml`).
 - `OSCommand` and `SendRawValue` are unrestricted over MQTT. Anyone with broker credentials can
   change unit settings; keep the broker credentials and `mosquitto` network exposure as they are.
 - First write experiment, when approved: write a value equal to the current one, check that
