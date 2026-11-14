@@ -1,8 +1,9 @@
 # Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
 
-Investigated 2026-11-12. All times UTC (AP logs are CET, UTC+1). **Neither device is resolved.** The
-`cerezo` min-RSSI change did not stop the fan outages. Both devices were power-cycled on Nov 12
-(~22:55Z); the 48 h verdict is pending, see [Follow-up on 2026-11-14](#follow-up-on-2026-11-14).
+Investigated 2026-11-12. All times UTC (AP logs are CET, UTC+1). **Status after the 48 h follow-up
+(2026-11-14): the fan is partially fixed (improving), the mini switch is not fixed.** Both devices were
+power-cycled on Nov 12 (~22:55Z); see [Follow-up on 2026-11-14](#follow-up-on-2026-11-14). Next step: new
+mini firmware on Nov 15, see [Next step](#next-step-planned-2026-11-15).
 
 ## Problem
 
@@ -90,7 +91,13 @@ false` as a default. No other AP or SSID setting changed.
 
 - **Interim: it did not stop the outages.** The fan stayed on `cerezo` ~47 min through the change,
   then dropped at 21:51-21:52Z with no kick (see cause 3).
-- Final result: to be filled in after the 48 h check, see [Follow-up on 2026-11-14](#follow-up-on-2026-11-14).
+- **48 h verdict (power-cycle Nov 12 22:55Z to Nov 14 ~22:05Z, ~47 h): fan partially fixed, mini not
+  fixed.** Details in [Outcome](#outcome-run-2026-11-14-2205z).
+  - Fan: 49 probe state changes in 47 h (~180 per 7 d vs 348 baseline, ~48 % fewer, borderline on the
+    >50 % criterion). Up continuously since Nov 13 ~18:25Z (~27.5 h clean). Whether the min-RSSI change,
+    the power-cycle or the reboot of `cerezo` helped is not separable.
+  - Mini: TCP 6053 up only ~6 min after boot and ~10 min on Nov 13 16:41Z, down ~47 h of 47 h 20 min.
+    It never self-recovered, so the API-timeout reboot is not the mechanism (see the Outcome).
 
 ### ESPHome upgrade (mini switch), flashed 2026-11-12
 
@@ -142,8 +149,51 @@ was **not run**.
 
 ## Follow-up on 2026-11-14
 
-Run it at ~22:50Z on Nov 14 or later (~48 h after the power-cycle, ~49 h after the `cerezo` change).
-Everything is read-only. Do **not** reboot an AP or device before the AP logs are copied.
+Run on Nov 14 ~22:05Z (~47 h after the power-cycle). Everything was read-only. Do **not** reboot an AP
+or device before the AP logs are copied. The checks, baseline and decision tables below are kept for
+re-runs; the outcome comes first.
+
+### Outcome (run 2026-11-14 ~22:05Z)
+
+Window: Nov 12 22:55Z power-cycle to Nov 14 ~22:05Z.
+
+**Fan: partially fixed, improving.**
+
+- Blackbox: 49 state changes in 47 h (~180 per 7 d vs 348), ~48 % fewer.
+- 5-min down windows: Nov 12 23:05 - Nov 13 00:10 (~65-70 min, right after the power-cycle), Nov 13
+  07:30-07:35, a 13:15-14:15 cluster (longest ~25 min, 13:45-14:05), 14:55, 16:45-16:50, 18:20.
+  Continuously up since Nov 13 ~18:25Z.
+- Loki (check d): 23 `Disconnected`, 20 `Failed to connect`, 4 `Initial state update failed`. Last fan
+  line Nov 13 18:16:29Z, none in the following ~28 h.
+- Nov 13 16:40Z: the fan and several other localtuya devices disconnected within seconds and the mini
+  briefly came back at 16:41Z, which points to a shared Wi-Fi/AP event, not a fan fault.
+- Now on `cerezo` (IoT VLAN 501, `ath2`; on `limonero` `ra1`/`rai1`) at rssi 28 (~-67 dBm), above the
+  -75 dBm threshold, associated since ~Nov 13 18:17Z, with only the hourly group-key handshakes (all
+  completed; `cerezo` now rekeys at hh:35:02). Station identity inferred from VLAN and association time,
+  not confirmed with the controller.
+- Cause of the Nov 13 drops unknown: the AP logs did not reach back (`cerezo` covered Nov 14 17:07-22:05Z,
+  `limonero` only 20:34-22:05Z).
+
+**Mini switch: not fixed.**
+
+- Blackbox TCP 6053: up only Nov 12 22:56-23:00 (~6 min after the 22:54:44 boot) and Nov 13
+  16:41-16:51, down the rest (~47 h of 47 h 20 min). Only 2 probe changes.
+- HA `esphome` warnings `Can't connect to ESPHome API ... Timeout while connecting` at Nov 12 23:02:37
+  and Nov 13 16:53:28.
+- It never self-recovered. If Wi-Fi stayed up, the default 15 min `api.reboot_timeout` should have
+  rebooted it and briefly brought the probe back. It did not, so this is a hard radio/Wi-Fi hang (or the
+  device not rebooting): the "Mini hangs again" row of the decision table.
+- Not readable: Reset Reason and the other debug sensors (device offline, `make device-logs` timed out,
+  no HA API token to read entity history). Its MAC was not identified, so the AP logs cannot say whether
+  it is still associated; no leave/kick/deauth/tx-fail lines for any client on IoT VLAN 502 in the covered
+  window (`cerezo` `ath4`, `limonero` `ra3`).
+
+**APs.** `cerezo` uptime 47.5 h (the manual reboot), `limonero` 142 d. No AP-wide events (no radio
+resets, crashes or mass drops). Low-RSSI kicks and one group-key failure on `cerezo` hit non-IoT LAN
+clients, not these devices.
+
+**Lessons.** AP log retention is too short to explain drops after the fact (`limonero` ~1.5 h, `cerezo`
+~5 h this time): copy logs within ~1 h of a drop, or add a UniFi exporter (unpoller) for history.
 
 ### Baseline at the start of the window
 
@@ -187,9 +237,14 @@ c. **APs over SSH, before anything is rebooted** (RAM-only logs, `limonero` keep
    `ssh limonero` (key auth, read-only commands such as `cat /proc/uptime`, `grep`, `wlanconfig`). In
    `/var/log/messages` and `messages.old` look for `Low RSSI` kicks, `group key handshake failed`,
    `tx continue fail` and DEAUTH reason codes per client (3 / 16 / 2). Note which AP each client is on.
-d. **Fan in Loki** (namespace `home-assistant`, 48 h): localtuya disconnect lines for the fan, e.g.
-   `{namespace="home-assistant"} |~ "(?i)localtuya" |~ "(?i)disconnect|lost|timeout"` (adjust to the real
-   message text, which was not checked).
+d. **Fan in Loki** (namespace `home-assistant`, 48 h): localtuya lines for the fan. Real message
+   texts (HA logs only WARNING and above, so there are no reconnect lines):
+   `Disconnected - waiting for discovery broadcast`, `Failed to connect to fan-office-a.iot.grigri:
+   [Errno 110] Connect call failed`, and ERROR `Initial state update failed, giving up: TimeoutError()`:
+
+   ```logql
+   {namespace="home-assistant"} |= "fan-office-a" |~ "Disconnected - waiting|Failed to connect|Initial state update failed"
+   ```
 e. **UniFi client view** for the two devices (AP, signal, retries), through the firefox-devtools MCP,
    API prefix `/api/s/default` (see How to Diagnose for hygiene).
 
@@ -217,10 +272,18 @@ Actions by evidence (one change at a time):
 Rules: no channel or TX-power change without a planned 2.4 GHz scan (see the decision above) and a
 pinned `limonero` channel; owner approval for any live UniFi change.
 
-### After the follow-up
+### Next step (planned 2026-11-15)
 
-Fill in the Result subsection above, update the one-liner in `docs/troubleshooting/INDEX.md` if the
-conclusion changes, and commit the docs.
+The owner flashes a new firmware version to the mini switch. Per the decision table the candidates are
+`wifi: phy_mode: 11G` (available since ESPHome 2026.5.0) and/or a newer ESPHome. One change at a time
+where possible.
+
+1. Before power-cycling, check whether the button and LED still respond (a hung radio with a live main
+   loop is different from a dead device).
+2. Add a blackbox ICMP ping probe for the mini in `system/monitoring/blackbox-exporter-values.yaml`, so a
+   hung API can be told from lost Wi-Fi.
+3. After flashing, read the Reset Reason sensor and re-run checks a-d.
+4. If the mini still hangs, replace it with an ESP32-based switch.
 
 ## How to Diagnose
 
@@ -237,6 +300,11 @@ Then correlate the outage start with AP logs.
   reboot (~22:34:10Z; boot-log clock ~90 s early before NTP sync) destroyed the pre-reboot log.
   `limonero` keeps only ~7 h. SSH to the AP and copy `/var/log/messages` and `messages.old` (or
   `logread`).
+- AP log retention is short (`limonero` ~1.5 h, `cerezo` ~5 h in the 48 h follow-up): copy logs within
+  ~1 h of a drop, or add a UniFi exporter (unpoller).
+- VAP mapping for the IoT SSIDs: VLAN 501 (fan) is `ath2` on `cerezo` and `ra1`/`rai1` on `limonero`;
+  VLAN 502 (mini) is `ath4` on `cerezo` and `ra3` on `limonero`.
+- `wlanconfig` is not available on `limonero` (no station list there).
 - Look in the AP logs for `stamgr kick-sta ... reason:`, `wpa_group_rekey`, `MacTableMaintenance`
   and DEAUTH reason codes 3/16/2. The controller event log has **no disconnect reason** (legacy
   `stat/event` returns empty); the AP logs do.
