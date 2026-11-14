@@ -168,6 +168,27 @@ app-template:
     piper:
       type: deployment
       replicas: 1
+      initContainers:
+        # Copies the synthetic household voice "Rajoy (IA)" (private, never committed here) from a private
+        # image into /data, where wyoming-piper advertises every <voice>.onnx next to the downloaded
+        # es_ES-sharvard-medium. The image is built from the private repository agil/tts-voices
+        # (tools/deploy/Dockerfile; package owner agil, which must stay "limited"); the nodes pull it with
+        # their containerd credential for git.grigri.cloud, like the wake words. One tag per release.
+        01-copy-voices:
+          image:
+            # No renovate hint: Renovate cannot read the private registry.
+            repository: git.grigri.cloud/agil/tts-voices-piper
+            tag: rajoy-e1000-2026-11-14@sha256:39a242b2c794c21b7d98d8d8447d005c89c957baa1fc66c189c0044eb3e79834
+          command:
+            - sh
+            - -ec
+            - cd /voices && sha256sum -c SHA256SUMS && cp /voices/*.onnx /voices/*.onnx.json /data/ && ls -l /data
+          resources:
+            requests:
+              cpu: 10m
+              memory: 8Mi
+            limits:
+              memory: 128Mi
       containers:
         piper:
           image:
@@ -593,6 +614,8 @@ app-template:
       sizeLimit: 5Gi
       advancedMounts:
         piper:
+          01-copy-voices:
+            - path: /data
           piper:
             - path: /data
     valetudopng:
