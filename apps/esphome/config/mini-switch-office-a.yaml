@@ -9,6 +9,12 @@ packages:
   connection: !include ./packages/connection.yaml
   mini-switch: !include ./packages/mini-switch.yaml
 
+# Force 802.11g on this ESP8266: the radio hangs while the main loop keeps running, so the Wi-Fi
+# stack never recovers. Merged with the `wifi:` block of packages/connection.yaml; this device only
+# (see docs/troubleshooting/office-iot-wifi-flapping.md).
+wifi:
+  phy_mode: 11G
+
 # Record why the device reboots (see docs/troubleshooting/office-iot-wifi-flapping.md).
 # Only the cheap options: no `fragmentation` sensor, nothing that allocates on the heap.
 debug:
