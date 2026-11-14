@@ -178,7 +178,7 @@ app-template:
           image:
             # No renovate hint: Renovate cannot read the private registry.
             repository: git.grigri.cloud/agil/tts-voices-piper
-            tag: rajoy-e1000-2026-11-14@sha256:39a242b2c794c21b7d98d8d8447d005c89c957baa1fc66c189c0044eb3e79834
+            tag: rajoy-e1000-v2-2026-11-14@sha256:936445dda32eb05eb8ae731577a5117b0908f846b680761757af72ae6b01c885
           command:
             - sh
             - -ec
