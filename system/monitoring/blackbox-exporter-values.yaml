@@ -135,6 +135,9 @@ serviceMonitor:
     - module: tcp_connect
       name: mini-switch-office-a
       url: mini-switch-office-a.iot.grigri:6053
+    - module: ping
+      name: mini-switch-office-a-ping
+      url: mini-switch-office-a.iot.grigri
     - module: tcp_connect
       name: irrigation-controller-corner
       url: irrigation-controller-corner.iot.grigri:6053
