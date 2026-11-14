@@ -9,9 +9,9 @@ packages:
   connection: !include ./packages/connection.yaml
   mini-switch: !include ./packages/mini-switch.yaml
 
-# Force 802.11g on this ESP8266: the radio hangs while the main loop keeps running, so the Wi-Fi
-# stack never recovers. Merged with the `wifi:` block of packages/connection.yaml; this device only
-# (see docs/troubleshooting/office-iot-wifi-flapping.md).
+# Force 802.11g on this ESP8266 to work around a suspected Wi-Fi radio hang (it drops off the
+# network and never recovers by itself). Merged with the `wifi:` block of packages/connection.yaml;
+# this device only (see docs/troubleshooting/office-iot-wifi-flapping.md).
 wifi:
   phy_mode: 11G
 

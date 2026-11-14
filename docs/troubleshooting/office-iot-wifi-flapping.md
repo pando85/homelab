@@ -276,12 +276,14 @@ pinned `limonero` channel; owner approval for any live UniFi change.
 
 The owner flashes a new firmware version to the mini switch. Per the decision table the candidates are
 `wifi: phy_mode: 11G` (available since ESPHome 2026.5.0) and/or a newer ESPHome. One change at a time
-where possible.
+where possible. `wifi: phy_mode: 11G` is already committed for the mini (commit b0591c35b) and takes
+effect on the next flash.
 
 1. Before power-cycling, check whether the button and LED still respond (a hung radio with a live main
    loop is different from a dead device).
-2. Add a blackbox ICMP ping probe for the mini in `system/monitoring/blackbox-exporter-values.yaml`, so a
-   hung API can be told from lost Wi-Fi.
+2. Done 2026-11-14 (commit 00ec9073c): ping target `mini-switch-office-a-ping` added in
+   `system/monitoring/blackbox-exporter-values.yaml`. Compare it with the TCP 6053 target
+   `mini-switch-office-a`: ping up and API down means a hung API; both down means lost Wi-Fi.
 3. After flashing, read the Reset Reason sensor and re-run checks a-d.
 4. If the mini still hangs, replace it with an ESP32-based switch.
 
