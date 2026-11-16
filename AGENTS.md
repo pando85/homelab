@@ -50,7 +50,8 @@ helm lint apps/<name>/
 - **Docs:** Troubleshooting in `docs/troubleshooting/`; `AGENTS.md` for links/reminders. See `docs/conventions/documenting-learnings.md`
 - **Security:** No hardcoded secrets. ExternalSecret → Vault. Public repo hygiene
 - **Personal information:** never commit people's names (household members, children, guests),
-  addresses, locations, phone or person details, or which account/token holds which privileges.
+  addresses, locations, phone or person details, Wi-Fi BSSIDs/AP MACs (geolocatable), or which
+  account/token holds which privileges.
   Use roles or rooms instead ("owner", "Office T"). Applies to code, docs, commit messages and PRs
 - **Vault CLI:** `export VAULT_ADDR=https://vault.internal.grigri.cloud`; reuses the owner's OIDC login.
   KV v2 mount `secret`: ExternalSecret `remoteRef.key: /<app>/<path>` ↔ `vault kv put secret/<app>/<path>`.
@@ -152,7 +153,7 @@ Full pitfall index (86 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **ArgoCD** (7): repo-server probe death-spiral, kustomize OCI auth override, Helm-hook mixing and
   hook-only edits that never converge (`docs/troubleshooting/argocd-helm-hook-provisioning.md`)
 - **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps
-- **Networking** (12): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP, pfSense alias change keeps old states (`pfsense-alias-change-keeps-old-states.md`), Envoy listener drain (`envoy-gateway-listener-drain.md`), Envoy debugging (`envoy-gateway-debugging.md`), Office A Wi-Fi IoT flapping: AP logs give the disconnect reasons (`office-iot-wifi-flapping.md`), UniFi Wi-Fi client debugging runbook (`unifi-wifi-client-debugging.md`)
+- **Networking** (12): Cilium stale BPF datapath, Armbian kernel BPF breakage, nodelocaldns LRP, pfSense alias change keeps old states (`pfsense-alias-change-keeps-old-states.md`), Envoy listener drain (`envoy-gateway-listener-drain.md`), Envoy debugging (`envoy-gateway-debugging.md`), Office A Wi-Fi IoT flapping: AP logs give the disconnect reasons, mini switch radio dies after power-on (`office-iot-wifi-flapping.md`), UniFi Wi-Fi client debugging runbook (`unifi-wifi-client-debugging.md`)
 - **Storage & Backup** (13): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools

@@ -248,13 +248,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   See `docs/troubleshooting/needrestart-k3s-restart-storm.md`
 
 - Office A Wi-Fi IoT devices (`fan-office-a`, `mini-switch-office-a`) flap and fire
-  `BlackboxProbeFailed`. 48 h follow-up (Nov 14): fan partially fixed (~48 % fewer probe changes
-  after the power-cycle and `cerezo`'s min-RSSI -75 dBm, cause of the remaining drops unknown), mini
-  not fixed (API port down ~all 47 h, never self-rebooted: likely a hard ESP radio hang; new firmware
-  with `wifi: phy_mode: 11G` and a ping probe next, ESP32 swap if it persists). Causes seen: `cerezo`'s
-  min-RSSI kick (`reason:Low RSSI`), the hourly WPA group rekey (hh:01) and silent drops with no AP-side
-  reason. UniFi events carry no disconnect reason and AP logs are RAM-only (`limonero` ~1.5-7 h): copy
-  them within ~1 h of a drop and BEFORE rebooting an AP.
+  `BlackboxProbeFailed`. Status 2026-11-16: fan on `limonero` at -80 dBm was kicked hourly (deauth
+  reason 16, missed group rekey), locked to `cerezo` in the UniFi controller: partly better, still
+  short drops. Mini: the radio dies minutes after power-on on either AP and on ESPHome 2026.10.0 and
+  2026.10.2 with a healthy heap, only a power cycle recovers it (likely hardware); full RF
+  calibration on every boot is in test, else swap for an ESP32/Shelly. UniFi events carry no
+  disconnect reason (the v2 system log has connect/disconnect history) and AP logs are RAM-only
+  (copy them within ~1 h and BEFORE rebooting an AP). Never commit AP BSSIDs.
   See `docs/troubleshooting/office-iot-wifi-flapping.md`
 
 - Debugging a Wi-Fi client on the UniFi network: start with the Prometheus blackbox view (sum

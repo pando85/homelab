@@ -23,12 +23,24 @@ CODE=$(pass show web/hass.grigri.cloud | head -1 \
   | jq -r '.result // empty')
 umask 077
 curl -s -X POST $H/auth/token -d grant_type=authorization_code -d code=$CODE -d client_id=$CID \
-  | jq -r .access_token > "$TOKEN_FILE"
+  > "$TOKEN_JSON"
+jq -r .access_token "$TOKEN_JSON" > "$TOKEN_FILE"
+jq -r .refresh_token "$TOKEN_JSON" > "$REFRESH_FILE"
+shred -u "$TOKEN_JSON"
 ```
 
-When finished, revoke the short-lived session's refresh token (the snippet above keeps only the access
-token, so use the UI): the session under the user's profile, Security tab, refresh tokens. Then check
-that a refresh with that token fails.
+When finished, revoke the session from the shell instead of the UI, using the `refresh_token` saved
+above, and delete the files:
+
+```bash
+printf 'token=%s' "$(cat "$REFRESH_FILE")" \
+  | curl -s -o /dev/null -w '%{http_code}\n' -X POST $H/auth/revoke -d @-   # 200
+shred -u "$TOKEN_FILE" "$REFRESH_FILE"
+```
+
+A following `grant_type=refresh_token` call with that token returns 400 (verified). Revoking also
+kills the access token, so stop background pollers that use it first (a watcher went blind after the
+revoke).
 
 REST examples (`Authorization: Bearer $(cat $TOKEN_FILE)`):
 
@@ -36,7 +48,10 @@ REST examples (`Authorization: Bearer $(cat $TOKEN_FILE)`):
 - `GET /api/states/<entity_id>` — state and attributes (e.g. `supported_color_modes`)
 - `POST /api/services/light/turn_on` with `{"entity_id": "...", "color_temp_kelvin": 4000}`
 - `POST /api/services/homeassistant/restart` — restart; `/api/` returns 503 for a few seconds
-- `GET /api/history/period/<iso>?filter_entity_id=...` — check whether an entity ever reached a state
+- `GET /api/history/period/<start>?end_time=<end>&filter_entity_id=a,b` — state history, e.g. whether
+  an entity ever reached a state, or the debug sensors of a flaky ESPHome device. With
+  `minimal_response` only the first state of each entity carries `entity_id`: query one entity per
+  request or drop `minimal_response`.
 
 ## Deploying a HACS Custom Integration Change
 

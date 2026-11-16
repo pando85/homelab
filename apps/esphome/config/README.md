@@ -263,6 +263,11 @@ uvx --from 'esphome==<ESPHOME_VERSION from Makefile>' --with pillow \
 shred -u secrets.yaml
 ```
 
+- **One-off flash with another ESPHome version** (rollback test), without a repo change:
+  `make flash-device DEVICE=<device> ESPHOME_VERSION=<x.y.z>` overrides the Makefile pin. Validate
+  first with that version's `esphome config <device>.yaml`. The next normal flash returns to the
+  pinned version.
+- If `uvx`/esphome fails on an unset `TMPDIR`, set `TMPDIR` explicitly.
 - **OTA is encrypted** with the api key (`ota: platform: esphome` + `encryption:` in `packages/connection.yaml`,
   no OTA password). A device whose running firmware is older than 2026.9.0 cannot encrypt yet: the
   client refuses to send it a plaintext image, so do its first flash with
@@ -299,13 +304,23 @@ and `Device Info` in Home Assistant, or in `make device-logs`, and compare their
   Max Block for a leak.
 - The reason is lost when the device is power-cycled, and the sensors are readable only while the
   device is reachable.
+- The workstation cannot reach the IoT VLAN, so logs from a device that is up only for minutes are
+  not an option: add the `debug:` sensors (reset reason, heap) **before** a device goes flaky and read
+  them from Home Assistant history (`/api/history/period/...`, see
+  [HA API access](../../../docs/troubleshooting/home-assistant-api-hacs-deploy.md)).
 
 **Wi-Fi hangs on ESP8266/ESP8285.** Symptom: the device stays powered but goes silent for hours (the
 AP shows `keep-alive silent` / `tx continue fail`, 1 Mbps AP-to-device rate, high retries, no
 association afterwards), and the TCP 6053 blackbox probe cannot tell a hung API from lost Wi-Fi. Seen
 upstream and unresolved: esphome issues 16724 and 14999, ratgdo issue 541 (helped there by `wifi:
-phy_mode: 11G`, available since 2026.5.0; an optional experiment, not applied). Same firmware runs
-stable on other devices, so compare the fleet before blaming the firmware. Diagnosis from the AP side:
+phy_mode: 11G`, available since 2026.5.0; it did not help `mini-switch-office-a`). Same firmware runs
+stable on other devices, so compare the fleet before blaming the firmware. If the radio dies minutes
+after a power-on on every AP and ESPHome version while the heap is healthy and only a power cycle
+recovers it, suspect the unit: on ESP8266 the full RF calibration happens only on power-on, a soft
+reset reuses it. ESPHome does not notice (its `wifi.reboot_timeout` only runs while it sees Wi-Fi
+down). ESPHome 2026.x also enables `wifi.post_connect_roaming` by default (periodic full channel scans
+while connected); disable it per device if it causes disconnects. Workaround and results:
+[Office A Wi-Fi flapping](../../../docs/troubleshooting/office-iot-wifi-flapping.md#follow-up-on-2026-11-16). Diagnosis from the AP side:
 [Debugging Wi-Fi clients on the UniFi network](../../../docs/troubleshooting/unifi-wifi-client-debugging.md);
 case study: [Office A Wi-Fi flapping](../../../docs/troubleshooting/office-iot-wifi-flapping.md).
 

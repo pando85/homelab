@@ -1,9 +1,18 @@
 # Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
 
-Investigated 2026-11-12. All times UTC (AP logs are CET, UTC+1). **Status after the 48 h follow-up
-(2026-11-14): the fan is partially fixed (improving), the mini switch is not fixed.** Both devices were
-power-cycled on Nov 12 (~22:55Z); see [Follow-up on 2026-11-14](#follow-up-on-2026-11-14). Next step: new
-mini firmware on Nov 15, see [Next step](#next-step-planned-2026-11-15).
+Investigated 2026-11-12, updated 2026-11-16. All times UTC (AP logs are CET, UTC+1). **Status
+2026-11-16: fan partly better, mini switch not fixed.** Different failure modes, do not merge them.
+Details in [Follow-up on 2026-11-16](#follow-up-on-2026-11-16).
+
+- **Fan (`fan-office-a`):** on `limonero` at -79..-85 dBm it is kicked every hour (deauth reason 16,
+  it misses the group rekey). Locked to `cerezo` at 11:16Z (controller change outside git): up on
+  `cerezo` at -64 dBm, but still short drops, being watched.
+- **Mini (`mini-switch-office-a`):** the radio goes silent minutes after every power-on, on either
+  AP, on 2026.10.0 and 2026.10.2, with a healthy heap. Only a power cycle recovers it. Likely
+  hardware. A full-RF-calibration-on-every-boot workaround is in test (not committed). If it fails:
+  replace with an ESP32 switch or a Shelly.
+
+Earlier: 48 h follow-up of 2026-11-14 in [Follow-up on 2026-11-14](#follow-up-on-2026-11-14).
 
 ## Problem
 
@@ -115,7 +124,8 @@ The upgrade alone is **not expected to fix it** (~20-30%, low confidence):
 - Fleet comparison: the two ESP8285 smart plugs run 2026.10.x on the identical Wi-Fi config and one
   is stable (0 flaps in 7 d), so the same firmware can hold Wi-Fi.
 
-Not done, optional: `phy_mode: 11G`, an `api: reboot_timeout` tweak.
+Not done on 2026-11-12: `phy_mode: 11G` (applied later, commit `b0591c35b`, no effect: see
+[Follow-up on 2026-11-16](#follow-up-on-2026-11-16)) and an `api: reboot_timeout` tweak.
 
 ### RF environment and the channel/power decision
 
@@ -262,7 +272,7 @@ Actions by evidence (one change at a time):
 
 | Evidence | Action |
 |---|---|
-| Mini hangs again, no self-reboot, Reset Reason unchanged | Hardware/firmware: replace the mini switch (an ESP32-based one is the obvious swap), or try `wifi: phy_mode: 11G` first. Add a ping probe in `system/monitoring/blackbox-exporter-values.yaml` to separate a hung API from lost Wi-Fi |
+| Mini hangs again, no self-reboot, Reset Reason unchanged | Hardware/firmware: replace the mini switch (an ESP32-based one is the obvious swap). `phy_mode: 11G` was tried and did not help (see 2026-11-16). Add a ping probe in `system/monitoring/blackbox-exporter-values.yaml` to separate a hung API from lost Wi-Fi |
 | Mini self-reboots with `Software/System restart` | The API-timeout reboot is firing: find out why HA/the probe lost the API (`api: reboot_timeout` default is 15 min; do not disable it) |
 | Fan still dropping with `Low RSSI` kicks | Lower or disable `cerezo` min RSSI further, or put an AP closer |
 | Fan dropping with group-key failures on `limonero` | Lengthen/disable the group rekey on the fan's IoT SSID only (owner approval, one SSID) |
@@ -272,20 +282,91 @@ Actions by evidence (one change at a time):
 Rules: no channel or TX-power change without a planned 2.4 GHz scan (see the decision above) and a
 pinned `limonero` channel; owner approval for any live UniFi change.
 
-### Next step (planned 2026-11-15)
+### Next step (planned 2026-11-15, done)
 
-The owner flashes a new firmware version to the mini switch. Per the decision table the candidates are
-`wifi: phy_mode: 11G` (available since ESPHome 2026.5.0) and/or a newer ESPHome. One change at a time
-where possible. `wifi: phy_mode: 11G` is already committed for the mini (commit b0591c35b) and takes
-effect on the next flash.
+New mini firmware with `wifi: phy_mode: 11G` (commit `b0591c35b`) was flashed, and the ping target
+`mini-switch-office-a-ping` was added in `system/monitoring/blackbox-exporter-values.yaml` (commit
+`00ec9073c`): ping up and API down means a hung API, both down means lost Wi-Fi. It did not fix the
+mini; what was tried next is in the 2026-11-16 section.
 
-1. Before power-cycling, check whether the button and LED still respond (a hung radio with a live main
-   loop is different from a dead device).
-2. Done 2026-11-14 (commit 00ec9073c): ping target `mini-switch-office-a-ping` added in
-   `system/monitoring/blackbox-exporter-values.yaml`. Compare it with the TCP 6053 target
-   `mini-switch-office-a`: ping up and API down means a hung API; both down means lost Wi-Fi.
-3. After flashing, read the Reset Reason sensor and re-run checks a-d.
-4. If the mini still hangs, replace it with an ESP32-based switch.
+## Follow-up on 2026-11-16
+
+Everything below was verified on 2026-11-16. Fan and mini are separate problems.
+
+### fan-office-a (Tuya, localtuya): partly better
+
+- Morning: on `limonero` at -79..-85 dBm (AP side). `limonero` deauthed it at 09:01:27Z and
+  10:01:27Z with reason 16 (group key handshake timeout: it missed the hourly GTK rekey) and it
+  re-joined ~30 min later each time, so it was offline about half of each hour. Earlier it sat on
+  `cerezo` at ~-67 dBm for ~27 h clean.
+- **11:16Z, UniFi "Lock to AP" to `cerezo` for the fan** (owner approved; controller change outside
+  git). `limonero` then rejected its auth requests for ~1 min (`send auth_rsp ... status=1`, stahtd
+  `event_type":"deny"`), and it joined `cerezo` at 11:17Z at -64 dBm. API call and rollback:
+  [UniFi runbook](unifi-wifi-client-debugging.md#lock-a-client-to-an-ap). Rollback: client > Lock to
+  AP off, or `fixed_ap_enabled:false`.
+- **Not fully stable after the lock.** On `cerezo` it dropped ~11:31-11:37Z (`cerezo` log: plain
+  `disassociated` at 11:32:08Z, then `sta_leave` and `deauthenticated due to local deauth request` at
+  11:35Z), was up 11:38-12:04Z, with short drops at ~12:05Z and ~12:08Z. Reason not identified yet.
+  Status: partial, still being watched.
+
+### mini-switch-office-a (Athom mini switch, ESP8285): not fixed
+
+Timeline from the UniFi controller v2 system log (since Nov 2) and Home Assistant history:
+
+- ~Oct 26 to Nov 2 19:24Z: one stable session of 6 d 21 h on `limonero`. Nov 2 19:24Z: 1 min
+  disconnect that looks like an OTA flash. Nov 2-7: sessions of 1 d 21 h, 6 h and 21 h, mostly on
+  `cerezo`.
+- **Since Nov 10 every session ends after ~1-37 min on BOTH APs** (`cerezo`: 24, 12, 15, 12, 9, 10
+  min; `limonero`: 37, 18, 25, 6, 1 min; 27 `cerezo` and 19 `limonero` events). AP-side signal is
+  always fine (`cerezo` -41..-56 dBm, `limonero` -57..-66 dBm).
+- **Failure signature (AP logs).** The client goes completely silent: `limonero` logs
+  `[keep-alive] ... silent for 60-sec`, then `MacTableMaintenance() ... had left` and an AP deauth
+  with reason 3 (last frame 11:24:45Z, removed 11:25:46Z; again 11:43:27Z / 11:44:28Z). No kick, no
+  min-RSSI action. Afterwards it **never tries to re-associate on either AP** (no auth_req / `Sead
+  AUTH` lines) until it is power-cycled.
+- **Not a memory problem.** HA debug sensors (`reset_reason`, `heap_free`, `heap_max_block`,
+  `loop_time`, `device_info`): heap steady ~40 KB free, max block ~38-42 KB, loop time ~18-20 ms.
+- **Asymmetric link on `limonero`**: device-side signal -73..-79 dBm while the AP heard it at ~-62
+  dBm. On `cerezo` -59..-63 dBm.
+- **Only a power cycle recovers it.** Every field recovery had reset reason `External System`
+  (Nov 12 22:19Z and 22:55Z; Nov 13 16:41Z after 17.6 h dead; Nov 15 13:34Z after 44.7 h dead;
+  Nov 16 11:11Z, 11:32Z, 11:37Z). The default `api.reboot_timeout` (15 min) should have caused many
+  software reboots during those outages without recovery (not provable: a reboot that never
+  reconnects leaves no trace). Software restarts only worked within minutes of a power-on (OTA
+  reboots Nov 12 22:01Z and Nov 16 10:48Z; an `Exception` crash-reboot at 11:17Z).
+- **ESPHome still believes it is connected while the radio is silent.** With `wifi.reboot_timeout:
+  5min` it sat dead 11:24-11:32Z without rebooting: that timer only runs while ESPHome sees Wi-Fi
+  down.
+- Comparison: `smart-plug-v2-battery` (same ESP8266 family, same `packages/connection.yaml`) stayed
+  on `limonero` 84 h without a drop.
+
+Ruled out on 2026-11-16, one change at a time:
+
+| Tried | Result |
+|---|---|
+| AP selection | Fleet already has `fast_connect: false` (scan, pick the strongest AP; the irrigation-controller fix, commit `322dbc01e`). The mini fails on both APs equally |
+| ESPHome `post_connect_roaming` (default true in 2026.x: full channel scan every 5 min while connected, up to 3 times, if RSSI < -49 dBm; ESPHome source notes off-channel time can cause beacon-timeout disconnects) | Disabled in commit `d1594f199` with `fast_connect: true` and `wifi.reboot_timeout: 5min`: still died ~7.5 min after connect |
+| ESPHome version | Flashed 2026.10.0 (ran a week stable) with `make flash-device DEVICE=mini-switch-office-a ESPHOME_VERSION=2026.10.0` (no repo change): still died ~6.5 min after connect (11:36:59Z to 11:43:27Z) |
+| Memory | Heap steady, see above |
+| `phy_mode: 11G` (commit `b0591c35b`) | Active (the AP reports PHY OFDM / IEEE80211_MODE_11G), did not help |
+
+**Working hypothesis: hardware on this unit** (radio/RF calibration drift or power supply sag). On
+ESP8266 the SDK does full RF calibration only on power-on and a soft reset reuses the stored
+calibration, which matches "only a power cycle helps".
+
+**In test (option 2, flashed by the owner ~12:05Z, config not yet committed):**
+
+- Full RF calibration on every boot: `esphome: includes:` header
+  `mini-switch-office-a/rf_calibration.h` with `RF_PRE_INIT() { system_phy_set_powerup_option(3); }`.
+  It overrides the Arduino ESP8266 core 3.1.2 weak `__run_user_rf_pre_init()` (`core_esp8266_phy.cpp`,
+  called from `user_rf_pre_init()`; the macro is in `Esp.h`). Verified linked with `nm`/`objdump`;
+  ~200 ms longer boot.
+- `api: reboot_timeout: 2min` and `wifi: output_power: 17dB`.
+- The first boot after the OTA did not come back by itself; the owner power-cycled it.
+- Expected if the hypothesis holds: short (~3 min) outages that self-recover with reset reason
+  `Software/System restart`.
+- If not: replace with an ESP32-based switch or a Shelly. A swap test with another mini switch
+  confirms hardware.
 
 ## How to Diagnose
 
@@ -324,6 +405,14 @@ Then correlate the outage start with AP logs.
   healthy Shellys). Use the blackbox exporter's view or a host on the VLAN.
 - Prometheus has no UniFi/AP metrics, so AP-side history exists only in RAM logs (hence the exporter idea in the Decision table).
 - Timezones: UniFi events UTC, AP logs CET, Home Assistant logs local.
+- Client connect/disconnect/roam history (with duration and signal) comes from the UniFi v2 system
+  log, not the legacy event log: see the [UniFi runbook](unifi-wifi-client-debugging.md#2-unifi-controller-who-is-on-which-ap-radio-settings).
+  For the mini it showed the per-session lengths above in one query.
+- Tell the two devices' signatures apart: fan = AP `deauth ... reason:16` at hh:01:27 on `limonero`
+  (missed group rekey, weak signal); mini = `keep-alive silent` + reason 3 + never re-associating
+  (dead radio). Per-AP log syntax: [UniFi runbook](unifi-wifi-client-debugging.md#3-ap-logs-over-ssh-source-of-truth-for-reasons).
+- The mini's device-side logs are unreachable from the workstation and it is up only for minutes:
+  read the HA debug sensors (`reset_reason`, `heap_free`) instead.
 - Mini switch device logs: `make device-logs DEVICE=mini-switch-office-a`, see the runbook in
   `apps/esphome/config/README.md` (needs `secrets.yaml` from the `esphome-secrets` secret).
 
