@@ -19,7 +19,7 @@ helmCharts:
   # in lockstep with gateway-helm below.
   - name: gateway-crds-helm
     repo: oci://docker.io/envoyproxy
-    version: v1.9.3
+    version: 1.10.0
     releaseName: envoy-gateway-crds
     namespace: envoy-gateway
     valuesFile: crds-values.yaml
