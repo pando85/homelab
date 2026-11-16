@@ -4,7 +4,7 @@
 section 10). Counts only: no audio is played, printed or sent anywhere; transcripts live in memory (local faster-whisper,
 never the cluster Whisper) and speaker embeddings are never saved.
 
-    kivi_label_queue.py scan     # six heads (v5, v6, v6.2, v6.3 arms p3a / p3b / p3c) on the cached room embeddings
+    kivi_label_queue.py scan     # seven heads (v5, v6, v6.2, v6.3 arms p3a / p3b / p3c, the live v6.3) on the cached room embeddings
                                  # (v6/room_emb plus labelq/room_emb) -> $KIVI_HOME/labelq/moments.json (times, scores)
     kivi_label_queue.py build    # candidates P1-P4, dedup, 6 s windows, local autolabel, the window table, plan and key
     kivi_label_queue.py report   # counts per source and day parity, owner minutes, what the labels add (fresh read)
@@ -15,7 +15,9 @@ Sources, in the owner's order (an item that several sources find keeps the first
   P1  the true-grid room events of the fair comparison that no labelled window covers (audit/fair_fa/unlabelled_events.csv);
   P2  live clips without an owner label (wake and button runs; `live/live_wakes.csv`, already autolabelled by the collect);
   P3  room moments where any head reaches raw >= 0.5 (2 s refractory, heads merged within 2 s), every day with cached
-      embeddings; c3-b evenings first, then c3-a evenings, c3-b days, c3-a days; even days before odd days inside each;
+      embeddings. Order (also of PC): even (train) days before odd (test) days; inside each, by how much the CURRENT
+      heads (every head but v5) confuse the window: band 0 max >= 0.9, 1 0.7-0.9, 2 0.5-0.7, 3 only v5 reached 0.5;
+      inside a band c3-b evenings, c3-a evenings, c3-b days, c3-a days; then the highest current score first;
   P4  possible missed calls: a moment at raw >= 0.3 of any head followed within 30 s on the same TV by a live run (a wake
       or a mic-button press; the detection time of a live_wakes.csv row).
 Dedup: a moment within 3 s of a window row of any `live-misses/*.csv` table (labelled, or pending in the queue) or inside a
@@ -65,7 +67,12 @@ WORK = KH / "labelq"
 HEADS = {"v5": "releases/v5-oye-kivi-2026-11-08/model/oye_kivi_next_uncalibrated.onnx",
          "v6": "releases/v6-oye-kivi-2026-11-11/model/oye_kivi_ctx_uncalibrated.onnx",
          "v6.2": "releases/v6-p2-oye-kivi-2026-11-12/model/oye_kivi_ctx2_uncalibrated.onnx",
-         "p3a": "v6p3/runs/p3a/kivi.onnx", "p3b": "v6p3/runs/p3b/kivi.onnx", "p3c": "v6p3/runs/p3c/kivi.onnx"}
+         "p3a": "v6p3/runs/p3a/kivi.onnx", "p3b": "v6p3/runs/p3b/kivi.onnx", "p3c": "v6p3/runs/p3c/kivi.onnx",
+         # the live model (arm r3 of v6.3r, oye_kivi_ctx3, raw threshold 0.945); the tflite of the same release is
+         # sha256 66b6e1ae72c0..., this onnx is byte-identical to v6p3r/runs/r3/kivi.onnx
+         "v6.3": "releases/v6-p3-oye-kivi-2026-11-13/model/oye_kivi_ctx3_uncalibrated.onnx"}
+OLD_HEAD = "v5"                  # the head of the old generation: it does not count for the P3 order
+BANDS = (0.9, 0.7, 0.5)          # lower edges of the confusion bands 0, 1, 2 (band 3: below 0.5)
 INDEXES = ("v6/room_emb/index.json", "labelq/room_emb/index.json")
 MANIFESTS = ("negatives", "negatives-v5era", "negatives-daily")
 FAIR_EVENTS = "audit/fair_fa/unlabelled_events.csv"
@@ -133,11 +140,23 @@ def merge_detections(dets, merge_s=MERGE_S):
     return [{"t": m["t"], "scores": {h: round(v, 4) for h, v in m["scores"].items()}} for m in out]
 
 
+def current_score(scores):
+    """Highest score of the current-generation heads (every known head but v5) of {head: score}; 0 when there is none.
+    Rounded to 3 decimals, as the `peaks` column stores it, so that build and reorder bin a window the same way."""
+    return round(max([v for h, v in scores.items() if h != OLD_HEAD and h in HEADS] or [0.0]), 3)
+
+
+def band_of(score):
+    """0: current heads >= 0.9, 1: 0.7-0.9, 2: 0.5-0.7, 3: below 0.5 (only v5 reached 0.5)."""
+    return next((i for i, edge in enumerate(BANDS) if score >= edge), len(BANDS))
+
+
 def p3_order(c):
-    """Sort key inside P3: c3-b evenings, c3-a evenings, c3-b days, c3-a days; even (train) before odd (test) days; then
-    the highest score first."""
+    """Sort key inside P3: even (train) before odd (test) days; the band of the current heads' max score (confusing
+    first, v5-only last); c3-b evenings, c3-a evenings, c3-b days, c3-a days; then the highest current score first."""
+    sc = current_score(c["scores"])
     block = (0 if c["evening"] else 2) + (0 if c["device"] == "c3-b" else 1)
-    return (block, c["split"] != "train", -max(c["scores"].values() or [0.0]), c["t"])
+    return (c["split"] != "train", band_of(sc), block, -sc, c["t"])
 
 
 def decide_window(ev):
@@ -373,7 +392,7 @@ def dedup(cands, windows, spans, queued=None):
             if queued is not None:
                 queued.append({"tier": c["tier"], "table": pending[0][4], "ref": pending[0][5], "device": dev,
                                "t": t, "split": split_of(madrid(t)[0]), "evening": str(int(madrid(t)[1])),
-                               "score": max(c["scores"].values() or [0.0])})
+                               "score": current_score(c["scores"])})
             continue
         if any(a <= t <= b for a, b in spans.get(dev, ())):
             why[f"{c['tier']}: inside a live clip"] += 1
@@ -599,27 +618,42 @@ def write_plan(root, live_rows, new_rows, autos, plan_path, key_path, queued=())
           f"trusted auto labels); {plan_path}")
 
 
+def row_peaks(r):
+    """{head: score} of a window row's `peaks` column ("head=score;..."; other entries such as oof= come along)."""
+    scores = {}
+    for x in (r.get("peaks") or "").split(";"):
+        if "=" in x:
+            h, v = x.split("=", 1)
+            try:
+                scores[h] = float(v)
+            except ValueError:
+                pass
+    return scores
+
+
 def row_score(r):
-    """Highest head score of a window row (`peaks` column), 0 when there is none."""
-    vals = [float(x.split("=", 1)[1]) for x in (r.get("peaks") or "").split(";") if "=" in x]
-    return max(vals or [0.0])
+    """Highest current-generation head score (not v5; oof= and other non-head entries are ignored) of a window row's
+    `peaks` column, 0 when there is none."""
+    return current_score(row_peaks(r))
 
 
 def plan_key(it, score=0.0):
-    """Order of the plan: tier; inside P3 the p3_order blocks (c3-b evenings, c3-a evenings, c3-b days, c3-a days; even
-    days first; highest score first); P1, P2 and P4 by time."""
+    """Order of the plan: tier; inside P3 (and PC, which sits in it) the p3_order key: even (train) days first, then the
+    band of `score` (the current heads' max: confusing first, v5-only last), then the block (c3-b evenings, c3-a
+    evenings, c3-b days, c3-a days), then the highest score first; P1, P2 and P4 by time. PC is block 2.5, after the
+    c3-b days and before the c3-a days of its band."""
     tier = TIERS.index(it["tier"])
-    if it["tier"] == "PC":                       # after c3-b evenings (0), c3-a evenings (1), c3-b days (2) of P3
-        return (TIERS.index("P3"), 2.5, False, -score, it["utc"])
-    if it["tier"] != "P3":
-        return (tier, 0, False, 0.0, it["utc"])
-    block = (0 if it["evening"] == "1" else 2) + (0 if it["device"] == "c3-b" else 1)
-    return (tier, block, it["split"] != "train", -score, it["utc"])
+    if it["tier"] not in ("P3", "PC"):
+        return (tier, False, 0, 0, 0.0, it["utc"])
+    block = 2.5 if it["tier"] == "PC" else (0 if it["evening"] == "1" else 2) + (0 if it["device"] == "c3-b" else 1)
+    return (TIERS.index("P3"), it["split"] != "train", band_of(score), block, -score, it["utc"])
 
 
 def cmd_reorder(a):
-    """Put the plan in plan_key order again (scores from the window table, or the scanned moments for rows of other
-    tables) and renumber; only the order changes."""
+    """Put the plan in plan_key order again and renumber; only the order changes. The score of a window item is the
+    current-heads max (as in build) of its table row's `peaks`, completed per head by the nearest scanned moment within
+    MATCH_S (a later `scan` brings a new head, e.g. the live v6.3, to rows that were cut before it was scanned), or of
+    that moment alone for rows of other tables."""
     root = Path(a.dataset_root).expanduser()
     plan_path = root / "labelq" / "plan.csv"
     plan = read_csv(plan_path, PLAN_FIELDS)
@@ -632,11 +666,13 @@ def cmd_reorder(a):
     def score(it):
         if it["kind"] != "window":
             return 0.0
-        if it["ref"] in win:
-            return row_score(win[it["ref"]])
         t = utc_epoch(it["utc"])
-        near = [max(m["scores"].values()) for m in by_dev[it["device"]] if abs(m["t"] - t) <= MATCH_S]
-        return max(near or [0.0])
+        sc = dict(row_peaks(win[it["ref"]])) if it["ref"] in win else {}
+        near = min((m for m in by_dev[it["device"]] if abs(m["t"] - t) <= MATCH_S), key=lambda m: abs(m["t"] - t),
+                   default=None)
+        for h, v in (near["scores"].items() if near else ()):
+            sc[h] = max(sc.get(h, 0.0), v)
+        return current_score(sc)
     plan.sort(key=lambda it: plan_key(it, score(it)))
     for i, it in enumerate(plan, 1):
         it["order"] = str(i)

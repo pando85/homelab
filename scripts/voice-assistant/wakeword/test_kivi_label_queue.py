@@ -63,12 +63,34 @@ def test_audit_sample_is_seeded_and_rounded_up():
     assert Q.audit_sample([]) == set() and len(Q.audit_sample(refs[:3])) == 1
 
 
-def test_p3_order_c3b_evenings_then_even_days_then_score():
-    mk = lambda dev, ev, split, s, t: {"device": dev, "evening": ev, "split": split, "scores": {"v5": s}, "t": t}  # noqa: E731
-    cs = [mk("c3-a", False, "train", 0.9, 1), mk("c3-b", True, "test", 0.9, 2), mk("c3-b", True, "train", 0.6, 3),
-          mk("c3-a", True, "train", 0.99, 4), mk("c3-b", False, "train", 0.7, 5), mk("c3-b", True, "train", 0.8, 6)]
+def _cand(dev, ev, split, scores, t):
+    return {"device": dev, "evening": ev, "split": split, "scores": scores, "t": t}
+
+
+def test_p3_order_train_first_then_band_then_block_then_score():
+    # t encodes the expected rank; scores of the current heads (v6.3 is one), v5 never counts
+    cs = [_cand("c3-b", True, "test", {"v6.3": 0.99}, 7),                   # test day: after every train item
+          _cand("c3-a", False, "train", {"v6.3": 0.95, "v5": 0.5}, 3),      # band 0, c3-a day
+          _cand("c3-b", True, "train", {"v5": 0.99, "v6": 0.6}, 5),         # v5 0.99 is ignored: band 2
+          _cand("c3-a", True, "train", {"v5": 0.97}, 6),                    # only v5: band 3
+          _cand("c3-b", False, "train", {"v6.2": 0.8}, 4),                  # band 1
+          _cand("c3-b", True, "train", {"p3a": 0.92}, 1),                   # band 0, c3-b evening
+          _cand("c3-b", True, "train", {"p3c": 0.99}, 0),                   # same block, higher score first
+          _cand("c3-a", True, "train", {"v6.3": 0.9}, 2)]                   # band 0 (>= 0.9), c3-a evening
     got = [c["t"] for c in sorted(cs, key=Q.p3_order)]
-    assert got == [6, 3, 2, 4, 5, 1]
+    assert got == [0, 1, 2, 3, 4, 5, 6, 7]
+
+
+def test_p3_order_v5_only_last_and_band_edges():
+    cs = [_cand("c3-b", True, "train", {"v5": 0.99}, 9),
+          _cand("c3-b", True, "train", {"v5": 0.6, "v6": 0.4994}, 8),       # current max < 0.5: band 3
+          _cand("c3-a", False, "train", {"v6": 0.5}, 3),                    # edges: 0.5 -> band 2
+          _cand("c3-a", False, "train", {"v6": 0.7}, 2),                    # 0.7 -> band 1
+          _cand("c3-a", False, "train", {"v6": 0.9}, 1)]                    # 0.9 -> band 0
+    assert [c["t"] for c in sorted(cs, key=Q.p3_order)] == [1, 2, 3, 8, 9]
+    assert [Q.band_of(x) for x in (0.95, 0.9, 0.89, 0.7, 0.69, 0.5, 0.49, 0.0)] == [0, 0, 1, 1, 2, 2, 3, 3]
+    assert Q.current_score({"v5": 0.99}) == 0.0 and Q.current_score({"oof": 0.9, "v6.3": 0.6}) == 0.6
+    assert "v6.3" in Q.HEADS and Q.HEADS["v6.3"].endswith("oye_kivi_ctx3_uncalibrated.onnx")
 
 
 def _piece(tmp_path, dev, start_iso, seconds, name):
@@ -179,10 +201,71 @@ def test_old_tables_keep_their_header(tmp_path):
     assert rows[0]["label"] == "noise" and "label_source" not in rows[0]
 
 
-def test_plan_key_orders_p3_blocks():
-    it = lambda tier, dev, ev, split, utc: {"tier": tier, "device": dev, "evening": ev, "split": split, "utc": utc}  # noqa: E731
-    items = [(it("P3", "c3-a", "0", "train", "b"), 0.99), (it("P3", "c3-b", "1", "test", "c"), 0.9),
-             (it("P1", "c3-a", "0", "test", "z"), 0.0), (it("P3", "c3-b", "1", "train", "d"), 0.6),
-             (it("P4", "c3-b", "1", "train", "a"), 0.4), (it("P3", "c3-a", "1", "train", "e"), 0.7)]
+def _item(tier, dev, ev, split, utc):
+    return {"tier": tier, "device": dev, "evening": ev, "split": split, "utc": utc}
+
+
+def test_plan_key_orders_p3_tiers_and_pc():
+    items = [(_item("P3", "c3-a", "0", "train", "b"), 0.99), (_item("P3", "c3-b", "1", "test", "c"), 0.9),
+             (_item("P1", "c3-a", "0", "test", "z"), 0.0), (_item("P3", "c3-b", "1", "train", "d"), 0.6),
+             (_item("P4", "c3-b", "1", "train", "a"), 0.4), (_item("P3", "c3-a", "1", "train", "e"), 0.7),
+             (_item("P3", "c3-b", "1", "train", "f"), 0.2),                       # v5-only: last of the train items
+             (_item("PC", "c3-b", "0", "train", "g"), 0.95)]
     got = [x["utc"] for x, s in sorted(items, key=lambda xs: Q.plan_key(*xs))]
-    assert got == ["z", "d", "c", "e", "b", "a"]
+    # P1; train: band 0 (g PC block 2.5 before b c3-a day), band 1 (e), band 2 (d), band 3 (f); then test (c); P4
+    assert got == ["z", "g", "b", "e", "d", "f", "c", "a"]
+    pc = [(_item("PC", "c3-b", "0", "train", "p"), 0.8), (_item("P3", "c3-b", "0", "train", "q"), 0.8),
+          (_item("P3", "c3-a", "0", "train", "r"), 0.8), (_item("P3", "c3-a", "1", "train", "s"), 0.8)]
+    assert [x["utc"] for x, s in sorted(pc, key=lambda xs: Q.plan_key(*xs))] == ["s", "q", "p", "r"]
+
+
+def _plan_from(root, cands):
+    """Window rows (peaks as build writes them) and plan items of the candidates, in a scrambled order."""
+    rows, plan = [], []
+    for i, c in enumerate(sorted(cands, key=lambda c: (c["t"] * 7919) % 1013), 1):
+        utc = L.dir_stamp(c["t"])
+        peaks = ";".join(f"{k}={v:.3f}" for k, v in sorted(c["scores"].items()))
+        rows.append({k: "" for k in Q.FIELDS} | {"id": f"lq-{i:05d}", "device": c["device"], "utc": utc, "peaks": peaks,
+                                                 "split": c["split"], "tier": "P3", "evening": str(int(c["evening"]))})
+        plan.append(dict(Q._plan_item("window", f"lq-{i:05d}", "P3", c["device"], utc, c["split"], str(int(c["evening"]))),
+                         order=str(i)))
+    L.write_miss_table(root / "live-misses" / Q.TABLE, rows)
+    L.write_csv_atomic(root / "labelq" / "plan.csv", Q.PLAN_FIELDS, plan)
+
+
+def _plan_order(root):
+    with open(root / "labelq" / "plan.csv", newline="") as f:
+        return [(p["device"], Q.utc_epoch(p["utc"])) for p in csv.DictReader(f)]
+
+
+def test_reorder_gives_the_build_order(tmp_path, monkeypatch):
+    root = tmp_path / "real"
+    (root / "live-misses").mkdir(parents=True)
+    (root / "labelq").mkdir()
+    work = tmp_path / "kh" / "labelq"
+    work.mkdir(parents=True)
+    monkeypatch.setattr(Q, "WORK", work)
+    base = ep("2026-11-10T17:00:00")
+    cands = []
+    for dev, off, sc in [("c3-b", 0, {"v5": 0.99}), ("c3-b", 60, {"v5": 0.6, "v6.3": 0.9496}), ("c3-a", 120, {"v6": 0.75}),
+                         ("c3-b", 180, {"v6.2": 0.55, "v5": 0.9}), ("c3-a", 240, {"p3b": 0.97}), ("c3-b", 300, {"v6": 0.5}),
+                         ("c3-b", 360, {"v6.3": 0.91}), ("c3-a", 420, {"v5": 0.7}), ("c3-a", 480, {"v6": 0.4}),
+                         ("c3-a", 540, {"v6": 0.8996})]:
+        for dd in (0, 1, 2, 13):                                           # days 10 and 12 train, 11 and 23 test
+            t = base + off + 86400 * dd
+            day, ev = Q.madrid(t)
+            cands.append({"device": dev, "t": t, "day": day, "evening": ev, "scores": sc, "split": Q.split_of(day)})
+    _plan_from(root, cands)
+    (work / "moments.json").write_text(json.dumps({"moments": []}))
+    ns = type("A", (), {"dataset_root": str(root)})()
+    Q.cmd_reorder(ns)
+    assert _plan_order(root) == [(c["device"], c["t"]) for c in sorted(cands, key=Q.p3_order)]
+    got = _plan_order(root)
+    assert [c["split"] for c in sorted(cands, key=Q.p3_order)] == ["train"] * 20 + ["test"] * 20
+    # a later scan adds a head the rows were cut without: reorder picks it up from the nearest moment (v5-only -> band 0)
+    c = next(c for c in cands if c["scores"] == {"v5": 0.99} and c["split"] == "train")
+    assert got.index((c["device"], c["t"])) >= 14                          # band 3 (6 items) is the end of the 20 train items
+    (work / "moments.json").write_text(json.dumps({"moments": [
+        {"device": c["device"], "t": c["t"] + 0.5, "scores": {"v5": 0.99, "v6.3": 0.97}}]}))
+    Q.cmd_reorder(ns)
+    assert _plan_order(root)[0] == (c["device"], c["t"])                   # c3-b evening, band 0, the highest score
