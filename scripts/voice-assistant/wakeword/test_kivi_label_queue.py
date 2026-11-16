@@ -91,6 +91,7 @@ def test_p3_order_v5_only_last_and_band_edges():
     assert [Q.band_of(x) for x in (0.95, 0.9, 0.89, 0.7, 0.69, 0.5, 0.49, 0.0)] == [0, 0, 1, 1, 2, 2, 3, 3]
     assert Q.current_score({"v5": 0.99}) == 0.0 and Q.current_score({"oof": 0.9, "v6.3": 0.6}) == 0.6
     assert "v6.3" in Q.HEADS and Q.HEADS["v6.3"].endswith("oye_kivi_ctx3_uncalibrated.onnx")
+    assert Q.HEADS["v6.4"].endswith("oye_kivi_ctx4_uncalibrated.onnx")
 
 
 def _piece(tmp_path, dev, start_iso, seconds, name, amp=300):

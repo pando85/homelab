@@ -79,9 +79,12 @@ BASE_MODELS = {
     # v6.3 = v6.3r arm r3 (same file), released and live from 2026-11-12T23:18:18Z by owner override
     "v6.3": ("releases/v6-p3-oye-kivi-2026-11-13/model/oye_kivi_ctx3_uncalibrated", 0.945,
              {"<=11-08": "T", "11-10": "S", "11-12": "T"}),
+    # v6.4 = arm s2 of v6.4, released and live from 2026-11-16T16:30:33Z by owner override (in-sample days: see plan 13)
+    "v6.4": ("releases/v6-p4-oye-kivi-2026-11-16/model/oye_kivi_ctx4_uncalibrated", 0.983, V64_SEEN),
 }
 P3_SEEN = {"<=11-08": "T", "11-10": "T+S"}          # v6p3: room 11-05/-06/-08, live and windows 11-08/-10; selection 11-10
 P3R_SEEN = {"<=11-08": "T", "11-10": "S", "11-12": "T"}   # v6p3r: 11-05 to -08 and 11-12; selection 11-10
+V64_SEEN = {"<=11-08": "T", "11-10": "T", "11-12": "T", "11-14": "S"}   # v6p4: trained on 11-05 to -12 (even); selection 11-14
 
 
 # ---------------------------------------------------------------------------------------------

@@ -80,7 +80,9 @@ HEADS = {"v5": "releases/v5-oye-kivi-2026-11-08/model/oye_kivi_next_uncalibrated
          "p3a": "v6p3/runs/p3a/kivi.onnx", "p3b": "v6p3/runs/p3b/kivi.onnx", "p3c": "v6p3/runs/p3c/kivi.onnx",
          # the live model (arm r3 of v6.3r, oye_kivi_ctx3, raw threshold 0.945); the tflite of the same release is
          # sha256 66b6e1ae72c0..., this onnx is byte-identical to v6p3r/runs/r3/kivi.onnx
-         "v6.3": "releases/v6-p3-oye-kivi-2026-11-13/model/oye_kivi_ctx3_uncalibrated.onnx"}
+         "v6.3": "releases/v6-p3-oye-kivi-2026-11-13/model/oye_kivi_ctx3_uncalibrated.onnx",
+         # the live model since 2026-11-16T16:30:33Z (arm s2 of v6.4, oye_kivi_ctx4, raw threshold 0.983)
+         "v6.4": "releases/v6-p4-oye-kivi-2026-11-16/model/oye_kivi_ctx4_uncalibrated.onnx"}
 OLD_HEAD = "v5"                  # the head of the old generation: it does not count for the P3 order
 BANDS = (0.9, 0.7, 0.5)          # lower edges of the confusion bands 0, 1, 2 (band 3: below 0.5)
 INDEXES = ("v6/room_emb/index.json", "labelq/room_emb/index.json")
