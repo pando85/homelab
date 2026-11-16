@@ -10,6 +10,7 @@ never the cluster Whisper) and speaker embeddings are never saved.
     kivi_label_queue.py report   # counts per source and day parity, owner minutes, what the labels add (fresh read)
     kivi_label_queue.py audit    # after the owner's labels: auto label against owner label on the blind 5 % sample
     kivi_label_queue.py reorder  # the plan in priority order again (only the order changes)
+    kivi_label_queue.py quiet-noise [--dry-run]   # the quiet-window rule below, applied to the windows that wait for the owner
 
 Sources, in the owner's order (an item that several sources find keeps the first and lists all):
   P1  the true-grid room events of the fair comparison that no labelled window covers (audit/fair_fa/unlabelled_events.csv);
@@ -32,6 +33,15 @@ and `other-speech`. To the owner (table cell left empty, the auto label only in 
 anything below 0.7. Live clips keep the collect's autolabel; to the owner: kivi_autolabel.is_uncertain rows and every
 auto `true` (a call: confirmed and speaker-labelled by ear). A seeded random 5 % of the trusted auto labels (windows and
 live auto `false`) go to the owner too, blind (the queue never shows a label; the auto label stays in the key).
+Quiet windows (owner decision 2026-11-16; of 19 owner-labelled windows below -50 dBFS all 19 were `noise`): a window whose
+level_dbfs (RMS of the whole 6 s window, kivi_replay_mine.wav_levels) is below QUIET_NOISE_DBFS (-50.0, strictly) and whose
+word evidence is not wake-like (no phrase / weak / exact kivi / oye-like / kivi-near word, see `wakelike`) is `noise`
+(0.9, label_source `auto-quiet`, key why `quiet`), trusted, instead of going to the owner; a quiet window that is wake-like
+(`attempt`, oye-like, kivi-like `unclear`) or that has no word evidence at all (cleaning rows) still goes to the owner. It
+overrides only what would go to the owner (`unclear`, low confidence); an already trusted `other-speech` keeps its label.
+`build` applies it to new windows, `quiet-noise` to windows that are already pending (empty label, no owner label); the
+5 % blind audit applies to these trusted labels in the same way (the audited rows keep their label in the table, are marked
+audit=1 in the key and stay in the plan; the others leave the plan).
 
 Files (private, mode 600/700): `<dataset>/live-misses/labelq_v6p3r.csv` (window table; MISS_FIELDS plus label_source,
 label_conf, speaker_conf, auto_evidence, split, tier, sources, evening, peaks), its clips under `live-misses/labelq/`,
@@ -91,6 +101,9 @@ EXTRA = ("label_source", "label_conf", "speaker_conf", "auto_evidence", "split",
 FIELDS = L.MISS_FIELDS + EXTRA
 TRUSTED_WIN = ("noise", "other-speech")
 OWNER_CONF = 0.7
+QUIET_NOISE_DBFS = -50.0         # level_dbfs below this (strictly), without wake-like word evidence: trusted `noise`
+QUIET_CONF = 0.9
+QUIET_SOURCE = "auto-quiet"
 AUDIT_SHARE = 0.05
 SEED = 20261112
 SECONDS_PER_ITEM = 6.0
@@ -188,6 +201,49 @@ def to_owner_live(row):
     if row["label"] == "true":
         return "call"
     return None
+
+
+def evidence_flags(evidence):
+    """{key: value} of an `auto_evidence` string ("ph=0;weak=0;kivi=0;oye=0;ksim=0.4;...;auto=unclear/0.40/-")."""
+    out = {}
+    for part in str(evidence or "").split(";"):
+        k, _, v = part.partition("=")
+        if k:
+            out[k] = v
+    return out
+
+
+def wakelike(evidence):
+    """Whether the word evidence of a window (the autolabeller's `auto_evidence` string) is wake-like: a phrase, a weak
+    phrase, an exact kivi, an oye-like word or a kivi-like word (kivi_sim >= KIVI_NEAR_SIM). An empty string (a row the
+    autolabeller never transcribed) is treated as wake-like: nothing is known, so the owner decides."""
+    import kivi_autolabel as A
+    f = evidence_flags(evidence)
+    if not f:
+        return True
+    try:
+        near = float(f.get("ksim") or 0.0) >= A.KIVI_NEAR_SIM
+    except ValueError:
+        near = True
+    return any(f.get(k) == "1" for k in ("ph", "weak", "kivi", "oye")) or near
+
+
+def is_quiet_noise(level, evidence, label="", conf=0.0):
+    """The quiet-window rule: level below QUIET_NOISE_DBFS, the auto label (label, conf) would go to the owner and is not
+    `attempt`, and the word evidence is not wake-like."""
+    try:
+        lv = float(level)
+    except (TypeError, ValueError):
+        return False
+    return lv < QUIET_NOISE_DBFS and label != "attempt" and to_owner_window(label, conf) and not wakelike(evidence)
+
+
+def quiet_override(res, level):
+    """A WindowLabeller result for a window of `level` dBFS: the quiet-noise result when the rule applies, else res."""
+    if not is_quiet_noise(level, res["evidence"], res["label"], res["conf"]):
+        return res
+    return dict(res, label="noise", conf=QUIET_CONF, speaker="", speaker_conf=0.0, quiet=True,
+                evidence=res["evidence"] + ";quiet=1")
 
 
 def audit_sample(refs, share=AUDIT_SHARE, seed=SEED):
@@ -510,15 +566,15 @@ def cmd_build(a, labeller=None):
                 dup_audio += 1
                 continue
             hashes.add(h)
-            res = labeller.label(pcm)
+            import kivi_replay_mine as K
+            rms, pkd = K.wav_levels(pcm)
+            res = quiet_override(labeller.label(pcm), rms)
             utc = L.dir_stamp(c["t"])
             rel = f"{CLIPS}/{c['device']}/{utc}/window.wav"
             dst = root / "live-misses" / rel
             if not dst.exists():
                 C.private_mkdir(dst.parent, root)
                 C.write_wav_new(dst, pcm)
-            import kivi_replay_mine as K
-            rms, pkd = K.wav_levels(pcm)
             owner = to_owner_window(res["label"], res["conf"])
             row = {k: "" for k in FIELDS} | {
                 "id": f"lq-{n0 + len(new_rows) + 1:05d}", "device": c["device"], "part": f"labelq-{c['tier']}", "utc": utc,
@@ -528,7 +584,7 @@ def cmd_build(a, labeller=None):
                 "peaks": ";".join(f"{k}={v:.3f}" for k, v in sorted(c["scores"].items())),
                 "auto_evidence": res["evidence"] + f";auto={res['label']}/{res['conf']:.2f}/{res['speaker'] or '-'}"}
             if not owner:
-                row.update(label=res["label"], label_source="auto-v1", label_conf=f"{res['conf']:.2f}",
+                row.update(label=res["label"], label_source=QUIET_SOURCE if res.get("quiet") else "auto-v1", label_conf=f"{res['conf']:.2f}",
                            speaker=res["speaker"] if res["label"] == "other-speech" else "",
                            speaker_conf=f"{res['speaker_conf']:.2f}" if res["label"] == "other-speech" else "")
             row["_auto"] = res
@@ -563,7 +619,7 @@ def write_plan(root, live_rows, new_rows, autos, plan_path, key_path, queued=())
         k = {"kind": "window", "ref": r["id"], "tier": r["tier"], "auto_label": res["label"], "auto_conf": f"{res['conf']:.2f}",
              "auto_speaker": res["speaker"], "audit": "0",
              "why": ("attempt" if res["label"] == "attempt" else "unclear" if res["label"] == "unclear" else
-                     "low-confidence") if owner else ""}
+                     "low-confidence") if owner else "quiet" if res.get("quiet") else ""}
         keys.append(k)
         if owner:
             items.append(_plan_item("window", r["id"], r["tier"], r["device"], r["utc"], r["split"], r["evening"]))
@@ -616,6 +672,92 @@ def write_plan(root, live_rows, new_rows, autos, plan_path, key_path, queued=())
     L.write_csv_atomic(key_path, KEY_FIELDS, old_key + [k for k in keys if (k["kind"], k["ref"]) not in keyed])
     print(f"plan: {len(plan)} item(s) ({len(plan) - len(old_plan)} new; audit sample {len(sample)} of {len(trusted_refs)} "
           f"trusted auto labels); {plan_path}")
+
+
+def quiet_candidates(rows, key_by):
+    """The quiet-noise rule on window rows: (ids to relabel, {split: Counter(relabel / skipped / labelled)}). Only rows with
+    a level below QUIET_NOISE_DBFS count. Pending = empty label or `unclear` and no owner label (owner / owner-button,
+    whatever the label); `skipped` = pending but wake-like or never transcribed (the key's auto label `attempt` also
+    keeps a row), `labelled` = already has an owner or trusted label."""
+    ids, cnt = [], defaultdict(Counter)
+    for r in rows:
+        try:
+            quiet = float(r["level_dbfs"]) < QUIET_NOISE_DBFS
+        except ValueError:
+            continue
+        if not quiet:
+            continue
+        c = cnt[r.get("split") or "?"]
+        if r.get("label_source") in L.OWNER_SOURCES or r["label"] not in ("", "unclear"):
+            c["labelled"] += 1
+            continue
+        k = key_by.get(("window", r["id"]))
+        if (k and k["auto_label"] == "attempt") or wakelike(r.get("auto_evidence", "")):
+            c["skipped"] += 1
+            continue
+        ids.append(r["id"])
+        c["relabel"] += 1
+    return ids, cnt
+
+
+def cmd_quiet_noise(a):
+    """Apply the quiet-window rule to the windows of the table that wait for the owner. Counts only. Order of writes:
+    table (a fresh read, atomic; owner labels win), key, plan; every file is backed up first. The trusted rows leave the
+    plan except a seeded 5 % blind audit sample, which keeps its label in the table (as in build), is audit=1 in the key
+    and stays in the plan. Idempotent: a second run finds nothing pending."""
+    root = Path(a.dataset_root).expanduser()
+    table = root / "live-misses" / TABLE
+    plan_path, key_path = root / "labelq" / "plan.csv", root / "labelq" / "key.csv"
+    key = read_csv(key_path, KEY_FIELDS)
+    key_by = {(k["kind"], k["ref"]): k for k in key}
+    fresh = L.read_miss_table(table)                    # fresh read right before the write
+    ids, cnt = quiet_candidates(fresh, key_by)
+    sample = {s.split("|", 1)[1] for s in audit_sample([f"window|{i}" for i in ids])}
+    by_id = {r["id"]: r for r in fresh}
+    for i in ids:
+        cnt[by_id[i].get("split") or "?"]["audited"] += i in sample
+    print(f"quiet-noise (level_dbfs < {QUIET_NOISE_DBFS}), per split; relabel = trusted `noise`, audited = of those kept "
+          f"for the owner (blind), skipped = wake-like evidence or not transcribed, labelled = already labelled")
+    for sp in sorted(cnt):
+        c = cnt[sp]
+        print(f"  {sp}: relabelled {c['relabel']}, audited {c['audited']}, skipped {c['skipped']}, "
+              f"already labelled {c['labelled']}")
+    print(f"  total: relabelled {len(ids)}, audited {len(sample)}")
+    if a.dry_run or not ids:
+        print("dry run: nothing written" if a.dry_run else "nothing to do")
+        return
+    todo = set(ids)
+    for r in fresh:
+        if r["id"] in todo:
+            r.update(label="noise", label_source=QUIET_SOURCE, label_conf=f"{QUIET_CONF:.2f}", speaker="", speaker_conf="",
+                     auto_evidence=(r.get("auto_evidence") or "") + ";quiet=1")
+    backup(table)
+    L.write_miss_table(table, fresh)
+    for i in sorted(todo):
+        k = key_by.get(("window", i))
+        if k is None:
+            r = by_id[i]
+            k = {"kind": "window", "ref": i, "tier": r.get("tier", ""), "auto_label": "", "auto_conf": "", "auto_speaker": "",
+                 "audit": "0", "why": ""}
+            key.append(k)
+        k.update(auto_label="noise", auto_conf=f"{QUIET_CONF:.2f}", auto_speaker="",
+                 audit="1" if i in sample else "0", why="audit" if i in sample else "quiet")
+    backup(key_path)
+    L.write_csv_atomic(key_path, KEY_FIELDS, key)
+    plan = sorted(read_csv(plan_path, PLAN_FIELDS), key=lambda p: int(p["order"] or 0))
+    drop = todo - sample
+    have = {p["ref"] for p in plan if p["kind"] == "window"}
+    plan = [p for p in plan if not (p["kind"] == "window" and p["ref"] in drop and p["table"] in (TABLE, ""))]
+    added = 0
+    for i in sorted(sample - have):                      # an audited row that was never planned: asked after the plan
+        r = by_id[i]
+        plan.append(_plan_item("window", i, r["tier"], r["device"], r["utc"], r["split"], r["evening"]))
+        added += 1
+    for n, p in enumerate(plan, 1):
+        p["order"] = str(n)
+    backup(plan_path)
+    L.write_csv_atomic(plan_path, PLAN_FIELDS, plan)
+    print(f"written: table, key, plan ({len(plan)} item(s); {len(drop)} left the plan, {added} audited row(s) added)")
 
 
 def row_peaks(r):
@@ -728,6 +870,8 @@ def cmd_report(a):
             rows[(cell, "auto true/attempt")] += 1
         elif auto in ("false", "noise", "other-speech", "tv-media"):
             rows[(cell, "auto false")] += 1
+        if src == QUIET_SOURCE:
+            rows[(cell, "of which quiet noise (auto-quiet)")] += 1
         if (kind, ref) in in_plan:
             rows[(cell, "to owner")] += 1
             if k["audit"] == "1":
@@ -785,6 +929,8 @@ def cmd_audit(a):
         auto = k["auto_label"]
         if kind == "live":
             agree[f"live auto {auto} -> owner {lab}"] += 1
+        elif evidence_flags(win.get(ref, {}).get("auto_evidence")).get("quiet") == "1":
+            agree[f"window auto-quiet {auto} -> owner {lab}"] += 1
         else:
             agree[f"window auto {auto} -> owner {lab}"] += 1
     print(json.dumps(dict(sorted(agree.items())), indent=1))
@@ -792,12 +938,13 @@ def cmd_audit(a):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("what", choices=["scan", "build", "report", "audit", "reorder"])
+    ap.add_argument("what", choices=["scan", "build", "report", "audit", "reorder", "quiet-noise"])
     ap.add_argument("--dataset-root", default=C.DEFAULT_DATASET_ROOT)
-    ap.add_argument("--dry-run", action="store_true", help="(build) candidates and dedup counts only")
+    ap.add_argument("--dry-run", action="store_true", help="(build) candidates and dedup counts only; (quiet-noise) counts only")
     ap.add_argument("--json", help="(report) also write the counts here")
     a = ap.parse_args(argv)
-    {"scan": cmd_scan, "build": cmd_build, "report": cmd_report, "audit": cmd_audit, "reorder": cmd_reorder}[a.what](a)
+    {"scan": cmd_scan, "build": cmd_build, "report": cmd_report, "audit": cmd_audit, "reorder": cmd_reorder,
+     "quiet-noise": cmd_quiet_noise}[a.what](a)
 
 
 if __name__ == "__main__":

@@ -93,12 +93,12 @@ def test_p3_order_v5_only_last_and_band_edges():
     assert "v6.3" in Q.HEADS and Q.HEADS["v6.3"].endswith("oye_kivi_ctx3_uncalibrated.onnx")
 
 
-def _piece(tmp_path, dev, start_iso, seconds, name):
+def _piece(tmp_path, dev, start_iso, seconds, name, amp=300):
     rel = f"negatives-daily/{dev}/{name}.wav"
     p = tmp_path / rel
     p.parent.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(len(name))
-    C.write_wav_new(p, (rng.standard_normal(int(seconds * 16000)) * 300).astype(np.int16))
+    C.write_wav_new(p, (rng.standard_normal(int(seconds * 16000)) * amp).astype(np.int16))
     return {"clip": rel, "device": dev, "start": ep(start_iso), "n": int(seconds * 16000), "part": "d"}
 
 
@@ -269,3 +269,190 @@ def test_reorder_gives_the_build_order(tmp_path, monkeypatch):
         {"device": c["device"], "t": c["t"] + 0.5, "scores": {"v5": 0.99, "v6.3": 0.97}}]}))
     Q.cmd_reorder(ns)
     assert _plan_order(root)[0] == (c["device"], c["t"])                   # c3-b evening, band 0, the highest score
+
+
+# ---------------------------------------------------------------------------------------------
+# quiet windows: level_dbfs below QUIET_NOISE_DBFS without wake-like evidence is a trusted `noise`
+# ---------------------------------------------------------------------------------------------
+
+CLEAN = "ph=0;weak=0;kivi=0;oye=0;score=0.0;ksim=0.3;words=2;wconf=0.4;spm=0.8;auto=unclear/0.45/-"
+WAKELIKE = "ph=1;weak=0;kivi=1;oye=1;ksim=1.0"
+
+
+def test_quiet_rule_boundaries():
+    assert Q.QUIET_NOISE_DBFS == -50.0
+    assert not Q.is_quiet_noise(-50.0, CLEAN, "unclear", 0.45)                 # exactly -50: to the owner
+    assert not Q.is_quiet_noise(-49.9, CLEAN, "unclear", 0.45)
+    assert Q.is_quiet_noise(-50.1, CLEAN, "unclear", 0.45)
+    assert Q.is_quiet_noise("-180.0", CLEAN, "unclear", 0.4)
+    assert not Q.is_quiet_noise("", CLEAN, "unclear", 0.4)                      # no level: no rule
+    for ev in ("ph=1;weak=0", "ph=0;weak=1", "ph=0;weak=0;kivi=1", "ph=0;weak=0;kivi=0;oye=1", "ph=0;ksim=0.75;oye=0",
+               "ph=0;ksim=0.9", ""):
+        assert not Q.is_quiet_noise(-60.0, ev, "unclear", 0.5), ev             # wake-like or never transcribed: owner
+    assert Q.is_quiet_noise(-60.0, "ph=0;weak=0;kivi=0;oye=0;ksim=0.74", "unclear", 0.5)
+    assert not Q.is_quiet_noise(-60.0, CLEAN, "attempt", 0.92)                  # a quiet real call is not negated
+    assert not Q.is_quiet_noise(-60.0, CLEAN, "other-speech", 0.75)             # already trusted: keeps its label
+    assert Q.is_quiet_noise(-60.0, CLEAN, "other-speech", 0.6)                  # to the owner by confidence: noise
+    r = Q.quiet_override({"label": "unclear", "conf": 0.45, "speaker": "spk01", "speaker_conf": 0.7, "evidence": CLEAN}, -61.0)
+    assert (r["label"], r["conf"], r["speaker"], r["quiet"]) == ("noise", 0.9, "", True) and r["evidence"].endswith(";quiet=1")
+    res = {"label": "unclear", "conf": 0.5, "speaker": "", "speaker_conf": 0.0, "evidence": "ph=0;oye=1"}
+    assert Q.quiet_override(res, -70.0) is res
+
+
+def test_build_quiet_windows_are_trusted_noise(tmp_path, monkeypatch):
+    root = tmp_path / "real"
+    (root / "live").mkdir(parents=True)
+    (root / "live-misses").mkdir()
+    pc = _piece(root, "c3-b", "2026-11-10T17:00:00", 1200, "b1", amp=10)       # about -70 dBFS
+    (root / "negatives-daily" / "manifest.jsonl").write_text(
+        json.dumps({"clip": pc["clip"], "device": "c3-b", "start_utc": "2026-11-10T17:00:00.000Z", "split": "d"}) + "\n")
+    work = tmp_path / "kh" / "labelq"
+    work.mkdir(parents=True)
+    monkeypatch.setattr(Q, "WORK", work)
+    monkeypatch.setattr(Q, "KH", tmp_path / "kh")
+    moments = [{"device": "c3-b", "t": pc["start"] + 60 * k, "scores": {"v5": 0.6 + 0.01 * k}} for k in range(1, 4)]
+    (work / "moments.json").write_text(json.dumps({"moments": moments}))
+    L.write_table(root / "live" / "live_wakes.csv", [])
+
+    class Fake:
+        def __init__(self):
+            self.labels = iter([("unclear", 0.4, ""), ("attempt", 0.92, "spk02"), ("unclear", 0.5, "")])
+            self.evidence = iter([CLEAN, WAKELIKE, "ph=0;weak=0;kivi=0;oye=1;ksim=0.5"])
+
+        def label(self, pcm):
+            lab, conf, spk = next(self.labels)
+            return {"label": lab, "conf": conf, "speaker": spk, "speaker_conf": 0.0, "evidence": next(self.evidence)}
+
+    ns = type("A", (), {"dataset_root": str(root), "dry_run": False})()
+    Q.cmd_build(ns, labeller=Fake())
+    table = L.read_miss_table(root / "live-misses" / Q.TABLE)
+    assert [float(r["level_dbfs"]) < -50 for r in table] == [True] * 3
+    assert [(r["label"], r["label_source"]) for r in table] == [("noise", "auto-quiet"), ("", ""), ("", "")]
+    assert table[0]["label_conf"] == "0.90" and "quiet=1" in table[0]["auto_evidence"]
+    with open(root / "labelq" / "key.csv", newline="") as f:
+        key = {k["ref"]: k for k in csv.DictReader(f)}
+    # one trusted label, 5 % rounded up = 1 audited: it keeps its label in the table and stays in the plan
+    assert key[table[0]["id"]]["why"] == "audit" and key[table[0]["id"]]["audit"] == "1"
+    assert key[table[1]["id"]]["why"] == "attempt" and key[table[2]["id"]]["why"] == "unclear"
+    assert len(L.queue_items(root)) == 3
+
+
+def _quiet_root(tmp_path, n_quiet=41):
+    """A window table with pending quiet rows (train and test) plus the rows the rule must leave alone."""
+    root = tmp_path / "real"
+    (root / "live").mkdir(parents=True)
+    (root / "live-misses").mkdir()
+    (root / "labelq").mkdir()
+    rows, plan, key = [], [], []
+
+    def add(i, level, label="", src="", ev=CLEAN, split="train", auto="unclear", why="unclear"):
+        rid = f"lq-{i:05d}"
+        rows.append({k: "" for k in Q.FIELDS} | {"id": rid, "device": "c3-b", "utc": f"20261110T1{i % 10}0000.000Z",
+                                                  "clip": f"labelq/{rid}.wav", "level_dbfs": str(level), "label": label,
+                                                  "label_source": src, "label_conf": "1.00" if src == "owner" else "",
+                                                  "speaker": "spk01" if src == "owner" else "", "split": split, "tier": "P3",
+                                                  "evening": "1", "auto_evidence": ev})
+        plan.append(Q._plan_item("window", rid, "P3", "c3-b", f"20261110T1{i % 10}0000.000Z", split, "1"))
+        key.append({"kind": "window", "ref": rid, "tier": "P3", "auto_label": auto, "auto_conf": "0.40", "auto_speaker": "",
+                    "audit": "0", "why": why})
+        return rid
+
+    for i in range(n_quiet):
+        add(i, -55.0 - i / 10, split="train" if i % 3 else "test")
+    ids = {"edge": add(100, -50.0), "loud": add(101, -49.9),
+           "attempt": add(102, -70.0, ev=WAKELIKE, auto="attempt", why="attempt"),
+           "oye": add(103, -70.0, ev="ph=0;weak=0;kivi=0;oye=1;ksim=0.5"),
+           "key_attempt": add(104, -70.0, auto="attempt", why="attempt"),
+           "no_ev": add(105, -70.0, ev=""),
+           "owner_noise": add(106, -70.0, "noise", "owner"), "owner_unclear": add(107, -70.0, "unclear", "owner"),
+           "owner_attempt": add(108, -70.0, "attempt", "owner"),
+           "auto_noise": add(109, -70.0, "noise", "auto-v1", auto="noise", why="")}
+    L.write_miss_table(root / "live-misses" / Q.TABLE, rows)
+    L.write_csv_atomic(root / "labelq" / "plan.csv", Q.PLAN_FIELDS, [dict(p, order=str(n)) for n, p in enumerate(plan, 1)])
+    L.write_csv_atomic(root / "labelq" / "key.csv", Q.KEY_FIELDS, key)
+    return root, ids
+
+
+def _snap(root):
+    return {p.name: p.read_bytes() for d in ("live-misses", "labelq") for p in (root / d).glob("*.csv")}
+
+
+def _qns(root, dry=False):
+    return type("A", (), {"dataset_root": str(root), "dry_run": dry})()
+
+
+def _audited(root):
+    with open(root / "labelq" / "key.csv", newline="") as f:
+        return sorted(k["ref"] for k in csv.DictReader(f) if k["audit"] == "1")
+
+
+def test_quiet_noise_command(tmp_path, capsys):
+    root, ids = _quiet_root(tmp_path)
+    before = _snap(root)
+    Q.cmd_quiet_noise(_qns(root, dry=True))
+    out = capsys.readouterr().out
+    assert _snap(root) == before and not list(root.rglob("*.bak-*"))             # --dry-run writes nothing
+    assert "total: relabelled 41, audited 3" in out                              # 5 % of 41 rounded up
+    assert "train: relabelled 27" in out and "test: relabelled 14" in out
+    assert "skipped 4" in out and "already labelled 4" in out
+    Q.cmd_quiet_noise(_qns(root))
+    rows = {r["id"]: r for r in L.read_miss_table(root / "live-misses" / Q.TABLE)}
+    quiet = [r for r in rows.values() if r["label_source"] == Q.QUIET_SOURCE]
+    assert len(quiet) == 41 and all(r["label"] == "noise" and r["label_conf"] == "0.90" and "quiet=1" in r["auto_evidence"]
+                                    for r in quiet)
+    for k in ("edge", "loud", "attempt", "oye", "key_attempt", "no_ev"):          # to the owner, untouched
+        assert rows[ids[k]]["label"] == "" and rows[ids[k]]["label_source"] == ""
+    assert [rows[ids[k]]["label"] for k in ("owner_noise", "owner_unclear", "owner_attempt")] == ["noise", "unclear", "attempt"]
+    assert all(rows[ids[k]]["label_source"] == "owner" and rows[ids[k]]["speaker"] == "spk01"
+               for k in ("owner_noise", "owner_unclear", "owner_attempt"))
+    assert rows[ids["auto_noise"]]["label_source"] == "auto-v1"
+    with open(root / "labelq" / "key.csv", newline="") as f:
+        key = {k["ref"]: k for k in csv.DictReader(f)}
+    audited = set(_audited(root))
+    assert len(audited) == 3 and audited <= {r["id"] for r in quiet}
+    for r in quiet:
+        k = key[r["id"]]
+        assert (k["auto_label"], k["auto_conf"]) == ("noise", "0.90")
+        assert k["why"] == ("audit" if r["id"] in audited else "quiet")
+    assert key[ids["attempt"]]["auto_label"] == "attempt" and key[ids["edge"]]["why"] == "unclear"
+    with open(root / "labelq" / "plan.csv", newline="") as f:
+        plan = list(csv.DictReader(f))
+    left = {ids[k] for k in ("edge", "loud", "attempt", "oye", "key_attempt", "no_ev", "owner_noise", "owner_unclear",
+                             "owner_attempt", "auto_noise")}
+    assert [p["order"] for p in plan] == [str(n) for n in range(1, len(plan) + 1)]
+    assert {p["ref"] for p in plan} == audited | left
+    asked = {it["row"]["id"] for it in L.queue_items(root)}                      # trusted rows are not asked, owner ones neither
+    assert asked == audited | (left - {ids[k] for k in ("owner_noise", "owner_unclear", "owner_attempt")})
+    # idempotent: a second run changes nothing and writes no backup
+    after = _snap(root)
+    nbak = len(list(root.rglob("*.bak-*")))
+    Q.cmd_quiet_noise(_qns(root))
+    assert "nothing to do" in capsys.readouterr().out
+    assert _snap(root) == after and len(list(root.rglob("*.bak-*"))) == nbak
+    # the report and the audit command count the new rows
+    ns = type("A", (), {"dataset_root": str(root), "json": None})()
+    Q.cmd_report(ns)
+    assert "auto-quiet" in capsys.readouterr().out
+    Q.cmd_audit(ns)
+    assert "not labelled yet" in capsys.readouterr().out
+
+
+def test_quiet_noise_audit_is_deterministic_and_owner_wins(tmp_path):
+    a, _ = _quiet_root(tmp_path / "a")
+    b, _ = _quiet_root(tmp_path / "b")
+    Q.cmd_quiet_noise(_qns(a))
+    Q.cmd_quiet_noise(_qns(b))
+    assert _audited(a) == _audited(b) and len(_audited(a)) == 3
+    # the owner labels an audited row; a later run keeps the owner label and the audit mark
+    aud = _audited(a)[0]
+    L.save_miss_label(a / "live-misses" / Q.TABLE, aud, "attempt", "spk02")
+    Q.cmd_quiet_noise(_qns(a))
+    row = next(r for r in L.read_miss_table(a / "live-misses" / Q.TABLE) if r["id"] == aud)
+    assert (row["label"], row["label_source"]) == ("attempt", "owner") and aud in _audited(a)
+    # a pending quiet row that the owner labelled before the run keeps the owner label
+    c, _ = _quiet_root(tmp_path / "c")
+    first = next(r["id"] for r in L.read_miss_table(c / "live-misses" / Q.TABLE) if r["level_dbfs"] == "-55.0")
+    L.save_miss_label(c / "live-misses" / Q.TABLE, first, "attempt", "spk02")
+    Q.cmd_quiet_noise(_qns(c))
+    row = next(r for r in L.read_miss_table(c / "live-misses" / Q.TABLE) if r["id"] == first)
+    assert (row["label"], row["label_source"]) == ("attempt", "owner")
