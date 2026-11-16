@@ -9,11 +9,19 @@ packages:
   connection: !include ./packages/connection.yaml
   mini-switch: !include ./packages/mini-switch.yaml
 
-# Force 802.11g on this ESP8266 to work around a suspected Wi-Fi radio hang (it drops off the
-# network and never recovers by itself). Merged with the `wifi:` block of packages/connection.yaml;
-# this device only (see docs/troubleshooting/office-iot-wifi-flapping.md).
+# Device-only Wi-Fi overrides, merged with the `wifi:` block of packages/connection.yaml.
+# - phy_mode 11G (802.11g) works around a suspected Wi-Fi radio hang on this ESP8266.
+# - post_connect_roaming is off: it runs a full channel scan every 5 min while connected, and
+#   ESPHome's own source notes the off-channel time can cause beacon-timeout disconnects. Office A
+#   hears hundreds of neighbour BSSIDs, so that scan is long.
+# - fast_connect connects without a scan at boot.
+# - reboot_timeout 5min reboots quickly when Wi-Fi stays down, instead of waiting 24 h.
+# See docs/troubleshooting/office-iot-wifi-flapping.md.
 wifi:
   phy_mode: 11G
+  post_connect_roaming: false
+  fast_connect: true
+  reboot_timeout: 5min
 
 # Record why the device reboots (see docs/troubleshooting/office-iot-wifi-flapping.md).
 # Only the cheap options: no `fragmentation` sensor, nothing that allocates on the heap.
