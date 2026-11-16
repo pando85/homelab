@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Kivi v6.4 threshold and arm, by the rule pre-registered in kivi-models docs/plan/2026-11-false-wake-plan.md section
-13.3 (committed before training). Reads only: the synthetic validation and C5 sets (no day data), the 2026-11-14 room audio
+13.2 (committed before training). Reads only: the synthetic validation and C5 sets (no day data), the 2026-11-14 room audio
 and live clips (the selection day; no v6.4 arm trained on it, and neither did v6.3) and the window tables (owner-labelled
 attempts). Counts only.
 
@@ -16,9 +16,10 @@ Reference = the live model v6.3 (`oye_kivi_ctx3`, raw 0.9450).
 3. False fires on the selection day at a try: (a) TFLite detections at the server grid (`v6_replay.py`, 2 s refractory) of the
    whole day minus those within 3 s of an owner-labelled attempt, plus (b) the live clips of the day labelled false (trusted)
    on which the model crosses anywhere in tail + request audio. Counted per TV and in total; v6.3 in the same run.
-4. Choice among all eligible (arm, try): fewest c3-b fires; tie: fewest in total; tie: fewest room detections at t - 0.02
-   (a smoother proxy, same replay); tie: fewest of the 787 decoy evaluation clips fired; tie: lower accept rate on
-   `v6/feat/near_test.npy`; tie: lower t (more recall); tie: s1, s3, s2. No eligible (arm, try): no v6.4, nothing packaged.
+4. Choice among all eligible (arm, try): fewest c3-b fires; tie: fewest in total; tie: the lowest try (the recall-matched t
+   first, so a higher threshold has to buy strictly fewer fires); tie: fewest room detections at t - 0.02 (a smoother
+   proxy, same replay); tie: fewest of the 787 decoy evaluation clips fired; tie: lower accept rate on
+   `v6/feat/near_test.npy`; tie: s1, s3, s2. No eligible (arm, try): no v6.4, nothing packaged.
 
     v6p4_select.py --arm s1=v6p4/runs/s1 --arm s2=v6p4/runs/s2 --arm s3=v6p4/runs/s3 --out v6p4/selection.json
 """
@@ -123,7 +124,7 @@ def main():
     c5_ref = c5_rates(ref_h, REF[1])
     near = np.load(KH / NEAR)
     dz = np.load(KH / DECOY)
-    res = {"rule": "plan section 13.3", "selection_day": SEL_DAY, "R_ref": round(100 * r_ref, 2),
+    res = {"rule": "plan section 13.2", "selection_day": SEL_DAY, "R_ref": round(100 * r_ref, 2),
            "c5_ref": {k: round(100 * v, 2) for k, v in c5_ref.items()}, "arms": {}}
     heads, tries = {}, {}
     for n, d in arms.items():
@@ -188,7 +189,8 @@ def main():
         n, t = nt
         pt = res["arms"][n]["per_try"][f"{t:.4f}"]
         c = pt["selection_day"]
-        return (c["c3-b"], c["total"], c["room_at_t-0.02"], pt["decoy_fired"], pt["near_test"], t, ORDER.index(n))
+        return (c["c3-b"], c["total"], tries[n].index(t), c["room_at_t-0.02"], pt["decoy_fired"], pt["near_test"],
+                ORDER.index(n) if n in ORDER else len(ORDER))
     res["chosen"] = None
     if chosen:
         n, t = min(chosen, key=key)
