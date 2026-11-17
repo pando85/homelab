@@ -13,9 +13,8 @@ electricidad_precio:
     Precio de la luz (PVPC, en céntimos por kWh) ahora y en las próximas horas, y la hora más barata
     para poner la lavadora, el lavavajillas u otro aparato. Úsala para "¿cuánto cuesta la luz?",
     "¿cuál es la hora más barata?" o "¿cuándo pongo la lavadora/el lavavajillas?". Con aparato o
-    duracion_h devuelve en mejor la hora de inicio más barata desde ahora, el precio medio, el ahorro
-    frente a empezar ahora, y cuántas horas de inicio diferido (lavavajillas) o de fin diferido
-    (lavadora) hay que programar en el aparato. Los precios de mañana se publican hacia las 20:30;
+    duracion_h devuelve solo mejor, con la respuesta ya redactada en mejor.resumen: dila tal cual
+    (incluye las horas de inicio diferido o fin diferido que hay que programar en el aparato). Los precios de mañana se publican hacia las 20:30;
     antes de eso solo hay precios hasta las 24:00 de hoy (manana_publicado false). La casa tiene una batería que ya
     desplaza parte del consumo a las horas baratas: presenta la hora como orientativa y el ahorro
     como máximo, sin prometer cifras exactas.
@@ -161,25 +160,40 @@ electricidad_precio:
                 {%- set mejor = {'status': 'sin_hueco', 'motivo': motivo} -%}
               {%- else -%}
                 {%- set st = ns4.best[0] -%}
-                {%- set wait_h = ((st - t_now) / 3600) -%}
+                {%- set ya = st == t_now -%}
+                {%- set avg = ns4.best[1] -%}
+                {%- set now_avg = ns4.now_avg -%}
+                {%- set pct = (((now_avg - avg) / now_avg * 100) | round(0) | int)
+                    if now_avg not in [none, 0] else 0 -%}
+                {%- set delay_start = ((st - t_now) / 3600) | round(0) | int -%}
+                {%- set delay_end = ((st + d - t_now) / 3600) | round(0) | int -%}
+                {%- set c = (avg | string).replace('.', ',') -%}
+                {%- set c_now = (now_avg | string).replace('.', ',') -%}
+                {%- set nombre = {'lavadora': 'la lavadora', 'lavavajillas': 'el lavavajillas'}.get(ap, 'el programa') -%}
+                {%- if ya -%}
+                  {%- set resumen = 'Lo más barato es poner ' ~ nombre ~ ' ya; acabaría ' ~ (label(st + d).replace(' ', ' a las ', 1))
+                      ~ ', a ' ~ c ~ ' céntimos el kilovatio hora de media.' -%}
+                {%- else -%}
+                  {%- set resumen = 'Lo más barato es que ' ~ nombre ~ ' empiece ' ~ (label(st).replace(' ', ' a las ', 1)) ~ ' y acabe '
+                      ~ (label(st + d).replace(' ', ' a las ', 1)) ~ '.'
+                      ~ (' Prográmalo con inicio diferido de ' ~ delay_start ~ ' horas.' if ap == 'lavavajillas' else '')
+                      ~ (' Prográmala con fin diferido de ' ~ delay_end ~ ' horas.' if ap == 'lavadora' else '')
+                      ~ ' Media de ' ~ c ~ ' céntimos el kilovatio hora frente a ' ~ c_now
+                      ~ ' si empieza ahora: hasta un ' ~ pct ~ ' por ciento menos, algo menos con la batería.' -%}
+                {%- endif -%}
                 {%- set mejor = {
                   'status': 'ok',
-                  'aparato': ap or 'otro',
-                  'duracion_h': dur,
-                  'empezar_ya': st == t_now,
-                  'inicio': 'ahora' if st == t_now else label(st),
+                  'resumen': resumen,
+                  'inicio': 'ahora' if ya else label(st),
                   'fin': label(st + d),
-                  'precio_medio': ns4.best[1],
-                  'precio_medio_si_empiezas_ahora': ns4.now_avg,
-                  'ahorro_pct': (((ns4.now_avg - ns4.best[1]) / ns4.now_avg * 100) | round(0) | int)
-                    if ns4.now_avg not in [none, 0] else none,
-                  'empezar_dentro_de_h': wait_h | round(1),
-                  'inicio_diferido_h': (wait_h | round(0) | int) if ap == 'lavavajillas' else none,
-                  'fin_diferido_h': ((((st + d - t_now) / 3600) | round(0) | int) if st != t_now else 0)
-                    if ap == 'lavadora' else none
+                  'duracion_h': dur,
+                  'inicio_diferido_h': delay_start if ap == 'lavavajillas' else none,
+                  'fin_diferido_h': (0 if ya else delay_end) if ap == 'lavadora' else none
                 } -%}
               {%- endif -%}
-              {%- set out = dict(out, mejor=mejor) -%}
+              {#- Only the answer: the price list and the day's extremes confused the small agent model
+                  (it mixed the cheapest hour with the recommended start). -#}
+              {%- set out = {'status': 'ok', 'fuente': out.fuente, 'ahora': out.ahora, 'mejor': mejor} -%}
             {%- endif -%}
             {{ out }}
           {%- endif -%}
