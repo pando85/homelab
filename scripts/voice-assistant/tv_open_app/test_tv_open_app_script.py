@@ -19,7 +19,7 @@ import yaml
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 
 HA = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "apps", "home-assistant", "config")
-OPTIONS_B = ["Jellyfin", "Subsonic Player", "YouTube AdFree", "Movistar Plus+", "Spotify – Música y podcasts",
+OPTIONS_B = ["Moonfin", "Subsonic Player", "YouTube AdFree", "Movistar Plus+", "Spotify – Música y podcasts",
              "RTVE.es Play", "Prime Video", "Navegador web", "Other"]
 OPTIONS_A = ["Netflix", "Prime Video", "Disney+", "Apple TV", "YouTube", "Navegador web", "Other"]
 

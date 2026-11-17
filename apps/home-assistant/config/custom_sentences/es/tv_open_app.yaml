@@ -53,8 +53,9 @@ lists:
         out: "Spotify – Música y podcasts"
       - in: "twitch"
         out: "Twitch"
-      - in: "jellyfin"
-        out: "Jellyfin"
+      # Jellyfin client for webOS. "moon fin" / "mun fin": likely Whisper spellings of the name.
+      - in: "(moonfin|moon fin|munfin|mun fin)"
+        out: "Moonfin"
       - in: "moonlight"
         out: "Moonlight"
       - in: "retroarch"
