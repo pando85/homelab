@@ -1,0 +1,187 @@
+electricidad_precio:
+  alias: Precio de la luz y mejor hora
+  icon: mdi:cash-clock
+  # Exposed to Assist as an LLM tool. Source: sensor.esios_pvpc (PVPC 2.0TD, hourly, from REE/ESIOS),
+  # attributes price_00h..price_23h for today and price_next_day_00h..23h once tomorrow's prices are
+  # published (about 20:30). The best start is computed here, not by the model: the cost of a window
+  # is the price of every hour weighted by how much of that hour the program covers, so a start "now"
+  # in the middle of an hour counts only the rest of that hour. The house has no solar panels. The
+  # home battery (battery optimizer) is deliberately left out: it already moves grid purchases to
+  # cheap hours, so the PVPC window is a guide and the saving an upper bound, as the description says. Default durations from the recorder (2026-11): washer cycles 20 to 114
+  # min (most 50 to 80), one dishwasher cycle 236 min.
+  description: >-
+    Precio de la luz (PVPC, en céntimos por kWh) ahora y en las próximas horas, y la hora más barata
+    para poner la lavadora, el lavavajillas u otro aparato. Úsala para "¿cuánto cuesta la luz?",
+    "¿cuál es la hora más barata?" o "¿cuándo pongo la lavadora/el lavavajillas?". Con aparato o
+    duracion_h devuelve en mejor la hora de inicio más barata desde ahora, el precio medio, el ahorro
+    frente a empezar ahora, y cuántas horas de inicio diferido (lavavajillas) o de fin diferido
+    (lavadora) hay que programar en el aparato. Los precios de mañana se publican hacia las 20:30;
+    antes de eso solo hay precios hasta las 24:00 de hoy (manana_publicado false). La casa tiene una batería que ya
+    desplaza parte del consumo a las horas baratas: presenta la hora como orientativa y el ahorro
+    como máximo, sin prometer cifras exactas.
+  mode: parallel
+  max: 5
+  fields:
+    aparato:
+      name: Aparato
+      description: >-
+        lavadora (programa de 2 h por defecto), lavavajillas (4 h por defecto) u otro (indica
+        duracion_h). Déjalo vacío si solo preguntan por el precio.
+      required: false
+      example: lavadora
+      selector:
+        select:
+          options:
+            - lavadora
+            - lavavajillas
+            - otro
+    duracion_h:
+      name: Duración (horas)
+      description: >-
+        Duración del programa en horas, solo si el usuario la dice (por ejemplo 1.5). Si no, se usa la
+        del aparato.
+      required: false
+      example: 2
+      selector:
+        number:
+          min: 0.5
+          max: 12
+          step: 0.5
+          mode: box
+    terminar_antes:
+      name: Terminar antes de
+      description: >-
+        Hora a la que el programa tiene que haber terminado, solo si el usuario la pide (por ejemplo
+        "que acabe antes de las 8" es 08:00). La próxima vez que llegue esa hora.
+      required: false
+      example: "08:00"
+      selector:
+        time:
+  sequence:
+    - alias: Read the prices and pick the best start
+      variables:
+        result: >-
+          {%- set e = 'sensor.esios_pvpc' -%}
+          {%- set aparatos = {'lavadora': 2, 'lavavajillas': 4} -%}
+          {%- set ap = (aparato | default('', true) | string | lower | trim) -%}
+          {%- set dur = (duracion_h | float(0)) if duracion_h is defined and duracion_h not in [none, ''] else 0 -%}
+          {%- set dur = dur if dur > 0 else aparatos.get(ap, 0) -%}
+          {%- set t_now = as_timestamp(now()) -%}
+          {%- set base = as_timestamp(today_at('00:00')) -%}
+          {#- Hourly slots with a price: [start timestamp, price in c€/kWh, label]. -#}
+          {%- set ns = namespace(slots=[]) -%}
+          {%- for day, prefix in [(0, 'price_'), (1, 'price_next_day_')] -%}
+            {%- for i in range(24) -%}
+              {%- set v = state_attr(e, prefix ~ ('%02d' | format(i)) ~ 'h') -%}
+              {%- if v is number -%}
+                {%- set ts = as_timestamp(today_at('00:00') + timedelta(days=day, hours=i)) -%}
+                {%- set ns.slots = ns.slots + [[ts, (v * 100) | round(1), day]] -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {%- set dias = ['hoy', 'mañana'] -%}
+          {%- macro label(ts) -%}
+            {{- dias[((ts - base) // 86400) | int] if ts - base < 172800 else '' }} {{ ts | timestamp_custom('%H:%M') -}}
+          {%- endmacro -%}
+          {#- Slots from the current hour on. -#}
+          {%- set ns2 = namespace(rest=[]) -%}
+          {%- for s in ns.slots if s[0] + 3600 > t_now -%}
+            {%- set ns2.rest = ns2.rest + [s] -%}
+          {%- endfor -%}
+          {%- if ns2.rest | length == 0 -%}
+            {{ {'status': 'no_prices', 'fuente': 'PVPC (REE/ESIOS)'} }}
+          {%- else -%}
+            {%- set last_end = ns2.rest[-1][0] + 3600 -%}
+            {%- set cheapest = ns2.rest | sort(attribute='1') | first -%}
+            {%- set dearest = ns2.rest | sort(attribute='1', reverse=true) | first -%}
+            {%- set out = {
+              'status': 'ok',
+              'fuente': 'PVPC (REE/ESIOS)',
+              'unidad': 'céntimos de euro por kWh',
+              'ahora': {'hora': label(ns2.rest[0][0]), 'precio': ns2.rest[0][1]},
+              'manana_publicado': ns.slots | selectattr('2', 'eq', 1) | list | length > 0,
+              'mas_barata': {'hora': label(cheapest[0]), 'precio': cheapest[1]},
+              'mas_cara': {'hora': label(dearest[0]), 'precio': dearest[1]}
+            } -%}
+            {%- set ns3 = namespace(p=[]) -%}
+            {%- for s in ns2.rest -%}
+              {%- set ns3.p = ns3.p + [{'hora': label(s[0]), 'precio': s[1]}] -%}
+            {%- endfor -%}
+            {%- set out = dict(out, precios=ns3.p) -%}
+            {%- if dur > 0 -%}
+              {%- set d = dur * 3600 -%}
+              {%- set deadline = none -%}
+              {%- if terminar_antes is defined and terminar_antes not in [none, ''] -%}
+                {%- set dl = as_timestamp(today_at(terminar_antes)) -%}
+                {%- set deadline = dl if dl > t_now else dl + 86400 -%}
+              {%- endif -%}
+              {#- Candidate starts: the ones the appliance can be set to. The LG dishwasher delays its
+                  start and the LG washer its end by whole hours from now; anything else starts now
+                  or at a full hour. -#}
+              {%- set ns4 = namespace(best=none, now_avg=none, starts=[t_now]) -%}
+              {%- for k in range(1, 49) -%}
+                {%- if ap == 'lavavajillas' -%}
+                  {%- set ns4.starts = ns4.starts + [t_now + k * 3600] -%}
+                {%- elif ap == 'lavadora' and t_now + k * 3600 - d > t_now -%}
+                  {%- set ns4.starts = ns4.starts + [t_now + k * 3600 - d] -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- if ap not in ['lavadora', 'lavavajillas'] -%}
+                {%- set ns4.starts = ns4.starts + (ns2.rest | map(attribute='0') | select('gt', t_now) | list) -%}
+              {%- endif -%}
+              {%- set starts = ns4.starts -%}
+              {%- for st in starts -%}
+                {%- set en = st + d -%}
+                {%- if en <= last_end and (deadline is none or en <= deadline) -%}
+                  {%- set ns5 = namespace(cost=0) -%}
+                  {%- for s in ns2.rest -%}
+                    {%- set ov = ([s[0] + 3600, en] | min) - ([s[0], st] | max) -%}
+                    {%- if ov > 0 -%}
+                      {%- set ns5.cost = ns5.cost + s[1] * ov -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                  {%- set avg = (ns5.cost / d) | round(1) -%}
+                  {%- if st == t_now -%}
+                    {%- set ns4.now_avg = avg -%}
+                  {%- endif -%}
+                  {%- if ns4.best is none or avg < ns4.best[1] -%}
+                    {%- set ns4.best = [st, avg] -%}
+                  {%- endif -%}
+                {%- endif -%}
+              {%- endfor -%}
+              {%- if ns4.best is none -%}
+                {%- if deadline is not none and deadline - t_now < d -%}
+                  {%- set motivo = 'no da tiempo: un programa de ' ~ dur ~ ' h empezado ahora acaba después de '
+                    ~ label(deadline) -%}
+                {%- else -%}
+                  {%- set motivo = 'no hay precios suficientes para un programa de ' ~ dur ~ ' h'
+                    ~ (' que acabe antes de ' ~ label(deadline) if deadline is not none else '')
+                    ~ ('' if out.manana_publicado else '; los precios de mañana se publican hacia las 20:30') -%}
+                {%- endif -%}
+                {%- set mejor = {'status': 'sin_hueco', 'motivo': motivo} -%}
+              {%- else -%}
+                {%- set st = ns4.best[0] -%}
+                {%- set wait_h = ((st - t_now) / 3600) -%}
+                {%- set mejor = {
+                  'status': 'ok',
+                  'aparato': ap or 'otro',
+                  'duracion_h': dur,
+                  'empezar_ya': st == t_now,
+                  'inicio': 'ahora' if st == t_now else label(st),
+                  'fin': label(st + d),
+                  'precio_medio': ns4.best[1],
+                  'precio_medio_si_empiezas_ahora': ns4.now_avg,
+                  'ahorro_pct': (((ns4.now_avg - ns4.best[1]) / ns4.now_avg * 100) | round(0) | int)
+                    if ns4.now_avg not in [none, 0] else none,
+                  'empezar_dentro_de_h': wait_h | round(1),
+                  'inicio_diferido_h': (wait_h | round(0) | int) if ap == 'lavavajillas' else none,
+                  'fin_diferido_h': ((((st + d - t_now) / 3600) | round(0) | int) if st != t_now else 0)
+                    if ap == 'lavadora' else none
+                } -%}
+              {%- endif -%}
+              {%- set out = dict(out, mejor=mejor) -%}
+            {%- endif -%}
+            {{ out }}
+          {%- endif -%}
+    - stop: Prices returned
+      response_variable: result
