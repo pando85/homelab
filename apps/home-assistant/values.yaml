@@ -69,6 +69,8 @@ app-template:
             HA_URL: http://home-assistant-hass:8123
             DASH_URL: http://0.0.0.0:5050
             TIMEZONE: Europe/Madrid
+            # 4.5.16 runs uv at startup; $HOME is / for uid 568, so point its cache at the writable emptyDir.
+            UV_CACHE_DIR: /conf/.uv-cache
           envFrom:
             - secretRef:
                 name: hass-appdaemon
