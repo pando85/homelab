@@ -370,8 +370,16 @@ home. `llama_cpp` logs request chunks only at debug level; keep debug logging of
 3. Kiais: normalise streamed tool calls to the OpenAI shape (section 3), and say whether its
    session affinity can use the `user` field, which `llama_cpp` and `litellm` set to the
    conversation id.
-4. Live information: weather now works through `HassGetWeather` and `GetLiveContext`; forecasts and
-   calendar need exposed calendars and a forecast script exposed as a tool (next step).
+4. Live information: weather comes from the core **AEMET OpenData** integration (`weather.aemet`,
+   added in the UI on 2026-11-17 at the home zone's coordinates, station updates on, radar off; the
+   API key lives only in Home Assistant's `.storage` and the owner's password store). Until then the
+   only weather entity was Met.no's `weather.forecast_home`, not exposed to Assist, so "¿Qué tiempo
+   hace hoy?" got "no tengo acceso". The current weather goes through `HassGetWeather` and
+   `GetLiveContext`; forecasts go through `script.tiempo_prevision`
+   (`apps/home-assistant/config/script/tiempo_prevision.yaml`, exposed to Assist as a tool:
+   `periodo` `dias` for up to 7 days, `horas` for the next 24 hours). AEMET quirk: today's daily
+   entry can show a rain condition with 0 % probability once the rainy part of the day has passed.
+   Calendars are still open.
 5. End-to-end latency through the satellite (STT, TTS, network), and whether the production Piper
    accepts streamed TTS input.
 6. Behaviour of `llama_cpp` when Kiais hangs or fails (SDK 600 s timeout); test with a controlled

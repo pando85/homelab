@@ -1,0 +1,102 @@
+tiempo_prevision:
+  alias: Previsión del tiempo
+  icon: mdi:weather-partly-rainy
+  # Exposed to Assist as an LLM tool: the description and the field are what the agent reads.
+  # Source: the AEMET OpenData integration (weather.aemet, set up in the UI on 2026-11-17). The
+  # current weather does not need this script: HassGetWeather and GetLiveContext read weather.aemet.
+  description: >-
+    Previsión del tiempo de AEMET para la casa (weather forecast). Úsala para cualquier pregunta sobre
+    el tiempo que va a hacer: lluvia, temperaturas, viento, esta tarde o esta noche, mañana, el fin de
+    semana o un día concreto de la semana. periodo dias da un resumen por día (hasta 7 días, el primero
+    es hoy); periodo horas da la previsión hora a hora de las próximas 24 horas. Devuelve status ok o
+    unavailable (AEMET no responde). Para el tiempo de ahora mismo no hace falta.
+  mode: parallel
+  max: 5
+  fields:
+    periodo:
+      name: Periodo
+      description: >-
+        dias para la previsión por día de los próximos días; horas para la previsión hora a hora de
+        las próximas 24 horas (por ejemplo a qué hora lloverá o el tiempo de esta noche).
+      required: true
+      default: dias
+      example: dias
+      selector:
+        select:
+          options:
+            - dias
+            - horas
+  sequence:
+    - alias: Pick the forecast type
+      variables:
+        entity: weather.aemet
+        tipo: >-
+          {{ 'hourly' if (periodo | default('dias', true) | string | lower | trim)
+             in ['horas', 'hora', 'hourly'] else 'daily' }}
+    - alias: AEMET is unavailable
+      if: "{{ states(entity) in ['unavailable', 'unknown'] }}"
+      then:
+        - variables:
+            result:
+              status: unavailable
+              fuente: AEMET OpenData
+        - stop: weather.aemet is unavailable
+          response_variable: result
+    - action: weather.get_forecasts
+      target:
+        entity_id: "{{ entity }}"
+      data:
+        type: "{{ tipo }}"
+      response_variable: raw
+    - alias: Build a short Spanish summary for the agent
+      variables:
+        result: >-
+          {%- set estados = {
+            'clear-night': 'despejado', 'cloudy': 'nublado', 'exceptional': 'fenómeno excepcional',
+            'fog': 'niebla', 'hail': 'granizo', 'lightning': 'tormenta',
+            'lightning-rainy': 'tormenta con lluvia', 'partlycloudy': 'parcialmente nublado',
+            'pouring': 'lluvia intensa', 'rainy': 'lluvia', 'snowy': 'nieve',
+            'snowy-rainy': 'aguanieve', 'sunny': 'soleado', 'windy': 'viento',
+            'windy-variant': 'viento y nubes'} -%}
+          {%- set dias_semana = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado',
+                                 'domingo'] -%}
+          {%- set relativos = {0: 'hoy', 1: 'mañana', 2: 'pasado mañana'} -%}
+          {%- set hoy = now().date() -%}
+          {%- set ns = namespace(items=[]) -%}
+          {%- for f in raw[entity].forecast -%}
+            {%- set t = as_local(as_datetime(f.datetime)) -%}
+            {%- set delta = (t.date() - hoy).days -%}
+            {%- set dia = dias_semana[t.weekday()] ~ ' ' ~ t.day -%}
+            {%- if relativos[delta] is defined -%}
+              {%- set dia = relativos[delta] ~ ' (' ~ dia ~ ')' -%}
+            {%- endif -%}
+            {%- if tipo == 'daily' and delta >= 0 -%}
+              {%- set item = {
+                'dia': dia,
+                'estado': estados.get(f.condition, f.condition),
+                'max_c': f.temperature,
+                'min_c': f.templow,
+                'prob_lluvia_pct': f.precipitation_probability,
+                'viento_kmh': f.wind_speed} -%}
+              {%- set ns.items = ns.items + [item] -%}
+            {%- elif tipo == 'hourly' and t >= now() - timedelta(hours=1)
+                     and ns.items | length < 24 -%}
+              {%- set item = {
+                'dia': dia,
+                'hora': t.strftime('%H:%M'),
+                'estado': estados.get(f.condition, f.condition),
+                'temp_c': f.temperature,
+                'prob_lluvia_pct': f.precipitation_probability,
+                'lluvia_mm': f.precipitation,
+                'viento_kmh': f.wind_speed,
+                'rachas_kmh': f.wind_gust_speed} -%}
+              {%- set ns.items = ns.items + [item] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ {'status': 'ok',
+              'fuente': 'AEMET OpenData',
+              'consultado': now().strftime('%Y-%m-%d %H:%M'),
+              'periodo': 'horas' if tipo == 'hourly' else 'dias',
+              'prevision': ns.items} }}
+    - stop: Forecast returned
+      response_variable: result
