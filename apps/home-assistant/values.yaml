@@ -548,6 +548,9 @@ app-template:
             - path: /config/custom_sentences/es/tv_open_app.yaml
               subPath: tv_open_app.yaml
               readOnly: true
+            - path: /config/custom_sentences/es/responses.yaml
+              subPath: responses.yaml
+              readOnly: true
     appdaemon:
       enabled: true
       type: configMap

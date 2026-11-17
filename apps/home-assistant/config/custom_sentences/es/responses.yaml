@@ -1,0 +1,37 @@
+# Overrides of built-in Spanish responses (no intents or sentences here, so nothing is matched or
+# hijacked). Home Assistant merges this file over the built-in intents data, so a response listed
+# here replaces only the built-in response of the same intent and name.
+#
+# HassGetWeather: the built-in answer ends in "15.0 °C", which Piper reads badly. Same conditions as
+# the built-in table; the temperature is spoken like the built-in HassClimateGetTemperature answer
+# ("15 grados", "2,5 grados bajo cero").
+language: es
+responses:
+  intents:
+    HassGetWeather:
+      default: >-
+        {% set weather_condition = {
+          'clear': 'Cielo despejado',
+          'clear-night': 'Cielo despejado',
+          'cloudy': 'Cielo nuboso',
+          'exceptional': 'Clima excepcionalmente adverso',
+          'fog': 'Niebla',
+          'hail': 'Precipitaciones en forma de granizo',
+          'lightning': 'Tormentas eléctricas',
+          'lightning-rainy': 'Lluvia y tormenta eléctrica',
+          'partlycloudy': 'Cielos parcialmente nublados',
+          'pouring': 'Lluvia copiosa',
+          'rainy': 'Lluvia',
+          'snowy': 'Precipitaciones en forma de nieve',
+          'snowy-rainy': 'Precipitaciones en forma de aguanieve',
+          'sunny': 'Sol',
+          'windy': 'Vientos',
+          'windy-variant': 'Vientos y nubes'
+        } -%}
+        {%- set condition = weather_condition.get((state.state | string).lower(), '') -%}
+        {%- set t = state.attributes.get('temperature') -%}
+        {%- if t is none -%}
+          {{ condition }}
+        {%- else -%}
+          {{ condition }}, con una temperatura de {{ t | float | abs | round(1) | replace('.0', '') | replace('.', ',') }} {{ 'grado' if t | float | abs == 1 else 'grados' }}{{ ' bajo cero' if t | float < 0 else '' }}
+        {%- endif -%}
