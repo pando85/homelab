@@ -51,6 +51,8 @@ tiempo_prevision:
     - alias: Build a short Spanish summary for the agent
       variables:
         result: >-
+          {#- Optional forecast keys can be missing (AEMET's last daily entry has no wind_speed): read them
+              with .get() so a missing key is None, not an undefined value that breaks the dict. -#}
           {%- set estados = {
             'clear-night': 'despejado', 'cloudy': 'nublado', 'exceptional': 'fenómeno excepcional',
             'fog': 'niebla', 'hail': 'granizo', 'lightning': 'tormenta',
@@ -73,23 +75,23 @@ tiempo_prevision:
             {%- if tipo == 'daily' and delta >= 0 -%}
               {%- set item = {
                 'dia': dia,
-                'estado': estados.get(f.condition, f.condition),
-                'max_c': f.temperature,
-                'min_c': f.templow,
-                'prob_lluvia_pct': f.precipitation_probability,
-                'viento_kmh': f.wind_speed} -%}
+                'estado': estados.get(f.condition, f.condition) if f.condition is defined else None,
+                'max_c': f.get('temperature'),
+                'min_c': f.get('templow'),
+                'prob_lluvia_pct': f.get('precipitation_probability'),
+                'viento_kmh': f.get('wind_speed')} -%}
               {%- set ns.items = ns.items + [item] -%}
             {%- elif tipo == 'hourly' and t >= now() - timedelta(hours=1)
                      and ns.items | length < 24 -%}
               {%- set item = {
                 'dia': dia,
                 'hora': t.strftime('%H:%M'),
-                'estado': estados.get(f.condition, f.condition),
-                'temp_c': f.temperature,
-                'prob_lluvia_pct': f.precipitation_probability,
-                'lluvia_mm': f.precipitation,
-                'viento_kmh': f.wind_speed,
-                'rachas_kmh': f.wind_gust_speed} -%}
+                'estado': estados.get(f.condition, f.condition) if f.condition is defined else None,
+                'temp_c': f.get('temperature'),
+                'prob_lluvia_pct': f.get('precipitation_probability'),
+                'lluvia_mm': f.get('precipitation'),
+                'viento_kmh': f.get('wind_speed'),
+                'rachas_kmh': f.get('wind_gust_speed')} -%}
               {%- set ns.items = ns.items + [item] -%}
             {%- endif -%}
           {%- endfor -%}
