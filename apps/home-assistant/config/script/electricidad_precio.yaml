@@ -114,21 +114,11 @@ electricidad_precio:
                 {%- set dl = as_timestamp(today_at(terminar_antes)) -%}
                 {%- set deadline = dl if dl > t_now else dl + 86400 -%}
               {%- endif -%}
-              {#- Candidate starts: the ones the appliance can be set to. The LG dishwasher delays its
-                  start and the LG washer its end by whole hours from now; anything else starts now
-                  or at a full hour. -#}
-              {%- set ns4 = namespace(best=none, now_avg=none, starts=[t_now]) -%}
-              {%- for k in range(1, 49) -%}
-                {%- if ap == 'lavavajillas' -%}
-                  {%- set ns4.starts = ns4.starts + [t_now + k * 3600] -%}
-                {%- elif ap == 'lavadora' and t_now + k * 3600 - d > t_now -%}
-                  {%- set ns4.starts = ns4.starts + [t_now + k * 3600 - d] -%}
-                {%- endif -%}
-              {%- endfor -%}
-              {%- if ap not in ['lavadora', 'lavavajillas'] -%}
-                {%- set ns4.starts = ns4.starts + (ns2.rest | map(attribute='0') | select('gt', t_now) | list) -%}
-              {%- endif -%}
-              {%- set starts = ns4.starts -%}
+              {#- Candidate starts: now, then every full hour. The LG delays are whole hours from the
+                  moment the machine is programmed, so the suggested delay is rounded to the nearest
+                  hour (off by at most half an hour: the answer is a guide, not an exact plan). -#}
+              {%- set ns4 = namespace(best=none, now_avg=none) -%}
+              {%- set starts = [t_now] + (ns2.rest | map(attribute='0') | select('gt', t_now) | list) -%}
               {%- for st in starts -%}
                 {%- set en = st + d -%}
                 {%- if en <= last_end and (deadline is none or en <= deadline) -%}
