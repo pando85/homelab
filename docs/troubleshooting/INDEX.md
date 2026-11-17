@@ -15,7 +15,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Storage & Backup](#storage--backup) (13 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (13 entries)
+- [Desktop & Home](#desktop--home) (14 entries)
 - [Applications](#applications) (12 entries)
 
 ---
@@ -467,6 +467,14 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `f.get('key')`. Built-in responses can be overridden from a custom sentences file with only a
   `responses:` key (used to say "grados" instead of "°C"). See
   `docs/troubleshooting/home-assistant-voice-weather.md`
+
+- Kivi electricity prices and appliance timing: `script.electricidad_precio` reads `sensor.esios_pvpc`
+  and does the arithmetic itself. The small agent mixes up result fields, so appliance questions return
+  only a ready-to-read `resumen`. Full-hour start candidates (a window ending seconds after the last
+  known price was dropped). Expose new tools after the last restart and check
+  `core.entity_registry` (an exposure was lost in a restart). Wait for a restart by comparing the
+  pod's `startTime` with the value before the push. History REST queries need `end_time`. See
+  `docs/troubleshooting/home-assistant-voice-electricity-prices.md`
 
 - Lovelace dashboards are UI-storage (`/config/.storage/lovelace.*`), not git, and break silently when
   an entity is renamed (the Climate dashboard pointed at non-existent `sensor.heishamon_*` for months).
