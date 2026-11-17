@@ -379,7 +379,8 @@ home. `llama_cpp` logs request chunks only at debug level; keep debug logging of
    (`apps/home-assistant/config/script/tiempo_prevision.yaml`, exposed to Assist as a tool:
    `periodo` `dias` for up to 7 days, `horas` for the next 24 hours). AEMET quirk: today's daily
    entry can show a rain condition with 0 % probability once the rainy part of the day has passed.
-   Calendars are still open.
+   Setup and pitfalls: `docs/troubleshooting/home-assistant-voice-weather.md`. Calendars are still
+   open.
 5. End-to-end latency through the satellite (STT, TTS, network), and whether the production Piper
    accepts streamed TTS input.
 6. Behaviour of `llama_cpp` when Kiais hangs or fails (SDK 600 s timeout); test with a controlled

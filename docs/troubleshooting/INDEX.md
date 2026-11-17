@@ -15,7 +15,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Storage & Backup](#storage--backup) (13 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (12 entries)
+- [Desktop & Home](#desktop--home) (13 entries)
 - [Applications](#applications) (12 entries)
 
 ---
@@ -458,6 +458,15 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   relay demand. Fix: the reworked `heuristic_action` in `pando85/localtuya` `876b229` (half-step
   hysteresis, cool/auto, off), enabled per climate entity through the options flow — which reloads the
   whole localtuya entry. See `docs/troubleshooting/home-assistant-localtuya.md`
+
+- Kivi weather: `HassGetWeather` and `GetLiveContext` only see weather entities **exposed to Assist**
+  (new `weather.*` entities are not exposed by default), so "¿Qué tiempo hace?" gets "no tengo acceso".
+  Source is the core AEMET integration (`weather.aemet`); forecasts come from the
+  `script.tiempo_prevision` tool. A script whose response dict holds an undefined value (a missing
+  forecast key read as `f.key`) fails with "expected a dictionary, but got <class 'str'>": use
+  `f.get('key')`. Built-in responses can be overridden from a custom sentences file with only a
+  `responses:` key (used to say "grados" instead of "°C"). See
+  `docs/troubleshooting/home-assistant-voice-weather.md`
 
 - Lovelace dashboards are UI-storage (`/config/.storage/lovelace.*`), not git, and break silently when
   an entity is renamed (the Climate dashboard pointed at non-existent `sensor.heishamon_*` for months).

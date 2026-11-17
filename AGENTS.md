@@ -157,7 +157,7 @@ Full pitfall index (86 entries grouped by subsystem): `docs/troubleshooting/INDE
 - **Storage & Backup** (13): prusik RAM-bound latency, ZFS orphan leak, Velero backup chains, CI DinD disk fill
 - **Ansible & Infra** (2): cross-host facts in scoped runs, Ubuntu 26.04 compat
 - **LLM Infrastructure** (3): Hermes config overwrite, auth failures, persistent CLI tools
-- **Desktop & Home** (12): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote), Omnibattery `backup_mode` latch (backup threshold 500 W workaround)
+- **Desktop & Home** (13): Home Assistant venv/aiohttp/localtuya, localtuya thermostat `hvac_action` needs `heuristic_action`, UI-storage dashboards edited over the websocket API, PVPC negative prices, Shelly CoIoT push, never disable CoIoT on a Gen1 Shelly (breaks HA setup *and* reboot-loops the device when MQTT is on), renaming an HA entity moves its recorder history (use remove-then-promote), Omnibattery `backup_mode` latch (backup threshold 500 W workaround), Kivi weather needs the weather entity exposed to Assist; AEMET + forecast script tool (`home-assistant-voice-weather.md`)
 - **Applications** (12): Supabase/Zalando bootstrap, GoTrue CORS, Firecrawl nuq schema, Firecrawl
   egress NP probe-timeout rollback (root cause unknown, aggregate denied counters prove nothing)
 
