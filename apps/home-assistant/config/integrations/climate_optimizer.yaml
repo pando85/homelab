@@ -24,7 +24,8 @@ input_datetime:
 # whatever the plan says (ADR-0009 decision 6). 21 is the optimizer's own default
 # (climate_actuation.floor_c), so creating these changes nothing. The optimizer ignores a helper
 # outside 18 to 23 or one HA has not updated for 2 h. The climate shadow reads the same helpers.
-# `initial: 21` keeps a fresh or restarted helper equal to that default instead of HA's minimum (18).
+# No `initial:` on purpose: the owner's value is restored across Home Assistant restarts. They carry
+# 21 already from the earlier `initial:`; a helper created fresh without it would start at 18.
 input_number:
   comfort_floor_hall_kitchen:
     name: Comfort floor hall and kitchen
@@ -32,7 +33,6 @@ input_number:
     min: 18
     max: 23
     step: 0.5
-    initial: 21
     unit_of_measurement: "°C"
   comfort_floor_bedroom:
     name: Comfort floor bedroom
@@ -40,7 +40,6 @@ input_number:
     min: 18
     max: 23
     step: 0.5
-    initial: 21
     unit_of_measurement: "°C"
   comfort_floor_office_t:
     name: Comfort floor Office T
@@ -48,17 +47,13 @@ input_number:
     min: 18
     max: 23
     step: 0.5
-    initial: 21
     unit_of_measurement: "°C"
 
   # Per-room day minimums (degC): the temperature the plan heats each room to inside the comfort window
   # (max(day minimum, floor) there). Unlike a floor it never forces heating at once: it shapes the
   # next hourly plan (HH:10). The optimizer ignores a helper outside 18 to 26 or one HA has not
   # updated for 2 h and uses its configured value (hall_kitchen 23.5, bedroom 21, office_t 21).
-  # TEMPORARY `initial:` = those configured values, so creating the helpers changes nothing (a fresh
-  # helper without `initial:` would start at its minimum, 18, and lower comfort). `initial:` also
-  # resets the helper at every HA restart, which discards the owner's tweaks: once HA has restarted
-  # with this deployed, the follow-up PR removes every `initial:` from the comfort helpers.
+  # No `initial:` on purpose: the owner's value is restored across Home Assistant restarts.
   comfort_day_minimum_hall_kitchen:
     name: Comfort day minimum hall and kitchen
     icon: mdi:thermometer-check
@@ -66,7 +61,6 @@ input_number:
     max: 26
     step: 0.5
     mode: slider
-    initial: 23.5
     unit_of_measurement: "°C"
   comfort_day_minimum_bedroom:
     name: Comfort day minimum bedroom
@@ -75,7 +69,6 @@ input_number:
     max: 26
     step: 0.5
     mode: slider
-    initial: 21
     unit_of_measurement: "°C"
   comfort_day_minimum_office_t:
     name: Comfort day minimum Office T
@@ -84,13 +77,12 @@ input_number:
     max: 26
     step: 0.5
     mode: slider
-    initial: 21
     unit_of_measurement: "°C"
 
   # The comfort window (hours of the day, house-wide): the day minimums apply from the start
   # (weekdays or weekends) to the end. 12.5 = 12:30; the optimizer rounds to 15 min and uses its
-  # configured window when start >= end or a helper is unusable. Same TEMPORARY `initial:` as above
-  # (12:00, 09:00, 22:00 = the configured window), removed by the same follow-up.
+  # configured window when start >= end or a helper is unusable. No `initial:`, like the helpers above
+  # (the configured window is 12:00 weekdays, 09:00 weekends, 22:00).
   comfort_day_start_weekday_hour:
     name: Comfort day start (weekdays)
     icon: mdi:clock-start
@@ -98,7 +90,6 @@ input_number:
     max: 24
     step: 0.25
     mode: box
-    initial: 12
     unit_of_measurement: h
   comfort_day_start_weekend_hour:
     name: Comfort day start (weekends)
@@ -107,7 +98,6 @@ input_number:
     max: 24
     step: 0.25
     mode: box
-    initial: 9
     unit_of_measurement: h
   comfort_day_end_hour:
     name: Comfort day end
@@ -116,7 +106,6 @@ input_number:
     max: 24
     step: 0.25
     mode: box
-    initial: 22
     unit_of_measurement: h
 
 automation:
