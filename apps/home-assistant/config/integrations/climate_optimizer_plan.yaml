@@ -3,7 +3,9 @@
 # GET /climate/plan/summary of the in-cluster optimizer service (battery-optimizer, contract in
 # pando85/home-energy-optimizer docs/climate-plan-contract.md), once a minute, same mechanism as
 # battery_optimizer_plan.yaml. Nothing here writes to a device or reads the plan to control it: the
-# plan is advisory and `live` is locked in the optimizer (ADR-0008 proposed), whatever is selected.
+# plan is advisory. The optimizer itself writes the heat pump only with climate_actuation.mode: live
+# AND this select at `live` (ADR-0009, climate_optimizer.yaml); until the first, `live` is locked in
+# the optimizer (live_locked) whatever is selected.
 #
 # The summary answers 200 in every state, so the sensors can say `mode_off` or `expired`: the plan
 # state sensor then shows the state, the values of the plan are unknown (never the last plan's), and
@@ -12,8 +14,8 @@
 # The mode select: `shadow` is first so a fresh helper starts in shadow without a write, and there
 # is no `initial:` on purpose, so the owner's choice survives restarts (Reloader, updates). The
 # optimizer reads it; with the helper absent or unknown it falls back to its own config. `live` is
-# a request the optimizer refuses (live_locked); `off` stops the export, not the optimizer's
-# measurement.
+# a request the optimizer refuses (live_locked) until climate_actuation.mode is live; `off` stops
+# the export, not the optimizer's measurement.
 #
 # Rooms are those of the plan (bedroom, hall_kitchen, office_t); a room added to the optimizer needs
 # its three predicted-temperature sensors below.

@@ -1,0 +1,109 @@
+# Live climate control by battery-optimizer (ADR-0009 in pando85/home-energy-optimizer). The
+# service writes the heat-pump operating mode (input_select.heishamon_heatmode, Heat+DHW or DHW), the
+# Z1 water target (input_number.heishamon_heatshift_z1, integers 20 to 35, direct mode only) and the
+# heartbeat below, only while BOTH the deployed climate_actuation.mode is live AND the owner's select
+# input_select.climate_optimizer_mode (climate_optimizer_plan.yaml) is live. It never writes the select.
+# The watchdog below repeats the safe heating state when the heartbeat stops. Runbook:
+# docs/deployment/battery-optimizer.md#live-climate-control.
+#
+# Everything here is inert while the select is not `live`: the heartbeat and the floor helpers are
+# only read, and the watchdog acts only while the select is `live` (or on its edge out of `live`).
+# Do NOT set the select to `live` before climate_actuation.mode: live is deployed: no heartbeat is
+# written then, and the watchdog would force Heat+DHW every minute.
+input_datetime:
+  climate_optimizer_heartbeat:
+    name: Climate optimizer heartbeat
+    has_date: true
+    has_time: true
+    # No `initial:` on purpose: restored across Home Assistant restarts, like the battery's.
+
+# Per-room comfort floors (degC). A room whose thermostat reads below its floor forces Heat+DHW
+# whatever the plan says (ADR-0009 decision 6). 21 is the optimizer's own default
+# (climate_actuation.floor_c), so creating these changes nothing. The optimizer ignores a helper
+# outside 18 to 23 or one HA has not updated for 2 h. The climate shadow reads the same helpers.
+# `initial: 21` keeps a fresh or restarted helper equal to that default instead of HA's minimum (18).
+input_number:
+  comfort_floor_hall_kitchen:
+    name: Comfort floor hall and kitchen
+    icon: mdi:thermometer-low
+    min: 18
+    max: 23
+    step: 0.5
+    initial: 21
+    unit_of_measurement: "°C"
+  comfort_floor_bedroom:
+    name: Comfort floor bedroom
+    icon: mdi:thermometer-low
+    min: 18
+    max: 23
+    step: 0.5
+    initial: 21
+    unit_of_measurement: "°C"
+  comfort_floor_office_t:
+    name: Comfort floor Office T
+    icon: mdi:thermometer-low
+    min: 18
+    max: 23
+    step: 0.5
+    initial: 21
+    unit_of_measurement: "°C"
+
+automation:
+  # Safe heating state when the optimizer stops: Heat+DHW, and the legacy 26 degC water target only
+  # in direct mode (in curve mode the same command is a shift of -5..+5 K). It acts only while the
+  # owner's select is `live`, plus once on the select leaving `live` (the optimizer writes the same
+  # safe state itself then; this repeats it). It replaces automation.appdaemon_climate_watchdog.
+  - id: climate_optimizer_watchdog
+    alias: Climate optimizer watchdog
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: state
+        entity_id: input_select.climate_optimizer_mode
+        from: "live"
+        # null: state changes only, not attribute changes
+        to: null
+        id: select_left_live
+    conditions:
+      - condition: or
+        conditions:
+          - condition: trigger
+            id: select_left_live
+          - condition: and
+            conditions:
+              - condition: state
+                entity_id: input_select.climate_optimizer_mode
+                state: "live"
+              - condition: template
+                value_template: >-
+                  {{ as_timestamp(now())
+                     - (state_attr('input_datetime.climate_optimizer_heartbeat', 'timestamp')
+                        | float(0)) > 600 }}
+    actions:
+      - action: input_select.select_option
+        target:
+          entity_id: input_select.heishamon_heatmode
+        data:
+          option: Heat+DHW
+        continue_on_error: true
+      # Separate step so an unavailable helper or sensor blocks nothing else, and only in direct
+      # mode (sensor.aquarea_heating_mode = 1), where the helper is an absolute temperature.
+      - if:
+          - condition: template
+            value_template: "{{ states('sensor.aquarea_heating_mode') | int(-1) == 1 }}"
+        then:
+          - action: input_number.set_value
+            target:
+              entity_id: input_number.heishamon_heatshift_z1
+            data:
+              value: 26
+            continue_on_error: true
+      - action: persistent_notification.create
+        data:
+          notification_id: climate_optimizer_watchdog
+          title: Climate optimizer watchdog
+          message: >-
+            Heat mode set to Heat+DHW ({{ 'owner select left live' if trigger.id == 'select_left_live'
+            else 'heartbeat older than 10 min' }}); water target 26 degC only in direct mode (now
+            {{ 'direct' if states('sensor.aquarea_heating_mode') | int(-1) == 1 else 'not direct' }}).
