@@ -115,69 +115,6 @@
     },
     {
       "type": "stat",
-      "title": "Minimum hours per day",
-      "id": 3,
-      "description": "input_number.appdaemon_climate_min_hours_per_day, the rule's heating hours per day.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${datasource}"
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 4,
-        "x": 4,
-        "y": 1
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "max(hass_input_number_state{entity=\"input_number.appdaemon_climate_min_hours_per_day\"})",
-          "legendFormat": "",
-          "refId": "A",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "h",
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "color": {
-            "mode": "thresholds"
-          },
-          "decimals": 0
-        },
-        "overrides": []
-      },
-      "options": {
-        "colorMode": "value",
-        "graphMode": "none",
-        "justifyMode": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      }
-    },
-    {
-      "type": "stat",
       "title": "Hall-kitchen",
       "id": 4,
       "description": "Hall-kitchen thermostat temperature now.",
@@ -919,9 +856,9 @@
     },
     {
       "type": "timeseries",
-      "title": "Heating hours per day against the rule's minimum",
+      "title": "Heating hours per day",
       "id": 17,
-      "description": "Hours with space-heating electricity above 0 (5 min steps, rolling 24 h) against appdaemon_climate_min_hours_per_day. A compressor run also includes defrost.",
+      "description": "Hours with space-heating electricity above 0 (5 min steps, rolling 24 h). A compressor run also includes defrost.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -942,16 +879,6 @@
           "expr": "count_over_time((max(hass_sensor_power_w{entity=\"sensor.aquarea_heat_power_consumed\"}) > 0)[1d:5m]) / 12",
           "legendFormat": "Heating hours",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "editorMode": "code",
-          "expr": "max(hass_input_number_state{entity=\"input_number.appdaemon_climate_min_hours_per_day\"})",
-          "legendFormat": "Rule minimum",
-          "refId": "B"
         }
       ],
       "fieldConfig": {
@@ -971,41 +898,7 @@
           },
           "min": 0
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Rule minimum"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "blue"
-                }
-              },
-              {
-                "id": "custom.lineStyle",
-                "value": {
-                  "fill": "dash",
-                  "dash": [
-                    10,
-                    10
-                  ]
-                }
-              },
-              {
-                "id": "custom.lineWidth",
-                "value": 1
-              },
-              {
-                "id": "custom.fillOpacity",
-                "value": 0
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "options": {
         "legend": {
@@ -1347,7 +1240,7 @@
       "type": "timeseries",
       "title": "Climate watchdog triggers (per day)",
       "id": 22,
-      "description": "Triggers of automation.appdaemon_climate_watchdog in the last 24 h (a trigger means the AppDaemon climate app stopped answering).",
+      "description": "Triggers of automation.climate_optimizer_watchdog in the last 24 h (a trigger means the fallback ran: the climate heartbeat was older than 10 min or the owner select left live).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -1365,7 +1258,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "sum(increase(hass_automation_triggered_count_total{entity=\"automation.appdaemon_climate_watchdog\"}[1d]))",
+          "expr": "sum(increase(hass_automation_triggered_count_total{entity=\"automation.climate_optimizer_watchdog\"}[1d]))",
           "legendFormat": "Triggers",
           "refId": "A"
         }
