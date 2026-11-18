@@ -232,3 +232,6 @@ query that still uses it must be pointed at the new one.
 The thermostats' own `hvac_action` source (DP 36) follows the mode, not the demand; `heuristic_action`
 derives it from temperatures instead. See
 [home-assistant-localtuya.md](home-assistant-localtuya.md#hvac_action-dp-36-follows-the-mode-not-the-demand).
+
+The Schedules dashboard cards run on the `scheduler` integration; see
+[home-assistant-restarts.md](home-assistant-restarts.md) for why an HA restart can re-run a schedule slot.
