@@ -118,33 +118,38 @@
 - alert: BatteryGridExport
   # The Shelly's own export counter integrates sub-second, so it catches spikes the 1-minute scrape
   # of the power sensor misses. max by (entity) collapses the duplicate series the HA exporter
-  # leaves after a pod IP change. Brief export transients are expected at a small discharge_margin_w.
+  # leaves after a pod IP change. Brief export transients are expected with load-following discharge
+  # (each load-down step exports for 1-4 s), so the threshold is 30 Wh/24 h (owner decision
+  # 2026-11-18, was 5 Wh): the alert flags days well above normal.
   expr: |
     increase(
       (max by (entity) (hass_sensor_energy_kwh{entity="sensor.shellyem_main_channel_1_energy_returned"}))[24h:1m]
-    ) > 0.005
+    ) > 0.030
   labels:
     severity: warning
   annotations:
-    summary: more than 5 Wh was exported to the grid in the last 24 hours
+    summary: more than 30 Wh was exported to the grid in the last 24 hours
     description: |
-      The grid export counter rose by {{ $value | humanize }} kWh in 24 hours; the battery should
-      discharge into the house without exporting. Likely causes: actuation.discharge_margin_w too
+      The grid export counter rose by {{ $value | humanize }} kWh in 24 hours. Brief export
+      transients are expected with load-following discharge (each load-down step exports for 1-4 s),
+      so this flags a day well above normal, not any export. Likely causes: actuation.discharge_margin_w too
       small, Omnibattery PD loop oscillation, the battery holding a discharge while Home Assistant
       is down, a sudden load drop. First check the Battery dashboard, actuation.discharge_margin_w in
       the service config and the input_boolean.battery_optimizer_live kill switch.
 - alert: BatteryGridExportSustained
-  # More than 10 Wh in 15 minutes is about 40 W of average export: the control loop is not holding.
+  # More than 40 Wh in 15 minutes is over 160 W of average export: the control loop is not holding
+  # (a 2 kW runaway crosses it in about 75 s). Owner decision 2026-11-18, was 10 Wh (40 W), which
+  # a load cycling on and off during a discharge slot crossed.
   expr: |
     increase(
       (max by (entity) (hass_sensor_energy_kwh{entity="sensor.shellyem_main_channel_1_energy_returned"}))[15m:1m]
-    ) > 0.01
+    ) > 0.04
   labels:
     severity: critical
   annotations:
     summary: the battery is exporting to the grid, the control loop is not holding
     description: |
-      The grid export counter rose by {{ $value | humanize }} kWh in 15 minutes (over 40 W average).
+      The grid export counter rose by {{ $value | humanize }} kWh in 15 minutes (over 160 W average).
       Check the Battery dashboard, actuation.discharge_margin_w in the service config and, if the
       export continues, turn input_boolean.battery_optimizer_live off to hand control back.
 - alert: BatteryMarginCanBeLowered

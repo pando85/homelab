@@ -587,7 +587,7 @@ and `live`; the HA-side rules read `hass_*` and only fire while the kill switch 
 | `BatteryOptimizerKillSwitchOnNotLive` | the kill switch has been on for 15 m while the service is not `live` or `dry_run` (or is down) |
 | `BatteryOptimizerChargePowerHigh` | measured battery charge above 2600 W for 2 m (the go-live caps are 2500 W): a cap or `battery_ac_power_sign` is wrong |
 | `BatteryOptimizerChargeClamped` | `battery_optimizer_actuator_clamped_watts > 1000` for 30 m (sized for the 2500 W caps). **Unconfirmed metric name** from the unreleased optimizer change; check it against the released `/metrics` |
-| `BatteryMarginCanBeLowered` | a suggestion, never an action: 7 days at the current `actuation.discharge_margin_w`, at most 7 Wh exported, the lowest 0.1% of discharge-time grid samples at 25 W or more of import and over 50000 samples (needs the optimizer release that adds `actuator_discharge_grid_watts`; silent before it). `severity: warning` so it reaches Telegram. Lower the margin by 25 W in `files/service-overrides.yaml` by hand; the 7-day clock restarts. Plan: `docs/planning/discharge-margin-tuning.md` in the app repo |
+| `BatteryMarginCanBeLowered` | a suggestion, never an action: 7 days at the current `actuation.discharge_margin_w`, at most 7 Wh exported, the lowest 0.1% of discharge-time grid samples at 25 W or more of import and over 50000 samples (needs the optimizer release that adds `actuator_discharge_grid_watts`; silent before it). `severity: warning` so it reaches Telegram. Lower the margin by 25 W in `files/service-overrides.yaml` by hand; the 7-day clock restarts. Plan: `docs/planning/discharge-margin-tuning.md` in the app repo. Its own export criterion (7 Wh/week) is unchanged, so it cannot fire while load-following exports at the 2026-11-18 levels; the margin is already 50 W by owner decision |
 
 ### Omnibattery backup-port threshold (500 W)
 
@@ -792,7 +792,7 @@ change log).
   the Modbus write and the inverter ramp. Gains cannot remove it.
 - Export comes almost only from load-down steps while the battery is pinned at its per-slot cap: 2-4 s below 0 W,
   worst about -290 W and about 0.27 Wh per event. That is about 0.05 Wh per discharge hour at the 100 W margin,
-  well below the 5 Wh/day `BatteryGridExport` alert.
+  well below the `BatteryGridExport` alert (5 Wh/day then, 30 Wh/day since 2026-11-18).
 - `max_power_change` was never binding: the fastest setpoint change was about 190 W/s against the 400 W/s allowed.
 - `pd_control_quality` was `oscillating` for 0.35 h of 66 h, always with fast-changing loads.
 
@@ -854,7 +854,11 @@ discharging at the old load until the guard acts.
 - Peak export of step - 100 W, so 1.3-1.8 kW for about 2 s: 1-2 Wh per event, 2-10 Wh per evening, under 1 EUR/year.
 - Rare worst case: a load drop during a Shelly dropout, about 15 Wh.
 - This exceeds the 0.5 Wh per-episode revert criterion above and may trip
-  `BatteryGridExport` (5 Wh/24 h). The owner chose to keep that alert at 5 Wh.
+  `BatteryGridExport` (it did from 2026-11-12). On 2026-11-18 the owner accepted the small export and raised the
+  alerts: `BatteryGridExport` to 30 Wh/24 h (was 5 Wh) and `BatteryGridExportSustained` to 40 Wh/15 min, about
+  160 W average (was 10 Wh, 40 W). Daily export 2026-11-12 to 11-17 was 5.6, 5.3, 0.4, 8.5, 16.9 and 65 Wh
+  (the 65 Wh day: an appliance cycling about 2.3 kW every minute in a discharge slot). Cost about EUR 0.01/day
+  against about EUR 0.04/day earned by load-following. A 2 kW runaway still crosses the critical alert in about 75 s.
 - Optional owner lever: `pd_min_cycle_interval` 0 cuts about 15-20% of the export, at the cost of more Modbus
   traffic.
 - **Open: the grid registration.** If the installation is registered as self-consumption without surplus (zero export
