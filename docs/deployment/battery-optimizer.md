@@ -126,7 +126,7 @@ deployment.
 | Resources | requests 100m / 256Mi, memory limit 512Mi, no CPU limit (observed ~125-150 MiB RSS) |
 | Probes | liveness **and** readiness on `/health/live`; generous startup probe. `/health/ready` returns 503 whenever an input is stale, which would remove the endpoint and stop the scrape exactly when the metrics matter, so alert on `battery_optimizer_ready` instead |
 | Service / scrape | ClusterIP `battery-optimizer:8080` (`http`); ServiceMonitor labelled `operator.prometheus.io/instance: prometheus-long-term` (job `battery-optimizer`, 30 s), so `battery_optimizer_*` lives in the long-term Prometheus for the multi-week comparison |
-| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) and the [live control](#alerts) alerts (`rules-service/actuator.yaml`) |
+| Alerts | `PrometheusRule/battery-optimizer-service` (long-term Prometheus): `BatteryOptimizerServiceDown`, `ServiceAbsent`, `NotReady` (30 m), `HomeAssistantDisconnected` (10 m), `GridPowerStale` (15 m), `PlanStale` (1 h), `SolveFailures`, `SinkWriteErrors`, `SolvesSkipped`, `HistoryStale`, the [climate shadow](#climate-shadow-track-b2) alerts (`rules-service/climate-shadow.yaml`) the [live control](#alerts) alerts (`rules-service/actuator.yaml`) and the [live climate control](#live-climate-control) alerts (`rules-service/climate-actuator.yaml`) |
 | Dashboard | ConfigMap `dashboards-battery-optimizer`, Grafana folder `battery-optimizer`, datasource `prometheus-long-term`: `Battery optimizer service`, `Battery optimizer climate shadow`, `Battery: plan vs actual`, `Battery: load forecast`, `Battery: model and actuation`, `Battery: temperature`, `Tariff prices` and the six `Climate: ...` dashboards (see [Dashboards per component](#dashboards-per-component)) |
 
 ### Dashboards per component
@@ -598,6 +598,46 @@ and the upstream maintainer's answer for a small permanent backup load is to set
 the last power command ran for about 13 h. Never set it back to 50 W. Details, the incident and the
 diagnosis: [`home-assistant-omnibattery.md`](../troubleshooting/home-assistant-omnibattery.md#backup-port-threshold-500-w).
 The supervised grid-loss test under this setting is still open.
+
+## Live climate control
+
+ADR-0009 in the app repository (`docs/adr/0009-live-climate-control.md`, operations in
+`docs/service.md#live-climate-control-adr-0009`) lets the optimizer write space heating: the heat-pump
+operating mode (`input_select.heishamon_heatmode`, `Heat+DHW` or `DHW`) and the Z1 water target
+(`input_number.heishamon_heatshift_z1`, integers 20 to 35, direct mode only), through the same
+`ha_guard` allowlist and the same live token as the battery. It is independent of the battery's `mode`:
+`climate_actuation.mode: shadow | dry_run | live` in `files/service-overrides.yaml`, **not set here**
+(base default `shadow`, no climate actuator and no climate write path). DHW stays with AppDaemon
+`dhw_control`; the optimizer never writes it.
+
+It writes only while **both** `climate_actuation.mode` is `live` and the owner's
+`input_select.climate_optimizer_mode` reads `live`, and only while `input_boolean.appdaemon_climate_enable`
+(the legacy controller) is not `on`.
+
+| Piece | Where | State |
+|---|---|---|
+| Owner select `input_select.climate_optimizer_mode` | `config/integrations/climate_optimizer_plan.yaml` | `shadow` / `off` / `live`; read by the service, never written |
+| Heartbeat `input_datetime.climate_optimizer_heartbeat` | `config/integrations/climate_optimizer.yaml` | Written by every reconciled `live` tick (60 s). No `initial:` |
+| Comfort floors `input_number.comfort_floor_{hall_kitchen,bedroom,office_t}` | same file | 18 to 23 degC, step 0.5, `initial: 21` (the optimizer's own default, so creating them changes nothing) |
+| Watchdog automation `climate_optimizer_watchdog` | same file | Every minute and on the select leaving `live`; acts only while the select is `live`: heartbeat older than 10 min -> `Heat+DHW`, and `heishamon_heatshift_z1` 26 only while `sensor.aquarea_heating_mode` is 1 (own `continue_on_error` step). Persistent notification `climate_optimizer_watchdog` |
+| Alerts | `rules-service/climate-actuator.yaml` | See below |
+
+**Do not set the select to `live` while `climate_actuation.mode` is not `live`:** no heartbeat is written,
+so the watchdog would force `Heat+DHW` every minute (`BatteryOptimizerClimateSelectLiveNotLive` warns).
+The watchdog also does nothing while `input_boolean.appdaemon_climate_enable` is `on` (missing or
+unavailable proceeds), so a select set to `live` while the legacy `climate_control` still runs cannot
+fight its mode writes (ADR-0009 one writer: the legacy one wins until the switch).
+**Rollback:** set the select to `shadow` or `off` (immediate: the optimizer writes the safe state once
+and stops, the watchdog repeats it); then remove the write path with `climate_actuation.mode: shadow`
+(delete the key) and roll out.
+
+**Alerts** (`rules-service/climate-actuator.yaml`; the `climate_actuator_*` series exist only in
+`dry_run` and `live`, so they are silent in `shadow`): `BatteryOptimizerClimateActuatorAlert` (critical,
+writes not confirmed), `ClimateSafeState` (any fallback except `shutdown`), `ClimateWriteRefused`
+(critical, a guard refusal), `ClimateWriteFailures`, `ClimateNotDirectMode` (`Heating_Mode` is not 1),
+`ClimateLegacyWriterActive` (legacy toggle on while live: nothing is written), `ClimateHeartbeatFailures`,
+`ClimateHeartbeatStale` (critical, seen from HA, survives a dead service for 30 min) and
+`ClimateSelectLiveNotLive` (select `live` while the config is not).
 
 ## Battery settings: where they are and how to read them
 

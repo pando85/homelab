@@ -1,0 +1,126 @@
+# Live climate control (ADR-0009 in the app repository). The climate_actuator_* series exist only
+# with climate_actuation.mode dry_run or live (the counters are pre-labelled at 0 there), so the
+# actuator rules stay silent in shadow. The heartbeat rule reads hass_* from the same long-term
+# Prometheus and remembers the owner's select with last_over_time, so it still fires when the
+# service is down. Runbook: docs/deployment/battery-optimizer.md#live-climate-control.
+- alert: BatteryOptimizerClimateActuatorAlert
+  # A write was not confirmed after its retries: the actuator fell back to the safe heating state
+  # (alert write_failed), or could not even confirm it (safe_state_failed; no heartbeat then, so the
+  # HA watchdog sets the safe state itself after 10 minutes). The gauge does not say which: see
+  # `/status` (climate_actuator.alert).
+  expr: battery_optimizer_climate_actuator_alert == 1
+  for: 2m
+  labels:
+    severity: critical
+  annotations:
+    summary: battery-optimizer cannot confirm its heat-pump writes
+    description: |
+      battery_optimizer_climate_actuator_alert has been 1 for 2 minutes. See `/status`
+      (climate_actuator.alert is write_failed or safe_state_failed), the write failure counters and
+      the climate_actuation records. Set input_select.climate_optimizer_mode to shadow to hand control
+      back; the HA watchdog repeats the safe state (Heat+DHW).
+- alert: BatteryOptimizerClimateSafeState
+  # Any entry into the safe heating state except the one at shutdown (which is a stop, not a fault).
+  # select_left_live is the owner's rollback and plan_not_from_this_process / no_plan the first
+  # minutes after a restart; the others (plan_expired, plan_failed, observer_no_state,
+  # no_room_reading, mode_sensor_unavailable, write_failed) mean the plan is not being executed.
+  expr: sum by (reason) (increase(battery_optimizer_climate_actuator_fallbacks_total{reason!="shutdown"}[10m])) > 0
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer entered the safe heating state ({{ $labels.reason }})
+    description: |
+      The climate actuator wrote the safe state (Heat+DHW, 26 degC in direct mode) for reason
+      {{ $labels.reason }} and stops writing until a valid plan returns. Worst case is extra kWh,
+      never no heating. See battery_optimizer_climate_actuator_fallback_active and `/status`.
+- alert: BatteryOptimizerClimateWriteRefused
+  # A guard refusal is a bug (the actuator only builds allowlisted writes) and is never retried.
+  expr: increase(battery_optimizer_climate_actuator_write_failures_total{reason="forbidden"}[10m]) > 0
+  labels:
+    severity: critical
+  annotations:
+    summary: the climate actuator built a write the guard refused
+    description: '{{ $value | printf "%.0f" }} heat-pump write(s) were refused by the ha_guard allowlist in the last 10 minutes. This is a code or configuration error (entity ids in climate_actuation.entities); see the pod logs.'
+- alert: BatteryOptimizerClimateWriteFailures
+  # Each retry counts, up to max_attempts (3) per write, so three attempts of one write reach the
+  # threshold. ha_error is the service call failing, readback_timeout the unit not confirming within
+  # readback_timeout_s (HeishaMon or the MQTT path).
+  expr: sum by (reason) (increase(battery_optimizer_climate_actuator_write_failures_total{reason=~"ha_error|readback_timeout"}[30m])) > 2
+  labels:
+    severity: warning
+  annotations:
+    summary: heat-pump writes are failing ({{ $labels.reason }})
+    description: '{{ $value | printf "%.0f" }} write attempt(s) failed with {{ $labels.reason }} in the last 30 minutes. readback_timeout: check the "Set heatmode" / "Set Z1 Heat Temperature" automations and HeishaMon MQTT (sensor.aquarea_mode, sensor.aquarea_z1_heat_request_temperature).'
+- alert: BatteryOptimizerClimateNotDirectMode
+  # Heating is wanted but sensor.aquarea_heating_mode is not 1 (curve mode, or unavailable): the
+  # same command would mean a shift of -5..+5 K, so no water target is written. The mode is an
+  # installer setting and cannot be changed over MQTT.
+  expr: battery_optimizer_climate_actuator_not_direct_mode == 1
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: the heat pump is not in direct mode, no water target is written
+    description: |
+      battery_optimizer_climate_actuator_not_direct_mode has been 1 for 10 minutes: heating is wanted
+      but sensor.aquarea_heating_mode is not 1. The mode write continues; the water target stays
+      where it is. See docs/user-guide/heat-pump-water-temperature.md (control modes).
+- alert: BatteryOptimizerClimateLegacyWriterActive
+  # The legacy AppDaemon controller's toggle is on while the climate actuator is live: the actuator
+  # writes nothing at all (no plan, no safe state, no heartbeat) to avoid a second writer.
+  expr: |
+    (battery_optimizer_climate_actuator_guard_reason{reason="legacy_writer_active"} == 1)
+    and on () (battery_optimizer_climate_actuator_mode{mode="live"} == 1)
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: the climate actuator is live but the legacy controller is enabled, nothing is written
+    description: |
+      input_boolean.appdaemon_climate_enable reads on (or was left on), so the optimizer writes
+      nothing, heartbeat included. Turn it off and disable the AppDaemon climate_control app, or set
+      input_select.climate_optimizer_mode to shadow.
+- alert: BatteryOptimizerClimateHeartbeatFailures
+  expr: increase(battery_optimizer_climate_actuator_heartbeats_total{result="failed"}[10m]) > 0
+  labels:
+    severity: warning
+  annotations:
+    summary: battery-optimizer climate heartbeat writes are failing
+    description: '{{ $value | printf "%.0f" }} heartbeat write(s) to input_datetime.climate_optimizer_heartbeat failed in the last 10 minutes. After 10 minutes without one the HA watchdog sets the safe heating state.'
+- alert: BatteryOptimizerClimateHeartbeatStale
+  # Seen from Home Assistant, so it fires even when the service is down: the HA watchdog has set
+  # (and keeps setting) the safe heating state. The select and the mode come from the service's own
+  # gauges through last_over_time, so a service that died while live is still caught for 30 minutes
+  # (BatteryOptimizerServiceDown covers it after that). dry_run sends no heartbeat, so it is
+  # excluded by requiring mode live.
+  expr: |
+    (time() - hass_last_updated_time_seconds{entity="input_datetime.climate_optimizer_heartbeat"} > 600)
+    and on () (last_over_time(battery_optimizer_climate_actuator_owner_select{state="live"}[30m]) == 1)
+    and on () (last_over_time(battery_optimizer_climate_actuator_mode{mode="live"}[30m]) == 1)
+  for: 2m
+  labels:
+    severity: critical
+  annotations:
+    summary: climate optimizer heartbeat is stale while live control is on
+    description: |
+      input_datetime.climate_optimizer_heartbeat is {{ $value | humanizeDuration }} old while the
+      owner's select is live. The HA watchdog is holding the safe heating state (Heat+DHW). Check the
+      service (pod, `/status` climate_actuator block, heartbeat metrics).
+- alert: BatteryOptimizerClimateSelectLiveNotLive
+  # The owner's select requests live but the deployed climate_actuation.mode is not live, so the
+  # optimizer writes nothing (live_locked). Worse, the HA watchdog acts while the select is live
+  # and no heartbeat is ever written, so it would force Heat+DHW every minute. Set the select back
+  # to shadow, or deploy climate_actuation.mode: live.
+  expr: |
+    (battery_optimizer_climate_plan_mode_requested{mode="live"} == 1)
+    and on () (battery_optimizer_climate_plan_live_locked == 1)
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: climate optimizer select is live but the service config is not
+    description: |
+      input_select.climate_optimizer_mode has requested live for 10 minutes while
+      climate_actuation.mode is not live. Nothing is planned into the heat pump, and the HA
+      watchdog (no heartbeat is written) sets Heat+DHW every minute. Set the select to shadow or
+      roll out climate_actuation.mode: live.
