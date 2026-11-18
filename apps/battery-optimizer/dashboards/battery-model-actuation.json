@@ -1755,7 +1755,7 @@
       "type": "timeseries",
       "title": "Grid export while discharging (Wh and s, rolling 24 h)",
       "id": 28,
-      "description": "Left axis: energy the Shelly's device-integrated returned-energy counter recorded in the last 24 h (the BatteryGridExport source; about 1 Wh/day expected at 100 W, alerts above 5 Wh). Right axis: seconds with grid power below 0 W while discharging, from the service's 2 s samples (battery_optimizer_actuator_export_seconds_total). Neither is counted while Home Assistant is down.",
+      "description": "Left axis: energy the Shelly's device-integrated returned-energy counter recorded in the last 24 h (the BatteryGridExport source; about 1 Wh/day expected at 100 W without load-following, 5-20 Wh/day with it; alerts above 30 Wh). Right axis: seconds with grid power below 0 W while discharging, from the service's 2 s samples (battery_optimizer_actuator_export_seconds_total). Neither is counted while Home Assistant is down.",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
