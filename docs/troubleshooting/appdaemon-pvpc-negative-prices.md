@@ -1,5 +1,8 @@
 # AppDaemon Climate/DHW Control Fails on Negative PVPC Prices
 
+> `climate_control` was retired by the optimizer's live climate control (ADR-0009) and is archived in
+> `apps/home-assistant/appdaemon/archive/climate_control/`; this page is kept for `dhw_control` and history.
+
 ## Problem
 
 AppDaemon apps `climate_control` and `dhw_control` get stuck in a retry loop:

@@ -46,3 +46,11 @@ climate_shadow:
   prior: "2311c010392f"
   # Advisory climate plan (base default "off").
   optimizer_mode: "shadow"
+
+climate_actuation:
+  # The optimizer writes space heating: heat-pump operating mode (Heat+DHW / DHW) and the Z1 water
+  # target, ADR-0009 in pando85/home-energy-optimizer (base default shadow). It writes only while the
+  # owner's input_select.climate_optimizer_mode is also `live`. The legacy AppDaemon climate_control is
+  # retired in the same change. Needs the service mode: live above (live token). Roll back by setting the
+  # select to shadow (immediate), then deleting this key (base default shadow) and rolling out.
+  mode: live

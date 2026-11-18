@@ -1,23 +1,6 @@
-climate_control:
-  module: climate_control
-  class: ClimateControl
-  input_boolean:
-    enable: input_boolean.appdaemon_climate_enable
-  input_number:
-    min_hours_per_day: input_number.appdaemon_climate_min_hours_per_day
-  input_select_heat_mode: input_select.appdaemon_climate_heat_mode
-  sensor:
-    pvpc_price: sensor.esios_pvpc
-  notify:
-    enabled: true
-    entity_id: notify.agil
-  climate:
-    enabled: true
-    entity: input_select.heishamon_heatmode
-    on_mode: Heat+DHW
-    off_mode: DHW
-  fallback_cheap_electricity_price: 0.09
-  log_level: INFO
+# climate_control was retired when the optimizer took over space heating (ADR-0009 in
+# pando85/home-energy-optimizer); it is archived in appdaemon/archive/climate_control/, see the
+# README there. dhw_control stays: the optimizer never writes DHW.
 
 dhw_control:
   module: dhw_control

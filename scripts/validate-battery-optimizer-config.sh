@@ -48,6 +48,7 @@ expected = {
     "climate_shadow.enabled": True,
     "climate_shadow.prior": "2311c010392f",
     "climate_shadow.optimizer_mode": "shadow",
+    "climate_actuation.mode": "live",
 }
 for path, want in expected.items():
     node = cfg
