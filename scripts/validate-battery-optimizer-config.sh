@@ -44,6 +44,7 @@ expected = {
     "actuation.load_following.enabled": True,
     "actuation.load_following.max_w": 2500,
     "full_charge.enabled": True,
+    "full_charge.mode": "live",
     "climate_shadow.enabled": True,
     "climate_shadow.prior": "2311c010392f",
     "climate_shadow.optimizer_mode": "shadow",

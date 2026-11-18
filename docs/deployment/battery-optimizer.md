@@ -649,8 +649,8 @@ Optimizer-side knobs live in the `actuation:` block of the base `/app/config/ser
 
 Every Omnibattery feature that competes with the optimizer is off: predictive charging, charge delay,
 capacity protection, hourly balance and the weekly full charge. The weekly full charge is the one
-exception: `full_charge.mode` is `shadow` today, so its switches stay off; with `live` the optimizer arms
-it itself (see [Live battery control](#live-battery-control)).
+exception: `full_charge.mode` is `live` from 2026-11-18 (owner decision, first run supervised), so the
+optimizer arms it itself (see [Live battery control](#live-battery-control)); with `shadow` its switches stay off.
 
 ### How to read them
 
@@ -951,6 +951,7 @@ site-specific). A version bump therefore changes one line and production values 
 
 | Date | Change |
 |------|--------|
+| 2026-11-18 | `full_charge.mode: live` (owner decision): the service owns Omnibattery's weekly full charge; first run supervised. Shadow since 2026-11-04 (interrupted 2026-11-08 to 11-11). Roll back by deleting the key (base `shadow`). |
 | 2026-11-11 | The `planning.*`, `thermal.mode`, `load_following` and `full_charge.enabled` values were reverted to template defaults by the 0.16.0 re-vendor (2026-11-08 to 2026-11-11); restored on 2026-11-11 (owner request). `climate_shadow` was restored earlier. |
 | 2026-11-11 | Moved to the overrides mechanism (0.17.0): `files/service.yaml`, `tariff.yaml`, `climate.yaml` and `climate-mpc.yaml` are gone, the image's copies are the base. Effective `config_hash` unchanged (`2dc9ff4b88f5`). |
 
