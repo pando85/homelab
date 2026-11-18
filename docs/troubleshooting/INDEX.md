@@ -15,7 +15,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Storage & Backup](#storage--backup) (13 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
-- [Desktop & Home](#desktop--home) (14 entries)
+- [Desktop & Home](#desktop--home) (15 entries)
 - [Applications](#applications) (12 entries)
 
 ---
@@ -490,6 +490,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   charging, then discharging, at the 50 W setting). The threshold is a configuration knob and must stay
   above the servers' load: **500 W, never 50 W** (upstream ffunes/Omnibattery#660, by design). See
   `docs/troubleshooting/home-assistant-omnibattery.md`
+
+- Any `apps/home-assistant/config/**` or pod-spec change restarts HA, and the `scheduler` integration
+  re-executes the time slot in progress at startup unless it recorded the shutdown time, which needs a
+  clean stop (the pod had `terminationGracePeriodSeconds: 1`, now 60 s). Prefer point entries over time
+  ranges for schedules of devices with physical side effects (the bedroom cover re-opened twice on
+  2026-11-18). See `docs/troubleshooting/home-assistant-restarts.md`
 
 ## Applications
 
