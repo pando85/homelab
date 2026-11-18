@@ -606,13 +606,16 @@ ADR-0009 in the app repository (`docs/adr/0009-live-climate-control.md`, operati
 operating mode (`input_select.heishamon_heatmode`, `Heat+DHW` or `DHW`) and the Z1 water target
 (`input_number.heishamon_heatshift_z1`, integers 20 to 35, direct mode only), through the same
 `ha_guard` allowlist and the same live token as the battery. It is independent of the battery's `mode`:
-`climate_actuation.mode: shadow | dry_run | live` in `files/service-overrides.yaml`, **not set here**
-(base default `shadow`, no climate actuator and no climate write path). DHW stays with AppDaemon
-`dhw_control`; the optimizer never writes it.
+`climate_actuation.mode: shadow | dry_run | live` in `files/service-overrides.yaml`: `live` since the
+switch (owner's go, see the change log); before it the key was absent (base default `shadow`, no climate
+actuator and no climate write path). DHW stays with AppDaemon `dhw_control`; the optimizer never writes it.
+The legacy AppDaemon `climate_control` is retired and archived in
+`apps/home-assistant/appdaemon/archive/climate_control/` (its README says how to restore it).
 
 It writes only while **both** `climate_actuation.mode` is `live` and the owner's
 `input_select.climate_optimizer_mode` reads `live`, and only while `input_boolean.appdaemon_climate_enable`
-(the legacy controller) is not `on`.
+(the legacy controller's toggle, removed by the switch; missing counts as off) is not `on`.
+`automation.appdaemon_climate_watchdog` is gone, `climate_optimizer_watchdog` replaces it.
 
 | Piece | Where | State |
 |---|---|---|
@@ -622,14 +625,22 @@ It writes only while **both** `climate_actuation.mode` is `live` and the owner's
 | Watchdog automation `climate_optimizer_watchdog` | same file | Every minute and on the select leaving `live`; acts only while the select is `live`: heartbeat older than 10 min -> `Heat+DHW`, and `heishamon_heatshift_z1` 26 only while `sensor.aquarea_heating_mode` is 1 (own `continue_on_error` step). Persistent notification `climate_optimizer_watchdog` |
 | Alerts | `rules-service/climate-actuator.yaml` | See below |
 
+**Switch checklist** (done once, in this order): merge and let ArgoCD sync both the service and Home
+Assistant (Reloader restarts them); owner at home on a heating day; confirm `sensor.aquarea_heating_mode`
+is `1` (direct mode) and `/status` reports `climate_actuator` (`mode: live`, `sends: true`); only then the
+owner sets `input_select.climate_optimizer_mode` to `live`; watch the first mode and water writes and their
+readbacks (`sensor.aquarea_mode`, `sensor.aquarea_z1_heat_request_temperature`), the heartbeat and
+`battery_optimizer_climate_actuator_*`; to test the watchdog, stop the pod and wait 10 min.
+
 **Do not set the select to `live` while `climate_actuation.mode` is not `live`:** no heartbeat is written,
 so the watchdog would force `Heat+DHW` every minute (`BatteryOptimizerClimateSelectLiveNotLive` warns).
 The watchdog also does nothing while `input_boolean.appdaemon_climate_enable` is `on` (missing or
 unavailable proceeds), so a select set to `live` while the legacy `climate_control` still runs cannot
 fight its mode writes (ADR-0009 one writer: the legacy one wins until the switch).
 **Rollback:** set the select to `shadow` or `off` (immediate: the optimizer writes the safe state once
-and stops, the watchdog repeats it); then remove the write path with `climate_actuation.mode: shadow`
-(delete the key) and roll out.
+and stops, the watchdog repeats it); then revert the switch PR, which removes
+`climate_actuation.mode: live` and brings back `climate_control` and its watchdog (the water target and
+the mode stay at the last written values; the safe state is `Heat+DHW` at 26 degC).
 
 **Alerts** (`rules-service/climate-actuator.yaml`; the `climate_actuator_*` series exist only in
 `dry_run` and `live`, so they are silent in `shadow`): `BatteryOptimizerClimateActuatorAlert` (critical,
@@ -991,6 +1002,7 @@ site-specific). A version bump therefore changes one line and production values 
 
 | Date | Change |
 |------|--------|
+| 2026-11-18 | `climate_actuation.mode: live` (ADR-0009, needs the owner's explicit go; the select `input_select.climate_optimizer_mode` stays the second key). `climate_control` retired and archived, `input_boolean.appdaemon_climate_enable` and `automation.appdaemon_climate_watchdog` removed. Roll back by the select, then reverting the switch PR. |
 | 2026-11-18 | `full_charge.mode: live` (owner decision): the service owns Omnibattery's weekly full charge; first run supervised. Shadow since 2026-11-04 (interrupted 2026-11-08 to 11-11). Roll back by deleting the key (base `shadow`). |
 | 2026-11-11 | The `planning.*`, `thermal.mode`, `load_following` and `full_charge.enabled` values were reverted to template defaults by the 0.16.0 re-vendor (2026-11-08 to 2026-11-11); restored on 2026-11-11 (owner request). `climate_shadow` was restored earlier. |
 | 2026-11-11 | Moved to the overrides mechanism (0.17.0): `files/service.yaml`, `tariff.yaml`, `climate.yaml` and `climate-mpc.yaml` are gone, the image's copies are the base. Effective `config_hash` unchanged (`2dc9ff4b88f5`). |

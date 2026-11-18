@@ -303,8 +303,9 @@ Neither the fork nor the HA helper (range -5 to 40) prevents either case. Before
   Temperature" automation then publishes the same value back. It is harmless for an identical value
   but it means every device-side change is re-written once.
 - Writes are persistent in the unit; there is no automatic fallback if Home Assistant or the
-  optimizer stops. A control loop needs a watchdog that restores a safe request (the existing
-  AppDaemon watchdog does this for the operating mode only, see `appdaemon_climate.yaml`).
+  optimizer stops. A control loop needs a watchdog that restores a safe request (the HA automation
+  `climate_optimizer_watchdog` in `climate_optimizer.yaml` does this: the operating mode, and the 26 degC water
+  target only in direct mode).
 - `OSCommand` and `SendRawValue` are unrestricted over MQTT. Anyone with broker credentials can
   change unit settings; keep the broker credentials and `mosquitto` network exposure as they are.
 - First write experiment, when approved: write a value equal to the current one, check that
