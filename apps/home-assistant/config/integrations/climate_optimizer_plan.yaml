@@ -1,11 +1,11 @@
-# What the climate optimizer plans, in SHADOW mode only: the Climate optimizer dashboard shows the
-# plan next to what the heat pump does, and the select below is the owner's mode switch. Read only:
-# GET /climate/plan/summary of the in-cluster optimizer service (battery-optimizer, contract in
+# What the climate optimizer plans, and the owner's mode switch: the Climate optimizer dashboard shows
+# the plan next to what the heat pump does, and the select below is the owner's mode switch. Read
+# only: GET /climate/plan/summary of the in-cluster optimizer service (battery-optimizer, contract in
 # pando85/home-energy-optimizer docs/climate-plan-contract.md), once a minute, same mechanism as
-# battery_optimizer_plan.yaml. Nothing here writes to a device or reads the plan to control it: the
-# plan is advisory. The optimizer itself writes the heat pump only with climate_actuation.mode: live
-# AND this select at `live` (ADR-0009, climate_optimizer.yaml); until the first, `live` is locked in
-# the optimizer (live_locked) whatever is selected.
+# battery_optimizer_plan.yaml. Nothing in this file writes to a device. The optimizer itself writes
+# the heat pump only with climate_actuation.mode: live AND this select at `live` (ADR-0009,
+# climate_optimizer.yaml); until the first, `live` is locked in the optimizer (live_locked) whatever
+# is selected.
 #
 # The summary answers 200 in every state, so the sensors can say `mode_off` or `expired`: the plan
 # state sensor then shows the state, the values of the plan are unknown (never the last plan's), and
@@ -16,6 +16,12 @@
 # optimizer reads it; with the helper absent or unknown it falls back to its own config. `live` is
 # a request the optimizer refuses (live_locked) until climate_actuation.mode is live; `off` stops
 # the export, not the optimizer's measurement.
+#
+# The second template block below reads the climate actuator's own state from GET /status
+# (`climate_actuator`, ADR-0009), same cadence: whether it is in control, what it wants written, why
+# it holds back, the safe-state fallback, rooms forced by a floor, and the last confirmed write. The
+# block exists only while climate_actuation.mode is dry_run or live, so these sensors are
+# unavailable in shadow and when the service does not answer. Read only.
 #
 # Rooms are those of the plan (bedroom, hall_kitchen, office_t); a room added to the optimizer needs
 # its three predicted-temperature sensors below.
@@ -31,6 +37,10 @@ input_select:
 rest_command:
   climate_optimizer_summary:
     url: http://battery-optimizer.battery-optimizer.svc:8080/climate/plan/summary
+    method: get
+    timeout: 10
+  climate_optimizer_status:
+    url: http://battery-optimizer.battery-optimizer.svc:8080/status
     method: get
     timeout: 10
 
@@ -509,3 +519,155 @@ template:
           hot_water_planned_now: >-
             {% set c = plan_response.content %}
             {{ c.dhw_now if c.dhw_now is boolean else none }}
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: rest_command.climate_optimizer_status
+        response_variable: status_response
+        continue_on_error: true
+    sensor:
+      - name: Climate optimizer actuator mode
+        unique_id: climate_optimizer_actuator_mode
+        icon: mdi:cog-play
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {{ a.mode if a.mode is string else none }}
+      - name: Climate optimizer desired water
+        unique_id: climate_optimizer_desired_water
+        unit_of_measurement: "°C"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:water-thermometer-outline
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {% set d = a.desired %}
+          {{ (d.water_c | int) if d is mapping and d.water_c is number else none }}
+        attributes:
+          source: >-
+            {% set d = status_response.content.climate_actuator.desired %}
+            {{ d.source if d is mapping and d.source is string else none }}
+          reason: >-
+            {% set d = status_response.content.climate_actuator.desired %}
+            {{ d.reason if d is mapping and d.reason is string else none }}
+      - name: Climate optimizer holds
+        unique_id: climate_optimizer_holds
+        icon: mdi:timer-pause
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {{ a.holds | join(', ') if a.holds is sequence and a.holds | length > 0 else 'none' }}
+      - name: Climate optimizer fallback reason
+        unique_id: climate_optimizer_fallback_reason
+        icon: mdi:shield-alert
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {% set f = a.fallback %}
+          {{ f.reason if f is mapping and f.reason is string else 'none' }}
+        attributes:
+          safe_state_confirmed: >-
+            {% set f = status_response.content.climate_actuator.fallback %}
+            {{ f.safe_state_confirmed if f is mapping and f.safe_state_confirmed is boolean else none }}
+      - name: Climate optimizer floor override rooms
+        unique_id: climate_optimizer_floor_override_rooms
+        icon: mdi:thermometer-alert
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {{ a.floor_override_rooms | join(', ') if a.floor_override_rooms is sequence and a.floor_override_rooms | length > 0 else 'none' }}
+      - name: Climate optimizer observed mode
+        unique_id: climate_optimizer_observed_mode
+        icon: mdi:heat-pump
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {% set o = a.observed %}
+          {{ o.observed_mode if o is mapping and o.observed_mode is string else none }}
+        attributes:
+          observed_water_c: >-
+            {% set o = status_response.content.climate_actuator.observed %}
+            {{ o.observed_water_c if o is mapping and o.observed_water_c is number else none }}
+          direct_mode: >-
+            {% set o = status_response.content.climate_actuator.observed %}
+            {{ o.direct_mode if o is mapping and o.direct_mode is boolean else none }}
+      - name: Climate optimizer last confirmed write
+        unique_id: climate_optimizer_last_confirmed_write
+        device_class: timestamp
+        icon: mdi:check-circle-outline
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {% set w = a.last_confirmed_write_at %}
+          {{ (w.values() | map('as_datetime') | list | max).isoformat() if w is mapping and w | length > 0 else none }}
+    binary_sensor:
+      - name: Climate optimizer in control
+        unique_id: climate_optimizer_in_control
+        icon: mdi:steering
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {{ a.in_control if a.in_control is boolean else none }}
+        attributes:
+          sends: >-
+            {% set a = status_response.content.climate_actuator %}
+            {{ a.sends if a.sends is boolean else none }}
+          guard_reasons: >-
+            {% set g = status_response.content.climate_actuator.guard %}
+            {{ g.reasons | join(', ') if g is mapping and g.reasons is sequence else none }}
+      - name: Climate optimizer desired heating
+        unique_id: climate_optimizer_desired_heating
+        icon: mdi:radiator
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {% set d = a.desired %}
+          {{ d.heating if d is mapping and d.heating is boolean else none }}
+      - name: Climate optimizer actuator alert
+        unique_id: climate_optimizer_actuator_alert
+        device_class: problem
+        availability: >-
+          {{ status_response is defined and status_response.status == 200
+             and status_response.content is mapping
+             and status_response.content.climate_actuator is mapping }}
+        state: >-
+          {% set a = status_response.content.climate_actuator %}
+          {{ a.alert is string }}
+        attributes:
+          alert: >-
+            {% set a = status_response.content.climate_actuator %}
+            {{ a.alert if a.alert is string else none }}
+          last_error: >-
+            {% set a = status_response.content.climate_actuator %}
+            {{ a.last_error if a.last_error is string else none }}

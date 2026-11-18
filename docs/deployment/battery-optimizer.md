@@ -622,6 +622,10 @@ It writes only while **both** `climate_actuation.mode` is `live` and the owner's
 | Owner select `input_select.climate_optimizer_mode` | `config/integrations/climate_optimizer_plan.yaml` | `shadow` / `off` / `live`; read by the service, never written |
 | Heartbeat `input_datetime.climate_optimizer_heartbeat` | `config/integrations/climate_optimizer.yaml` | Written by every reconciled `live` tick (60 s). No `initial:` |
 | Comfort floors `input_number.comfort_floor_{hall_kitchen,bedroom,office_t}` | same file | 18 to 23 degC, step 0.5, `initial: 21` (the optimizer's own default, so creating them changes nothing) |
+| Comfort day minimums `input_number.comfort_day_minimum_{hall_kitchen,bedroom,office_t}` | same file | 18 to 26 degC, step 0.5, `initial:` = the configured values (23.5, 21, 21); the plan heats each room to its day minimum inside the comfort window, applied at the next hourly plan (HH:10). The optimizer reads them from Prometheus |
+| Comfort window `input_number.comfort_day_start_weekday_hour`, `comfort_day_start_weekend_hour`, `comfort_day_end_hour` | same file | Hours of the day, 0 to 24, step 0.25, box (12.5 = 12:30), `initial:` 12, 9, 22; house-wide; the optimizer rounds to 15 min and falls back to its configured window when start >= end |
+| Actuator state sensors `sensor/binary_sensor.climate_optimizer_*` (in control, desired heating and water, holds, fallback reason, floor override rooms, observed mode, last confirmed write, alert) | `config/integrations/climate_optimizer_plan.yaml` | REST `GET /status` -> `climate_actuator` once a minute; unavailable while `climate_actuation.mode` is `shadow` or the service does not answer |
+| Dashboard "Climate optimizer" | `apps/home-assistant/lovelace/dashboard-climate-optimizer.json` | Storage mode, not applied by ArgoCD: see [Climate optimizer dashboard](#climate-optimizer-dashboard) |
 | Watchdog automation `climate_optimizer_watchdog` | same file | Every minute and on the select leaving `live`; acts only while the select is `live`: heartbeat older than 10 min -> `Heat+DHW`, and `heishamon_heatshift_z1` 26 only while `sensor.aquarea_heating_mode` is 1 (own `continue_on_error` step). Persistent notification `climate_optimizer_watchdog` |
 | Alerts | `rules-service/climate-actuator.yaml` | See below |
 
@@ -649,6 +653,41 @@ writes not confirmed), `ClimateSafeState` (any fallback except `shutdown`), `Cli
 `ClimateLegacyWriterActive` (legacy toggle on while live: nothing is written), `ClimateHeartbeatFailures`,
 `ClimateHeartbeatStale` (critical, seen from HA, survives a dead service for 30 min) and
 `ClimateSelectLiveNotLive` (select `live` while the config is not).
+
+### Climate optimizer dashboard
+
+The "Climate optimizer" dashboard holds every climate-optimizer control and its key state in one
+place, in this order: **Control** (the mode select, what each mode does, in control / holds /
+fallback / alert), **Comfort schedule** (per room floor and day minimum, the comfort window), **Now**
+(planned and observed heating and water, rooms against the plan), **Hot water (AppDaemon)**,
+**Charts** and, collapsed, the **manual** heat mode and Zone 1 target (overwritten while `live`) and
+the plan details. Its source is `apps/home-assistant/lovelace/dashboard-climate-optimizer.json`.
+
+It is a UI-managed (storage-mode) dashboard, so git does not apply it and the file is the reference
+copy ([dashboards](../troubleshooting/home-assistant-dashboards.md)). To install or update it
+(needs an admin user; agree each change with the owner first):
+
+1. Deploy the helpers and sensors of this change first and let Home Assistant restart, so every
+   entity the dashboard references exists.
+2. First time: **Settings > Dashboards > Add dashboard > New dashboard from scratch**, title
+   `Climate optimizer`, URL `climate-optimizer` (it needs a hyphen), then open it.
+3. Open the dashboard, **Edit** (pencil) > three dots > **Raw configuration editor**, select all,
+   paste the whole JSON file, **Save**. To update, repeat the paste; a manual edit in the UI is lost.
+4. Reload the page. A tile reading "Entity not available" names an entity that is missing, for
+   example an actuator sensor while `climate_actuation.mode` is `shadow`.
+
+### Comfort helpers: persistence in two steps
+
+Home Assistant resets an `input_number` that has `initial:` to it at every restart, which would
+discard the owner's tweaks of the floors, day minimums and comfort window; a brand-new helper
+without `initial:` starts at its minimum (18 degC, lower than every comfort value). So:
+
+1. **First PR (this one):** every comfort helper has an `initial:` equal to the configured value, so
+   creating it changes nothing. Tweaks made on the dashboard last until the next restart.
+2. **Follow-up PR, after this is deployed and HA has restarted once:** remove every `initial:` from
+   the comfort helpers (floors, day minimums, window). The restored state then wins and the owner's
+   values survive restarts. Check the three day minimums read their configured values before
+   removing it, and do not remove `initial:` before the first restart with the helpers in place.
 
 ## Battery settings: where they are and how to read them
 
