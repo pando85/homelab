@@ -190,6 +190,14 @@
        "name": "Next heating stop"
       },
       {
+       "type": "markdown",
+       "title": "Plan (next 24 h)",
+       "content": "{% set sid = 'sensor.climate_optimizer_plan' %}\n{%- if states(sid) in ['unavailable', 'unknown'] or not state_attr(sid, 'blocks') -%}\n**No current plan.** The optimizer publishes one in `shadow` and `live` mode, replanned hourly at :10.\n{%- else -%}\nPlan made {{ as_local(as_datetime(states(sid))).strftime('%H:%M') }}, replanned hourly at :10.\n\n| When | Heating | Zone 1 water | Hall/kitchen | Bedroom | Office T |\n|---|---|---|---|---|---|\n{% for b in state_attr(sid, 'blocks') -%}\n| {{ as_local(as_datetime(b['from'])).strftime('%a %H:%M') }} to {{ as_local(as_datetime(b['until'])).strftime('%a %H:%M') }} | {{ 'on' if b.heating else 'off' }}{{ ' + DHW' if b.dhw else '' }} | {{ b.water_c if b.water_c is not none else '-' }} | {{ b.rooms_end.hall_kitchen | default('?', true) }} | {{ b.rooms_end.bedroom | default('?', true) }} | {{ b.rooms_end.office_t | default('?', true) }} |\n{% endfor %}\nRooms are the predicted air temperature (degC) at the end of the block, a forecast of the plan, which is executed only in live mode. Zone 2 is not planned; DHW runs are scheduled by dhw_control and shown only as the plan's assumption.\n{%- endif %}",
+       "grid_options": {
+        "columns": 12
+       }
+      },
+      {
        "type": "tile",
        "entity": "sensor.climate_optimizer_observed_mode",
        "name": "Heat mode (observed)"

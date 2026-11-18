@@ -17,7 +17,13 @@
 # a request the optimizer refuses (live_locked) until climate_actuation.mode is live; `off` stops
 # the export, not the optimizer's measurement.
 #
-# The second template block below reads the climate actuator's own state from GET /status
+# The second template block below polls the full plan, GET /climate/plan (ClimatePlan v1, about
+# 4 kB), for the forward view of the dashboard: `sensor.climate_optimizer_plan` (state: when the plan
+# was made) with `blocks`, the future 15-minute slots merged while heating on or off and the water
+# target stay the same, as the battery plan does. Unlike the summary this endpoint answers 404 while
+# no plan is current (mode_off, no_plan, expired), so the sensor is unavailable then.
+#
+# The third template block below reads the climate actuator's own state from GET /status
 # (`climate_actuator`, ADR-0009), same cadence: whether it is in control, what it wants written, why
 # it holds back, the safe-state fallback, rooms forced by a floor, and the last confirmed write. The
 # block exists only while climate_actuation.mode is dry_run or live, so these sensors are
@@ -37,6 +43,10 @@ input_select:
 rest_command:
   climate_optimizer_summary:
     url: http://battery-optimizer.battery-optimizer.svc:8080/climate/plan/summary
+    method: get
+    timeout: 10
+  climate_optimizer_full_plan:
+    url: http://battery-optimizer.battery-optimizer.svc:8080/climate/plan
     method: get
     timeout: 10
   climate_optimizer_status:
@@ -519,6 +529,70 @@ template:
           hot_water_planned_now: >-
             {% set c = plan_response.content %}
             {{ c.dhw_now if c.dhw_now is boolean else none }}
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+      - trigger: homeassistant
+        event: start
+    actions:
+      - action: rest_command.climate_optimizer_full_plan
+        response_variable: full_plan_response
+        continue_on_error: true
+    sensor:
+      # `blocks` is the plan from now on: consecutive 15-minute slots whose end is after now, merged
+      # while `heating` and `water_c` are equal. Each block: from, until (UTC ISO), heating (bool),
+      # water_c (null when off), dhw (true when any slot of the block is hot water production in the
+      # plan's assumption), rooms_end (room: predicted degC at the end of the block). The run starts
+      # are found in one pass over the slots, the blocks are then built from slices, so the cost is
+      # linear in the 96 slots. Slot arrays are columnar, so no per-slot datetime parsing.
+      - name: Climate optimizer plan
+        unique_id: climate_optimizer_plan
+        device_class: timestamp
+        icon: mdi:calendar-clock
+        availability: >-
+          {{ full_plan_response is defined and full_plan_response.status == 200
+             and full_plan_response.content is mapping
+             and full_plan_response.content.version == 1
+             and full_plan_response.content.generated_at is string
+             and full_plan_response.content.slots is mapping }}
+        state: "{{ full_plan_response.content.generated_at }}"
+        attributes:
+          valid_until: >-
+            {% set c = full_plan_response.content %}
+            {{ c.valid_until if c.valid_until is string else none }}
+          plan_id: >-
+            {% set c = full_plan_response.content %}
+            {{ c.plan_id if c.plan_id is string else none }}
+          blocks: >-
+            {% set s = full_plan_response.content.slots %}
+            {% set n = s.n | int(0) %}
+            {% set step = s.step_minutes | int(15) %}
+            {% set t0 = as_datetime(s.start) %}
+            {% set first = [(((now() - t0).total_seconds() // (step * 60)) | int), 0] | max %}
+            {% set ns = namespace(starts=[], key='') %}
+            {% for i in range(first, n) %}
+              {% set k = s.heating[i] ~ '/' ~ s.water_c[i] %}
+              {% if k != ns.key %}
+                {% set ns.starts = ns.starts + [i] %}
+                {% set ns.key = k %}
+              {% endif %}
+            {% endfor %}
+            {% set out = namespace(blocks=[]) %}
+            {% for a in ns.starts %}
+              {% set z = n if loop.last else ns.starts[loop.index] %}
+              {% set rooms = namespace(pairs=[]) %}
+              {% for room, v in s.predicted_room_c.items() %}
+                {% set rooms.pairs = rooms.pairs + [(room, (v[z - 1] | round(1)) if v[z - 1] is number else none)] %}
+              {% endfor %}
+              {% set out.blocks = out.blocks + [{
+                   'from': (t0 + timedelta(minutes=a * step)).isoformat(),
+                   'until': (t0 + timedelta(minutes=z * step)).isoformat(),
+                   'heating': s.heating[a] == 1,
+                   'water_c': s.water_c[a],
+                   'dhw': s.dhw[a:z] | sum > 0,
+                   'rooms_end': dict(rooms.pairs)}] %}
+            {% endfor %}
+            {{ out.blocks }}
   - triggers:
       - trigger: time_pattern
         minutes: "/1"
