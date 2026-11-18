@@ -48,7 +48,7 @@
 # Use the dedicated ebpf-profiler distribution (NOT the contrib image)
 image:
   repository: otel/opentelemetry-collector-ebpf-profiler
-  tag: 0.164.0
+  tag: 0.165.0
   pullPolicy: IfNotPresent
 
 mode: daemonset
