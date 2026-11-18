@@ -621,9 +621,9 @@ It writes only while **both** `climate_actuation.mode` is `live` and the owner's
 |---|---|---|
 | Owner select `input_select.climate_optimizer_mode` | `config/integrations/climate_optimizer_plan.yaml` | `shadow` / `off` / `live`; read by the service, never written |
 | Heartbeat `input_datetime.climate_optimizer_heartbeat` | `config/integrations/climate_optimizer.yaml` | Written by every reconciled `live` tick (60 s). No `initial:` |
-| Comfort floors `input_number.comfort_floor_{hall_kitchen,bedroom,office_t}` | same file | 18 to 23 degC, step 0.5, `initial: 21` (the optimizer's own default, so creating them changes nothing) |
-| Comfort day minimums `input_number.comfort_day_minimum_{hall_kitchen,bedroom,office_t}` | same file | 18 to 26 degC, step 0.5, `initial:` = the configured values (23.5, 21, 21); the plan heats each room to its day minimum inside the comfort window, applied at the next hourly plan (HH:10). The optimizer reads them from Prometheus |
-| Comfort window `input_number.comfort_day_start_weekday_hour`, `comfort_day_start_weekend_hour`, `comfort_day_end_hour` | same file | Hours of the day, 0 to 24, step 0.25, box (12.5 = 12:30), `initial:` 12, 9, 22; house-wide; the optimizer rounds to 15 min and falls back to its configured window when start >= end |
+| Comfort floors `input_number.comfort_floor_{hall_kitchen,bedroom,office_t}` | same file | 18 to 23 degC, step 0.5, no `initial:` (restored across restarts; the optimizer's own default is 21) |
+| Comfort day minimums `input_number.comfort_day_minimum_{hall_kitchen,bedroom,office_t}` | same file | 18 to 26 degC, step 0.5, no `initial:` (configured values 23.5, 21, 21); the plan heats each room to its day minimum inside the comfort window, applied at the next hourly plan (HH:10). The optimizer reads them from Prometheus |
+| Comfort window `input_number.comfort_day_start_weekday_hour`, `comfort_day_start_weekend_hour`, `comfort_day_end_hour` | same file | Hours of the day, 0 to 24, step 0.25, box (12.5 = 12:30), no `initial:` (configured 12, 9, 22); house-wide; the optimizer rounds to 15 min and falls back to its configured window when start >= end |
 | Actuator state sensors `sensor/binary_sensor.climate_optimizer_*` (in control, desired heating and water, holds, fallback reason, floor override rooms, observed mode, last confirmed write, alert) | `config/integrations/climate_optimizer_plan.yaml` | REST `GET /status` -> `climate_actuator` once a minute; unavailable while `climate_actuation.mode` is `shadow` or the service does not answer |
 | Dashboard "Climate optimizer" | `apps/home-assistant/lovelace/dashboard-climate-optimizer.json` | Storage mode, not applied by ArgoCD: see [Climate optimizer dashboard](#climate-optimizer-dashboard) |
 | Watchdog automation `climate_optimizer_watchdog` | same file | Every minute and on the select leaving `live`; acts only while the select is `live`: heartbeat older than 10 min -> `Heat+DHW`, and `heishamon_heatshift_z1` 26 only while `sensor.aquarea_heating_mode` is 1 (own `continue_on_error` step). Persistent notification `climate_optimizer_watchdog` |
@@ -682,12 +682,12 @@ Home Assistant resets an `input_number` that has `initial:` to it at every resta
 discard the owner's tweaks of the floors, day minimums and comfort window; a brand-new helper
 without `initial:` starts at its minimum (18 degC, lower than every comfort value). So:
 
-1. **First PR (this one):** every comfort helper has an `initial:` equal to the configured value, so
-   creating it changes nothing. Tweaks made on the dashboard last until the next restart.
-2. **Follow-up PR, after this is deployed and HA has restarted once:** remove every `initial:` from
-   the comfort helpers (floors, day minimums, window). The restored state then wins and the owner's
-   values survive restarts. Check the three day minimums read their configured values before
-   removing it, and do not remove `initial:` before the first restart with the helpers in place.
+1. **First PR:** every comfort helper got an `initial:` equal to the configured value, so creating it
+   changed nothing. Tweaks made on the dashboard lasted until the next restart.
+2. **Follow-up PR (this state), after the first was deployed and HA had restarted once:** no comfort
+   helper (floors, day minimums, window) has an `initial:`. The restored state wins and the owner's
+   values survive restarts. Never add an `initial:` back, and for a new comfort helper deploy it
+   with its `initial:` first and drop it after one restart, as above.
 
 ## Battery settings: where they are and how to read them
 
