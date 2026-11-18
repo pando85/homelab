@@ -32,8 +32,12 @@ actuation:
     floor: storage_value
 
 full_charge:
-  # Periodic full charge for this battery; full_charge.mode stays at the base value.
+  # Periodic full charge for this battery. Live from 2026-11-18 (owner decision, first supervised
+  # live run), after shadow since 2026-11-04 (interrupted 2026-11-08 to 11-11 by the 0.16.0
+  # re-vendor). Needs the service mode: live above. Roll back by deleting the mode key (base
+  # default shadow).
   enabled: true
+  mode: live
 
 climate_shadow:
   # Climate shadow runs for this house (base default false).
