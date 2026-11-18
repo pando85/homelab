@@ -385,7 +385,10 @@ app-template:
             limits:
               memory: 128Mi
   defaultPodOptions:
-    terminationGracePeriodSeconds: 1
+    # HA needs time to run its stop handlers: the scheduler records the shutdown time (so a restart
+    # does not re-apply time slots that already ran, e.g. reopening the bedroom cover) and HA saves
+    # restore state and the recorder queue. 1 s killed it before any of that (2026-11-18).
+    terminationGracePeriodSeconds: 60
 
     securityContext:
       runAsUser: 568
