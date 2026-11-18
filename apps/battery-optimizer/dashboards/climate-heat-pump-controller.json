@@ -49,9 +49,9 @@
     },
     {
       "type": "stat",
-      "title": "Climate rule enabled",
+      "title": "Climate actuator in control",
       "id": 2,
-      "description": "input_boolean.appdaemon_climate_enable (1 = the legacy cheapest-hours rule may run).",
+      "description": "battery_optimizer_climate_actuator_in_control (1 = the optimizer may write space heating: climate_actuation.mode live and the owner select live; 0 = shadow or off, nothing is written).",
       "datasource": {
         "type": "prometheus",
         "uid": "${datasource}"
@@ -69,7 +69,7 @@
             "uid": "${datasource}"
           },
           "editorMode": "code",
-          "expr": "max(hass_input_boolean_state{entity=\"input_boolean.appdaemon_climate_enable\"})",
+          "expr": "max(battery_optimizer_climate_actuator_in_control)",
           "legendFormat": "",
           "refId": "A",
           "instant": true,
