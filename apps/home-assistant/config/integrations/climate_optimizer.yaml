@@ -9,7 +9,10 @@
 # Everything here is inert while the select is not `live`: the heartbeat and the floor helpers are
 # only read, and the watchdog acts only while the select is `live` (or on its edge out of `live`).
 # Do NOT set the select to `live` before climate_actuation.mode: live is deployed: no heartbeat is
-# written then, and the watchdog would force Heat+DHW every minute.
+# written then, and the watchdog would force Heat+DHW every minute. Likewise while the legacy
+# AppDaemon climate_control still runs: the watchdog does nothing while
+# input_boolean.appdaemon_climate_enable is on (ADR-0009 one-writer rule, the legacy writer wins
+# until the switch); otherwise it would fight the legacy app's mode writes and flap the compressor.
 input_datetime:
   climate_optimizer_heartbeat:
     name: Climate optimizer heartbeat
@@ -53,6 +56,8 @@ automation:
   # in direct mode (in curve mode the same command is a shift of -5..+5 K). It acts only while the
   # owner's select is `live`, plus once on the select leaving `live` (the optimizer writes the same
   # safe state itself then; this repeats it). It replaces automation.appdaemon_climate_watchdog.
+  # It does nothing, for both branches, while the legacy toggle input_boolean.appdaemon_climate_enable
+  # is `on`; a missing or unavailable toggle (its state after the switch removes it) proceeds.
   - id: climate_optimizer_watchdog
     alias: Climate optimizer watchdog
     mode: single
@@ -66,6 +71,12 @@ automation:
         to: null
         id: select_left_live
     conditions:
+      - alias: Legacy climate controller is not the writer
+        condition: not
+        conditions:
+          - condition: state
+            entity_id: input_boolean.appdaemon_climate_enable
+            state: "on"
       - condition: or
         conditions:
           - condition: trigger

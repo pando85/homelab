@@ -624,6 +624,9 @@ It writes only while **both** `climate_actuation.mode` is `live` and the owner's
 
 **Do not set the select to `live` while `climate_actuation.mode` is not `live`:** no heartbeat is written,
 so the watchdog would force `Heat+DHW` every minute (`BatteryOptimizerClimateSelectLiveNotLive` warns).
+The watchdog also does nothing while `input_boolean.appdaemon_climate_enable` is `on` (missing or
+unavailable proceeds), so a select set to `live` while the legacy `climate_control` still runs cannot
+fight its mode writes (ADR-0009 one writer: the legacy one wins until the switch).
 **Rollback:** set the select to `shadow` or `off` (immediate: the optimizer writes the safe state once
 and stops, the watchdog repeats it); then remove the write path with `climate_actuation.mode: shadow`
 (delete the key) and roll out.
