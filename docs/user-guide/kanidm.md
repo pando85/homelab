@@ -212,16 +212,48 @@ Measured 2026-11-10 on the operator's workstation (client 1.12.0 against server 
 - **Client/server version mismatch warning is benign.** The CLI prints "Mismatched client and server
   version" on every call; group read/write operations succeed regardless.
 - **Non-interactive login.** `kanidm login` prompts on the TTY and fails with
-  `IO(NotConnected, "not a terminal")` in a non-interactive shell. The `KANIDM_PASSWORD` environment
-  variable is honoured instead (it backs the `--password` option), which is how an agent or script
-  can log in without a TTY. Never put the password in argv or in a file that is not `0600` and
-  shredded afterwards.
+  `IO(NotConnected, "not a terminal")` in a non-interactive shell. It has no password flag or
+  environment variable; see [Agent CLI login](#agent-cli-login) for the working method.
 - **Bind account.** For group management, bind as `idm_admin`, not `admin`. The `admin` account
   still exists but is the historical bootstrap identity; `idm_admin` is the operator account the
   Kaniop operator and the rest of the automation expect.
 - **Logout after a session.** `kanidm logout -D idm_admin -H https://idm.grigri.cloud` revokes the
   cached token in `~/.cache/kanidm_cli`. Do it after a session so no long-lived ReadWrite token
   sits on disk.
+
+## Agent CLI login
+
+An agent can log the `kanidm` CLI in without a human, using the credentials in `pass`. The CLI reads
+the password from `/dev/tty` and has no password flag or environment variable, so plain piping fails
+with `IO(NotConnected, "not a terminal")`. Run the login under a pseudo-terminal and feed the
+password from `pass` (it never touches argv, a file or the log):
+
+```bash
+(sleep 2; pass show k8s.grigri/kanidmd/idm_admin | head -n1) | script -qec 'kanidm login -D idm_admin' /dev/null
+```
+
+Then pass `-D idm_admin` (or `-D admin`) on later commands. Add `-H https://idm.grigri.cloud` if the
+client config has no real `uri`. CLI tokens are short-lived (about 1 h); `kanidm session list` shows
+cached sessions and their expiry. The client/server version-mismatch WARN is harmless.
+
+| `pass` entry | Account | Use for |
+|---|---|---|
+| `k8s.grigri/kanidmd/idm_admin` | `idm_admin` | Persons, groups, OAuth2 clients (e.g. `kanidm system oauth2 get mcp-gateway -D idm_admin`) |
+| `k8s.grigri/kanidmd/admin` | `admin` | System administration only; cannot read person entries ("No matching entries") |
+
+The owner's own web login (`web/idm.grigri.cloud`) and the `fido2/idm.grigri.cloud/*` entries are
+passkey material for the browser; the CLI cannot use them.
+
+Limitations and rules:
+
+- **Person sessions are invisible to the admin accounts.** `kanidm person session status <name>
+  -D idm_admin` reports "No sessions exist" even when sessions exist; only the person itself can see
+  its OAuth2/UAT sessions. The owner's account uses passkeys, so an agent cannot inspect the owner's
+  OAuth2 sessions from the CLI.
+- **Read-only.** Kanidm configuration is GitOps via Kaniop CRDs. Use the CLI for `get`/`list`/`show`
+  only; the exception is person group membership (see
+  [Group membership rules](#group-membership-rules)).
+- **Log out when done.** `kanidm logout -D idm_admin` removes the cached token.
 
 ## Use groups in SSO
 

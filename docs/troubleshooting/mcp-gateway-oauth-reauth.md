@@ -50,3 +50,22 @@ consent_required = (!previously_granted || (!is_basic && loopback_uri_matched)) 
 `enable_consent_prompt` is always true for a Public client, and a loopback redirect always forces
 the prompt (RFC 6819 guidance for native clients). A full re-auth therefore always shows
 "Proceed"; the longer refresh expiry only makes full re-auths rare.
+
+## Verification
+
+- **Config applied:** the `KanidmOAuth2Client` (namespace `mcp-gateway`) has the Kaniop condition
+  `RefreshTokenExpiryUpdated: AttributeMatch`.
+- **Stored value:** `kanidm system oauth2 get mcp-gateway -D idm_admin | grep refresh` shows
+  `oauth2_refresh_token_expiry` (login: [Agent CLI login](../user-guide/kanidm.md#agent-cli-login)).
+  Kanidm 1.11.2 accepted the Uint32 maximum `4294967295` and stored it as-is, before the value was
+  lowered to `31536000`.
+- **Only new tokens benefit:** the lifetime is fixed when a token is issued, so each client must
+  re-authenticate once after the change.
+- **End-to-end proof:** opencode's log (`~/.local/share/opencode/log/opencode.log`) logs per server
+  `mcp oauth request succeeded`, `invalid_grant` or `credential invalidated`. A successful refresh
+  after more than 16 h idle shows the fix works.
+- **Not checkable by an agent:** the owner's OAuth2 sessions are invisible to the admin accounts
+  (see [Agent CLI login](../user-guide/kanidm.md#agent-cli-login)).
+- **Renaming a server orphans its credential:** opencode keys stored credentials per MCP server
+  name, so renaming a server in `opencode.json` leaves the old credential behind (the old
+  `homelab-*` labels remained) and forces a re-auth.
