@@ -37,3 +37,7 @@ spec:
   {{- end }}
   preferShortUsername: true
   strictRedirectUrl: true
+  {{- with .Values.kanidm.oauth2Client.refreshTokenExpiry }}
+  # int64: large YAML numbers are float64 in Helm and would render as 4.294967295e+09.
+  refreshTokenExpiry: {{ . | int64 }}
+  {{- end }}

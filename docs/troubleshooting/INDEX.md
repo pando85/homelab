@@ -16,7 +16,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
 - [Desktop & Home](#desktop--home) (15 entries)
-- [Applications](#applications) (12 entries)
+- [Applications](#applications) (13 entries)
 
 ---
 
@@ -547,6 +547,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `client_id` supplied to the client out of band; a native MCP client that falls through CIMD and
   DCR to nothing fails with "expecting a client_id". The authorization-server metadata document is
   the source of truth. See `docs/troubleshooting/kanidm-no-dcr-mcp-client-id.md`
+
+- opencode MCP servers (`mcp.grigri.cloud`) go to `needs_auth` after a day idle, with oauth refresh
+  failing `invalid_grant`: Kanidm's default refresh-token expiry is 16 h of non-use. Fix:
+  `kanidm.oauth2Client.refreshTokenExpiry` (Kaniop `spec.refreshTokenExpiry`, max 4294967295). The
+  consent "Proceed" page cannot be removed for a public localhost client. See
+  `docs/troubleshooting/mcp-gateway-oauth-reauth.md`
 
 - Kanidm restore requires `KanidmRestore` CR with matching `targetRef.uid`, pinned `restoreImage`,
   and safety backup (or break-glass annotations). Restore job permission bug (#1005) causes failures.

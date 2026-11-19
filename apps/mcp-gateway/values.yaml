@@ -695,6 +695,16 @@ kanidm:
     # device-code or client-credentials grant.
     redirectUrls:
       - http://127.0.0.1:15000/callback
+    # OAuth2 refresh-token lifetime in seconds. Kanidm's default is 16 h of non-use:
+    # opencode's MCP refresh failed with `invalid_grant` after ~22.7 h idle and forced
+    # a browser re-auth. 4294967295 is the maximum Kanidm accepts (Uint32). The expiry
+    # is sliding (every refresh re-issues it), so a token that keeps being used does
+    # not expire. Trade-off: a stolen refresh token stays valid as long as it keeps
+    # being used or until the parent Kanidm session is revoked/expires.
+    # This does NOT remove the consent ("Proceed") page: a public client with a
+    # localhost redirect is always re-prompted by Kanidm (RFC 6819).
+    # See docs/troubleshooting/mcp-gateway-oauth-reauth.md
+    refreshTokenExpiry: 4294967295
     # scopeMap: workload (service-account) grants. The agent group keeps ALL
     # three MCP scopes deliberately: agents are workloads, and splitting them
     # into the per-route human groups would require encoding service-account
