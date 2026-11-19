@@ -6,7 +6,8 @@
 identities, Calypso action with `cache-mode: disk-s3` default; `disk` is the rollback). Results and
 the 2026-11-10 bucket-full incident are in the
 [caching analysis](../docs/conventions/rust-build-caching.md#deployed-state-and-results). The
-phases below are the original plan; workstation access (phase 6) is not done. Approval to record,
+phases below are the original plan; workstation access (phase 6, steps 3-4) was tried and dropped on
+2026-11-19. Approval to record,
 commit and push this plan is not approval to provision secrets, modify application/workstation
 configuration or deploy it.
 
@@ -259,9 +260,11 @@ After successful pilot review and explicit approval:
 
 1. Enable approved CI workflows on both runners, using the reviewed daemon/trust layout.
 2. Observe representative workloads and at least one backup cycle before adding clients.
-3. Add workstation read-only S3 access through `desktop-installer`, verifying its installed
-   sccache version and supported configuration. Keep local compilation functional offline.
-4. Evaluate workstation publishing separately after confirming useful key compatibility and trust.
+3. ~~Add workstation read-only S3 access through `desktop-installer`.~~ Tried; **dropped on
+   2026-11-19**: 0 S3 hits in 34.6k lookups because the desktop's `CARGO_*` env differs from CI's and
+   sccache hashes all of it into the key. The desktop uses a disk-only sccache.
+4. ~~Evaluate workstation publishing separately.~~ Closed with step 3. See
+   [Rust build caching](../docs/conventions/rust-build-caching.md#workstation-and-the-shared-s3-cache-decision-2026-11-19).
 5. Tune bucket retention/capacity and local limits from observed working sets, not assumptions.
 
 Do not reduce local limits initially. Local-first sharing does not free the existing roughly
@@ -290,9 +293,9 @@ Path normalization (`normalize-paths: true`, sccache 0.19 `BASEDIRS` = workspace
 implemented** in the Calypso action and enabled only for Validation (`rust.yml`); release workflows
 still use path-specific keys and a change enabling it is being prepared in Calypso. Workstation
 checkouts are not normalized. Cross-host hits are plausible for Validation (identical basedir shape
-on both runners) but not proven; a workstation-to-CI benefit is still to be earned. Keep Phase 6
-step 4 (workstation publishing) gated on demonstrated key compatibility, and do not respond to low
-cross-host hits by changing retention or the cap.
+on both runners) but not proven. The workstation-to-CI benefit was not earned (2026-11-19, see
+step 3 above), and low hit rates were a `CARGO_*` key mismatch, not a retention or cap problem; do
+not respond to low hits by changing retention or the cap.
 
 ## Rollback
 
@@ -312,7 +315,7 @@ cross-host hits by changing retention or the cap.
 |---|---|
 | Homelab | Private bucket/policy/retention/quota configuration, ExternalSecret references, rendering/lint evidence and deployment runbook updates |
 | Calypso | Opt-in multi-level setup, reviewed daemon/secret isolation, controlled pilot workflow and per-level evidence |
-| Desktop installer | Later, read-only S3 configuration through managed templates and `pass`; publishing remains a separate decision |
+| Desktop installer | Read-only S3 configuration was tried and dropped on 2026-11-19 (disk-only sccache); the `sccache-desktop` MinIO identity is now unused, removal is a [follow-up TODO](ci-runners-sccache-follow-up-todo.md) |
 
 Link final runbooks and pilot evidence from the
 [caching analysis](../docs/conventions/rust-build-caching.md). Recheck existing MinIO provisioning

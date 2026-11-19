@@ -2,12 +2,16 @@
 
 ## Status and recommendation
 
-**CI layer deployed (since 2026-11-06 ~19:10Z); workstation layers still proposals.** The text
-below was written as a pre-deployment proposal on 2026-11-06; the evidence sections are that
-baseline, not current behavior. Deployed state, measured on 2026-11-10, is in
-[Deployed state and results](#deployed-state-and-results). The
-[shared S3 deployment plan](../../planning/shared-s3-sccache-deployment.md) records phases, approval
-gates and rollback. Workstation S3 access and per-worktree targets are not deployed.
+**CI layer deployed (since 2026-11-06 ~19:10Z); workstation S3 tier tried and dropped; per-worktree
+targets still a proposal.** The text below was written as a pre-deployment proposal on 2026-11-06;
+the evidence sections are that baseline, not current behavior. Deployed state, measured on
+2026-11-10 and 2026-11-19, is in [Deployed state and results](#deployed-state-and-results). The
+workstation outcome (0 S3 hits, back to a disk-only sccache) is in
+[Workstation and the shared S3 cache](#workstation-and-the-shared-s3-cache-decision-2026-11-19).
+The [shared S3 deployment plan](../../planning/shared-s3-sccache-deployment.md) records phases, approval
+gates and rollback. Per-worktree targets are not deployed. The "Shared MinIO as a secondary cache"
+and "Validation and rollout" sections below are the original design; for the workstation they are
+superseded.
 
 Use three complementary layers:
 
@@ -109,7 +113,7 @@ Verified 2026-11-10 from CI job logs and MinIO metrics.
 | Share of all hits served by S3 | 21.3% |
 | S3 own hit rate | ~46% |
 | Per-job hit rate, with / without S3 tier | 80.6% / 63.5% |
-| S3 hit read time | 8-17 ms (same as disk) |
+| S3 hit read time | 8-17 ms (measured 2026-11-10; 14-37 ms vs 4-12 ms local on 2026-11-19) |
 | MinIO GET TTFB p99 / PUT p95 | < 50 ms / ~0.24 s |
 | Read, write or timeout errors | none |
 
@@ -133,6 +137,55 @@ panels 20–26 Loki), per-job `SCCACHE_STATS` lines in Loki from Calypso commit 
 5 Prometheus alerts in `minio-sccache.rules`. 2026-11-11 spot check: 10 jobs/24h, 0 cache errors,
 per-job hit rates build-rust-binaries ~80%, validation ~38% dragged down by cold runs. See the
 [runbook](../troubleshooting/sccache-s3-bucket-full-silent.md) for the LogQL pipeline.
+
+**Health over 9 days to 2026-11-19 (~300 `SCCACHE_STATS` events, all multivara/calypso):**
+
+| Measurement | Result |
+|---|---:|
+| Hit rate, push jobs (read-write) / PR jobs (read-only) | 94.5% / 64.7% |
+| `validation` PR jobs (116): >= 90% hits / < 10% hits | 59 / 45 (bimodal) |
+| Cache read/write errors, timeouts, PUT 4xx, 5xx | 0 |
+| Bucket usage | ~40 GiB of 200 GiB, peak 85 GiB, 7-day expiry |
+| S3 L1 read hit / local L0 read hit | 14-37 ms / 4-12 ms |
+
+- The Envoy hop in front of MinIO adds ~1 ms at p50, so pointing runners at the in-cluster MinIO
+  endpoint is not worth it.
+- CI wall time is test-bound: the test phase (650-2,080 s) dominates the clippy phase (157-375 s),
+  and warm test phases use about 1 of 14 cores. More caching cannot shorten it.
+- The cold PR jobs are a cache-key problem, not a capacity or backend problem: sccache hashes every
+  `CARGO_*` env var into the key, and Calypso's per-PR `CARGO_SCOPE` made affected-mode PRs miss
+  main's entries. Rule: never name custom CI env vars with a `CARGO_` prefix. Details, ablation and
+  fix PRs: [sccache cache keys and `CARGO_*`](../troubleshooting/sccache-cargo-env-cache-keys.md).
+  The cold runs behind the 2026-11-11 "validation ~38%" spot check above are probably the same effect.
+- Pending verification: after Calypso PRs #3061 and #3062 are merged together (each changes every CI
+  key once, so main re-warms once) and main has pushed, affected-mode PRs should show >= 90% hits.
+  Open items: [follow-up TODO](../../planning/ci-runners-sccache-follow-up-todo.md).
+
+## Workstation and the shared S3 cache (decision 2026-11-19)
+
+The z800 desktop read the shared bucket with a read-only identity and got **0 S3 hits out of 34.6k
+lookups** (S3 reachable and authenticated; real 404 misses). Its `CARGO_*` environment differs from
+CI's (`CARGO_HOME` value, `CARGO_INCREMENTAL`, `CARGO_BUILD_JOBS`, `CARGO_TARGET_DIR`, debug profile
+vars), and sccache hashes all of them into the key. Ablation: with an identical environment the
+desktop got 234 Rust S3 hits; changing any one variable gave 0 (or 15 for `CARGO_TARGET_DIR`).
+
+Making the keys match would need:
+
+- CI to move its settings off `CARGO_*` env (Calypso PRs #3061 and #3062 do part of this),
+- the desktop to share CI's `/cache/cargo` as `CARGO_HOME`, and
+- only `just`-driven builds with CI-identical features and profiles would benefit. The owner's most
+  frequent local build, `release-e2e`, can never match CI.
+
+`CARGO_HOME` cannot be normalised with an sccache basedir: openssl-src (via git2 `vendored-openssl`)
+bakes `CARGO_MANIFEST_DIR` into an artifact that openssl-sys reads (Calypso AGENTS.md, "Stable
+CARGO_HOME"). Patching or forking sccache to ignore cargo-config env vars was considered and rejected
+for now: fork maintenance burden and cache-key correctness risk.
+
+**Decision: not worth it. The desktop goes back to a disk-only sccache.** No workstation S3 access is
+planned; the workstation-publishing question is closed with it. Desktop local stats for reference:
+overall hit rate ~40%, Rust 24-33%. Its 25 GiB disk cache was full and turned over every 1-2 days,
+with most bytes in entries >= 1 MiB (full debuginfo, which Calypso PR #3062 addresses). The
+desktop-installer change that implements this is tracked in that repo.
 
 ## What Cargo and sccache reuse
 
@@ -290,7 +343,9 @@ access-based LRU. An existing shared MinIO must retain operational headroom for 
 ## Compatibility and security
 
 - Align sccache versions/cache format and the pinned Rust toolchain. Different profiles, features,
-  target triples, compiler/sysroot paths, relevant environment and flags can prevent hits.
+  target triples, compiler/sysroot paths, relevant environment and flags can prevent hits. The
+  relevant environment includes the name and value of **every `CARGO_*` variable** (set vs unset
+  counts); see [sccache cache keys and `CARGO_*`](../troubleshooting/sccache-cargo-env-cache-keys.md).
 - Validate path normalization/remapping with representative builds. Sharing a backend does not
   automatically make local and CI keys compatible; do not change embedded path semantics blindly.
 - Use a dedicated private bucket or namespace, scoped credentials and TLS on non-local links.
@@ -360,5 +415,6 @@ The original future-improvement section in the
 - [sccache 0.19.0 Redis backend](https://github.com/mozilla/sccache/blob/v0.19.0/docs/Redis.md)
 - [Fast storage tier on prusik](prusik-fast-storage-tier.md)
 - [Runner disk-pressure incident](../troubleshooting/ci-runner-amd64-disk-full.md)
+- [sccache cache keys and `CARGO_*`](../troubleshooting/sccache-cargo-env-cache-keys.md)
 - Configuration inspected in the application checkout: `.envrc`, `justfile`, `rust-toolchain.toml`,
   `.forgejo/actions/sccache-setup/action.yml`; workstation: `~/.cargo/config.toml`.

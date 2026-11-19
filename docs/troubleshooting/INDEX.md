@@ -12,7 +12,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 - [ArgoCD](#argocd) (7 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (12 entries)
-- [Storage & Backup](#storage--backup) (13 entries)
+- [Storage & Backup](#storage--backup) (14 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
 - [LLM Infrastructure](#llm-infrastructure) (3 entries)
 - [Desktop & Home](#desktop--home) (15 entries)
@@ -347,6 +347,11 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   because write policy `l0` silently drops failed secondary writes. Check `du -sb /export/sccache`
   in the minio pod and the PutObject 4xx rate, not sccache errors. See
   `docs/troubleshooting/sccache-s3-bucket-full-silent.md`
+
+- sccache hashes the name and value of every `CARGO_*` env var into every Rust cache key (set vs unset
+  counts). A custom `CARGO_SCOPE` that differed per PR made affected-mode PR jobs miss main's entries
+  (64.7% vs 94.5% hits), and the desktop's different `CARGO_*` env gave 0 S3 hits in 34.6k lookups.
+  Never name custom CI env vars `CARGO_*`. See `docs/troubleshooting/sccache-cargo-env-cache-keys.md`
 
 ## Ansible & Infrastructure
 

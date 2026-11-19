@@ -119,6 +119,54 @@ Follow-ups for Calypso, if test time is to be cut:
   `error: failed to open` as a transient build error and retry it three times. Only relevant if a
   runner other than `cargo test` is adopted.
 
+## sccache findings of 2026-11-19: open items
+
+Findings and decisions are in [Rust build caching](../docs/conventions/rust-build-caching.md) and
+[sccache cache keys and `CARGO_*`](../docs/troubleshooting/sccache-cargo-env-cache-keys.md). CI is
+healthy (0 errors, 94.5% push hit rate, 40 of 200 GiB used); PR jobs are cold because of a key
+mismatch, and CI wall time is test-bound.
+
+**Verify (read-only, in Calypso):**
+
+- [ ] **Merge multivara/calypso PRs #3061 and #3062 together** (`CARGO_SCOPE` renamed to
+  `CALYPSO_PKG_SCOPE`; `debug = "line-tables-only"` in `Cargo.toml`, CI `CARGO_PROFILE_*_DEBUG`
+  dropped). Each changes every CI key once, so merging both together re-warms main once. Unmerged on
+  2026-11-19.
+- [ ] **Check affected-mode PRs after the first main push post-merge.** They should show >= 90% hits
+  (the `SCCACHE_STATS` LogQL in `sccache-s3-observability.md`, per-`event`/`workflow` hit rate).
+  If they stay cold, the next suspect is feature unification under `-p` scoping. Fix: a
+  cargo-hakari workspace-hack, or a `--workspace --no-run` build before the scoped tests.
+
+**CI improvement candidates, ranked:**
+
+- [ ] **(a) Raise the per-slot L0 from 5 to 8-10 GiB** in the Calypso action. All slots are full and
+  warm jobs miss L0 on ~20% of requests; runner volumes have 25-43 GiB free. This supersedes the
+  "2x7-8 GiB" check above.
+- [ ] **(b) prusik only: raise `CARGO_BUILD_JOBS` from 2 to 4 or more.** It runs one job on 14 cores
+  with a 12 Gi memory limit and peak RSS ~9 GiB. Keep amd64 at 2 because two jobs run there
+  concurrently.
+- [ ] **(c) Owner policy decision: S3 writes for non-fork PR jobs.** Would lift PR hit rates but
+  relaxes the trust boundary (PR code could publish cache entries). Not recommended without an
+  explicit decision.
+- [ ] **(d) Hygiene: `guardian.*.log` files pile up in `/cache/sccache-slots`** (207 and 239 files on
+  the two runners). Add rotation or cleanup.
+
+**Calypso pin-script bugs:**
+
+- [ ] `.ci/sccache-pin.sh:95` overwrites the global `/cache/bin/sccache-pin.json`, and `provenance_ok`
+  reads only that file, so rolling back to an older rev rebuilds sccache (~3 min per runner) instead
+  of reusing `/cache/bin/pin/<rev>/`. Write per-rev provenance.
+- [ ] `.ci/sccache-pin.sh:173` calls an undefined `retire_legacy_daemons_once`. Harmless, but prints
+  "command not found".
+
+**Desktop read-only MinIO identity (owner decision):**
+
+- [ ] **Remove the now-unused `sccache-desktop` identity?** The desktop goes back to a disk-only
+  sccache (no S3 access), but `platform/minio/values.yaml` still defines the `sccacheDesktopPolicy`
+  policy and the `sccache-desktop` user, and `platform/minio/templates/external-secrets-users.yaml`
+  still maps `sccacheDesktopPassword` from Vault. Removing them needs a Vault cleanup of that
+  property too. Not removed yet; revoke the credential sooner if security requires it.
+
 ## Later
 
 - [ ] **Separate disk or volume for `/srv/ci-runner` on k8s-amd64-1**, so CI cannot push the
