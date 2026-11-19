@@ -69,3 +69,17 @@ the prompt (RFC 6819 guidance for native clients). A full re-auth therefore alwa
 - **Renaming a server orphans its credential:** opencode keys stored credentials per MCP server
   name, so renaming a server in `opencode.json` leaves the old credential behind (the old
   `homelab-*` labels remained) and forces a re-auth.
+
+### Status (2026-11-19)
+
+- **Applied:** at ~12:39 UTC Kaniop applied `refreshTokenExpiry: 31536000` (commit `8c444e97b`).
+  `kanidm system oauth2 get mcp-gateway -D idm_admin` shows `oauth2_refresh_token_expiry: 31536000`.
+- **opencode:** `context7` refreshed at 12:40 UTC without re-auth, because Kanidm re-issues refresh
+  tokens with the client's current expiry on each refresh. `firecrawl` and `grafana-grigri` were
+  re-authorized at 12:40 and 12:41 UTC. All three hold refresh tokens issued after the change.
+- **Not client-readable:** refresh tokens are Kanidm JWEs (A128KW/A128GCM), so their expiry cannot
+  be read client-side.
+- **Not yet verified:** a successful refresh after more than 16 h idle. If opencode again reports
+  `invalid_grant` or `needs_auth` for these servers, the refresh-token expiry is not the (only)
+  cause. Next suspect: the parent Kanidm session purge/expiry (account policy `authsession_expiry`,
+  default 1 day). Investigate in a fresh session starting from this doc.
