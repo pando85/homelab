@@ -30,7 +30,8 @@ was revoked, the refresh fails regardless of the token lifetime.
 
 Set `kanidm.oauth2Client.refreshTokenExpiry` in `apps/mcp-gateway/values.yaml`; the template renders
 it as `spec.refreshTokenExpiry` on the `KanidmOAuth2Client`. The attribute
-(`oauth2_refresh_token_expiry`) is a Uint32, so the maximum is `4294967295` seconds (~136 years).
+(`oauth2_refresh_token_expiry`) is a Uint32; its maximum was accepted by Kanidm 1.11.2 but is
+unnecessarily long for a stolen token. The chosen value is `31536000` seconds (1 year).
 The template pipes the value through `int64`; without it Helm renders large numbers in scientific
 notation.
 

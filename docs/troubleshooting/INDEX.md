@@ -550,7 +550,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 - opencode MCP servers (`mcp.grigri.cloud`) go to `needs_auth` after a day idle, with oauth refresh
   failing `invalid_grant`: Kanidm's default refresh-token expiry is 16 h of non-use. Fix:
-  `kanidm.oauth2Client.refreshTokenExpiry` (Kaniop `spec.refreshTokenExpiry`, max 4294967295). The
+  `kanidm.oauth2Client.refreshTokenExpiry` (Kaniop `spec.refreshTokenExpiry`, set to 31536000 = 1 year). The
   consent "Proceed" page cannot be removed for a public localhost client. See
   `docs/troubleshooting/mcp-gateway-oauth-reauth.md`
 
