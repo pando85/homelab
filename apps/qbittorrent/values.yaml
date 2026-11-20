@@ -150,10 +150,15 @@ app-template:
         external-dns.kubernetes.io/enabled: "true"
       externalTrafficPolicy: Local
       ports:
-        bittorrent:
+        bittorrent-tcp:
           enabled: true
           port: *torrent_port
           protocol: TCP
+          targetPort: *torrent_port
+        bittorrent-udp:
+          enabled: true
+          port: *torrent_port
+          protocol: UDP
           targetPort: *torrent_port
 
   serviceMonitor:
