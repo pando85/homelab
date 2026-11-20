@@ -46,6 +46,8 @@ climate_shadow:
   prior: "2311c010392f"
   # Advisory climate plan (base default "off").
   optimizer_mode: "shadow"
+  # Start of the optimizer's live climate control (ADR-0009), opens the new window after 7 days (base default null).
+  go_live: "2026-11-18"
 
 climate_actuation:
   # The optimizer writes space heating: heat-pump operating mode (Heat+DHW / DHW) and the Z1 water
