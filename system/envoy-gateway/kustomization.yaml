@@ -32,7 +32,7 @@ helmCharts:
     valuesFile: values.yaml
 
 configMapGenerator:
-  # Upstream Envoy Gateway dashboards (charts/gateway-addons-helm/dashboards at v1.9.3). Local
+  # Upstream Envoy Gateway dashboards (charts/gateway-addons-helm/dashboards at v1.10.0). Local
   # edits: hardcoded datasource uid replaced by the $datasource variable, controller namespace
   # default envoy-gateway. Picked up by the Grafana sidecar (label grafana_dashboard).
   - name: envoy-gateway-dashboards
