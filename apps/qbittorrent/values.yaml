@@ -160,7 +160,7 @@ app-template:
       controller: qbittorrent
       type: LoadBalancer
       annotations:
-        lbipam.cilium.io/ips: "192.168.193.8"
+        lbipam.cilium.io/ips: "192.168.193.12"
         external-dns.kubernetes.io/enabled: "true"
       externalTrafficPolicy: Local
       ports:
