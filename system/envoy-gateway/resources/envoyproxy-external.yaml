@@ -73,7 +73,7 @@ spec:
         container:
           # eMudhra CA fix: same pin as global.images.envoyProxy in values.yaml (this field replaces it)
           # renovate: datasource=docker versioning=regex:^distroless-v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
-          image: docker.io/envoyproxy/envoy:distroless-v1.39.6
+          image: docker.io/envoyproxy/envoy:distroless-v1.40.2
           resources:
             requests:
               cpu: 40m
