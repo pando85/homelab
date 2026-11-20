@@ -1,11 +1,3 @@
-global:
-  images:
-    envoyProxy:
-      # Same as the v1.10.0 chart default: distroless-v1.40.2, the first 1.40 patch that drops the
-      # compromised eMudhra CAs. Keep in step with resources/envoyproxy-*.yaml (that field overrides this).
-      # renovate: datasource=docker versioning=regex:^distroless-v(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)$
-      image: docker.io/envoyproxy/envoy:distroless-v1.40.2
-
 # CRDs come from the gateway-crds-helm chart (see kustomization.yaml)
 crds:
   enabled: false
