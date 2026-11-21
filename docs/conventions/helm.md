@@ -96,6 +96,12 @@ For custom image fields:
 dockerImage: postgres:16
 ```
 
+To skip releases by version shape (e.g. kanidm `X.Y.0`, k3s patches `.0`-`.3`), use a package rule
+with `allowedVersions: '!/regex/'` in `.github/renovate.json5`. It cannot be combined with
+`matchUpdateTypes` in the same rule. Prefer it over `minimumReleaseAge` for k3s: the
+`k3s-upgrade` build-date check rejects old builds
+([`k3s-system-upgrade-build-date-check.md`](../troubleshooting/k3s-system-upgrade-build-date-check.md)).
+
 ## Adding a New App
 
 1. Create `apps/<name>/` with `Chart.yaml`, `values.yaml`, `templates/`

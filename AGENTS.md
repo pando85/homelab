@@ -123,7 +123,7 @@ command.
 
 ## Common Pitfalls
 
-Full pitfall index (86 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
+Full pitfall index (87 entries grouped by subsystem): `docs/troubleshooting/INDEX.md`
 
 **Pre-deployment rules** (no separate doc — must be known before starting work):
 
@@ -149,7 +149,7 @@ Full pitfall index (86 entries grouped by subsystem): `docs/troubleshooting/INDE
 
 **Subsystem index** (top pitfalls per group — see `docs/troubleshooting/INDEX.md` for full entries):
 
-- **Kubernetes & GitOps** (16): node addition, app-template `tpl` evaluation, topology spread constraints, `eviction-hard` replaces k3s defaults, Forgejo runner `valid_volumes` silently drops container-job mounts
+- **Kubernetes & GitOps** (17): node addition, k3s system-upgrade build-date check/taints, app-template `tpl` evaluation, topology spread constraints, `eviction-hard` replaces k3s defaults, Forgejo runner `valid_volumes` silently drops container-job mounts
 - **ArgoCD** (7): repo-server probe death-spiral, kustomize OCI auth override, Helm-hook mixing and
   hook-only edits that never converge (`docs/troubleshooting/argocd-helm-hook-provisioning.md`)
 - **Monitoring** (9): Grafana sidecar collisions, Vector log loss, Tempo WAL path collision, DiskPressure Loki gaps

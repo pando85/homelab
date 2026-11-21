@@ -8,7 +8,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 ## Table of Contents
 
-- [Kubernetes & GitOps](#kubernetes--gitops) (16 entries)
+- [Kubernetes & GitOps](#kubernetes--gitops) (17 entries)
 - [ArgoCD](#argocd) (7 entries)
 - [Monitoring & Observability](#monitoring--observability) (9 entries)
 - [Networking](#networking) (12 entries)
@@ -97,6 +97,15 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   them), and dev-profile `cargo new` builds are never sccache-cacheable (incremental compilation
   → `requests_not_cacheable`), so cache tests must set `CARGO_INCREMENTAL=0`. See
   `docs/troubleshooting/forgejo-runner-valid-volumes.md`
+
+- k3s system-upgrade Plans stay `Complete=False` (Jobs `DeadlineExceeded`) for two reasons: (1)
+  `rancher/k3s-upgrade` refuses a target binary built in an earlier month than the installed one
+  (`Current build date ... is more recent than ...`, no force flag) and a new minor's early patches
+  are older builds, so target the newest patch of the next minor — Renovate gates k3s minors with
+  `allowedVersions` (patch `.4`+), not release age; (2) the agent Plan needs a toleration for any
+  node taint (`dedicated=ci:NoSchedule`) or its pod stays `FailedScheduling`. `prusik` stays
+  `SchedulingDisabled` until the server Plan succeeds — don't uncordon by hand. See
+  `docs/troubleshooting/k3s-system-upgrade-build-date-check.md`
 
 ## ArgoCD
 
