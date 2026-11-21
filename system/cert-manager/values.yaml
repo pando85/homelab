@@ -14,6 +14,17 @@ cert-manager:
     - --enable-certificate-owner-ref=true
     - --dns01-recursive-nameservers-only
     - --dns01-recursive-nameservers=8.8.8.8:53,1.1.1.1:53
+
+  # Controller options that have no flag in the chart. gatewayAPI.enabled turns on the Gateway API
+  # support the ACME `gatewayHTTPRoute` HTTP-01 solver needs (cert-manager v1.21: the chart renders
+  # `config` into the controller's ControllerConfiguration ConfigMap; the old --enable-gateway-api flag
+  # is the same switch). Used by the zerossl-forkline-io ClusterIssuer for the Forkline Remote hosts.
+  # The chart's ClusterRole already allows httproutes.
+  config:
+    apiVersion: controller.config.cert-manager.io/v1alpha1
+    kind: ControllerConfiguration
+    gatewayAPI:
+      enabled: true
   global:
     leaderElection:
       namespace: cert-manager

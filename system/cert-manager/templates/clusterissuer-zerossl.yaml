@@ -1,7 +1,8 @@
 # ZeroSSL for forkline.io (Forkline Remote: per-machine certificates under remote.forkline.io and
-# remote.staging.forkline.io). letsencrypt-prod-dns stays the documented fallback CA. The EAB key ID
-# is not a secret and must be literal here (cert-manager has no secret reference for it); the HMAC key
-# comes from the zerossl-eab Secret (ExternalSecret zerossl-eab, Vault /cert-manager/zerossl).
+# remote.staging.forkline.io, solved with HTTP-01; the rest of forkline.io keeps DNS-01).
+# letsencrypt-prod-dns stays the documented fallback CA. The EAB key ID is not a secret and must be
+# literal here (cert-manager has no secret reference for it); the HMAC key comes from the zerossl-eab
+# Secret (ExternalSecret zerossl-eab, Vault /cert-manager/zerossl).
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:
@@ -17,6 +18,25 @@ spec:
         name: zerossl-eab
         key: eab_hmac_key
     solvers:
+    # Forkline Remote machine hosts (<machine>-<user>.remote.forkline.io and .remote.staging.forkline.io, ADR-0053 6.3):
+    # HTTP-01 through the existing port-80 `http` listener of the `external` Gateway. cert-manager creates the solver
+    # pod, Service and a temporary exact-host HTTPRoute in the CertificateRequest's namespace (calypso-remote), which
+    # outranks the catch-all external-http-redirect for /.well-known/acme-challenge/<token> only. HTTP-01 cannot
+    # validate wildcards, so a CSR with a wildcard name for these zones can no longer be issued. Needs
+    # config.gatewayAPI.enabled in values.yaml. dnsZones picks the most specific match, so the rest of forkline.io
+    # keeps DNS-01 below.
+    - selector:
+        dnsZones:
+        - remote.forkline.io
+        - remote.staging.forkline.io
+      http01:
+        gatewayHTTPRoute:
+          parentRefs:
+          - group: gateway.networking.k8s.io
+            kind: Gateway
+            name: external
+            namespace: envoy-gateway
+            sectionName: http
     - selector:
         dnsZones:
         - forkline.io
