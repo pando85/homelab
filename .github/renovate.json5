@@ -261,6 +261,16 @@
       platformAutomerge: false,
     },
     {
+      description: 'Skip kanidm X.Y.0 releases: always wait for the first patch release',
+      matchDatasources: [
+        'docker',
+      ],
+      matchPackageNames: [
+        'kanidm/server',
+      ],
+      allowedVersions: '!/^v?\\d+\\.\\d+\\.0$/',
+    },
+    {
       description: 'Group k3s changes in one PR. New minors are gated by patch number (only .4 and later), not release age: k3s-upgrade refuses binaries built in an earlier month than the installed one',
       matchPackageNames: [
         'k3s-io/k3s',
