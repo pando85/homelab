@@ -30,10 +30,41 @@ kubectl --context=grigri get kanidmbackup <backup-name> -n kanidm -o yaml
 - Target has exactly one replica group with `primaryNode: true`
 - Target uses PVC storage and security context UID/GID/fsGroup 389
 
-There are two restore modes:
+There are two restore sources (Kaniop 0.24.1, set exactly one):
 
-- `backupRef` only supports restoring to the original Kanidm CR because Kaniop 0.16.2 requires the backup's `kanidmRef.uid` to match the target UID.
-- `local` supports clean-cluster disaster recovery after the verified S3 payload is staged on the target primary PVC.
+- `source.backupRef`: a `Ready` `KanidmBackup` in the namespace (remote S3 backup). Its `kanidmRef`
+  name/UID must match the target; a backup from another UID needs the disaster-recovery annotations
+  (see [Clean-Cluster Disaster Recovery](#clean-cluster-disaster-recovery)).
+- `source.local`: a backup basename below `/data` on the target primary PVC.
+
+Both require `safetyBackup.repositoryRef` unless `safetyBackup.skip: true` with break-glass
+annotations; without it the restore fails at `Validating`, before any quiesce.
+
+### GitOps Restore (Chart Values)
+
+`system/kanidm` renders `kanidm-restore` from the `restore` values. Rendering fails if both or
+neither source is set, `targetUid` is empty, or the safety backup has no repository and no skip.
+Restore from a remote backup with a safety backup in the `kanidm` repository:
+
+```yaml
+restore:
+  enabled: true
+  targetUid: <KANIDM_UID>      # kubectl get kanidm kanidm -n kanidm -o jsonpath='{.metadata.uid}'
+  backupRef: <backup-name>     # a Ready KanidmBackup, e.g. kb-0ee13386
+  fileName: ""
+  safetyBackup:
+    repositoryRef: kanidm      # default
+```
+
+Check the render (`helm template --namespace kanidm kanidm system/kanidm/ --show-only
+templates/kanidm-restore.yaml`), commit, push and let Argo sync. The phases run `Quiescing` →
+`SafetyBackup` (offline upload of the current DB to `kanidm`, recorded in
+`status.safetyBackupRef`) → `PreparingSource` (download and SHA-256 check of the remote payload) →
+`RestoringPrimary` and onwards. After `Completed`, set `enabled: false` again so Argo prunes the
+CR; the spec is immutable, so a new restore always goes through disable then enable. For a local
+file set `fileName` and leave `backupRef` empty.
+
+### Manual Restore
 
 **1. Get target Kanidm UID:**
 ```bash
@@ -101,7 +132,7 @@ kubectl --context=grigri delete kanidmrestore kanidm-restore -n kanidm
 ### Critical Constraints
 
 - **UID binding**: `targetRef.uid` must match Kanidm's `metadata.uid`
-- **Remote restore binding**: `backupRef` also requires the backup's `kanidmRef.uid` to match the target UID; Kaniop 0.16.2 cannot use it for a fresh Kanidm CR
+- **Remote restore binding**: `backupRef` also requires the backup's `kanidmRef` name/UID to match the target, unless the audited disaster-recovery annotations are set
 - **Domain binding**: Target `spec.domain` must match the database domain stored in the backup, or Kanidm will refuse to start after restore
 - **Image pinning**: `restoreImage` must exactly match `target.spec.image` and the backup's Kanidm version (no `latest`)
 - **Primary designation**: Exactly one replica group must set `primaryNode: true`
@@ -115,7 +146,17 @@ kubectl --context=grigri delete kanidmrestore kanidm-restore -n kanidm
 
 ### Clean-Cluster Disaster Recovery
 
-Kaniop 0.16.2 does not support cross-UID disaster recovery through `source.backupRef`. Use `source.local`:
+Kaniop 0.24.1 can restore a `backupRef` from a lost cluster (different Kanidm UID):
+catalog it with a `KanidmBackup` that carries the original `kanidmRef` and `manifestKey`, wait for
+`Ready`, then set `restore.backupRef` plus these `restore.annotations`:
+
+```yaml
+backup.kaniop.rs/disaster-recovery: "true"
+backup.kaniop.rs/break-glass-reason: "original cluster lost"
+backup.kaniop.rs/break-glass-approved-by: "<role>"
+```
+
+The staged `source.local` path below still works when the repository cannot be used:
 
 1. Verify the S3 manifest and payload exist before creating or changing any CR.
 2. Confirm the payload SHA-256 matches `manifest.json`.
@@ -188,7 +229,7 @@ For testing a production backup in a different namespace:
 2. Create a PVC-backed Kanidm target with the same domain and image version as the backup, exactly one primary replica group, and security context 389.
 3. Use a self-signed test TLS certificate for that domain and do not create an Ingress.
 4. Stage only the verified payload on the primary PVC and delete the staging Job immediately.
-5. Restore through `source.local`; `backupRef` cannot cross target UIDs in Kaniop 0.16.2.
+5. Restore through `source.local`, or through `backupRef` with the disaster-recovery annotations.
 6. Wait for both the restore to report `Completed` and the Kanidm CR to report all desired replicas Ready.
 7. Validate representative people, groups, and OAuth2 clients with `kanidmd db-scan` and confirm incremental replication succeeds on both pods.
 8. Before deleting a copied `KanidmBackup` CR, remove `kanidmbackups.kaniop.rs/finalizer`; normal CR deletion removes the referenced S3 data.

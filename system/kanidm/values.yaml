@@ -2,7 +2,26 @@ image:
   repository: kanidm/server
   tag: "1.11.2"
 
+# KanidmRestore (templates/kanidm-restore.yaml). Destructive: it stops Kanidm and replaces its
+# database. The spec is immutable, so set `enabled: false` (Argo prunes the object) before
+# changing the values for another restore.
+# Runbook: docs/troubleshooting/kanidm-restore-procedure.md
 restore:
   enabled: false
-  fileName: ""
+  # metadata.uid of the target Kanidm `kanidm`.
   targetUid: ""
+  # Source: set exactly one of `backupRef` or `fileName`.
+  # Name of a Ready KanidmBackup in this namespace (remote backup in the S3 repository).
+  backupRef: ""
+  # Basename of a backup file below /data on the primary PVC.
+  fileName: ""
+  # Backup of the current database taken before the restore changes it.
+  safetyBackup:
+    # KanidmBackupRepository for the safety backup (templates/backup-repository.yaml).
+    repositoryRef: kanidm
+    # Skipping needs the break-glass annotations below.
+    skip: false
+  # Audit annotations: backup.kaniop.rs/break-glass-reason and
+  # backup.kaniop.rs/break-glass-approved-by (required for `skip` and for
+  # backup.kaniop.rs/disaster-recovery: "true", a backup from another Kanidm UID).
+  annotations: {}

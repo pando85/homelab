@@ -1,14 +1,45 @@
 {{- if .Values.restore.enabled }}
+{{- $restore := .Values.restore }}
+{{- if and $restore.backupRef $restore.fileName }}
+{{- fail "restore: set only one of restore.backupRef or restore.fileName" }}
+{{- end }}
+{{- if not (or $restore.backupRef $restore.fileName) }}
+{{- fail "restore: set one of restore.backupRef or restore.fileName" }}
+{{- end }}
+{{- if not (or $restore.safetyBackup.repositoryRef $restore.safetyBackup.skip) }}
+{{- fail "restore: restore.safetyBackup.repositoryRef is required unless restore.safetyBackup.skip is true" }}
+{{- end }}
+{{- $annotations := $restore.annotations | default dict }}
+{{- if or $restore.safetyBackup.skip (eq (get $annotations "backup.kaniop.rs/disaster-recovery") "true") }}
+{{- if not (and (get $annotations "backup.kaniop.rs/break-glass-reason") (get $annotations "backup.kaniop.rs/break-glass-approved-by")) }}
+{{- fail "restore: safetyBackup.skip and disaster-recovery need the backup.kaniop.rs/break-glass-reason and backup.kaniop.rs/break-glass-approved-by annotations" }}
+{{- end }}
+{{- end }}
 apiVersion: kaniop.rs/v1beta1
 kind: KanidmRestore
 metadata:
   name: {{ .Release.Name }}-restore
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   restoreImage: {{ .Values.image.repository }}:{{ .Values.image.tag }}
   source:
+    {{- if $restore.backupRef }}
+    backupRef:
+      name: {{ $restore.backupRef | quote }}
+    {{- else }}
     local:
-      fileName: {{ .Values.restore.fileName | quote }}
+      fileName: {{ $restore.fileName | quote }}
+    {{- end }}
+  safetyBackup:
+    {{- with $restore.safetyBackup.repositoryRef }}
+    repositoryRef:
+      name: {{ . | quote }}
+    {{- end }}
+    skip: {{ $restore.safetyBackup.skip | default false }}
   targetRef:
     name: kanidm
-    uid: {{ .Values.restore.targetUid | quote }}
+    uid: {{ required "restore: restore.targetUid is required" $restore.targetUid | quote }}
 {{- end }}
