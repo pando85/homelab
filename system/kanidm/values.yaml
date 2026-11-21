@@ -7,12 +7,12 @@ image:
 # changing the values for another restore.
 # Runbook: docs/troubleshooting/kanidm-restore-procedure.md
 restore:
-  enabled: false
+  enabled: true
   # metadata.uid of the target Kanidm `kanidm`.
-  targetUid: ""
+  targetUid: "be36942f-0685-4d42-a137-8faa891d3830"
   # Source: set exactly one of `backupRef` or `fileName`.
   # Name of a Ready KanidmBackup in this namespace (remote backup in the S3 repository).
-  backupRef: ""
+  backupRef: "kb-008f5795"
   # Basename of a backup file below /data on the primary PVC.
   fileName: ""
   # Backup of the current database taken before the restore changes it.
