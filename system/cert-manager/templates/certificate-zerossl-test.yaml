@@ -1,0 +1,14 @@
+# Temporary DNS-01 issuance test of the zerossl-forkline-io ClusterIssuer (Forkline Remote, gate G10).
+# Remove this file once the Certificate is Ready.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: zerossl-test-remote-staging
+spec:
+  secretName: zerossl-test-remote-staging-tls
+  issuerRef:
+    name: zerossl-forkline-io
+    kind: ClusterIssuer
+  dnsNames:
+    - t.remote.staging.forkline.io
+    - "*.t.remote.staging.forkline.io"
