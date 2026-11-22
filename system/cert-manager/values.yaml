@@ -25,6 +25,11 @@ cert-manager:
     kind: ControllerConfiguration
     gatewayAPI:
       enabled: true
+  # The controller reads `config` only at start: restart it when its ConfigMap changes (a values change alone
+  # updates the ConfigMap but not the pod).
+  deploymentAnnotations:
+    configmap.reloader.stakater.com/reload: cert-manager
+
   global:
     leaderElection:
       namespace: cert-manager
