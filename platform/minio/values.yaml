@@ -2,14 +2,14 @@ minio:
   image:
     # renovate: datasource=docker depName=pgsty/silo versioning=regex:^RELEASE\.(?<major>\d{4})-(?<minor>\d{2})-(?<patch>\d{2})T(?<build>\d{2})-(?<revision>\d{2})-(?<patch2>\d{2})Z$
     repository: pgsty/silo
-    tag: RELEASE.2026-10-26T00-00-00Z
+    tag: RELEASE.2026-11-12T00-00-00Z
 
   # mc (MinIO client) for post-install hooks (bucket/policy/user provisioning).
   # quay.io/minio/mc images were removed from quay.io (401 UNAUTHORIZED as of 2026-11).
   # The pgsty/silo server image includes mc (symlinked to mcli), so reuse it.
   mcImage:
     repository: pgsty/silo
-    tag: RELEASE.2026-10-26T00-00-00Z
+    tag: RELEASE.2026-11-12T00-00-00Z
 
   mode: standalone
 
