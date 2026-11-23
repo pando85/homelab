@@ -1,7 +1,7 @@
 # Single place that pins the ESPHome CLI used by flash-device/device-logs. Keep it in step with the
 # dashboard image tag in ../values.yaml (Renovate bumps both in one PR, see .github/renovate.json5).
 # renovate: datasource=docker depName=ghcr.io/esphome/esphome
-ESPHOME_VERSION ?= 2026.10.2
+ESPHOME_VERSION ?= 2026.11.0
 ESPHOME ?= uvx --from 'esphome==$(ESPHOME_VERSION)' --with pillow esphome
 DEVICE_DOMAIN ?= iot.grigri
 FLASH_KUBE_CONTEXT ?= $(or $(KUBE_CONTEXT),grigri)
