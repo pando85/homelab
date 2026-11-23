@@ -74,7 +74,7 @@ app-template:
           image:
             # renovate: datasource=docker depName=mcr.microsoft.com/playwright/mcp
             repository: mcr.microsoft.com/playwright/mcp
-            tag: v0.0.85
+            tag: v0.0.86
           # Args are appended to the image's own ENTRYPOINT (see header
           # comment). No `command:` override: that would drop tini as
           # PID 1 and Chromium's zombie children would accumulate.
