@@ -11,30 +11,25 @@ packages:
 
 # Device-only Wi-Fi/API overrides, merged with `wifi:` and `api:` of packages/connection.yaml.
 # - The radio stops transmitting a few minutes after power-on while the Wi-Fi stack still thinks
-#   it is connected, and a soft reboot does not recover it (stored RF calibration is reused).
-#   includes: forces a full RF calibration on every boot (mini-switch-office-a/rf_calibration.h).
-# - api reboot_timeout 2min reboots once Home Assistant loses contact, even if Wi-Fi looks up.
+#   it is connected. Since 2026-11-16 it sends nothing at all (see the doc below).
 # - phy_mode 11G (802.11g) works around a suspected Wi-Fi radio hang on this ESP8266.
 # - output_power 17dB lowers the TX current draw.
 # - post_connect_roaming is off: it runs a full channel scan every 5 min while connected, and
 #   ESPHome's own source notes the off-channel time can cause beacon-timeout disconnects. Office A
 #   hears hundreds of neighbour BSSIDs, so that scan is long.
 # - fast_connect connects without a scan at boot.
-# - reboot_timeout 5min reboots quickly when Wi-Fi stays down, instead of waiting 24 h.
+# - reboot_timeout 15min must stay above the fallback AP's ap_timeout (5min in
+#   packages/connection.yaml), or the device reboots before the hotspot starts and the only
+#   wireless recovery path is gone. Same for `api: reboot_timeout` (default 15min, keep it).
+# - No early-boot hooks (RF_PRE_INIT / esphome includes touching the PHY): the full RF calibration
+#   on every boot (2026-11-16) left this unit silent, recoverable only over serial.
 # See docs/troubleshooting/office-iot-wifi-flapping.md.
-esphome:
-  includes:
-    - mini-switch-office-a/rf_calibration.h
-
-api:
-  reboot_timeout: 2min
-
 wifi:
   phy_mode: 11G
   output_power: 17dB
   post_connect_roaming: false
   fast_connect: true
-  reboot_timeout: 5min
+  reboot_timeout: 15min
 
 # Record why the device reboots (see docs/troubleshooting/office-iot-wifi-flapping.md).
 # Only the cheap options: no `fragmentation` sensor, nothing that allocates on the heap.

@@ -316,8 +316,10 @@ upstream and unresolved: esphome issues 16724 and 14999, ratgdo issue 541 (helpe
 phy_mode: 11G`, available since 2026.5.0; it did not help `mini-switch-office-a`). Same firmware runs
 stable on other devices, so compare the fleet before blaming the firmware. If the radio dies minutes
 after a power-on on every AP and ESPHome version while the heap is healthy and only a power cycle
-recovers it, suspect the unit: on ESP8266 the full RF calibration happens only on power-on, a soft
-reset reuses it. ESPHome does not notice (its `wifi.reboot_timeout` only runs while it sees Wi-Fi
+recovers it, suspect the unit (radio or supply). Do not "fix" it with a full RF calibration on every
+boot (`RF_PRE_INIT() { system_phy_set_powerup_option(3); }`): the core default already re-runs a
+TX-power calibration on every boot, and the forced full calibration left `mini-switch-office-a`
+silent and unreachable without serial. ESPHome does not notice (its `wifi.reboot_timeout` only runs while it sees Wi-Fi
 down). ESPHome 2026.x also enables `wifi.post_connect_roaming` by default (periodic full channel scans
 while connected); disable it per device if it causes disconnects. Workaround and results:
 [Office A Wi-Fi flapping](../../../docs/troubleshooting/office-iot-wifi-flapping.md#follow-up-on-2026-11-16). Diagnosis from the AP side:
@@ -349,6 +351,21 @@ each ESPHome device by the hostname stored in its config entry (`/config/.storag
    (`apps/home-assistant/dashboards/*.json`, Prometheus label `entity="sensor.<id>"`), this README's
    catalog and the docs. `grep -rn` the old ids in this repo and in HA `.storage`.
 6. Optional: the config entry title (`config_entries/update` with `title`).
+
+**Keep a wireless recovery path.** A device that cannot join Wi-Fi is only recoverable over the air
+through the fallback hotspot (`wifi.ap`, captive portal OTA upload). Learned on
+`mini-switch-office-a` (2026-11-16, [details](../../../docs/troubleshooting/office-iot-wifi-flapping.md#follow-up-on-2026-11-23)):
+
+- `api.reboot_timeout` and `wifi.reboot_timeout` must both be **longer** than `wifi.ap.ap_timeout`
+  (5 min in `packages/connection.yaml`). The API timer reboots with no Home Assistant client even
+  while Wi-Fi is down, so `api: reboot_timeout: 2min` means the hotspot never starts. Equal values race.
+- Safe mode does not rescue a device that reboots every few minutes: a boot counts as good after
+  `boot_is_good_after` (1 min).
+- No early-boot or PHY hooks (`esphome: includes:` defining `RF_PRE_INIT`, `user_rf_pre_init`,
+  `system_phy_*`) on a device without serial access. They run before ESPHome, so safe mode and the
+  hotspot cannot undo them.
+- Before an experimental OTA, check the device can still be flashed if it never reconnects (hotspot
+  reachable, or serial header accessible).
 
 **Gotchas.**
 
