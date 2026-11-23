@@ -702,6 +702,14 @@ Comfort is back 2 h before Return. Hot water (AppDaemon `dhw_control`) is not af
   [home-assistant-dashboards.md](../troubleshooting/home-assistant-dashboards.md#editing-a-dashboard-live)
   (back up, validate entities and the markdown template, compare, save), after Home Assistant has
   restarted with the new helpers and sensors.
+- **Alerts** (`rules-service/climate-vacation.yaml`; silent until the optimizer release with vacation
+  mode exports its series): `ClimateVacationHold` (no usable plan while away: heating off with the
+  12 degC guard only, normal safe state from 48 h before Return), `ClimateVacationGuard` (critical,
+  a room below the 12 degC building guard, heating forced), `ClimateVacationLateWarmup` (phase
+  `ready` but a floor override fires: comfort was not back 2 h before Return),
+  `ClimateVacationInvalid` (dates set but rejected, so the house is heated normally) and
+  `HomeTooCold` (critical, a thermostat below 12 degC for 30 min, from the `hass_*` series, so it
+  fires without the service too). All but `HomeTooCold` carry the `BatteryOptimizer` prefix.
 
 ### Comfort helpers: persistence in two steps
 
