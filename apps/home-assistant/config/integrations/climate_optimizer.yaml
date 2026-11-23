@@ -20,6 +20,27 @@ input_datetime:
     has_time: true
     # No `initial:` on purpose: restored across Home Assistant restarts, like the battery's.
 
+  # Climate vacation mode (v1): the owner sets Leave and Return on the Climate optimizer dashboard.
+  # Read only by the optimizer, which plans the absence and the warm-up itself; Home Assistant only
+  # holds the inputs and shows the status (sensor.climate_optimizer_vacation_phase,
+  # climate_optimizer_plan.yaml). No automation here acts on them. The window is valid when
+  # Return > Leave, Return > now and it lasts at most 60 days; an invalid or missing window means
+  # normal comfort (the reason is the sensor's `invalid_reason`). Comfort is back 2 h before Return:
+  # the optimizer plans the warm-up to reach it. Hot water (AppDaemon dhw_control) is not affected in
+  # v1. "Back early" = script.climate_vacation_cancel below sets both to now, an empty window. No
+  # `initial:` on purpose (restored across restarts); a fresh helper starts at today 00:00, both
+  # equal, so no vacation until the owner sets them.
+  climate_vacation_start:
+    name: Vacation leave
+    icon: mdi:airplane-takeoff
+    has_date: true
+    has_time: true
+  climate_vacation_end:
+    name: Vacation return
+    icon: mdi:airplane-landing
+    has_date: true
+    has_time: true
+
 # Per-room comfort floors (degC). A room whose thermostat reads below its floor forces Heat+DHW
 # whatever the plan says (ADR-0009 decision 6). 21 is the optimizer's own default
 # (climate_actuation.floor_c), so creating these changes nothing. The optimizer ignores a helper
@@ -107,6 +128,27 @@ input_number:
     step: 0.25
     mode: box
     unit_of_measurement: h
+
+script:
+  # The only writer of the vacation helpers besides the owner's dashboard edits. In this package, not
+  # in config/script/, so the vacation inputs and their cancel live and go together.
+  climate_vacation_cancel:
+    alias: Cancel vacation / back early
+    description: >-
+      Sets Vacation leave and Vacation return to now: an empty window, so the climate optimizer goes
+      back to normal comfort.
+    icon: mdi:bag-suitcase-off
+    mode: single
+    sequence:
+      - variables:
+          now_ts: "{{ now().timestamp() | int }}"
+      - action: input_datetime.set_datetime
+        target:
+          entity_id:
+            - input_datetime.climate_vacation_start
+            - input_datetime.climate_vacation_end
+        data:
+          timestamp: "{{ now_ts }}"
 
 automation:
   # Safe heating state when the optimizer stops: Heat+DHW, and the legacy 26 degC water target only

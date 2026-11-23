@@ -13,6 +13,61 @@
      "cards": [
       {
        "type": "heading",
+       "heading": "Vacation",
+       "icon": "mdi:bag-suitcase"
+      },
+      {
+       "type": "tile",
+       "entity": "input_datetime.climate_vacation_start",
+       "name": "Leave"
+      },
+      {
+       "type": "tile",
+       "entity": "input_datetime.climate_vacation_end",
+       "name": "Return"
+      },
+      {
+       "type": "tile",
+       "entity": "script.climate_vacation_cancel",
+       "name": "Cancel vacation / back early",
+       "icon": "mdi:bag-suitcase-off",
+       "tap_action": {
+        "action": "perform-action",
+        "perform_action": "script.climate_vacation_cancel",
+        "confirmation": {
+         "text": "Cancel the vacation? Leave and Return are set to now, so the optimizer goes back to normal comfort."
+        }
+       },
+       "icon_tap_action": {
+        "action": "perform-action",
+        "perform_action": "script.climate_vacation_cancel",
+        "confirmation": {
+         "text": "Cancel the vacation? Leave and Return are set to now, so the optimizer goes back to normal comfort."
+        }
+       }
+      },
+      {
+       "type": "tile",
+       "entity": "input_boolean.appdaemon_dhw_enable",
+       "name": "DHW control (AppDaemon)",
+       "icon_tap_action": {
+        "action": "more-info"
+       }
+      },
+      {
+       "type": "markdown",
+       "content": "{%- macro t(ts) -%}{{ ts | timestamp_custom('%a %d %b %H:%M') if ts is number else '\u2014' }}{%- endmacro %}\n{%- set sid = 'sensor.climate_optimizer_vacation_phase' %}\n{%- set ph = states(sid) %}\n{%- set s = state_attr(sid, 'start') %}\n{%- set e = state_attr(sid, 'end') %}\n{%- set rs = state_attr(sid, 'recovery_start') %}\n{%- set ra = state_attr(sid, 'ready_at') %}\n{%- set guard = state_attr(sid, 'guard_c') %}\n{%- set why = state_attr(sid, 'invalid_reason') %}\n{%- set leave = as_timestamp(s, none) if s is string else state_attr('input_datetime.climate_vacation_start', 'timestamp') %}\n{%- set back = as_timestamp(e, none) if e is string else state_attr('input_datetime.climate_vacation_end', 'timestamp') %}\n{%- set rs_ts = as_timestamp(rs, none) if rs is string else none %}\n{%- set ra_ts = as_timestamp(ra, none) if ra is string else none %}\n{% if ph in ['unavailable', 'unknown'] -%}\n\u26a0\ufe0f **Vacation status unknown:** the optimizer does not answer, or its version has no vacation mode yet.\n{%- elif ph == 'none' -%}\n**No vacation.** Set Leave and Return to plan one.\n{%- elif ph == 'scheduled' -%}\n**Scheduled:** leave {{ t(leave) }}. Normal comfort until then.\n{%- elif ph == 'away' -%}\n**Away:** heating paused{{ (' (guard ' ~ guard ~ ' \u00b0C)') if guard is number else '' }}, warm-up {{ ('planned ' ~ t(rs_ts)) if rs_ts is number else 'not yet planned' }}.\n{%- elif ph == 'recovery' -%}\n**Warming up** since {{ t(rs_ts) }}{{ (', comfort at ' ~ t(ra_ts)) if ra_ts is number else '' }}.\n{%- elif ph == 'ready' -%}\n\u2705 **Ready:** comfort back since {{ t(ra_ts) }}.\n{%- else -%}\n\u26a0\ufe0f **Unknown phase:** {{ ph }}\n{%- endif %}\n{% if ph != 'none' or why %}\n- **Leave:** {{ t(leave) }}\n- **Return:** {{ t(back) }}\n{%- endif %}\n{%- if why %}\n- \u26a0\ufe0f **Window ignored:** {{ why }}. Normal comfort applies.\n{%- endif %}\n- **Hot water:** still managed by AppDaemon `dhw_control` (DHW control is **{{ states('input_boolean.appdaemon_dhw_enable') }}**, tile above); vacation mode does not change it.\n\nThe optimizer reads Leave and Return. The window counts when Return is after Leave and in the future, at most 60 days; otherwise normal comfort. Comfort is back 2 h before Return. **Cancel vacation** sets both to now (back early, or to drop a planned one).\n",
+       "grid_options": {
+        "columns": 12
+       }
+      }
+     ]
+    },
+    {
+     "type": "grid",
+     "cards": [
+      {
+       "type": "heading",
        "heading": "Control",
        "icon": "mdi:shield-check"
       },

@@ -1,0 +1,78 @@
+# Climate vacation mode (v1): the owner sets Leave and Return in Home Assistant, the optimizer plans
+# the absence (heating off, rooms held only above the 12 degC building guard) and the warm-up so
+# comfort is back 2 h before Return. The vacation and guard series come with the optimizer release
+# that adds vacation mode; until then these rules have no data and stay silent (no absent() rules on
+# purpose). HomeTooCold reads hass_* only, so it works without the service. Runbook:
+# docs/deployment/battery-optimizer.md#climate-vacation-mode.
+- alert: BatteryOptimizerClimateVacationHold
+  # While away the optimizer has no usable plan: it holds heating off with only the 12 degC guard
+  # instead of the normal safe state (Heat+DHW), and switches to the normal safe state 48 h before
+  # Return so the house is not cold on arrival.
+  expr: sum by (reason) (increase(battery_optimizer_climate_actuator_vacation_fallbacks_total[10m])) > 0
+  labels:
+    severity: warning
+  annotations:
+    summary: vacation fallback, heating held off with the 12 degC guard ({{ $labels.reason }})
+    description: |
+      The climate actuator has no usable plan during a vacation (reason {{ $labels.reason }}): heating
+      stays off, only the 12 degC building guard is active. 48 h before Return it switches to the
+      normal safe state (Heat+DHW). See `/status` (climate_actuator) and the plan state.
+- alert: BatteryOptimizerClimateVacationGuard
+  # The building guard is the last line during a vacation: a room below 12 degC forces heating.
+  # The pipes and the building are at risk, not comfort.
+  expr: battery_optimizer_climate_actuator_guard_override_rooms > 0
+  for: 5m
+  labels:
+    severity: critical
+  annotations:
+    summary: a room fell below the 12 degC building guard during a vacation
+    description: |
+      {{ $value | printf "%.0f" }} room(s) under the vacation building guard for 5 minutes: heating is
+      forced. Check the room temperatures and the heat pump (sensor.aquarea_mode, errors), and that
+      the forced heating actually raises them.
+- alert: BatteryOptimizerClimateVacationLateWarmup
+  # The phase is ready (comfort due 2 h before Return) but a comfort floor override still fires:
+  # the planned warm-up did not reach comfort in time and the floor override is catching up.
+  expr: |
+    (battery_optimizer_climate_vacation_phase{phase="ready"} == 1)
+    and on () (increase(battery_optimizer_climate_actuator_floor_overrides_total[15m]) > 0)
+  labels:
+    severity: warning
+  annotations:
+    summary: the vacation warm-up was late, the house was not at comfort 2 h before Return
+    description: |
+      The vacation phase is ready but a comfort floor override started in the last 15 minutes: a
+      room was below its floor at the time comfort should have been back. The floor override is
+      catching up. Compare the warm-up start (sensor.climate_optimizer_vacation_warm_up_start) with
+      the room temperatures to tune the warm-up.
+- alert: BatteryOptimizerClimateVacationInvalid
+  # Leave and Return are set but rejected (Return not after Leave, in the past, or longer than
+  # 60 days): the house is heated normally, which the owner may not expect while away.
+  expr: max by (reason) (battery_optimizer_climate_vacation_invalid) == 1
+  for: 10m
+  labels:
+    severity: warning
+  annotations:
+    summary: vacation dates are set but rejected ({{ $labels.reason }})
+    description: |
+      The optimizer rejects the vacation window (reason {{ $labels.reason }}), so the house is heated
+      to normal comfort. Fix Leave and Return on the Climate optimizer dashboard, or cancel the
+      vacation (script.climate_vacation_cancel).
+- alert: HomeTooCold
+  # Independent of the optimizer: it reads the thermostats from Home Assistant's own metrics in the
+  # same long-term Prometheus (like BatteryOptimizerClimateHeartbeatStale), so it fires even if the
+  # service is down or the vacation guard does not act. It lives here because the vacation mode is
+  # what lets the house cool this far.
+  expr: |
+    min by (entity) (
+      hass_climate_current_temperature_celsius{entity=~"climate.thermostat_(bedroom|hall_kitchen|office_t)"}
+    ) < 12
+  for: 30m
+  labels:
+    severity: critical
+  annotations:
+    summary: '{{ $labels.entity }} is below 12 degC'
+    description: |
+      {{ $labels.entity }} reads {{ $value | printf "%.1f" }} degC, below 12 for 30 minutes. Check
+      the heat pump and the optimizer (vacation guard, `/status`); set
+      input_select.climate_optimizer_mode to shadow to hand heating back to the thermostats.

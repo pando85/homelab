@@ -658,7 +658,8 @@ writes not confirmed), `ClimateSafeState` (any fallback except `shutdown`), `Cli
 ### Climate optimizer dashboard
 
 The "Climate optimizer" dashboard holds every climate-optimizer control and its key state in one
-place, in this order: **Control** (the mode select, what each mode does, in control / holds /
+place, in this order: **Vacation** (Leave, Return, cancel, status; see
+[Climate vacation mode](#climate-vacation-mode)), **Control** (the mode select, what each mode does, in control / holds /
 fallback / alert), **Comfort schedule** (per room floor and day minimum, the comfort window), **Now**
 (planned and observed heating and water, the plan as a table of blocks "Plan (next 24 h)", rooms against the plan), **Hot water (AppDaemon)**,
 **Charts** and, collapsed, the **manual** heat mode and Zone 1 target (overwritten while `live`) and
@@ -671,11 +672,44 @@ copy ([dashboards](../troubleshooting/home-assistant-dashboards.md)). To install
 1. Deploy the helpers and sensors of this change first and let Home Assistant restart, so every
    entity the dashboard references exists.
 2. First time: **Settings > Dashboards > Add dashboard > New dashboard from scratch**, title
-   `Climate optimizer`, URL `climate-optimizer` (it needs a hyphen), then open it.
+   `Climate optimizer`, URL `dashboard-climate-optimizer` (it needs a hyphen; the live
+   dashboard has this `url_path`), then open it.
 3. Open the dashboard, **Edit** (pencil) > three dots > **Raw configuration editor**, select all,
    paste the whole JSON file, **Save**. To update, repeat the paste; a manual edit in the UI is lost.
 4. Reload the page. A tile reading "Entity not available" names an entity that is missing, for
    example an actuator sensor while `climate_actuation.mode` is `shadow`.
+
+### Climate vacation mode
+
+v1: the owner sets **Leave** and **Return** (`input_datetime.climate_vacation_start` / `_end`,
+`config/integrations/climate_optimizer.yaml`) in the "Vacation" section of the Climate optimizer
+dashboard. The optimizer only reads them and plans the absence and the warm-up itself; no Home
+Assistant automation acts on them. The window is valid when Return is after Leave and in the future,
+at most 60 days; invalid or missing means normal comfort (the reason is shown on the dashboard).
+Comfort is back 2 h before Return. Hot water (AppDaemon `dhw_control`) is not affected in v1.
+
+- **Status:** `sensor.climate_optimizer_vacation_phase` (`none`, `scheduled`, `away`, `recovery`,
+  `ready`; attributes `start`, `end`, `ready_at`, `recovery_start`, `guard_c`, `invalid_reason`),
+  `sensor.climate_optimizer_vacation_warm_up_start` and `..._vacation_ready_at`, from the `vacation`
+  block of `GET /climate/plan/summary` (`config/integrations/climate_optimizer_plan.yaml`).
+  Unavailable while the optimizer has no vacation mode yet or does not answer.
+- **Cancel / back early:** the "Cancel vacation / back early" tile (with confirmation) runs
+  `script.climate_vacation_cancel`, which sets both helpers to now: an empty window, normal comfort.
+- **After deploy** the helpers start empty (both today 00:00, no `initial:`), so nothing changes
+  until the owner sets them; afterwards they are restored across restarts.
+- **Dashboard:** the "Vacation" section is in the reference JSON only. The live dashboard is storage
+  mode, so the owner applies it with the websocket procedure in
+  [home-assistant-dashboards.md](../troubleshooting/home-assistant-dashboards.md#editing-a-dashboard-live)
+  (back up, validate entities and the markdown template, compare, save), after Home Assistant has
+  restarted with the new helpers and sensors.
+- **Alerts** (`rules-service/climate-vacation.yaml`; silent until the optimizer release with vacation
+  mode exports its series): `ClimateVacationHold` (no usable plan while away: heating off with the
+  12 degC guard only, normal safe state from 48 h before Return), `ClimateVacationGuard` (critical,
+  a room below the 12 degC building guard, heating forced), `ClimateVacationLateWarmup` (phase
+  `ready` but a floor override fires: comfort was not back 2 h before Return),
+  `ClimateVacationInvalid` (dates set but rejected, so the house is heated normally) and
+  `HomeTooCold` (critical, a thermostat below 12 degC for 30 min, from the `hass_*` series, so it
+  fires without the service too). All but `HomeTooCold` carry the `BatteryOptimizer` prefix.
 
 ### Comfort helpers: persistence in two steps
 
