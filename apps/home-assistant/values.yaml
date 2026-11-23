@@ -195,7 +195,7 @@ app-template:
         piper:
           image:
             repository: rhasspy/wyoming-piper
-            tag: 2.5.3
+            tag: 2.5.4
           args:
             - --voice
             #- en_US-amy-medium
