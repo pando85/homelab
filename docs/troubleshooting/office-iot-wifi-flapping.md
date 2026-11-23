@@ -1,16 +1,19 @@
 # Office A IoT Wi-Fi Flapping (fan-office-a, mini-switch-office-a)
 
-Investigated 2026-11-12, updated 2026-11-16. All times UTC (AP logs are CET, UTC+1). **Status
-2026-11-16: fan partly better, mini switch not fixed.** Different failure modes, do not merge them.
-Details in [Follow-up on 2026-11-16](#follow-up-on-2026-11-16).
+Investigated 2026-11-12, updated 2026-11-23. All times UTC (AP logs are CET, UTC+1). **Status
+2026-11-23: fan partly better (still locked to `cerezo`), mini switch offline since 2026-11-16 12:20Z
+and needs a serial reflash.** Different failure modes, do not merge them. Details in
+[Follow-up on 2026-11-23](#follow-up-on-2026-11-23) and
+[Follow-up on 2026-11-16](#follow-up-on-2026-11-16).
 
 - **Fan (`fan-office-a`):** on `limonero` at -79..-85 dBm it is kicked every hour (deauth reason 16,
   it misses the group rekey). Locked to `cerezo` at 11:16Z (controller change outside git): up on
   `cerezo` at -64 dBm, but still short drops, being watched.
 - **Mini (`mini-switch-office-a`):** the radio goes silent minutes after every power-on, on either
-  AP, on 2026.10.0 and 2026.10.2, with a healthy heap. Only a power cycle recovers it. Likely
-  hardware. A full-RF-calibration-on-every-boot workaround is in test (not committed). If it fails:
-  replace with an ESP32 switch or a Shelly.
+  AP, on 2026.10.0 and 2026.10.2, with a healthy heap. Only a power cycle recovered it. The
+  full-RF-calibration-on-every-boot test firmware (2026-11-16) left it completely silent: no frame on
+  either AP and no fallback hotspot, even after power cycles. No wireless recovery path is left;
+  next step is a serial log and reflash, or replacing it with an ESP32 switch or a Shelly.
 
 Earlier: 48 h follow-up of 2026-11-14 in [Follow-up on 2026-11-14](#follow-up-on-2026-11-14).
 
@@ -350,11 +353,14 @@ Ruled out on 2026-11-16, one change at a time:
 | Memory | Heap steady, see above |
 | `phy_mode: 11G` (commit `b0591c35b`) | Active (the AP reports PHY OFDM / IEEE80211_MODE_11G), did not help |
 
-**Working hypothesis: hardware on this unit** (radio/RF calibration drift or power supply sag). On
-ESP8266 the SDK does full RF calibration only on power-on and a soft reset reuses the stored
-calibration, which matches "only a power cycle helps".
+**Working hypothesis: hardware on this unit** (radio/RF calibration drift or power supply sag).
+The reasoning at the time ("the SDK does a full RF calibration only on power-on, a soft reset reuses
+it") was **wrong**: the Arduino ESP8266 core 3.1.2 default (`phy_init_data[114]` = 1 in
+`core_esp8266_phy.cpp`) does only a TX-power calibration on *every* boot, power-on included, and
+reuses the RF calibration stored in flash. Option 3 therefore changed every boot, not only soft
+resets. See [Follow-up on 2026-11-23](#follow-up-on-2026-11-23).
 
-**In test (option 2, flashed by the owner ~12:05Z, config not yet committed):**
+**Tested (option 2, flashed by the owner ~12:05Z, commit `848c1b81e`; reverted 2026-11-23):**
 
 - Full RF calibration on every boot: `esphome: includes:` header
   `mini-switch-office-a/rf_calibration.h` with `RF_PRE_INIT() { system_phy_set_powerup_option(3); }`.
@@ -365,8 +371,54 @@ calibration, which matches "only a power cycle helps".
 - The first boot after the OTA did not come back by itself; the owner power-cycled it.
 - Expected if the hypothesis holds: short (~3 min) outages that self-recover with reset reason
   `Software/System restart`.
-- If not: replace with an ESP32-based switch or a Shelly. A swap test with another mini switch
-  confirms hardware.
+- Result: it ran ~15 min (last seen 12:20Z) and has not transmitted since. See below.
+
+## Follow-up on 2026-11-23
+
+**Mini switch: silent since 2026-11-16 12:20Z, not recoverable over the air.**
+
+- UniFi: last seen 2026-11-16 12:20Z on `limonero`. No connect/disconnect event in the v2 system log
+  for 7 days. Blackbox TCP 6053 and ping probes down for the whole 48 h checked.
+- UniFi was ruled out as the cause: the IoT SSID (2.4 GHz only) is up on both APs, no MAC filter, AP
+  group "All APs", PMF off, `limonero` 2.4 GHz min-RSSI off. The client has `fixed_ap_enabled:false`
+  and is not blocked. A stale `fixed_ap_mac` (pointing to `cerezo`) is stored but ignored while the
+  lock is off: there is no "block from `limonero`" anywhere. The fan is the only client with an active
+  Lock to AP (`cerezo`).
+- Owner power-cycled it (15 s) ~19:50Z while both AP logs were followed live (`tail -F` over SSH, 10
+  min): **not a single line for its MAC on either AP**, so no auth request at all. A UniFi setting
+  can only refuse a client that tries. No fallback hotspot ("Mini Switch Office A") seen either.
+
+**Our config removed every wireless recovery path** (checked in the ESPHome 2026.11.0 source):
+
+| Path | Why it could not work |
+|---|---|
+| OTA | Needs the device on the network |
+| Fallback hotspot + captive portal | `api: reboot_timeout: 2min` reboots when no API client is connected, Wi-Fi or not (`api_server.cpp`, only suppressed while provisioning). The hotspot starts after `ap_timeout: 5min` (`wifi_component.cpp`), so it could never appear. `wifi: reboot_timeout: 5min` equal to `ap_timeout` was a race too |
+| Safe mode | Entered after 10 boots that did not reach `boot_is_good_after` (default 1 min). A 2 min reboot cycle marks every boot good, so it never triggers. And safe mode still runs `RF_PRE_INIT` and needs Wi-Fi |
+
+**What `rf_calibration.h` could have done** (not proven, the serial log decides):
+
+- Every boot ran the ~200 ms full RF calibration, which before had run only on the first boot after a
+  flash. Its current peak on a weak/aging supply (power sag was already suspected) can brown the chip
+  out before Wi-Fi starts: a boot loop that no ESPHome setting can stop, because the hook runs before
+  any component.
+- A full calibration in a crowded 2.4 GHz band (hundreds of neighbour BSSIDs) can produce bad
+  calibration data, redone on every boot.
+- Or coincidence: sessions were already shrinking to minutes since Nov 10 and the radio finally died.
+
+**Fix committed 2026-11-23:** `rf_calibration.h` removed, `api` `reboot_timeout` back to the
+15 min default and `wifi` `reboot_timeout` 15 min, both above `ap_timeout` 5 min. Rules for the
+whole fleet: `apps/esphome/config/README.md`, "Keep a wireless recovery path".
+
+**Pending, needs physical access:**
+
+1. Open the unit, 3.3 V USB-TTL (TX, RX, GND; GPIO0 to GND at power-on only for flashing). The
+   mini switch config sets `logger: baud_rate: 0`, so only the ROM boot messages appear: read them
+   at **74880 baud** while powering it. A repeating `ets Jan 8 2013,rst cause:...` banner means a
+   boot loop (firmware or supply); one clean boot then silence means a dead radio.
+2. Flash the committed config over serial (`esphome run mini-switch-office-a.yaml --device
+   /dev/ttyUSB0`, secrets via `make secrets`, shred afterwards).
+3. If it still dies or never transmits: replace it with an ESP32-based switch or a Shelly.
 
 ## How to Diagnose
 

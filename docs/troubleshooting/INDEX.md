@@ -257,11 +257,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   See `docs/troubleshooting/needrestart-k3s-restart-storm.md`
 
 - Office A Wi-Fi IoT devices (`fan-office-a`, `mini-switch-office-a`) flap and fire
-  `BlackboxProbeFailed`. Status 2026-11-16: fan on `limonero` at -80 dBm was kicked hourly (deauth
+  `BlackboxProbeFailed`. Status 2026-11-23: fan on `limonero` at -80 dBm was kicked hourly (deauth
   reason 16, missed group rekey), locked to `cerezo` in the UniFi controller: partly better, still
-  short drops. Mini: the radio dies minutes after power-on on either AP and on ESPHome 2026.10.0 and
-  2026.10.2 with a healthy heap, only a power cycle recovers it (likely hardware); full RF
-  calibration on every boot is in test, else swap for an ESP32/Shelly. UniFi events carry no
+  short drops. Mini: the radio died minutes after power-on on either AP and ESPHome version with a
+  healthy heap; the full-RF-calibration-on-every-boot test firmware left it silent (no frames on
+  either AP), and `api: reboot_timeout: 2min` below `ap_timeout` had killed the fallback hotspot, so
+  it needs a serial reflash. Keep both reboot timeouts above `ap_timeout` and no `RF_PRE_INIT` hooks
+  without serial access. UniFi events carry no
   disconnect reason (the v2 system log has connect/disconnect history) and AP logs are RAM-only
   (copy them within ~1 h and BEFORE rebooting an AP). Never commit AP BSSIDs.
   See `docs/troubleshooting/office-iot-wifi-flapping.md`
