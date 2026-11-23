@@ -11,6 +11,14 @@
 # state sensor then shows the state, the values of the plan are unknown (never the last plan's), and
 # every sensor is unavailable when the service does not answer (down, non-200, not JSON).
 #
+# Vacation mode (v1): the same summary carries `vacation` ({phase: none | scheduled | away |
+# recovery | ready, start, end, ready_at, recovery_start, guard_c, invalid_reason}) in every state,
+# also without a current plan. `sensor.climate_optimizer_vacation_phase` (state: phase) and the
+# timestamps `..._vacation_warm_up_start` (recovery_start) and `..._vacation_ready_at` need only that
+# mapping, so they stay available without a plan; an optimizer older than vacation mode (no
+# `vacation`) leaves them unavailable. The optimizer reads the owner's Leave and Return helpers
+# (climate_optimizer.yaml); Home Assistant only shows its decision.
+#
 # The mode select: `shadow` is first so a fresh helper starts in shadow without a write, and there
 # is no `initial:` on purpose, so the owner's choice survives restarts (Reloader, updates). The
 # optimizer reads it; with the helper absent or unknown it falls back to its own config. `live` is
@@ -499,6 +507,69 @@ template:
             {% set c = plan_response.content %}
             {% set k = c.comfort.get('office_t') if c.comfort is mapping else none %}
             {{ k.day_min_from_helper if k is mapping else none }}
+      # Vacation mode (helpers in climate_optimizer.yaml). The summary carries `vacation` in every
+      # state, also without a current plan, so these need only the mapping, not `state`. Absent
+      # (optimizer before vacation mode) = unavailable. Times are UTC ISO strings or null.
+      - name: Climate optimizer vacation phase
+        unique_id: climate_optimizer_vacation_phase
+        icon: mdi:bag-suitcase
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping
+             and plan_response.content.get('vacation') is mapping }}
+        state: >-
+          {% set v = plan_response.content.get('vacation') if plan_response is defined
+             and plan_response.content is mapping else none %}
+          {{ v.phase if v is mapping and v.phase is string else none }}
+        attributes:
+          start: >-
+            {% set v = plan_response.content.get('vacation') if plan_response is defined
+               and plan_response.content is mapping else none %}
+            {{ v.start if v is mapping and v.start is string else none }}
+          end: >-
+            {% set v = plan_response.content.get('vacation') if plan_response is defined
+               and plan_response.content is mapping else none %}
+            {{ v.end if v is mapping and v.end is string else none }}
+          ready_at: >-
+            {% set v = plan_response.content.get('vacation') if plan_response is defined
+               and plan_response.content is mapping else none %}
+            {{ v.ready_at if v is mapping and v.ready_at is string else none }}
+          recovery_start: >-
+            {% set v = plan_response.content.get('vacation') if plan_response is defined
+               and plan_response.content is mapping else none %}
+            {{ v.recovery_start if v is mapping and v.recovery_start is string else none }}
+          guard_c: >-
+            {% set v = plan_response.content.get('vacation') if plan_response is defined
+               and plan_response.content is mapping else none %}
+            {{ v.guard_c if v is mapping and v.guard_c is number else none }}
+          invalid_reason: >-
+            {% set v = plan_response.content.get('vacation') if plan_response is defined
+               and plan_response.content is mapping else none %}
+            {{ v.invalid_reason if v is mapping and v.invalid_reason is string else none }}
+      - name: Climate optimizer vacation warm-up start
+        unique_id: climate_optimizer_vacation_warm_up_start
+        device_class: timestamp
+        icon: mdi:radiator
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping
+             and plan_response.content.get('vacation') is mapping }}
+        state: >-
+          {% set v = plan_response.content.get('vacation') if plan_response is defined
+             and plan_response.content is mapping else none %}
+          {{ v.recovery_start if v is mapping and v.recovery_start is string else none }}
+      - name: Climate optimizer vacation ready at
+        unique_id: climate_optimizer_vacation_ready_at
+        device_class: timestamp
+        icon: mdi:home-thermometer
+        availability: >-
+          {{ plan_response is defined and plan_response.status == 200
+             and plan_response.content is mapping
+             and plan_response.content.get('vacation') is mapping }}
+        state: >-
+          {% set v = plan_response.content.get('vacation') if plan_response is defined
+             and plan_response.content is mapping else none %}
+          {{ v.ready_at if v is mapping and v.ready_at is string else none }}
     binary_sensor:
       - name: Climate optimizer live locked
         unique_id: climate_optimizer_live_locked
