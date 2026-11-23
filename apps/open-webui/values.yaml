@@ -42,7 +42,7 @@ open-webui:
 
   image:
     repository: ghcr.io/open-webui/open-webui
-    tag: v0.13.3
+    tag: v0.13.4
 
   # Envoy Gateway route.
   # No httpsRedirect: the Gateways have their own http redirect routes.
