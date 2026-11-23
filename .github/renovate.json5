@@ -174,9 +174,25 @@
       matchPackageNames: [
         'ghcr.io/firecrawl/firecrawl',
       ],
-      automerge: false,
-      ignoreTests: false,
-      platformAutomerge: false,
+      automerge: true,
+      ignoreTests: true,
+      automergeType: 'pr',
+      platformAutomerge: true,
+    },
+    {
+      matchDatasources: [
+        'helm',
+      ],
+      matchPackageNames: [
+        '/opentelemetry-collector/',
+      ],
+      matchUpdateTypes: [
+        'minor',
+      ],
+      automerge: true,
+      ignoreTests: true,
+      automergeType: 'pr',
+      platformAutomerge: true,
     },
     {
       matchDatasources: [
