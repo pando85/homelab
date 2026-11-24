@@ -10,7 +10,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 - [Kubernetes & GitOps](#kubernetes--gitops) (17 entries)
 - [ArgoCD](#argocd) (7 entries)
-- [Monitoring & Observability](#monitoring--observability) (9 entries)
+- [Monitoring & Observability](#monitoring--observability) (10 entries)
 - [Networking](#networking) (12 entries)
 - [Storage & Backup](#storage--backup) (14 entries)
 - [Ansible & Infrastructure](#ansible--infrastructure) (2 entries)
@@ -201,6 +201,12 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   `vector-agent` along with everything else and refuses to re-admit it until the pressure clears.
   Read the node's journal over SSH (`journalctl --since/--until`) for that window. See
   `docs/troubleshooting/ci-runner-amd64-disk-full.md`
+
+- gpu-operator chart bumps can silently rename DCGM metrics: dcgm-exporter 4.9.0 added unit
+  suffixes (`DCGM_FI_DEV_GPU_TEMP` → `DCGM_FI_DEV_GPU_TEMP_CELSIUS`), singularized
+  `XID_ERROR`, and dropped `CLOCK_THROTTLE_REASONS` from its default counters — breaking
+  alerts and dashboards while `up=1`. After a bump, verify metric names against the rules.
+  See `docs/troubleshooting/dcgm-exporter-metric-renames.md`
 
 ## Networking
 
