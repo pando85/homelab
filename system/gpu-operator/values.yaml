@@ -20,6 +20,48 @@ dcgmExporter:
     enabled: true
     additionalLabels:
       release: monitoring
+  # Custom metrics file: dcgm-exporter 4.9.0 renamed metrics with unit suffixes
+  # (DCGM_FI_DEV_GPU_TEMP -> DCGM_FI_DEV_GPU_TEMP_CELSIUS, ...). This pins the fields we
+  # alert on and re-enables DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, which the 4.9.0 default
+  # counters file dropped (GpuThrottling alert). See
+  # docs/troubleshooting/dcgm-exporter-metric-renames.md
+  config:
+    name: dcgm-exporter-metrics
+    create: true
+    data: |-
+      # DCGM FIELD, Prometheus metric type, help message
+      # Clocks
+      DCGM_FI_DEV_SM_CLOCK_HERTZ, gauge, SM clock frequency in hertz.
+      DCGM_FI_DEV_MEMORY_CLOCK_HERTZ, gauge, Memory clock frequency in hertz.
+      # Temperature
+      DCGM_FI_DEV_MEMORY_TEMP_CELSIUS, gauge, Memory temperature (in C).
+      DCGM_FI_DEV_GPU_TEMP_CELSIUS, gauge, GPU temperature (in C).
+      # Power
+      DCGM_FI_DEV_BOARD_POWER_WATTS, gauge, Power draw (in W).
+      DCGM_FI_DEV_GPU_ENERGY_JOULES_TOTAL, counter, GPU energy consumed since the driver was reloaded in joules.
+      # PCIE
+      DCGM_FI_DEV_PCIE_REPLAY_TOTAL, counter, Total number of PCIe retries.
+      # Utilization
+      DCGM_FI_DEV_GPU_UTIL_RATIO, gauge, GPU utilization as a ratio.
+      DCGM_FI_DEV_MEMORY_UTIL_RATIO, gauge, Memory utilization as a ratio.
+      DCGM_FI_DEV_ENC_UTIL_RATIO, gauge, Encoder utilization as a ratio.
+      DCGM_FI_DEV_DEC_UTIL_RATIO, gauge, Decoder utilization as a ratio.
+      # Errors and throttling
+      DCGM_FI_DEV_XID_ERROR, gauge, Value of the last XID error encountered.
+      DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, gauge, Clock throttle reasons bitmask (DCGM_CLOCKS_EVENT_REASON_*).
+      # Memory usage
+      DCGM_FI_DEV_FB_CAPACITY_BYTES, gauge, Total framebuffer capacity in bytes.
+      DCGM_FI_DEV_FB_FREE_BYTES, gauge, Free framebuffer memory in bytes.
+      DCGM_FI_DEV_FB_USED_BYTES, gauge, Used framebuffer memory in bytes.
+      DCGM_FI_DEV_FB_RESERVED_BYTES, gauge, Reserved framebuffer memory in bytes.
+      # vGPU
+      DCGM_FI_DEV_VGPU_LICENSE_STATUS, gauge, vGPU License status
+      # Remapped rows
+      DCGM_FI_DEV_ROW_REMAP_UNCORRECTABLE_TOTAL, counter, Number of remapped rows for uncorrectable errors
+      DCGM_FI_DEV_ROW_REMAP_CORRECTABLE_TOTAL, counter, Number of remapped rows for correctable errors
+      DCGM_FI_DEV_ROW_REMAP_FAILED, gauge, Whether remapping of rows has failed
+      # Static configuration information (appears as labels on the other metrics)
+      DCGM_FI_SYSTEM_DRIVER_VERSION, label, Driver Version
 
 gfd:
   enabled: true

@@ -119,7 +119,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (Hostname, gpu) (DCGM_FI_DEV_GPU_TEMP{instance=~\"${instance}\", gpu=~\"${gpu}\"})",
+          "expr": "max by (Hostname, gpu) (label_replace({__name__=~\"DCGM_FI_DEV_GPU_TEMP|DCGM_FI_DEV_GPU_TEMP_CELSIUS\", instance=~\"${instance}\", gpu=~\"${gpu}\"}, \"Hostname\", \"$1\", \"hostname\", \"(.+)\"))",
           "instant": false,
           "interval": "",
           "legendFormat": "{{Hostname}} GPU {{gpu}}",
@@ -205,7 +205,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "avg(max by (Hostname, gpu) (DCGM_FI_DEV_GPU_TEMP{instance=~\"${instance}\", gpu=~\"${gpu}\"}))",
+          "expr": "avg(max by (Hostname, gpu) (label_replace({__name__=~\"DCGM_FI_DEV_GPU_TEMP|DCGM_FI_DEV_GPU_TEMP_CELSIUS\", instance=~\"${instance}\", gpu=~\"${gpu}\"}, \"Hostname\", \"$1\", \"hostname\", \"(.+)\")))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -312,7 +312,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (Hostname, gpu) (DCGM_FI_DEV_POWER_USAGE{instance=~\"${instance}\", gpu=~\"${gpu}\"})",
+          "expr": "max by (Hostname, gpu) (label_replace({__name__=~\"DCGM_FI_DEV_POWER_USAGE|DCGM_FI_DEV_BOARD_POWER_WATTS\", instance=~\"${instance}\", gpu=~\"${gpu}\"}, \"Hostname\", \"$1\", \"hostname\", \"(.+)\"))",
           "interval": "",
           "legendFormat": "{{Hostname}} GPU {{gpu}}",
           "refId": "A"
@@ -397,7 +397,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum(max by (Hostname, gpu) (DCGM_FI_DEV_POWER_USAGE{instance=~\"${instance}\", gpu=~\"${gpu}\"}))",
+          "expr": "sum(max by (Hostname, gpu) (label_replace({__name__=~\"DCGM_FI_DEV_POWER_USAGE|DCGM_FI_DEV_BOARD_POWER_WATTS\", instance=~\"${instance}\", gpu=~\"${gpu}\"}, \"Hostname\", \"$1\", \"hostname\", \"(.+)\")))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -504,7 +504,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (Hostname, gpu) (DCGM_FI_DEV_SM_CLOCK{instance=~\"${instance}\", gpu=~\"${gpu}\"} * 1000000)",
+          "expr": "max by (Hostname, gpu) (label_replace((DCGM_FI_DEV_SM_CLOCK{instance=~\"${instance}\", gpu=~\"${gpu}\"} * 1000000) or DCGM_FI_DEV_SM_CLOCK_HERTZ{instance=~\"${instance}\", gpu=~\"${gpu}\"}, \"Hostname\", \"$1\", \"hostname\", \"(.+)\"))",
           "format": "time_series",
           "interval": "",
           "intervalFactor": 1,
@@ -615,7 +615,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (Hostname, gpu) (DCGM_FI_DEV_GPU_UTIL{instance=~\"${instance}\", gpu=~\"${gpu}\"})",
+          "expr": "max by (Hostname, gpu) (label_replace(DCGM_FI_DEV_GPU_UTIL{instance=~\"${instance}\", gpu=~\"${gpu}\"} or (DCGM_FI_DEV_GPU_UTIL_RATIO{instance=~\"${instance}\", gpu=~\"${gpu}\"} * 100), \"Hostname\", \"$1\", \"hostname\", \"(.+)\"))",
           "interval": "",
           "legendFormat": "{{Hostname}} GPU {{gpu}}",
           "refId": "A"
@@ -724,7 +724,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (Hostname, gpu) (DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{instance=~\"${instance}\", gpu=~\"${gpu}\"})",
+          "expr": "max by (Hostname, gpu) (label_replace(DCGM_FI_PROF_PIPE_TENSOR_ACTIVE{instance=~\"${instance}\", gpu=~\"${gpu}\"} or DCGM_FI_PROF_TENSOR_UTIL_RATIO{instance=~\"${instance}\", gpu=~\"${gpu}\"}, \"Hostname\", \"$1\", \"hostname\", \"(.+)\"))",
           "interval": "",
           "legendFormat": "{{Hostname}} GPU {{gpu}}",
           "refId": "A"
@@ -791,7 +791,7 @@
               }
             ]
           },
-          "unit": "decmbytes"
+          "unit": "bytes"
         },
         "overrides": []
       },
@@ -830,7 +830,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "max by (Hostname, gpu) (DCGM_FI_DEV_FB_USED{instance=~\"${instance}\", gpu=~\"${gpu}\"})",
+          "expr": "max by (Hostname, gpu) (label_replace((DCGM_FI_DEV_FB_USED{instance=~\"${instance}\", gpu=~\"${gpu}\"} * 1048576) or DCGM_FI_DEV_FB_USED_BYTES{instance=~\"${instance}\", gpu=~\"${gpu}\"}, \"Hostname\", \"$1\", \"hostname\", \"(.+)\"))",
           "interval": "",
           "legendFormat": "{{Hostname}} GPU {{gpu}}",
           "refId": "A"
@@ -1228,12 +1228,12 @@
           "type": "prometheus",
           "uid": "prometheus"
         },
-        "definition": "label_values(DCGM_FI_DEV_GPU_TEMP, instance)",
+        "definition": "label_values({__name__=~\"DCGM_FI_DEV_GPU_TEMP|DCGM_FI_DEV_GPU_TEMP_CELSIUS\"}, instance)",
         "includeAll": true,
         "multi": true,
         "name": "instance",
         "options": [],
-        "query": "label_values(DCGM_FI_DEV_GPU_TEMP, instance)",
+        "query": "label_values({__name__=~\"DCGM_FI_DEV_GPU_TEMP|DCGM_FI_DEV_GPU_TEMP_CELSIUS\"}, instance)",
         "refresh": 1,
         "regex": "",
         "regexApplyTo": "value",
