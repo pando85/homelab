@@ -28,7 +28,7 @@ ceased to exist:
 | `DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION` | `DCGM_FI_DEV_GPU_ENERGY_JOULES_TOTAL` | mJ → J |
 | `DCGM_FI_DEV_PCIE_REPLAY_COUNTER` | `DCGM_FI_DEV_PCIE_REPLAY_TOTAL` | — |
 | `DCGM_FI_DEV_XID_ERRORS` | `DCGM_FI_DEV_XID_ERROR` (singular) | — |
-| `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS` | **dropped from default counters** | see below |
+| `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS` | `DCGM_EXP_CLOCK_EVENTS_COUNT` (`clock_event` label) | bitmask → per-reason series |
 
 Additional traps found during the investigation:
 
@@ -39,12 +39,16 @@ Additional traps found during the investigation:
   `Hostname="z800"` and old metric names. After the rename, the only remaining
   `DCGM_FI_DEV_GPU_TEMP` series came from z800 — which can never match `node="prusik"`,
   so `GpuMetricsMissing` fired permanently.
-- **Throttle bitmask dropped, field still alive.** `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS`
-  is a deprecated alias of DCGM field 112 (`DCGM_FI_DEV_CLOCKS_EVENT_REASONS`, same
-  `DCGM_CLOCKS_EVENT_REASON_*` bitmask). The exporter's default counters file no longer
-  enables it; upstream prefers new per-reason `*_THROTTLE_SECONDS_TOTAL` counters
-  (disabled by default). `GpuThrottling` was silently dead — it had never fired because
-  the field was not in the old chart's counters file either.
+- **Throttle bitmask is a hard error, not just a rename.** `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS`
+  (deprecated alias of DCGM field 112, `DCGM_FI_DEV_CLOCKS_EVENT_REASONS`) still exists in
+  DCGM, but dcgm-exporter 4.9.0 **refuses to export it and crash-loops** if the counters
+  file lists it: "clock-event bitmap without event identity; use DCGM_EXP_CLOCK_EVENTS_COUNT
+  or DCGM_EXP_CLOCK_EVENTS_TOTAL instead". The replacement is exporter-owned
+  `DCGM_EXP_CLOCK_EVENTS_COUNT` (gauge, events in the configured window, labels
+  `clock_event` + `window_size_in_ms`) with reason values `gpu_idle, clocks_setting,
+  power_cap, hw_slowdown, sync_boost, sw_thermal, hw_thermal, hw_power_brake,
+  display_clocks` — a 1:1 map of the old bitmask bits. `GpuThrottling` had never fired
+  before this either: the field was not in the old chart's counters file.
 - **XID metric is sticky and lazy.** `DCGM_FI_DEV_XID_ERROR` is only exported once an
   XID has occurred, and then keeps the last XID code as its value. `> 0` alerts fire
   permanently after a single event until the driver is reloaded; silence manually after
@@ -74,12 +78,15 @@ not "exporter down". Empty dashboard panels look identical to nonexistent metric
 Applied in `system/gpu-operator/`:
 
 - `resources/prometheus-gpu-rules.yaml`: temperature alerts and `GpuMetricsMissing` use
-  `DCGM_FI_DEV_GPU_TEMP_CELSIUS`; `GpuXidError` uses `DCGM_FI_DEV_XID_ERROR`.
+  `DCGM_FI_DEV_GPU_TEMP_CELSIUS`; `GpuXidError` uses `DCGM_FI_DEV_XID_ERROR`;
+  `GpuThrottling` uses
+  `DCGM_EXP_CLOCK_EVENTS_COUNT{clock_event=~"hw_slowdown|sw_thermal|hw_thermal|hw_power_brake"} > 0`
+  (same reasons the old bitmask alert selected).
 - `values.yaml`: `dcgmExporter.config` pins a custom counters file (ConfigMap
   `dcgm-exporter-metrics`, key `dcgm-metrics.csv`) with the unit-suffixed names **plus
-  re-enabled `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS`**, keeping `GpuThrottling`'s bitmask
-  expression valid. If a future DCGM removes the deprecated name, switch the csv line
-  and the alert to `DCGM_FI_DEV_CLOCKS_EVENT_REASONS`.
+  `DCGM_EXP_CLOCK_EVENTS_COUNT`** for throttling. Do not add
+  `DCGM_FI_DEV_CLOCK_THROTTLE_REASONS` / `DCGM_FI_DEV_CLOCKS_EVENT_REASONS` to the file —
+  4.9.0 crashes on field 112.
 - `dashboards/dcgm-exporter.json`: queries accept old **or** new names (`or` /
   `__name__=~` regex) so both prusik and the z800 desktop render; `label_replace(...,
   "Hostname", "$1", "hostname", "(.+)")` normalizes the node label; unit conversions

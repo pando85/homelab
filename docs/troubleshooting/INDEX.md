@@ -204,9 +204,10 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 - gpu-operator chart bumps can silently rename DCGM metrics: dcgm-exporter 4.9.0 added unit
   suffixes (`DCGM_FI_DEV_GPU_TEMP` → `DCGM_FI_DEV_GPU_TEMP_CELSIUS`), singularized
-  `XID_ERROR`, and dropped `CLOCK_THROTTLE_REASONS` from its default counters — breaking
-  alerts and dashboards while `up=1`. After a bump, verify metric names against the rules.
-  See `docs/troubleshooting/dcgm-exporter-metric-renames.md`
+  `XID_ERROR`, and replaced the throttle bitmask with `DCGM_EXP_CLOCK_EVENTS_COUNT`
+  (re-adding the old field crash-loops the exporter) — breaking alerts and dashboards
+  while `up=1`. After a bump, verify metric names against the rules. See
+  `docs/troubleshooting/dcgm-exporter-metric-renames.md`
 
 ## Networking
 
