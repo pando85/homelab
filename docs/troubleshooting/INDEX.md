@@ -8,7 +8,7 @@ the subsystem-specific doc for full diagnosis and fix procedures.
 
 ## Table of Contents
 
-- [Kubernetes & GitOps](#kubernetes--gitops) (17 entries)
+- [Kubernetes & GitOps](#kubernetes--gitops) (18 entries)
 - [ArgoCD](#argocd) (7 entries)
 - [Monitoring & Observability](#monitoring--observability) (10 entries)
 - [Networking](#networking) (12 entries)
@@ -97,6 +97,13 @@ the subsystem-specific doc for full diagnosis and fix procedures.
   them), and dev-profile `cargo new` builds are never sccache-cacheable (incremental compilation
   → `requests_not_cacheable`), so cache tests must set `CARGO_INCREMENTAL=0`. See
   `docs/troubleshooting/forgejo-runner-valid-volumes.md`
+
+- CI runners at capacity 2 with a 12Gi runner limit OOM/evict when two heavy host-mode jobs
+  overlap (one job peaks ~10.7Gi; two want ~17–20Gi). On z800 the cgroup thrash mimics a network
+  outage: job logs stop mid-compile, tasks fail at identical timestamps, recovery shows
+  `log file has been archived`; sccache stats arriving after the failure prove the job stayed
+  alive. Identical failure timestamps across runs = runner-level event, not job bugs. See
+  `docs/troubleshooting/ci-runners-memory-overcommit.md`
 
 - k3s system-upgrade Plans stay `Complete=False` (Jobs `DeadlineExceeded`) for two reasons: (1)
   `rancher/k3s-upgrade` refuses a target binary built in an earlier month than the installed one
