@@ -68,25 +68,19 @@ spec:
               nvidia.com/gpu slots (device plugin or time-slicing config broken)
             message: GPU node {{$labels.node}} advertises only {{$value}} of 8 GPU slots
             summary: GPU node advertises too few GPU slots
-        # Bitmask field re-enabled via dcgmExporter.config in values.yaml (dropped from
-        # the dcgm-exporter 4.9.0 default counters file)
+        # dcgm-exporter 4.9.0 rejects the old CLOCK_THROTTLE_REASONS bitmask; the
+        # exporter-owned clock-events metric (enabled via dcgmExporter.config in
+        # values.yaml) carries the same reasons as a clock_event label
         - alert: GpuThrottling
-          expr: |
-            (
-                floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 8) % 2
-              + floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 32) % 2
-              + floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 64) % 2
-              + floor(DCGM_FI_DEV_CLOCK_THROTTLE_REASONS / 128) % 2
-            ) > 0
+          expr: DCGM_EXP_CLOCK_EVENTS_COUNT{clock_event=~"hw_slowdown|sw_thermal|hw_thermal|hw_power_brake"} > 0
           for: 10m
           labels:
             severity: warning
           annotations:
             description:
               GPU {{$labels.gpu}} on node {{$labels.hostname}} is throttling clocks
-              due to hardware slowdown, thermal or power brake (throttle reasons
-              bitmask, idle/app-clocks/sw-power-cap excluded)
-            message: GPU {{$labels.gpu}} on {{$labels.hostname}} is throttling
+              ({{$labels.clock_event}}; idle/app-clocks/sw-power-cap excluded)
+            message: GPU {{$labels.gpu}} on {{$labels.hostname}} is throttling ({{$labels.clock_event}})
             summary: GPU is thermal/power throttling
         - alert: GpuPodPending
           expr: |

@@ -22,8 +22,8 @@ dcgmExporter:
       release: monitoring
   # Custom metrics file: dcgm-exporter 4.9.0 renamed metrics with unit suffixes
   # (DCGM_FI_DEV_GPU_TEMP -> DCGM_FI_DEV_GPU_TEMP_CELSIUS, ...). This pins the fields we
-  # alert on and re-enables DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, which the 4.9.0 default
-  # counters file dropped (GpuThrottling alert). See
+  # alert on and enables DCGM_EXP_CLOCK_EVENTS_COUNT for the GpuThrottling alert:
+  # 4.9.0 hard-rejects the old DCGM_FI_DEV_CLOCK_THROTTLE_REASONS bitmask (crash). See
   # docs/troubleshooting/dcgm-exporter-metric-renames.md
   config:
     name: dcgm-exporter-metrics
@@ -48,7 +48,7 @@ dcgmExporter:
       DCGM_FI_DEV_DEC_UTIL_RATIO, gauge, Decoder utilization as a ratio.
       # Errors and throttling
       DCGM_FI_DEV_XID_ERROR, gauge, Value of the last XID error encountered.
-      DCGM_FI_DEV_CLOCK_THROTTLE_REASONS, gauge, Clock throttle reasons bitmask (DCGM_CLOCKS_EVENT_REASON_*).
+      DCGM_EXP_CLOCK_EVENTS_COUNT, gauge, Clock events observed during the configured time window.
       # Memory usage
       DCGM_FI_DEV_FB_CAPACITY_BYTES, gauge, Total framebuffer capacity in bytes.
       DCGM_FI_DEV_FB_FREE_BYTES, gauge, Free framebuffer memory in bytes.
