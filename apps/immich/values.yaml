@@ -25,6 +25,9 @@ variables:
           key: password
     DB_URL: postgresql://$(A_REPLACE_DB_USERNAME):$(A_REPLACE_DB_PASSWORD)@$(A_REPLACE_DB_HOSTNAME):5432/$(A_REPLACE_DB_DATABASE_NAME)?sslmode=no-verify
     IMMICH_TELEMETRY_INCLUDE: all
+    # Workaround for https://github.com/immich-app/immich/issues/33466:
+    # v3.4.2 metrics exporter 400s with default IMMICH_HOST (::). Remove on v3.4.3.
+    IMMICH_HOST: "0.0.0.0"
 
 app-template:
   controllers:
