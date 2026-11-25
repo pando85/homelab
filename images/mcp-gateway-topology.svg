@@ -1,0 +1,143 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="970" viewBox="0 0 1480 970" role="img" aria-labelledby="title desc">
+  <title id="title">Homelab MCP gateway architecture</title>
+  <desc id="desc">OpenCode and Hermes connect through Envoy to the public agentgateway, which authenticates with Kanidm and routes to live Grafana, Context7, and Firecrawl MCP backends. More MCPs can be added. A separate VPN-only admin gateway is deployed but its Vault MCP integration is deferred and has no enabled route.</desc>
+  <defs>
+    <linearGradient id="canvas" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0a1528"/><stop offset="1" stop-color="#080e1c"/></linearGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#4dd6d5"/><stop offset="1" stop-color="#4c94ff"/></linearGradient>
+    <linearGradient id="indigo" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9c8bff"/><stop offset="1" stop-color="#688bff"/></linearGradient>
+    <linearGradient id="gateway" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#142e42"/><stop offset="1" stop-color="#15203c"/></linearGradient>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse"><path d="M36 0H0V36" fill="none" stroke="#8aa1c4" stroke-opacity=".055" stroke-width="1"/></pattern>
+    <filter id="shadow" x="-25%" y="-40%" width="150%" height="190%"><feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000" flood-opacity=".35"/></filter>
+    <marker id="arrowCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#5bc8e9"/></marker>
+    <marker id="arrowPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10Z" fill="#a697ff"/></marker>
+  </defs>
+  <rect width="1480" height="970" rx="28" fill="url(#canvas)"/>
+  <rect width="1480" height="970" rx="28" fill="url(#grid)"/>
+  <circle cx="1325" cy="38" r="330" fill="#24486d" opacity=".12"/>
+  <circle cx="14" cy="945" r="275" fill="#453774" opacity=".11"/>
+  <g font-family="Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <text x="62" y="62" font-size="16" font-weight="700" letter-spacing="3.2" fill="#62cfe4">HOMELAB / AI INFRASTRUCTURE</text>
+    <text x="60" y="126" font-size="52" font-weight="800" letter-spacing="-1.6" fill="#f3f7ff">MCP gateway</text>
+    <text x="62" y="163" font-size="20" fill="#a6b7d0">Two isolated agentgateway planes · Kanidm OAuth2 · per-MCP scope enforcement</text>
+    <g transform="translate(1055 69)">
+      <rect width="112" height="35" rx="17.5" fill="#163c3d" stroke="#2a8179"/><circle cx="18" cy="18" r="5" fill="#66e6bc"/><text x="31" y="23" font-size="14" font-weight="700" fill="#b1f6dc">3 LIVE</text>
+      <rect x="124" width="135" height="35" rx="17.5" fill="#302a45" stroke="#625884"/><circle cx="143" cy="18" r="5" fill="#b1a1ff"/><text x="155" y="23" font-size="14" font-weight="700" fill="#d5cdff">ADMIN</text>
+      <rect x="271" width="99" height="35" rx="17.5" fill="#262e40" stroke="#58657b" stroke-dasharray="5 4"/><text x="293" y="23" font-size="14" font-weight="700" fill="#aebbd0">FUTURE</text>
+    </g>
+    <path d="M60 190H1420" stroke="#637a9c" stroke-opacity=".32"/>
+    <text x="60" y="231" font-size="17" font-weight="700" letter-spacing="2" fill="#80b6c5">CLIENTS</text>
+    <text x="446" y="231" font-size="17" font-weight="700" letter-spacing="2" fill="#80b6c5">PUBLIC DATA PLANE</text>
+    <text x="948" y="231" font-size="17" font-weight="700" letter-spacing="2" fill="#80b6c5">MCP BACKENDS</text>
+    <!-- Public client panel -->
+    <g filter="url(#shadow)">
+      <rect x="60" y="258" width="294" height="319" rx="20" fill="#121e34" stroke="#35485f" stroke-width="1.5"/>
+      <rect x="83" y="286" width="248" height="113" rx="13" fill="#1c2d42"/>
+      <rect x="99" y="307" width="39" height="39" rx="10" fill="#244a56"/>
+      <path d="M110 326l7-6 7 6-7 6z M120 337h9" stroke="#7ce4ea" fill="none" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/>
+      <text x="151" y="327" font-size="24" font-weight="750" fill="#f1f7ff">OpenCode</text>
+      <text x="100" y="373" font-size="16" fill="#aabbd0">Human operator · PKCE</text>
+      <rect x="83" y="416" width="248" height="113" rx="13" fill="#1c2d42"/>
+      <rect x="99" y="437" width="39" height="39" rx="10" fill="#244a56"/>
+      <rect x="109" y="448" width="20" height="16" rx="5" fill="none" stroke="#7ce4ea" stroke-width="2.2"/><circle cx="116" cy="455" r="2" fill="#7ce4ea"/><circle cx="123" cy="455" r="2" fill="#7ce4ea"/>
+      <text x="151" y="457" font-size="24" font-weight="750" fill="#f1f7ff">Hermes</text>
+      <text x="100" y="503" font-size="16" fill="#aabbd0">K3s agents · token exchange</text>
+      <text x="84" y="560" font-size="14" fill="#7590ad">MCP clients · no direct backend access</text>
+    </g>
+    <!-- Public gateway -->
+    <g filter="url(#shadow)">
+      <rect x="446" y="258" width="404" height="319" rx="21" fill="url(#gateway)" stroke="#4c9ea9" stroke-width="1.8"/>
+      <rect x="446" y="258" width="404" height="8" rx="4" fill="url(#cyan)"/>
+      <circle cx="491" cy="308" r="23" fill="#1a5261" stroke="#478f9b"/>
+      <path d="M491 294l12 5v10c0 9-7 15-12 18-5-3-12-9-12-18v-10z" fill="none" stroke="#a4fbf5" stroke-width="2"/>
+      <path d="M485 310l4 4 8-9" fill="none" stroke="#a4fbf5" stroke-width="2" stroke-linecap="round"/>
+      <text x="526" y="303" font-size="17" font-weight="700" letter-spacing="1.7" fill="#72e3de">PUBLIC GATEWAY</text>
+      <text x="526" y="334" font-size="30" font-weight="800" fill="#f4fbff">agentgateway</text>
+      <rect x="473" y="359" width="348" height="43" rx="10" fill="#0c1d32" stroke="#3a617c"/>
+      <text x="647" y="386" text-anchor="middle" font-size="19" font-weight="650" fill="#d8f1ff">mcp.grigri.cloud</text>
+      <g fill="#1e4053" stroke="#32647b">
+        <rect x="472" y="423" width="348" height="38" rx="9"/>
+        <rect x="472" y="471" width="348" height="38" rx="9"/>
+      </g>
+      <circle cx="490" cy="442" r="5" fill="#65e9bd"/>
+      <circle cx="490" cy="490" r="5" fill="#65e9bd"/>
+      <text x="508" y="448" font-size="17" fill="#d7e9f4">Validate OAuth2 JWT · issuer/audience</text>
+      <text x="508" y="496" font-size="17" fill="#d7e9f4">Per-route scopes · tool audit → Loki</text>
+      <text x="474" y="551" font-size="15" fill="#96bbcb">Envoy external → HTTPS → isolated routes</text>
+    </g>
+    <!-- Edge connector -->
+    <path d="M354 397H440" stroke="#5bc8e9" stroke-width="3.2" fill="none" marker-end="url(#arrowCyan)"/>
+    <rect x="365" y="355" width="67" height="28" rx="14" fill="#173447" stroke="#37758b"/>
+    <text x="398" y="374" text-anchor="middle" font-size="12.5" font-weight="700" fill="#8ce6ea">ENVOY</text>
+    <!-- Kanidm identity plane -->
+    <g filter="url(#shadow)">
+      <rect x="446" y="621" width="404" height="133" rx="18" fill="#141d37" stroke="#52659d" stroke-width="1.4"/>
+      <rect x="473" y="644" width="44" height="44" rx="12" fill="#293558"/>
+      <circle cx="495" cy="661" r="7" stroke="#beb7ff" fill="none" stroke-width="2"/>
+      <path d="M486 677c2-9 17-9 19 0" stroke="#beb7ff" fill="none" stroke-width="2" stroke-linecap="round"/>
+      <text x="534" y="668" font-size="26" font-weight="800" fill="#f0eeff">Kanidm</text>
+      <text x="474" y="710" font-size="16" fill="#b4bde0">OIDC discovery · PKCE · scopes / JWKS</text>
+      <text x="474" y="733" font-size="13" fill="#8190bc">Separate OAuth2 clients per gateway plane</text>
+    </g>
+    <path d="M651 620V583" stroke="#a697ff" stroke-width="3" fill="none" marker-end="url(#arrowPurple)"/>
+    <text x="666" y="604" font-size="13" fill="#b8adff">JWT + JWKS</text>
+    <!-- Routing fanout -->
+    <path d="M850 419H899V352" stroke="#5bc8e9" stroke-width="3" fill="none"/>
+    <path d="M899 352V637" stroke="#5bc8e9" stroke-width="2.4" stroke-opacity=".65" fill="none"/>
+    <circle cx="899" cy="419" r="6" fill="#6fe9da"/>
+    <!-- Live cards -->
+    <g filter="url(#shadow)">
+      <rect x="947" y="299" width="473" height="86" rx="15" fill="#14293a" stroke="#378e95" stroke-width="1.5"/>
+      <rect x="947" y="299" width="7" height="86" rx="3.5" fill="#59d9bd"/>
+      <text x="977" y="332" font-size="24" font-weight="750" fill="#f4fbff">Grafana MCP</text>
+      <text x="977" y="361" font-size="15.5" fill="#adc6d4">In-cluster · caller identity delegated</text>
+      <rect x="1264" y="313" width="131" height="27" rx="13.5" fill="#174f44"/>
+      <text x="1329" y="332" text-anchor="middle" font-size="14" font-weight="750" fill="#8cf8cc">mcp_grafana</text>
+      <rect x="947" y="397" width="473" height="86" rx="15" fill="#14293a" stroke="#378e95" stroke-width="1.5"/>
+      <rect x="947" y="397" width="7" height="86" rx="3.5" fill="#59d9bd"/>
+      <text x="977" y="430" font-size="24" font-weight="750" fill="#f4fbff">Context7</text>
+      <text x="977" y="459" font-size="15.5" fill="#adc6d4">Remote HTTPS · Vault-managed API key</text>
+      <rect x="1264" y="411" width="131" height="27" rx="13.5" fill="#174f44"/>
+      <text x="1329" y="430" text-anchor="middle" font-size="14" font-weight="750" fill="#8cf8cc">mcp_context7</text>
+      <rect x="947" y="495" width="473" height="86" rx="15" fill="#14293a" stroke="#378e95" stroke-width="1.5"/>
+      <rect x="947" y="495" width="7" height="86" rx="3.5" fill="#59d9bd"/>
+      <text x="977" y="528" font-size="24" font-weight="750" fill="#f4fbff">Firecrawl MCP</text>
+      <text x="977" y="557" font-size="15.5" fill="#adc6d4">In-cluster · isolated backend</text>
+      <rect x="1264" y="509" width="131" height="27" rx="13.5" fill="#174f44"/>
+      <text x="1329" y="528" text-anchor="middle" font-size="14" font-weight="750" fill="#8cf8cc">mcp_firecrawl</text>
+      <rect x="947" y="593" width="473" height="86" rx="15" fill="#121d2f" stroke="#69758c" stroke-width="1.6" stroke-dasharray="8 7"/>
+      <rect x="961" y="616" width="36" height="36" rx="11" fill="#283248"/>
+      <path d="M979 624v20m-10-10h20" stroke="#c2cce0" stroke-width="2.5" stroke-linecap="round"/>
+      <text x="1012" y="626" font-size="23" font-weight="700" fill="#c7d4e8">More MCPs …</text>
+      <text x="1012" y="653" font-size="15.5" fill="#91a1b8">Future integrations · not configured yet</text>
+    </g>
+    <path d="M899 342H940" stroke="#5bc8e9" stroke-width="2.5" fill="none" marker-end="url(#arrowCyan)"/>
+    <path d="M899 440H940" stroke="#5bc8e9" stroke-width="2.5" fill="none" marker-end="url(#arrowCyan)"/>
+    <path d="M899 538H940" stroke="#5bc8e9" stroke-width="2.5" fill="none" marker-end="url(#arrowCyan)"/>
+    <path d="M899 636H940" stroke="#798ca8" stroke-width="2.3" stroke-dasharray="6 7" fill="none"/>
+    <text x="948" y="708" font-size="15" fill="#90a6c0">Live routes: /grafana/mcp · /context7/mcp · /firecrawl/mcp</text>
+    <!-- Private/admin lane -->
+    <path d="M60 779H1420" stroke="#746c9e" stroke-opacity=".5" stroke-width="1.4" stroke-dasharray="7 9"/>
+    <text x="60" y="802" font-size="16" font-weight="750" letter-spacing="2" fill="#ac9de3">ADMIN / LAN + VPN ONLY</text>
+    <rect x="60" y="820" width="294" height="105" rx="17" fill="#1a1c34" stroke="#645789" stroke-width="1.4"/>
+    <text x="83" y="856" font-size="22" font-weight="750" fill="#ece9ff">Privileged operator</text>
+    <text x="83" y="885" font-size="15.5" fill="#b9b0d9">VPN + separate Kanidm client</text>
+    <text x="83" y="907" font-size="13.5" fill="#9186b3">No automatic Hermes access</text>
+    <path d="M354 872H439" stroke="#a697ff" stroke-width="2.8" fill="none" marker-end="url(#arrowPurple)"/>
+    <rect x="364" y="833" width="68" height="27" rx="13.5" fill="#2b2949" stroke="#6d619b"/>
+    <text x="398" y="851" font-size="12.5" font-weight="700" text-anchor="middle" fill="#c5b7ff">ENVOY</text>
+    <rect x="446" y="820" width="404" height="105" rx="17" fill="#22213c" stroke="#8a7abb" stroke-width="1.5"/>
+    <rect x="446" y="820" width="404" height="7" rx="3.5" fill="url(#indigo)"/>
+    <text x="470" y="856" font-size="23" font-weight="800" fill="#efecff">Admin agentgateway</text>
+    <text x="470" y="884" font-size="17" fill="#bbb0e6">mcp.internal.grigri.cloud</text>
+    <text x="470" y="907" font-size="14" fill="#e0bc85">Deployed · routes: [] · fail-closed</text>
+    <path d="M850 872H943" stroke="#ba9c72" stroke-width="2.4" fill="none" stroke-dasharray="7 7"/>
+    <circle cx="895" cy="872" r="13" fill="#302a2e" stroke="#d8a26c" stroke-width="1.5"/>
+    <path d="M890 867l10 10m0-10l-10 10" stroke="#ffcb8d" stroke-width="2" stroke-linecap="round"/>
+    <rect x="947" y="820" width="473" height="105" rx="17" fill="#262431" stroke="#a0805d" stroke-width="1.5" stroke-dasharray="8 6"/>
+    <text x="971" y="856" font-size="23" font-weight="800" fill="#f0e7dc">Vault MCP</text>
+    <text x="971" y="886" font-size="16" fill="#d0b9a0">Deferred · no backend route or MCP pod</text>
+    <rect x="1256" y="833" width="136" height="28" rx="14" fill="#4b3427" stroke="#a77a48"/>
+    <text x="1324" y="852" text-anchor="middle" font-size="13" font-weight="750" fill="#ffce8c">NOT ENABLED</text>
+    <text x="62" y="954" font-size="14" fill="#8293b1">Boundaries: Envoy ingress · OAuth2 scopes · network isolation · structured audit. Dashed links are not active traffic paths.</text>
+  </g>
+</svg>
