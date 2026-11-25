@@ -1,0 +1,35 @@
+# ReSpeaker XVF3800 with XIAO ESP32-S3, kitchen voice satellite.
+# Upstream package dependencies and XMOS firmware use the SAME pinned tag.
+# ESPHome >= 2026.10.0 is required (dashboard: 2026.10.0).
+# We reuse the existing Vault-backed ESPHome secrets rather than duplicating
+# packages/connection.yaml: the upstream satellite already declares wifi/api/ota.
+substitutions:
+  name: respeaker-xvf3800-kitchen
+  friendly_name: ReSpeaker Kitchen
+  respeaker_ref: 2026.10.4
+
+packages:
+  respeaker:
+    url: https://github.com/formatBCE/Respeaker-XVF3800-ESPHome-integration
+    ref: ${respeaker_ref}
+    refresh: 1d
+    files:
+      - packages/base.yaml
+      - packages/hardware.yaml
+      - packages/voice-assistant.yaml
+      - packages/leds.yaml
+      - packages/timers-alarm.yaml
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  domain: !secret domain_devices
+
+api:
+  encryption:
+    key: !secret home_assistant_api_key
+
+ota:
+  - platform: esphome
+    id: ota_esphome
+    password: !secret ota_password

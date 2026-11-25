@@ -1,0 +1,11 @@
+apiVersion: snapscheduler.backube/v1
+kind: SnapshotSchedule
+metadata:
+  name: music-assistant-zfs-backups
+spec:
+  retention:
+    maxCount: 20
+  schedule: "0 1 * * *"
+  claimSelector:
+    matchLabels:
+      backup: music-assistant-zfs
