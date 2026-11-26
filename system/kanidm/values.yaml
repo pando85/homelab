@@ -1,6 +1,6 @@
 image:
   repository: kanidm/server
-  tag: "1.11.2"
+  tag: "1.12.2"
 
 # KanidmRestore (templates/kanidm-restore.yaml). Destructive: it stops Kanidm and replaces its
 # database. The spec is immutable, so set `enabled: false` (Argo prunes the object) before
